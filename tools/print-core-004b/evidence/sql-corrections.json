@@ -1,0 +1,28 @@
+{
+  "original": "4F05F943112DF35AFE986CA8BC1B4CFCF15FC53B0AFA23328C5E9A786F2FD97F",
+  "R01R02": "D0F22A28323288F3FC7C6765643A932730DE3D3964DEDEFFF2516406760F004F",
+  "final": "E55A0340E266681556CA238E2D59019DE10E9439FEECAEB8AFF3CCE92DE8D6DD",
+  "changes": [
+    {
+      "id": "R01",
+      "kind": "schema qualification and fixed search_path"
+    },
+    {
+      "id": "R02",
+      "kind": "nested table branch before OLD.expires_at"
+    },
+    {
+      "id": "R03",
+      "kind": "parenthesize CASE in two IF conditions",
+      "observedSQLSTATE": "42601",
+      "scope": "syntax only; no model/invariant change"
+    },
+    {
+      "id": "R04",
+      "kind": "rename query alias colliding with PL/pgSQL record variable b",
+      "observedSQLSTATE": "42702",
+      "scope": "name resolution only; no model/invariant change"
+    }
+  ],
+  "R03": "F8001CD338ED1E122DA775A74C416AC2ABCB0863403571302415F5D7D4A1E74F"
+}

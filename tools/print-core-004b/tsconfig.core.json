@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "incremental": false,
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "next-auth": [
+        "C:/Projetos/omni-gestao/node_modules/next-auth"
+      ],
+      "next-auth/*": [
+        "C:/Projetos/omni-gestao/node_modules/next-auth/*"
+      ]
+    },
+    "types": [
+      "node"
+    ],
+    "typeRoots": [
+      "C:/Projetos/omni-gestao/node_modules/@types"
+    ]
+  },
+  "include": [
+    "../../lib/print-core-synthetic/**/*.ts",
+    "../../types/next-auth.d.ts",
+    "./gate-b-run.ts"
+  ],
+  "exclude": [
+    ".lab",
+    "scratch"
+  ]
+}

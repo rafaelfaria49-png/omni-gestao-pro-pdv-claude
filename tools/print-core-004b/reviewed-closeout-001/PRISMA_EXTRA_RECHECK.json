@@ -1,0 +1,42 @@
+{
+  "goal": "OMNI-PRINT-004B-EVIDENCE-CLOSEOUT-001",
+  "status": "PASS",
+  "singleDirectedAttempt": 1,
+  "command": [
+    "C:/Users/rafae/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
+    "C:/Projetos/omni-gestao/node_modules/prisma/build/index.js",
+    "validate",
+    "--schema",
+    "C:\\Projetos\\omni-print-004b-evidence-closeout-001\\validation\\schema.prisma"
+  ],
+  "cwd": "C:\\Projetos\\omni-print-004b-evidence-closeout-001\\validation",
+  "timeoutMs": 120000,
+  "startedUtc": "2026-10-30T16:14:48.095Z",
+  "nodeVersion": "v24.19.0",
+  "nodeBinarySHA256": "3602F2BB1A10F2CBAB4C36886218A33C1AB3DB87290E73B033C46C77147D0237",
+  "prismaVersion": "6.19.3",
+  "prismaCliSHA256": "C2A77456B70E8BA1E640E122824ED694433828A7C0D76FF3DB7FC376B4B0E1A0",
+  "schemaOriginal": "C:/Projetos/omni-gestao-print-core-004b/prisma/schema.prisma",
+  "schemaCopy": "C:\\Projetos\\omni-print-004b-evidence-closeout-001\\validation\\schema.prisma",
+  "schemaSHA256": "AEA08DA0E8DB34AF5BFC73D90148A01BCF5BD3EEBED06E7A5835453AAC5E56ED",
+  "engineSHA256": "F2B48E3CE8DE8712C9DCE6C71F952BEC383FA472830B91BCA8E64B4B51BF0DD7",
+  "environment": "positive allowlist; inherited environment discarded; no application .env; local config reference without credentials",
+  "localReference": {
+    "host": "127.0.0.1",
+    "port": 1,
+    "database": "omni_004b_validation_only",
+    "credentials": false
+  },
+  "databaseStartedOrWritten": false,
+  "priorLogsModified": false,
+  "finishedUtc": "2026-10-30T16:15:14.173Z",
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdoutFile": "PRISMA_EXTRA_RECHECK.stdout.log",
+  "stderrFile": "PRISMA_EXTRA_RECHECK.stderr.log",
+  "stdoutSHA256": "8BF9ADCF42B136ABF6C12B507ECBF7E2F8C4402A7FB3CF4C3361CF79E042306D",
+  "stderrSHA256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+  "schemaAfterSHA256": "AEA08DA0E8DB34AF5BFC73D90148A01BCF5BD3EEBED06E7A5835453AAC5E56ED",
+  "causeOfPreviousTimeout": "NOT_DETERMINED"
+}

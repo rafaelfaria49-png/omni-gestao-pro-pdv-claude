@@ -1,0 +1,2108 @@
+{
+  "originalCounts": {
+    "PASS": 53,
+    "FAIL": 0,
+    "DEFERRED": 27
+  },
+  "originalMatrixUnchanged": true,
+  "newExecutions": 0,
+  "newPASS": 0,
+  "tracedRecordedKernelBlocks": 35,
+  "distinctKernelBlocksReferencedByOriginalPASS": 33,
+  "unmappedAdditionalRecordedBlocks": [
+    {
+      "id": "CORE-MISSING-COPY-COMMIT",
+      "status": "PASS"
+    },
+    {
+      "id": "CORE-A4-LOGICAL-ONLY",
+      "status": "PASS"
+    }
+  ],
+  "overlayCounts": {
+    "traceableWithDeclaredScope": 47,
+    "partialAcceptanceCriterion": 6,
+    "deferredUnchanged": 27
+  },
+  "explanation": "The six partial cases are a subset of the53reportedPASS, not six additional cases. Traceability does not recertify all broader clauses.",
+  "contextNotes": [
+    {
+      "id": "I25",
+      "note": "Os108 snapshots excluem admin_users. Igualdade completa é checkpoint pós-correções→final; antes→checkpoint compara conjunto de tabelas, não cada delta/escritor. Journal cobre exec tentado, não query/commit. Grants/fonte/42501 são provas adicionais."
+    },
+    {
+      "id": "P13",
+      "note": "Asserções de minimização são do snapshot/DTO da fixture. Infraestrutura produtiva completa de logs, rotas e cache não foi certificada."
+    },
+    {
+      "id": "REV-B-01",
+      "note": "Leitura de sessaoId pelo payload corrigida e reader executado. Não há asserção com sessaoId não nulo; ensaio mínimo futuro pode fornecer valor sintético e conferir snapshot/fingerprint."
+    }
+  ],
+  "rows": [
+    {
+      "id": "B01",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CONCURRENT-INITIAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            198,
+            210
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B02",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CONCURRENT-INITIAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            198,
+            210
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B03",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SEMANTIC-CONFLICT",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-SEMANTIC-CONFLICT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            211,
+            219
+          ],
+          "assertionCount": 2
+        },
+        {
+          "test": "CORE-NORMALIZATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            551,
+            566
+          ],
+          "assertionCount": 6
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B04",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            220,
+            232
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B05",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            220,
+            232
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B06",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-ATOMIC-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            233,
+            246
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B07",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-ATOMIC-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            233,
+            246
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B08",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-TWO-EXECUTORS",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-TWO-EXECUTORS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            247,
+            254
+          ],
+          "assertionCount": 2
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B09",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-LEASE-FENCING",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-LEASE-FENCING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            255,
+            263
+          ],
+          "assertionCount": 2
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B10",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            264,
+            281
+          ],
+          "assertionCount": 6
+        },
+        {
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            476,
+            489
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B11",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVOCATION",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVOCATION-CONCURRENT-T3",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REVOCATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            388,
+            402
+          ],
+          "assertionCount": 3
+        },
+        {
+          "test": "CORE-REVOCATION-CONCURRENT-T3",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            499,
+            524
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B12",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-FINGERPRINT",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-FINGERPRINT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            572,
+            599
+          ],
+          "assertionCount": 5
+        },
+        {
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            600,
+            638
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B13",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CROSS-SCOPE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CROSS-SCOPE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            403,
+            422
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B14",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPRINT-COALESCENCE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REPRINT-COALESCENCE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            328,
+            337
+          ],
+          "assertionCount": 2
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B15",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PARTIAL-COPIES",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            282,
+            296
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B16",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            264,
+            281
+          ],
+          "assertionCount": 6
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B17",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            640,
+            664
+          ],
+          "assertionCount": 10
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B18",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            640,
+            664
+          ],
+          "assertionCount": 10
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B19",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "PARTIAL_ACCEPTANCE_CRITERION",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            640,
+            664
+          ],
+          "assertionCount": 10
+        },
+        {
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            297,
+            306
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "demonstrated": "Purga de bytes/requests mantém slot, fechamento histórico e dedup.",
+      "notDemonstrated": "Retirement/arquivamento completo e fechamento atômico da elegibilidade.",
+      "nextSmallestProof": "Manter essa subcláusula no gate D03 de retenção/retirement; não executar exclusão/retirada sem autorização própria.",
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B20",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-ATOMIC-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            233,
+            246
+          ],
+          "assertionCount": 5
+        },
+        {
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            423,
+            439
+          ],
+          "assertionCount": 8
+        },
+        {
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            525,
+            541
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B21",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-SHARED-DESTINATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            373,
+            387
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B22",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-INITIAL-RACE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-HISTORICAL-INITIAL-RACE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            307,
+            317
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B23",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            640,
+            664
+          ],
+          "assertionCount": 10
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B24",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            338,
+            356
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B25",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-SHARED-DESTINATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            373,
+            387
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "B26",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-A4-THERMAL-SLOT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-A4-THERMAL-SLOT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            318,
+            327
+          ],
+          "assertionCount": 2
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "F01",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "PHYSICAL_HOMOLOGATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "F02",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "PHYSICAL_HOMOLOGATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "F03",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "PHYSICAL_HOMOLOGATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "F04",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "PHYSICAL_HOMOLOGATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "F05",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "PHYSICAL_HOMOLOGATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "F06",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "PHYSICAL_HOMOLOGATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "F07",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "PHYSICAL_HOMOLOGATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I01",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "REAL_SESSION_AND_API_INTEGRATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I02",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "REAL_SESSION_AND_API_INTEGRATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I03",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUTHORITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-AUTHORITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            159,
+            169
+          ],
+          "assertionCount": 7
+        },
+        {
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            220,
+            232
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I04",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "CANONICAL_SCOPED_READER_INTEGRATION",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I05",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ELIGIBILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-ELIGIBILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            567,
+            570
+          ],
+          "assertionCount": 2
+        },
+        {
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            600,
+            638
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I06",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "ADAPTER_PAIRING_AND_DEVICE_IDENTITY",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I07",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "ADAPTER_PAIRING_AND_CHALLENGE",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I08",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "MULTISTORE_DEVICE_PAIRING",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I09",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "INSTALLATION_AND_QUEUE_LIFECYCLE",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I10",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "BINDING_REVOCATION_LIFECYCLE",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I11",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "UI_CONTEXT_HANDLING",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I12",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "G_AUTH_PRINT_LOGOUT",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I13",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-INPUT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-INPUT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            170,
+            179
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I14",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "API_ORIGIN_CSRF_CACHE",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I15",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            264,
+            281
+          ],
+          "assertionCount": 6
+        },
+        {
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            525,
+            541
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I16",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PARTIAL-COPIES",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            282,
+            296
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I17",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "PARTIAL_ACCEPTANCE_CRITERION",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            476,
+            489
+          ],
+          "assertionCount": 3
+        },
+        {
+          "test": "CORE-SHARED-DESTINATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            373,
+            387
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "demonstrated": "Lease vencido, crash pré-chamada e destino retido não permitem reenvio cego.",
+      "notDemonstrated": "Consulta de adaptador real/sintético retornando não encontrado; tal API não existe no núcleo.",
+      "nextSmallestProof": "No gate de adaptador, retorno não encontrado correlacionado com tentativa potencial deve manter UNKNOWN/gate e zero reenvio.",
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I18",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "TRANSPORT_CANCELLATION_AND_EFFECT_PROOF",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I19",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "ADAPTER_CAPABILITIES_AND_DEDUP_CONTRACT",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I20",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "OFFLINE_TRANSPORT_AND_LATE_DELIVERY",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I21",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            297,
+            306
+          ],
+          "assertionCount": 5
+        },
+        {
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            357,
+            372
+          ],
+          "assertionCount": 1
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I22",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            338,
+            356
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I23",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "EXPLICIT_UI_FALLBACK_HANDOFF",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I24",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SYNTHETIC-TEST",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-SYNTHETIC-TEST",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            440,
+            450
+          ],
+          "assertionCount": 3
+        },
+        {
+          "test": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            180,
+            197
+          ],
+          "assertionCount": 10
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I25",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-COMMERCIAL-INTEGRITY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-COMMERCIAL-INTEGRITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            679,
+            688
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I26",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "D03_PRODUCTIVE_LIMITS_RETENTION_AND_GRANTS",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I27",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "REAL_INSTALLATION_AUTHENTICITY_AND_REPLAY_PROOF",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I28",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            338,
+            356
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I29",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-STALE-RISK-T0-T1",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-STALE-RISK-T0-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            490,
+            498
+          ],
+          "assertionCount": 2
+        },
+        {
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            357,
+            372
+          ],
+          "assertionCount": 1
+        },
+        {
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            338,
+            356
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I30",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            338,
+            356
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "I31",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "REAL_A4_BROWSER_HANDOFF",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P01",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "PARTIAL_ACCEPTANCE_CRITERION",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-NORMALIZATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            551,
+            566
+          ],
+          "assertionCount": 6
+        }
+      ],
+      "demonstrated": "Defaults, ordem e campos admitidos normalizados; keys distintas convergem ao mesmo job.",
+      "notDemonstrated": "Envelope UI que aceite uiContextId e o exclua do commandHash. O shape interno não aceita esse campo.",
+      "nextSmallestProof": "No gate de API/UI, ensaiar dois envelopes que difiram apenas em uiContextId e confirmar identidade semântica. Não abrir API neste fechamento.",
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P02",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-NORMALIZATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            551,
+            566
+          ],
+          "assertionCount": 6
+        },
+        {
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            220,
+            232
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P03",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURE-CRYPTO-AND-CANONICAL",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PURE-CRYPTO-AND-CANONICAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            665,
+            677
+          ],
+          "assertionCount": 9
+        },
+        {
+          "test": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            180,
+            197
+          ],
+          "assertionCount": 10
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P04",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "REVIEW_OF_REAL_RENDERER_HTML_SECURITY",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P05",
+      "originalStatus": "DEFERRED",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "DEFERRED_UNCHANGED",
+      "proofReferences": [],
+      "sourceAssertionReferences": [],
+      "nextGate": "THERMAL_RENDERER_PROFILE_ENCODING",
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P06",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "PARTIAL_ACCEPTANCE_CRITERION",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            180,
+            197
+          ],
+          "assertionCount": 10
+        },
+        {
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            423,
+            439
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "demonstrated": "Hash dos bytes, variação por ordinal e recusa de mutações; snapshot/payload autenticados.",
+      "notDemonstrated": "Duas renderizações independentes com snapshot, renderer e perfil idênticos comparadas explicitamente.",
+      "nextSmallestProof": "Teste puro dirigido de igualdade byte a byte/hash para dois renders com entradas idênticas, sem dispositivo.",
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P07",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "PARTIAL_ACCEPTANCE_CRITERION",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PARTIAL-COPIES",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            282,
+            296
+          ],
+          "assertionCount": 4
+        }
+      ],
+      "demonstrated": "PARTIAL com ACCEPT + NO_EFFECT e retry manual somente da segunda via; UNKNOWN isolado não é retryable.",
+      "notDemonstrated": "Vetor misto ACCEPT + UNKNOWN na agregação.",
+      "nextSmallestProof": "Teste puro com vetor ACCEPT + UNKNOWN: PARTIAL preserva ambas as vias e não oferece retry da via incerta.",
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P08",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-LEASE-FENCING",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-LEASE-FENCING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            255,
+            263
+          ],
+          "assertionCount": 2
+        },
+        {
+          "test": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            264,
+            281
+          ],
+          "assertionCount": 6
+        },
+        {
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            423,
+            439
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P09",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SYNTHETIC-TEST",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            180,
+            197
+          ],
+          "assertionCount": 10
+        },
+        {
+          "test": "CORE-SYNTHETIC-TEST",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            440,
+            450
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P10",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ELIGIBILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-ELIGIBILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            567,
+            570
+          ],
+          "assertionCount": 2
+        },
+        {
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            600,
+            638
+          ],
+          "assertionCount": 8
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P11",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "PARTIAL_ACCEPTANCE_CRITERION",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-INPUT",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-INPUT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            170,
+            179
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "demonstrated": "Limites de vias, itens e comando. maxBytes1 produz COMMAND_LIMIT antes dos bytes do snapshot.",
+      "notDemonstrated": "Negativas específicas SNAPSHOT_LIMIT e PAYLOAD_LIMIT.",
+      "nextSmallestProof": "Duas fixtures dirigidas: comando cabe mas snapshot excede; snapshot cabe mas payload excede. Exigir os códigos específicos e zero tentativas/efeitos. Sem modificar os guards para passar.",
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P12",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            640,
+            664
+          ],
+          "assertionCount": 10
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P13",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUTHORITY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            180,
+            197
+          ],
+          "assertionCount": 10
+        },
+        {
+          "test": "CORE-AUTHORITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            159,
+            169
+          ],
+          "assertionCount": 7
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P14",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            297,
+            306
+          ],
+          "assertionCount": 5
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P15",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            640,
+            664
+          ],
+          "assertionCount": 10
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    },
+    {
+      "id": "P16",
+      "originalStatus": "PASS",
+      "originalScope": "LOCAL_SYNTHETIC_004B",
+      "closeoutAssessment": "TRACEABLE_WITH_DECLARED_SCOPE",
+      "proofReferences": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "sourceAssertionReferences": [
+        {
+          "test": "CORE-CONCURRENT-INITIAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "lines": [
+            198,
+            210
+          ],
+          "assertionCount": 3
+        }
+      ],
+      "nextGate": null,
+      "interpretation": "This is a review overlay, not a new test execution or promotion of original status."
+    }
+  ]
+}
