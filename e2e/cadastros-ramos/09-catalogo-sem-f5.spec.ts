@@ -77,6 +77,28 @@ test("Cadastro editado em outra aba e em outro aparelho chega ao PDV aberto sem 
   const produto = await db.produto.findFirstOrThrow({ where: { storeId: B, sku: "E2E-SYNC-001" } })
 
   const pdv = await caixa.newPage()
+  // DIAG temporário (CI 41479634312): quem dispara a navegação dura do PDV no offline.
+  const diag: string[] = []
+  const t0 = Date.now()
+  const dlog = (s: string) => diag.push(`+${Date.now() - t0}ms ${s}`)
+  await pdv.addInitScript(() => {
+    const orig = window.fetch
+    window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
+      try {
+        const h = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+        if (h.get("rsc") || h.get("next-action") || h.get("next-router-prefetch")) {
+          console.log(`[diag-rsc] ${String(input instanceof Request ? input.url : input)} action=${h.get("next-action")} prefetch=${h.get("next-router-prefetch")} online=${navigator.onLine}\n${new Error().stack}`)
+        }
+      } catch { /* diag */ }
+      return orig.call(window, input, init)
+    } as typeof fetch
+    for (const ev of ["online", "offline", "pagehide", "beforeunload"]) {
+      window.addEventListener(ev, () => console.log(`[diag-ev] ${ev} online=${navigator.onLine}`))
+    }
+  })
+  pdv.on("console", (m) => dlog(`console.${m.type()} ${m.text().slice(0, 1500)}`))
+  pdv.on("framenavigated", (f) => { if (f === pdv.mainFrame()) dlog(`framenavigated ${f.url()}`) })
+  pdv.on("request", (r) => { if (r.isNavigationRequest()) dlog(`navrequest ${r.url()}`) })
   await test.step("PDV aberto com o item no carrinho", async () => {
     const bipe = await abrirPdv(pdv)
     await marcarSemReload(pdv)
@@ -123,10 +145,16 @@ test("Cadastro editado em outra aba e em outro aparelho chega ao PDV aberto sem 
   })
 
   await test.step("Offline: edição remota chega quando a rede volta, carrinho preservado", async () => {
+    try {
+    dlog("== setOffline(true)")
     await caixa.setOffline(true)
     await editarProduto(remoto, "E2E-SYNC-002", { preco: "15,00" })
+    dlog("== setOffline(false)")
     await caixa.setOffline(false)
     await expect(panel(pdv).getByRole("button", { name: /Usar R\$\s?15,00/ })).toBeVisible({ timeout: 50_000 })
+    } finally {
+      console.log(`[diag 09]\n${diag.join("\n")}`)
+    }
     await expect(cartRow(pdv)).toHaveCount(1)
     await expect(cartRow(pdv)).toContainText("12,50")
     await aindaSemReload(pdv)
