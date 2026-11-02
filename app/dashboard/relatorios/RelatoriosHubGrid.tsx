@@ -101,21 +101,14 @@ const reports: ReportCard[] = [
   },
   {
     title: "Produtos Mais Vendidos",
-    description: "Ranking de produtos por quantidade vendida, margem e faturamento.",
+    description: "Ranking por quantidade e receita, resumo por categoria e vendas líquidas de devoluções.",
     href: "/dashboard/relatorios/produtos",
     icon: Package,
     tone: "text-info",
     bg: "bg-info/10",
-    status: "em_breve",
-    phase: "planejado",
-    features: [
-      "Ranking de itens mais vendidos por quantidade, receita e margem de contribuição",
-      "Análise de curva ABC de estoque",
-      "Filtro por categoria, marca e período",
-      "Gráfico de dispersão de vendas"
-    ],
-    targetRelease: "Fase 3 - Relatórios Gerenciais",
-    visible: (p) => p.hubs.cadastros || p.hubs.vendas,
+    status: "disponivel",
+    // Mesma regra da API: módulo de vendas (PDV sozinho não basta).
+    visible: (p) => p.hubs.vendas && p.modules?.sales === true,
   },
   {
     title: "Clientes",
