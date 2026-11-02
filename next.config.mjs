@@ -50,6 +50,10 @@ const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
   register: true,
+  // O padrão (true) instala `online → location.reload()` no app inteiro: cada oscilação
+  // de rede recarregava o PDV e apagava o carrinho em memória. A reconexão já é tratada
+  // pelos handlers de `online` (catálogo, pendências, caixa, versão) sem recarregar.
+  reloadOnOnline: false,
   skipWaiting: true,
   cacheOnFrontEndNav: true,
   extendDefaultRuntimeCaching: true,

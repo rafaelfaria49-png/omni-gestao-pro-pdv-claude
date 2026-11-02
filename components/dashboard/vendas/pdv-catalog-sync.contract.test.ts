@@ -114,6 +114,13 @@ describe("operations-store — contrato da sincronização do catálogo", () => 
     expect(next).toContain('url.pathname === "/api/ops/inventory" && url.searchParams.get("catalogSync") === "1"')
   })
 
+  it("volta da rede não recarrega a página (o next-pwa recarrega por padrão e apaga o carrinho)", () => {
+    expect(read("next.config.mjs")).toMatch(/withPWAInit\(\{[\s\S]*?reloadOnOnline: false,[\s\S]*?\}\)/)
+    expect(effect).toContain('window.addEventListener("online", onOnline)')
+    // Offline nem tenta: não gasta o intervalo mínimo que atrasaria o check da volta.
+    expect(effect).toMatch(/if \(navigator\.onLine === false\) return\r?\n\s*if \(catalogWatchersRef\.current > 0\) sync\(false\)/)
+  })
+
   it("catálogo novo não reenvia ordens (o PUT legado só reage a ordens)", () => {
     expect(store).toContain("const snap = JSON.stringify({ ord: state.ordens })")
     expect(store).toContain("}, [opsDbReady, state.ordens, storageKey, canReadOperations])")

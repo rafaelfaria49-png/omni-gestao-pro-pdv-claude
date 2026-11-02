@@ -1163,6 +1163,8 @@ export function OperationsProvider({
       })
     }
     const autoSync = () => {
+      // Offline não tenta (nem gasta o intervalo mínimo): o `online` dispara o check na volta.
+      if (navigator.onLine === false) return
       if (catalogWatchersRef.current > 0) sync(false)
     }
     const onVisibility = () => {
