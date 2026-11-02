@@ -92,13 +92,17 @@ test("Cadastro editado em outra aba e em outro aparelho chega ao PDV aberto sem 
       } catch { /* diag */ }
       return orig.call(window, input, init)
     } as typeof fetch
-    for (const ev of ["online", "offline", "pagehide", "beforeunload"]) {
+    for (const ev of ["online", "offline", "pagehide"]) {
       window.addEventListener(ev, () => console.log(`[diag-ev] ${ev} online=${navigator.onLine}`))
     }
+    // Navegação iniciada por JS despacha beforeunload de forma síncrona: o stack mostra quem chamou.
+    window.addEventListener("beforeunload", () => console.log(`[diag-ev] beforeunload online=${navigator.onLine}\n${new Error().stack}`))
+    window.addEventListener("online", () => console.log(`[diag-ev] online-listener-first\n${new Error().stack}`), { capture: true })
   })
   pdv.on("console", (m) => dlog(`console.${m.type()} ${m.text().slice(0, 1500)}`))
   pdv.on("framenavigated", (f) => { if (f === pdv.mainFrame()) dlog(`framenavigated ${f.url()}`) })
   pdv.on("request", (r) => { if (r.isNavigationRequest()) dlog(`navrequest ${r.url()}`) })
+  pdv.on("requestfailed", (r) => dlog(`requestfailed ${r.method()} ${r.url()} ${r.failure()?.errorText} nav=${r.isNavigationRequest()} type=${r.resourceType()}`))
   await test.step("PDV aberto com o item no carrinho", async () => {
     const bipe = await abrirPdv(pdv)
     await marcarSemReload(pdv)
