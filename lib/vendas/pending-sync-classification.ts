@@ -284,3 +284,86 @@ export function unresolvedProductFinalizeReason(labels: readonly string[]): stri
   const alvo = labels.length > 0 ? labels.join(", ") : "um item do carrinho"
   return `Venda NÃO registrada — nada foi gravado no servidor. Sem cadastro válido nesta loja: ${alvo}. O catálogo foi recarregado: remova o item e adicione-o de novo pela busca (ou cadastre-o) e finalize novamente.`
 }
+
+/**
+ * Rejeições DEFINITIVAS do writer (PDV-CADASTROS-SYNC-AUTOMATICO-001): todas lançadas dentro
+ * da transação da venda, antes do commit — nada é gravado (número, venda, estoque, caixa,
+ * financeiro). Para uma identidade criada na própria finalização isso prova que a venda não
+ * existe: o desfecho é RECUSADA (FAILED, carrinho volta para correção), não PENDING — que
+ * congelava o payload e travava as próximas vendas com a guarda de identidade.
+ * Fora daqui, de propósito: rede/5xx (resultado DESCONHECIDO — mesma identidade é reenviada),
+ * drift de estoque (o reenvio da mesma venda reconcilia) e conflito de identidade (quarentena).
+ */
+export const DEFINITIVE_REJECTION_CODES: ReadonlySet<string> = new Set([
+  UNRESOLVED_PRODUCT_CODE,
+  "ESTOQUE_INSUFICIENTE",
+  "PAGAMENTOS_TOTAL_DIVERGENTE",
+  "LINHAS_VENDA_INVALIDAS",
+  "FRACTIONAL_QUANTITY_UNSUPPORTED",
+  "PRODUTO_POR_PESO_NAO_OPERACIONAL",
+  "PRODUTO_COMERCIAL_INVALIDO",
+  "CREDITO_VALE_INSUFICIENTE",
+  "CAIXA_FECHADO",
+  "SESSAO_INVALIDA",
+])
+
+export type SaleAttemptOutcome = "CONFIRMED" | "REJECTED" | "UNKNOWN" | "ACTION_REQUIRED" | "QUARANTINED"
+
+/**
+ * Desfecho de UMA tentativa de gravar a venda:
+ * - CONFIRMED: servidor confirmou (2xx);
+ * - REJECTED: recusa definitiva antes do commit (4xx com código de `DEFINITIVE_REJECTION_CODES`);
+ * - UNKNOWN: rede/timeout/5xx — pode ter gravado; só a mesma identidade pode tentar de novo;
+ * - QUARANTINED: conflito de identidade;
+ * - ACTION_REQUIRED: demais 4xx de negócio (ex.: caixa original fechado, drift).
+ */
+export function classifySaleAttemptOutcome(input: {
+  ok: boolean
+  code?: string | null
+  httpStatus?: number
+  networkError?: boolean
+}): SaleAttemptOutcome {
+  if (input.ok) return "CONFIRMED"
+  const code = typeof input.code === "string" ? input.code.trim() : ""
+  if (code && QUARANTINE_CODES.has(code)) return "QUARANTINED"
+  if (input.networkError === true) return "UNKNOWN"
+  const status = input.httpStatus
+  if (typeof status !== "number" || status >= 500) return "UNKNOWN"
+  if (status >= 400 && code && DEFINITIVE_REJECTION_CODES.has(code)) return "REJECTED"
+  return "ACTION_REQUIRED"
+}
+
+/**
+ * Desfecho da finalização quando o servidor NÃO confirmou. FAILED só para recusa definitiva de
+ * identidade criada nesta chamada; identidade reaproveitada (pode estar PENDING em outra aba),
+ * rede/5xx e demais 4xx seguem PENDING com a mesma identidade.
+ */
+export function finalizeFailureDisposition(input: {
+  code?: string | null
+  httpStatus?: number
+  networkError?: boolean
+  reusedIdentity: boolean
+}): "FAILED" | "PENDING" {
+  const outcome = classifySaleAttemptOutcome({
+    ok: false,
+    code: input.code,
+    httpStatus: input.httpStatus,
+    networkError: input.networkError,
+  })
+  return outcome === "REJECTED" && !input.reusedIdentity ? "FAILED" : "PENDING"
+}
+
+const REJECTION_GUIDANCE: Record<string, string> = {
+  ESTOQUE_INSUFICIENTE: "Estoque insuficiente no servidor para um item. Ajuste a quantidade e finalize novamente.",
+  PAGAMENTOS_TOTAL_DIVERGENTE: "A soma das formas de pagamento difere do total. Revise os valores e finalize novamente.",
+  CREDITO_VALE_INSUFICIENTE: "O saldo de crédito/vale no servidor não cobre a venda. Reaplique o pagamento e finalize novamente.",
+  CAIXA_FECHADO: "Não há caixa aberto válido neste terminal. Abra o caixa e finalize novamente.",
+  SESSAO_INVALIDA: "Não há caixa aberto válido neste terminal. Abra o caixa e finalize novamente.",
+}
+
+/** Mensagem do desfecho RECUSADA (nada gravado; carrinho preservado). */
+export function definitiveRejectionFinalizeReason(code: string, labels: readonly string[], serverMessage?: string): string {
+  if (code === UNRESOLVED_PRODUCT_CODE) return unresolvedProductFinalizeReason(labels)
+  const guidance = REJECTION_GUIDANCE[code] ?? `${(serverMessage ?? "").trim() || "O servidor recusou a venda."} Corrija e finalize novamente.`
+  return `Venda NÃO registrada — nada foi gravado no servidor. ${guidance}`
+}

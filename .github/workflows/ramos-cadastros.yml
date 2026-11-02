@@ -33,6 +33,13 @@ on:
       - "e2e/cadastros-ramos/**"
       - "e2e/cadastros-ramos.playwright.config.ts"
       - ".github/workflows/ramos-cadastros.yml"
+      # Catálogo sem F5 no PDV (PDV-CADASTROS-SYNC-AUTOMATICO-001) — prova 09.
+      - "lib/estoque/catalog-*"
+      - "lib/operations-store*"
+      - "lib/pdv/cart-catalog-reconcile*"
+      - "app/api/ops/inventory/**"
+      - "components/dashboard/vendas/pdv-classic*"
+      - "components/dashboard/vendas/pdv-catalog-divergence-panel*"
   workflow_dispatch:
 
 permissions:

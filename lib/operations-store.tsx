@@ -79,8 +79,8 @@ import {
   PENDING_SYNC_CLASS,
   resolvePendingSyncErrorCode,
   shouldAutoRetryPendingSync,
-  UNRESOLVED_PRODUCT_CODE,
-  unresolvedProductFinalizeReason,
+  definitiveRejectionFinalizeReason,
+  finalizeFailureDisposition,
   unresolvedSaleLineLabels,
 } from "@/lib/vendas/pending-sync-classification"
 import {
@@ -108,6 +108,13 @@ import {
   sanitizeSaleRecords,
 } from "@/lib/pdv-mount-guards"
 import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
+import {
+  CATALOG_SYNC_INTERVAL_MS,
+  createCatalogSyncController,
+  subscribeCatalogChanged,
+  type CatalogCheckStatus,
+  type CatalogSyncController,
+} from "@/lib/estoque/catalog-sync"
 
 const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
 
@@ -478,6 +485,8 @@ type OpsState = {
 type SaleLine = {
   inventoryId: string
   quantity: number
+  /** `Produto.id` capturado no carrinho (PDV-CADASTROS-SYNC-AUTOMATICO-001). */
+  produtoId?: string
 }
 
 const defaultState: OpsState = {
@@ -621,6 +630,12 @@ interface OperationsContextType {
    * caixa/fechamento. Best-effort: erro de rede não altera o estado.
    */
   refreshSalesFromServer: () => Promise<void>
+  /** Versão do catálogo carregado (PDV-CADASTROS-SYNC-AUTOMATICO-001); `null` antes da 1ª carga. */
+  catalogVersion: string | null
+  /** Pergunta a versão do catálogo da loja e baixa o snapshot se mudou; `force` baixa direto. */
+  checkCatalog: (opts?: { force?: boolean }) => Promise<CatalogCheckStatus>
+  /** Superfície de venda montada: liga os checks automáticos de versão. Devolve o desligamento. */
+  watchCatalogSync: () => () => void
   /**
    * Reenvia ao servidor uma venda local marcada como `syncPending`. Em sucesso,
    * limpa `syncPending`. Em erro, mantém o estado pendente e devolve o motivo.
@@ -809,6 +824,29 @@ function parseLocalRest(raw: string, prev: OpsState): Partial<OpsState> | null {
   } catch {
     return null
   }
+}
+
+/**
+ * PENDING não reduz o catálogo do servidor. Opção A: o estoque exibido permanece o saldo
+ * autoritativo até CONFIRMED — só a devolução pendente devolve a quantidade ao item.
+ */
+function withPendingDevolucaoStock(items: InventoryItem[], devolucoes: DevolucaoRecord[]): InventoryItem[] {
+  const adjustedItems = items.map((i) => ({ ...i }))
+  const pendingDevs = devolucoes.filter((d) => isRecord(d) && d.syncPending === true)
+  for (const dev of pendingDevs) {
+    const lines = Array.isArray(dev.lines) ? dev.lines : []
+    for (const line of lines) {
+      if (!isRecord(line)) continue
+      const lineId = typeof line.inventoryId === "string" ? line.inventoryId : ""
+      const qty = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
+      if (!lineId || qty <= 0) continue
+      const item = adjustedItems.find((i) => i.id === lineId)
+      if (item) {
+        item.stock += qty
+      }
+    }
+  }
+  return adjustedItems
 }
 
 function peekLegacyInventoryOrdens(raw: string | null): { inventory: InventoryItem[]; ordens: OrdemServico[] } {
@@ -1062,6 +1100,94 @@ export function OperationsProvider({
     saveCaixaSnapshot(lojaId, state.caixa)
   }, [caixaHydrated, state.caixa, storageKey])
 
+  // ── Catálogo sem F5 (PDV-CADASTROS-SYNC-AUTOMATICO-001) ─────────────────────
+  // O provider baixava o catálogo só ao montar (troca de loja / F5). Agora pergunta a
+  // versão da loja no foco, na volta da aba/rede e a cada 30 s com a aba visível, e baixa
+  // o snapshot quando muda; aviso de cadastro salvo (esta aba ou outra) baixa na hora.
+  // Só substitui `inventory`: carrinho, pendências e caixa não são tocados aqui.
+  const catalogSyncRef = useRef<CatalogSyncController<InventoryItem> | null>(null)
+  const [catalogVersion, setCatalogVersion] = useState<string | null>(null)
+  // Checks automáticos (foco/aba/rede/intervalo) só com um PDV montado: o provider envolve o
+  // dashboard inteiro e outras telas não devem pagar o polling. Aviso de cadastro vale sempre.
+  const catalogWatchersRef = useRef(0)
+  const watchCatalogSync = useCallback(() => {
+    catalogWatchersRef.current += 1
+    return () => {
+      catalogWatchersRef.current = Math.max(0, catalogWatchersRef.current - 1)
+    }
+  }, [])
+
+  const checkCatalog = useCallback(async (opts?: { force?: boolean }): Promise<CatalogCheckStatus> => {
+    const controller = catalogSyncRef.current
+    if (!controller) return "disabled"
+    const status = await controller.check(opts)
+    if (catalogSyncRef.current === controller) setCatalogVersion(controller.knownVersion())
+    return status
+  }, [])
+
+  useEffect(() => {
+    const lj = opsLojaIdFromStorageKey(storageKey)
+    // `catalogSync=1` é NetworkOnly no service worker (next.config.mjs): o cache NetworkFirst de
+    // `/api/*` devolveria um catálogo velho em rede lenta. A carga inicial segue cacheável (offline).
+    const inventoryUrl = (versionOnly: boolean) =>
+      `/api/ops/inventory?lojaId=${encodeURIComponent(lj)}&catalogSync=1${versionOnly ? "&versionOnly=1" : ""}`
+    const controller = createCatalogSyncController<InventoryItem>({
+      storeId: lj,
+      fetchVersion: async (_storeId, signal) => {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return null
+        const res = await fetch(inventoryUrl(true), { credentials: "include", cache: "no-store", signal })
+        if (!res.ok) return null
+        const body = (await res.json()) as { storeId?: unknown; version?: unknown }
+        return body.storeId === lj && typeof body.version === "string" ? body.version : null
+      },
+      fetchSnapshot: async (_storeId, signal) => {
+        const res = await fetch(inventoryUrl(false), { credentials: "include", cache: "no-store", signal })
+        if (!res.ok) return null
+        const body = (await res.json()) as { items?: InventoryItem[]; version?: unknown; _lojaIdRecebido?: unknown }
+        // Resposta de outra loja nunca vira catálogo desta.
+        if (body._lojaIdRecebido !== lj) return null
+        return {
+          items: sanitizeInventoryItems<InventoryItem>(body.items),
+          version: typeof body.version === "string" ? body.version : null,
+        }
+      },
+      apply: (snapshot) => {
+        setState((prev) => ({ ...prev, inventory: withPendingDevolucaoStock(snapshot.items, prev.devolucoes) }))
+      },
+    })
+    catalogSyncRef.current = controller
+    setCatalogVersion(null)
+    const sync = (force: boolean) => {
+      void controller.check({ force }).then(() => {
+        if (catalogSyncRef.current === controller) setCatalogVersion(controller.knownVersion())
+      })
+    }
+    const autoSync = () => {
+      // Offline não tenta (nem gasta o intervalo mínimo): o `online` dispara o check na volta.
+      if (navigator.onLine === false) return
+      if (catalogWatchersRef.current > 0) sync(false)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") autoSync()
+    }
+    const onFocus = () => autoSync()
+    const onOnline = () => autoSync()
+    window.addEventListener("focus", onFocus)
+    window.addEventListener("online", onOnline)
+    document.addEventListener("visibilitychange", onVisibility)
+    const unsubscribe = subscribeCatalogChanged(lj, () => sync(true))
+    const timer = window.setInterval(onVisibility, CATALOG_SYNC_INTERVAL_MS)
+    return () => {
+      controller.dispose()
+      if (catalogSyncRef.current === controller) catalogSyncRef.current = null
+      window.removeEventListener("focus", onFocus)
+      window.removeEventListener("online", onOnline)
+      document.removeEventListener("visibilitychange", onVisibility)
+      unsubscribe()
+      window.clearInterval(timer)
+    }
+  }, [storageKey])
+
   useEffect(() => {
     setOpsDbReady(false)
     let cancelled = false
@@ -1078,13 +1204,10 @@ export function OperationsProvider({
         ])
         if (cancelled) return
         if (!rInv.ok || (rOs && !rOs.ok)) {
-          lastSentOpsRef.current = JSON.stringify({
-            inv: stateRef.current.inventory,
-            ord: stateRef.current.ordens,
-          })
+          lastSentOpsRef.current = JSON.stringify({ ord: stateRef.current.ordens })
           return
         }
-        const jInv = (await rInv.json()) as { items?: InventoryItem[] }
+        const jInv = (await rInv.json()) as { items?: InventoryItem[]; version?: unknown }
         const jOs = rOs ? (await rOs.json()) as { ordens?: OrdemServico[] } : { ordens: [] }
         // P0 PDV-RAFACELL-LOAD-CRASH: valida ELEMENTOS das respostas (não só o
         // array). Uma linha inválida da loja nunca derruba o mount.
@@ -1117,7 +1240,7 @@ export function OperationsProvider({
           }
         }
 
-        const snap = JSON.stringify({ inv: items, ord: ordens })
+        const snap = JSON.stringify({ ord: ordens })
         lastSentOpsRef.current = snap
 
         let remoteSales: SaleRecord[] = []
@@ -1143,23 +1266,7 @@ export function OperationsProvider({
 
         if (!cancelled) {
           setState((prev) => {
-            // PENDING não reduz o catálogo do servidor. Opção A: o estoque
-            // exibido permanece o saldo autoritativo até CONFIRMED.
-            const adjustedItems = items.map((i) => ({ ...i }))
-            const pendingDevs = prev.devolucoes.filter((d) => isRecord(d) && d.syncPending === true)
-            for (const dev of pendingDevs) {
-              const lines = Array.isArray(dev.lines) ? dev.lines : []
-              for (const line of lines) {
-                if (!isRecord(line)) continue
-                const lineId = typeof line.inventoryId === "string" ? line.inventoryId : ""
-                const qty = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
-                if (!lineId || qty <= 0) continue
-                const item = adjustedItems.find((i) => i.id === lineId)
-                if (item) {
-                  item.stock += qty
-                }
-              }
-            }
+            const adjustedItems = withPendingDevolucaoStock(items, prev.devolucoes)
             const sales = mergeSalesById(prev.sales, remoteSales)
             reconcilePersistedSaleAttempts(lj, sales)
             return {
@@ -1169,6 +1276,7 @@ export function OperationsProvider({
               sales,
             }
           })
+          catalogSyncRef.current?.setKnownVersion(jInv.version)
         }
 
         // A reconciliação da sessão de caixa NÃO vive mais aqui. Ficava depois de
@@ -1207,14 +1315,15 @@ export function OperationsProvider({
         }
       } catch {
         if (!cancelled) {
-          lastSentOpsRef.current = JSON.stringify({
-            inv: stateRef.current.inventory,
-            ord: stateRef.current.ordens,
-          })
+          lastSentOpsRef.current = JSON.stringify({ ord: stateRef.current.ordens })
         }
       } finally {
         if (!cancelled) {
           setOpsDbReady(true)
+          // Checks automáticos só depois da carga inicial; um primeiro check fecha a
+          // janela em que um cadastro salvo durante a carga não seria visto.
+          catalogSyncRef.current?.enable()
+          void checkCatalog()
         }
       }
     }
@@ -1222,7 +1331,7 @@ export function OperationsProvider({
     return () => {
       cancelled = true
     }
-  }, [storageKey, canReadOperations])
+  }, [storageKey, canReadOperations, checkCatalog])
 
   /**
    * Reconcilia a sessão de caixa com o servidor — fonte da verdade.
@@ -1304,7 +1413,9 @@ export function OperationsProvider({
 
   useEffect(() => {
     if (!opsDbReady || !canReadOperations) return
-    const snap = JSON.stringify({ inv: state.inventory, ord: state.ordens })
+    // Só ORDENS dispara o PUT (é só o que ele envia): o catálogo agora é atualizado sem F5 e
+    // não pode reenviar ordens a cada versão nova (PDV-CADASTROS-SYNC-AUTOMATICO-001).
+    const snap = JSON.stringify({ ord: state.ordens })
     if (snap === lastSentOpsRef.current) return
     const t = setTimeout(() => {
       lastSentOpsRef.current = snap
@@ -1329,7 +1440,7 @@ export function OperationsProvider({
       }).catch(() => {})
     }, 750)
     return () => clearTimeout(t)
-  }, [opsDbReady, state.inventory, state.ordens, storageKey, canReadOperations])
+  }, [opsDbReady, state.ordens, storageKey, canReadOperations])
 
   const ledgerKey = JSON.stringify(state.dailyLedger)
   useEffect(() => {
@@ -2114,21 +2225,10 @@ export function OperationsProvider({
     })
   }, [reconcileRecoveredSales, storageKey])
 
+  /** Baixa o catálogo já (best-effort) pelo controlador: mesma loja, resposta mais nova vence. */
   const refreshInventoryFromServer = useCallback(async () => {
-    const lj = opsLojaIdFromStorageKey(storageKey)
-    try {
-      const rInv = await fetch(`/api/ops/inventory?lojaId=${encodeURIComponent(lj)}`, {
-        credentials: "include",
-        cache: "no-store",
-      })
-      if (!rInv.ok) return
-      const jInv = (await rInv.json()) as { items?: InventoryItem[] }
-      const items = sanitizeInventoryItems<InventoryItem>(jInv.items)
-      setState((prev) => ({ ...prev, inventory: items.map((i) => ({ ...i })) }))
-    } catch {
-      /* best-effort — descarte já reverteu o que era local */
-    }
-  }, [storageKey])
+    await checkCatalog({ force: true })
+  }, [checkCatalog])
 
   const discardLocalPendingSale = useCallback<OperationsContextType["discardLocalPendingSale"]>(
     async (saleId) => {
@@ -2708,7 +2808,9 @@ export function OperationsProvider({
         )
         // Identidade estável do catálogo: o `inventoryId` é o SKU quando existe e o
         // Cadastro pode alterá-lo antes da sincronização (PDV-SYNC-PRODUTO-NAO-RESOLVIDO).
-        const produtoId = typeof item?.dbId === "string" ? item.dbId.trim() : ""
+        // A do carrinho (capturada ao incluir o item) vence a busca pelo id operacional.
+        const fromLine = itemType === "produto" && typeof ln.produtoId === "string" ? ln.produtoId.trim() : ""
+        const produtoId = fromLine || (typeof item?.dbId === "string" ? item.dbId.trim() : "")
         return produtoId ? { ...record, produtoId } : record
       })
       const already = next.sales.find(
@@ -2774,28 +2876,38 @@ export function OperationsProvider({
         }
       }
       const code = persistResult.code
-      // PRODUTO_NAO_RESOLVIDO (PDV-SYNC-PRODUTO-NAO-RESOLVIDO-RECOVERY-001): o servidor
-      // rejeitou ANTES de qualquer efeito — o replay por clientSaleId/pedidoId roda antes da
-      // resolução de produto e a transação inteira (numeração inclusa) reverteu. Não há venda
-      // a confirmar. Manter PENDING congelava um payload que o operador não consegue revisar:
-      // o Reenviar repetia o mesmo 409 e a guarda de identidade travava as próximas vendas.
-      // FAILED honesto: descarta a tentativa local (nunca confirmada, `localEffectsApplied:
-      // false`), recarrega o catálogo e devolve o carrinho intacto para corrigir o item.
-      // Só para identidade criada NESTA chamada: uma `clientSaleId` reaproveitada do mapa
-      // compartilhado de tentativas pode estar viva como PENDING em outra aba — o 409 só
-      // prova que ela não estava gravada AGORA; fechá-la abriria caminho para 2 identidades.
-      if (code === UNRESOLVED_PRODUCT_CODE && !reusedIdentity) {
+      // RECUSA DEFINITIVA (PDV-SYNC-PRODUTO-NAO-RESOLVIDO-RECOVERY-001 →
+      // PDV-CADASTROS-SYNC-AUTOMATICO-001): o writer recusou ANTES de qualquer efeito — o
+      // código está em `DEFINITIVE_REJECTION_CODES` (lançado dentro da transação, que reverte
+      // inteira, numeração inclusa). Não há venda a confirmar. Manter PENDING congelava um
+      // payload que o operador não consegue revisar: o Reenviar repetia o mesmo 409 e a guarda
+      // de identidade travava as próximas vendas. FAILED honesto: descarta a tentativa local
+      // (nunca confirmada, `localEffectsApplied: false`), recarrega catálogo/caixa e devolve o
+      // carrinho intacto. Rede/5xx (resultado DESCONHECIDO) continua PENDING com a mesma
+      // identidade. Só para identidade criada NESTA chamada: uma `clientSaleId` reaproveitada
+      // do mapa compartilhado pode estar viva como PENDING em outra aba — o 409 só prova que
+      // ela não estava gravada AGORA; fechá-la abriria caminho para 2 identidades.
+      const disposition = finalizeFailureDisposition({
+        code,
+        httpStatus: persistResult.httpStatus,
+        networkError: persistResult.networkError,
+        reusedIdentity: reusedIdentity != null,
+      })
+      if (disposition === "FAILED" && code) {
         const token = { id: saleRow.id, clientSaleId: saleRow.clientSaleId }
         const isThisAttempt = (s: SaleRecord) => s.syncPending === true && saleMatches(s, token)
         clearPersistedSaleAttempt(lj, fingerprint, { clientSaleId: saleRow.clientSaleId, saleId: saleRow.id })
         stateRef.current = { ...stateRef.current, sales: stateRef.current.sales.filter((s) => !isThisAttempt(s)) }
         setState((prev) => ({ ...prev, sales: prev.sales.filter((s) => !isThisAttempt(s)) }))
-        void refreshInventoryFromServer()
-        console.warn("[venda-persist] produto-nao-resolvido — tentativa descartada", saleRow.id, "lojaId:", lj)
+        if (isCaixaSessionRejectionCode(code)) void refreshCaixaSession()
+        else void refreshInventoryFromServer()
+        console.warn("[venda-persist] recusa definitiva — tentativa descartada", code, saleRow.id, "lojaId:", lj)
         return {
           ok: false,
-          reason: unresolvedProductFinalizeReason(
+          reason: definitiveRejectionFinalizeReason(
+            code,
             unresolvedSaleLineLabels(saleRow.lines, persistResult.unresolvedInventoryIds),
+            persistResult.reason.replace(/^HTTP \d+ — /, ""),
           ),
         }
       }
@@ -3094,6 +3206,9 @@ export function OperationsProvider({
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,
       quarantineReviewKeys,
+      catalogVersion,
+      checkCatalog,
+      watchCatalogSync,
     }),
     [
       state,
@@ -3123,6 +3238,9 @@ export function OperationsProvider({
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,
       quarantineReviewKeys,
+      catalogVersion,
+      checkCatalog,
+      watchCatalogSync,
     ]
   )
 
