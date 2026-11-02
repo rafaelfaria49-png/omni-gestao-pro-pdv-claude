@@ -64,7 +64,10 @@ const withPWA = withPWAInit({
         url.pathname === "/api/ops/import/clientes" ||
         url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
-        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
+        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/") ||
+        // Sync do catálogo do PDV (PDV-CADASTROS-SYNC-AUTOMATICO-001): versão e snapshot nunca do
+        // cache — rede lenta devolveria catálogo velho. A carga inicial do PDV segue cacheável.
+        (url.pathname === "/api/ops/inventory" && url.searchParams.get("catalogSync") === "1")
       ),
       handler: "NetworkOnly",
       method: "GET",

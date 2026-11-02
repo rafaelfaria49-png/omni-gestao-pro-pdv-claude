@@ -5,6 +5,8 @@ import { serviceIdFromVirtualInventoryId } from "@/lib/os-pdv-virtual-lines"
 
 export type FinalizeSaleLineInput = {
   inventoryId: string
+  /** `Produto.id` capturado quando o item entrou no carrinho (identidade imutável). */
+  produtoId?: string
   quantity: number
   name?: string
   unitPrice?: number

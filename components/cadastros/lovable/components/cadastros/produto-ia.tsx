@@ -68,6 +68,7 @@ import { useStoreBusiness } from "@/lib/use-store-business";
 import { hasInvalidProductCommercial, productCommercialFromMetadata, productSpecificApplicability, productStockMovementAvailability, type ProductCommercialV1 } from "@/lib/cadastros/product-commercial-contract";
 import { manualProductNumberText, parseManualProductNumber } from "@/lib/cadastros/manual-product-input";
 import { usesClientExperience } from "@/lib/navigation/client-experience";
+import { notifyCatalogChanged } from "@/lib/estoque/catalog-sync";
 import { NovaCategoriaDialog, type NovaCategoriaResult } from "./NovaCategoriaDialog";
 
 /** União case-insensitive: a primeira lista tem precedência para o nome canônico. */
@@ -1273,11 +1274,15 @@ function ProductAIEditor({
         if (!result.ok) {
           if (result.type === "SAVE_ERROR") {
             unconfirmed = true; setUncertain(true);
+            // Pode ter gravado: o PDV confere a versão do catálogo em vez de supor.
+            notifyCatalogChanged(storeId);
             report("Não foi possível confirmar o salvamento. O produto pode ter sido gravado. Verifique o cadastro antes de iniciar outra tentativa.");
           } else report(result.message);
           return;
         }
         toast.success("Produto salvo com sucesso.", { description: name });
+        // PDV aberto nesta ou em outra aba atualiza o catálogo sem F5.
+        notifyCatalogChanged(storeId);
         // Atualização da listagem não altera a confirmação já recebida do writer.
         void Promise.resolve().then(() => onSaved?.()).catch(() => {});
         if (another) onCreateAnother(name);

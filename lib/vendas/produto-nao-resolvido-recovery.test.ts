@@ -142,7 +142,7 @@ describe("operations-store — contrato da finalização com PRODUTO_NAO_RESOLVI
     "const registrarDevolucao = useCallback",
   )
   const persistPending = between(store, "const persistPendingSale = useCallback", "const flushPendingSales = useCallback")
-  const failedBranch = between(finalize, "if (code === UNRESOLVED_PRODUCT_CODE && !reusedIdentity) {", "const view = pendingReasonView({")
+  const failedBranch = between(finalize, "if (disposition === \"FAILED\" && code) {", "const view = pendingReasonView({")
 
   it("linhas de produto levam o produtoId do catálogo (dbId)", () => {
     expect(finalize).toMatch(/item\?\.dbId/)
@@ -159,7 +159,7 @@ describe("operations-store — contrato da finalização com PRODUTO_NAO_RESOLVI
 
   it("identidade reaproveitada de outra tentativa (outra aba) nunca cai no FAILED", () => {
     // `reusedIdentity` vem do mapa compartilhado: pode estar PENDING em outra aba.
-    expect(finalize).toContain("if (code === UNRESOLVED_PRODUCT_CODE && !reusedIdentity) {")
+    expect(finalize).toContain("if (disposition === \"FAILED\" && code) {")
   })
 
   it("rede caindo depois do 409 não apaga a referência já guardada", () => {
@@ -177,7 +177,7 @@ describe("operations-store — contrato da finalização com PRODUTO_NAO_RESOLVI
   })
 
   it("o desfecho FAILED vem ANTES do retorno PENDING genérico", () => {
-    expect(finalize.indexOf("if (code === UNRESOLVED_PRODUCT_CODE && !reusedIdentity) {")).toBeLessThan(
+    expect(finalize.indexOf("if (disposition === \"FAILED\" && code) {")).toBeLessThan(
       finalize.lastIndexOf("pending: true,"),
     )
   })

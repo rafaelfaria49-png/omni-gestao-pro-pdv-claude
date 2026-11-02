@@ -101,6 +101,7 @@ import {
 import { sanitizeProdutoAcessoriosMetadata } from "@/lib/acessorios/metadata"
 import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 import type { CatalogoAparelhosMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
+import { notifyCatalogChanged } from "@/lib/estoque/catalog-sync"
 
 interface Product {
   id: string
@@ -532,6 +533,7 @@ export function GestaoProdutos({
         throw new Error(data?.error || `Falha ao excluir (HTTP ${res.status})`)
       }
       setSelectedProductIds(new Set())
+      notifyCatalogChanged(lojaHeader)
       await reloadInventory()
       toast({
         title: "Exclusão concluída",
@@ -848,6 +850,7 @@ export function GestaoProdutos({
           }
         }
       }
+      notifyCatalogChanged(lojaHeader)
       await reloadInventory()
       toast({
         title: editingProduct ? "Item atualizado" : "Item cadastrado",
@@ -893,6 +896,7 @@ export function GestaoProdutos({
         next.delete(pendingDeleteId)
         return next
       })
+      notifyCatalogChanged(lojaHeader)
       await reloadInventory()
       toast({ title: "Item removido do estoque" })
     } catch (e) {
