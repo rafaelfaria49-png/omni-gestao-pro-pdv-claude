@@ -115,7 +115,8 @@ describe("operations-store — contrato da sincronização do catálogo", () => 
   })
 
   it("volta da rede não recarrega a página (o next-pwa recarrega por padrão e apaga o carrinho)", () => {
-    expect(read("next.config.mjs")).toMatch(/withPWAInit\(\{[\s\S]*?reloadOnOnline: false,[\s\S]*?\}\)/)
+    const pwa = between(read("next.config.mjs"), "withPWAInit({", "workboxOptions:")
+    expect(pwa).toMatch(/^\s*reloadOnOnline: false,/m)
     expect(effect).toContain('window.addEventListener("online", onOnline)')
     // Offline nem tenta: não gasta o intervalo mínimo que atrasaria o check da volta.
     expect(effect).toMatch(/if \(navigator\.onLine === false\) return\r?\n\s*if \(catalogWatchersRef\.current > 0\) sync\(false\)/)

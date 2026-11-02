@@ -1,0 +1,14 @@
+{
+  "goal": "PDV-CADASTROS-SYNC-AUTOFIX-CI-325-001",
+  "date": "2026-11-02",
+  "pr": 325,
+  "stackedOn": "PR #324",
+  "failingRun": 41479634312,
+  "diagnosticRuns": [41509136678, 41510551865],
+  "fixCommit": "9375457",
+  "passingRun": 41512338936,
+  "branch": "claude/pdv-cadastros-sync-automatico-001",
+  "migrations": 0,
+  "productionWrites": 0,
+  "files": ["RELATORIO_FINAL.md"]
+}
