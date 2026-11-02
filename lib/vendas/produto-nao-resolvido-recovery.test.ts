@@ -141,7 +141,8 @@ describe("operations-store — contrato da finalização com PRODUTO_NAO_RESOLVI
     "const finalizeSaleTransaction = useCallback",
     "const registrarDevolucao = useCallback",
   )
-  const persistPending = between(store, "const persistPendingSale = useCallback", "const flushPendingSales = useCallback")
+  // O desfecho da resposta (inclusive o 409) mora em `settlePersistResponse`, chamado por `persistPendingSale`.
+  const persistPending = between(store, "const settlePersistResponse = useCallback", "const flushPendingSales = useCallback")
   const failedBranch = between(finalize, "if (disposition === \"FAILED\" && code) {", "const view = pendingReasonView({")
 
   it("linhas de produto levam o produtoId do catálogo (dbId)", () => {

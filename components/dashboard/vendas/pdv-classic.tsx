@@ -279,7 +279,7 @@ export function PdvClassic({
   // Caixa: apenas leitura do CaixaStatusBar/CaixaProvider via outros consumers.
   // `useCaixa()` legado (adicionarEntrada/Saida/sessaoId) só era usado pelo
   // `saveOperation` removido — fluxo migrado para o CaixaStatusBar compartilhado.
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens, sales, checkCatalog, watchCatalogSync } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens, sales, checkCatalog, watchCatalogSync, releaseSaleAttempt } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
@@ -2135,10 +2135,17 @@ export function PdvClassic({
                 setSelectedCustomer(null)
                 setShellCustomerField("CONSUMIDOR")
                 // N5-B1 R2 (P2-06): rascunho encerrado conscientemente — guard
-                // de identidade PENDING liberado (pendência segue syncing).
+                // de identidade PENDING liberado (pendência segue syncing). O store também
+                // libera: carrinho idêntico depois disto é venda NOVA (offline em sequência).
+                const tinhaPendente = pendingSaleIdentityRef.current?.hasPending() === true
+                releaseSaleAttempt?.(pendingSaleIdentityRef.current?.getIdentity())
                 pendingSaleIdentityRef.current?.clear()
                 setShellCancelSaleOpen(false)
-                setShellInfo("Venda cancelada. Sistema limpo.")
+                setShellInfo(
+                  tinhaPendente
+                    ? "Carrinho liberado. A venda anterior NÃO foi cancelada: segue registrada neste terminal, aguardando o servidor."
+                    : "Venda cancelada. Sistema limpo.",
+                )
                 focusShellBipe()
               }}
               advancedOpen={shellAdvancedOpen}

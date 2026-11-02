@@ -147,6 +147,16 @@ export interface SaleRecord {
   syncUnresolvedInventoryIds?: string[]
   /** true = a última falha foi de rede/abort, não corpo HTTP. */
   syncNetworkError?: boolean
+  /**
+   * PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001: quem disparou a última tentativa e o desfecho
+   * dela, persistidos com a venda — o resultado do Reenviar não vive só num toast.
+   */
+  syncLastAttemptSource?: "manual" | "auto" | "finalize"
+  syncLastAttemptOutcome?: import("@/lib/vendas/sale-sync-engine").SaleSyncAttemptOutcome
+  /** Instantâneo ISO da confirmação server-side (só com evidência da venda no servidor). */
+  syncConfirmedAt?: string
+  /** A venda nasceu sem conexão útil com o servidor (registro local, ainda não confirmado). */
+  registeredOffline?: boolean
 }
 
 export interface DevolucaoRecord {
