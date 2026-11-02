@@ -79,6 +79,9 @@ import {
   PENDING_SYNC_CLASS,
   resolvePendingSyncErrorCode,
   shouldAutoRetryPendingSync,
+  UNRESOLVED_PRODUCT_CODE,
+  unresolvedProductFinalizeReason,
+  unresolvedSaleLineLabels,
 } from "@/lib/vendas/pending-sync-classification"
 import {
   applyConfirmedLocalEffects,
@@ -283,6 +286,7 @@ function clearSaleSyncFailure(sale: SaleRecord): SaleRecord {
     syncFailureMessage: undefined,
     syncDrift: undefined,
     syncNetworkError: undefined,
+    syncUnresolvedInventoryIds: undefined,
   }
 }
 
@@ -723,6 +727,7 @@ type PersistPendingSaleResult =
       networkError?: boolean
       httpStatus?: number
       drift?: import("@/lib/estoque/stock-drift-reconcile").StockDriftDetails
+      unresolvedInventoryIds?: string[]
     }
 
 type FinalizeSaleTransactionResult = Awaited<ReturnType<OperationsContextType["finalizeSaleTransaction"]>>
@@ -733,6 +738,7 @@ type SaleSyncFailurePatch = {
   message?: string
   networkError?: boolean
   drift?: import("@/lib/estoque/stock-drift-reconcile").StockDriftDetails
+  unresolvedInventoryIds?: string[]
 }
 
 /** Recorte do item do planner consumido pela UI. */
@@ -1458,6 +1464,7 @@ export function OperationsProvider({
               syncFailureMessage: next.message ? next.message.slice(0, 500) : s.syncFailureMessage,
               ...(next.drift ? { syncDrift: next.drift } : {}),
               syncNetworkError: next.networkError,
+              ...(next.unresolvedInventoryIds ? { syncUnresolvedInventoryIds: next.unresolvedInventoryIds } : {}),
               syncLastAttemptAt: new Date().toISOString(),
               syncAttemptCount: (s.syncAttemptCount ?? 0) + 1,
             }
@@ -1572,7 +1579,14 @@ export function OperationsProvider({
             resolvePendingSyncErrorCode({ httpStatus: v1.status, message: v1Parsed.message })
           markSaleBlocked(
             { id: converted.id, clientSaleId: converted.clientSaleId },
-            { code: v1Code, httpStatus: v1.status, message: v1Parsed.message, networkError: false, drift: v1Parsed.drift },
+            {
+              code: v1Code,
+              httpStatus: v1.status,
+              message: v1Parsed.message,
+              networkError: false,
+              drift: v1Parsed.drift,
+              unresolvedInventoryIds: v1Parsed.unresolvedInventoryIds,
+            },
           )
           return {
             ok: false,
@@ -1580,15 +1594,24 @@ export function OperationsProvider({
             code: v1Code,
             httpStatus: v1.status,
             ...(v1Parsed.drift ? { drift: v1Parsed.drift } : {}),
+            ...(v1Parsed.unresolvedInventoryIds ? { unresolvedInventoryIds: v1Parsed.unresolvedInventoryIds } : {}),
           }
         }
-        markSaleBlocked(token, { code, httpStatus: res.status, message: parsed.message, networkError: false, drift: parsed.drift })
+        markSaleBlocked(token, {
+          code,
+          httpStatus: res.status,
+          message: parsed.message,
+          networkError: false,
+          drift: parsed.drift,
+          unresolvedInventoryIds: parsed.unresolvedInventoryIds,
+        })
         return {
           ok: false,
           reason: `HTTP ${res.status} — ${parsed.message}`,
           ...(code ? { code } : {}),
           httpStatus: res.status,
           ...(parsed.drift ? { drift: parsed.drift } : {}),
+          ...(parsed.unresolvedInventoryIds ? { unresolvedInventoryIds: parsed.unresolvedInventoryIds } : {}),
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -2679,10 +2702,14 @@ export function OperationsProvider({
         const item = itemType === "produto"
           ? next.inventory.find((inventoryItem) => inventoryItem.id === ln.inventoryId)
           : undefined
-        return saleLineRecordFromFinalizeInput(
+        const record = saleLineRecordFromFinalizeInput(
           ln,
           item ? { name: item.name, price: item.price } : undefined,
         )
+        // Identidade estável do catálogo: o `inventoryId` é o SKU quando existe e o
+        // Cadastro pode alterá-lo antes da sincronização (PDV-SYNC-PRODUTO-NAO-RESOLVIDO).
+        const produtoId = typeof item?.dbId === "string" ? item.dbId.trim() : ""
+        return produtoId ? { ...record, produtoId } : record
       })
       const already = next.sales.find(
         (s) => s.syncPending === true && (s.clientSaleId === clientSaleId || s.id === saleId),
@@ -2747,6 +2774,31 @@ export function OperationsProvider({
         }
       }
       const code = persistResult.code
+      // PRODUTO_NAO_RESOLVIDO (PDV-SYNC-PRODUTO-NAO-RESOLVIDO-RECOVERY-001): o servidor
+      // rejeitou ANTES de qualquer efeito — o replay por clientSaleId/pedidoId roda antes da
+      // resolução de produto e a transação inteira (numeração inclusa) reverteu. Não há venda
+      // a confirmar. Manter PENDING congelava um payload que o operador não consegue revisar:
+      // o Reenviar repetia o mesmo 409 e a guarda de identidade travava as próximas vendas.
+      // FAILED honesto: descarta a tentativa local (nunca confirmada, `localEffectsApplied:
+      // false`), recarrega o catálogo e devolve o carrinho intacto para corrigir o item.
+      // Só para identidade criada NESTA chamada: uma `clientSaleId` reaproveitada do mapa
+      // compartilhado de tentativas pode estar viva como PENDING em outra aba — o 409 só
+      // prova que ela não estava gravada AGORA; fechá-la abriria caminho para 2 identidades.
+      if (code === UNRESOLVED_PRODUCT_CODE && !reusedIdentity) {
+        const token = { id: saleRow.id, clientSaleId: saleRow.clientSaleId }
+        const isThisAttempt = (s: SaleRecord) => s.syncPending === true && saleMatches(s, token)
+        clearPersistedSaleAttempt(lj, fingerprint, { clientSaleId: saleRow.clientSaleId, saleId: saleRow.id })
+        stateRef.current = { ...stateRef.current, sales: stateRef.current.sales.filter((s) => !isThisAttempt(s)) }
+        setState((prev) => ({ ...prev, sales: prev.sales.filter((s) => !isThisAttempt(s)) }))
+        void refreshInventoryFromServer()
+        console.warn("[venda-persist] produto-nao-resolvido — tentativa descartada", saleRow.id, "lojaId:", lj)
+        return {
+          ok: false,
+          reason: unresolvedProductFinalizeReason(
+            unresolvedSaleLineLabels(saleRow.lines, persistResult.unresolvedInventoryIds),
+          ),
+        }
+      }
       const view = pendingReasonView({
         code,
         httpStatus: persistResult.httpStatus,
@@ -2780,7 +2832,7 @@ export function OperationsProvider({
         finalizeInFlightRef.current.delete(fingerprint)
       }
     },
-    [persistPendingSale, probeWriterCapability, refreshCaixaSession, storageKey]
+    [persistPendingSale, probeWriterCapability, refreshCaixaSession, refreshInventoryFromServer, storageKey]
   )
 
   const registrarDevolucao = useCallback<OperationsContextType["registrarDevolucao"]>((input) => {

@@ -7,9 +7,24 @@ import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { isSaleIdentityConflictCode } from "@/lib/vendas/sale-identity-conflict"
 import { summarizeLocalPendingSales } from "@/lib/vendas/quarantine-local-reconciliation"
-import { pendingReasonView, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
+import {
+  pendingReasonView,
+  PENDING_SYNC_CLASS,
+  unresolvedLinesCarryStableId,
+  unresolvedSaleLineLabels,
+} from "@/lib/vendas/pending-sync-classification"
+import type { SaleRecord } from "@/lib/operations-sale-types"
 
 const SEM_REVISAO: ReadonlySet<string> = new Set()
+
+/** Identidade curta da pendência (ref local + horário) — sem dado de cliente. */
+function pendingSaleLabel(sale: Pick<SaleRecord, "id" | "at">): string {
+  const at = new Date(sale.at)
+  const when = Number.isNaN(at.getTime())
+    ? ""
+    : ` de ${at.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+  return `Venda ${sale.id}${when}`
+}
 
 /**
  * Indicador HONESTO de pendências de sincronização do PDV.
@@ -26,25 +41,29 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
   const { toast } = useToast()
   const [resending, setResending] = useState(false)
 
-  const { salesPend, retryableSales, preservadas, revisao, devPend, caixaPend, total, headline } = useMemo(() => {
+  const { salesPend, retryableSales, preservadas, revisao, devPend, caixaPend, total, headline, headlineSale } = useMemo(() => {
     const sp = sales.filter((s) => s.syncPending === true)
     const retryable = sp.filter((s) => !isSaleIdentityConflictCode(s.syncBlockedCode))
     const resumo = summarizeLocalPendingSales(sp, quarantineReviewKeys ?? SEM_REVISAO)
     const dp = devolucoes.filter((d) => d.syncPending === true).length
     const cp = (pendingCaixaOperations ?? []).filter((o) => o.syncPending === true).length
-    const views = sp.map((s) =>
-      pendingReasonView({
+    // Cada motivo fica amarrado à PRÓPRIA venda pendente (linhas dela, não do carrinho).
+    const views = sp.map((s) => ({
+      sale: s,
+      view: pendingReasonView({
         code: s.syncBlockedCode,
         httpStatus: s.syncHttpStatus,
         networkError: s.syncNetworkError,
         message: s.syncFailureMessage,
         drift: s.syncDrift,
+        unresolvedLabels: unresolvedSaleLineLabels(s.lines, s.syncUnresolvedInventoryIds),
+        unresolvedProductRemoved: unresolvedLinesCarryStableId(s.lines, s.syncUnresolvedInventoryIds),
         pending: true,
       }),
-    )
-    const actionRequiredViews = views.filter((v) => v.class === PENDING_SYNC_CLASS.ACTION_REQUIRED)
-    const autoRetry = views.filter((v) => v.class === PENDING_SYNC_CLASS.AUTO_RETRY)
-    const quarantined = views.filter((v) => v.class === PENDING_SYNC_CLASS.QUARANTINED)
+    }))
+    const actionRequiredViews = views.filter((v) => v.view.class === PENDING_SYNC_CLASS.ACTION_REQUIRED)
+    const autoRetry = views.filter((v) => v.view.class === PENDING_SYNC_CLASS.AUTO_RETRY)
+    const quarantined = views.filter((v) => v.view.class === PENDING_SYNC_CLASS.QUARANTINED)
     const primary =
       actionRequiredViews[0] ??
       (autoRetry.length > 0 ? autoRetry[0] : undefined) ??
@@ -57,7 +76,8 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
       devPend: dp,
       caixaPend: cp,
       total: sp.length + dp + cp,
-      headline: primary,
+      headline: primary?.view,
+      headlineSale: primary?.sale,
     }
   }, [sales, devolucoes, pendingCaixaOperations, quarantineReviewKeys])
 
@@ -78,7 +98,7 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
   const reasonLine = quarantinedOnly
     ? " O sistema envia automaticamente — não limpe os dados do navegador antes de concluir."
     : headline
-      ? ` ${headline.title}. ${headline.description} ${headline.recommendedAction}`
+      ? `${actionRequired && headlineSale ? ` ${pendingSaleLabel(headlineSale)}:` : ""} ${headline.title}. ${headline.description} ${headline.recommendedAction}`
       : " O sistema envia automaticamente — não limpe os dados do navegador antes de concluir."
 
   const reenviar = async () => {

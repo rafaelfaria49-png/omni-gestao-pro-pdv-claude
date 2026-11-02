@@ -231,7 +231,10 @@ export async function POST(req: Request) {
         "[ops/venda-persist] produto-nao-resolvido",
         JSON.stringify({ lojaId, pedidoId, inventoryIds: error.inventoryIds }),
       )
-      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+      return NextResponse.json(
+        { error: error.message, code: error.code, inventoryIds: error.inventoryIds },
+        { status: 409 },
+      )
     }
     // Crédito/Vale fail-closed (PDV-TROCAS-VALE-HARDENING-PRE-PUBLISH-002): venda
     // contabilizando creditoVale sem saldo efetivamente debitado NÃO conclui — a
