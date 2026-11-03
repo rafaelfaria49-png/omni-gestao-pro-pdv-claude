@@ -1,0 +1,81 @@
+{
+  "goal": "OMNI-PRINT-004C-INTEGRACAO-END-TO-END-001",
+  "at": "2026-11-03T10:10:22.663Z",
+  "transport": "SIMULATED (FakeSpooler) + real Windows PowerShell host without printer",
+  "physicalPrint": "NOT_TESTED_NO_PRINTER",
+  "steps": [
+    {
+      "step": "generator-check",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": null,
+      "seconds": 0,
+      "logSha256": "c757b3793e7684acb6275cd0ac24da0ecc93256e444bb44eadda45c037625a07"
+    },
+    {
+      "step": "source-hygiene",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": null,
+      "seconds": 0,
+      "logSha256": "8330ffb4d815a80b09323d2cd611565aaa9d3ab72c6b5cb90f4020c3cb221410"
+    },
+    {
+      "step": "unit-and-windows-agent",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": "31 passed (31)",
+      "seconds": 8,
+      "logSha256": "b26c25dc4a7ba902d252352037ff6fbc462e53a3bbce8e20cfd554c7c956b60e"
+    },
+    {
+      "step": "pg-scenarios",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": "30 passed (30)",
+      "seconds": 10,
+      "logSha256": "91d910666af936fd7ce675dae9a95204276d11f265ddd9a51e818c927cfae888",
+      "note": "rerun after S29 assertion update: the transiently refused report is now re-sent within the same agent tick (round-3 P3 fix), so the copy no longer stays SENDING in between"
+    },
+    {
+      "step": "pg-synthetic-004b-regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": "3 passed (3)",
+      "seconds": 3,
+      "logSha256": "40f20b2f45c9319159d5b4585557f64ec75f7f232da7f8d0794aad84e5fb6c4c"
+    },
+    {
+      "step": "pg-two-agent-processes",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": "1 passed (1)",
+      "seconds": 7,
+      "logSha256": "325ebd98368cdd8791dcf859aa85934a6ca86d92a83b062f83a2ff2fe7e14607"
+    },
+    {
+      "step": "pg-index-strategy",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": "2 passed (2)",
+      "seconds": 7,
+      "logSha256": "b07be149f6ca47a97bf9f13ce0dd677af0f1a7e87100dca3613a0cd5581d38a1"
+    },
+    {
+      "step": "pg-future-layout-apply",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": null,
+      "seconds": 2,
+      "logSha256": "8d0bc2cd3ebe553270ba6eb55247ccc7a58bc62b031f3137f4f5b0807f0b03a7"
+    },
+    {
+      "step": "playwright-pdv-classic",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": "11 passed (38.9s)",
+      "seconds": 42,
+      "logSha256": "2805b14555dd4fff8a061eb62e845824496c62a68e9de1d9ee3c2baa05f949d4"
+    }
+  ]
+}

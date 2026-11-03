@@ -254,7 +254,7 @@ export class PrintCoreSynthetic {
       check(safeStates.includes(cp.state) && !cp.retry_suppressed_by_job_id && cp.payload_cipher && cp.payload_expires_at > new Date() &&
         j.authorization_expires_at > new Date(), "COPY_NOT_RETRYABLE")
       check(!cp.lease_owner || cp.lease_until <= new Date(), "LEASE_HELD")
-      const epoch = BigInt(cp.lease_epoch) + 1n, until = new Date(Date.now() + this.policy.leaseMs)
+      const epoch = BigInt(cp.lease_epoch) + BigInt(1), until = new Date(Date.now() + this.policy.leaseMs)
       await sql.exec("UPDATE public.print_copies SET state='READY',lease_owner=$1,lease_until=$2,lease_epoch=$3 WHERE id=$4::uuid", [owner, until, epoch, copyId])
       await this.event(sql, { store_id: storeId, document_id: j.document_id, job_id: jobId, copy_id: copyId }, "COPY_READY", null)
       return { epoch: String(epoch), owner, until }

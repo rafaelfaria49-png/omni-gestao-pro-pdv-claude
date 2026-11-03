@@ -1,0 +1,29 @@
+reset print_lab_pw
+
+Running 11 tests using 1 worker
+
+
+
+
+
+
+
+[1/11] e2e\specs\print-direct-004c.spec.ts:154:5 › PW1 impressão automática: venda CONFIRMADA → fila da impressora do terminal, sem janela/diálogo/preview
+[2/11] e2e\specs\print-direct-004c.spec.ts:174:5 › PW2 venda PENDENTE (falha de rede no writer) nunca chama a impressão direta
+[3/11] e2e\specs\print-direct-004c.spec.ts:188:5 › PW3 impressora desligada → aviso claro sem repetir a venda; religada → Tentar novamente imprime uma vez
+[4/11] e2e\specs\print-direct-004c.spec.ts:205:5 › PW4 segunda via explícita com confirmação de risco → SEGUNDA VIA na impressora
+[5/11] e2e\specs\print-direct-004c.spec.ts:221:5 › PW5 modo manual: nada é enviado até o operador clicar em Imprimir comprovante
+[6/11] e2e\specs\print-direct-004c.spec.ts:234:5 › PW6 agente fora do ar → 'não respondeu' sem impressão tardia; agente volta → Tentar novamente imprime uma vez
+[7/11] e2e\specs\print-direct-004c.spec.ts:250:5 › PW7 loja/terminal sem impressão direta ativada → fluxo atual intacto (sem chamada nova)
+[8/11] e2e\specs\print-direct-004c.spec.ts:258:5 › PW8 navegador por escolha explícita: registrado pelo servidor, HTML escapado e marcado; sem via térmica depois
+[9/11] e2e\specs\print-direct-004c.spec.ts:274:5 › PW9 resultado incerto: nada é reenviado; navegador exige confirmação e sai como SEGUNDA VIA
+[10/11] e2e\specs\print-direct-004c.spec.ts:295:5 › PW10 venda fora do contrato (KG) → volta ao fluxo anterior (automático e manual); nada térmico, nada pelo navegador
+[11/11] e2e\specs\print-direct-004c.spec.ts:305:5 › PW11 venda KG com impressão automática desligada → diálogo manual existente
+  11 passed (38.9s)
+(node:27504) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:17608) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17608) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:17608) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)

@@ -9,9 +9,9 @@ import { SyntheticBoundary } from "../../lib/print-core-synthetic/simulator"
 import { CoreError, type Database, type Row, type Sql } from "../../lib/print-core-synthetic/db"
 import { saleSnapshot } from "../../lib/print-core-synthetic/sale"
 import type { Authority } from "../../lib/print-core-synthetic/authority"
-// @ts-expect-error lab.mjs is the explicitly sanitized fixture bootstrap, never an application singleton
+// lab.mjs is the explicitly sanitized fixture bootstrap, never an application singleton
 import { config, validateConfig, connectionUrl, json, privateRoot } from "./lab.mjs"
-// @ts-expect-error explicit test-only process guard
+// explicit test-only process guard
 import { forbidRealTransports } from "./boundary-guard.mjs"
 
 const require = createRequire(import.meta.url)

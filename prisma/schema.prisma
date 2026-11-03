@@ -37,6 +37,7 @@ model Store {
   printJobs PrintJob[] @relation("P004JobStore")
   printRequests PrintRequest[] @relation("P004RequestStore")
   printEvents PrintEvent[] @relation("P004EventStore")
+  printAgentLinks PrintAgentLink[] @relation("P004AgentLinkStore")
   /**
    * Use ids estáveis: loja-1, loja-2, ...
    */
@@ -2226,6 +2227,7 @@ model AdminUser {
   printBindingRevocations PrintBinding[] @relation("P004BindingRevokedBy")
   printDelegations PrintDelegation[] @relation("P004DelegationPrincipal")
   printEvents PrintEvent[] @relation("P004EventActor")
+  printAgentLinksCreated PrintAgentLink[] @relation("P004AgentLinkCreatedBy")
   id        String   @id @default(cuid())
   name      String   @default("")
   email     String   @unique
@@ -3591,8 +3593,33 @@ model PrintInstallation {
   createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
   revokedBy AdminUser? @relation("P004InstallationRevokedBy", fields: [revokedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "p004_fk_01")
   bindings PrintBinding[] @relation("P004BindingInstallation")
+  agentLink PrintAgentLink? @relation("P004AgentLinkInstallation")
   @@unique([identityHash], map: "print_installations_u1")
   @@map("print_installations")
+}
+
+/// 004C candidato LOCAL_AGENT: pareamento/credencial do agente local (somente hashes). SQL candidato (fora de prisma/migrations): tools/print-004c-e2e/candidate-migrations/02_20261102_print_local_agent_candidate.sql.
+model PrintAgentLink {
+  installationId String @id @db.Uuid @map("installation_id")
+  storeId String @map("store_id")
+  label String @map("label")
+  createdById String @map("created_by_id")
+  pairingCodeHash String? @db.Char(64) @map("pairing_code_hash")
+  pairingExpiresAt DateTime? @db.Timestamptz(3) @map("pairing_expires_at")
+  credentialHash String? @db.Char(64) @map("credential_hash")
+  pairedAt DateTime? @db.Timestamptz(3) @map("paired_at")
+  agentVersion String? @map("agent_version")
+  lastSeenAt DateTime? @db.Timestamptz(3) @map("last_seen_at")
+  inventory Json @default("[]") @db.JsonB @map("inventory")
+  inventoryAt DateTime? @db.Timestamptz(3) @map("inventory_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  installation PrintInstallation @relation("P004AgentLinkInstallation", fields: [installationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "p004_fk_37")
+  store Store @relation("P004AgentLinkStore", fields: [storeId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "p004_fk_38")
+  createdBy AdminUser @relation("P004AgentLinkCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "p004_fk_39")
+  @@unique([pairingCodeHash], map: "print_agent_links_u1")
+  @@unique([credentialHash], map: "print_agent_links_u2")
+  @@index([storeId], map: "print_agent_links_i1")
+  @@map("print_agent_links")
 }
 
 model PrintDestination {

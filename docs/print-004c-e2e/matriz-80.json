@@ -1,0 +1,490 @@
+{
+  "totals": {
+    "PASS_REAL_SOFTWARE": 52,
+    "PASS_SIMULATED_TRANSPORT": 13,
+    "BLOCKED_HUMAN_GATE": 6,
+    "DEFERRED_PHYSICAL_HARDWARE": 9
+  },
+  "rows": [
+    {
+      "id": "P01",
+      "title": "Normalização de comando equivalente",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S02 (uiContextId diferente por envelope → mesmo job); ressalva histórica resolvida"
+    },
+    {
+      "id": "P02",
+      "title": "Mesmo key com comando diferente",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S22 (REQUEST_CONFLICT com comando alterado)"
+    },
+    {
+      "id": "P03",
+      "title": "Texto com ESC/GS/DLE/NUL, C0/C1 e DEL",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit P03 + S19 (ESC/GS/DLE/C0/C1/DEL/bidi inertes; NUL recusado pelo PostgreSQL)"
+    },
+    {
+      "id": "P04",
+      "title": "HTML, atributos, logo e rodapé maliciosos",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S28/PW8 (HTML do navegador gerado e escapado no servidor, sem script) + S19"
+    },
+    {
+      "id": "P05",
+      "title": "Encoding e largura 58/80 mm",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit 58/80 (≤32/≤48 colunas, WPC1252 ã/ç/É, ESC t 16) + S03; aparência no papel em F02"
+    },
+    {
+      "id": "P06",
+      "title": "Snapshot imutável por via",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit P06 (duas renderizações byte a byte) + S23 (imutabilidade); ressalva histórica resolvida"
+    },
+    {
+      "id": "P07",
+      "title": "Agregação de vias aceitas/incertas/falhas",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit P07 (ACEITO+INCERTO → PARCIAL sem retry da incerta) + S26; ressalva histórica resolvida"
+    },
+    {
+      "id": "P08",
+      "title": "Matriz de transições inválidas",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S23 (transições/imutabilidade/exclusão recusadas no banco) + R4"
+    },
+    {
+      "id": "P09",
+      "title": "Segunda via e teste versus gaveta",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit (INITIAL/REPRINT sem pulso de gaveta; validador recusa ESC p); teste sintético não exposto"
+    },
+    {
+      "id": "P10",
+      "title": "Documentos PENDING/quarentena e estado comercial",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S05/PW2 (venda pendente nunca imprime) + S22 (quarentena) + S14"
+    },
+    {
+      "id": "P11",
+      "title": "Limites de comando, itens, vias e payload",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S21 (COMMAND_LIMIT/SNAPSHOT_LIMIT/PAYLOAD_LIMIT/ITEM_LIMIT, zero efeitos) + S18; ressalva histórica resolvida"
+    },
+    {
+      "id": "P12",
+      "title": "Grant expirado/revogado e replay após cleanup",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S15 (sessionVersion/usuário inativo/delegação → AUTHORIZATION_LOST); limpeza não implementada (D03)"
+    },
+    {
+      "id": "P13",
+      "title": "Minimização e logs",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S19 (CPF fora do snapshot; nenhuma credencial/cipher na resposta)"
+    },
+    {
+      "id": "P14",
+      "title": "Venda histórica sem job anterior",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S24 (segunda via de venda sem job anterior fecha o slot INITIAL)"
+    },
+    {
+      "id": "P15",
+      "title": "Ações permitidas com payload expirado",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit (payload expirado não permite retry) + retry() exige payload vigente"
+    },
+    {
+      "id": "P16",
+      "title": "Equivalência de intenção entre principais autorizados",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S02 (dois usuários autorizados convergem no mesmo INITIAL)"
+    },
+    {
+      "id": "B01",
+      "title": "Duas criações INITIAL concorrentes, keys distintas",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S02 (duas criações INITIAL concorrentes → 1 job)"
+    },
+    {
+      "id": "B02",
+      "title": "Duas abas, manual versus automático e dois usuários",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S02 + PW5 (abas/usuários/manual×auto convergem)"
+    },
+    {
+      "id": "B03",
+      "title": "Dois terminais/destinos ou versão/vias diferentes",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S03 (outro terminal converge) + S30 (TERMINAL_MISMATCH para venda de outro caixa)"
+    },
+    {
+      "id": "B04",
+      "title": "Replay idêntico, resposta perdida após commit",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S09 (POST reenviado) + S13 (consentimento repetido converge)"
+    },
+    {
+      "id": "B05",
+      "title": "Replay alterado e outra identidade com key conhecida",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S22 (chave conhecida com outra identidade → REQUEST_EXPIRED)"
+    },
+    {
+      "id": "B06",
+      "title": "Crash/rollback antes do commit T1",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S21 (falha antes do commit T1 deixa zero linhas)"
+    },
+    {
+      "id": "B07",
+      "title": "Crash após T1 e antes de T2/T3",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S10/PW6 (sem T3: lease vence → não enviado, retry explícito imprime uma vez)"
+    },
+    {
+      "id": "B08",
+      "title": "Dois executores disputam uma via",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S25 + two-agents.pg (2 processos reais, mesma credencial, perdas de resposta, kill -9: 0 duplicatas em 3 execuções)"
+    },
+    {
+      "id": "B09",
+      "title": "Lease expira antes de T3 e executor antigo acorda",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S10/S12 (lease vencido: nada é reivindicável, sem impressão tardia)"
+    },
+    {
+      "id": "B10",
+      "title": "Crash após T3 antes da chamada e após envio antes de T4",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S11 (crash após envio: UNKNOWN) + S12 + two-agents (kill -9 e reinício)"
+    },
+    {
+      "id": "B11",
+      "title": "Revogação concorre com T3",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S15 (revogação antes da T3 → cópia expirada, nada enviado; sequencial)"
+    },
+    {
+      "id": "B12",
+      "title": "Correção/cancelamento da venda concorre com criação/envio",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S14 (cancelamento/correção após o job → cópia cancelada)"
+    },
+    {
+      "id": "B13",
+      "title": "Bindings e previousJobId de outra loja",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S04 (vínculos/agentes/provas de outra loja recusados)"
+    },
+    {
+      "id": "B14",
+      "title": "Duas confirmações concorrentes de segunda via",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S25 (duas confirmações concorrentes da segunda via → 1 job)"
+    },
+    {
+      "id": "B15",
+      "title": "Múltiplas vias com aceite/falha/incerteza parcial",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S26 (2 vias: aceite + falha → PARCIAL; retry só da não enviada)"
+    },
+    {
+      "id": "B16",
+      "title": "Evidência/callback duplicado e atrasado",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S22 (UNKNOWN tardio não rebaixa; NO_EFFECT após aceite → RESULT_CONFLICT) + S09"
+    },
+    {
+      "id": "B17",
+      "title": "Retenção de payload sem remoção de dedup",
+      "status": "BLOCKED_HUMAN_GATE",
+      "evidence": "D03 retenção/expurgo de payload não aprovado; expurgo não implementado"
+    },
+    {
+      "id": "B18",
+      "title": "Remoção posterior de tombstone de requisição",
+      "status": "BLOCKED_HUMAN_GATE",
+      "evidence": "D03 remoção de tombstone de requisição não aprovada"
+    },
+    {
+      "id": "B19",
+      "title": "Retenção/arquivamento de marca inicial",
+      "status": "BLOCKED_HUMAN_GATE",
+      "evidence": "D03 retenção/arquivamento da marca inicial (ressalva histórica mantida no gate)"
+    },
+    {
+      "id": "B20",
+      "title": "Auditoria e falha de persistência",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "eventos por transição; S21/S23 (rollback integral, sem auditoria parcial)"
+    },
+    {
+      "id": "B21",
+      "title": "Dois jobs compartilham fila física",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S19/S26 (um destino admite uma tentativa por vez; fila serializada)"
+    },
+    {
+      "id": "B22",
+      "title": "REPRINT histórico concorre com INITIAL",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S24 (REPRINT histórico fecha INITIAL; sequencial)"
+    },
+    {
+      "id": "B23",
+      "title": "INITIAL após REPRINT histórico e após cleanup",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S24 (INITIAL após REPRINT histórico recusado); após limpeza → D03"
+    },
+    {
+      "id": "B24",
+      "title": "Emissão substituta seguida de reconciliação antiga como não enviada",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S26 (via substituída não volta) + S28 (navegador cancela vias térmicas seguras)"
+    },
+    {
+      "id": "B25",
+      "title": "Executor A pausa após T3, posse do destino vence, B de outro job/loja disputa e A retorna",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S07/S12/S29 (destino retido até prova; outro job aguarda)"
+    },
+    {
+      "id": "B26",
+      "title": "INITIAL A4 concorre com INITIAL térmico",
+      "status": "BLOCKED_HUMAN_GATE",
+      "evidence": "D01.5: A4/legado não migrado ao ledger; alternativa do navegador é registrada (S28/PW8/PW9)"
+    },
+    {
+      "id": "I01",
+      "title": "A01/PLATFORM com loja explícita",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S22 (A01/PLATFORM com loja explícita)"
+    },
+    {
+      "id": "I02",
+      "title": "STORE autorizado com módulo/papel efetivos",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S01/PW1 (STORE autorizado)"
+    },
+    {
+      "id": "I03",
+      "title": "Usuário sem permissão, módulo ou de outra loja",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S15 (papel técnico/inativo/sessão) + S22 (módulo removido)"
+    },
+    {
+      "id": "I04",
+      "title": "Reader canônico PDV/sales e propriedade da venda",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S04 (leitor escopado por loja; venda de outra loja → 404)"
+    },
+    {
+      "id": "I05",
+      "title": "Documento inexistente, pendente, cancelado ou em quarentena",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S05/S14/S22 (inexistente/pendente/cancelada/quarentena)"
+    },
+    {
+      "id": "I06",
+      "title": "Terminal/impressora incompatíveis e deviceId forjado",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S22 (terminal inativo → TERMINAL_UNAVAILABLE) + S30 (navegador não autorizado → DEVICE_NOT_AUTHORIZED)"
+    },
+    {
+      "id": "I07",
+      "title": "Pareamento, desafio repetido e segredo compartilhado",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S22 (código de pareamento de uso único) + S16 (token inválido/revogado)"
+    },
+    {
+      "id": "I08",
+      "title": "Duas lojas no computador e dois terminais na loja",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S04 (dois agentes/lojas) + S03 (dois terminais na loja)"
+    },
+    {
+      "id": "I09",
+      "title": "Substituição/renomeação de computador ou fila",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "unit PRINTER_NOT_FOUND + S16 (revogar/parear novo computador)"
+    },
+    {
+      "id": "I10",
+      "title": "Binding revogado antes e depois de início",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S16 (instalação revogada derruba vínculos; antes da T3 → BINDING_CHANGED)"
+    },
+    {
+      "id": "I11",
+      "title": "Troca de loja/configuração durante solicitação",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S15 (STORE_CONTEXT_CONFLICT) + geração/descartes no cliente"
+    },
+    {
+      "id": "I12",
+      "title": "Logout/revogação e ACK atrasado",
+      "status": "BLOCKED_HUMAN_GATE",
+      "evidence": "G-AUTH: logout comum não incrementa sessionVersion (revogação por sessionVersion = PASS em S15)"
+    },
+    {
+      "id": "I13",
+      "title": "Input de bytes, HTML, host/porta/URL/path/credenciais",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S18 (host/porta/bytes/URL/HTML recusados como campos desconhecidos)"
+    },
+    {
+      "id": "I14",
+      "title": "Origin/CSRF e consultas/replays sem autorização",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S15 (Origin/CSRF) + S04 (consultas cruzadas)"
+    },
+    {
+      "id": "I15",
+      "title": "Adaptador aceita; conexão/resposta HTTP se perde",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S09 (resposta HTTP perdida em claim/report)"
+    },
+    {
+      "id": "I16",
+      "title": "Falha comprovada antes de envio",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S06/S07/S08/PW3 (falha comprovada antes do envio)"
+    },
+    {
+      "id": "I17",
+      "title": "Timeout, lease vencido e consulta não encontrado",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "S12 (consulta 'não encontrado no diário' mantém UNKNOWN, zero reenvio); ressalva histórica resolvida"
+    },
+    {
+      "id": "I18",
+      "title": "Cancelamento solicitado após aceite/spooler",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "cancelamento na fila do Windows exige fila real; nenhuma ação de cancelar após aceite é oferecida"
+    },
+    {
+      "id": "I19",
+      "title": "Capacidades ausentes/limitadas do adaptador",
+      "status": "PASS_SIMULATED_TRANSPORT",
+      "evidence": "unit (pausada/sem papel/erro/não encontrada) + host PowerShell real (inventário, status, OpenPrinter inexistente)"
+    },
+    {
+      "id": "I20",
+      "title": "Fila offline com entrega tardia",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "entrega tardia pela fila offline do Windows só é observável com impressora física"
+    },
+    {
+      "id": "I21",
+      "title": "Segundo job de reimpressão e venda histórica sem anterior",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S13/S24"
+    },
+    {
+      "id": "I22",
+      "title": "Segunda via após resultado incerto",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S20/S29/PW9 (segunda via após incerto; nada reenviado sozinho)"
+    },
+    {
+      "id": "I23",
+      "title": "Fallback explícito antes/depois de envio possível",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "PW8/PW9/S28 (navegador só por clique, registrado, SEGUNDA VIA quando aplicável); papel em F07"
+    },
+    {
+      "id": "I24",
+      "title": "Gaveta em inicial, segunda via e teste",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit (nenhuma via com gaveta)"
+    },
+    {
+      "id": "I25",
+      "title": "Integridade comercial em sucesso, erro, retry e crash",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S20 + PW1 (digest de todas as tabelas comerciais inalterado)"
+    },
+    {
+      "id": "I26",
+      "title": "Rate limit, payload expirado e grant invalidado",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S18 (rate limit) + S15 (grant invalidado) + unit (payload expirado)"
+    },
+    {
+      "id": "I27",
+      "title": "Concessão adulterada, callback falso e replay entre instalações",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "unit (token adulterado/domínio errado) + S04 (prova de outra instalação → 403) + S16"
+    },
+    {
+      "id": "I28",
+      "title": "Segunda via/fallback omite previousJobId com job incerto conhecido",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S13/S28 (risco descoberto pelo servidor; sem previousJobId)"
+    },
+    {
+      "id": "I29",
+      "title": "Risco muda entre preparação, T1 e T3; reconhecimento aponta outra via/revisão",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S27 (consentimento obsoleto) + S29 (risco muda na T3 → RISK_CHANGED)"
+    },
+    {
+      "id": "I30",
+      "title": "Via substituta autorizada e resposta antiga reconciliada depois",
+      "status": "PASS_REAL_SOFTWARE",
+      "evidence": "S26 (via substituída + callback antigo 'sem efeito' segue sem retry)"
+    },
+    {
+      "id": "I31",
+      "title": "A4/fallback com destino lógico e replay de criação",
+      "status": "BLOCKED_HUMAN_GATE",
+      "evidence": "D01.5: A4 lógico não exposto no ledger 004C"
+    },
+    {
+      "id": "F01",
+      "title": "Windows + Chrome e Windows + Edge",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "automatizado só em Chromium (Playwright); Windows+Chrome/Edge com impressora pendente"
+    },
+    {
+      "id": "F02",
+      "title": "Perfil térmico 58 mm e 80 mm",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "perfis 58/80 validados em bytes; papel real pendente"
+    },
+    {
+      "id": "F03",
+      "title": "Frio/quente, reinício, desligamento e falta de papel",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "frio/quente, reinício, desligamento e falta de papel com impressora real"
+    },
+    {
+      "id": "F04",
+      "title": "Duas vias, falha parcial e resposta perdida real",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "duas vias e resposta perdida reais"
+    },
+    {
+      "id": "F05",
+      "title": "Fila padrão trocada/removida e binding revogado",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "fila padrão trocada/removida e vínculo revogado com fila real"
+    },
+    {
+      "id": "F06",
+      "title": "Gaveta desligada e teste sintético",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "gaveta desligada verificada em bytes; teste físico pendente"
+    },
+    {
+      "id": "F07",
+      "title": "A4 e fallback em Chrome/Edge",
+      "status": "DEFERRED_PHYSICAL_HARDWARE",
+      "evidence": "impressão do navegador em Chrome/Edge com impressora real"
+    }
+  ]
+}
