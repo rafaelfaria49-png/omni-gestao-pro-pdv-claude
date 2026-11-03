@@ -3432,8 +3432,12 @@ export function OperationsProvider({
         const produtoId = fromLine || (typeof item?.dbId === "string" ? item.dbId.trim() : "")
         return produtoId ? { ...record, produtoId } : record
       })
+      // Writer V1 não tem `clientSaleId`: comparar `undefined === undefined` casava QUALQUER pendente
+      // V1 e a venda nova era absorvida pela anterior (perdida) — PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001.
       const already = next.sales.find(
-        (s) => s.syncPending === true && (s.clientSaleId === clientSaleId || s.id === saleId),
+        (s) =>
+          s.syncPending === true &&
+          ((Boolean(clientSaleId) && s.clientSaleId === clientSaleId) || s.id === saleId),
       )
       if (already) return reusePending(already)
 

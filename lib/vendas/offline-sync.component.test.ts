@@ -39,6 +39,8 @@ type Venda = { id: string; pedidoId: string; storeId: string; clientSaleId: stri
 /** Servidor-modelo: mesmo contrato observável do writer V2 / V1 e da consulta por clientSaleId. */
 class ServerModel {
   down = false
+  /** Writer anunciado na capability (`GET /api/ops/venda-persist/v2`). */
+  writer: "v1" | "v2" = "v2"
   modes: Mode[] = []
   stock = new Map<string, number>([["p-1", 10]])
   vendas = new Map<string, Venda>()
@@ -123,7 +125,7 @@ class ServerModel {
         _lojaIdRecebido: storeId,
       })
     }
-    if (url.pathname === "/api/ops/venda-persist/v2") return this.json(200, { writer: "v2" })
+    if (url.pathname === "/api/ops/venda-persist/v2") return this.json(200, { writer: this.writer })
     if (url.pathname === "/api/ops/vendas-list") return this.json(200, { sales: [] })
     if (url.pathname === "/api/ops/credito-cliente") return this.json(200, { creditos: {} })
     if (url.pathname.startsWith("/api/ops/caixa")) {
@@ -301,6 +303,29 @@ describe("offline — registro local, fila durável e sincronização automátic
     expect(ids.size).toBe(3)
     expect(pendentes()).toHaveLength(3)
     expect(stored().filter((s) => s.syncPending === true)).toHaveLength(3)
+    server.down = false
+    await act(async () => { setOnline(true) })
+    await waitFor(() => expect(pendentes()).toHaveLength(0))
+    expect(server.vendasDe(STORE_A)).toHaveLength(3)
+    expect(server.stock.get("p-1")).toBe(7)
+    expect(server.cash).toHaveLength(3)
+  })
+
+  it("T34-V1 — writer V1 (sem clientSaleId): segunda venda idêntica offline NÃO é absorvida pela primeira", async () => {
+    server.writer = "v1"
+    await mount()
+    // Capability V1 conhecida antes da queda (mesma ordem do E2E: venda online antes).
+    expect(await sell()).toMatchObject({ ok: true, pending: false })
+    setOnline(false)
+    server.down = true
+    const a = await sell()
+    expect(a).toMatchObject({ ok: true, pending: true })
+    act(() => ops().releaseSaleAttempt?.({ id: (a as { saleId: string }).saleId }))
+    const b = await sell()
+    expect(b).toMatchObject({ ok: true, pending: true })
+    expect((b as { saleId: string }).saleId).not.toBe((a as { saleId: string }).saleId)
+    expect(pendentes()).toHaveLength(2)
+    expect(pendentes().every((s) => !s.clientSaleId)).toBe(true)
     server.down = false
     await act(async () => { setOnline(true) })
     await waitFor(() => expect(pendentes()).toHaveLength(0))

@@ -183,10 +183,11 @@ test("Vendas offline ficam só no terminal, o Reenviar é honesto e a volta da r
     await expect(cartRow(page)).toHaveCount(0)
     await venderEmDinheiro(page, bipe)
     await expect(page.getByTestId("pdv-sync-total")).toHaveText("2", { timeout: 15_000 })
-    const fila = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "{}").sales ?? [], `assistec-pro-ops-v1-${B}`) as Array<{ syncPending?: boolean; clientSaleId?: string }>
+    const fila = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "{}").sales ?? [], `assistec-pro-ops-v1-${B}`) as Array<{ id: string; syncPending?: boolean; clientSaleId?: string }>
     const pendentes = fila.filter((s) => s.syncPending === true)
     expect(pendentes).toHaveLength(2)
-    expect(new Set(pendentes.map((s) => s.clientSaleId)).size).toBe(2)
+    // Identidade técnica: clientSaleId (writer V2) ou o número local (writer V1, sem clientSaleId).
+    expect(new Set(pendentes.map((s) => s.clientSaleId ?? s.id)).size).toBe(2)
     expect(await db.venda.count({ where: { storeId: B } })).toBe(vendasAntes + 1)
     await aindaSemReload(page)
   })
@@ -196,8 +197,12 @@ test("Vendas offline ficam só no terminal, o Reenviar é honesto e a volta da r
     await expect.poll(() => db.venda.count({ where: { storeId: B } }), { timeout: 90_000 }).toBe(vendasAntes + 3)
     await expect(page.getByTestId("pdv-sync-total")).toHaveCount(0, { timeout: 60_000 })
     await aindaSemReload(page)
-    const vendas = await db.venda.findMany({ where: { storeId: B, clientSaleId: { not: null } }, select: { clientSaleId: true } })
-    expect(new Set(vendas.map((v) => v.clientSaleId)).size).toBe(vendas.length)
+    // Nenhuma venda repetida: pedidoId único e clientSaleId (quando há) único entre as 3 deste produto.
+    const vendas = await db.venda.findMany({ where: { storeId: B, itens: { some: { nome: NOME } } }, select: { pedidoId: true, clientSaleId: true } })
+    expect(vendas).toHaveLength(3)
+    expect(new Set(vendas.map((v) => v.pedidoId)).size).toBe(3)
+    const ids = vendas.map((v) => v.clientSaleId).filter(Boolean)
+    expect(new Set(ids).size).toBe(ids.length)
     expect((await db.produto.findUniqueOrThrow({ where: { id: produto.id } })).stock).toBe(17)
     // Uma movimentação de estoque por venda confirmada — nenhum replay duplicou baixa.
     expect(await db.movimentacaoEstoque.count({ where: { storeId: B, produtoId: produto.id, origem: "pdv" } })).toBe(3)
