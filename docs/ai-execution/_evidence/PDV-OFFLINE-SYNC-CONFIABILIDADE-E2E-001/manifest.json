@@ -1,0 +1,66 @@
+{
+  "goal": "PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001",
+  "branch": "claude/pdv-offline-sync-confiabilidade-e2e-001",
+  "base": "main@a07e067",
+  "commit": "06cc67b",
+  "pr": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/326",
+  "productionWrites": 0,
+  "productionReads": 0,
+  "migrationsExecuted": false,
+  "merge": false,
+  "productionDeploy": false,
+  "files": [
+    {
+      "path": "ARQUITETURA_SYNC.md",
+      "bytes": 4420
+    },
+    {
+      "path": "CAUSA_RAIZ.md",
+      "bytes": 3471
+    },
+    {
+      "path": "FLUXOS_OFFLINE.md",
+      "bytes": 3429
+    },
+    {
+      "path": "INTEGRIDADE_FINANCEIRA_ESTOQUE.md",
+      "bytes": 2239
+    },
+    {
+      "path": "MATRIZ_TESTES_E2E.md",
+      "bytes": 6893
+    },
+    {
+      "path": "RELATORIO_FINAL.md",
+      "bytes": 3471
+    },
+    {
+      "path": "RESULTADOS_DB_E_API.md",
+      "bytes": 2855
+    },
+    {
+      "path": "RESULTADOS_UI_PLAYWRIGHT.md",
+      "bytes": 1579
+    },
+    {
+      "path": "REVISAO_INDEPENDENTE.md",
+      "bytes": 7341
+    },
+    {
+      "path": "RISCOS_REMANESCENTES.md",
+      "bytes": 4245
+    },
+    {
+      "path": "raw/vitest-postgres-integration.json",
+      "bytes": 4979
+    },
+    {
+      "path": "raw/vitest-sync-suites.json",
+      "bytes": 112773
+    }
+  ],
+  "status": "PARTIAL",
+  "independentReview": "APPROVE (rodada 3)",
+  "e2e10": "PARTIAL",
+  "postgresRawEvidenceCommit": "16a2ed2 (servidor inalterado depois)"
+}
