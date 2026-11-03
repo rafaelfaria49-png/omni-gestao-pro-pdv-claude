@@ -1181,6 +1181,10 @@ export function OperationsProvider({
    */
   const [unknownTwinPrompt, setUnknownTwinPrompt] = useState<UnknownTwinPrompt | null>(null)
   const unknownTwinPromptRef = useRef<UnknownTwinPrompt | null>(null)
+  // A decisão pertence à loja em que a venda foi barrada: troca de loja descarta o aviso.
+  useEffect(() => {
+    setUnknownTwinPrompt(null)
+  }, [storageKey])
   useEffect(() => {
     unknownTwinPromptRef.current = unknownTwinPrompt
   }, [unknownTwinPrompt])

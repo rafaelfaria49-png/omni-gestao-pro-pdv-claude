@@ -148,7 +148,12 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
   const decideTwin = (decision: "outra" | "verificar" | "cancelar") => {
     void resolveUnknownTwin?.(decision).then((r) => {
       if (decision === "outra") setTwinNote("Confirmado: é outra venda. A anterior continua na fila. Finalize de novo para registrar a nova.")
-      else if (decision === "verificar") setTwinNote(r?.ok ? "A venda anterior foi confirmada pelo servidor." : `Venda anterior: ${r?.reason ?? "sem resposta"}`)
+      else if (decision === "verificar")
+        setTwinNote(
+          r?.ok
+            ? "A venda anterior JÁ ESTÁ gravada no servidor. Se o carrinho é a mesma venda, limpe-o (F6) — não finalize de novo."
+            : `Venda anterior: ${r?.reason ?? "sem resposta"}`,
+        )
     })
   }
   const [resending, setResending] = useState(false)
