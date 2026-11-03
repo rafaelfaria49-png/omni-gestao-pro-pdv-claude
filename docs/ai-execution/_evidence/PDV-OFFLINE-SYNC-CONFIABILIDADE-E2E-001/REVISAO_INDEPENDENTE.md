@@ -73,5 +73,12 @@ Provas: `SessionProvider.offline.component.test.ts` (3/3) e `SessionProvider.fir
 - P2 corrigidos em `b6d4d90`: "verificar" que acha a anterior gravada orienta a NÃO refinalizar; aviso de venda gêmea
   descartado na troca de loja. P2 de instabilidade sob carga: CI final sem falhas/instáveis.
 
-**Gate de governança:** a revisão técnica aprova, mas o aval do PROPRIETÁRIO para `components/auth/SessionProvider.tsx`
-**não** está dado e não é presumido.
+**Gate de governança:** aval do PROPRIETÁRIO para `components/auth/SessionProvider.tsx` **concedido em 2026-11-03**
+(OWNER_AUTH_APPROVAL=YES, restrito à alteração client-side; **não** inclui merge nem deploy).
+
+## Rodada 5 — diff `63b7c34..a089dc5` (só o spec E2E 10)
+- **Veredito: APPROVE.** A asserção nova é mais estrita que a anterior: exige exatamente 1 `li` na região
+  "Notifications (F8)" com o título "Carrinho liberado", visível, contendo a frase completa. A cópia do leitor de tela
+  (`ToastAnnounce`) é portada para o `body`, é `span` e fica fora da região; um único `Toaster` montado;
+  `TOAST_LIMIT=1` só pode fazer o teste falhar, nunca passar em falso. Nenhuma outra asserção do spec tem o mesmo risco
+  (as demais usam test ids do painel ou papéis de diálogo).

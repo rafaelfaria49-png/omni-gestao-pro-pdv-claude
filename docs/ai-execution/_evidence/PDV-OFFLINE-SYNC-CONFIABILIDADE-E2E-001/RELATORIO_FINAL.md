@@ -2,7 +2,7 @@
 
 ```
 GOAL=PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001
-STATUS=DONE (técnico) — merge BLOQUEADO pelo gate de governança (aval do proprietário para SessionProvider)
+STATUS=DONE — PR apta para decisão SEPARADA de merge (aval do proprietário ao SessionProvider concedido; merge/deploy NÃO autorizados)
 
 MANUAL_RESEND=PASS  AUTOMATIC_RESEND=PASS  OFFLINE_SALES=PASS  DURABLE_LOCAL_QUEUE=PASS
 IDEMPOTENCY=PASS  MULTI_TAB=PASS  MULTI_STORE=PASS  CART_PRESERVATION=PASS
@@ -12,9 +12,9 @@ TESTS_TOTAL=60 (T01–T60)  TESTS_PASSED=54 (3 simulados)  TESTS_PARTIAL=5  TEST
 
 TYPECHECK=PASS (0 erros)  LINT=PASS (0 erros)  BUILD=PASS (CI)
 POSTGRES_INTEGRATION=PASS (10/10 local PG 17 + CI)  PLAYWRIGHT_E2E=PASS (33/33, 0 instáveis)
-CI=PASS (12/12 checks, 4 workflows, head b6d4d90)  INDEPENDENT_REVIEW=APPROVE (rodada 4)
+CI=PASS (4/4 workflows, head a089dc5)  INDEPENDENT_REVIEW=APPROVE (rodada 5)
 
-BRANCH=claude/pdv-offline-sync-confiabilidade-e2e-001  COMMIT(código)=b6d4d90
+BRANCH=claude/pdv-offline-sync-confiabilidade-e2e-001  COMMIT(código+teste)=a089dc5
 PR=https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/326 (DRAFT)
 MERGE=NO  PRODUCTION_DEPLOY=NO  PRODUCTION_WRITES=0
 ```
@@ -38,18 +38,18 @@ diálogo · RC13 2ª venda V1 absorvida pela pendente anterior (pré-existente n
 | Typecheck | local | 0 erros |
 | ESLint (arquivos alterados) | local + CI | 0 erros |
 | Build de produção | CI (`validate`, `e2e-authenticated`) | PASS |
-| Playwright E2E (01–10, login real, PG descartável) | CI run 41672371685 | 33/33, 0 instáveis (`raw/ci-e2e-report-summary.json`) |
-| Workflows | CI head `b6d4d90` | Ramos e Cadastros, Visor de peso, Cliente assistido, Acesso piloto — todos PASS |
+| Playwright E2E (01–10, login real, PG descartável) | CI run 41681544333 (head `a089dc5`) | 33/33, 0 instáveis (`raw/ci-e2e-report-summary.json`) |
+| Workflows | CI head `a089dc5` | Ramos e Cadastros, Visor de peso, Cliente assistido, Acesso piloto — todos PASS |
 
 ## Revisão independente
-4 rodadas (`REVISAO_INDEPENDENTE.md`): R1 REQUEST_CHANGES (1 P0, 3 P1) → R2 REQUEST_CHANGES (1 P1) → R3 APPROVE →
-R4 **APPROVE** (inclui confirmação de segurança do `SessionProvider`: sem bypass de autenticação, autorização ou sessão
+5 rodadas (`REVISAO_INDEPENDENTE.md`): R1 REQUEST_CHANGES (1 P0, 3 P1) → R2 REQUEST_CHANGES (1 P1) → R3 APPROVE →
+R4 APPROVE → R5 **APPROVE** (ajuste do seletor do toast no E2E) (inclui confirmação de segurança do `SessionProvider`: sem bypass de autenticação, autorização ou sessão
 revogada). Todos os achados corrigidos com teste; P2 da R4 corrigidos em `b6d4d90`.
 
-## Depende de autorização
-- **`components/auth/SessionProvider.tsx`** (camada de auth do cliente): aval explícito do proprietário (CORE_RULES).
-  Revisão técnica aprova; o gate de governança **não** está presumido aprovado.
-- Merge e deploy: não realizados; exigem autorização.
+## Autorizações
+- **`components/auth/SessionProvider.tsx`**: aval do proprietário **concedido em 2026-11-03** (OWNER_AUTH_APPROVAL=YES,
+  só a alteração client-side). Revisões R3–R5 confirmam: sem bypass de autenticação, autorização ou sessão revogada.
+- **Merge e deploy: NÃO autorizados e NÃO realizados.** A PR #326 segue em DRAFT, apta para uma decisão separada de merge.
 
 ## Depende de homologação física (caixa real)
 Rede real da loja (queda/volta, Wi-Fi sem internet, portal cativo); fluxo do operador com F6 entre vendas offline e

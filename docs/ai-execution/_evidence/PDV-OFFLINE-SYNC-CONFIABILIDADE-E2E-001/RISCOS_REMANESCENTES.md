@@ -17,7 +17,7 @@
 11. **Histórico/Detalhe**: fase e desfecho persistentes implementados; sem E2E dedicado da tela (T09/T50 PARTIAL).
 
 ## Governança / aprovação humana necessária
-12. **`components/auth/SessionProvider.tsx`** (camada de autenticação do CLIENTE): alterado para o PDV não sumir offline. Servidor de auth, `auth.ts`, `auth.config.ts`, `proxy.ts` e schema **inalterados**. CORE_RULES exige **autorização explícita** do proprietário para tocar em auth — merge só com esse aval.
+12. **`components/auth/SessionProvider.tsx`** (camada de autenticação do CLIENTE): alterado para o PDV não sumir offline. Servidor de auth, `auth.ts`, `auth.config.ts`, `proxy.ts` e schema **inalterados**. Aval do proprietário **concedido em 2026-11-03** para esta alteração client-side (não inclui merge nem deploy).
 13. **Contrato CORREÇÃO-01 mantido**: PENDING continua preservando o carrinho; o operador libera com F6 → "Cancelar venda" (mensagem honesta: a venda anterior NÃO foi cancelada). Limpar o carrinho automaticamente no PENDING é decisão de produto não tomada aqui.
 
 ## Dependências de ambiente (não são regressão desta PR)

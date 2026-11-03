@@ -2,12 +2,12 @@
   "goal": "PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001",
   "branch": "claude/pdv-offline-sync-confiabilidade-e2e-001",
   "base": "main@a07e067",
-  "commit": "b6d4d90",
+  "commit": "a089dc5",
   "pr": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/326",
   "productionWrites": 0,
   "productionReads": 0,
   "migrationsExecuted": false,
-  "merge": false,
+  "merge": "NOT AUTHORIZED",
   "productionDeploy": false,
   "files": [
     {
@@ -32,7 +32,7 @@
     },
     {
       "path": "RELATORIO_FINAL.md",
-      "bytes": 3946
+      "bytes": 4138
     },
     {
       "path": "RESULTADOS_DB_E_API.md",
@@ -40,15 +40,15 @@
     },
     {
       "path": "RESULTADOS_UI_PLAYWRIGHT.md",
-      "bytes": 3375
+      "bytes": 3822
     },
     {
       "path": "REVISAO_INDEPENDENTE.md",
-      "bytes": 8798
+      "bytes": 9436
     },
     {
       "path": "RISCOS_REMANESCENTES.md",
-      "bytes": 4176
+      "bytes": 4181
     },
     {
       "path": "raw/ci-e2e-isolation.json",
@@ -67,10 +67,12 @@
       "bytes": 116069
     }
   ],
-  "status": "DONE (técnico); merge bloqueado por governança (SessionProvider)",
-  "independentReview": "APPROVE (rodada 4)",
-  "ci": "12/12 PASS no head b6d4d90",
-  "e2e": "33/33 PASS (run 41672371685)",
+  "status": "DONE — apta para decisão separada de merge",
+  "ownerAuthApprovalSessionProvider": "YES (2026-11-03, client-side only)",
+  "deploy": "NOT AUTHORIZED",
+  "independentReview": "APPROVE (rodada 5)",
+  "ci": "4/4 workflows PASS no head a089dc5",
+  "e2e": "33/33 PASS, 0 flaky (run 41681544333)",
   "matrix": {
     "total": 60,
     "pass": 54,
@@ -78,6 +80,5 @@
     "partial": 5,
     "fail": 0,
     "blockedOrNotExecuted": 1
-  },
-  "postgresRawEvidenceCommit": "16a2ed2 (rotas do servidor inalteradas; CI PG PASS no head final)"
+  }
 }
