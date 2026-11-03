@@ -152,8 +152,8 @@ import {
 const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
 /** Janela em que uma venda idêntica com resultado desconhecido bloqueia o re-registro após F5. */
 const UNKNOWN_TWIN_WINDOW_MS = 10 * 60_000
-/** Prazo para o operador confirmar "é outra venda" repetindo a finalização depois do aviso. */
-const UNKNOWN_TWIN_CONFIRM_MS = 2 * 60_000
+/** Código da recusa: venda idêntica pendente com resultado desconhecido — decisão do operador. */
+export const UNKNOWN_TWIN_CODE = "VENDA_IDENTICA_RESULTADO_DESCONHECIDO"
 
 export type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
@@ -655,7 +655,8 @@ interface OperationsContextType {
     aPrazoConfig?: APrazoConfig
   }) => Promise<
     | { ok: true; saleId: string; pending?: boolean; clientSaleId?: string; serverId?: string }
-    | { ok: false; reason: string }
+    /** \`code: UNKNOWN_TWIN_CODE\` = aguardando a decisão explícita do operador (\`resolveUnknownTwin\`). */
+    | { ok: false; reason: string; code?: string }
   >
   registrarDevolucao: (input: {
     saleId: string
@@ -794,12 +795,28 @@ interface OperationsContextType {
   saleSyncPhases?: Readonly<Record<string, SaleSyncPhase>>
   /** `false` = a última gravação da fila no navegador falhou (quota/bloqueio). */
   localQueueHealthy?: boolean
+  /** Decisão pendente sobre venda idêntica com resultado desconhecido (ver `resolveUnknownTwin`). */
+  unknownTwinPrompt?: UnknownTwinPrompt | null
+  /**
+   * Decisão EXPLÍCITA do operador. `"outra"`: é outro cliente — a anterior segue na fila com a
+   * identidade dela e a próxima finalização cria identidade nova. `"verificar"`: consulta/reenvia a
+   * anterior (Reenviar manual). `"cancelar"`: fecha sem decidir (nada muda).
+   */
+  resolveUnknownTwin?: (decision: "outra" | "verificar" | "cancelar") => Promise<ManualSyncResult | null>
   /**
    * O operador encerrou conscientemente o carrinho da venda PENDENTE (Cancelar/limpar):
    * a venda continua na fila, mas um carrinho idêntico depois disto é uma NOVA venda —
    * não é coalescido nela (vendas offline idênticas e seguidas na padaria).
    */
   releaseSaleAttempt?: (identity: { id: string; clientSaleId?: string } | null | undefined) => void
+}
+
+export type UnknownTwinPrompt = {
+  key: string
+  saleId: string
+  clientSaleId?: string
+  at: string
+  total: number
 }
 
 export type ManualSyncResult =
@@ -1158,8 +1175,15 @@ export function OperationsProvider({
   const openSaleAttemptsRef = useRef(new Set<string>())
   /** Carrinhos encerrados conscientemente NESTA aba (Cancelar/Limpar) — ver `releaseSaleAttempt`. */
   const releasedSaleAttemptsRef = useRef(new Set<string>())
-  /** Aviso de venda gêmea já mostrado: repetir a finalização no prazo confirma "é outra venda". */
-  const twinOverrideRef = useRef(new Map<string, number>())
+  /**
+   * Venda idêntica pendente com resultado desconhecido que barrou a finalização: o PDV mostra a
+   * decisão explícita ("Verificar a anterior" × "É outra venda"). Nada é liberado sem clique.
+   */
+  const [unknownTwinPrompt, setUnknownTwinPrompt] = useState<UnknownTwinPrompt | null>(null)
+  const unknownTwinPromptRef = useRef<UnknownTwinPrompt | null>(null)
+  useEffect(() => {
+    unknownTwinPromptRef.current = unknownTwinPrompt
+  }, [unknownTwinPrompt])
   /** Lápides valem para pendência adotada de outra aba, nunca para a tentativa aberta aqui. */
   const isOpenHere = useCallback((sale: SaleRecord) => openSaleAttemptsRef.current.has(saleLocalKey(sale)), [])
   /** União entre abas + lápides; devolve `local` (mesma referência) quando nada muda. */
@@ -2345,6 +2369,21 @@ export function OperationsProvider({
     ],
   )
 
+  const resolveUnknownTwin = useCallback<NonNullable<OperationsContextType["resolveUnknownTwin"]>>(
+    async (decision) => {
+      const prompt = unknownTwinPromptRef.current
+      setUnknownTwinPrompt(null)
+      if (!prompt || decision === "cancelar") return null
+      if (decision === "outra") {
+        // A anterior continua pendente, com a identidade e a fila dela; só deixa de barrar.
+        releasedSaleAttemptsRef.current.add(prompt.key)
+        return null
+      }
+      return doRetrySyncSale(prompt.clientSaleId || prompt.saleId, false)
+    },
+    [doRetrySyncSale],
+  )
+
   const retrySyncSale = useCallback<OperationsContextType["retrySyncSale"]>(
     (saleId) => doRetrySyncSale(saleId, false),
     [doRetrySyncSale],
@@ -3350,18 +3389,20 @@ export function OperationsProvider({
           saleRecordAttemptFingerprint(s) === fingerprint,
       )
       if (unknownTwin) {
-        const twinKey = saleLocalKey(unknownTwin)
-        if ((twinOverrideRef.current.get(twinKey) ?? 0) > Date.now()) {
-          // Operador repetiu a finalização depois do aviso: é OUTRO cliente — segue com identidade nova.
-          twinOverrideRef.current.delete(twinKey)
-          releasedSaleAttemptsRef.current.add(twinKey)
-        } else {
-          twinOverrideRef.current.set(twinKey, Date.now() + UNKNOWN_TWIN_CONFIRM_MS)
-          const hora = new Date(unknownTwin.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-          return {
-            ok: false,
-            reason: `Já existe uma venda idêntica das ${hora} cujo envio ficou sem resposta do servidor — ela pode já estar gravada. Se for a MESMA venda, use "Reenviar" dela no aviso de sincronização. Se for OUTRO cliente, finalize de novo para registrar como venda nova. Nada foi gravado.`,
-          }
+        // Repetir a finalização NÃO libera (seria confirmação implícita por reflexo): só a escolha
+        // explícita "É outra venda" (`resolveUnknownTwin`) marca a anterior como outro cliente.
+        const hora = new Date(unknownTwin.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        setUnknownTwinPrompt({
+          key: saleLocalKey(unknownTwin),
+          saleId: unknownTwin.id,
+          clientSaleId: unknownTwin.clientSaleId,
+          at: unknownTwin.at,
+          total: unknownTwin.total,
+        })
+        return {
+          ok: false,
+          code: UNKNOWN_TWIN_CODE,
+          reason: `Já existe uma venda idêntica das ${hora} cujo envio ficou sem resposta do servidor — ela pode já estar gravada. Escolha no aviso: verificar a anterior ou "É outra venda". Nada foi gravado.`,
         }
       }
 
@@ -3817,6 +3858,8 @@ export function OperationsProvider({
       saleSyncPhases,
       localQueueHealthy,
       releaseSaleAttempt,
+      unknownTwinPrompt,
+      resolveUnknownTwin,
     }),
     [
       state,
@@ -3853,6 +3896,8 @@ export function OperationsProvider({
       saleSyncPhases,
       localQueueHealthy,
       releaseSaleAttempt,
+      unknownTwinPrompt,
+      resolveUnknownTwin,
     ]
   )
 

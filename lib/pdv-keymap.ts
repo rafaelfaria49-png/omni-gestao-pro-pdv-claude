@@ -32,9 +32,19 @@ export function isPdvTyping(e: KeyboardEvent): boolean {
   return isPdvEditableTarget(e.target) || isPdvEditableTarget(document.activeElement)
 }
 
-/** Flags locais cobrem os diálogos; o DOM também cobre menus/portais externos. */
+/**
+ * Flags locais cobrem os diálogos; o DOM também cobre menus/portais externos.
+ * Overlay em animação de SAÍDA (Radix marca `data-state="closed"` até o `animationend`) já foi
+ * fechado e não bloqueia: contá-lo descartava em silêncio o F12/F1 digitado logo depois de fechar
+ * um diálogo (ex.: Cancelar venda → bipe → F12) — PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001.
+ */
 export function hasPdvShortcutOverlay(localOpen = false): boolean {
-  return localOpen || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]') !== null
+  return (
+    localOpen ||
+    document.querySelector(
+      '[role="dialog"]:not([data-state="closed"]), [role="alertdialog"]:not([data-state="closed"]), [role="menu"]:not([data-state="closed"]), [role="listbox"]:not([data-state="closed"])',
+    ) !== null
+  )
 }
 
 export function isPdvRepeatedOrHandled(e: KeyboardEvent): boolean {

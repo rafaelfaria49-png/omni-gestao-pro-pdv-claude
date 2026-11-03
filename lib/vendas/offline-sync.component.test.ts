@@ -639,7 +639,8 @@ describe("abas, lojas e armazenamento local", () => {
     const r = await sell()
     expect(r).toMatchObject({ ok: false })
     expect((r as { reason: string }).reason).toMatch(/pode já estar gravada/)
-    expect((r as { reason: string }).reason).toMatch(/finalize de novo/)
+    expect(r).toMatchObject({ code: "VENDA_IDENTICA_RESULTADO_DESCONHECIDO" })
+    expect(ops().unknownTwinPrompt).toMatchObject({ clientSaleId: pendentes()[0].clientSaleId })
     expect(server.vendas.size).toBe(1)
     // O Reenviar verifica e reconcilia; só então um carrinho igual vira venda nova.
     const again = await retry(pendentes()[0].clientSaleId!)
@@ -649,7 +650,7 @@ describe("abas, lojas e armazenamento local", () => {
     expect(server.vendas.size).toBe(2)
   })
 
-  it("REV2-P2 — 'é outro cliente': repetir a finalização depois do aviso registra venda NOVA mesmo sem servidor", async () => {
+  it("REV3 — 'É outra venda' só com decisão EXPLÍCITA: repetir não libera; a escolha libera identidade nova e preserva a anterior", async () => {
     const view = await mount()
     server.modes.push("lostAfterCommit")
     await sell()
@@ -660,11 +661,24 @@ describe("abas, lojas e armazenamento local", () => {
     await waitFor(() => expect(server.posts.length).toBe(2))
     await act(async () => {})
     server.down = true
+    const anterior = pendentes()[0]
     const aviso = await sell()
-    expect(aviso).toMatchObject({ ok: false })
+    expect(aviso).toMatchObject({ ok: false, code: "VENDA_IDENTICA_RESULTADO_DESCONHECIDO" })
+    // Repetir a finalização (reflexo) NÃO é confirmação: continua barrada.
+    expect(await sell()).toMatchObject({ ok: false, code: "VENDA_IDENTICA_RESULTADO_DESCONHECIDO" })
+    expect(pendentes()).toHaveLength(1)
+    // "Voltar" não decide nada.
+    await act(async () => { await ops().resolveUnknownTwin?.("cancelar") })
+    expect(ops().unknownTwinPrompt).toBeNull()
+    expect(await sell()).toMatchObject({ ok: false })
+    // Decisão explícita: é outro cliente.
+    await act(async () => { await ops().resolveUnknownTwin?.("outra") })
     const outra = await sell()
     expect(outra).toMatchObject({ ok: true, pending: true })
     expect(new Set(pendentes().map((s) => s.clientSaleId)).size).toBe(2)
+    // A anterior segue na fila com a MESMA identidade e o mesmo estado de dúvida.
+    expect(pendentes().find((s) => s.clientSaleId === anterior.clientSaleId)).toMatchObject({ syncResultUnknown: true })
+    expect(stored().filter((s) => s.syncPending === true)).toHaveLength(2)
   })
 
   it("REV2-P2 — rede cai DEPOIS do envio: o desfecho é desconhecido (não 'nada foi enviado')", async () => {

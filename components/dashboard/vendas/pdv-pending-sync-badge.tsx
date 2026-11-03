@@ -23,6 +23,15 @@ import {
   type SyncConnectivity,
 } from "@/lib/vendas/sale-sync-engine"
 import type { SaleRecord } from "@/lib/operations-sale-types"
+import type { UnknownTwinPrompt } from "@/lib/operations-store"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const SEM_REVISAO: ReadonlySet<string> = new Set()
 
@@ -66,6 +75,55 @@ const STATUS_TONE: Record<OperatorSaleSyncStatus, string> = {
 type LastRun = { at: string; ok: number; fail: number; offline: boolean; detail: string }
 
 /**
+ * Decisão EXPLÍCITA quando a finalização foi barrada por uma venda idêntica cujo envio ficou sem
+ * resposta (pode já estar gravada). Repetir a finalização não decide nada; só estes botões.
+ */
+function UnknownTwinDecision({
+  prompt,
+  onDecide,
+}: {
+  prompt: UnknownTwinPrompt
+  onDecide: (decision: "outra" | "verificar" | "cancelar") => void
+}) {
+  return (
+    <AlertDialog open onOpenChange={(open) => { if (!open) onDecide("cancelar") }}>
+      <AlertDialogContent data-testid="pdv-unknown-twin-dialog">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Venda idêntica sem confirmação do servidor</AlertDialogTitle>
+          <AlertDialogDescription>
+            A venda de {brl(prompt.total)} das {hora(prompt.at)} tem o mesmo conteúdo e o envio dela ficou sem resposta — ela
+            pode já estar gravada. Registrar de novo sem verificar pode duplicar. Nada foi gravado ainda.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => onDecide("cancelar")}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"
+          >
+            Voltar
+          </button>
+          <button
+            type="button"
+            onClick={() => onDecide("verificar")}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-sm font-semibold hover:bg-muted"
+          >
+            Verificar a venda anterior
+          </button>
+          <button
+            type="button"
+            onClick={() => onDecide("outra")}
+            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            É outra venda
+          </button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+/**
  * Painel HONESTO de sincronização do PDV (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001).
  *
  * Mostra conexão útil com o servidor, quantas vendas estão em cada estado, a fase da
@@ -83,7 +141,16 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
     syncConnectivity = "desconhecida",
     saleSyncPhases,
     localQueueHealthy = true,
+    unknownTwinPrompt,
+    resolveUnknownTwin,
   } = useOperationsStore()
+  const [twinNote, setTwinNote] = useState<string | null>(null)
+  const decideTwin = (decision: "outra" | "verificar" | "cancelar") => {
+    void resolveUnknownTwin?.(decision).then((r) => {
+      if (decision === "outra") setTwinNote("Confirmado: é outra venda. A anterior continua na fila. Finalize de novo para registrar a nova.")
+      else if (decision === "verificar") setTwinNote(r?.ok ? "A venda anterior foi confirmada pelo servidor." : `Venda anterior: ${r?.reason ?? "sem resposta"}`)
+    })
+  }
   const [resending, setResending] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
@@ -233,6 +300,12 @@ export function PdvPendingSyncBadge({ className }: { className?: string }) {
       data-testid="pdv-sync-panel"
       data-connectivity={syncConnectivity}
     >
+      {unknownTwinPrompt && <UnknownTwinDecision prompt={unknownTwinPrompt} onDecide={decideTwin} />}
+      {twinNote && (
+        <div className="min-w-0 text-[11px] font-medium text-foreground" data-testid="pdv-unknown-twin-note">
+          {twinNote}
+        </div>
+      )}
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         {offline ? <WifiOff className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
         <span className="min-w-0 flex-1">
