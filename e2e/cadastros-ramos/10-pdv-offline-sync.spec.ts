@@ -22,14 +22,14 @@ const panel = (page: Page) => page.getByTestId("pdv-sync-panel")
 const cartRow = (page: Page): Locator => page.locator("button").filter({ has: page.locator(`[title="${NOME}"]`) })
 
 /**
- * Pós-venda CONFIRMADA abre o diálogo do comprovante (e "Impressão não enviada": o job do CI não
- * tem agente de impressão). Fecha-o quando estiver por cima — venda PENDENTE nunca o abre (contrato).
+ * Pós-venda CONFIRMADA abre o diálogo do comprovante ("Agora não" antes de imprimir; "Fechar" depois de
+ * "Impressão não enviada" — o job do CI não tem agente de impressão). Fecha-o quando estiver por cima — venda PENDENTE nunca o abre (contrato).
  */
 function guardPostSaleDialog(page: Page) {
   void page.addLocatorHandler(
     page.getByRole("dialog", { name: /^(Impressão não enviada|Comprovante enviado|Comprovante não fiscal)$/ }),
     async (dialog) => {
-      await dialog.getByRole("button", { name: "Fechar", exact: true }).first().click()
+      await dialog.getByRole("button", { name: /^(Agora não|Fechar)$/ }).first().click()
     },
   )
 }
@@ -38,7 +38,7 @@ function guardPostSaleDialog(page: Page) {
 async function fecharPosVenda(page: Page) {
   const dialog = page.getByRole("dialog", { name: /^(Impressão não enviada|Comprovante enviado|Comprovante não fiscal)$/ })
   await dialog.waitFor({ state: "visible", timeout: 10_000 }).catch(() => {})
-  if (await dialog.isVisible()) await dialog.getByRole("button", { name: "Fechar", exact: true }).first().click()
+  if (await dialog.isVisible()) await dialog.getByRole("button", { name: /^(Agora não|Fechar)$/ }).first().click()
   await expect(dialog).toHaveCount(0)
 }
 
