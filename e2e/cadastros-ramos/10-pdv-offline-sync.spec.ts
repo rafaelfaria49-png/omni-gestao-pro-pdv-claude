@@ -75,6 +75,18 @@ async function venderEmDinheiro(page: Page, bipe: Locator) {
   await bipe.press("Enter")
   await expect(cartRow(page)).toHaveCount(1)
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  // Registra o destino real do F12 (capturado no instante, não 4 s depois).
+  await page.evaluate(() => {
+    const w = window as unknown as { __f12?: unknown[] }
+    w.__f12 = []
+    const snap = (fase: string, e: KeyboardEvent) => w.__f12!.push({
+      fase, prevented: e.defaultPrevented, repeat: e.repeat,
+      overlays: Array.from(document.querySelectorAll("[role=dialog],[role=alertdialog],[role=menu],[role=listbox]")).map((el) => el.getAttribute("role")),
+      bipe: (document.querySelector("input[placeholder=\"Bipe ou digite o código do produto\"]") as HTMLInputElement | null)?.value,
+    })
+    window.addEventListener("keydown", (e) => { if (e.key === "F12") snap("captura", e) }, { capture: true, once: true })
+    window.addEventListener("keydown", (e) => { if (e.key === "F12") snap("bolha", e) }, { once: true })
+  })
   await page.keyboard.press("F12")
   const modal = page.getByRole("dialog", { name: "Finalizar Pagamento" })
   if (!(await modal.waitFor({ state: "visible", timeout: 4_000 }).then(() => true, () => false))) {
@@ -83,6 +95,9 @@ async function venderEmDinheiro(page: Page, bipe: Locator) {
       toasts: Array.from(document.querySelectorAll("[role=region] li")).map((el) => el.textContent),
       overlays: Array.from(document.querySelectorAll("[role=dialog],[role=alertdialog],[role=menu],[role=listbox]")).map((el) => `${el.getAttribute("role")}:${(el.textContent ?? "").slice(0, 80)}`),
       ativo: document.activeElement?.outerHTML.slice(0, 120),
+      f12: (window as unknown as { __f12?: unknown[] }).__f12,
+      caixa: document.body.innerText.match(/Caixa (Aberto|Fechado).{0,40}/)?.[0],
+      sessao: document.body.innerText.match(/sem referência de sessão.{0,60}/)?.[0] ?? null,
     }))
     throw new Error(`Pagamento não abriu após F12: ${JSON.stringify(motivo)}`)
   }
