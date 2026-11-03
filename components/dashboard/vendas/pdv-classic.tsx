@@ -2146,6 +2146,14 @@ export function PdvClassic({
                     ? "Carrinho liberado. A venda anterior NÃO foi cancelada: segue registrada neste terminal, aguardando o servidor."
                     : "Venda cancelada. Sistema limpo.",
                 )
+                // O shell atual não exibe `info`: com venda pendente, o operador precisa ver que ela NÃO foi cancelada.
+                if (tinhaPendente) {
+                  toast({
+                    title: "Carrinho liberado",
+                    description: "A venda anterior NÃO foi cancelada: segue registrada neste terminal, aguardando o servidor.",
+                    duration: 6000,
+                  })
+                }
                 focusShellBipe()
               }}
               advancedOpen={shellAdvancedOpen}
