@@ -157,6 +157,11 @@ export interface SaleRecord {
   syncConfirmedAt?: string
   /** A venda nasceu sem conexão útil com o servidor (registro local, ainda não confirmado). */
   registeredOffline?: boolean
+  /**
+   * Alguma tentativa pode ter gravado sem a resposta chegar (rede com navegador online,
+   * prazo, 5xx, 2xx sem prova). Só uma recusa de negócio do writer zera.
+   */
+  syncResultUnknown?: boolean
 }
 
 export interface DevolucaoRecord {

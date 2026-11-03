@@ -42,6 +42,11 @@ export const SALE_ALREADY_CONFIRMED_CODE = "JA_CONFIRMADA"
 export const SALE_PERSIST_TIMEOUT_MS = 25_000
 /** Consulta da venda por `clientSaleId` antes do reenvio manual. */
 export const SALE_VERIFY_TIMEOUT_MS = 10_000
+/**
+ * Espera do Reenviar manual por outra tentativa da MESMA venda (Web Locks): pior caso de uma
+ * tentativa = verificar + enviar + verificar (2xx sem prova) + fallback V1 + verificar.
+ */
+export const SALE_LOCK_WAIT_MS = 2 * 25_000 + 3 * 10_000 + 5_000
 /** Capability do writer. */
 export const SALE_PROBE_TIMEOUT_MS = 8_000
 
@@ -132,6 +137,8 @@ export function attemptOutcomeFromFailure(input: {
   httpStatus?: number
   networkError?: boolean
   timedOut?: boolean
+  /** O navegador estava offline na tentativa: a requisição nem saiu. */
+  offline?: boolean
 }): SaleSyncAttemptOutcome {
   const code = typeof input.code === "string" ? input.code.trim() : ""
   if (isSaleIdentityConflictCode(code)) return "QUARENTENA"
@@ -140,7 +147,9 @@ export function attemptOutcomeFromFailure(input: {
   if (code === PERMISSION_DENIED) return "SEM_PERMISSAO"
   if (code === INCONCLUSIVE_RESPONSE) return "RESPOSTA_INCONCLUSIVA"
   if (input.timedOut) return "SEM_RESPOSTA"
-  if (input.networkError) return "SEM_CONEXAO"
+  // Só o navegador offline prova que nada saiu; erro de rede com o navegador "online" pode
+  // ter acontecido depois do commit — resultado desconhecido.
+  if (input.networkError) return input.offline ? "SEM_CONEXAO" : "SEM_RESPOSTA"
   if (typeof input.httpStatus === "number" && input.httpStatus >= 500) return "SERVIDOR_INDISPONIVEL"
   if (code && DEFINITIVE_REJECTION_CODES.has(code)) return "REJEITADA"
   return "EXIGE_CORRECAO"
@@ -150,7 +159,7 @@ export const ATTEMPT_OUTCOME_LABEL: Record<SaleSyncAttemptOutcome, string> = {
   CONFIRMADA: "Confirmada pelo servidor",
   JA_EXISTIA_NO_SERVIDOR: "Já estava gravada no servidor — reconciliada sem reenviar",
   SEM_CONEXAO: "Sem conexão com o servidor — nada foi enviado",
-  SEM_RESPOSTA: "O servidor não respondeu a tempo — resultado desconhecido, a mesma venda será verificada",
+  SEM_RESPOSTA: "Sem resposta do servidor — resultado desconhecido; a mesma venda será verificada antes de qualquer reenvio",
   SERVIDOR_INDISPONIVEL: "Servidor indisponível (erro temporário)",
   RESPOSTA_INCONCLUSIVA: "Resposta sem prova da venda — não marcada como sincronizada",
   SESSAO_EXPIRADA: "Sessão expirada — entre novamente; a venda está preservada",
@@ -158,6 +167,25 @@ export const ATTEMPT_OUTCOME_LABEL: Record<SaleSyncAttemptOutcome, string> = {
   EXIGE_CORRECAO: "Servidor recusou — exige correção",
   REJEITADA: "Servidor recusou a venda — nada foi gravado",
   QUARENTENA: "Conflito de identidade — preservada para recuperação",
+}
+
+/**
+ * A tentativa pode ter gravado no servidor sem que a resposta chegasse (rede com o navegador
+ * online, prazo, 5xx, 2xx sem prova). Uma recusa de NEGÓCIO do writer V2 prova o contrário
+ * (identidade gravada seria replay 200) e zera a dúvida; 401/403 não provam nada.
+ */
+export function nextResultUnknown(
+  previous: boolean | undefined,
+  input: { code?: string | null; httpStatus?: number; networkError?: boolean; timedOut?: boolean; offline?: boolean },
+): boolean {
+  const code = typeof input.code === "string" ? input.code.trim() : ""
+  if (input.timedOut) return true
+  if (input.networkError) return input.offline ? previous === true : true
+  if (typeof input.httpStatus === "number" && input.httpStatus >= 500) return true
+  if (code === INCONCLUSIVE_RESPONSE) return true
+  if (code === AUTH_REQUIRED || code === PERMISSION_DENIED) return previous === true
+  if (typeof input.httpStatus === "number" && input.httpStatus >= 400) return false
+  return previous === true
 }
 
 /**
@@ -285,6 +313,7 @@ export function operatorSaleSyncView(
     | "syncLastAttemptAt"
     | "syncAttemptCount"
     | "syncLastAttemptOutcome"
+    | "syncResultUnknown"
   >,
   ctx: { phase?: SaleSyncPhase | null; offline?: boolean },
 ): OperatorSaleSyncView {
@@ -310,22 +339,30 @@ export function operatorSaleSyncView(
   if (klass === PENDING_SYNC_CLASS.ACTION_REQUIRED) {
     // 4xx de negócio: o writer recusou dentro da transação — nada gravado.
     const status: OperatorSaleSyncStatus = code && DEFINITIVE_REJECTION_CODES.has(code) ? "REJEITADA" : "EXIGE_CORRECAO"
-    return { status, label: OPERATOR_STATUS_LABEL[status], serverHasSale: "nao", canResend: true, needsAdmin: false }
+    return {
+      status,
+      label: OPERATOR_STATUS_LABEL[status],
+      serverHasSale: sale.syncResultUnknown === true ? "desconhecido" : "nao",
+      canResend: true,
+      needsAdmin: false,
+    }
   }
   const neverTried = !sale.syncLastAttemptAt && !sale.syncAttemptCount
   if (neverTried && !ctx.offline) {
     return { status: "REGISTRADA_LOCALMENTE", label: OPERATOR_STATUS_LABEL.REGISTRADA_LOCALMENTE, serverHasSale: "desconhecido", canResend: true, needsAdmin: false }
   }
   // Rede/5xx/prazo/inconclusivo: pode ter gravado — só a mesma identidade tenta de novo.
+  // Registro anterior a esta entrega (sem `syncResultUnknown`): heurística conservadora.
   const unknownResult =
-    sale.syncNetworkError === true ||
-    (typeof sale.syncHttpStatus === "number" && sale.syncHttpStatus >= 500) ||
-    code === INCONCLUSIVE_RESPONSE
+    sale.syncResultUnknown ??
+    (sale.syncNetworkError === true ||
+      (typeof sale.syncHttpStatus === "number" && sale.syncHttpStatus >= 500) ||
+      code === INCONCLUSIVE_RESPONSE)
   const authExpired = code === AUTH_REQUIRED
   return {
     status: "AGUARDANDO_CONEXAO",
     label: authExpired ? "Aguardando novo login" : OPERATOR_STATUS_LABEL.AGUARDANDO_CONEXAO,
-    serverHasSale: authExpired ? "nao" : unknownResult ? "desconhecido" : "nao",
+    serverHasSale: unknownResult ? "desconhecido" : "nao",
     canResend: true,
     needsAdmin: false,
   }
@@ -333,7 +370,7 @@ export function operatorSaleSyncView(
 
 // ── Fila entre abas ──────────────────────────────────────────────────────────
 
-type MergeableSale = Pick<SaleRecord, "id" | "clientSaleId" | "syncPending">
+type MergeableSale = Pick<SaleRecord, "id" | "clientSaleId" | "syncPending" | "at">
 
 function isSaleLike(value: unknown): value is SaleRecord {
   return (
@@ -345,16 +382,22 @@ function isSaleLike(value: unknown): value is SaleRecord {
   )
 }
 
-function sameSale(a: MergeableSale, b: MergeableSale): boolean {
-  if (a.clientSaleId && b.clientSaleId) return a.clientSaleId === b.clientSaleId
-  return a.id === b.id
+/**
+ * Chave entre abas: a `clientSaleId` (única por venda); sem ela (writer V1 legado), id +
+ * instante — o número `VDA-…` sozinho é reaproveitado por `nextSaleId` depois de um descarte
+ * e casaria uma venda NOVA com a antiga (lápide apagando venda real).
+ */
+export function crossTabSaleKey(sale: Pick<SaleRecord, "id" | "clientSaleId" | "at">): string {
+  const key = saleLocalKey(sale)
+  return key === sale.id ? `${sale.id}@${sale.at ?? ""}` : key
 }
 
 /**
  * União monotônica da fila desta aba com a gravada por outra aba (mesma loja):
  * - venda pendente que só a outra aba conhece entra (salvo lápide: descartada com prova);
  * - a mesma venda confirmada lá e pendente aqui vira confirmada (confirmação vence);
- * - nada daqui é removido. Devolve a MESMA referência quando não há mudança.
+ * - nada daqui é removido (para isso, `dropTombstonedPending`). Devolve a MESMA referência
+ *   quando não há mudança.
  */
 export function mergeSalesFromOtherTab<T extends SaleRecord>(
   local: readonly T[],
@@ -362,26 +405,51 @@ export function mergeSalesFromOtherTab<T extends SaleRecord>(
   tombstones: ReadonlySet<string>,
 ): T[] {
   if (!Array.isArray(incoming) || incoming.length === 0) return local as T[]
+  const index = new Map<string, number>()
+  local.forEach((s, i) => {
+    if (s && typeof s === "object") index.set(crossTabSaleKey(s as MergeableSale), i)
+  })
   let out: T[] | null = null
   for (const raw of incoming) {
     if (!isSaleLike(raw)) continue
     const other = raw as T
-    const current = out ?? local
-    const idx = current.findIndex((s) => sameSale(s, other))
-    if (idx >= 0) {
-      const mine = current[idx]
+    const key = crossTabSaleKey(other)
+    const idx = index.get(key)
+    if (idx !== undefined) {
+      const mine = (out ?? local)[idx]
       if (mine.syncPending === true && other.syncPending === false) {
         out = out ?? [...local]
         out[idx] = other
       }
       continue
     }
-    if (other.syncPending !== true) continue
-    if (tombstones.has(saleLocalKey(other)) || tombstones.has(other.id)) continue
+    if (other.syncPending !== true || tombstones.has(key)) continue
     out = out ?? [...local]
+    index.set(key, out.length)
     out.push(other)
   }
   return out ?? (local as T[])
+}
+
+/**
+ * Tira desta aba as pendentes que OUTRA aba descartou com prova (lápide): recusa definitiva
+ * na finalização ou descarte verificado no servidor. Sem isto a aba que adotou a pendência a
+ * regravava e reenviava — venda fantasma depois de o operador corrigir e vender de novo.
+ * `keep`: tentativas com carrinho aberto NESTA aba nunca saem por lápide alheia.
+ */
+export function dropTombstonedPending<T extends SaleRecord>(
+  sales: readonly T[],
+  tombstones: ReadonlySet<string>,
+  keep?: (sale: T) => boolean,
+): T[] {
+  if (tombstones.size === 0) return sales as T[]
+  let changed = false
+  const out = sales.filter((s) => {
+    const drop = s?.syncPending === true && tombstones.has(crossTabSaleKey(s)) && !(keep?.(s) ?? false)
+    if (drop) changed = true
+    return !drop
+  })
+  return changed ? out : (sales as T[])
 }
 
 const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60_000
@@ -415,13 +483,11 @@ export function readSaleTombstones(storeId: string, now = Date.now()): Set<strin
 }
 
 /** Lápide da venda removida da fila com prova (descarte verificado / recusa definitiva). */
-export function addSaleTombstone(storeId: string, sale: { id: string; clientSaleId?: string }, now = Date.now()): void {
+export function addSaleTombstone(storeId: string, sale: Pick<SaleRecord, "id" | "clientSaleId" | "at">, now = Date.now()): void {
   if (typeof window === "undefined") return
   try {
     const map = readTombstoneMap(storeId, now)
-    const at = new Date(now).toISOString()
-    map[saleLocalKey(sale)] = at
-    map[sale.id] = at
+    map[crossTabSaleKey(sale)] = new Date(now).toISOString()
     const entries = Object.entries(map).sort((a, b) => (a[1] < b[1] ? 1 : -1)).slice(0, TOMBSTONE_MAX)
     window.localStorage.setItem(saleTombstonesKey(storeId), JSON.stringify(Object.fromEntries(entries)))
   } catch {

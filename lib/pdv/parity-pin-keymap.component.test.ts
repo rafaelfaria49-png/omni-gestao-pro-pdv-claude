@@ -32,6 +32,8 @@ vi.mock("@/lib/operations-store", () => ({ useOperationsStore: () => ({
   inventory: runtime.inventory, caixa: runtime.caixa, sales: [], ordens: [],
   finalizeSaleTransaction: runtime.finalize, setInventory: runtime.noop,
   getSaldoCreditoCliente: () => 0, sincronizarCreditoLocal: runtime.noop,
+  // Contrato do provider desde a #325 (catálogo sem F5): o Clássico liga/desliga o watch.
+  checkCatalog: async () => "unchanged", watchCatalogSync: () => () => {},
 }) }))
 vi.mock("@/lib/store-settings-provider", () => ({ useStoreSettings: () => ({
   pdvParams: runtime.params, blob: { pdvParams: runtime.params }, settings: {}, hydrated: true,

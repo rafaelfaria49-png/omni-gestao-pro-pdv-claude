@@ -9,6 +9,9 @@ import {
   PERMISSION_DENIED,
   SaleSyncTimeoutError,
   addSaleTombstone,
+  crossTabSaleKey,
+  dropTombstonedPending,
+  nextResultUnknown,
   attemptOutcomeFromFailure,
   authFailureCode,
   autoRetryDelayMs,
@@ -106,7 +109,9 @@ describe("classificação dos códigos novos", () => {
   })
   it("desfecho da tentativa", () => {
     expect(attemptOutcomeFromFailure({ networkError: true, timedOut: true })).toBe("SEM_RESPOSTA")
-    expect(attemptOutcomeFromFailure({ networkError: true })).toBe("SEM_CONEXAO")
+    // Só o navegador offline prova que nada saiu; com o navegador "online" o resultado é desconhecido.
+    expect(attemptOutcomeFromFailure({ networkError: true, offline: true })).toBe("SEM_CONEXAO")
+    expect(attemptOutcomeFromFailure({ networkError: true })).toBe("SEM_RESPOSTA")
     expect(attemptOutcomeFromFailure({ httpStatus: 503 })).toBe("SERVIDOR_INDISPONIVEL")
     expect(attemptOutcomeFromFailure({ code: "ESTOQUE_INSUFICIENTE", httpStatus: 409 })).toBe("REJEITADA")
     expect(attemptOutcomeFromFailure({ code: "CAIXA_ORIGINAL_FECHADO", httpStatus: 409 })).toBe("EXIGE_CORRECAO")
@@ -186,11 +191,44 @@ describe("lápides persistidas", () => {
   beforeEach(() => localStorage.clear())
   it("grava por identidade e id, expira em 7 dias", () => {
     const now = Date.parse("2026-11-02T12:00:00Z")
-    addSaleTombstone("loja-a", { id: "PEND-x", clientSaleId: "cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }, now)
-    expect(readSaleTombstones("loja-a", now).has("cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true)
-    expect(readSaleTombstones("loja-a", now).has("PEND-x")).toBe(true)
+    const cs = "cs_" + "x".repeat(32)
+    addSaleTombstone("loja-a", { id: "PEND-x", clientSaleId: cs, at: "2026-11-02T10:00:00.000Z" }, now)
+    expect(readSaleTombstones("loja-a", now).has(cs)).toBe(true)
+    // O id provisório sozinho não vira lápide (seria ambíguo).
+    expect(readSaleTombstones("loja-a", now).has("PEND-x")).toBe(false)
     expect(readSaleTombstones("loja-b", now).size).toBe(0)
     expect(readSaleTombstones("loja-a", now + 8 * 24 * 60 * 60_000).size).toBe(0)
+  })
+})
+
+describe("lápides e chave entre abas (revisão independente P0/P1)", () => {
+  const CS = "cs_" + "e".repeat(32)
+  it("V1 sem clientSaleId: a chave inclui o instante — VDA reaproveitado não casa a venda nova", () => {
+    const antiga = sale({ id: "VDA-2026-0007", clientSaleId: undefined, at: "2026-11-02T10:00:00.000Z" })
+    const nova = sale({ id: "VDA-2026-0007", clientSaleId: undefined, at: "2026-11-02T10:05:00.000Z" })
+    expect(crossTabSaleKey(antiga)).not.toBe(crossTabSaleKey(nova))
+    expect(dropTombstonedPending([nova], new Set([crossTabSaleKey(antiga)]))).toHaveLength(1)
+    // Confirmada de outra aba com o mesmo VDA mas outro instante não substitui a pendente daqui.
+    const merged = mergeSalesFromOtherTab([nova], [{ ...antiga, syncPending: false }], new Set())
+    expect(merged.find((s) => s.at === nova.at)?.syncPending).toBe(true)
+  })
+  it("pendente adotada com lápide sai; a tentativa aberta nesta aba fica; confirmada nunca sai", () => {
+    const adotada = sale({ id: "PEND-1", clientSaleId: CS })
+    const tomb = new Set([CS])
+    expect(dropTombstonedPending([adotada], tomb)).toEqual([])
+    expect(dropTombstonedPending([adotada], tomb, () => true)).toHaveLength(1)
+    const list = [{ ...adotada, syncPending: false }]
+    expect(dropTombstonedPending(list, tomb)).toBe(list)
+  })
+  it("dúvida sobre gravação: rede online/prazo/5xx/inconclusivo acumulam; recusa de negócio zera; offline não cria", () => {
+    expect(nextResultUnknown(false, { networkError: true })).toBe(true)
+    expect(nextResultUnknown(false, { networkError: true, offline: true })).toBe(false)
+    expect(nextResultUnknown(true, { networkError: true, offline: true })).toBe(true)
+    expect(nextResultUnknown(false, { timedOut: true, networkError: true })).toBe(true)
+    expect(nextResultUnknown(false, { httpStatus: 502 })).toBe(true)
+    expect(nextResultUnknown(false, { httpStatus: 200, code: INCONCLUSIVE_RESPONSE })).toBe(true)
+    expect(nextResultUnknown(true, { httpStatus: 409, code: "ESTOQUE_INSUFICIENTE" })).toBe(false)
+    expect(nextResultUnknown(true, { httpStatus: 401, code: AUTH_REQUIRED })).toBe(true)
   })
 })
 

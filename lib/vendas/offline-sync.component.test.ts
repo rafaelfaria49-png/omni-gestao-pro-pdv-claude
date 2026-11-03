@@ -47,6 +47,11 @@ class ServerModel {
   posts: Array<{ storeId: string; clientSaleId: string | null; pedidoId?: string; retroactive: boolean; path: string }> = []
   gets: string[] = []
   verifyCalls = 0
+  /** Recusa de negócio por identidade (fila mista). */
+  rejectFor = new Map<string, { status: number; body: Record<string, unknown> }>()
+  /** Pausa a próxima escrita até `release()` (envio em voo). */
+  paused: Array<() => void> = []
+  pauseNext = false
   private seq = 0
 
   private json(status: number, body: unknown) {
@@ -80,6 +85,12 @@ class ServerModel {
       const wire = JSON.parse(String(init?.body ?? "null")) as { sale: SaleRecord; clientSaleId?: string; allowClosedOriginalSession?: boolean }
       const clientSaleId = url.pathname.endsWith("/v2") ? wire.clientSaleId ?? null : null
       this.posts.push({ storeId, clientSaleId, pedidoId: wire.sale.id, retroactive: wire.allowClosedOriginalSession === true, path: url.pathname })
+      if (this.pauseNext) {
+        this.pauseNext = false
+        await new Promise<void>((done) => this.paused.push(done))
+      }
+      const rejection = clientSaleId ? this.rejectFor.get(clientSaleId) : undefined
+      if (rejection) return this.json(rejection.status, rejection.body)
       const mode = this.modes.shift() ?? "ok"
       if (mode === "network") throw new TypeError("Failed to fetch")
       if (mode === "hang") {
@@ -377,15 +388,7 @@ describe("Reenviar manual — tentativa real, progresso e resultado autoritativo
     const r0 = await sell()
     expect(r0).toMatchObject({ ok: true, pending: true })
     expect(server.vendas.size).toBe(1)
-    const phases: string[] = []
-    const id = pendentes()[0].clientSaleId!
-    let r!: Awaited<ReturnType<typeof retry>>
-    await act(async () => {
-      const p = ops().retrySyncSale(id)
-      await Promise.resolve()
-      phases.push(...Object.values(ops().saleSyncPhases ?? {}))
-      r = await p
-    })
+    const r = await retry(pendentes()[0].clientSaleId!)
     expect(r).toEqual({ ok: true, reconciled: true, pedidoId: "VDA-OFF-1" })
     expect(server.posts).toHaveLength(1)
     expect(server.vendas.size).toBe(1)
@@ -506,6 +509,53 @@ describe("erros transitórios, sessão e recusas de negócio", () => {
   })
 })
 
+describe("fila mista e concorrência manual × automático", () => {
+  it("T35 — fila com aprovadas e recusada: cada uma no seu estado, a recusada não some nem entra em loop", async () => {
+    await mount()
+    setOnline(false)
+    server.down = true
+    const ids: string[] = []
+    for (let i = 0; i < 3; i += 1) {
+      const r = await sell()
+      ids.push((r as { clientSaleId: string }).clientSaleId)
+      act(() => ops().releaseSaleAttempt?.({ id: (r as { saleId: string }).saleId, clientSaleId: ids[i] }))
+    }
+    server.down = false
+    server.rejectFor.set(ids[1], { status: 409, body: { error: "Estoque insuficiente", code: "ESTOQUE_INSUFICIENTE" } })
+    await act(async () => { setOnline(true) })
+    await waitFor(() => expect(pendentes()).toHaveLength(1))
+    expect(pendentes()[0]).toMatchObject({ clientSaleId: ids[1], syncBlockedCode: "ESTOQUE_INSUFICIENTE" })
+    expect(operatorSaleSyncView(pendentes()[0], {}).status).toBe("REJEITADA")
+    expect(server.vendasDe(STORE_A)).toHaveLength(2)
+    const posts = server.posts.length
+    await act(async () => { setOnline(true) })
+    await act(async () => { await new Promise((done) => setTimeout(done, 50)) })
+    expect(server.posts.length).toBe(posts)
+    expect(stored().filter((s) => s.syncPending === true).map((s) => s.clientSaleId)).toEqual([ids[1]])
+  })
+
+  it("T36 — Reenviar manual durante o envio automático em voo: junta-se a ele, um único POST", async () => {
+    await mount()
+    setOnline(false)
+    server.down = true
+    await sell()
+    const id = pendentes()[0].clientSaleId!
+    server.down = false
+    server.pauseNext = true
+    await act(async () => { setOnline(true) })
+    await waitFor(() => expect(server.paused).toHaveLength(1))
+    expect(ops().saleSyncPhases?.[id]).toBe("enviando")
+    let manual!: Promise<unknown>
+    await act(async () => { manual = ops().retrySyncSale(id) })
+    await act(async () => { server.paused.shift()?.() })
+    const r = await act(async () => manual)
+    expect((r as { ok: boolean }).ok).toBe(true)
+    expect(server.posts).toHaveLength(1)
+    expect(server.vendas.size).toBe(1)
+    await waitFor(() => expect(ops().saleSyncPhases ?? {}).toEqual({}))
+  })
+})
+
 describe("abas, lojas e armazenamento local", () => {
   it("T14/T44 — duas abas: a fila de uma não é sobrescrita pela outra; ambas reenviam e o servidor guarda UMA venda", async () => {
     await mount(STORE_A, "tab1")
@@ -528,6 +578,74 @@ describe("abas, lojas e armazenamento local", () => {
     expect(server.vendas.size).toBe(1)
     expect(server.stock.get("p-1")).toBe(9)
     expect(server.cash).toHaveLength(1)
+  })
+
+  it("REV-P0 — recusa definitiva na aba A tira da aba B a pendência que ela adotou; B nunca a envia nem regrava", async () => {
+    await mount(STORE_A, "tab1")
+    await mount(STORE_A, "tab2")
+    server.pauseNext = true
+    let finalizing!: Promise<unknown>
+    await act(async () => {
+      finalizing = ops(STORE_A, "tab1").finalizeSaleTransaction({ lines: [{ inventoryId: "p-1", produtoId: "prod-1", name: "Pão sintético", quantity: 1, unitPrice: 10 }], total: 10, paymentBreakdown: pbOf({ dinheiro: 10 }) })
+    })
+    await waitFor(() => expect(server.paused).toHaveLength(1))
+    // A gravação durável aconteceu antes do POST: a aba 2 adota pela notificação de storage.
+    const cs = stored().find((s) => s.syncPending === true)!.clientSaleId!
+    await act(async () => { window.dispatchEvent(new StorageEvent("storage", { key: keyOf(STORE_A), newValue: localStorage.getItem(keyOf(STORE_A)) })) })
+    await waitFor(() => expect(pendentes(STORE_A, "tab2").some((s) => s.clientSaleId === cs)).toBe(true))
+    server.rejectFor.set(cs, { status: 409, body: { error: "Produto não resolvido", code: "PRODUTO_NAO_RESOLVIDO", inventoryIds: ["p-1"] } })
+    await act(async () => { server.paused.shift()?.() })
+    expect(await act(async () => finalizing)).toMatchObject({ ok: false })
+    expect(ops(STORE_A, "tab1").sales.some((s) => s.clientSaleId === cs)).toBe(false)
+    // A lápide chega na aba 2 (evento de storage da chave de lápides).
+    await act(async () => { window.dispatchEvent(new StorageEvent("storage", { key: `omnigestao:pdv-sale-tombstones:${STORE_A}`, newValue: "{}" })) })
+    await waitFor(() => expect(ops(STORE_A, "tab2").sales.some((s) => s.clientSaleId === cs)).toBe(false))
+    const posts = server.posts.length
+    await act(async () => { setOnline(true) })
+    await act(async () => { await new Promise((done) => setTimeout(done, 50)) })
+    expect(server.posts.slice(posts).some((p) => p.clientSaleId === cs)).toBe(false)
+    expect(stored().some((s) => s.clientSaleId === cs)).toBe(false)
+    expect(server.vendas.size).toBe(0)
+  })
+
+  it("REV-P1 — evento de storage sem novidade não re-renderiza nem regrava (abas convergem)", async () => {
+    await mount(STORE_A, "tab1")
+    setOnline(false)
+    server.down = true
+    await sell(STORE_A, "tab1")
+    await act(async () => {})
+    const spy = vi.spyOn(Storage.prototype, "setItem")
+    const before = spy.mock.calls.filter(([k]) => k === keyOf(STORE_A)).length
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => { window.dispatchEvent(new StorageEvent("storage", { key: keyOf(STORE_A), newValue: localStorage.getItem(keyOf(STORE_A)) })) })
+    }
+    expect(spy.mock.calls.filter(([k]) => k === keyOf(STORE_A)).length).toBe(before)
+  })
+
+  it("REV-P2-7 — depois do F5, carrinho idêntico a uma venda com resultado DESCONHECIDO é barrado até verificar", async () => {
+    const view = await mount()
+    server.modes.push("lostAfterCommit")
+    await sell()
+    expect(pendentes()[0]).toMatchObject({ syncResultUnknown: true })
+    view.unmount()
+    runtimes.clear()
+    // O reenvio automático da montagem também fica sem resposta: a dúvida continua.
+    const posts = server.posts.length
+    server.modes.push("network")
+    await mount()
+    await waitFor(() => expect(server.posts.length).toBe(posts + 1))
+    await act(async () => {})
+    expect(pendentes()[0]).toMatchObject({ syncResultUnknown: true })
+    const r = await sell()
+    expect(r).toMatchObject({ ok: false })
+    expect((r as { reason: string }).reason).toMatch(/pode já estar gravada/)
+    expect(server.vendas.size).toBe(1)
+    // O Reenviar verifica e reconcilia; só então um carrinho igual vira venda nova.
+    const again = await retry(pendentes()[0].clientSaleId!)
+    expect(again).toMatchObject({ ok: true, reconciled: true })
+    server.modes.length = 0
+    expect(await sell()).toMatchObject({ ok: true, pending: false })
+    expect(server.vendas.size).toBe(2)
   })
 
   it("T30/T43 — loja B nunca envia a pendência da loja A", async () => {
