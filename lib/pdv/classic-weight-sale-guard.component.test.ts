@@ -20,12 +20,12 @@ const r = vi.hoisted(() => ({
   hold: undefined as HoldProps | undefined,
   weightOpen: false, attrOpen: false,
   toast: vi.fn(), finalize: vi.fn(), setInventory: vi.fn(), hardware: vi.fn(), noop: vi.fn(),
+  checkCatalog: vi.fn(async () => undefined), watchCatalogSync: vi.fn(() => () => undefined),
 }))
 vi.mock("@/lib/operations-store", () => ({ useOperationsStore: () => ({
   inventory: r.inventory, setInventory: r.setInventory, finalizeSaleTransaction: r.finalize,
   getSaldoCreditoCliente: () => 0, sincronizarCreditoLocal: r.noop, ordens: [], sales: [],
-  // Contrato do provider desde a #325 (catálogo sem F5): o Clássico liga/desliga o watch.
-  checkCatalog: async () => "unchanged", watchCatalogSync: () => () => {},
+  checkCatalog: r.checkCatalog, watchCatalogSync: r.watchCatalogSync,
 }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: r.store, opsStorageKey: `ops-${r.store}`, empresaDocumentos: { nomeFantasia: "Loja sintética" }, getEnderecoDocumentos: () => "" }) }))
 vi.mock("@/lib/store-settings-provider", () => ({ useStoreSettings: () => ({ storeId: r.store, pdvParams: { atalhosRapidos: [] }, impressaoConfig: {}, settings: {}, hydrated: true }) }))
