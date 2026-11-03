@@ -2,7 +2,7 @@
   "goal": "PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001",
   "branch": "claude/pdv-offline-sync-confiabilidade-e2e-001",
   "base": "main@a07e067",
-  "commit": "06cc67b",
+  "commit": "b6d4d90",
   "pr": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/326",
   "productionWrites": 0,
   "productionReads": 0,
@@ -16,11 +16,11 @@
     },
     {
       "path": "CAUSA_RAIZ.md",
-      "bytes": 3471
+      "bytes": 4270
     },
     {
       "path": "FLUXOS_OFFLINE.md",
-      "bytes": 3429
+      "bytes": 4050
     },
     {
       "path": "INTEGRIDADE_FINANCEIRA_ESTOQUE.md",
@@ -28,27 +28,35 @@
     },
     {
       "path": "MATRIZ_TESTES_E2E.md",
-      "bytes": 6893
+      "bytes": 6336
     },
     {
       "path": "RELATORIO_FINAL.md",
-      "bytes": 3471
+      "bytes": 3946
     },
     {
       "path": "RESULTADOS_DB_E_API.md",
-      "bytes": 2855
+      "bytes": 2944
     },
     {
       "path": "RESULTADOS_UI_PLAYWRIGHT.md",
-      "bytes": 1579
+      "bytes": 3375
     },
     {
       "path": "REVISAO_INDEPENDENTE.md",
-      "bytes": 7341
+      "bytes": 8798
     },
     {
       "path": "RISCOS_REMANESCENTES.md",
-      "bytes": 4245
+      "bytes": 4176
+    },
+    {
+      "path": "raw/ci-e2e-isolation.json",
+      "bytes": 438
+    },
+    {
+      "path": "raw/ci-e2e-report-summary.json",
+      "bytes": 5935
     },
     {
       "path": "raw/vitest-postgres-integration.json",
@@ -56,11 +64,20 @@
     },
     {
       "path": "raw/vitest-sync-suites.json",
-      "bytes": 112773
+      "bytes": 116069
     }
   ],
-  "status": "PARTIAL",
-  "independentReview": "APPROVE (rodada 3)",
-  "e2e10": "PARTIAL",
-  "postgresRawEvidenceCommit": "16a2ed2 (servidor inalterado depois)"
+  "status": "DONE (técnico); merge bloqueado por governança (SessionProvider)",
+  "independentReview": "APPROVE (rodada 4)",
+  "ci": "12/12 PASS no head b6d4d90",
+  "e2e": "33/33 PASS (run 41672371685)",
+  "matrix": {
+    "total": 60,
+    "pass": 54,
+    "passSimulated": 3,
+    "partial": 5,
+    "fail": 0,
+    "blockedOrNotExecuted": 1
+  },
+  "postgresRawEvidenceCommit": "16a2ed2 (rotas do servidor inalteradas; CI PG PASS no head final)"
 }

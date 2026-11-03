@@ -26,6 +26,8 @@
 7. F5 / fechar e reabrir o navegador: a fila volta do `localStorage`; o catálogo da carga inicial
    vem do cache do service worker; envio retoma quando houver rede e sessão.
 8. Sessão expirada: a venda fica "Aguardando novo login"; depois do login, envia sozinha.
+9. Após F5 ou em outra aba, carrinho IDÊNTICO a uma venda cujo envio ficou sem resposta (pode estar gravada): a finalização é barrada e o painel abre a decisão explícita — **Verificar a venda anterior** (consulta/reenvia a mesma identidade), **É outra venda** (a anterior fica na fila com a identidade dela; a próxima finalização cria identidade nova) ou **Voltar**. Repetir a finalização não decide nada.
+10. Teclado: F1/F12 digitados logo após fechar um diálogo (ex.: Cancelar venda) funcionam — o guarda de atalhos ignora diálogos em animação de saída (antes descartava o atalho em silêncio).
 
 ## Pagamentos offline
 - **Dinheiro**: declarado pelo operador (com troco, se informado) — rastreável na venda.

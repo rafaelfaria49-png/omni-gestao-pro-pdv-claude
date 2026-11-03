@@ -10,8 +10,8 @@
 
 ## Riscos técnicos aceitos
 7. **Totais locais entre abas**: confirmação adotada de outra aba não reaplica efeitos locais (totais do caixa local daquela aba) até recarregar; o fechamento usa o resumo do servidor.
-8. **Trava de venda idêntica com resultado desconhecido (≤ 10 min)**: em Wi-Fi sem internet prolongado, um segundo cliente com carrinho idêntico, depois de um F5, é barrado até o Reenviar verificar a anterior (ou o operador aguardar a janela). Escolha deliberada: evitar duplicata vale mais que liberar o 2º carrinho idêntico sem verificação.
-8b. **Confirmação "é outra venda" implícita**: após o aviso da venda gêmea, repetir a finalização em até 2 min registra venda nova. Repetição por reflexo, sem ler o aviso, pode duplicar — só após F5/outra aba com resultado desconhecido. Melhoria sugerida: botão explícito "É outra venda" no modal de pagamento.
+8. **Trava de venda idêntica com resultado desconhecido (≤ 10 min)**: após F5/outra aba, um carrinho idêntico a uma venda cujo envio ficou sem resposta é barrado até o operador decidir no diálogo (verificar a anterior ou "É outra venda"). Com o servidor fora, "É outra venda" segue funcionando (registro local).
+8b. **"É outra venda" é decisão explícita** (diálogo com "Verificar a venda anterior" / "É outra venda" / "Voltar"); repetir a finalização não libera nada. Resta o risco humano de escolher "É outra venda" quando era a mesma — o texto avisa que a anterior pode já estar gravada.
 9. **Navegadores sem Web Locks**: sem single-flight entre abas (o banco continua idempotente; pode haver POST repetido, nunca venda repetida).
 10. **Fechamento com pendências**: ciência obrigatória (provada em teste de componente); a venda pendente não entra no fechamento e depende do "Sincronizar retroativo" manual depois.
 11. **Histórico/Detalhe**: fase e desfecho persistentes implementados; sem E2E dedicado da tela (T09/T50 PARTIAL).

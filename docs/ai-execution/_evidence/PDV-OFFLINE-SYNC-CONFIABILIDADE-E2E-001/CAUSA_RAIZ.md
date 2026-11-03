@@ -15,6 +15,9 @@ Nenhuma leitura ou escrita em produção. A venda real da RafaCell (≈ R$ 119,9
 | RC7 | Venda perdida ao fechar a aba | A venda só ia para o `localStorage` no efeito do próximo render, **depois** do 1º `fetch` sair. Fechar/travar a aba nesse intervalo perdia a venda (só o mapa de tentativas era síncrono). | Persistência |
 | RC8 | Pendência travada após login | 401 sem `code` virava ACTION_REQUIRED genérico; o reenvio automático nunca voltava, nem depois de entrar de novo. 403 idem. | Auth/cliente |
 | RC9 | Reconexão lenta / polling | Retry fixo (30 s + foco + `online`) sem backoff nem coordenação entre abas; `navigator.onLine` era o único sinal de conexão. | Cliente |
+| RC11 | PDV some offline ("Sua sessão foi encerrada") | Poll de 30 s do NextAuth: falha de rede ⇒ sessão `null` ⇒ `WorkspaceAccessBoundary` desmonta o dashboard. Achado no E2E 10. | Auth (cliente) |
+| RC12 | F1/F12 ignorados logo após fechar um diálogo | `hasPdvShortcutOverlay` contava o diálogo Radix ainda em animação de saída (`data-state="closed"`) e descartava o atalho em silêncio (Cancelar venda → bipe → F12). Achado no E2E 10, provado pela captura no instante do F12. | UI/teclado |
+| RC13 | 2ª venda offline sumindo no writer V1 | Na finalização, `s.clientSaleId === clientSaleId` com os dois lados `undefined` (V1 não tem clientSaleId) casava qualquer pendente V1: a venda nova era absorvida pela anterior. Bug pré-existente na main; achado no E2E 10. | Cliente |
 | RC10 | Fechamento de caixa mascarando diferença | Fechar o caixa com vendas da sessão não confirmadas não avisava: elas não entram no fechamento do servidor. | UI/caixa |
 
 **Incidente RafaCell (referência sintética):** a venda ficou PENDING por `PRODUTO_NAO_RESOLVIDO`

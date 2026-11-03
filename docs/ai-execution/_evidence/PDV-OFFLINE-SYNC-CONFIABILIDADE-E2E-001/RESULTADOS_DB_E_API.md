@@ -23,10 +23,10 @@
 | T29 | mesma identidade com outro conteúdo | 409 IDEMPOTENCY_KEY_REUSED, original intacta | igual |
 | T30/T43 | mesma clientSaleId na loja B | venda própria da B; loja A intacta | igual |
 
-Resultado no CI: ver `RESULTADOS_UI_PLAYWRIGHT.md` (seção CI) — mesmo arquivo roda no job `postgres-integration`.
+Resultado no CI: job `postgres-integration` do workflow "Ramos e Cadastros" PASS no head final `b6d4d90` (run 41672371685), rodando este mesmo arquivo. As rotas do servidor não foram alteradas por esta PR.
 
 ## Contrato cliente × servidor (OperationsProvider real × servidor-modelo)
-`lib/vendas/offline-sync.component.test.ts` — **27/27 PASS**: o provider real (fila, finalização, automático,
+`lib/vendas/offline-sync.component.test.ts` — **33/33 PASS**: o provider real (fila, finalização, automático,
 manual) contra um modelo com o contrato observável do writer (idempotente por identidade, uma baixa e um
 lançamento por venda criada, recusas sem efeito, falhas de rede/prazo/500/401/2xx inconclusivo/resposta perdida
 após commit). Lista completa em `MATRIZ_TESTES_E2E.md`.

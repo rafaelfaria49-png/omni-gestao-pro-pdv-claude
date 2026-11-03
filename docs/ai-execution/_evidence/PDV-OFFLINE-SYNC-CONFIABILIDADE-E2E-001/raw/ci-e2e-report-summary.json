@@ -1,0 +1,179 @@
+{
+  "run": 41672371685,
+  "head": "b6d4d90",
+  "stats": {
+    "startTime": "2026-11-03T16:18:21.391Z",
+    "duration": 251470.633,
+    "expected": 33,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "specs": [
+    {
+      "file": "01-padaria.spec.ts",
+      "title": "Padaria: ramo, cadastro, edição e nova sessão com persistência real",
+      "ok": true
+    },
+    {
+      "file": "01-padaria.spec.ts",
+      "title": "Produto por peso: somente preparação, preservado ao reabrir e editar",
+      "ok": true
+    },
+    {
+      "file": "02-lojas-mistas.spec.ts",
+      "title": "Variedades: peso e grade combinados sem mudar ramo nem ativar aparelhos",
+      "ok": true
+    },
+    {
+      "file": "02-lojas-mistas.spec.ts",
+      "title": "Campos ocultos: editar campo comum preserva vínculos, overrides false, garantia e fiscal",
+      "ok": true
+    },
+    {
+      "file": "02-lojas-mistas.spec.ts",
+      "title": "Assistência legada: recursos pertinentes e vínculos preservados sem gravar configuração",
+      "ok": true
+    },
+    {
+      "file": "02-lojas-mistas.spec.ts",
+      "title": "Acessórios: compatibilidade e acessórios sem assistência técnica",
+      "ok": true
+    },
+    {
+      "file": "03-permissoes-multiloja.spec.ts",
+      "title": "Operador sem Configurações não altera ramo; cadastro e loja continuam verificados no servidor",
+      "ok": true
+    },
+    {
+      "file": "03-permissoes-multiloja.spec.ts",
+      "title": "Papel sem Cadastros é recusado pelo servidor mesmo na própria loja",
+      "ok": true
+    },
+    {
+      "file": "03-permissoes-multiloja.spec.ts",
+      "title": "Multiloja: produtos e ramo de A não aparecem em B; resposta atrasada de A não hidrata B",
+      "ok": true
+    },
+    {
+      "file": "04-responsivo.spec.ts",
+      "title": "Viewport 1440px: editor de ramo e ficha de produto sem overflow, sem gravar",
+      "ok": true
+    },
+    {
+      "file": "04-responsivo.spec.ts",
+      "title": "Viewport 390px: editor de ramo e ficha de produto sem overflow, sem gravar",
+      "ok": true
+    },
+    {
+      "file": "04-responsivo.spec.ts",
+      "title": "Viewport 320px: editor de ramo e ficha de produto sem overflow, sem gravar",
+      "ok": true
+    },
+    {
+      "file": "05-clientes-vcard.spec.ts",
+      "title": "vCard: arquivo → escolha → prévia → aplicar → revisar → salvar → listar → reabrir → novo login",
+      "ok": true
+    },
+    {
+      "file": "05-clientes-vcard.spec.ts",
+      "title": "vCard: cancelar não cria registro; duplicidade canônica recusada sem fusão; troca de loja descarta a leitura",
+      "ok": true
+    },
+    {
+      "file": "05-clientes-vcard.spec.ts",
+      "title": "vCard: servidor recusa papel sem Cadastros e outra loja; leitura isolada por loja",
+      "ok": true
+    },
+    {
+      "file": "05-clientes-vcard.spec.ts",
+      "title": "vCard: prévia sem overflow horizontal em 390 px, sem gravar",
+      "ok": true
+    },
+    {
+      "file": "05-clientes-vcard.spec.ts",
+      "title": "vCard: prévia sem overflow horizontal em 320 px, sem gravar",
+      "ok": true
+    },
+    {
+      "file": "06-clientes-qr.spec.ts",
+      "title": "QR por imagem: PNG → prévia → aplicar → revisar → salvar → listar → reabrir → novo login",
+      "ok": true
+    },
+    {
+      "file": "06-clientes-qr.spec.ts",
+      "title": "QR por imagem: JPEG e WebP reais, conteúdo incompatível, imagem grande e corrompida, nada gravado",
+      "ok": true
+    },
+    {
+      "file": "06-clientes-qr.spec.ts",
+      "title": "QR por imagem: leitura feita na loja B não chega à loja A",
+      "ok": true
+    },
+    {
+      "file": "06-clientes-qr.spec.ts",
+      "title": "QR: seção sem overflow horizontal em 390 px, sem gravar",
+      "ok": true
+    },
+    {
+      "file": "06-clientes-qr.spec.ts",
+      "title": "QR: seção sem overflow horizontal em 320 px, sem gravar",
+      "ok": true
+    },
+    {
+      "file": "06-clientes-qr.spec.ts",
+      "title": "QR: desktop 1440 px com a seção aberta, sem overflow",
+      "ok": true
+    },
+    {
+      "file": "07-clientes-qr-camera.spec.ts",
+      "title": "câmera sintética com QR: clique → indicador → QR lido → câmera desligada → revisar → salvar uma vez",
+      "ok": true
+    },
+    {
+      "file": "07-clientes-qr-camera.spec.ts",
+      "title": "câmera sintética sem QR: indicador visível; cancelar e fechar o diálogo encerram as tracks; nada gravado",
+      "ok": true
+    },
+    {
+      "file": "07-clientes-qr-camera.spec.ts",
+      "title": "permissão de câmera negada: mensagem com alternativas, sem track; imagem e .vcf continuam disponíveis",
+      "ok": true
+    },
+    {
+      "file": "08-cadastro-manual.spec.ts",
+      "title": "Cadastro manual sem SKU/EAN: categoria pela UI, edição e nova sessão",
+      "ok": true
+    },
+    {
+      "file": "08-cadastro-manual.spec.ts",
+      "title": "Embalados e cadastro consecutivo: confirmação, códigos opcionais e duplicidade por loja",
+      "ok": true
+    },
+    {
+      "file": "08-cadastro-manual.spec.ts",
+      "title": "Base por G persiste sem conversão, saldo fracionado ou desbloqueio de operação",
+      "ok": true
+    },
+    {
+      "file": "08-cadastro-manual.spec.ts",
+      "title": "Valores inválidos mantêm o texto; vazio e zero não simulam preço ou saldo",
+      "ok": true
+    },
+    {
+      "file": "08-cadastro-manual.spec.ts",
+      "title": "Resposta perdida após commit real: consulta canônica sem segunda submissão",
+      "ok": true
+    },
+    {
+      "file": "09-catalogo-sem-f5.spec.ts",
+      "title": "Cadastro editado em outra aba e em outro aparelho chega ao PDV aberto sem F5",
+      "ok": true
+    },
+    {
+      "file": "10-pdv-offline-sync.spec.ts",
+      "title": "Vendas offline ficam só no terminal, o Reenviar é honesto e a volta da rede sincroniza uma vez cada",
+      "ok": true
+    }
+  ]
+}

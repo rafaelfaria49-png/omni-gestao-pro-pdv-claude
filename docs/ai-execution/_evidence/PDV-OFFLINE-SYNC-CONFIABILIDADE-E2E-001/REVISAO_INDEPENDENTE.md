@@ -57,3 +57,21 @@ Provas: `SessionProvider.offline.component.test.ts` (3/3) e `SessionProvider.fir
   (renderiza `children` uma vez; a chave só muda com a prop do servidor e o React desmonta antes de remontar;
   `goto` é carga completa). Hipótese: Suspense ocultando subárvore já renderizada (dependente de tempo).
   Resultado da reexecução no commit final: ver `RELATORIO_FINAL.md`.
+
+
+## Rodada 4 — diff `2677f78..65889c5`
+- **Execução real do revisor:** 12 arquivos em série (Node 22): 265 testes, todos PASS.
+- **Veredito: APPROVE** — sem P0/P1.
+- (A) guarda de atalhos: os 4 PDVs que o usam passam antes a própria flag local; não há `forceMount` nem overlay
+  não-Radix com `data-state="closed"`; diálogo em saída é inerte. (B) "É outra venda": repetir não libera; só o botão;
+  Escape/fechar = "cancelar". (C) bug V1 confirmado como pré-existente na main e corrigido.
+- **Segurança do `SessionProvider` (pedido do proprietário):** sem bypass de autenticação, autorização ou sessão
+  revogada — só muda o estado da sessão no cliente; `proxy.ts`, callback `jwt` (relê o usuário do banco a cada
+  `auth()`), guardas 401/403 inalterados; revogação/logout/expiração detectados online em ~30 s; falha de rede é
+  inconclusiva. Risco residual inerente ao offline: revogação só é percebida quando a rede volta (nenhuma capacidade
+  no servidor é ganha). Informativo (pré-existente): a fila é por loja, não por usuário.
+- P2 corrigidos em `b6d4d90`: "verificar" que acha a anterior gravada orienta a NÃO refinalizar; aviso de venda gêmea
+  descartado na troca de loja. P2 de instabilidade sob carga: CI final sem falhas/instáveis.
+
+**Gate de governança:** a revisão técnica aprova, mas o aval do PROPRIETÁRIO para `components/auth/SessionProvider.tsx`
+**não** está dado e não é presumido.
