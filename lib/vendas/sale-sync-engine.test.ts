@@ -212,6 +212,17 @@ describe("lápides e chave entre abas (revisão independente P0/P1)", () => {
     const merged = mergeSalesFromOtherTab([nova], [{ ...antiga, syncPending: false }], new Set())
     expect(merged.find((s) => s.at === nova.at)?.syncPending).toBe(true)
   })
+  it("REV2-P1 — venda legada que GANHA clientSaleId continua sendo a mesma (sem cópia a cada ciclo)", () => {
+    const legada = sale({ id: "VDA-2026-0009", clientSaleId: undefined, at: "2026-11-02T09:00:00.000Z" })
+    const comId = { ...legada, clientSaleId: CS }
+    // Aba local já tem a identidade derivada; o storage ainda tem a cópia sem ela (e vice-versa).
+    let fila: SaleRecord[] = [comId]
+    for (let i = 0; i < 5; i += 1) fila = mergeSalesFromOtherTab(fila, [legada, ...fila], new Set())
+    expect(fila).toHaveLength(1)
+    expect(mergeSalesFromOtherTab([legada], [comId], new Set())).toHaveLength(1)
+    // Lápide gravada pela identidade nova também tira a cópia legada.
+    expect(dropTombstonedPending([legada], new Set([crossTabSaleKey(comId), "VDA-2026-0009@2026-11-02T09:00:00.000Z"]))).toEqual([])
+  })
   it("pendente adotada com lápide sai; a tentativa aberta nesta aba fica; confirmada nunca sai", () => {
     const adotada = sale({ id: "PEND-1", clientSaleId: CS })
     const tomb = new Set([CS])

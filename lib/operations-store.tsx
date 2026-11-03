@@ -152,6 +152,8 @@ import {
 const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
 /** Janela em que uma venda idêntica com resultado desconhecido bloqueia o re-registro após F5. */
 const UNKNOWN_TWIN_WINDOW_MS = 10 * 60_000
+/** Prazo para o operador confirmar "é outra venda" repetindo a finalização depois do aviso. */
+const UNKNOWN_TWIN_CONFIRM_MS = 2 * 60_000
 
 export type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
@@ -827,6 +829,8 @@ type PersistPendingSaleResult =
       unresolvedInventoryIds?: string[]
       /** O prazo da requisição estourou (resultado desconhecido). */
       timedOut?: boolean
+      /** O navegador já estava offline ANTES do envio (a requisição nem saiu). */
+      offlineAtSend?: boolean
     }
 
 type SaleAttemptSource = "manual" | "auto" | "finalize"
@@ -841,6 +845,8 @@ type SaleSyncFailurePatch = {
   drift?: import("@/lib/estoque/stock-drift-reconcile").StockDriftDetails
   unresolvedInventoryIds?: string[]
   timedOut?: boolean
+  /** Navegador offline ANTES do envio — medido antes do fetch, não depois da falha. */
+  offlineAtSend?: boolean
   source?: SaleAttemptSource
 }
 
@@ -1152,6 +1158,8 @@ export function OperationsProvider({
   const openSaleAttemptsRef = useRef(new Set<string>())
   /** Carrinhos encerrados conscientemente NESTA aba (Cancelar/Limpar) — ver `releaseSaleAttempt`. */
   const releasedSaleAttemptsRef = useRef(new Set<string>())
+  /** Aviso de venda gêmea já mostrado: repetir a finalização no prazo confirma "é outra venda". */
+  const twinOverrideRef = useRef(new Map<string, number>())
   /** Lápides valem para pendência adotada de outra aba, nunca para a tentativa aberta aqui. */
   const isOpenHere = useCallback((sale: SaleRecord) => openSaleAttemptsRef.current.has(saleLocalKey(sale)), [])
   /** União entre abas + lápides; devolve `local` (mesma referência) quando nada muda. */
@@ -1843,8 +1851,9 @@ export function OperationsProvider({
 
   const markSaleBlocked = useCallback((token: { id: string; clientSaleId?: string }, patch?: string | SaleSyncFailurePatch) => {
     const next: SaleSyncFailurePatch = typeof patch === "string" ? { code: patch } : patch ?? {}
-    // Navegador offline na tentativa = a requisição nem saiu (não é "resultado desconhecido").
-    const offline = typeof navigator !== "undefined" && navigator.onLine === false
+    // Navegador offline ANTES do envio = a requisição nem saiu (não é "resultado desconhecido").
+    // Medido antes do fetch: a rede pode cair DEPOIS do commit e antes da resposta.
+    const offline = next.offlineAtSend === true
     const failure = {
       code: next.code,
       httpStatus: next.httpStatus,
@@ -2064,6 +2073,7 @@ export function OperationsProvider({
       const work = (async (): Promise<PersistPendingSaleResult> => {
       const token = { id: sale.id, clientSaleId: sale.clientSaleId }
       const useV2 = Boolean(sale.clientSaleId) && (isProvisionalSaleRef(sale.id) || writerCapabilityRef.current !== "v1")
+      const offlineAtSend = typeof navigator !== "undefined" && navigator.onLine === false
       setSalePhase(phaseKey, "enviando")
       try {
         const res = useV2 ? await postV2Sale(lojaId, sale, retroactive) : await postV1Sale(lojaId, sale, retroactive)
@@ -2086,12 +2096,13 @@ export function OperationsProvider({
         const msg = err instanceof Error ? err.message : String(err)
         const timedOut = err instanceof SaleSyncTimeoutError
         noteServerReachability(false)
-        markSaleBlocked(token, { networkError: true, message: msg, timedOut, source })
+        markSaleBlocked(token, { networkError: true, message: msg, timedOut, offlineAtSend, source })
         return {
           ok: false,
           reason: timedOut ? `Sem resposta do servidor: ${msg}` : `Falha de rede: ${msg}`,
           networkError: true,
           ...(timedOut ? { timedOut: true } : {}),
+          ...(offlineAtSend ? { offlineAtSend: true } : {}),
         }
       } finally {
         setSalePhase(phaseKey, null)
@@ -2303,10 +2314,7 @@ export function OperationsProvider({
             ok: false,
             reason: result.reason,
             ...(result.code ? { code: result.code } : {}),
-            outcome: attemptOutcomeFromFailure({
-              ...result,
-              offline: typeof navigator !== "undefined" && navigator.onLine === false,
-            }),
+            outcome: attemptOutcomeFromFailure({ ...result, offline: result.offlineAtSend === true }),
           }
         }, SALE_LOCK_WAIT_MS)
         if (!locked.acquired) {
@@ -3342,10 +3350,18 @@ export function OperationsProvider({
           saleRecordAttemptFingerprint(s) === fingerprint,
       )
       if (unknownTwin) {
-        const hora = new Date(unknownTwin.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-        return {
-          ok: false,
-          reason: `Já existe uma venda idêntica das ${hora} cujo envio ficou sem resposta do servidor — ela pode já estar gravada. Use "Reenviar" dessa venda no aviso de sincronização para verificar antes de registrar outra igual. Nada foi gravado.`,
+        const twinKey = saleLocalKey(unknownTwin)
+        if ((twinOverrideRef.current.get(twinKey) ?? 0) > Date.now()) {
+          // Operador repetiu a finalização depois do aviso: é OUTRO cliente — segue com identidade nova.
+          twinOverrideRef.current.delete(twinKey)
+          releasedSaleAttemptsRef.current.add(twinKey)
+        } else {
+          twinOverrideRef.current.set(twinKey, Date.now() + UNKNOWN_TWIN_CONFIRM_MS)
+          const hora = new Date(unknownTwin.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+          return {
+            ok: false,
+            reason: `Já existe uma venda idêntica das ${hora} cujo envio ficou sem resposta do servidor — ela pode já estar gravada. Se for a MESMA venda, use "Reenviar" dela no aviso de sincronização. Se for OUTRO cliente, finalize de novo para registrar como venda nova. Nada foi gravado.`,
+          }
         }
       }
 

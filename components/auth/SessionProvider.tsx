@@ -22,11 +22,27 @@ export function SessionProvider({ children, session }: { children: React.ReactNo
   )
 }
 
-type SessionLike = { user?: { id?: unknown; sessionVersion?: unknown } } | null
+type SessionLike = { user?: Record<string, unknown> } | null
 
-function sessionIdentity(value: SessionLike): string {
-  return JSON.stringify([value?.user?.id ?? null, value?.user?.sessionVersion ?? null])
+/** JSON com chaves ordenadas: o mesmo usuário sempre serializa igual. */
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>
+    return `{${Object.keys(obj).sort().map((k) => `${JSON.stringify(k)}:${stable(obj[k])}`).join(",")}}`
+  }
+  return JSON.stringify(value ?? null)
 }
+
+/**
+ * Identidade + autoridade do usuário (papel, lojas, módulos, troca de senha…): qualquer
+ * mudança relê a sessão, como o poll antigo. `expires` fica de fora (desliza a cada leitura).
+ */
+function sessionIdentity(value: SessionLike): string {
+  return stable(value?.user ?? null)
+}
+
+const REVALIDATE_TIMEOUT_MS = 8_000
 
 /**
  * Revalida a sessão a cada 30 s, na volta da aba e na volta da rede. Rede fora/sem resposta
@@ -44,12 +60,16 @@ function SessionRevalidator() {
     const check = async () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return
       let fetched: SessionLike
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), REVALIDATE_TIMEOUT_MS)
       try {
-        const res = await fetch("/api/auth/session", { cache: "no-store", credentials: "include" })
+        const res = await fetch("/api/auth/session", { cache: "no-store", credentials: "include", signal: controller.signal })
         if (!res.ok) return
         fetched = (await res.json()) as SessionLike
       } catch {
         return
+      } finally {
+        window.clearTimeout(timer)
       }
       if (cancelled || sessionIdentity(fetched) === current) return
       try {

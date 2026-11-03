@@ -639,6 +639,7 @@ describe("abas, lojas e armazenamento local", () => {
     const r = await sell()
     expect(r).toMatchObject({ ok: false })
     expect((r as { reason: string }).reason).toMatch(/pode já estar gravada/)
+    expect((r as { reason: string }).reason).toMatch(/finalize de novo/)
     expect(server.vendas.size).toBe(1)
     // O Reenviar verifica e reconcilia; só então um carrinho igual vira venda nova.
     const again = await retry(pendentes()[0].clientSaleId!)
@@ -646,6 +647,42 @@ describe("abas, lojas e armazenamento local", () => {
     server.modes.length = 0
     expect(await sell()).toMatchObject({ ok: true, pending: false })
     expect(server.vendas.size).toBe(2)
+  })
+
+  it("REV2-P2 — 'é outro cliente': repetir a finalização depois do aviso registra venda NOVA mesmo sem servidor", async () => {
+    const view = await mount()
+    server.modes.push("lostAfterCommit")
+    await sell()
+    view.unmount()
+    runtimes.clear()
+    server.modes.push("network")
+    await mount()
+    await waitFor(() => expect(server.posts.length).toBe(2))
+    await act(async () => {})
+    server.down = true
+    const aviso = await sell()
+    expect(aviso).toMatchObject({ ok: false })
+    const outra = await sell()
+    expect(outra).toMatchObject({ ok: true, pending: true })
+    expect(new Set(pendentes().map((s) => s.clientSaleId)).size).toBe(2)
+  })
+
+  it("REV2-P2 — rede cai DEPOIS do envio: o desfecho é desconhecido (não 'nada foi enviado')", async () => {
+    await mount()
+    const original = server.handle.bind(server)
+    server.handle = async (raw, init) => {
+      if ((init?.method ?? "GET") === "POST" && raw.includes("/venda-persist")) {
+        const res = await original(raw, init)
+        online = false
+        void res
+        throw new TypeError("Failed to fetch")
+      }
+      return original(raw, init)
+    }
+    await sell()
+    expect(server.vendas.size).toBe(1)
+    expect(pendentes()[0]).toMatchObject({ syncLastAttemptOutcome: "SEM_RESPOSTA", syncResultUnknown: true })
+    expect(operatorSaleSyncView(pendentes()[0], { offline: true }).serverHasSale).toBe("desconhecido")
   })
 
   it("T30/T43 — loja B nunca envia a pendência da loja A", async () => {

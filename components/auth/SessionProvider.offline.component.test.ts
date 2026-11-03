@@ -47,6 +47,15 @@ it("navegador offline nem consulta; 5xx também é inconclusivo", async () => {
   expect(status()).toBe("authenticated")
 })
 
+it("mudança de papel/lojas no servidor também faz o NextAuth reler (não só id/versão)", async () => {
+  const fetchMock = vi.fn(async () => Response.json({ ...session, user: { ...session.user, role: "OPERADOR" } }))
+  vi.stubGlobal("fetch", fetchMock)
+  mount()
+  await act(async () => { vi.advanceTimersByTime(31_000) })
+  // Revalidação + releitura pelo NextAuth (canal "next-auth").
+  await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+})
+
 it("servidor responde sem sessão (logout/revogação): o NextAuth relê e a sessão termina", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => Response.json(null)))
   mount()

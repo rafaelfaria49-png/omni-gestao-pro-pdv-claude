@@ -21,8 +21,30 @@ const BIPE = "Bipe ou digite o código do produto"
 const panel = (page: Page) => page.getByTestId("pdv-sync-panel")
 const cartRow = (page: Page): Locator => page.locator("button").filter({ has: page.locator(`[title="${NOME}"]`) })
 
+/**
+ * Pós-venda CONFIRMADA abre o diálogo do comprovante (e "Impressão não enviada": o job do CI não
+ * tem agente de impressão). Fecha-o quando estiver por cima — venda PENDENTE nunca o abre (contrato).
+ */
+function guardPostSaleDialog(page: Page) {
+  void page.addLocatorHandler(
+    page.getByRole("dialog", { name: /^(Impressão não enviada|Comprovante enviado|Comprovante não fiscal)$/ }),
+    async (dialog) => {
+      await dialog.getByRole("button", { name: "Fechar", exact: true }).first().click()
+    },
+  )
+}
+
+/** Espera o diálogo do comprovante da venda confirmada (abre assíncrono) e o fecha. */
+async function fecharPosVenda(page: Page) {
+  const dialog = page.getByRole("dialog", { name: /^(Impressão não enviada|Comprovante enviado|Comprovante não fiscal)$/ })
+  await dialog.waitFor({ state: "visible", timeout: 10_000 }).catch(() => {})
+  if (await dialog.isVisible()) await dialog.getByRole("button", { name: "Fechar", exact: true }).first().click()
+  await expect(dialog).toHaveCount(0)
+}
+
 async function abrirPdv(page: Page) {
   guardOnboarding(page)
+  guardPostSaleDialog(page)
   await page.goto("/dashboard/vendas")
   const usar = page.getByRole("button", { name: "Usar" }).first()
   const semTerminal = page.getByText("Continuar sem terminal")
@@ -102,6 +124,7 @@ test("Vendas offline ficam só no terminal, o Reenviar é honesto e a volta da r
     await expect.poll(() => db.venda.count({ where: { storeId: B } }), { timeout: 30_000 }).toBe(vendasAntes + 1)
     await expect.poll(async () => (await db.produto.findUniqueOrThrow({ where: { id: produto.id } })).stock).toBe(19)
     await expect(cartRow(page)).toHaveCount(0)
+    await fecharPosVenda(page)
   })
 
   await test.step("T02/T04 — internet cai: venda registrada SÓ no terminal, nada no servidor", async () => {

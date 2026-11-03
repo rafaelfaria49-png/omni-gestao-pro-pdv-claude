@@ -389,7 +389,22 @@ function isSaleLike(value: unknown): value is SaleRecord {
  */
 export function crossTabSaleKey(sale: Pick<SaleRecord, "id" | "clientSaleId" | "at">): string {
   const key = saleLocalKey(sale)
-  return key === sale.id ? `${sale.id}@${sale.at ?? ""}` : key
+  return key === sale.id ? legacySaleKey(sale) : key
+}
+
+/**
+ * Chave secundária `id@at`: a MESMA venda legada antes e depois de ganhar a `clientSaleId`
+ * derivada (reconciliação da quarentena). Sem ela a cópia sem identidade voltava do storage
+ * como "outra" venda a cada ciclo e a fila crescia até esgotar a quota.
+ */
+function legacySaleKey(sale: Pick<SaleRecord, "id" | "at">): string {
+  return `${sale.id}@${sale.at ?? ""}`
+}
+
+function saleKeys(sale: Pick<SaleRecord, "id" | "clientSaleId" | "at">): string[] {
+  const primary = crossTabSaleKey(sale)
+  const legacy = legacySaleKey(sale)
+  return primary === legacy ? [primary] : [primary, legacy]
 }
 
 /**
@@ -407,14 +422,14 @@ export function mergeSalesFromOtherTab<T extends SaleRecord>(
   if (!Array.isArray(incoming) || incoming.length === 0) return local as T[]
   const index = new Map<string, number>()
   local.forEach((s, i) => {
-    if (s && typeof s === "object") index.set(crossTabSaleKey(s as MergeableSale), i)
+    if (s && typeof s === "object") for (const k of saleKeys(s as MergeableSale)) if (!index.has(k)) index.set(k, i)
   })
   let out: T[] | null = null
   for (const raw of incoming) {
     if (!isSaleLike(raw)) continue
     const other = raw as T
-    const key = crossTabSaleKey(other)
-    const idx = index.get(key)
+    const keys = saleKeys(other)
+    const idx = keys.map((k) => index.get(k)).find((i) => i !== undefined)
     if (idx !== undefined) {
       const mine = (out ?? local)[idx]
       if (mine.syncPending === true && other.syncPending === false) {
@@ -423,9 +438,9 @@ export function mergeSalesFromOtherTab<T extends SaleRecord>(
       }
       continue
     }
-    if (other.syncPending !== true || tombstones.has(key)) continue
+    if (other.syncPending !== true || keys.some((k) => tombstones.has(k))) continue
     out = out ?? [...local]
-    index.set(key, out.length)
+    for (const k of keys) index.set(k, out.length)
     out.push(other)
   }
   return out ?? (local as T[])
@@ -445,7 +460,7 @@ export function dropTombstonedPending<T extends SaleRecord>(
   if (tombstones.size === 0) return sales as T[]
   let changed = false
   const out = sales.filter((s) => {
-    const drop = s?.syncPending === true && tombstones.has(crossTabSaleKey(s)) && !(keep?.(s) ?? false)
+    const drop = s?.syncPending === true && saleKeys(s).some((k) => tombstones.has(k)) && !(keep?.(s) ?? false)
     if (drop) changed = true
     return !drop
   })
@@ -487,7 +502,8 @@ export function addSaleTombstone(storeId: string, sale: Pick<SaleRecord, "id" | 
   if (typeof window === "undefined") return
   try {
     const map = readTombstoneMap(storeId, now)
-    map[crossTabSaleKey(sale)] = new Date(now).toISOString()
+    const at = new Date(now).toISOString()
+    for (const k of saleKeys(sale)) map[k] = at
     const entries = Object.entries(map).sort((a, b) => (a[1] < b[1] ? 1 : -1)).slice(0, TOMBSTONE_MAX)
     window.localStorage.setItem(saleTombstonesKey(storeId), JSON.stringify(Object.fromEntries(entries)))
   } catch {

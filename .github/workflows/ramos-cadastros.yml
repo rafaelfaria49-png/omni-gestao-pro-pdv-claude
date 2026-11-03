@@ -94,7 +94,7 @@ jobs:
           lib/vendas/sale-quantity-contract.test.ts
           lib/vendas/sale-sync-engine.test.ts lib/vendas/offline-sync.component.test.ts
           lib/vendas/pending-sync-classification.test.ts lib/vendas/produto-nao-resolvido-recovery.test.ts components/dashboard/vendas/pdv-pending-sync-badge-offline.test.ts components/dashboard/vendas/pdv-pending-sync-badge.test.ts
-          components/auth/SessionProvider.offline.component.test.ts components/auth/SessionProvider.first-access.component.test.ts
+          components/auth/SessionProvider.offline.component.test.ts components/auth/SessionProvider.first-access.component.test.ts components/dashboard/caixa/fechamento-pendentes-sync.component.test.ts
           app/api/stores/[id]/settings/route.test.ts
           app/api/settings/perfil-loja/route.test.ts
           app/api/ops/venda-persist/route.test.ts app/api/ops/venda-persist/v2/route.test.ts
