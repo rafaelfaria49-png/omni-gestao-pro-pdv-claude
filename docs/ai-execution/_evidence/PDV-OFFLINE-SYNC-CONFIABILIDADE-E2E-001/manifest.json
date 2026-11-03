@@ -2,7 +2,7 @@
   "goal": "PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001",
   "branch": "claude/pdv-offline-sync-confiabilidade-e2e-001",
   "base": "main@a07e067",
-  "commit": "a089dc5",
+  "commit": "39b6525",
   "pr": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/326",
   "productionWrites": 0,
   "productionReads": 0,
@@ -28,11 +28,11 @@
     },
     {
       "path": "MATRIZ_TESTES_E2E.md",
-      "bytes": 6336
+      "bytes": 6346
     },
     {
       "path": "RELATORIO_FINAL.md",
-      "bytes": 4138
+      "bytes": 4474
     },
     {
       "path": "RESULTADOS_DB_E_API.md",
@@ -40,7 +40,7 @@
     },
     {
       "path": "RESULTADOS_UI_PLAYWRIGHT.md",
-      "bytes": 3822
+      "bytes": 3881
     },
     {
       "path": "REVISAO_INDEPENDENTE.md",
@@ -56,7 +56,7 @@
     },
     {
       "path": "raw/ci-e2e-report-summary.json",
-      "bytes": 5935
+      "bytes": 5934
     },
     {
       "path": "raw/vitest-postgres-integration.json",
@@ -71,8 +71,9 @@
   "ownerAuthApprovalSessionProvider": "YES (2026-11-03, client-side only)",
   "deploy": "NOT AUTHORIZED",
   "independentReview": "APPROVE (rodada 5)",
-  "ci": "4/4 workflows PASS no head a089dc5",
-  "e2e": "33/33 PASS, 0 flaky (run 41681544333)",
+  "ci": "4/4 workflows, 12/12 checks PASS no head 39b6525",
+  "e2e": "33/33 PASS, 0 flaky (run 41683909751)",
+  "prState": "DRAFT, MERGEABLE/CLEAN",
   "matrix": {
     "total": 60,
     "pass": 54,

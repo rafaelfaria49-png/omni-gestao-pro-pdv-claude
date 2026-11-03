@@ -12,7 +12,7 @@ TESTS_TOTAL=60 (T01–T60)  TESTS_PASSED=54 (3 simulados)  TESTS_PARTIAL=5  TEST
 
 TYPECHECK=PASS (0 erros)  LINT=PASS (0 erros)  BUILD=PASS (CI)
 POSTGRES_INTEGRATION=PASS (10/10 local PG 17 + CI)  PLAYWRIGHT_E2E=PASS (33/33, 0 instáveis)
-CI=PASS (4/4 workflows, head a089dc5)  INDEPENDENT_REVIEW=APPROVE (rodada 5)
+CI=PASS (4/4 workflows, 12/12 checks, head 39b6525 = branch + main #328)  INDEPENDENT_REVIEW=APPROVE (rodada 5)
 
 BRANCH=claude/pdv-offline-sync-confiabilidade-e2e-001  COMMIT(código+teste)=a089dc5
 PR=https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/326 (DRAFT)
@@ -38,13 +38,16 @@ diálogo · RC13 2ª venda V1 absorvida pela pendente anterior (pré-existente n
 | Typecheck | local | 0 erros |
 | ESLint (arquivos alterados) | local + CI | 0 erros |
 | Build de produção | CI (`validate`, `e2e-authenticated`) | PASS |
-| Playwright E2E (01–10, login real, PG descartável) | CI run 41681544333 (head `a089dc5`) | 33/33, 0 instáveis (`raw/ci-e2e-report-summary.json`) |
-| Workflows | CI head `a089dc5` | Ramos e Cadastros, Visor de peso, Cliente assistido, Acesso piloto — todos PASS |
+| Playwright E2E (01–10, login real, PG descartável) | CI run 41683909751 (head `39b6525`; também PASS em `a089dc5`) | 33/33, 0 instáveis (`raw/ci-e2e-report-summary.json`) |
+| Workflows | CI head `39b6525` | Ramos e Cadastros, Visor de peso, Cliente assistido, Acesso piloto — todos PASS |
 
 ## Revisão independente
 5 rodadas (`REVISAO_INDEPENDENTE.md`): R1 REQUEST_CHANGES (1 P0, 3 P1) → R2 REQUEST_CHANGES (1 P1) → R3 APPROVE →
 R4 APPROVE → R5 **APPROVE** (ajuste do seletor do toast no E2E) (inclui confirmação de segurança do `SessionProvider`: sem bypass de autenticação, autorização ou sessão
 revogada). Todos os achados corrigidos com teste; P2 da R4 corrigidos em `b6d4d90`.
+
+## Integração com a main
+A `main` avançou (#328, mesmos mocks do Clássico que esta PR corrigia). Merge da `main` na branch em `39b6525`: conflito só nesses 2 testes, adotada a versão da `main`; testes afetados 135/135 local; CI completo PASS. PR `MERGEABLE`/`CLEAN`.
 
 ## Autorizações
 - **`components/auth/SessionProvider.tsx`**: aval do proprietário **concedido em 2026-11-03** (OWNER_AUTH_APPROVAL=YES,

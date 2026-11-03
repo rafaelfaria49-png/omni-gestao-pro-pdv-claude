@@ -1,7 +1,7 @@
 # MATRIZ_TESTES_E2E — T01–T60
 
-Head de código final: `b6d4d90` (CI 12/12 PASS). Legenda de evidência:
-- **E2E** = `e2e/cadastros-ramos/10-pdv-offline-sync.spec.ts` — build de produção + `next start` + login NextAuth real + PostgreSQL 16 descartável + Chromium (CI run 41672371685: 33 specs esperados, 0 inesperados, 0 instáveis)
+Head final: `39b6525` (CI 12/12 PASS; E2E run 41683909751). Legenda de evidência:
+- **E2E** = `e2e/cadastros-ramos/10-pdv-offline-sync.spec.ts` — build de produção + `next start` + login NextAuth real + PostgreSQL 16 descartável + Chromium (CI run 41683909751: 33 specs esperados, 0 inesperados, 0 instáveis)
 - **C** = `lib/vendas/offline-sync.component.test.ts` — OperationsProvider REAL × servidor-modelo (33/33)
 - **K** = `lib/pdv/classic-offline-sequence.component.test.ts` — PDV Clássico REAL (pendente → F6 → venda idêntica → F12) (1/1)
 - **M** = motor `sale-sync-engine.test.ts` (55/55) · **B** = painel/decisão (`pdv-pending-sync-badge*`, `pdv-unknown-twin-decision`) (18/18)

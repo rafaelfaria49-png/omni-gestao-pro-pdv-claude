@@ -31,8 +31,9 @@ Defeito real de produção (sem internet o PDV some em ≤ 30 s), corrigido em `
 | **`65889c5`, `b6d4d90`** | **PASS** | — | — |
 | `63b7c34` | FAIL (strict mode) | `getByText` achava o toast visível E a cópia oculta que o Radix anuncia ao leitor de tela (`span role=status`) — dependente de tempo | asserção no toast da região "Notifications (F8)": exatamente 1, visível, título + descrição completos |
 | **`a089dc5`** | **PASS** | — | — |
+| **`39b6525`** (merge da `main` #328) | **PASS** | — | — |
 
-## Resultado final — head `a089dc5` (run 41681544333; também PASS em `b6d4d90`, run 41672371685)
+## Resultado final — head `39b6525` (run 41683909751; também PASS em `a089dc5` e `b6d4d90`)
 33 specs esperados, **0 inesperados, 0 instáveis** (`raw/ci-e2e-report-summary.json`). Passos do spec 10, todos PASS:
 1. Produto pela interface.
 2. T01 — venda online confirmada pelo servidor (estoque 20→19, carrinho limpo, diálogo do comprovante fechado).
