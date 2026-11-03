@@ -179,7 +179,11 @@ test("Vendas offline ficam só no terminal, o Reenviar é honesto e a volta da r
     const cancelar = page.getByRole("dialog", { name: /Cancelar Venda/ })
     await expect(cancelar).toBeVisible()
     await cancelar.getByRole("button", { name: "Cancelar venda", exact: true }).click()
-    await expect(page.getByText(/A venda anterior NÃO foi cancelada/)).toBeVisible()
+    // O toast visível (região "Notifications (F8)"), não a cópia oculta que o Radix anuncia ao leitor de tela.
+    const liberado = page.getByLabel("Notifications (F8)").locator("li").filter({ hasText: "Carrinho liberado" })
+    await expect(liberado).toHaveCount(1)
+    await expect(liberado).toBeVisible()
+    await expect(liberado).toContainText("A venda anterior NÃO foi cancelada: segue registrada neste terminal")
     await expect(cartRow(page)).toHaveCount(0)
     await venderEmDinheiro(page, bipe)
     await expect(page.getByTestId("pdv-sync-total")).toHaveText("2", { timeout: 15_000 })
