@@ -77,7 +77,15 @@ async function venderEmDinheiro(page: Page, bipe: Locator) {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await page.keyboard.press("F12")
   const modal = page.getByRole("dialog", { name: "Finalizar Pagamento" })
-  await expect(modal).toBeVisible()
+  if (!(await modal.waitFor({ state: "visible", timeout: 4_000 }).then(() => true, () => false))) {
+    // Diagnóstico: o motivo da recusa vem em toast efêmero — capturado antes de sumir.
+    const motivo = await page.evaluate(() => ({
+      toasts: Array.from(document.querySelectorAll("[role=region] li")).map((el) => el.textContent),
+      overlays: Array.from(document.querySelectorAll("[role=dialog],[role=alertdialog],[role=menu],[role=listbox]")).map((el) => `${el.getAttribute("role")}:${(el.textContent ?? "").slice(0, 80)}`),
+      ativo: document.activeElement?.outerHTML.slice(0, 120),
+    }))
+    throw new Error(`Pagamento não abriu após F12: ${JSON.stringify(motivo)}`)
+  }
   await modal.getByRole("button", { name: /^Dinheiro$/i }).click()
   const cashConfirm = modal.getByRole("button", { name: /Confirmar (Dinheiro|valor exato)/i })
   if (await cashConfirm.count()) await cashConfirm.first().click()
