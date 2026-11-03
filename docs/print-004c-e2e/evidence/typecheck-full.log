@@ -1,5 +1,3 @@
-
-real	0m17.707s
-user	0m0.015s
-sys	0m0.015s
+npm notice run omni-gestao-pro@0.1.0 typecheck
+npm notice run node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js --noEmit
 exit=0

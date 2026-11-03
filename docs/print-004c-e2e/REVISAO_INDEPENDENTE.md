@@ -44,3 +44,20 @@ não registra nada; host que falhou ao iniciar não trava resets; venda fora do 
 anterior (automático → aviso legado; manual → diálogo); testes unitários para recusa por orçamento e TOMBSTONE de
 tentativa nova (PW10/PW11 no Playwright). Residual: o orçamento de lease é medido no servidor antes do envio da resposta
 (margem de ~15 s mitiga; o efeito possível é só exibir "incerto" por alguns segundos, nunca reenviar).
+
+## Rodada 4 (CI corretivo da PR #327) — APPROVE
+
+Escopo: mocks de `@/lib/operations-store` nos testes `parity-pin-keymap`/`classic-weight-sale-guard` e renomeação
+`PrintDelegation.sessionVersion` → `principalSessionVersion`. Sem P0/P1/P2. Confirmou: causa raiz das duas falhas; mocks
+não escondem comportamento que esses testes deveriam afirmar (o catálogo tem teste próprio do #325); renomeação neutra no
+banco (`migrate diff` vazio, coluna/índice/FKs iguais) e sem consumidor do client Prisma; nada alterado em
+`prisma/migrations`, `scripts/platform`, `.github/workflows` ou nas migrations candidatas; nenhum outro workflow passa a
+disparar.
+
+| Achado P3 | Tratamento |
+|---|---|
+| `HASHES.json` desatualizado após os ajustes | manifesto regenerado (inclui os 2 testes do PDV) |
+| `typecheck-full.log` sem código de saída | regravado com `exit=0` |
+| `main` segue com os mocks desatualizados | relatado (fora do escopo desta PR; correção própria na main) |
+| `run-pilot-e2e.mjs` frágil a homônimos dos 4 campos | observação; script do piloto não alterado |
+| restante do E2E do piloto nunca rodou no CI | confirmado pela rodada de CI do novo commit |

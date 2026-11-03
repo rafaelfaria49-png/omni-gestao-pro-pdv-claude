@@ -3681,7 +3681,9 @@ model PrintDelegation {
   id String @id @db.Uuid @map("id")
   storeId String @map("store_id")
   principalId String @map("principal_id")
-  sessionVersion Int @map("session_version")
+  // Nome Prisma distinto de AdminUser.sessionVersion (a coluna continua session_version): o E2E do piloto
+  // deriva o schema anterior removendo a única linha "sessionVersion" do arquivo.
+  principalSessionVersion Int @map("session_version")
   createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
   expiresAt DateTime @db.Timestamptz(3) @map("expires_at")
   revokedAt DateTime? @db.Timestamptz(3) @map("revoked_at")
@@ -3693,7 +3695,7 @@ model PrintDelegation {
   events PrintEvent[] @relation("P004EventDelegation")
   @@unique([id, storeId, principalId], map: "print_delegations_u1")
   @@unique([id, storeId], map: "print_delegations_u2")
-  @@index([principalId, sessionVersion], map: "print_delegations_i1")
+  @@index([principalId, principalSessionVersion], map: "print_delegations_i1")
   @@index([storeId, expiresAt], map: "print_delegations_i2")
   @@map("print_delegations")
 }

@@ -85,3 +85,21 @@ real), D05 (hardware), G-AUTH logout global (I12). Ver `MATRIZ_80.md`.
 | Build de produção | local inviável (≈600 MB livres no C:; build precisa ≈1,5 GB) → CI do GitHub (workflow platform-pilot: typecheck + build sem autoridade de migration + E2E do piloto) |
 
 Detalhes: `evidence/battery-summary.json`, `MATRIZ_80.md`, `REVISAO_INDEPENDENTE.md`, hashes em `evidence/HASHES.json`.
+
+## 7. CI corretivo da PR #327 (sobre `6c12d6c`)
+
+O CI de `6c12d6c` passou em Ramos e Cadastros (build, E2E, PostgreSQL), no `validate` do piloto (typecheck + build sem
+autoridade de migration) e nos previews Vercel. Duas falhas, diagnosticadas contra a `main` `a07e067`:
+
+| Falha | Causa raiz | Origem | Correção | Prova |
+|---|---|---|---|---|
+| Visor de peso / validate: 39 testes, `watchCatalogSync is not a function` | o #325 (main) passou a chamar `checkCatalog()`/`watchCatalogSync()` ao montar o PDV Clássico; os mocks de `@/lib/operations-store` em `parity-pin-keymap` e `classic-weight-sale-guard` não têm essas funções | **pré-existente na main**: arquivos de teste idênticos aos da `a07e067`; o workflow é filtrado por caminho e não rodou no #325 — esta PR o disparou ao tocar `PdvSection.tsx` | mocks ganham `checkCatalog`/`watchCatalogSync` estáveis e sem efeito (compatibilidade; nenhum teste removido ou afrouxado) | `ci-327/main-tests-on-candidate.log` (testes da main: 39 falhas, mesmo erro); `ci-327/visor-validate.log` (comando do workflow: 49 arquivos, 877/877); ESLint 0 erros; `track verify --all` sem divergências; `git diff --check` limpo |
+| Piloto / authenticated: `PILOT_SCHEMA_BASELINE_MISMATCH` | `run-pilot-e2e.mjs` deriva o schema anterior removendo a **única** linha `sessionVersion`; o modelo `PrintDelegation` (004B) tinha uma segunda | **regressão desta PR** | campo Prisma renomeado para `principalSessionVersion` com `@map("session_version")`: coluna, índice e FKs inalterados; SQL candidato intocado; nenhum consumidor do client Prisma | `ci-327/pilot-schema-derivation.log` (candidato 1/1/1/1; `6c12d6c` tinha 2); `migrate diff` entre os schemas = vazio; `ci-327/pilot-sim.log` (db push do schema derivado + migration do piloto + diff banco→schema vazio, em PG descartável) |
+
+Reexecução após os ajustes: bateria completa (`battery-summary.json`) toda PASS — unitários/agente 31/31, PG 30/30,
+regressão 004B 3/3, dois processos PASS (12 vendas, 0 duplicatas), índice 2/2, layout futuro PASS, Playwright 11/11;
+typecheck completo `exit=0`. Localmente os testes jsdom rodam com `--no-experimental-webstorage` (Node 26 local; o CI usa
+Node 24). Revisão independente da rodada: APPROVE (`REVISAO_INDEPENDENTE.md`, rodada 4).
+
+Remanescente fora do escopo: a `main` continua com os mocks desatualizados — qualquer PR que dispare o workflow do visor
+cai na mesma falha até a correção chegar lá.

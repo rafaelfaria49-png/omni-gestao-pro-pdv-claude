@@ -2,11 +2,11 @@ reset print_lab_e2e
 
  RUN  v4.1.4 C:/Projetos/omni-gestao-print-e2e-004c
 
-(node:23768) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
-(Use `node --trace-deprecation ...` to show where the warning was created)
 
  Test Files  1 passed (1)
       Tests  30 passed (30)
-   Start at  07:10:38
-   Duration  10.24s (transform 309ms, setup 0ms, import 423ms, tests 9.67s, environment 0ms)
+   Start at  13:13:41
+   Duration  12.04s (transform 302ms, setup 0ms, import 412ms, tests 11.39s, environment 0ms)
 
+(node:18728) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)

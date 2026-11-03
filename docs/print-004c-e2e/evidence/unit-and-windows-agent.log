@@ -4,8 +4,8 @@
 
  Test Files  4 passed (4)
       Tests  31 passed (31)
-   Start at  07:09:03
-   Duration  7.04s (transform 382ms, setup 0ms, import 634ms, tests 6.94s, environment 0ms)
+   Start at  13:13:31
+   Duration  7.45s (transform 394ms, setup 0ms, import 745ms, tests 7.52s, environment 0ms)
 
-(node:9416) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:18024) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)

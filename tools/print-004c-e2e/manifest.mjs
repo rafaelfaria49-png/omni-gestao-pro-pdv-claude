@@ -8,7 +8,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004c-e2e", "app/api/print/direct", "app/api/print/agent", "docs/print-004c-e2e",
   "components/dashboard/vendas/pdv-direct-print-feedback.tsx", "components/configuracoes-v3/features/settings/sections/ImpressaoDiretaAgenteCard.tsx",
   "components/configuracoes-v3/features/settings/sections/PdvSection.tsx", "components/dashboard/vendas/pdv-classic.tsx", "lib/pdv-impressao-config.ts",
-  "e2e/specs/print-direct-004c.spec.ts", "e2e/fixtures/print-direct.ts", "e2e/print-direct.playwright.config.ts", "prisma/schema.prisma"]
+  "e2e/specs/print-direct-004c.spec.ts", "e2e/fixtures/print-direct.ts", "e2e/print-direct.playwright.config.ts", "prisma/schema.prisma",
+  // CI corretivo da PR #327: mocks do PDV Clássico alinhados ao #325.
+  "lib/pdv/parity-pin-keymap.component.test.ts", "lib/pdv/classic-weight-sale-guard.component.test.ts"]
 const files = []
 const walk = (rel) => {
   const abs = path.join(root, rel)

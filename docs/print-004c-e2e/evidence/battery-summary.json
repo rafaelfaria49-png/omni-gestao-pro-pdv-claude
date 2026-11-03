@@ -1,6 +1,6 @@
 {
   "goal": "OMNI-PRINT-004C-INTEGRACAO-END-TO-END-001",
-  "at": "2026-11-03T10:10:22.663Z",
+  "at": "2026-11-03T16:15:24.436Z",
   "transport": "SIMULATED (FakeSpooler) + real Windows PowerShell host without printer",
   "physicalPrint": "NOT_TESTED_NO_PRINTER",
   "steps": [
@@ -26,56 +26,55 @@
       "exitCode": 0,
       "tests": "31 passed (31)",
       "seconds": 8,
-      "logSha256": "b26c25dc4a7ba902d252352037ff6fbc462e53a3bbce8e20cfd554c7c956b60e"
+      "logSha256": "832cb0581b14267df0998a62caaeb1f7a27659410dedbda0a13188e309b1d3fb"
     },
     {
       "step": "pg-scenarios",
       "status": "PASS",
       "exitCode": 0,
       "tests": "30 passed (30)",
-      "seconds": 10,
-      "logSha256": "91d910666af936fd7ce675dae9a95204276d11f265ddd9a51e818c927cfae888",
-      "note": "rerun after S29 assertion update: the transiently refused report is now re-sent within the same agent tick (round-3 P3 fix), so the copy no longer stays SENDING in between"
+      "seconds": 15,
+      "logSha256": "b388cf465f12d6573e90f016187dc13d8a1b1c9f2515f6d9ac50b7e4880d6057"
     },
     {
       "step": "pg-synthetic-004b-regression",
       "status": "PASS",
       "exitCode": 0,
       "tests": "3 passed (3)",
-      "seconds": 3,
-      "logSha256": "40f20b2f45c9319159d5b4585557f64ec75f7f232da7f8d0794aad84e5fb6c4c"
+      "seconds": 5,
+      "logSha256": "eadf323dc64e58272fb53aa7f81aefbb83939c3a46175c0f37ce43dd70288e2a"
     },
     {
       "step": "pg-two-agent-processes",
       "status": "PASS",
       "exitCode": 0,
       "tests": "1 passed (1)",
-      "seconds": 7,
-      "logSha256": "325ebd98368cdd8791dcf859aa85934a6ca86d92a83b062f83a2ff2fe7e14607"
+      "seconds": 9,
+      "logSha256": "10e12e5d9128643501535fb716aa7a024393d0cf0e356cc8339abe0a6dfd115a"
     },
     {
       "step": "pg-index-strategy",
       "status": "PASS",
       "exitCode": 0,
       "tests": "2 passed (2)",
-      "seconds": 7,
-      "logSha256": "b07be149f6ca47a97bf9f13ce0dd677af0f1a7e87100dca3613a0cd5581d38a1"
+      "seconds": 10,
+      "logSha256": "6a37c79e9be8d2c90f263bc2397a98979ac5d7db75847d5f427d9e383df97821"
     },
     {
       "step": "pg-future-layout-apply",
       "status": "PASS",
       "exitCode": 0,
       "tests": null,
-      "seconds": 2,
+      "seconds": 3,
       "logSha256": "8d0bc2cd3ebe553270ba6eb55247ccc7a58bc62b031f3137f4f5b0807f0b03a7"
     },
     {
       "step": "playwright-pdv-classic",
       "status": "PASS",
       "exitCode": 0,
-      "tests": "11 passed (38.9s)",
-      "seconds": 42,
-      "logSha256": "2805b14555dd4fff8a061eb62e845824496c62a68e9de1d9ee3c2baa05f949d4"
+      "tests": "11 passed (58.8s)",
+      "seconds": 63,
+      "logSha256": "0b2d873f88afc61b0a5f451448b413107f7defcdd62d6f0b1733b91fec8022af"
     }
   ]
 }
