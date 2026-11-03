@@ -142,7 +142,10 @@ test("Vendas offline ficam só no terminal, o Reenviar é honesto e a volta da r
   await test.step("T56/T07/T08 — Reenviar offline responde na hora e não finge envio", async () => {
     await panel(page).getByRole("button", { name: "Reenviar", exact: true }).click()
     await expect(page.getByTestId("pdv-sync-last-run")).toContainText("sem conexão — nada foi enviado", { timeout: 15_000 })
-    await panel(page).getByRole("button", { name: "Detalhes" }).click()
+    // Reenviar com falha já expande a lista (o motivo fica visível sem outro clique).
+    const detalhes = panel(page).getByRole("button", { name: "Detalhes" })
+    if ((await detalhes.getAttribute("aria-expanded")) !== "true") await detalhes.click()
+    await expect(detalhes).toHaveAttribute("aria-expanded", "true")
     await expect(page.getByTestId("pdv-sync-row").first()).toContainText("NÃO gravada")
     expect(await db.venda.count({ where: { storeId: B } })).toBe(vendasAntes + 1)
   })
