@@ -93,6 +93,18 @@ function normInv(id: string | null | undefined): string {
   return (id ?? "").trim()
 }
 
+/**
+ * Fração do preço de linha que o cliente efetivamente pagou. `ItemVenda.lineTotal` é
+ * preço × quantidade ANTES do desconto da venda (que só existe no payload); o motor
+ * garante apenas pagamentos = `Venda.total`. Sem o fator, item de R$100 vendido com 50%
+ * de desconto virava vale de R$100. Acréscimo não é devolvido (fator nunca passa de 1).
+ */
+export function fatorValorPago(total: number, itens: Array<{ lineTotal: number }>): number {
+  const soma = itens.reduce((s, i) => s + (Number.isFinite(i.lineTotal) ? i.lineTotal : 0), 0)
+  if (!(soma > 0) || !Number.isFinite(total) || total < 0) return 1
+  return Math.min(1, total / soma)
+}
+
 /** Identidade de conteúdo de uma devolução — base da comparação de replay. */
 export function devolucaoFingerprint(input: {
   vendaLocalId: string
@@ -238,7 +250,7 @@ export async function registrarDevolucaoInTransaction(
 
   const venda = await tx.venda.findFirst({
     where: { id: locked[0]!.id, storeId },
-    select: { id: true, status: true, itens: { select: { inventoryId: true, nome: true, quantidade: true, lineTotal: true } } },
+    select: { id: true, status: true, total: true, itens: { select: { inventoryId: true, nome: true, quantidade: true, lineTotal: true } } },
   })
   if (!venda) {
     throw new DevolucaoBusinessError("VENDA_ORIGEM_NAO_ENCONTRADA", `Venda ${vendaLocalId} não encontrada.`, { vendaLocalId })
@@ -272,6 +284,7 @@ export async function registrarDevolucaoInTransaction(
     jaDevolvido.set(k, (jaDevolvido.get(k) ?? 0) + (it.quantidade || 0))
   }
 
+  const fatorPago = fatorValorPago(venda.total, venda.itens)
   const vistos = new Set<string>()
   /** `inventoryId` = Produto.id canônico (o que vai ao banco). */
   const itensCalc: RegistrarDevolucaoOk["itens"] = []
@@ -300,7 +313,8 @@ export async function registrarDevolucaoInTransaction(
         { inventoryId: k, disponivel: Math.max(0, disponivel), solicitado: qty },
       )
     }
-    const unit = orig.lineTotal / orig.quantidade
+    // Valor PAGO, não o de tabela: desconto da venda (só no payload) reduz o vale.
+    const unit = (orig.lineTotal / orig.quantidade) * fatorPago
     chavesClient.push(normInv(req.inventoryId))
     itensCalc.push({
       inventoryId: k,
@@ -311,7 +325,23 @@ export async function registrarDevolucaoInTransaction(
     })
   }
 
-  const valorTotal = arredonda2(itensCalc.reduce((s, i) => s + i.valorTotal, 0))
+  // Teto acumulado: o que já foi devolvido desta venda + esta devolução nunca passa
+  // do total PAGO (arredondamento de parciais não cria centavos de vale).
+  const jaRestituido = await tx.devolucaoVenda.aggregate({
+    where: { storeId, vendaLocalId },
+    _sum: { valorTotal: true },
+  })
+  const restante = Math.max(0, arredonda2(venda.total - (jaRestituido._sum.valorTotal ?? 0)))
+  const valorBruto = arredonda2(itensCalc.reduce((s, i) => s + i.valorTotal, 0))
+  const valorTotal = Math.min(valorBruto, restante)
+  // Mantém Σ itens = documento quando o teto cortou (desconta do fim para o início).
+  let excesso = arredonda2(valorBruto - valorTotal)
+  for (let i = itensCalc.length - 1; i >= 0 && excesso > 0; i--) {
+    const corte = Math.min(excesso, itensCalc[i]!.valorTotal)
+    itensCalc[i]!.valorTotal = arredonda2(itensCalc[i]!.valorTotal - corte)
+    itensCalc[i]!.valorUnitario = arredonda2(itensCalc[i]!.valorTotal / itensCalc[i]!.quantidade)
+    excesso = arredonda2(excesso - corte)
+  }
   const geraCredito = input.tipo === "vale_credito" || input.tipo === "troca"
   const docNorm = input.clienteDoc.replace(/\D/g, "")
   const creditoEmitido = geraCredito ? valorTotal : 0

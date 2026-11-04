@@ -510,6 +510,33 @@ function mergeCustomerCredits(
   return merged
 }
 
+/** Recusas do servidor que nenhum reenvio resolve (PDV-F8-TROCA-IMEDIATA-001). */
+export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
+  "REEMBOLSO_DINHEIRO_BLOQUEADO_POR_POLITICA",
+  "VENDA_ORIGEM_OBRIGATORIA",
+  "VENDA_CANCELADA",
+  "ITEM_NAO_CONSTA_NA_VENDA",
+  "QUANTIDADE_EXCEDE_DEVOLVIVEL",
+  "CLIENTE_DOC_OBRIGATORIO",
+  "ITENS_DUPLICADOS",
+])
+
+/**
+ * Desfecho de uma devolução da fila local frente à resposta do servidor:
+ * - `confirmada`: 2xx;
+ * - `reidentificar`: o id local colidiu com OUTRA devolução (ids antigos sem sufixo,
+ *   gerados por contador de navegador) — é outra devolução real, reenvia com id novo;
+ * - `recusada`: recusa definitiva → sai da fila e o vale local é estornado;
+ * - `aguardar`: rede/5xx/venda ainda não sincronizada → tenta de novo depois.
+ */
+export function classificarRespostaDevolucao(status: number, code: string | undefined):
+  "confirmada" | "reidentificar" | "recusada" | "aguardar" {
+  if (status >= 200 && status < 300) return "confirmada"
+  if (code === "LOCAL_ID_CONFLITO") return "reidentificar"
+  if (code && DEVOLUCAO_RECUSA_DEFINITIVA.has(code)) return "recusada"
+  return "aguardar"
+}
+
 /** Sufixo aleatório: o contador é por navegador, então dois terminais geravam o MESMO id. */
 export function devolucaoIdSuffix(): string {
   const c = globalThis.crypto
@@ -2958,6 +2985,60 @@ export function OperationsProvider({
     }
   }, [storageKey])
 
+  /** Aplica o desfecho do servidor a uma devolução da fila (ver `classificarRespostaDevolucao`). */
+  const aplicarRespostaDevolucao = useCallback(async (devId: string, res: Response, lj: string) => {
+    const body = (await res.json().catch(() => null)) as { code?: string; error?: string } | null
+    const desfecho = classificarRespostaDevolucao(res.status, body?.code)
+    if (desfecho === "aguardar") {
+      console.warn("[devolucao-persist] HTTP", res.status, devId, "lojaId:", lj, "code:", body?.code ?? "")
+      return
+    }
+    setState((prev) => {
+      const dev = prev.devolucoes.find((d) => d.id === devId)
+      if (!dev || dev.syncPending !== true) return prev
+      if (desfecho === "confirmada") {
+        return { ...prev, devolucoes: prev.devolucoes.map((d) => (d.id === devId ? { ...d, syncPending: false } : d)) }
+      }
+      if (desfecho === "reidentificar") {
+        const novoId = `${devId.replace(/-[0-9A-F]{8}$/, "")}-${devolucaoIdSuffix()}`
+        return { ...prev, devolucoes: prev.devolucoes.map((d) => (d.id === devId ? { ...d, id: novoId } : d)) }
+      }
+      // Recusa definitiva: sai da fila; desfaz o vale e o devolvido locais (o servidor não gravou).
+      console.warn("[devolucao-persist] recusa definitiva", devId, body?.code)
+      const customerCredits = { ...prev.customerCredits }
+      if (dev.mode === "vale_credito" && dev.creditIssued > 0 && customerCredits[dev.customerCpf]) {
+        const atual = customerCredits[dev.customerCpf]!
+        customerCredits[dev.customerCpf] = { ...atual, saldo: Math.max(0, Math.round((atual.saldo - dev.creditIssued) * 100) / 100) }
+      }
+      const sales = prev.sales.map((s) =>
+        s.id !== dev.saleId
+          ? s
+          : {
+              ...s,
+              lines: s.lines.map((l) => {
+                const back = dev.lines.find((x) => x.inventoryId === l.inventoryId)
+                return back ? { ...l, qtyReturned: Math.max(0, (l.qtyReturned ?? 0) - back.quantity) } : l
+              }),
+            },
+      )
+      const inventory = prev.inventory.map((i) => {
+        const back = dev.lines.find((x) => x.inventoryId === i.id)
+        return back ? { ...i, stock: i.stock - back.quantity } : i
+      })
+      return {
+        ...prev,
+        inventory,
+        customerCredits,
+        sales,
+        devolucoes: prev.devolucoes.map((d) =>
+          d.id === devId
+            ? { ...d, syncPending: false, syncRejectedCode: body?.code, syncRejectedReason: body?.error ?? "" }
+            : d,
+        ),
+      }
+    })
+  }, [])
+
   const flushPendingDevolucoes = useCallback(() => {
     const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true)
     if (pending.length === 0) return
@@ -2999,22 +3080,12 @@ export function OperationsProvider({
           payload: dev.payload || { saleId: dev.saleId, linhas: dev.lines.map(l => ({ inventoryId: l.inventoryId, quantity: l.quantity })), modo: dev.tipo || dev.mode, motivo: dev.motivo || "" },
         }),
       })
-        .then(async (res) => {
-          if (res.ok) {
-            setState((prev) => ({
-              ...prev,
-              devolucoes: prev.devolucoes.map((d) => (d.id === dev.id ? { ...d, syncPending: false } : d)),
-            }))
-          } else {
-            const body = await res.text().catch(() => "")
-            console.warn("[devolucao-persist] re-sync HTTP", res.status, dev.id, "lojaId:", lj, "body:", body)
-          }
-        })
+        .then((res) => aplicarRespostaDevolucao(dev.id, res, lj))
         .catch((err: unknown) => {
           console.warn("[devolucao-persist] re-sync rede", dev.id, "lojaId:", lj, err)
         })
     }
-  }, [storageKey])
+  }, [storageKey, aplicarRespostaDevolucao])
 
   const flushPendingCaixaOperations = useCallback(() => {
     if (storeCaixaOnlineOnlyRef.current) return
@@ -3815,24 +3886,14 @@ export function OperationsProvider({
           payload: devRow.payload || { saleId: devRow.saleId, linhas: devRow.lines.map(l => ({ inventoryId: l.inventoryId, quantity: l.quantity })), modo: devRow.tipo || devRow.mode, motivo: devRow.motivo || "" },
         }),
       })
-        .then(async (res) => {
-          if (res.ok) {
-            setState((prev) => ({
-              ...prev,
-              devolucoes: prev.devolucoes.map((d) => (d.id === devolucaoId ? { ...d, syncPending: false } : d)),
-            }))
-          } else {
-            const body = await res.text().catch(() => "")
-            console.error("[devolucao-persist] HTTP", res.status, devRow.id, "lojaId:", lj, "body:", body)
-          }
-        })
+        .then((res) => aplicarRespostaDevolucao(devolucaoId, res, lj))
         .catch((err: unknown) => {
           console.error("[devolucao-persist] rede", devRow.id, "lojaId:", lj, err)
         })
     }
 
     return { ok: true, devolucaoId, creditIssued: mode === "vale_credito" ? creditIssued : 0 }
-  }, [storageKey])
+  }, [storageKey, aplicarRespostaDevolucao])
 
   const registrarOperacaoCaixa = useCallback<OperationsContextType["registrarOperacaoCaixa"]>(
     async ({ sessaoId, tipo, valor, motivo, localId, operador }) => {

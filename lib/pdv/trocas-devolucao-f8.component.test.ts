@@ -180,6 +180,36 @@ describe("F8 — troca imediata na mesma tela", () => {
     expect(rt.calls.filter((c) => c.startsWith("devolucao:"))).toHaveLength(1)
   })
 
+  it("tentativa sem resposta + formulário editado: reenvia a ORIGINAL primeiro e não cria outra", async () => {
+    let n = 0
+    devolucaoResponder = (b) => {
+      n += 1
+      if (n === 1) throw new TypeError("Failed to fetch") // 1ª: servidor gravou, resposta perdida
+      return json(200, { ...devOk(String(b.localId)), idempotente: true })
+    }
+    await prepararTroca()
+    await act(async () => { fireEvent.click(screen.getByText("Finalizar Troca Imediata")) })
+    await waitFor(() => expect(rt.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Sem confirmação do servidor" })))
+    // operador muda de ideia: Vale-Troca em vez de troca imediata (intenção diferente)
+    fireEvent.click(screen.getByText("Vale-Troca"))
+    await act(async () => { fireEvent.click(screen.getByText("Confirmar Devolução")) })
+    await waitFor(() => expect(rt.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Devolução recusada", description: expect.stringMatching(/FOI gravada/) })))
+    const ids = rt.calls.filter((c) => c.startsWith("devolucao:"))
+    expect(ids).toHaveLength(2)
+    expect(ids[0]).toBe(ids[1]) // só a original foi reenviada
+    expect(rt.finalize).not.toHaveBeenCalled()
+  })
+
+  it("venda nova pendente: 'Concluir' não registra outra venda", async () => {
+    rt.finalize.mockImplementationOnce(async () => { rt.calls.push("finalize"); return { ok: true, saleId: "VDA-2026-0043", pending: true } })
+    await prepararTroca()
+    await act(async () => { fireEvent.click(screen.getByText("Finalizar Troca Imediata")) })
+    await waitFor(() => expect(rt.finalize).toHaveBeenCalledTimes(1))
+    await act(async () => { fireEvent.click(screen.getByText("Concluir nova venda")) })
+    expect(rt.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Nova venda já registrada" }))
+    expect(rt.finalize).toHaveBeenCalledTimes(1)
+  })
+
   it("recusa do servidor (ex.: outra devolução simultânea levou o saldo) não faz venda", async () => {
     devolucaoResponder = () => json(409, { error: "Camiseta P: ainda devolvível 0, solicitado 1.", code: "QUANTIDADE_EXCEDE_DEVOLVIVEL" })
     await prepararTroca()

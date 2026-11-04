@@ -78,8 +78,8 @@ describe.skipIf(!url)("F8 troca imediata — integração real (PG descartável)
 
   const headers = () => ({ "Content-Type": "application/json", "x-assistec-loja-id": storeId })
 
-  async function vender(lines: Array<{ sku: string; qty: number; unit: number }>, pb: SalePayload["paymentBreakdown"], cpf = CPF) {
-    const total = lines.reduce((s, l) => s + l.qty * l.unit, 0)
+  async function vender(lines: Array<{ sku: string; qty: number; unit: number }>, pb: SalePayload["paymentBreakdown"], cpf = CPF, totalPago?: number) {
+    const total = totalPago ?? lines.reduce((s, l) => s + l.qty * l.unit, 0)
     const sale: SalePayload = {
       id: `VDA-F8-${randomUUID().slice(0, 8)}`,
       at: new Date().toISOString(),
@@ -244,6 +244,56 @@ describe.skipIf(!url)("F8 troca imediata — integração real (PG descartável)
     // Isolamento por loja: outra loja não enxerga a venda.
     const outra = await getElegibilidade(new Request(`http://localhost/api/ops/devolucao/elegibilidade?q=${origem.id}`, { headers: { "x-assistec-loja-id": `${storeId}-x` } }))
     expect((await outra.json()).vendas).toHaveLength(0)
+  })
+
+  it("desconto da venda: vale = valor PAGO (2×10 vendidos por 10), nunca o preço de tabela", async () => {
+    const origem = await vender([{ sku: "CAM-P", qty: 2, unit: 10 }], { dinheiro: 10 }, CPF, 10)
+    expect(origem.status, JSON.stringify(origem.body)).toBe(200)
+    const a = await devolver({ localId: "DEV-DESC-1", vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] })
+    expect(a.body).toMatchObject({ valorTotal: 5, creditoEmitido: 5 })
+    const b = await devolver({ localId: "DEV-DESC-2", vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] })
+    expect(b.body).toMatchObject({ valorTotal: 5, creditoEmitido: 5 })
+    expect(await saldoVale()).toBe(10)
+    const res = await getElegibilidade(new Request(`http://localhost/api/ops/devolucao/elegibilidade?q=${origem.id}`, { headers: headers() }))
+    expect((await res.json()).vendas[0].lines[0]).toMatchObject({ quantity: 2, lineTotal: 10, qtyReturned: 2 })
+  })
+
+  async function cancelar(id: string) {
+    const res = await postCancelar(
+      new Request(`http://localhost/api/vendas/${id}/cancelar`, { method: "POST", headers: headers(), body: JSON.stringify({ motivo: "teste sintético", forcar: true }) }),
+      { params: Promise.resolve({ id }) },
+    )
+    return { status: res.status, body: await res.json() }
+  }
+
+  it("cancelamento bloqueado quando a venda foi paga com vale e teve vale emitido em devolução (sem valor em dobro)", async () => {
+    const base = await vender([{ sku: "MEIA", qty: 2, unit: 5 }], { dinheiro: 10 })
+    await devolver({ localId: "DEV-BASE", vendaLocalId: base.id, tipo: "vale_credito", itens: [{ inventoryId: "MEIA", quantidade: 2 }] })
+    const comVale = await vender([{ sku: "CAM-P", qty: 2, unit: 10 }], { creditoVale: 10, dinheiro: 10 })
+    expect(comVale.status).toBe(200)
+    await devolver({ localId: "DEV-CV", vendaLocalId: comVale.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 2 }] })
+    const r = await cancelar(comVale.id)
+    expect(r.status).toBe(409)
+    expect(r.body.code).toBe("vale_emitido_bloqueia_cancelamento")
+    expect((await db.venda.findFirst({ where: { pedidoId: comVale.id } }))!.status).toBe("devolvida")
+    expect(await saldoVale()).toBe(20)
+  })
+
+  it("corrida cancelamento × devolução: nunca estoque em dobro nem vale + estorno acima do pago", async () => {
+    for (let i = 0; i < 5; i++) {
+      const estoqueAntes = await stock("CAM-P")
+      const origem = await vender([{ sku: "CAM-P", qty: 2, unit: 10 }], { dinheiro: 20 })
+      const [c, d] = await Promise.all([
+        cancelar(origem.id),
+        devolver({ localId: `DEV-RACE-${i}`, vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] }),
+      ])
+      expect([200, 409]).toContain(c.status)
+      expect([200, 409]).toContain(d.status)
+      expect(await stock("CAM-P")).toBe(c.status === 200 ? estoqueAntes : estoqueAntes - 2 + (d.status === 200 ? 1 : 0))
+      const vale = (await db.clienteCredito.aggregate({ where: { storeId, vendaOrigemId: origem.id }, _sum: { valorOriginal: true } }))._sum.valorOriginal ?? 0
+      const estorno = (await db.movimentacaoFinanceira.aggregate({ where: { storeId, origem: "cancelamento_pdv", referenciaId: origem.id }, _sum: { valor: true } }))._sum.valor ?? 0
+      expect(vale + estorno).toBeLessThanOrEqual(20)
+    }
   })
 
   it("cancelamento após vale: estorno desconta o vale já entregue (sem saída fictícia, sem pagar duas vezes)", async () => {

@@ -182,6 +182,12 @@ export interface DevolucaoRecord {
   motivo?: string
   observacao?: string
   payload?: any
+  /**
+   * Recusa DEFINITIVA do servidor (ex.: reembolso bloqueado, quantidade acima do
+   * devolvível): sai da fila, o vale local é estornado e a pendência fica visível.
+   */
+  syncRejectedCode?: string
+  syncRejectedReason?: string
 }
 
 export interface CaixaOperacaoRecord {

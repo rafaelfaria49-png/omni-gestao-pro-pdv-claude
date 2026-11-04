@@ -50,6 +50,17 @@ type ServerDevolucaoOk = {
   itens: Array<{ inventoryId: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
 }
 
+/** O que o espelho local precisa para registrar uma devolução já gravada no servidor. */
+type PendingMirror = {
+  saleId: string
+  tipo: "troca" | "vale_credito" | "somente_estoque"
+  lines: { inventoryId: string; quantity: number }[]
+  cpf: string
+  nome: string
+  payload: Record<string, unknown>
+  motivo: string
+}
+
 type ServerDevolucaoResult =
   | { kind: "ok"; data: ServerDevolucaoOk }
   | { kind: "rejected"; status: number; message: string; code?: string }
@@ -120,7 +131,7 @@ export function TrocasDevolucao({
   const [enviando, setEnviando] = useState(false)
   const enviandoRef = useRef(false)
   /** Mesma intenção ⇒ mesmo localId: reenvio após resposta perdida é replay, não 2ª devolução. */
-  const pendingDevRef = useRef<{ fp: string; localId: string } | null>(null)
+  const pendingDevRef = useRef<{ fp: string; localId: string; body: Record<string, unknown>; mirror: PendingMirror } | null>(null)
   /**
    * Troca cuja devolução JÁ foi gravada no servidor mas a nova venda não concluiu:
    * o vale existe (persistido) e o reenvio só refaz a venda — nunca outra devolução.
@@ -130,6 +141,8 @@ export function TrocasDevolucao({
     dev: ServerDevolucaoOk
     cpf: string
     nome: string
+    /** Nova venda já registrada (pendente de sincronização) — nunca finalizar de novo. */
+    novaVendaPendenteId?: string
   } | null>(null)
   const trocaBipeRef = useRef<HTMLInputElement>(null)
 
@@ -180,21 +193,37 @@ export function TrocasDevolucao({
     const upper = id.toUpperCase()
     const idNorm = id.replace(/\s/g, "").toUpperCase()
 
-    if (initialSale && (initialSale.id.toUpperCase() === upper || initialSale.id.replace(/\s/g, "").toUpperCase() === idNorm)) {
-      aplicarVenda(initialSale)
-      return
+    // Aberta pelo Histórico: reconsulta o servidor (devolvível agregado de todos os
+    // terminais) e só cai no snapshot/cópia local se o servidor não responder.
+    let cancelado = false
+    const fallback = () => {
+      if (cancelado) return
+      if (initialSale && (initialSale.id.toUpperCase() === upper || initialSale.id.replace(/\s/g, "").toUpperCase() === idNorm)) {
+        aplicarVenda(initialSale)
+        return
+      }
+      const s = sales.find((x) => x.id.toUpperCase() === upper || x.id.replace(/\s/g, "").toUpperCase() === idNorm)
+      if (s) aplicarVenda(s)
     }
-
-    const s = sales.find(
-      (x) =>
-        x.id.toUpperCase() === upper ||
-        x.id.replace(/\s/g, "").toUpperCase() === idNorm
-    )
-    if (s) {
-      aplicarVenda(s)
+    if (lojaAtivaId) {
+      void fetch(`/api/ops/devolucao/elegibilidade?q=${encodeURIComponent(id)}`, {
+        credentials: "include",
+        headers: { "x-assistec-loja-id": lojaAtivaId },
+      })
+        .then(async (res) => {
+          const j = res.ok ? ((await res.json()) as { vendas?: SaleRecord[] }) : null
+          const v = j?.vendas?.find((x) => x.id.toUpperCase() === upper)
+          if (cancelado) return
+          if (v) aplicarVenda(v, "servidor")
+          else fallback()
+        })
+        .catch(fallback)
+      return () => { cancelado = true }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- aplicarVenda estável o suficiente para prefill
-  }, [initialSaleId, initialSale, searchParams, sales])
+    fallback()
+    return () => { cancelado = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill roda por venda pedida, não a cada mudança do store
+  }, [initialSaleId, initialSale, searchParams, lojaAtivaId])
 
   useEffect(() => {
     // Venda vinda do servidor já traz o devolvível agregado de TODOS os terminais;
@@ -211,7 +240,8 @@ export function TrocasDevolucao({
   const aplicarVenda = (s: SaleRecord, source: "servidor" | "local" = "local") => {
     setSaleSource(source)
     setTrocaRecovery(null)
-    pendingDevRef.current = null
+    // Tentativa incerta (sem resposta) NÃO é descartada ao trocar de venda: a próxima
+    // gravação reenvia a original primeiro (ver gravarDevolucaoConfirmada).
     setSale(s)
     setCandidateSales(null)
     setCandidateLabel("")
@@ -504,17 +534,15 @@ export function TrocasDevolucao({
     return lines
   }
 
-  /** localId estável por intenção (venda + tipo + titular + linhas). */
-  const localIdPara = (fp: string): string => {
-    if (pendingDevRef.current?.fp === fp) return pendingDevRef.current.localId
-    const localId = nextDevolucaoId(devolucoes)
-    pendingDevRef.current = { fp, localId }
-    return localId
-  }
-
   /**
    * Grava a devolução NO SERVIDOR e espera a resposta (fonte da verdade de valor,
    * crédito e saldo devolvível). Só depois espelha localmente, com o mesmo localId.
+   *
+   * Tentativa SEM resposta fica "incerta" (o servidor pode ter gravado). Enquanto
+   * estiver incerta, qualquer nova intenção (CPF corrigido, quantidade mudada, outra
+   * venda) primeiro reenvia a tentativa ORIGINAL com o mesmo localId: se ela tinha
+   * sido gravada, o operador é avisado e nada novo é criado — uma devolução física
+   * nunca vira duas no servidor.
    */
   const gravarDevolucaoConfirmada = async (args: {
     tipo: "troca" | "vale_credito" | "somente_estoque"
@@ -525,8 +553,25 @@ export function TrocasDevolucao({
   }): Promise<ServerDevolucaoResult & { localId?: string }> => {
     if (!sale || !lojaAtivaId) return { kind: "rejected", status: 400, message: "Loja ou venda não selecionada." }
     const fp = [sale.id, args.tipo, args.cpf, ...args.lines.map((l) => `${l.inventoryId}:${l.quantity}`).sort()].join("#")
-    const localId = localIdPara(fp)
-    const r = await postDevolucaoServidor(lojaAtivaId, {
+
+    const incerta = pendingDevRef.current
+    if (incerta && incerta.fp !== fp) {
+      const anterior = await postDevolucaoServidor(lojaAtivaId, incerta.body)
+      if (anterior.kind === "network") return { ...anterior, localId: incerta.localId }
+      pendingDevRef.current = null
+      if (anterior.kind === "ok") {
+        espelharDevolucao(incerta.mirror, anterior.data)
+        return {
+          kind: "rejected",
+          status: 409,
+          message: `A tentativa anterior sem confirmação FOI gravada (${anterior.data.localId}, vale ${formatBrl(anterior.data.creditoEmitido)}). Nada novo foi registrado — revise antes de continuar.`,
+        }
+      }
+      // A anterior não foi gravada (recusa de negócio): segue com a intenção nova.
+    }
+
+    const localId = incerta && incerta.fp === fp ? incerta.localId : nextDevolucaoId(devolucoes)
+    const body = {
       localId,
       vendaLocalId: sale.id,
       sessaoId: sessaoId || undefined,
@@ -540,31 +585,39 @@ export function TrocasDevolucao({
         quantidade: l.quantity,
       })),
       payload: { ...args.payload, localId },
-    })
+    }
+    const mirror = { saleId: sale.id, ...args, motivo: motivo.trim() }
+    const r = await postDevolucaoServidor(lojaAtivaId, body)
     if (r.kind === "ok") {
-      // Espelho local (estoque/crédito/histórico deste navegador) — sem reenvio.
-      registrarDevolucao({
-        saleId: sale.id,
-        lines: args.lines,
-        mode: args.tipo === "somente_estoque" ? "somente_estoque" : "vale_credito",
-        customerCpf: args.cpf,
-        customerName: args.nome,
-        sessaoId: sessaoId ?? undefined,
-        tipo: args.tipo,
-        motivo: motivo.trim(),
-        payload: args.payload,
-        serverConfirmed: {
-          localId: r.data.localId,
-          creditIssued: r.data.creditoEmitido,
-          lines: r.data.itens.map((i) => ({ inventoryId: i.inventoryId, name: i.nome, quantity: i.quantidade, valor: i.valorTotal })),
-        },
-      })
+      espelharDevolucao(mirror, r.data)
       pendingDevRef.current = null
     } else if (r.kind === "rejected") {
       // Recusa de negócio: nada foi gravado — a próxima tentativa é intenção nova.
       pendingDevRef.current = null
+    } else {
+      pendingDevRef.current = { fp, localId, body, mirror }
     }
     return { ...r, localId }
+  }
+
+  /** Espelho local (estoque/crédito/histórico deste navegador) do que o servidor gravou — sem reenvio. */
+  const espelharDevolucao = (m: PendingMirror, data: ServerDevolucaoOk) => {
+    registrarDevolucao({
+      saleId: m.saleId,
+      lines: m.lines,
+      mode: m.tipo === "somente_estoque" ? "somente_estoque" : "vale_credito",
+      customerCpf: m.cpf,
+      customerName: m.nome,
+      sessaoId: sessaoId ?? undefined,
+      tipo: m.tipo,
+      motivo: m.motivo,
+      payload: m.payload,
+      serverConfirmed: {
+        localId: data.localId,
+        creditIssued: data.creditoEmitido,
+        lines: data.itens.map((i) => ({ inventoryId: i.inventoryId, name: i.nome, quantity: i.quantidade, valor: i.valorTotal })),
+      },
+    })
   }
 
   const exigirTitular = (): { cpf: string; nome: string } | null => {
@@ -621,6 +674,13 @@ export function TrocasDevolucao({
       let nome: string
       let itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
 
+      if (trocaRecovery && trocaRecovery.saleId === sale.id && trocaRecovery.novaVendaPendenteId) {
+        toast({
+          title: "Nova venda já registrada",
+          description: `A venda ${trocaRecovery.novaVendaPendenteId} aguarda sincronização: use Vendas → Reenviar sync. Nada novo foi feito.`,
+        })
+        return
+      }
       if (trocaRecovery && trocaRecovery.saleId === sale.id) {
         // Retomada: a devolução já está gravada — só refaz a nova venda.
         dev = trocaRecovery.dev
@@ -704,6 +764,7 @@ export function TrocasDevolucao({
       // estão gravados no servidor (estado de retomada visível); o reenvio da venda
       // usa a MESMA identidade (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
       if (novaVenda.pending) {
+        setTrocaRecovery((cur) => (cur ? { ...cur, novaVendaPendenteId: novaVenda.saleId } : cur))
         appendAuditLog({
           action: "devolucao_vale",
           userLabel: `${nomeLoja} (PDV)`,
@@ -1239,6 +1300,7 @@ export function TrocasDevolucao({
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           ref={trocaBipeRef}
+                          disabled={enviando}
                           value={trocaSearch}
                           onChange={(e) => setTrocaSearch(e.target.value)}
                           onKeyDown={(e) => {
@@ -1304,6 +1366,7 @@ export function TrocasDevolucao({
                                   variant="ghost"
                                   className="h-5 w-5 rounded-md hover:bg-muted"
                                   onClick={() => decTrocaItem(l.inventoryId)}
+                                  disabled={enviando}
                                 >
                                   <Minus className="h-2.5 w-2.5" />
                                 </Button>
@@ -1314,6 +1377,7 @@ export function TrocasDevolucao({
                                   variant="ghost"
                                   className="h-5 w-5 rounded-md hover:bg-muted"
                                   onClick={() => incTrocaItem(l.inventoryId)}
+                                  disabled={enviando}
                                 >
                                   <Plus className="h-2.5 w-2.5" />
                                 </Button>
@@ -1327,6 +1391,7 @@ export function TrocasDevolucao({
                                 variant="ghost"
                                 className="h-5 w-5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-md"
                                 onClick={() => removeTrocaItem(l.inventoryId)}
+                                disabled={enviando}
                               >
                                 <X className="h-2.5 w-2.5" />
                               </Button>

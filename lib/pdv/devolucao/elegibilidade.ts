@@ -14,6 +14,7 @@ import type { Prisma } from "@/generated/prisma"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { saleFromDbRow } from "@/lib/vendas/sale-from-db-row"
 import { canonicalProductKeyResolver } from "@/lib/pdv/devolucao/product-keys"
+import { fatorValorPago } from "@/lib/pdv/devolucao/registrar-devolucao"
 
 export const ELEGIBILIDADE_LIMITE = 10
 
@@ -137,6 +138,9 @@ export async function buscarVendasElegiveis(
       porItem.set(k, cur)
     }
     // Mantém a chave que o PDV conhece (SKU do payload); números sempre do banco.
+    // Mesmo fator do escritor: a tela mostra o valor que o servidor vai creditar.
+    const fator = fatorValorPago(r.total, r.itens)
+    for (const v of porItem.values()) v.lineTotal = Math.round(v.lineTotal * fator * 100) / 100
     const usados = new Set<string>()
     const lines: VendaElegivel["lines"] = []
     for (const base of sale.lines) {
