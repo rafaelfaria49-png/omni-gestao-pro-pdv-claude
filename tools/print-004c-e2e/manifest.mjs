@@ -10,7 +10,11 @@ const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004
   "components/configuracoes-v3/features/settings/sections/PdvSection.tsx", "components/dashboard/vendas/pdv-classic.tsx", "lib/pdv-impressao-config.ts",
   "e2e/specs/print-direct-004c.spec.ts", "e2e/fixtures/print-direct.ts", "e2e/print-direct.playwright.config.ts", "prisma/schema.prisma",
   // CI corretivo da PR #327: mocks do PDV Clássico alinhados ao #325.
-  "lib/pdv/parity-pin-keymap.component.test.ts", "lib/pdv/classic-weight-sale-guard.component.test.ts"]
+  "lib/pdv/parity-pin-keymap.component.test.ts", "lib/pdv/classic-weight-sale-guard.component.test.ts",
+  // D01-A1: reimpressão registrada pelo Histórico de vendas e pela Conferência do caixa.
+  "components/dashboard/vendas/direct-reprint-panel.tsx", "components/dashboard/vendas/cupom-nao-fiscal.tsx",
+  "components/dashboard/vendas/reimpressao-registrada.static.test.ts", "components/dashboard/vendas/vendas-arquivo-geral.tsx",
+  "components/dashboard/caixa/conferencia-caixa.tsx", "lib/vendas/venda-cupom-mapper.ts", "lib/vendas/venda-cupom-mapper.test.ts"]
 const files = []
 const walk = (rel) => {
   const abs = path.join(root, rel)

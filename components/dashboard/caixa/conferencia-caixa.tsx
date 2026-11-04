@@ -715,7 +715,7 @@ export function ConferenciaCaixa({
 
       {/* ── Reimpressão do comprovante — mesmo componente do Histórico de Vendas ── */}
       {cupom && (
-        <CupomNaoFiscal isOpen={!!cupom} onClose={() => setCupom(null)} data={cupom} />
+        <CupomNaoFiscal isOpen={!!cupom} onClose={() => setCupom(null)} data={cupom} reprintStoreId={storeId} />
       )}
 
       {/* ── Estorno: step-up de supervisor + motivo obrigatório ──────────────── */}

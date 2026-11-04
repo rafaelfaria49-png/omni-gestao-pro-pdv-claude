@@ -42,6 +42,9 @@ Pré-condições (gates humanos, nenhum foi aberto por este candidato):
 2. Esperado: novo papel com "SEGUNDA VIA - REIMPRESSAO 1/1" no topo.
 3. "Abrir impressão do navegador" após um cupom aceito deve pedir confirmação e imprimir com "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR" (testar em Chrome e Edge).
 
+4. **Reimpressão pelo Histórico de vendas e pela Conferência do caixa (D01-A1):** abrir o cupom de uma venda impressa no item 3 → "Reimprimir como 2ª via" → o painel deve informar que 1 via pode já ter saído → "Imprimir 2ª via na impressora do caixa" pede um segundo clique → papel com "SEGUNDA VIA - REIMPRESSAO". Repetir pelo navegador: "SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR". Com duas abas abertas na mesma venda, a segunda deve pedir confirmação de novo.
+5. Venda feita há mais de 30 min sem nenhuma via impressa: a impressão pelo navegador também sai marcada SEGUNDA VIA (regra conservadora: fora da janela da 1ª via é reimpressão).
+
 ## 6. Falha e recuperação
 
 | Teste | Como provocar | Esperado |

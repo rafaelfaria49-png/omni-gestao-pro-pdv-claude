@@ -53,7 +53,21 @@ async function serve() {
     function App(){const ops=useOperationsStore();window.__ops=ops;return <PdvClassic/>}
     createRoot(document.getElementById('root')).render(<OperationsProvider storageKey='${OPS_KEY}'><App/></OperationsProvider>);
   `
-  const bundle = await build({ absWorkingDir: root, stdin: { contents: entry, resolveDir: root, loader: "tsx" }, bundle: true, write: false,
+  // D01-A1: the REAL receipt dialog of the sales history / cash conference (CupomNaoFiscal + registered reprint panel).
+  // Its legacy print paths are observed (never executed): the registered reprint must replace them when direct print is on.
+  const reprintStubs: Record<string, string> = {
+    ...Object.fromEntries(Object.entries(stubs).filter(([k]) => k !== "components/dashboard/vendas/cupom-nao-fiscal.tsx")),
+    "lib/pdv-print-runtime.ts": `export async function printPdvSaleReceipt(){window.__legacyPrint.thermal++;return {ok:true,via:'browser'}}`,
+    "lib/thermal-print.ts": `export const escapeHtml=(s)=>String(s).replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);export function openThermalHtmlPrint(){window.__legacyPrint.html++;return true}`,
+  }
+  const reprintEntry = `
+    import React from 'react';import {createRoot} from 'react-dom/client';
+    import {CupomNaoFiscal} from '@/components/dashboard/vendas/cupom-nao-fiscal';
+    window.__legacyPrint={thermal:0,html:0};
+    function App(){const [open,setOpen]=React.useState(true);return open?<CupomNaoFiscal isOpen onClose={()=>setOpen(false)} data={window.__cupom} reprintStoreId={window.__reprintStore}/>:<p>fechado</p>}
+    createRoot(document.getElementById('root')).render(<App/>);
+  `
+  const bundleOf = async (contents: string, stubs: Record<string, string>) => (await build({ absWorkingDir: root, stdin: { contents, resolveDir: root, loader: "tsx" }, bundle: true, write: false,
     platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"test"' },
     plugins: [{ name: "print-direct-boundaries", setup(b) {
       b.onResolve({ filter: /.*/ }, async (args) => {
@@ -71,11 +85,17 @@ async function serve() {
       })
       b.onLoad({ filter: /.*/, namespace: "synthetic" }, (args) => ({ contents: stubs[args.path] ?? names[args.path], loader: "tsx", resolveDir: root }))
     } }],
-  })
-  const script = bundle.outputFiles[0].contents
+  })).outputFiles[0].contents
+  const script = await bundleOf(entry, stubs)
+  const reprintScript = await bundleOf(reprintEntry, reprintStubs)
   const server = createServer((req, res) => {
     if (req.headers.host !== new URL(ORIGIN).host) { res.writeHead(403).end(); return }
     if (req.url === "/fixture.js") { res.writeHead(200, { "Content-Type": "text/javascript" }).end(script); return }
+    if (req.url === "/reprint.js") { res.writeHead(200, { "Content-Type": "text/javascript" }).end(reprintScript); return }
+    if (req.url === "/reprint") {
+      res.writeHead(200, { "Content-Type": "text/html", "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:" })
+      res.end('<!doctype html><html><head><style>svg{width:20px;height:20px}button{padding:6px;margin:3px}[role=dialog]{position:fixed;inset:20px;overflow:auto;background:white;z-index:5;padding:12px;border:1px solid black}</style></head><body><div id="root"></div><script src="/reprint.js"></script></body></html>'); return
+    }
     if (req.url === "/" || req.url?.startsWith("/?")) {
       res.writeHead(200, { "Content-Type": "text/html", "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:" })
       res.end('<!doctype html><html><head><style>svg{width:20px;height:20px}button,input{padding:6px;margin:3px}[role=dialog],[role=alertdialog]{position:fixed;inset:20px;overflow:auto;background:white;z-index:5;padding:12px;border:1px solid black}[role=alertdialog]{z-index:10;inset:30%}[data-testid=pdv-direct-print-feedback]{position:fixed;right:0;bottom:0;z-index:2147483646;background:#fff;border:1px solid #000;padding:8px}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>'); return

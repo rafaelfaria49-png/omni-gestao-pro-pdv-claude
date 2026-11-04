@@ -4,9 +4,9 @@ reset print_lab_e2e
 
 
  Test Files  1 passed (1)
-      Tests  33 passed (33)
-   Start at  23:21:49
-   Duration  11.82s (transform 278ms, setup 0ms, import 381ms, tests 11.29s, environment 0ms)
+      Tests  35 passed (35)
+   Start at  00:49:33
+   Duration  12.59s (transform 303ms, setup 0ms, import 411ms, tests 12.03s, environment 0ms)
 
-(node:8276) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:22144) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
