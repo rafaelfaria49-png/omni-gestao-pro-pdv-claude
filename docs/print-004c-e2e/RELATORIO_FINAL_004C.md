@@ -103,3 +103,16 @@ Node 24). Revisão independente da rodada: APPROVE (`REVISAO_INDEPENDENTE.md`, r
 
 Remanescente fora do escopo: a `main` continua com os mocks desatualizados — qualquer PR que dispare o workflow do visor
 cai na mesma falha até a correção chegar lá.
+
+O CI de `9069dca` passou inteiro (10/10, incluindo o E2E autenticado do piloto). A correção dos mocks chegou à `main`
+pelo #328 (`8cbd551`, conteúdo idêntico), o que encerra o remanescente acima.
+
+### 7.1 Merge da `main` `37acc3b` (#326, sync offline do PDV)
+
+Conflito único em `next.config.mjs`: as duas frentes acrescentaram rotas à regra `NetworkOnly`; mantidas ambas
+(`/api/print/*` desta PR + `by-client-sale-id`/`venda-persist/v2` do #326). `pdv-classic.tsx` mesclou sem conflito; a
+impressão direta continua exigindo `serverId`, que o #326 só preenche com a venda confirmada no servidor. Pós-merge:
+typecheck `exit=0`; ESLint 0 erros; `track verify --all` sem divergências; vitest dos conjuntos do visor, PDV, sync
+offline (#326) e impressão direta: 1869 passam, 10 falham em 2 testes estáticos (`fechamento-calculadora-modal`,
+`pdv-scan-autoclear`) que falham igual na `main` `37acc3b` limpa e não estão em nenhum workflow. A bateria PG/Playwright
+não foi reexecutada (nenhum arquivo da impressão mudou no merge); o build fica com o CI.

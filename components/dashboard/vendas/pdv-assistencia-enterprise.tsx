@@ -959,7 +959,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // Reconciliação R3+main: `sales` é do guard PENDING (GOAL 002), `sincronizarCreditoLocal`
   // é do P2-02 (R2, ainda não mergeado na main) e `pdvScanUnregisteredAction` é o GOAL 007
   // (main). Os três convivem — nenhum lado sobrescreve o contrato do outro.
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales, releaseSaleAttempt } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig, pdvScanUnregisteredAction } = useStoreSettings()
   const pdvCapabilities = usePdvCapabilities("assistencia")
   const heldSalesEnabled = pdvCapabilities.isEnabled("pdv.heldSales")
@@ -3244,6 +3244,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 setSelectedLineId(null)
                 // N5-B1 R2 (P2-06): rascunho encerrado conscientemente — o guard
                 // de identidade PENDING libera (pendência segue syncing).
+                releaseSaleAttempt?.(pendingSaleIdentityRef.current?.getIdentity())
                 pendingSaleIdentityRef.current?.clear()
                 setClearConfirmOpen(false)
               }}

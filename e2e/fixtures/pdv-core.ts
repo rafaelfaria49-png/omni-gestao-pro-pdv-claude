@@ -50,6 +50,13 @@ export class SyntheticBackend {
     if (key === "GET /api/ops/caixa/sessoes") return ok({ sessoes: [{ id: "n5-c-caixa", storeId: STORE, terminalId: null, saldoInicial: 100, abertaEm: new Date().toISOString() }] })
     if (key === "GET /api/ops/credito-cliente") return ok({ creditos: { [CUSTOMER.document]: { nome: CUSTOMER.name, saldo: this.credit } } })
     if (key === "GET /api/ops/venda-persist/v2") return ok({ writer: "v2" })
+    // Mesmo contrato da rota real: 404 enquanto a identidade não foi gravada, 200 com a venda depois.
+    if (key === "GET /api/ops/vendas/by-client-sale-id") {
+      if (this.failWrites) throw new Error("Synthetic network failure")
+      const sale = this.confirmed.get(url.searchParams.get("clientSaleId") ?? "")
+      if (!sale) return { status: 404, body: { error: "Venda não encontrada" } }
+      return ok({ ok: true, venda: { id: `server-${sale.id}`, storeId: STORE, pedidoId: sale.id, clientSaleId: sale.clientSaleId, total: sale.total, at: sale.at, status: "concluida" } })
+    }
     if (key === "POST /api/ops/venda-persist/v2") {
       const wire = JSON.parse(body ?? "null") as Wire
       if (!wire?.clientSaleId || wire.sale?.clientSaleId !== wire.clientSaleId) throw new Error("Writer identity missing")
