@@ -29,6 +29,7 @@ type Ui =
   | { kind: "loading" }
   | { kind: "ready"; quote: ReprintQuote; notice: string | null }
   | { kind: "confirm-browser"; risk: Risk; consent: string }
+  | { kind: "confirm-thermal"; quote: ReprintQuote }
   | { kind: "job"; job: JobView; stale: boolean }
   | { kind: "browser-done"; mark: string }
   | { kind: "error"; message: string }
@@ -100,6 +101,11 @@ export function DirectReprintPanel({ storeId, saleId, numeroVenda, onLegacy }: D
     setUi({ kind: "job", job, stale: false })
     if (!job.final || job.copies.some(c => c.phase === "UNCERTAIN")) void follow(gen, job)
   }
+  /** With a possibly printed or uncertain copy, the thermal reprint needs a second, explicit click (never automatic). */
+  const askThermal = (q: ReprintQuote) => {
+    if (q.possibleAdditionalCopy || q.uncertainCopies > 0) setUi({ kind: "confirm-thermal", quote: q })
+    else void printThermal(q)
+  }
   const printThermal = (q: ReprintQuote) => guarded(async gen => {
     if (!terminalId) return
     const reasonCode = q.uncertainCopies > 0 ? "UNCERTAIN_RESULT" : "CUSTOMER_REQUEST"
@@ -156,11 +162,12 @@ export function DirectReprintPanel({ storeId, saleId, numeroVenda, onLegacy }: D
   const uncertain = !!job?.copies.some(c => c.phase === "UNCERTAIN")
   const working = ui.kind === "loading" || job?.phase === "QUEUED" || job?.phase === "SENDING"
   const failed = ui.kind === "error" || job?.phase === "FAILED_BEFORE_SEND" || job?.phase === "NOT_SENT" || job?.phase === "CANCELLED"
-  const alert = failed || uncertain || ui.kind === "confirm-browser" || (ui.kind === "ready" && (ui.quote.possibleAdditionalCopy || !!ui.notice))
+  const alert = failed || uncertain || ui.kind === "confirm-browser" || ui.kind === "confirm-thermal" || (ui.kind === "ready" && (ui.quote.possibleAdditionalCopy || !!ui.notice))
   const title = ui.kind === "idle" ? "Reimpressão registrada"
     : ui.kind === "loading" ? "Consultando as vias desta venda…"
     : ui.kind === "ready" ? "Reimprimir como SEGUNDA VIA"
     : ui.kind === "confirm-browser" ? "Confirme de novo: a situação das vias mudou"
+    : ui.kind === "confirm-thermal" ? "Confirmar 2ª via na impressora do caixa?"
     : ui.kind === "browser-done" ? "Impressão do navegador aberta"
     : ui.kind === "error" ? "Não foi possível reimprimir"
     : working && ui.stale ? "A segunda via ainda não teve resposta da impressora do caixa"
@@ -171,6 +178,7 @@ export function DirectReprintPanel({ storeId, saleId, numeroVenda, onLegacy }: D
   const detail = ui.kind === "idle" ? "Com a impressão direta ligada, a reimpressão desta venda sai marcada SEGUNDA VIA e fica registrada."
     : ui.kind === "ready" ? `${ui.notice ? ui.notice + " " : ""}${riskText(ui.quote)} A reimpressão sai marcada SEGUNDA VIA e fica registrada.`
     : ui.kind === "confirm-browser" ? `${riskText(ui.risk)} Situação conferida agora no servidor. Confirme para imprimir, marcada SEGUNDA VIA.`
+    : ui.kind === "confirm-thermal" ? `${riskText(ui.quote)} Confira o papel antes. A nova via sai marcada SEGUNDA VIA e nada é reenviado automaticamente.`
     : ui.kind === "browser-done" ? `${ui.mark}. A janela do navegador não confirma que o papel saiu.`
     : ui.kind === "error" ? ui.message
     : ui.kind === "loading" ? `Venda ${numeroVenda}`
@@ -198,7 +206,7 @@ export function DirectReprintPanel({ storeId, saleId, numeroVenda, onLegacy }: D
           </Button>
         )}
         {ui.kind === "ready" && canThermal && (
-          <Button type="button" className="h-10 flex-1 gap-2 text-sm" disabled={busy} onClick={() => void printThermal(ui.quote)}>
+          <Button type="button" className="h-10 flex-1 gap-2 text-sm" disabled={busy} onClick={() => askThermal(ui.quote)}>
             <Printer className="h-4 w-4" />Imprimir 2ª via na impressora do caixa
           </Button>
         )}
@@ -208,6 +216,10 @@ export function DirectReprintPanel({ storeId, saleId, numeroVenda, onLegacy }: D
             <Printer className="h-4 w-4" />Imprimir 2ª via pelo navegador
           </Button>
         )}
+        {ui.kind === "confirm-thermal" && <>
+          <Button type="button" className="h-10 flex-1 text-sm" disabled={busy} onClick={() => void printThermal(ui.quote)}>Confirmar 2ª via na impressora do caixa</Button>
+          <Button type="button" variant="outline" className="h-10 flex-1 text-sm" disabled={busy} onClick={() => setUi({ kind: "ready", quote: ui.quote, notice: null })}>Cancelar</Button>
+        </>}
         {ui.kind === "confirm-browser" && <>
           <Button type="button" className="h-10 flex-1 text-sm" disabled={busy} onClick={() => void printBrowser(ui.consent)}>Confirmar 2ª via pelo navegador</Button>
           <Button type="button" variant="outline" className="h-10 flex-1 text-sm" disabled={busy} onClick={() => setUi({ kind: "idle" })}>Cancelar</Button>

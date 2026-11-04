@@ -90,4 +90,16 @@ Segunda passada: **APPROVE** (sem P0/P1/P2; 3 P3).
 | P2 consentimento da cópia pelo navegador não ficava preso ao risco (duas abas com risco > 0 imprimiam sem nova confirmação) | origem REPRINT exige token assinado (cotação ou reconfirmação do servidor) comparado ao risco atual; S34 e PW15 cobrem duas abas com risco; mutação comprova |
 | P3 texto do cartão; motivo térmico; via na fila invisível; limite de bytes em laço; `COMMAND_LIMIT` ambíguo; erro de outra venda; `role`/`aria-live`; acompanhamento de 90 s; gravação ao abrir; consentimento expirado | corrigidos (ressalva KG; `UNCERTAIN_RESULT`; `queuedCopies`; térmica escondida com aviso; `COPIES_LIMIT`; erro oculto e zerado por venda; mensagem só no bloco; "Conferir de novo"; painel começa parado; nova cotação automática) |
 | P3 2ª passada: volta ao fluxo antigo sem explicação | corrigido: linha explicando que a venda segue o fluxo atual, sem registro |
-| P3 2ª passada: API do PDV aceita `confirm: true` sem token; térmica sem segundo clique | registrados como riscos residuais em `D01_A1_REIMPRESSAO_REGISTRADA.md` (fora do escopo A1; sem caminho de interface) |
+| P3 2ª passada: API do PDV aceita `confirm: true` sem token; térmica sem segundo clique | registrados como residuais e **fechados na rodada 7** |
+
+## Rodada 7 (D01-A1: CI, consentimento na origem PDV, confirmação térmica, sobre `7e86fdd`) — APPROVE
+
+Escopo: runner `ubuntu-24.04` nos três jobs com Playwright desta PR; `browserFallback` decidido pelo estado do servidor
+(só a 1ª via legítima sem consentimento; `confirm` ignorado); cliente do PDV com token; `confirm-thermal` no painel; S28
+adaptado, S35 e PW19 novos. Sem P0/P1/P2.
+
+| Achado P3 | Tratamento |
+|---|---|
+| confirmação do navegador no PDV dizia "0 via(s)" quando o servidor pede confirmação sem via exposta | texto próprio: venda fora da janela da 1ª via sai como SEGUNDA VIA e fica registrada |
+| `pdv-scale-visor` (browser) e `cadastros-cliente-assistido` (validate) seguem em `ubuntu-latest` com Playwright | pendência fora desta PR, registrada em `D01_A1_REIMPRESSAO_REGISTRADA.md` (a #327 dispara o visor) |
+| venda antiga sem via sai SEGUNDA VIA também pelo PDV | conservador e coerente; registrado como residual para a homologação física |

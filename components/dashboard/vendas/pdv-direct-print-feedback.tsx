@@ -23,7 +23,7 @@ type Ui =
   | { kind: "job"; job: JobView }
   | { kind: "error"; message: string }
   | { kind: "confirm-reprint"; quote: ReprintQuote; job: JobView | null }
-  | { kind: "confirm-browser"; risk: Risk; job: JobView | null }
+  | { kind: "confirm-browser"; risk: Risk; consent: string; job: JobView | null }
   | { kind: "browser-done"; mark: string }
 
 const POLL_MS = 800
@@ -133,7 +133,8 @@ export function PdvDirectPrintFeedback({ request, onDismiss, onUnsupported }: Pd
     if (!r.ok) { setUi({ kind: "error", message: directPrintErrorMessage(r.error) }); return }
     show(gen, r.value.job)
   })
-  const browserPrint = (confirm: boolean, job: JobView | null) => {
+  /** `consent`: the server's re-confirmation token, bound to the risk shown — never a bare "yes" (D01-A1). */
+  const browserPrint = (consent: string | null, job: JobView | null) => {
     if (!request) return
     // Opened inside the click (no popup blocker); nothing is recorded if the browser refuses the window.
     const w = window.open("", "_blank")
@@ -141,12 +142,15 @@ export function PdvDirectPrintFeedback({ request, onDismiss, onUnsupported }: Pd
     return guarded(async gen => {
       // The operator closed the window (or a blocker handed back a closed one): record nothing.
       if (w.closed) { setUi({ kind: "error", message: "A janela de impressão foi fechada. Nada foi registrado." }); return }
-      const r = await directPrintClient.browserFallback(request.storeId, { saleId: request.saleId, confirm })
+      const r = await directPrintClient.browserFallback(request.storeId, { saleId: request.saleId, confirm: false, ...(consent ? { consent } : {}) })
       if (generation.current !== gen || !r.ok || r.value.fallback.requiresConfirmation) w.close()
       if (generation.current !== gen) return
       if (!r.ok) { setUi({ kind: "error", message: directPrintErrorMessage(r.error) }); return }
       const f = r.value.fallback
-      if (f.requiresConfirmation) { setUi({ kind: "confirm-browser", risk: f, job }); return }
+      if (f.requiresConfirmation) {
+        if (!f.consent) { setUi({ kind: "error", message: directPrintErrorMessage("RISK_CONFIRMATION_REQUIRED") }); return }
+        setUi({ kind: "confirm-browser", risk: f, consent: f.consent, job }); return
+      }
       writeBrowserPrint(w, f.html)
       setUi({ kind: "browser-done", mark: f.mark })
     })
@@ -177,7 +181,10 @@ export function PdvDirectPrintFeedback({ request, onDismiss, onUnsupported }: Pd
     : ui.kind === "confirm-reprint" ? (ui.quote.possibleAdditionalCopy
       ? `Atenção: ${riskText(ui.quote)} A nova será impressa como SEGUNDA VIA.`
       : "Nenhuma via anterior foi enviada à impressora. A nova será impressa como SEGUNDA VIA.")
-    : ui.kind === "confirm-browser" ? `Atenção: ${riskText(ui.risk)} A impressão do navegador será marcada como SEGUNDA VIA e registrada.`
+    : ui.kind === "confirm-browser" ? (ui.risk.possibleAdditionalCopy
+      ? `Atenção: ${riskText(ui.risk)} A impressão do navegador será marcada como SEGUNDA VIA e registrada.`
+      // The server also asks when no copy is exposed but this is no longer the first copy (outside its window, D01-A1).
+      : "Esta venda já passou da janela da 1ª via. A impressão do navegador sai como SEGUNDA VIA e fica registrada.")
     : working ? `${sale}. O PDV continua livre para a próxima venda.`
     : done ? `${sale} · a fila do Windows aceitou o comprovante. Confira o papel na impressora.${otherTerminal ? ` (Registrado na impressora ${job?.printerName ?? "de outro caixa"}.)` : ""}`
     : uncertain ? "O comprovante pode ter saído. Confira o papel antes de pedir a segunda via. Nada será reenviado automaticamente."
@@ -209,10 +216,10 @@ export function PdvDirectPrintFeedback({ request, onDismiss, onUnsupported }: Pd
           <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setUi(ui.job ? { kind: "job", job: ui.job } : { kind: "idle" })}>Cancelar</Button>
         </>}
         {ui.kind === "confirm-browser" && <>
-          <Button type="button" size="sm" disabled={busy} onClick={() => void browserPrint(true, ui.job)}>Imprimir pelo navegador (2ª via)</Button>
+          <Button type="button" size="sm" disabled={busy} onClick={() => void browserPrint(ui.consent, ui.job)}>Imprimir pelo navegador (2ª via)</Button>
           <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setUi(ui.job ? { kind: "job", job: ui.job } : { kind: "idle" })}>Cancelar</Button>
         </>}
-        {canBrowser && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void browserPrint(false, job)}>Abrir impressão do navegador</Button>}
+        {canBrowser && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void browserPrint(null, job)}>Abrir impressão do navegador</Button>}
         {!working && ui.kind !== "confirm-reprint" && ui.kind !== "confirm-browser" && <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>Fechar</Button>}
       </div>
     </div>

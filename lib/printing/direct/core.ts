@@ -384,13 +384,12 @@ export class DirectPrintCore {
    * is marked SEGUNDA VIA. The HTML is rendered and escaped server-side from the confirmed sale.
    */
   async browserFallback(auth: Principal, storeId: string, input: unknown) {
+    // `confirm` is accepted for compatibility and ignored: a boolean from the client never authorizes a second copy.
     const v = shape(input, ["saleId", "confirm", "uiContextId", "origin", "consent"])
     const saleId = text(v.saleId, 160)
-    // D01-A1: a reprint from the sales history / cash conference is a second copy by definition — always marked as one,
-    // and printed only against a signed consent whose disclosed risk is still the current one (like the thermal REPRINT).
     check(v.origin === undefined || v.origin === "PDV" || v.origin === "REPRINT", "INVALID_INPUT", 400)
     const reprint = v.origin === "REPRINT"
-    if (reprint) check(typeof v.consent === "string", "RISK_CONFIRMATION_REQUIRED", 400)
+    const consentToken = v.consent === undefined ? null : text(v.consent, 8192)
     return this.db.transaction(async sql => {
       const actor = await authorize(sql, auth, storeId)
       const source = await this.source(sql, storeId, saleId)
@@ -401,16 +400,20 @@ export class DirectPrintCore {
         uncertainCopies: exposure.rows.filter(r => r.state === "UNKNOWN" || r.state === "SENDING").length,
         acceptedCopies: exposure.rows.filter(r => r.state === "SPOOLER_ACCEPTED" || r.state === "TRANSPORT_ACCEPTED").length,
         browserCopies: exposure.browserCopies, queuedCopies: exposure.rows.filter(r => r.state === "REGISTERED" || r.state === "READY").length }
-      if (reprint && !(await this.browserConsentHolds(sql, text(v.consent, 8192), storeId, d.id, actor.principalId, exposure.hash))) {
+      // The server state, never the client's `origin`, tells the legitimate first copy (a sale just made, no copy of any
+      // kind yet, INITIAL slot open) from a second copy. Every second copy — PDV, history, conference or a direct API
+      // call — needs a signed consent bound to the risk disclosed now (D01-A1).
+      const firstCopy = !reprint && !possible && d.initial_state !== "HISTORICAL_CLOSED" &&
+        Date.now() - source.at.getTime() <= this.policy.initialWindowMs
+      if (!firstCopy && !(consentToken && await this.browserConsentHolds(sql, consentToken, storeId, d.id, actor.principalId, exposure.hash))) {
         const consent = this.crypto.sign("browser-reprint-v1", { storeId, documentId: d.id, principalId: actor.principalId,
           exposureHash: exposure.hash, expires: Date.now() + this.policy.riskMs })
         return { requiresConfirmation: true as const, ...risk, consent }
       }
-      if (!reprint && possible && v.confirm !== true) return { requiresConfirmation: true as const, ...risk }
       const cancelled = await sql.exec(`UPDATE public.print_copies SET state='CANCELLED' WHERE document_id=$1::uuid AND state IN ('REGISTERED','READY','PRE_SEND_FAILED')`, [d.id])
-      const mark = reprint ? "SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR" : possible ? "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR" : "VIA IMPRESSA PELO NAVEGADOR"
+      const mark = reprint ? "SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR" : firstCopy ? "VIA IMPRESSA PELO NAVEGADOR" : "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR"
       await this.event(sql, { store_id: storeId, document_id: d.id }, "BROWSER_FALLBACK_PRINTED", actor.principalId,
-        { mark, origin: reprint ? "REPRINT" : "PDV", possibleAdditionalCopy: possible, cancelledThermalCopies: cancelled, physicalPrintConfirmed: false })
+        { mark, origin: reprint ? "REPRINT" : "PDV", firstCopy, possibleAdditionalCopy: possible, cancelledThermalCopies: cancelled, physicalPrintConfirmed: false })
       return { requiresConfirmation: false as const, mark, html: renderBrowserHtml(source.input, source.mode, mark) }
     })
   }

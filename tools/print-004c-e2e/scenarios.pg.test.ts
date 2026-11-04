@@ -576,7 +576,8 @@ describe.skipIf(!URL_)("OMNI-PRINT-004C — direct print end-to-end (simulated t
     expect((await reprint(sale.id)).res.status).toBe(200)
   })
   it("S28 P2-4 impressão pelo navegador: registrada, cancela vias térmicas seguras, SEGUNDA VIA quando já pode haver cópia, HTML escapado", async () => {
-    const fb = (saleId: string, confirm = false) => call(direct.browserFallback, sessionOf(IDS.caixaA), "/api/print/direct/browser-fallback", IDS.storeA, { saleId, confirm })
+    // D01-A1: a second copy is confirmed with the token the server returns (bound to the risk), never with a boolean.
+    const fb = (saleId: string, consent?: string) => call(direct.browserFallback, sessionOf(IDS.caixaA), "/api/print/direct/browser-fallback", IDS.storeA, { saleId, confirm: false, ...(consent ? { consent } : {}) })
     const s1 = await confirmedSale(prisma, IDS.storeA, { items: [{ nome: "<img src=x onerror=alert(1)> Pão", q: 1, p: 2 }] })
     spoolerA.printers.get("POS-80 (simulada)")!.online = false
     const j1 = (await createJob(s1.id)).body.job.jobId
@@ -600,7 +601,7 @@ describe.skipIf(!URL_)("OMNI-PRINT-004C — direct print end-to-end (simulated t
     const b0 = await fb(s2.id)
     expect(b0.body.fallback).toMatchObject({ requiresConfirmation: true, possibleAdditionalCopy: true, acceptedCopies: 1 })
     expect(b0.body.fallback.html).toBeUndefined()
-    const b1 = await fb(s2.id, true)
+    const b1 = await fb(s2.id, b0.body.fallback.consent)
     expect(b1.body.fallback.mark).toBe("SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR")
     expect(b1.body.fallback.html).toContain("SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR")
     const after = await prisma.$queryRawUnsafe<Json[]>(`SELECT count(*)::int n FROM public.print_events e JOIN public.print_documents d ON d.id=e.document_id WHERE d.sale_id=$1 AND e.event_type='BROWSER_FALLBACK_PRINTED'`, s2.id)
@@ -790,7 +791,7 @@ describe.skipIf(!URL_)("OMNI-PRINT-004C — direct print end-to-end (simulated t
     expect(both.map(r => r.body.fallback.requiresConfirmation).sort()).toEqual([false, true])
 
     // Consent is mandatory, bound to principal/store and unforgeable; origin is validated.
-    expect((await fb(s4.id, undefined)).body.error).toBe("RISK_CONFIRMATION_REQUIRED")
+    expect((await fb(s4.id, undefined)).body.fallback).toMatchObject({ requiresConfirmation: true }) // no token: nothing prints
     expect((await fb(s4.id, q4.consent.slice(0, -2) + "xx")).status).toBe(403)
     expect((await fb(s4.id, q4.consent, {}, sessionOf(IDS.caixa2A))).body.fallback.requiresConfirmation).toBe(true) // another user's consent
     expect((await fb(s4.id, q4.consent, { origin: "HISTORICO" })).body.error).toBe("INVALID_INPUT")
@@ -808,5 +809,70 @@ describe.skipIf(!URL_)("OMNI-PRINT-004C — direct print end-to-end (simulated t
     await drain(agentA)
     expect(outputs(spoolerA)).toBe(before)
     expect((await ledger(s5.id)).map(c => c.state)).toEqual(["CANCELLED"])
+  })
+
+  it("S35 D01-A1 API direta: origem PDV/ausente não contorna o consentimento; 1ª via legítima preservada; token ausente/forjado/expirado/obsoleto; registro indisponível", async () => {
+    const fb = (saleId: string, extra: Json = {}, rt = runtime) =>
+      call(direct.browserFallback, sessionOf(IDS.caixaA), "/api/print/direct/browser-fallback", IDS.storeA, { saleId, ...extra }, rt)
+    const printed = async (saleId: string) => (await prisma.$queryRawUnsafe<Json[]>(`SELECT e.details->>'mark' mark FROM public.print_events e
+      JOIN public.print_documents d ON d.id=e.document_id WHERE d.sale_id=$1 AND e.event_type='BROWSER_FALLBACK_PRINTED' ORDER BY e.created_at`, saleId)).map(r => r.mark)
+
+    // Legitimate first copy of a sale just made (no copy of any kind): the PDV flow prints without consent, unmarked.
+    const s1 = await confirmedSale(prisma, IDS.storeA)
+    expect((await fb(s1.id, { origin: "PDV" })).body.fallback).toMatchObject({ requiresConfirmation: false, mark: "VIA IMPRESSA PELO NAVEGADOR" })
+    // From then on it is a second copy: neither `confirm: true`, nor PDV/absent origin, prints without the signed consent.
+    for (const extra of [{ origin: "PDV", confirm: true }, { confirm: true }, {}]) {
+      const r = (await fb(s1.id, extra)).body.fallback
+      expect(r).toMatchObject({ requiresConfirmation: true, browserCopies: 1 })
+      expect(r.html).toBeUndefined()
+    }
+    const token = (await fb(s1.id)).body.fallback.consent as string
+    expect((await fb(s1.id, { consent: token })).body.fallback).toMatchObject({ requiresConfirmation: false, mark: "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR" })
+    // Obsolete: the same token after its own print no longer matches the risk.
+    expect((await fb(s1.id, { consent: token })).body.fallback.requiresConfirmation).toBe(true)
+    // Forged: refused outright, nothing recorded.
+    expect((await fb(s1.id, { consent: token.slice(0, -3) + "abc" })).status).toBe(403)
+    // Expired: a correctly signed token past its deadline asks again.
+    const [doc] = await prisma.$queryRawUnsafe<Json[]>(`SELECT id FROM public.print_documents WHERE sale_id=$1`, s1.id)
+    const exposureNow = (await fb(s1.id)).body.fallback.consent as string
+    const expired = runtime.crypto.sign("browser-reprint-v1", { ...runtime.crypto.verify("browser-reprint-v1", exposureNow), documentId: doc.id, expires: Date.now() - 1000 })
+    expect((await fb(s1.id, { consent: expired })).body.fallback.requiresConfirmation).toBe(true)
+    // Another document's token never authorizes this one.
+    const s9 = await confirmedSale(prisma, IDS.storeA)
+    await fb(s9.id)
+    const foreign = (await fb(s9.id)).body.fallback.consent as string
+    expect((await fb(s1.id, { consent: foreign })).body.fallback.requiresConfirmation).toBe(true)
+    expect(await printed(s1.id)).toEqual(["VIA IMPRESSA PELO NAVEGADOR", "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR"])
+
+    // An old sale (outside the first-copy window) is a historical reprint even with no copy registered: consent + SEGUNDA VIA.
+    const s2 = await confirmedSale(prisma, IDS.storeA, { minutesAgo: 120 })
+    const old = (await fb(s2.id, { origin: "PDV", confirm: true })).body.fallback
+    expect(old).toMatchObject({ requiresConfirmation: true, possibleAdditionalCopy: false })
+    expect((await fb(s2.id, { consent: old.consent })).body.fallback.mark).toBe("SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR")
+    // A sale already printed by the agent: the PDV browser copy needs consent and is marked.
+    const s3 = await confirmedSale(prisma, IDS.storeA)
+    await createJob(s3.id); await drain(agentA)
+    const s3r = (await fb(s3.id, { confirm: true })).body.fallback
+    expect(s3r).toMatchObject({ requiresConfirmation: true, acceptedCopies: 1 })
+    expect((await fb(s3.id, { consent: s3r.consent })).body.fallback.mark).toBe("SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR")
+
+    // Two tabs/terminals asking for the first copy at the same instant: one prints it, the other must confirm a second copy.
+    const s4 = await confirmedSale(prisma, IDS.storeA)
+    const both = await Promise.all([fb(s4.id, { origin: "PDV" }), fb(s4.id, { origin: "PDV" })])
+    expect(both.map(r => r.body.fallback.requiresConfirmation).sort()).toEqual([false, true])
+    expect(await printed(s4.id)).toEqual(["VIA IMPRESSA PELO NAVEGADOR"])
+
+    // Print registry unavailable: the server answers an error and nothing is printed or recorded.
+    const s5 = await confirmedSale(prisma, IDS.storeA)
+    const down: Database = { ...db, transaction: () => Promise.reject(new Error("connect ECONNREFUSED 127.0.0.1:5432")) }
+    const res = await direct.browserFallback(browserRequest("/api/print/direct/browser-fallback", IDS.storeA, { saleId: s5.id, origin: "REPRINT", consent: token }),
+      depsFor(down, runtime, sessionOf(IDS.caixaA)))
+    const body = await res.json() as Json
+    expect(res.status).toBeGreaterThanOrEqual(500)
+    expect(body.ok).toBe(false)
+    expect(body.fallback).toBeUndefined()
+    const off = await fb(s5.id, { origin: "REPRINT", consent: token }, { enabled: false, reason: "OWNER_APPROVAL_REQUIRED" } as unknown as EnabledRuntime)
+    expect([off.status, off.body.error]).toEqual([404, "DIRECT_PRINT_DISABLED"])
+    expect(await prisma.$queryRawUnsafe<Json[]>(`SELECT 1 FROM public.print_documents WHERE sale_id=$1`, s5.id)).toEqual([])
   })
 })

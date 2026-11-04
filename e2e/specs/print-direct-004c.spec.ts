@@ -54,7 +54,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await stopAgent(); host?.kill(); await server?.stop(); await prisma.$disconnect() })
 
 test.beforeEach(async ({ context, page }) => {
-  salePosts = []; printCalls = []; errors = []
+  salePosts = []; printCalls = []; errors = []; registryDown = null
   runtime = baseRuntime
   await setPrinter({ online: true })
   page.on("pageerror", e => errors.push(e.message))
@@ -73,6 +73,7 @@ async function handle(route: Route) {
   const key = `${req.method()} ${url.pathname}`
   if (url.pathname.startsWith("/api/print/direct/")) {
     printCalls.push(key)
+    if (registryDown && url.pathname.endsWith(registryDown)) { await route.fulfill({ status: 503, json: { ok: false, error: "LEDGER_BUSY" } }); return }
     const request = new Request(req.url(), { method: req.method(), headers: await req.allHeaders(), body: req.method() === "GET" ? undefined : req.postData() ?? "" })
     const d = depsFor(db, runtime, sessionOf(IDS.caixaA))
     const p = url.pathname
@@ -116,6 +117,7 @@ async function handle(route: Route) {
   errors.push("unplanned " + key); await route.abort("failed")
 }
 let failWrites = false
+let registryDown: string | null = null
 
 async function mount(page: Page, cfg: Json = {}) {
   const storage: Record<string, string> = {}
@@ -369,6 +371,10 @@ test("PW12 reimpressão registrada (Histórico/Conferência) pela térmica do ca
   await expect(page.getByRole("button", { name: "Enviar para térmica" })).toHaveCount(0) // legacy unregistered print is gone
   expect((await spooled()).length).toBe(before + 1) // nothing before the explicit choice
   await panel(page).getByRole("button", { name: "Imprimir 2ª via na impressora do caixa" }).click()
+  await expect(panel(page)).toContainText("Confirmar 2ª via na impressora do caixa?")
+  await page.waitForTimeout(500)
+  expect((await spooled()).length).toBe(before + 1) // still nothing: the risk must be confirmed
+  await panel(page).getByRole("button", { name: "Confirmar 2ª via na impressora do caixa" }).click()
   await expect(panel(page)).toContainText("Segunda via enviada à fila da impressora", { timeout: 15000 })
   expect((await spooled()).length).toBe(before + 2)
   expect((await spooled()).at(-1)!.text).toContain("SEGUNDA VIA - REIMPRESSAO")
@@ -485,6 +491,10 @@ test("PW16 resultado incerto da 1ª via: reimpressão informa o risco, sai uma S
   await startReprint(page)
   await expect(panel(page)).toContainText("pode(m) já ter saído")
   await panel(page).getByRole("button", { name: "Imprimir 2ª via na impressora do caixa" }).click()
+  await expect(panel(page)).toContainText("Confirmar 2ª via na impressora do caixa?")
+  await expect(panel(page)).toContainText("nada é reenviado automaticamente")
+  expect((await spooled()).length).toBe(afterInitial)
+  await panel(page).getByRole("button", { name: "Confirmar 2ª via na impressora do caixa" }).click()
   await expect(panel(page)).toContainText("Segunda via enviada à fila da impressora", { timeout: 15000 })
   await page.waitForTimeout(1500)
   expect((await spooled()).length - afterInitial).toBe(1)
@@ -522,4 +532,23 @@ test("PW18 venda fora do contrato (KG) ou servidor com o recurso fechado: volta 
   await expect(panel(p2)).toHaveCount(0)
   expect(await jobsOf(sale.id)).toEqual([])
   await p2.close()
+})
+
+test("PW19 registro de impressão indisponível: nada imprime, nada volta ao fluxo antigo, a janela aberta é fechada", async ({ page }) => {
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  registryDown = "/reprint-quote"
+  await mountReprint(page, sale.id)
+  await startReprint(page)
+  await expect(panel(page)).toContainText("Não foi possível reimprimir")
+  await expect(panel(page).getByRole("button", { name: "Tentar de novo" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Enviar para térmica" })).toHaveCount(0) // never the unregistered flow
+  registryDown = "/browser-fallback"
+  await panel(page).getByRole("button", { name: "Tentar de novo" }).click()
+  await expect(panel(page)).toContainText("Nenhuma via desta venda foi registrada")
+  await panel(page).getByRole("button", { name: "Imprimir 2ª via pelo navegador" }).click()
+  await expect(panel(page)).toContainText("Não foi possível reimprimir")
+  const b = await browserCounts(page)
+  expect([b.open, b.childPrint, b.html]).toEqual([1, 0, ""]) // the window opened by the click was closed unused
+  expect(await legacyPrint(page)).toEqual({ thermal: 0, html: 0 })
+  expect(await reprintEvents(sale.id)).toEqual([])
 })
