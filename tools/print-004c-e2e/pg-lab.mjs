@@ -6,7 +6,7 @@
  * then 004B synthetic migration and the 004C LOCAL_AGENT candidate migration, all with ON_ERROR_STOP.
  */
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -47,8 +47,12 @@ if (cmd === "init") {
   console.log("initialized " + DATA)
 } else if (cmd === "start") {
   // stdio ignore: pg_ctl start with pipes never returns on Windows (postmaster inherits handles).
-  const r = spawnSync(exe("pg_ctl.exe"), ["-D", DATA, "-l", path.join(DIR, "pg.log"), "-w", "-o", `-p ${PORT} -c listen_addresses=127.0.0.1 -c max_connections=60`, "start"], { stdio: "ignore", windowsHide: true, timeout: 60000 })
-  if (r.status !== 0) throw new Error("pg_ctl start failed; see pg.log")
+  // Every lab connection uses TCP loopback. PGDG's /var/run/postgresql Unix socket directory belongs to postgres,
+  // while this private cluster runs as the unprivileged CI runner; it does not need a Unix socket.
+  const socketOptions = process.platform === "win32" ? "" : " -c unix_socket_directories="
+  const log = path.join(DIR, "pg.log")
+  const r = spawnSync(exe("pg_ctl.exe"), ["-D", DATA, "-l", log, "-w", "-o", `-p ${PORT} -c listen_addresses=127.0.0.1 -c max_connections=60${socketOptions}`, "start"], { stdio: "ignore", windowsHide: true, timeout: 60000 })
+  if (r.status !== 0) throw new Error("pg_ctl start failed: " + (existsSync(log) ? readFileSync(log, "utf8").slice(-6000) : "no lab startup log"))
   psql("postgres", ["-c", `DO $$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${OWNER}') THEN CREATE ROLE ${OWNER} LOGIN PASSWORD 'lab' NOSUPERUSER NOCREATEROLE NOBYPASSRLS; END IF; END$$;`])
   console.log(`started 127.0.0.1:${PORT}`)
 } else if (cmd === "stop") {

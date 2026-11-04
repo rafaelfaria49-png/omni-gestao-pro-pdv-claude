@@ -41,7 +41,7 @@
     "tools/print-004c-e2e/lab-env.ts": "d3481ca0905996a6aba17151477797396a077f9b4cc18d46a4ccede79db393db",
     "tools/print-004c-e2e/manifest.mjs": "ae1dfe2e5d5a762043bd9d0fdb785bdbf1961f21f195714be2ba2fdd4eac0b0e",
     "tools/print-004c-e2e/matrix-80.mjs": "4e19865068f2436140622a161a3d5e7a1541a4f5f44e5f25981e6e2e5d1ba404",
-    "tools/print-004c-e2e/pg-lab.mjs": "c6253d21643ae6f3a16ad01d716db1571e0542af64e093ed22ded3bad82e6107",
+    "tools/print-004c-e2e/pg-lab.mjs": "4128c349d48caebf911c4adb9d57b1ca14fa9418ba1041f0be665f613eb612e1",
     "tools/print-004c-e2e/run-all.mjs": "d50bc62fbf90ebf47dec4c5e471dbaa67b3f0e22d82b491e1d5117e248ffb939",
     "tools/print-004c-e2e/run-pg.mjs": "37c6668be2b46e495c6ee6c000027e5f12515330286f5b2fec9dadfe0eb0e3f7",
     "tools/print-004c-e2e/run-playwright.mjs": "6c516fa7f48a7cdafd56bbda838b4a5a0b6c8c82c50fc869bbac3f481df35316",
