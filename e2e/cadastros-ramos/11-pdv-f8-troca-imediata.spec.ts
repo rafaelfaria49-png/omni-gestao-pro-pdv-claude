@@ -79,6 +79,17 @@ async function venderDuasEmDinheiro(page: Page, bipe: Locator) {
   await expect(modal).toHaveCount(0)
 }
 
+/**
+ * Venda confirmada abre o diálogo do comprovante (assíncrono). Com ele aberto o PDV
+ * ignora atalhos (contrato do Clássico) — fecha antes do F8, como o spec 10.
+ */
+async function fecharPosVenda(page: Page) {
+  const dialog = page.getByRole("dialog", { name: /^(Impressão não enviada|Comprovante enviado|Comprovante não fiscal)$/ })
+  await dialog.waitFor({ state: "visible", timeout: 10_000 }).catch(() => {})
+  if (await dialog.isVisible()) await dialog.getByRole("button", { name: /^(Agora não|Fechar)$/ }).first().click()
+  await expect(dialog).toHaveCount(0)
+}
+
 async function abrirTrocaPorF8(page: Page) {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await page.keyboard.press("F8")
@@ -139,6 +150,7 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     expect(vendaOrigem.itens.reduce((s, i) => s + i.lineTotal, 0)).toBe(20)
     expect(vendaOrigem.total).toBe(20)
     await expect.poll(async () => (await db.produto.findUniqueOrThrow({ where: { id: prodP.id } })).stock).toBe(8)
+    await fecharPosVenda(page)
   })
 
   await test.step("F8 abre o painel; busca pelo SKU acha a venda no servidor; bipe do novo item", async () => {
