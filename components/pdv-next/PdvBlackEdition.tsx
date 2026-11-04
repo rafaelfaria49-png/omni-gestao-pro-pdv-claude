@@ -86,7 +86,11 @@ export function PdvBlackEdition() {
     finalizeSaleTransaction,
     getSaldoCreditoCliente,
     sincronizarCreditoLocal,
+    releaseSaleAttempt,
   } = useOperationsStore()
+  // Venda PENDENTE cujo carrinho segue na tela: Cancelar libera a tentativa no store
+  // (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001) — carrinho idêntico depois disso é venda nova.
+  const pendingAttemptRef = useRef<{ id: string; clientSaleId?: string } | null>(null)
   const { caixa, abrirCaixa, fecharCaixa, sessaoId: caixaSessaoId } = useCaixa()
   const { toast } = useToast()
 
@@ -593,6 +597,7 @@ export function PdvBlackEdition() {
     }
 
     if (result.pending) {
+      pendingAttemptRef.current = { id: result.saleId, ...(result.clientSaleId ? { clientSaleId: result.clientSaleId } : {}) }
       setPaymentOpen(false)
       toast({ title: PENDING_SALE_TITLE, description: PENDING_SALE_DESCRIPTION, duration: 6000 })
       focusBipe()
@@ -728,6 +733,8 @@ export function PdvBlackEdition() {
         cancelSaleOpen={cancelSaleOpen}
         onCancelSaleOpenChange={setCancelSaleOpen}
         onConfirmCancelSale={() => {
+          releaseSaleAttempt?.(pendingAttemptRef.current)
+          pendingAttemptRef.current = null
           setCartRows([])
           setSelectedLineId(null)
           setLastAddedItem(null)

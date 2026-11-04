@@ -91,10 +91,12 @@ import {
   saleSyncActionsForCode,
 } from "@/lib/vendas/sale-identity-conflict"
 import { pendingReasonView, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
+import { ATTEMPT_OUTCOME_LABEL, SALE_ALREADY_CONFIRMED_CODE, operatorSaleSyncView } from "@/lib/vendas/sale-sync-engine"
 import {
   classifyLocalSaleSync,
   displaySaleNumber,
   isProvisionalSaleRef,
+  saleLocalKey,
   type LocalSaleSyncKind,
 } from "@/lib/vendas/local-sale-identity"
 import {
@@ -283,9 +285,11 @@ export function VendasArquivoGeral() {
     recoverQuarantinedSale,
     probeSaleWriterCapability,
     quarantineReviewKeys,
+    saleSyncPhases,
+    syncConnectivity,
   } = useOperationsStore()
   const { toast } = useToast()
-  
+
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -346,6 +350,18 @@ export function VendasArquivoGeral() {
   )
   const pendingSaleSyncActions = saleSyncActionsForCode(pendenteLocalLive?.syncBlockedCode)
   const conflitoIdentidade = pendingSaleSyncActions.quarantined
+  // Estado operacional da pendência (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001): fase em curso e
+  // o que existe no servidor — "confirmada" só com prova.
+  const pendenteLocalSync = useMemo(
+    () =>
+      pendenteLocalLive && pendenteLocalLive.syncPending === true
+        ? operatorSaleSyncView(pendenteLocalLive, {
+            phase: saleSyncPhases?.[saleLocalKey(pendenteLocalLive)] ?? null,
+            offline: syncConnectivity === "offline" || syncConnectivity === "servidor_inacessivel",
+          })
+        : null,
+    [pendenteLocalLive, saleSyncPhases, syncConnectivity],
+  )
   const pendingReason = useMemo(
     () =>
       pendenteLocalLive
@@ -699,13 +715,20 @@ export function VendasArquivoGeral() {
         return
       }
       setReenviandoId(vendaId)
-      const res = await retrySyncSale(vendaId)
+      // Identidade estável: o id provisório muda para o VDA na confirmação.
+      const res = await retrySyncSale(pendingSale?.clientSaleId || pendingSale?.id || vendaId)
       setReenviandoId(null)
       if (res.ok) {
         toast({
-          title: "Venda sincronizada",
-          description: `${vendaId} foi confirmada no servidor.`,
+          title: res.reconciled ? "Venda já estava no servidor" : "Venda sincronizada",
+          description: res.reconciled
+            ? `${res.pedidoId ?? vendaId} já estava gravada — reconciliada sem reenviar (nada duplicado).`
+            : `${res.pedidoId ?? vendaId} foi confirmada no servidor.`,
         })
+        void fetchRemoteSales()
+        load()
+      } else if (res.code === SALE_ALREADY_CONFIRMED_CODE || res.code === "NAO_ENCONTRADA") {
+        toast({ title: "Nada a reenviar", description: res.reason.slice(0, 220) })
         void fetchRemoteSales()
         load()
       } else if (isSaleIdentityConflictCode(res.code)) {
@@ -2021,6 +2044,19 @@ export function VendasArquivoGeral() {
                         )}
                       </p>
                     )}
+                    {pendenteLocalSync && (
+                      <p className="text-xs text-foreground" data-testid="venda-pendente-sync-status">
+                        <span className="font-semibold">{pendenteLocalSync.label}.</span>{" "}
+                        No servidor:{" "}
+                        {pendenteLocalSync.serverHasSale === "nao"
+                          ? "NÃO gravada (estoque e caixa do servidor não lançados)"
+                          : "ainda não confirmada (estoque e caixa do servidor não lançados)"}
+                        .
+                        {pendenteLocalLive?.syncLastAttemptOutcome && (
+                          <> Resultado da última tentativa: {ATTEMPT_OUTCOME_LABEL[pendenteLocalLive.syncLastAttemptOutcome]}.</>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -2207,7 +2243,11 @@ export function VendasArquivoGeral() {
                       ) : (
                         <Send className="h-4 w-4" />
                       )}
-                      Reenviar sincronização
+                      {reenviandoId === detalhePendenteLocal.id
+                        ? pendenteLocalSync?.status === "ENVIANDO"
+                          ? "Enviando…"
+                          : "Verificando venda…"
+                        : "Reenviar sincronização"}
                     </Button>
                   )}
                   {pendingSaleSyncActions.canRetroactiveRetry &&

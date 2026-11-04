@@ -22,6 +22,22 @@ export const STOCK_INVARIANT_DRIFT = "STOCK_INVARIANT_DRIFT"
 /** 409 do writer: linha de produto sem `Produto` na loja — nada foi gravado. */
 export const UNRESOLVED_PRODUCT_CODE = "PRODUTO_NAO_RESOLVIDO"
 
+/**
+ * Códigos do CLIENTE (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001) — o servidor não os emite:
+ * - `AUTH_REQUIRED`: 401 sem código (sessão expirada). Nada gravado; volta a tentar
+ *   sozinho, com backoff, quando houver sessão válida.
+ * - `PERMISSION_DENIED`: 403 sem código. Nada gravado; exige usuário com permissão.
+ * - `RESPOSTA_INCONCLUSIVA`: 2xx sem prova da venda no corpo. NÃO é sucesso.
+ * - `SEM_CONEXAO`: tentativa recusada localmente porque o navegador está offline.
+ */
+export const AUTH_REQUIRED = "AUTH_REQUIRED"
+export const PERMISSION_DENIED = "PERMISSION_DENIED"
+export const INCONCLUSIVE_RESPONSE = "RESPOSTA_INCONCLUSIVA"
+export const OFFLINE_CODE = "SEM_CONEXAO"
+
+/** Transitórios por natureza: mesma identidade, reenvio automático com backoff. */
+const AUTO_RETRY_CODES = new Set([AUTH_REQUIRED, INCONCLUSIVE_RESPONSE, OFFLINE_CODE])
+
 const QUARANTINE_CODES = new Set(["PEDIDO_ID_DE_OUTRA_LOJA", "PEDIDO_ID_CONFLITO_MESMA_LOJA"])
 
 const ACTION_REQUIRED_CODES = new Set([
@@ -45,6 +61,7 @@ const ACTION_REQUIRED_CODES = new Set([
   "IDEMPOTENCY_CONFLICT",
   "VALIDATION",
   "CROSS_STORE",
+  PERMISSION_DENIED,
 ])
 
 export type PendingSyncFailureInput = {
@@ -76,6 +93,7 @@ export function classifyPendingSyncFailure(input: PendingSyncFailureInput): Pend
   const code = resolvePendingSyncErrorCode(input)
   if (code && QUARANTINE_CODES.has(code)) return PENDING_SYNC_CLASS.QUARANTINED
   if (code && ACTION_REQUIRED_CODES.has(code)) return PENDING_SYNC_CLASS.ACTION_REQUIRED
+  if (code && AUTO_RETRY_CODES.has(code)) return PENDING_SYNC_CLASS.AUTO_RETRY
   if (input.networkError === true) return PENDING_SYNC_CLASS.AUTO_RETRY
   if (typeof input.httpStatus === "number" && input.httpStatus >= 500) return PENDING_SYNC_CLASS.AUTO_RETRY
   if (typeof input.httpStatus === "number" && input.httpStatus >= 400) return PENDING_SYNC_CLASS.ACTION_REQUIRED
@@ -209,8 +227,55 @@ export function pendingReasonView(input: PendingSyncFailureInput & { pending?: b
       return {
         class: classified,
         title: "Crédito/vale insuficiente",
-        description: "O saldo de crédito no servidor não cobre esta venda.",
-        recommendedAction: "Ajuste o pagamento e reenvie a mesma venda.",
+        description: "O saldo de crédito no servidor não cobre esta venda. Nada foi gravado.",
+        recommendedAction:
+          "O pagamento não é alterado automaticamente. Regularize o saldo do cliente com o administrador e use Reenviar da mesma venda.",
+      }
+    case "PAGAMENTOS_TOTAL_DIVERGENTE":
+      return {
+        class: classified,
+        title: "Pagamento divergente do total",
+        description: "A soma das formas de pagamento desta venda não fecha com o total. Nada foi gravado.",
+        recommendedAction:
+          "Valor e pagamento não são alterados sem o operador. Peça ao administrador para revisar esta venda em Vendas. Não finalize de novo.",
+      }
+    case AUTH_REQUIRED:
+      return {
+        class: classified,
+        title: "Sessão expirada",
+        description: "O servidor não aceitou a sessão deste navegador. Nada foi gravado; a venda continua preservada neste terminal.",
+        recommendedAction: "Entre novamente no sistema. O envio da MESMA venda recomeça sozinho depois do login.",
+      }
+    case PERMISSION_DENIED:
+      return {
+        class: classified,
+        title: "Sem permissão para registrar a venda",
+        description: "O usuário atual não pode registrar vendas nesta loja. Nada foi gravado.",
+        recommendedAction: "Entre com um usuário com acesso a Vendas desta loja e use Reenviar da mesma venda.",
+      }
+    case INCONCLUSIVE_RESPONSE:
+      return {
+        class: classified,
+        title: "Resposta sem confirmação",
+        description: "A conexão respondeu, mas sem a prova da venda no servidor (rede instável ou portal de Wi-Fi). A venda NÃO foi marcada como sincronizada.",
+        recommendedAction: "Aguarde: o sistema verifica a mesma venda sozinho. Ou use Reenviar da mesma venda.",
+      }
+    case OFFLINE_CODE:
+      return {
+        class: classified,
+        title: "Sem conexão",
+        description: "Este navegador está sem internet. A venda está registrada só neste terminal e ainda não foi confirmada.",
+        recommendedAction: "Quando a conexão voltar o envio é automático. Não limpe os dados do navegador.",
+      }
+    case "CLIENT_SALE_ID_REQUIRED":
+    case "IDEMPOTENCY_KEY_REUSED":
+    case "IDEMPOTENCY_CONFLICT":
+      return {
+        class: classified,
+        title: "Identificação da venda recusada",
+        description:
+          "O servidor recusou a chave técnica desta venda (ausente ou já usada por outro conteúdo). Nenhuma venda foi sobrescrita e nenhuma identidade nova é criada.",
+        recommendedAction: "Não finalize de novo. Peça ao administrador para revisar esta venda em Vendas.",
       }
     default:
       break
