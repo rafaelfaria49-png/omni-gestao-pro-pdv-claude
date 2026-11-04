@@ -38,7 +38,7 @@ for (const [name, args, extra] of steps) {
     env: { ...process.env, DATABASE_URL: "postgresql://test:test@127.0.0.1:1/isolated", DIRECT_URL: "postgresql://test:test@127.0.0.1:1/isolated",
       MIGRATION_AUTHORITY_ENABLED: "false", VERCEL: "0", VERCEL_ENV: "development", NEXT_TELEMETRY_DISABLED: "1",
       AUTH_SECRET: "isolated-d03-build-only", AUTH_TRUST_HOST: "true", NEXTAUTH_URL: "http://localhost:3000", FORCE_COLOR: "0", NO_COLOR: "1", ...extra } })
-  const log = ((r.stdout ?? "") + (r.stderr ?? "")).replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+  const log = ((r.stdout ?? "") + (r.stderr ?? "")).replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/[\t ]+$/gm, "")
   writeFileSync(path.join(out, name + ".log"), log + `\nexit=${r.status}\n`)
   summary.steps.push({ step: name, status: r.status === 0 ? "PASS" : "FAIL", exit: r.status, seconds: Math.round((Date.now() - started) / 1000),
     tests: /Tests\s+([^\n]+)/.exec(log)?.[1] ?? /(\d+ passed[^\n]*)/.exec(log)?.[1] ?? null })

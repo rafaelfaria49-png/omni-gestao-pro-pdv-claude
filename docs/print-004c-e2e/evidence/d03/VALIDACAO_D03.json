@@ -1,7 +1,10 @@
 {
   "goal": "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001",
-  "at": "2026-11-04T22:00:16.732Z",
+  "at": "2026-11-04T22:09:27.095Z",
   "status": "PASS",
+  "provenance": {
+    "source": "LOCAL_LOGS"
+  },
   "productionExecution": false,
   "physicalHomologation": "PENDING",
   "steps": [
@@ -24,7 +27,7 @@
       "status": "PASS",
       "exit": 0,
       "tests": "78 passed (78)",
-      "sha256": "9e26809f6372d096ef1cd0d2d7236b4c6585342c72fb0eb732327b246b0edc61"
+      "sha256": "a5a2a27ea76dedafcb6591f556cdae19ffd43aae3cd9902f081323fb95c7c13c"
     },
     {
       "step": "offline-regression",
@@ -108,7 +111,7 @@
       "status": "PASS",
       "exit": 0,
       "tests": null,
-      "sha256": "e96873300e7cfd0a2eaf074510b78dea1c8ddd5e92a9b30d9ff248a092da9288"
+      "sha256": "cd3a30bc73336ef5c8967bbe017f579f6166c0573d827f576d0e069e597d7876"
     },
     {
       "step": "mutation",

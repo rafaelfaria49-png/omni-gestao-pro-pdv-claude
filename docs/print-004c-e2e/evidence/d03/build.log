@@ -22,9 +22,9 @@ Tip: Need your database queries to be 1000x faster? Accelerate offers you that a
   Finished TypeScript config validation in 277ms ...
   Collecting page data using 11 workers ...
   Generating static pages using 11 workers (0/105) ...
-  Generating static pages using 11 workers (26/105) 
-  Generating static pages using 11 workers (52/105) 
-  Generating static pages using 11 workers (78/105) 
+  Generating static pages using 11 workers (26/105)
+  Generating static pages using 11 workers (52/105)
+  Generating static pages using 11 workers (78/105)
 ✓ Generating static pages using 11 workers (105/105) in 35.2s
   Finalizing page optimization ...
   Collecting build traces ...
@@ -428,7 +428,7 @@ npm notice run next build --webpack
  We detected multiple lockfiles and selected the directory of C:\Projetos\omni-gestao\package-lock.json as the root directory.
  To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
    See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
- Detected additional lockfiles: 
+ Detected additional lockfiles:
    * C:\Projetos\omni-gestao\.worktrees\omni-print-d03\package-lock.json
 
 

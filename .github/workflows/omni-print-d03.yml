@@ -21,6 +21,8 @@ jobs:
       DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated
     steps:
       - uses: actions/checkout@v4
+      - name: Iniciar evidências exclusivas desta execução
+        run: node tools/print-d03/evidence.mjs --reset
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci --no-audit --no-fund
@@ -46,11 +48,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+      - name: Iniciar evidências exclusivas desta execução
+        run: node tools/print-d03/evidence.mjs --reset
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci --no-audit --no-fund
       - name: PostgreSQL 17 descartável
         run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gpg
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --retry 3 -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc | grep -q B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+          echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y postgresql-17
           echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
