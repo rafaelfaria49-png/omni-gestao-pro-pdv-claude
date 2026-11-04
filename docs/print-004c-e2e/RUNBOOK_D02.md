@@ -151,7 +151,7 @@ Parar imediatamente, sem novas tentativas, se:
 | Núcleo desistiu 3 vezes | encerrar; nada a desfazer além dos índices (opcional, §9) |
 | `INDEXES_PARTIAL` (parada entre os dois índices) | `apply-indexes` de novo: mantém o válido e cria o que falta |
 | Aplicado mas não registrado (`verify --prisma` acusa ausência) | `promote` + `resolve`; **nunca** registrar o que não existe (a ferramenta recusa) |
-| Checksum diferente em `_prisma_migrations` | arquivo com CRLF ou alterado: apagar as 3 linhas D02 de `_prisma_migrations`, recuperar o checkout limpo e repetir `promote` + `resolve` |
+| Checksum diferente em `_prisma_migrations` | **PARAR — não apagar, editar ou recriar linhas de `_prisma_migrations` manualmente.** Preservar o histórico, coletar evidências e confirmar backup; comparar os bytes originais (LF), os checksums das três `migration.sql` e os registros do Prisma. Identificar a causa (CRLF, arquivo alterado, divergência de histórico) e elaborar recuperação controlada validada em cópia, com aprovação técnica expressa. Não executar `promote`/`resolve`, merge ou deploy enquanto houver divergência; `prisma migrate resolve` só nos casos suportados e após conferir o catálogo real. |
 | `prisma migrate deploy` rodou o núcleo e falhou (ver §10) | `prisma migrate resolve --rolled-back 20261105120200_omni_print_d02_core` e reaplicar pelo §6 |
 | Vendas paradas além do previsto | interromper o `psql` (Ctrl+C) ou `SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name='omni-print-d02'`. A transação (ii) volta inteira |
 | Dano real (último recurso) | restaurar o ponto do §4 **com aprovação do proprietário**, ciente de que vendas posteriores a ele se perdem |
