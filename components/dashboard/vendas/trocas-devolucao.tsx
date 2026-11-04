@@ -67,6 +67,34 @@ type ServerDevolucaoResult =
   /** Sem resposta: o servidor PODE ter gravado — o reenvio usa o MESMO localId. */
   | { kind: "network"; message: string }
 
+type TentativaIncerta = { fp: string; localId: string; body: Record<string, unknown>; mirror: PendingMirror }
+
+/**
+ * Tentativa sem resposta sobrevive a fechar/reabrir o F8 e a recarregar a aba
+ * (sessionStorage por loja): reabrir e mudar o formulário não pode gerar um 2º localId
+ * para a mesma devolução física. Falha de storage não bloqueia (vale o ref em memória).
+ */
+const tentativaKey = (lojaId: string) => `omnigestao:devolucao-incerta:${lojaId}`
+function lerTentativaIncerta(lojaId: string | null | undefined): TentativaIncerta | null {
+  if (!lojaId) return null
+  try {
+    const raw = sessionStorage.getItem(tentativaKey(lojaId))
+    const v = raw ? (JSON.parse(raw) as TentativaIncerta) : null
+    return v && typeof v.localId === "string" && typeof v.fp === "string" ? v : null
+  } catch {
+    return null
+  }
+}
+function gravarTentativaIncerta(lojaId: string | null | undefined, v: TentativaIncerta | null) {
+  if (!lojaId) return
+  try {
+    if (v) sessionStorage.setItem(tentativaKey(lojaId), JSON.stringify(v))
+    else sessionStorage.removeItem(tentativaKey(lojaId))
+  } catch {
+    /* storage indisponível: segue só em memória */
+  }
+}
+
 async function postDevolucaoServidor(lojaId: string, body: Record<string, unknown>): Promise<ServerDevolucaoResult> {
   let res: Response
   try {
@@ -131,7 +159,16 @@ export function TrocasDevolucao({
   const [enviando, setEnviando] = useState(false)
   const enviandoRef = useRef(false)
   /** Mesma intenção ⇒ mesmo localId: reenvio após resposta perdida é replay, não 2ª devolução. */
-  const pendingDevRef = useRef<{ fp: string; localId: string; body: Record<string, unknown>; mirror: PendingMirror } | null>(null)
+  const pendingDevRef = useRef<TentativaIncerta | null>(null)
+  const definirTentativa = (v: TentativaIncerta | null) => {
+    pendingDevRef.current = v
+    gravarTentativaIncerta(lojaAtivaId, v)
+  }
+  useEffect(() => {
+    pendingDevRef.current = lerTentativaIncerta(lojaAtivaId)
+  }, [lojaAtivaId])
+  /** Devoluções que o servidor recusou em definitivo (fila offline) — precisam de tratamento manual. */
+  const recusadas = useMemo(() => devolucoes.filter((d) => !!d.syncRejectedCode), [devolucoes])
   /**
    * Troca cuja devolução JÁ foi gravada no servidor mas a nova venda não concluiu:
    * o vale existe (persistido) e o reenvio só refaz a venda — nunca outra devolução.
@@ -558,9 +595,12 @@ export function TrocasDevolucao({
     if (incerta && incerta.fp !== fp) {
       const anterior = await postDevolucaoServidor(lojaAtivaId, incerta.body)
       if (anterior.kind === "network") return { ...anterior, localId: incerta.localId }
-      pendingDevRef.current = null
+      definirTentativa(null)
       if (anterior.kind === "ok") {
         espelharDevolucao(incerta.mirror, anterior.data)
+        if (incerta.mirror.tipo === "troca" && incerta.mirror.saleId === sale.id) {
+          setTrocaRecovery({ saleId: sale.id, dev: anterior.data, cpf: incerta.mirror.cpf, nome: incerta.mirror.nome })
+        }
         return {
           kind: "rejected",
           status: 409,
@@ -590,12 +630,12 @@ export function TrocasDevolucao({
     const r = await postDevolucaoServidor(lojaAtivaId, body)
     if (r.kind === "ok") {
       espelharDevolucao(mirror, r.data)
-      pendingDevRef.current = null
+      definirTentativa(null)
     } else if (r.kind === "rejected") {
       // Recusa de negócio: nada foi gravado — a próxima tentativa é intenção nova.
-      pendingDevRef.current = null
+      definirTentativa(null)
     } else {
-      pendingDevRef.current = { fp, localId, body, mirror }
+      definirTentativa({ fp, localId, body, mirror })
     }
     return { ...r, localId }
   }
@@ -986,6 +1026,19 @@ export function TrocasDevolucao({
 
   return (
     <div className="space-y-6 w-full">
+      {recusadas.length > 0 && (
+        <div role="alert" data-testid="devolucoes-recusadas" className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 text-xs text-foreground space-y-1">
+          <p className="font-semibold">
+            {recusadas.length === 1 ? "1 devolução deste terminal foi recusada" : `${recusadas.length} devoluções deste terminal foram recusadas`} pelo servidor e NÃO está gravada
+          </p>
+          {recusadas.slice(0, 5).map((d) => (
+            <p key={d.id}>
+              <span className="font-mono">{d.id}</span> · venda <span className="font-mono">{d.saleId}</span> · {d.syncRejectedReason || d.syncRejectedCode}
+              {d.tipo === "devolucao" ? " — reembolso em dinheiro já entregue: registre a saída manualmente com o Financeiro." : d.creditIssued > 0 ? " — vale local estornado; confira com o cliente." : ""}
+            </p>
+          ))}
+        </div>
+      )}
       {(!sale || showSearch) && (
         <Card className="bg-card border-border shadow-sm">
           <CardHeader className="pb-4">

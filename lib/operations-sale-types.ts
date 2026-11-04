@@ -184,7 +184,8 @@ export interface DevolucaoRecord {
   payload?: any
   /**
    * Recusa DEFINITIVA do servidor (ex.: reembolso bloqueado, quantidade acima do
-   * devolvível): sai da fila, o vale local é estornado e a pendência fica visível.
+   * devolvível): sai da fila, o vale local é estornado, entra no audit-log e é listada no
+   * painel de Troca/Devolução (F8) para tratamento manual.
    */
   syncRejectedCode?: string
   syncRejectedReason?: string

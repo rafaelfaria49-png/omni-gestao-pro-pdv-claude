@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
 import type { Orcamento } from "@/lib/orcamento-types"
 import { normalizeDocDigits } from "@/lib/cpf"
+import { appendAuditLog } from "@/lib/audit-log"
 import { OPS_KEY_LEGACY } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
@@ -3005,6 +3006,11 @@ export function OperationsProvider({
       }
       // Recusa definitiva: sai da fila; desfaz o vale e o devolvido locais (o servidor não gravou).
       console.warn("[devolucao-persist] recusa definitiva", devId, body?.code)
+      appendAuditLog({
+        action: "devolucao_vale",
+        userLabel: "PDV (fila offline)",
+        detail: `[devolucao RECUSADA PELO SERVIDOR — NÃO GRAVADA] ${devId} | venda ${dev.saleId} | tipo ${dev.tipo ?? dev.mode} | crédito local estornado ${dev.creditIssued.toFixed(2)} | ${body?.code ?? ""} ${body?.error ?? ""}`,
+      })
       const customerCredits = { ...prev.customerCredits }
       if (dev.mode === "vale_credito" && dev.creditIssued > 0 && customerCredits[dev.customerCpf]) {
         const atual = customerCredits[dev.customerCpf]!

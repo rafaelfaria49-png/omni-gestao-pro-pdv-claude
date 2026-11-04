@@ -14,6 +14,7 @@ const rt = vi.hoisted(() => ({
   toast: vi.fn(),
   fetch: vi.fn(),
   calls: [] as string[],
+  devolucoes: [] as unknown[],
 }))
 
 const VENDA = {
@@ -30,7 +31,7 @@ vi.mock("@/lib/operations-store", () => ({
   nextDevolucaoId: () => `DEV-2026-0001-${Math.random().toString(16).slice(2, 10).toUpperCase()}`,
   useOperationsStore: () => ({
     sales: [],
-    devolucoes: [],
+    devolucoes: rt.devolucoes,
     inventory: [
       { id: "CAM-P", name: "Camiseta P", price: 10, stock: 5, category: "Roupas", barcode: "7890000000017", sku: "CAM-P" },
       { id: "CAM-G", name: "Camiseta G", price: 15, stock: 5, category: "Roupas", barcode: "7890000000024", sku: "CAM-G" },
@@ -72,6 +73,7 @@ let devolucaoResponder: (body: Record<string, unknown>) => Response | Promise<Re
 
 beforeEach(() => {
   rt.calls.length = 0
+  rt.devolucoes.length = 0
   rt.finalize.mockReset().mockImplementation(async () => {
     rt.calls.push("finalize")
     return { ok: true, saleId: "VDA-2026-0043" }
@@ -116,6 +118,14 @@ async function prepararTroca() {
 }
 
 describe("F8 — troca imediata na mesma tela", () => {
+  it("recusa definitiva da fila offline aparece no painel (reembolso legado → Financeiro)", async () => {
+    rt.devolucoes.push({ id: "DEV-2026-0003", saleId: "VDA-1", tipo: "devolucao", mode: "somente_estoque", creditIssued: 0, lines: [], syncRejectedCode: "REEMBOLSO_DINHEIRO_BLOQUEADO_POR_POLITICA", syncRejectedReason: "Reembolso bloqueado" })
+    render(createElement(TrocasDevolucao))
+    const alerta = screen.getByTestId("devolucoes-recusadas")
+    expect(alerta.textContent).toMatch(/DEV-2026-0003/)
+    expect(alerta.textContent).toMatch(/registre a saída manualmente com o Financeiro/)
+  })
+
   it("busca no servidor e respeita o devolvível agregado (2 vendidas − 1 devolvida = 1)", async () => {
     await abrirVendaPeloServidor()
     expect(rt.calls).toEqual(["busca"])
