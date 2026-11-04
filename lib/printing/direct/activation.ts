@@ -13,8 +13,8 @@ export const CANDIDATE_RELEASE = "OMNI-PRINT-004C-CANDIDATE-1"
 export const APPROVED_RELEASE: string | null = null
 
 /**
- * Candidate operating values. D03 is PENDING: these are explicit, finite, reviewable numbers,
- * never "infinite" defaults. Retention purge of ledger metadata is NOT implemented (B19 gate).
+ * D03-A approved operating values. Content retention is implemented in retention.ts (7 days after
+ * proven completion); ledger metadata/evidence are permanent. Production release gates remain closed.
  */
 export type DirectPrintPolicy = {
   requestMs: number; authorizationMs: number; contentMs: number; dispatchLeaseMs: number; sendLeaseMs: number; riskMs: number; initialWindowMs: number

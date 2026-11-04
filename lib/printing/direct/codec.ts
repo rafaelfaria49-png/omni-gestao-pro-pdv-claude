@@ -39,7 +39,7 @@ export function cleanData(value: unknown): unknown {
 
 /**
  * Content sealing and server-signed tokens. Keys come only from the deployment secret store
- * (D03 key management is PENDING): no default, no key in the database, no key in logs.
+ * (D03-A, RUNBOOK_D03.md): no default, no key in the database, no key in logs.
  */
 export class PrintCrypto {
   readonly keyRef: string
@@ -49,7 +49,14 @@ export class PrintCrypto {
   }
   static fromBase64(content: string | undefined, signing: string | undefined): PrintCrypto | null {
     if (!content || !signing) return null
-    try { return new PrintCrypto(Buffer.from(content, "base64url"), Buffer.from(signing, "base64url")) } catch { return null }
+    const decode = (value: string) => {
+      const bytes = Buffer.from(value, "base64url")
+      // Buffer.from is deliberately permissive; deployment secrets must be a canonical 32-byte encoding.
+      check(/^[A-Za-z0-9+/_-]+=?$/.test(value) && (value.length === 43 || (value.length === 44 && value.endsWith("="))) && bytes.length === 32 &&
+        value.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "") === bytes.toString("base64").replace(/=+$/, ""), "PRINT_KEYS_REQUIRED", 503)
+      return bytes
+    }
+    try { return new PrintCrypto(decode(content), decode(signing)) } catch { return null }
   }
   seal(value: Uint8Array, aad: string): Buffer {
     const nonce = randomBytes(12), cipher = createCipheriv("aes-256-gcm", this.key, nonce)

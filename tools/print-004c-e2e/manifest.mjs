@@ -16,7 +16,8 @@ const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004
   "components/dashboard/vendas/reimpressao-registrada.static.test.ts", "components/dashboard/vendas/vendas-arquivo-geral.tsx",
   "components/dashboard/caixa/conferencia-caixa.tsx", "lib/vendas/venda-cupom-mapper.ts", "lib/vendas/venda-cupom-mapper.test.ts",
   // D02-A: migrations recortadas, ferramenta do operador e exclusão de loja com registros de impressão.
-  "tools/print-d02", "app/api/stores/[id]/route.ts", ".gitattributes"]
+  "tools/print-d02", "app/api/stores/[id]/route.ts", ".gitattributes",
+  "tools/print-d03", ".github/workflows/omni-print-d03.yml"]
 const files = []
 const walk = (rel) => {
   const abs = path.join(root, rel)

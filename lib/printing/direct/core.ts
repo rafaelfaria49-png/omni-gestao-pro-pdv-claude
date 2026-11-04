@@ -96,6 +96,16 @@ export class DirectPrintCore {
       proof_kind: "NONE", actor_kind: actor ? "USER" : "SYSTEM", actor_user_id: actor, details })
   }
 
+  /** D03: record the exact cancellation of EACH safe copy in the same transaction as its replacement. */
+  private async cancelSafeCopies(sql: Sql, storeId: string, documentId: string, actor: string, reason: string, exceptJob: string | null = null) {
+    const cancelled = await sql.query(`UPDATE public.print_copies SET state='CANCELLED'
+      WHERE store_id=$1 AND document_id=$2::uuid AND ($3::uuid IS NULL OR job_id<>$3::uuid)
+      AND state IN ('REGISTERED','READY','PRE_SEND_FAILED') RETURNING id,job_id`, [storeId, documentId, exceptJob])
+    for (const c of cancelled) await this.event(sql, { store_id: storeId, document_id: documentId, job_id: c.job_id, copy_id: c.id },
+      "COPY_CANCELLED", actor, { reason, replacementJobId: exceptJob })
+    return cancelled.length
+  }
+
   /** Explicit, authenticated act preceding a second copy: discloses every possibly-printed copy (risk) and binds consent to it. */
   async quoteReprint(auth: Principal, storeId: string, saleId: string) {
     return this.db.transaction(async sql => {
@@ -238,8 +248,7 @@ export class DirectPrintCore {
         payload_key_ref: this.crypto.keyRef, payload_expires_at: contentUntil, send_key: randomUUID() })
       if (c.kind === "REPRINT") {
         // Explicit substitute: safe copies of older jobs are cancelled; possibly-sent ones can never be retried later.
-        await sql.exec(`UPDATE public.print_copies SET state='CANCELLED' WHERE document_id=$1::uuid AND job_id<>$2::uuid
-          AND state IN ('REGISTERED','READY','PRE_SEND_FAILED')`, [d.id, jobId])
+        await this.cancelSafeCopies(sql, r.store_id, d.id, actor.principalId, "REPRINT_REPLACED", jobId)
         await sql.exec(`UPDATE public.print_copies SET retry_suppressed_by_job_id=$1::uuid WHERE document_id=$2::uuid
           AND job_id<>$1::uuid AND state IN ('SENDING','UNKNOWN','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE')
           AND retry_suppressed_by_job_id IS NULL`, [jobId, d.id])
@@ -410,7 +419,7 @@ export class DirectPrintCore {
           exposureHash: exposure.hash, expires: Date.now() + this.policy.riskMs })
         return { requiresConfirmation: true as const, ...risk, consent }
       }
-      const cancelled = await sql.exec(`UPDATE public.print_copies SET state='CANCELLED' WHERE document_id=$1::uuid AND state IN ('REGISTERED','READY','PRE_SEND_FAILED')`, [d.id])
+      const cancelled = await this.cancelSafeCopies(sql, storeId, d.id, actor.principalId, "EXPLICIT_FALLBACK")
       const mark = reprint ? "SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR" : firstCopy ? "VIA IMPRESSA PELO NAVEGADOR" : "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR"
       await this.event(sql, { store_id: storeId, document_id: d.id }, "BROWSER_FALLBACK_PRINTED", actor.principalId,
         { mark, origin: reprint ? "REPRINT" : "PDV", firstCopy, possibleAdditionalCopy: possible, cancelledThermalCopies: cancelled, physicalPrintConfirmed: false })

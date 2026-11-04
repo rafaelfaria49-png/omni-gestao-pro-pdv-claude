@@ -12,13 +12,14 @@ import { fileURLToPath } from "node:url"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const BIN = process.env.PG_BIN || "C:/Program Files/PostgreSQL/17/bin"
+const exe = name => path.join(BIN, process.platform === "win32" ? name : name.replace(/\.exe$/, ""))
 const DIR = process.env.PRINT_LAB_DIR
 const PORT = Number(process.env.PRINT_LAB_PORT || 55474)
 const OWNER = "omni_print_lab_owner"
 if (!DIR || path.resolve(DIR).startsWith(root)) throw new Error("PRINT_LAB_DIR must be set outside the repository")
 const DATA = path.join(DIR, "pgdata")
 const run = (exe, args, opts = {}) => {
-  const r = spawnSync(path.join(BIN, exe), args, { encoding: "utf8", windowsHide: true, timeout: 120000, ...opts })
+  const r = spawnSync(path.join(BIN, process.platform === "win32" ? exe : exe.replace(/\.exe$/, "")), args, { encoding: "utf8", windowsHide: true, timeout: 120000, ...opts })
   if (r.status !== 0) throw new Error(`${exe} ${args.join(" ")} -> ${r.status}\n${r.stdout}\n${r.stderr}`)
   return r.stdout
 }
@@ -29,7 +30,7 @@ function baselineSql() {
   const cache = path.join(DIR, "baseline-main.sql")
   if (existsSync(cache)) return cache
   const schema = path.join(DIR, "schema-main.prisma")
-  const git = spawnSync("git", ["show", "origin/main:prisma/schema.prisma"], { cwd: root, encoding: "utf8", maxBuffer: 64 << 20 })
+  const git = spawnSync("git", ["show", `${process.env.PRINT_LAB_BASE_REF || "origin/main"}:prisma/schema.prisma`], { cwd: root, encoding: "utf8", maxBuffer: 64 << 20 })
   if (git.status !== 0) throw new Error(git.stderr)
   writeFileSync(schema, git.stdout)
   const r = spawnSync(process.execPath, [path.join(root, "node_modules/prisma/build/index.js"), "migrate", "diff", "--from-empty", "--to-schema-datamodel", schema, "--script"],
@@ -46,12 +47,12 @@ if (cmd === "init") {
   console.log("initialized " + DATA)
 } else if (cmd === "start") {
   // stdio ignore: pg_ctl start with pipes never returns on Windows (postmaster inherits handles).
-  const r = spawnSync(path.join(BIN, "pg_ctl.exe"), ["-D", DATA, "-l", path.join(DIR, "pg.log"), "-w", "-o", `-p ${PORT} -c listen_addresses=127.0.0.1 -c max_connections=60`, "start"], { stdio: "ignore", windowsHide: true, timeout: 60000 })
+  const r = spawnSync(exe("pg_ctl.exe"), ["-D", DATA, "-l", path.join(DIR, "pg.log"), "-w", "-o", `-p ${PORT} -c listen_addresses=127.0.0.1 -c max_connections=60`, "start"], { stdio: "ignore", windowsHide: true, timeout: 60000 })
   if (r.status !== 0) throw new Error("pg_ctl start failed; see pg.log")
   psql("postgres", ["-c", `DO $$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${OWNER}') THEN CREATE ROLE ${OWNER} LOGIN PASSWORD 'lab' NOSUPERUSER NOCREATEROLE NOBYPASSRLS; END IF; END$$;`])
   console.log(`started 127.0.0.1:${PORT}`)
 } else if (cmd === "stop") {
-  spawnSync(path.join(BIN, "pg_ctl.exe"), ["-D", DATA, "-m", "fast", "-w", "stop"], { stdio: "ignore", windowsHide: true, timeout: 60000 })
+  spawnSync(exe("pg_ctl.exe"), ["-D", DATA, "-m", "fast", "-w", "stop"], { stdio: "ignore", windowsHide: true, timeout: 60000 })
   console.log("stopped")
 } else if (cmd === "reset") {
   if (!/^print_lab_[a-z0-9_]+$/.test(db || "")) throw new Error("db must match print_lab_*")

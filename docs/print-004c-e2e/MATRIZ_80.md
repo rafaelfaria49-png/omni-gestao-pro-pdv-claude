@@ -1,6 +1,6 @@
 # Matriz de 80 casos — OMNI-PRINT-004C
 
-Totais: PASS_REAL_SOFTWARE=52 · PASS_SIMULATED_TRANSPORT=13 · BLOCKED_HUMAN_GATE=6 · DEFERRED_PHYSICAL_HARDWARE=9
+Totais: PASS_REAL_SOFTWARE=55 · PASS_SIMULATED_TRANSPORT=13 · BLOCKED_HUMAN_GATE=3 · DEFERRED_PHYSICAL_HARDWARE=9
 
 Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts.
 
@@ -17,7 +17,7 @@ Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/pri
 | P09 | Segunda via e teste versus gaveta | PASS_REAL_SOFTWARE | unit (INITIAL/REPRINT sem pulso de gaveta; validador recusa ESC p); teste sintético não exposto |
 | P10 | Documentos PENDING/quarentena e estado comercial | PASS_REAL_SOFTWARE | S05/PW2 (venda pendente nunca imprime) + S22 (quarentena) + S14 |
 | P11 | Limites de comando, itens, vias e payload | PASS_REAL_SOFTWARE | S21 (COMMAND_LIMIT/SNAPSHOT_LIMIT/PAYLOAD_LIMIT/ITEM_LIMIT, zero efeitos) + S18; ressalva histórica resolvida |
-| P12 | Grant expirado/revogado e replay após cleanup | PASS_REAL_SOFTWARE | S15 (sessionVersion/usuário inativo/delegação → AUTHORIZATION_LOST); limpeza não implementada (D03) |
+| P12 | Grant expirado/revogado e replay após cleanup | PASS_REAL_SOFTWARE | S15 (sessionVersion/usuário inativo/delegação → AUTHORIZATION_LOST); D03 R02/R07 (identidades mantidas após expurgo; requisição vencida não executa) |
 | P13 | Minimização e logs | PASS_REAL_SOFTWARE | S19 (CPF fora do snapshot; nenhuma credencial/cipher na resposta) |
 | P14 | Venda histórica sem job anterior | PASS_REAL_SOFTWARE | S24 (segunda via de venda sem job anterior fecha o slot INITIAL) |
 | P15 | Ações permitidas com payload expirado | PASS_REAL_SOFTWARE | unit (payload expirado não permite retry) + retry() exige payload vigente |
@@ -38,13 +38,13 @@ Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/pri
 | B14 | Duas confirmações concorrentes de segunda via | PASS_REAL_SOFTWARE | S25 (duas confirmações concorrentes da segunda via → 1 job) |
 | B15 | Múltiplas vias com aceite/falha/incerteza parcial | PASS_SIMULATED_TRANSPORT | S26 (2 vias: aceite + falha → PARCIAL; retry só da não enviada) |
 | B16 | Evidência/callback duplicado e atrasado | PASS_REAL_SOFTWARE | S22 (UNKNOWN tardio não rebaixa; NO_EFFECT após aceite → RESULT_CONFLICT) + S09 |
-| B17 | Retenção de payload sem remoção de dedup | BLOCKED_HUMAN_GATE | D03 retenção/expurgo de payload não aprovado; expurgo não implementado (proposta: 7 dias após estado final, DECISOES_PROPRIETARIO_OMNI_PRINT.md) |
-| B18 | Remoção posterior de tombstone de requisição | BLOCKED_HUMAN_GATE | D03 remoção de tombstone de requisição não aprovada (proposta: nunca remover) |
-| B19 | Retenção/arquivamento de marca inicial | BLOCKED_HUMAN_GATE | D03 retenção/arquivamento da marca inicial (ressalva histórica mantida no gate; proposta: permanente) |
+| B17 | Retenção de payload sem remoção de dedup | PASS_REAL_SOFTWARE | D03 R01/R02/R04/R05/R09/R10/R11: conteúdo após 7 dias do término comprovado; dedup/provas permanentes, UNKNOWN preservado; concorrência/rollback/retomada |
+| B18 | Remoção posterior de tombstone de requisição | PASS_REAL_SOFTWARE | D03-A: nenhuma remoção de tombstone; R02/R07/R12 (command expurgado sem apagar requestKey; papel sem DELETE) |
+| B19 | Retenção/arquivamento de marca inicial | PASS_REAL_SOFTWARE | D03 R02/R03/R16: marca de primeira via permanente após expurgo; replay converge; segunda via autorizada reconstrói a venda |
 | B20 | Auditoria e falha de persistência | PASS_REAL_SOFTWARE | eventos por transição; S21/S23 (rollback integral, sem auditoria parcial) |
 | B21 | Dois jobs compartilham fila física | PASS_SIMULATED_TRANSPORT | S19/S26 (um destino admite uma tentativa por vez; fila serializada) |
 | B22 | REPRINT histórico concorre com INITIAL | PASS_REAL_SOFTWARE | S24 (REPRINT histórico fecha INITIAL; sequencial) |
-| B23 | INITIAL após REPRINT histórico e após cleanup | PASS_REAL_SOFTWARE | S24 (INITIAL após REPRINT histórico recusado); após limpeza → D03 |
+| B23 | INITIAL após REPRINT histórico e após cleanup | PASS_REAL_SOFTWARE | S24 + D03 R16 (INITIAL após REPRINT histórico e expurgo continua recusado) |
 | B24 | Emissão substituta seguida de reconciliação antiga como não enviada | PASS_REAL_SOFTWARE | S26 (via substituída não volta) + S28 (navegador cancela vias térmicas seguras) |
 | B25 | Executor A pausa após T3, posse do destino vence, B de outro job/loja disputa e A retorna | PASS_SIMULATED_TRANSPORT | S07/S12/S29 (destino retido até prova; outro job aguarda) |
 | B26 | INITIAL A4 concorre com INITIAL térmico | BLOCKED_HUMAN_GATE | D01.5: A4/legado não migrado ao ledger; alternativa do navegador é registrada (S28/PW8/PW9) |

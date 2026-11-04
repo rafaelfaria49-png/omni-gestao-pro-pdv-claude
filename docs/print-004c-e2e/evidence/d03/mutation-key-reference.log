@@ -1,0 +1,35 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d03-mutation
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 13254ms
+     × R02 purge is irreversible/idempotent; no DELETE; hashes, sendKey/requestKey, first slot and key refs survive 12319ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  18:17:58
+   Duration  13.80s (transform 292ms, setup 0ms, import 396ms, tests 13.25s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R02 purge is irreversible/idempotent; no DELETE; hashes, sendKey/requestKey, first slot and key refs survive
+AssertionError: expected null to be 'ENV_V1_fa6d854601f55d56' // Object.is equality
+
+- Expected:
+"ENV_V1_fa6d854601f55d56"
+
++ Received:
+null
+
+ ❯ tools/print-d03/retention.pg.test.ts:113:45
+    111|     ]) await expect(db.exec(q)).rejects.toThrow(/p004/)
+    112|     const audit = await db.query("SELECT details FROM public.print_eve…
+    113|     expect(audit[0].details.snapshotKeyRef).toBe(runtime.crypto.keyRef)
+       |                                             ^
+    114|     expect(audit[0].details.payloadKeyRefs[0].keyRef).toBe(runtime.cry…
+    115|     const replay = await core.create(user, f.p.key, f.p.command)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

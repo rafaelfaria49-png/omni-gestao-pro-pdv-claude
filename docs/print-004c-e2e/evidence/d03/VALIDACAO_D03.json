@@ -1,0 +1,112 @@
+{
+  "goal": "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001",
+  "at": "2026-11-04T21:19:33.273Z",
+  "status": "PENDING",
+  "productionExecution": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "generator",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "69b65a382307e13a58e48a30b55c1fb432e902425e153cc7265a2a00edf1c31c"
+    },
+    {
+      "step": "d02-generator",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "d093662a9b07a9a75722658642531c22f1c746090be143cc53af55ef43995297"
+    },
+    {
+      "step": "unit",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "78 passed (78)",
+      "sha256": "9e26809f6372d096ef1cd0d2d7236b4c6585342c72fb0eb732327b246b0edc61"
+    },
+    {
+      "step": "offline-regression",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "135 passed (135)",
+      "sha256": "075112632ed0bd4d2d6dfab06ddf7252fd8ca1022fdb4113076ef6b29ea51c5b"
+    },
+    {
+      "step": "retention-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "17 passed (17)",
+      "sha256": "7e1f35aa08f1ea3b979f41d93c3377852dda1cc95fa8a36ff9b48a09f9d0ba57"
+    },
+    {
+      "step": "offline-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "10 passed (10)",
+      "sha256": "1318601124c2b2d45235687b02e4b189be805890ce7176fe86522ff458193c75"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "35 passed (35)",
+      "sha256": "5f1e6770093db29fe6152aeba91d51d5008b98a36a4bb91acee765b74507866c"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "1 passed (1)",
+      "sha256": "6722b8e564d32867a15dab7160b65272cd78d7dace9671f27612107f067f77c2"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "3 passed (3)",
+      "sha256": "81ea39f603cb3b1e6cf71c3777b50f627836f2e139827be8eff45814fb1fff6d"
+    },
+    {
+      "step": "d02-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "8 passed (8)",
+      "sha256": "529e2458a93951a21633ef837a75943b527dd3333334d4033d43d7fc6db63302"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "5 passed (5)",
+      "sha256": "7452b4a205cb6e9b1eedd2b86c8cc6ecba25e14c16132219ae94df1ba6dab8a5"
+    },
+    {
+      "step": "playwright",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "19 passed (1.7m)",
+      "sha256": "56e7d2f94b3189098856423577627df0cabd1985fde055997fb1f3d414171a7c"
+    },
+    {
+      "step": "typecheck",
+      "status": "PENDING"
+    },
+    {
+      "step": "eslint",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "build",
+      "status": "PENDING"
+    },
+    {
+      "step": "mutation",
+      "status": "PASS"
+    }
+  ]
+}
