@@ -52,6 +52,10 @@ on:
       - "next.config.mjs"
       - "components/auth/SessionProvider*"
       - "lib/pdv-keymap*"
+      # F8 troca imediata (PDV-F8-TROCA-IMEDIATA-INTEGRACAO-SEGURA-001) — prova 11.
+      - "app/api/ops/devolucao/**"
+      - "lib/pdv/devolucao/**"
+      - "components/dashboard/vendas/trocas-devolucao*"
   workflow_dispatch:
 
 permissions:

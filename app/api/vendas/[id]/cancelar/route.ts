@@ -209,6 +209,7 @@ export async function POST(
         id: true,
         tipo: true,
         valorTotal: true,
+        creditoEmitido: true,
         itens: { select: { inventoryId: true, quantidade: true } },
       },
     })
@@ -416,9 +417,19 @@ export async function POST(
         if (devIds.length > 0) {
           const refunds = await tx.movimentacaoFinanceira.findMany({
             where: { storeId, referenciaId: { in: devIds }, tipo: "saida", origem: "devolucao_pdv" },
-            select: { valor: true },
+            select: { valor: true, referenciaId: true },
           })
-          valorJaRefund = arredonda2(refunds.reduce((s, m) => s + (m.valor ?? 0), 0))
+          // Valor já restituído por devolução: a saída legada quando existe; senão o
+          // vale emitido (PDV-F8-TROCA-IMEDIATA-INTEGRACAO-SEGURA-001 — vale-troca não
+          // gera mais saída financeira, mas continua sendo valor já entregue ao cliente).
+          const saidaPorDev = new Map<string, number>()
+          for (const m of refunds) {
+            const k = m.referenciaId ?? ""
+            saidaPorDev.set(k, (saidaPorDev.get(k) ?? 0) + (m.valor ?? 0))
+          }
+          valorJaRefund = arredonda2(
+            devolucoes.reduce((s, d) => s + (saidaPorDev.has(d.id) ? saidaPorDev.get(d.id)! : d.creditoEmitido ?? 0), 0),
+          )
         }
         const valorEstorno = arredonda2(Math.max(0, valorEntrada - valorJaRefund))
         if (valorEstorno > 0) {

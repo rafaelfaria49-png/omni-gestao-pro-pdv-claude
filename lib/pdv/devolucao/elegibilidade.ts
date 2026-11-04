@@ -1,0 +1,169 @@
+/**
+ * PDV-F8-TROCA-IMEDIATA-INTEGRACAO-SEGURA-001 — busca de vendas de origem no SERVIDOR.
+ *
+ * O F8 antes procurava só no `localStorage` do navegador: venda feita em outro
+ * terminal não aparecia e o "disponível para devolver" ignorava devoluções feitas
+ * em outros caixas. Aqui a fonte é o banco, sempre escopada pela loja:
+ *  - código da venda (pedidoId) exato;
+ *  - código de barras / SKU / ID do produto → últimas vendas que contêm o item;
+ *  - CPF/CNPJ do cliente ou parte do nome.
+ * `qtyReturned` de cada linha é o agregado de TODAS as devoluções da venda no banco.
+ * É leitura informativa: a autoridade final continua no lock da gravação.
+ */
+import type { Prisma } from "@/generated/prisma"
+import type { SaleRecord } from "@/lib/operations-sale-types"
+import { saleFromDbRow } from "@/lib/vendas/sale-from-db-row"
+import { canonicalProductKeyResolver } from "@/lib/pdv/devolucao/product-keys"
+
+export const ELEGIBILIDADE_LIMITE = 10
+
+type ReadClient = Pick<Prisma.TransactionClient, "venda" | "produto" | "itemDevolucaoVenda">
+
+export type VendaElegivel = SaleRecord & {
+  /** Linhas com o saldo devolvível calculado no servidor. */
+  lines: Array<SaleRecord["lines"][number] & { qtyReturned: number }>
+}
+
+export type BuscaElegibilidadeResult = {
+  criterio: "pedido" | "produto" | "cliente" | "nenhum"
+  produtoNome?: string
+  vendas: VendaElegivel[]
+}
+
+function digits(s: string): string {
+  return s.replace(/\D/g, "")
+}
+
+export async function buscarVendasElegiveis(
+  client: ReadClient,
+  storeId: string,
+  rawQuery: string,
+): Promise<BuscaElegibilidadeResult> {
+  const q = rawQuery.trim()
+  if (!q || !storeId) return { criterio: "nenhum", vendas: [] }
+
+  const include = { itens: true } as const
+  let criterio: BuscaElegibilidadeResult["criterio"] = "nenhum"
+  let produtoNome: string | undefined
+  let rows: Prisma.VendaGetPayload<{ include: typeof include }>[] = []
+
+  // 1. Código da venda (exato, sem diferenciar caixa).
+  const byPedido = await client.venda.findMany({
+    where: { storeId, pedidoId: { equals: q, mode: "insensitive" } },
+    include,
+    take: 1,
+  })
+  if (byPedido.length > 0) {
+    criterio = "pedido"
+    rows = byPedido
+  }
+
+  // 2. Produto por código de barras / SKU / ID → últimas vendas com o item.
+  if (rows.length === 0) {
+    const produto = await client.produto.findFirst({
+      where: { storeId, OR: [{ id: q }, { sku: q }, { barcode: q }] },
+      select: { id: true, sku: true, barcode: true, name: true },
+    })
+    if (produto) {
+      const ids = [produto.id, produto.sku, produto.barcode].filter((x): x is string => typeof x === "string" && x.trim() !== "")
+      criterio = "produto"
+      produtoNome = produto.name
+      rows = await client.venda.findMany({
+        where: { storeId, itens: { some: { inventoryId: { in: ids } } } },
+        include,
+        orderBy: { at: "desc" },
+        take: ELEGIBILIDADE_LIMITE,
+      })
+    }
+  }
+
+  // 3. Cliente: CPF/CNPJ (payload) ou parte do nome.
+  if (rows.length === 0 && criterio === "nenhum") {
+    const doc = digits(q)
+    const or: Prisma.VendaWhereInput[] = [{ clienteNome: { contains: q, mode: "insensitive" } }]
+    if (doc.length >= 11) or.push({ payload: { path: ["customerCpf"], equals: doc } })
+    rows = await client.venda.findMany({
+      where: { storeId, OR: or },
+      include,
+      orderBy: { at: "desc" },
+      take: ELEGIBILIDADE_LIMITE,
+    })
+    if (rows.length > 0) criterio = "cliente"
+  }
+
+  if (rows.length === 0) return { criterio, produtoNome, vendas: [] }
+
+  const pedidoIds = rows.map((r) => r.pedidoId)
+  const devolvidos = await client.itemDevolucaoVenda.findMany({
+    where: { devolucao: { storeId, vendaLocalId: { in: pedidoIds } } },
+    select: { inventoryId: true, quantidade: true, devolucao: { select: { vendaLocalId: true } } },
+  })
+  // Chaves do payload (SKU), do ItemVenda (Produto.id) e das devoluções → Produto.id.
+  const payloadKeys = rows.flatMap((r) => {
+    const lines = (r.payload as { lines?: Array<{ inventoryId?: string; produtoId?: string }> } | null)?.lines
+    return Array.isArray(lines) ? lines.flatMap((l) => [l?.inventoryId, l?.produtoId]) : []
+  })
+  const canon = await canonicalProductKeyResolver(client, storeId, [
+    ...rows.flatMap((r) => r.itens.map((i) => i.inventoryId)),
+    ...devolvidos.map((d) => d.inventoryId),
+    ...payloadKeys,
+  ])
+  const retorno = new Map<string, number>()
+  for (const d of devolvidos) {
+    const k = `${d.devolucao.vendaLocalId}::${canon(d.inventoryId)}`
+    retorno.set(k, (retorno.get(k) ?? 0) + (d.quantidade || 0))
+  }
+
+  const vendas: VendaElegivel[] = rows.map((r) => {
+    const sale = saleFromDbRow({
+      pedidoId: r.pedidoId,
+      total: r.total,
+      at: r.at,
+      clienteNome: r.clienteNome,
+      status: r.status,
+      payload: r.payload,
+      clientSaleId: r.clientSaleId,
+      serverId: r.id,
+      itens: r.itens,
+    })
+    // Quantidade/valor por item vêm do banco (ItemVenda), não do payload do client.
+    const porItem = new Map<string, { quantidade: number; lineTotal: number; nome: string }>()
+    for (const it of r.itens) {
+      const k = canon(it.inventoryId)
+      if (!k) continue
+      const cur = porItem.get(k) ?? { quantidade: 0, lineTotal: 0, nome: it.nome }
+      cur.quantidade += it.quantidade || 0
+      cur.lineTotal += it.lineTotal || 0
+      porItem.set(k, cur)
+    }
+    // Mantém a chave que o PDV conhece (SKU do payload); números sempre do banco.
+    const usados = new Set<string>()
+    const lines: VendaElegivel["lines"] = []
+    for (const base of sale.lines) {
+      const k = canon((base as { produtoId?: string }).produtoId || base.inventoryId)
+      const db = porItem.get(k)
+      if (!db || usados.has(k)) continue
+      usados.add(k)
+      lines.push({
+        ...base,
+        quantity: db.quantidade,
+        lineTotal: db.lineTotal,
+        qtyReturned: retorno.get(`${r.pedidoId}::${k}`) ?? 0,
+      })
+    }
+    for (const [k, v] of porItem) {
+      if (usados.has(k)) continue
+      lines.push({
+        inventoryId: k,
+        name: v.nome,
+        unitPrice: v.quantidade > 0 ? v.lineTotal / v.quantidade : 0,
+        quantity: v.quantidade,
+        lineTotal: v.lineTotal,
+        qtyReturned: retorno.get(`${r.pedidoId}::${k}`) ?? 0,
+      } as VendaElegivel["lines"][number])
+    }
+    return { ...sale, lines }
+  })
+
+  return { criterio, produtoNome, vendas }
+}

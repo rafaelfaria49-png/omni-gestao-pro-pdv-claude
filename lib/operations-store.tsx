@@ -510,14 +510,25 @@ function mergeCustomerCredits(
   return merged
 }
 
-function nextDevolucaoId(list: DevolucaoRecord[]): string {
+/** Sufixo aleatório: o contador é por navegador, então dois terminais geravam o MESMO id. */
+export function devolucaoIdSuffix(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.getRandomValues === "function") {
+    const b = new Uint8Array(4)
+    c.getRandomValues(b)
+    return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("").toUpperCase()
+  }
+  return Math.random().toString(16).slice(2, 10).toUpperCase().padEnd(8, "0")
+}
+
+export function nextDevolucaoId(list: DevolucaoRecord[]): string {
   const year = new Date().getFullYear()
   let max = 0
   for (const d of list) {
-    const m = d.id.match(/^DEV-(\d{4})-(\d+)$/)
+    const m = d.id.match(/^DEV-(\d{4})-(\d+)(?:-[0-9A-F]+)?$/)
     if (m && parseInt(m[1], 10) === year) max = Math.max(max, parseInt(m[2], 10))
   }
-  return `DEV-${year}-${String(max + 1).padStart(4, "0")}`
+  return `DEV-${year}-${String(max + 1).padStart(4, "0")}-${devolucaoIdSuffix()}`
 }
 
 type OpsState = {
@@ -669,6 +680,16 @@ interface OperationsContextType {
     motivo?: string
     observacao?: string
     payload?: any
+    /**
+     * Devolução JÁ gravada pelo servidor (troca imediata — PDV-F8-TROCA-IMEDIATA-001):
+     * o espelho local usa o mesmo `localId`, o crédito e as linhas autoritativos e não
+     * reenvia (`syncPending: false`). A venda de origem pode não estar neste navegador.
+     */
+    serverConfirmed?: {
+      localId: string
+      creditIssued: number
+      lines: { inventoryId: string; name: string; quantity: number; valor: number }[]
+    }
   }) => { ok: true; devolucaoId: string; creditIssued: number } | { ok: false; reason: string }
   registrarOperacaoCaixa: (input: {
     sessaoId: string
@@ -3601,11 +3622,81 @@ export function OperationsProvider({
   )
 
   const registrarDevolucao = useCallback<OperationsContextType["registrarDevolucao"]>((input) => {
-    const { saleId, lines, mode, customerCpf, customerName, sessaoId, tipo, motivo, observacao, payload } = input
+    const { saleId, lines, mode, customerCpf, customerName, sessaoId, tipo, motivo, observacao, payload, serverConfirmed } = input
     const k = normalizeDocDigits(customerCpf)
     if (!k) return { ok: false, reason: "CPF/CNPJ do cliente obrigatório." }
 
     const prev = stateRef.current
+
+    // Espelho local de devolução JÁ confirmada pelo servidor: não revalida contra a
+    // cópia local (o servidor é a autoridade e a venda pode ser de outro terminal),
+    // não reenvia e não duplica — mesmo localId já presente é no-op.
+    if (serverConfirmed) {
+      const localId = serverConfirmed.localId
+      if (prev.devolucoes.some((d) => d.id === localId)) {
+        return { ok: true, devolucaoId: localId, creditIssued: serverConfirmed.creditIssued }
+      }
+      const credit = Math.round(serverConfirmed.creditIssued * 100) / 100
+      // Publica JÁ em `stateRef` (como `finalizeSaleTransaction`): a nova venda da
+      // troca roda no mesmo tick e lê o saldo do vale em `stateRef.current`; via
+      // `setState` funcional o crédito só apareceria no próximo render e a troca
+      // falhava com "Saldo de crédito insuficiente".
+      const build = (cur: OpsState): OpsState => {
+        const inventory = cur.inventory.map((i) => {
+          const back = serverConfirmed.lines.find((l) => l.inventoryId === i.id)
+          return back ? { ...i, stock: i.stock + back.quantity } : i
+        })
+        const sales = cur.sales.map((s) =>
+          s.id !== saleId
+            ? s
+            : {
+                ...s,
+                lines: s.lines.map((l) => {
+                  const back = serverConfirmed.lines.find((x) => x.inventoryId === l.inventoryId)
+                  return back ? { ...l, qtyReturned: (l.qtyReturned ?? 0) + back.quantity } : l
+                }),
+              },
+        )
+        const customerCredits = { ...cur.customerCredits }
+        if (credit > 0) {
+          const atual = customerCredits[k]?.saldo ?? 0
+          customerCredits[k] = {
+            nome: customerName.trim() || customerCredits[k]?.nome || "Cliente",
+            saldo: Math.round((atual + credit) * 100) / 100,
+          }
+        }
+        return {
+          ...cur,
+          inventory,
+          sales,
+          customerCredits,
+          devolucoes: [
+            ...cur.devolucoes,
+            {
+              id: localId,
+              at: new Date().toISOString(),
+              saleId,
+              customerCpf: k,
+              customerName: customerName.trim(),
+              lines: serverConfirmed.lines,
+              mode,
+              creditIssued: credit,
+              syncPending: false,
+              sessaoId: sessaoId || undefined,
+              tipo: tipo || mode,
+              motivo: motivo || "",
+              observacao: observacao || "",
+              payload,
+            },
+          ],
+        }
+      }
+      const next = build(prev)
+      stateRef.current = next
+      setState((cur) => (cur.devolucoes.some((d) => d.id === localId) ? cur : cur === prev ? next : build(cur)))
+      return { ok: true, devolucaoId: localId, creditIssued: credit }
+    }
+
     const sale = prev.sales.find((s) => s.id === saleId)
     if (!sale) return { ok: false, reason: "Venda/cupom não encontrado." }
 
