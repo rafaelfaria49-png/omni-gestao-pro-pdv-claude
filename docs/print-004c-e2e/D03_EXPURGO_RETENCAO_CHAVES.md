@@ -54,7 +54,20 @@ S32 é reutilizado: trocar a chave durante envio não interrompe o claim inteiro
 
 Evidências novas ficam em `evidence/d03/`, separadas das baterias históricas. `verify.mjs` executa core/agente Windows, D03 PostgreSQL, S01–S35 (incluindo S32/S33/S34/S35), dois processos de agente, regressão 004B, D02, Playwright D01-A1/PDV, typecheck, ESLint e build sem autoridade de migration. O workflow próprio usa Node 24 e PostgreSQL 17 descartável; não recebe segredos de produção.
 
-Resultados finais e links serão preenchidos após a bateria e o CI; nenhum teste físico é classificado como PASS. Revisão: [REVISAO_INDEPENDENTE_D03.md](REVISAO_INDEPENDENTE_D03.md).
+| Verificação local (Node 24 / PostgreSQL 17 descartável) | Resultado |
+|---|---|
+| Retenção D03, R01–R17 | 17/17 PASS |
+| Core, agente Windows, guardas e D01-A1 | 78/78 PASS |
+| Cenários S01–S35, incluindo S32/S33 | 35/35 PASS |
+| Dois processos reais de agente / regressão 004B | 1/1 e 3/3 PASS |
+| Compatibilidade D02 / ensaio de locks | 8/8 e 5/5 PASS |
+| Playwright PDV Clássico e D01-A1 | 19/19 PASS, transporte simulado |
+| Regressão offline / integração PostgreSQL offline | 135/135 e 10/10 PASS |
+| Mutações críticas | 8/8 detectadas por falha de asserção; fonte restaurada |
+| Typecheck completo / ESLint | saída 0 / saída 0 |
+| Build local de produção | saída 0; `MIGRATION_SKIPPED`; sem migration/deploy |
+
+A consolidação autoritativa é `evidence/d03/VALIDACAO_D03.json`: verifica os códigos de saída dos logs mais recentes e os hashes. Arquivos `summary*.json` preservam as tentativas anteriores, inclusive os erros de preparo corrigidos. O primeiro workflow remoto foi recusado por usar `runner.temp` em contexto não permitido; o diretório Linux foi corrigido e validado por actionlint. CI remoto é acompanhado nos checks da [PR draft #332](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/332), sem merge. Nenhum teste físico é classificado como PASS. Revisão: [REVISAO_INDEPENDENTE_D03.md](REVISAO_INDEPENDENTE_D03.md).
 
 ## Limites remanescentes
 

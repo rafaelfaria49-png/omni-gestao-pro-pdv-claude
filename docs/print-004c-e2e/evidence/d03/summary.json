@@ -74,6 +74,27 @@
       "exit": 0,
       "seconds": 105,
       "tests": "19 passed (1.7m)"
+    },
+    {
+      "step": "typecheck",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1021,
+      "tests": null
+    },
+    {
+      "step": "eslint",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 10,
+      "tests": null
+    },
+    {
+      "step": "build",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 495,
+      "tests": null
     }
   ]
 }

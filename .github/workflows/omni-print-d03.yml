@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      PRINT_LAB_DIR: ${{ runner.temp }}/omni-print-d03-pg
+      PRINT_LAB_DIR: /tmp/omni-print-d03-pg
       PRINT_LAB_PORT: "55483"
       PRINT_LAB_BASE_REF: "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6"
       DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated

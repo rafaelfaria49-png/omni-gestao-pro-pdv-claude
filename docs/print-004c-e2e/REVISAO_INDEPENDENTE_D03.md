@@ -29,6 +29,6 @@ A primeira leitura pediu mudanças no cálculo da data. Após as correções, o 
 
 O primeiro ensaio D03 encontrou timeout no hook que clona o banco, não falha de invariante. O timeout foi configurado explicitamente nos hooks e a reexecução 17/17 foi conferida. A integração offline inicial encontrou proprietário incorreto das tabelas do laboratório; aplicação do baseline com o papel do laboratório corrigiu o preparo e 10/10 passou.
 
-Typecheck, ESLint, build, mutações e CI remoto são registrados pela evidência consolidada e checks da PR quando concluídos. Nenhuma aprovação é inventada para etapa ausente: `evidence/d03/VALIDACAO_D03.json` distingue PASS/FAIL/PENDING e referencia hashes dos logs. O manifesto oficial cobre fontes, documentação e evidências.
+Validação técnica adicional concluída pelo executor: typecheck completo, ESLint e build (sem autoridade de migration) com saída 0; oito mutações críticas detectadas, com restauração da fonte. O primeiro workflow foi recusado por contexto `runner.temp` indisponível no `env` do job; correção para diretório temporário Linux e verificação por actionlint. CI remoto é registrado nos checks da PR. Nenhuma aprovação é inventada para etapa ausente: `evidence/d03/VALIDACAO_D03.json` distingue PASS/FAIL/PENDING e referencia hashes dos logs. O manifesto oficial cobre fontes, documentação e evidências.
 
 Impressão física e produção não foram executadas. Gate de release continua fechado.
