@@ -1,6 +1,6 @@
 {
   "goal": "OMNI-PRINT-004C-INTEGRACAO-END-TO-END-001",
-  "at": "2026-11-03T16:15:24.436Z",
+  "at": "2026-11-04T02:23:23.095Z",
   "transport": "SIMULATED (FakeSpooler) + real Windows PowerShell host without printer",
   "physicalPrint": "NOT_TESTED_NO_PRINTER",
   "steps": [
@@ -25,24 +25,24 @@
       "status": "PASS",
       "exitCode": 0,
       "tests": "31 passed (31)",
-      "seconds": 8,
-      "logSha256": "832cb0581b14267df0998a62caaeb1f7a27659410dedbda0a13188e309b1d3fb"
+      "seconds": 5,
+      "logSha256": "7bafe6024938dcd4a3e021c9d1af3aef47c600303acfcf55efd69e695d738543"
     },
     {
       "step": "pg-scenarios",
       "status": "PASS",
       "exitCode": 0,
-      "tests": "30 passed (30)",
+      "tests": "33 passed (33)",
       "seconds": 15,
-      "logSha256": "b388cf465f12d6573e90f016187dc13d8a1b1c9f2515f6d9ac50b7e4880d6057"
+      "logSha256": "b75a03f2f5d5460a5b7c3ce60b905596cf76f36f5ec551b1ba982905ec3bccde"
     },
     {
       "step": "pg-synthetic-004b-regression",
       "status": "PASS",
       "exitCode": 0,
       "tests": "3 passed (3)",
-      "seconds": 5,
-      "logSha256": "eadf323dc64e58272fb53aa7f81aefbb83939c3a46175c0f37ce43dd70288e2a"
+      "seconds": 4,
+      "logSha256": "934c02f4236a8f23081f041a5eac8d5b450c9f6862d36db148edf10d3513eeea"
     },
     {
       "step": "pg-two-agent-processes",
@@ -50,31 +50,39 @@
       "exitCode": 0,
       "tests": "1 passed (1)",
       "seconds": 9,
-      "logSha256": "10e12e5d9128643501535fb716aa7a024393d0cf0e356cc8339abe0a6dfd115a"
+      "logSha256": "c77f8c4cfd4a930e6b9f32aa771e19bb96315980efa49c2e598b1c23b20330e7"
     },
     {
       "step": "pg-index-strategy",
       "status": "PASS",
       "exitCode": 0,
       "tests": "2 passed (2)",
-      "seconds": 10,
-      "logSha256": "6a37c79e9be8d2c90f263bc2397a98979ac5d7db75847d5f427d9e383df97821"
+      "seconds": 7,
+      "logSha256": "b959b21713e8fba3432753b7e6db22e0914ccb9dbbd792ac78db23146ee794fa"
+    },
+    {
+      "step": "pg-d02-rehearsal",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": "5 passed (5)",
+      "seconds": 18,
+      "logSha256": "6ce82be26b5fbeb317da18f90f04fdeed8360bace87356ee9bbbc66bddb9e6d8"
     },
     {
       "step": "pg-future-layout-apply",
       "status": "PASS",
       "exitCode": 0,
       "tests": null,
-      "seconds": 3,
+      "seconds": 2,
       "logSha256": "8d0bc2cd3ebe553270ba6eb55247ccc7a58bc62b031f3137f4f5b0807f0b03a7"
     },
     {
       "step": "playwright-pdv-classic",
       "status": "PASS",
       "exitCode": 0,
-      "tests": "11 passed (58.8s)",
-      "seconds": 63,
-      "logSha256": "0b2d873f88afc61b0a5f451448b413107f7defcdd62d6f0b1733b91fec8022af"
+      "tests": "11 passed (38.4s)",
+      "seconds": 41,
+      "logSha256": "d1342ab5fc0145e4a83d18770b352696743ab8731fe4993eab613c994e4be5fb"
     }
   ]
 }

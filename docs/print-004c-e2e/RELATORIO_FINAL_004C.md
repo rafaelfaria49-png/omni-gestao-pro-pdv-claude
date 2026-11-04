@@ -116,3 +116,30 @@ typecheck `exit=0`; ESLint 0 erros; `track verify --all` sem divergências; vite
 offline (#326) e impressão direta: 1869 passam, 10 falham em 2 testes estáticos (`fechamento-calculadora-modal`,
 `pdv-scan-autoclear`) que falham igual na `main` `37acc3b` limpa e não estão em nenhum workflow. A bateria PG/Playwright
 não foi reexecutada (nenhum arquivo da impressão mudou no merge); o build fica com o CI.
+
+### 7.2 Preparação dos gates para decisão do proprietário (GOAL OMNI-PRINT-004C-RELEASE-GATES-001, sobre `8edd892`)
+
+Documento de decisão: `DECISOES_PROPRIETARIO_OMNI_PRINT.md` (D01–D05 e G-AUTH, opção recomendada pronta para aprovação). Nenhum
+gate foi aprovado; `APPROVED_RELEASE` segue `null`; nada foi aplicado, configurado ou publicado em produção.
+
+- **D02:** ensaio `d02-rehearsal.pg.test.ts` (5/5, `evidence/release-gates/d02-rehearsal.log`) e `d02/rollback_print_candidate.sql`.
+  - As FKs de 01-futura/02 bloqueiam `vendas`/`stores`/`admin_users`/`pdv_terminais` até o COMMIT. Os arquivos candidatos
+    (inalterados) não têm `lock_timeout`: uma venda aberta enfileira as seguintes (provado).
+  - O recorte recomendado (ii) leva a guarda **dentro do arquivo** (`CUT_GUARD`: `lock_timeout` 2 s + locks pai no início,
+    `vendas` primeiro). Desiste inteiro em ~2 s, sem segurar heartbeat/login enquanto aguarda (provado).
+  - O rollback exige `AccessExclusiveLock` nas tabelas pai (medido no PostgreSQL 17). Agora pega os locks em ordem e desiste
+    inteiro sob carga. Recomendação: rollback = desligar o recurso; remover tabelas só com a loja fechada.
+  - O build de produção roda `prisma migrate deploy` sob a autoridade de migrations, por isso o plano registra as migrations
+    com `migrate resolve --applied` antes do merge.
+- **Correção de servidor (D03):** com a chave de conteúdo trocada durante um envio, o `claim` do agente falhava inteiro por até
+  60 s. Agora a reentrega dessa tentativa é pulada (fica incerta, nunca reenviada) em `lib/printing/direct/core.ts`. Cenário
+  S32 (falha sem a correção, verificado por mutação).
+- **D03:** cenário S33 prova o expurgo de conteúdo em sentido único já suportado pelo schema e que a identidade anti-duplicata
+  sobrevive ao expurgo.
+- **G-AUTH:** cenário S31 (ACK atrasado do agente após revogação da sessão: registrado, sem reenvio, sessão antiga 401).
+- **Regressão após integrar a main (#326) e após as correções:** bateria completa reexecutada — gerador PASS, higiene PASS,
+  unitários/agente 31/31, cenários PostgreSQL 33/33, regressão 004B 3/3, dois processos PASS, índice 2/2, ensaio D02 5/5,
+  layout futuro PASS, Playwright PDV Clássico 11/11; typecheck `exit=0`; ESLint 0 erros. CI do head `8edd892`: 10/10.
+- Matriz de 80: classificações inalteradas (6 BLOCKED_HUMAN_GATE, 9 DEFERRED_PHYSICAL_HARDWARE); evidência de I12/B17–B19
+  atualizada. Roteiro físico ganhou critérios de parada e registro de execução (todas as linhas NÃO EXECUTADO).
+- Revisão independente: rodada 5 (`REVISAO_INDEPENDENTE.md`) — REQUEST_CHANGES (5 P2) → corrigido → APPROVE; P3 tratados.

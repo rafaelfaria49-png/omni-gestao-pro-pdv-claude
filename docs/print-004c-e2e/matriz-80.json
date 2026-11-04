@@ -202,19 +202,19 @@
       "id": "B17",
       "title": "Retenção de payload sem remoção de dedup",
       "status": "BLOCKED_HUMAN_GATE",
-      "evidence": "D03 retenção/expurgo de payload não aprovado; expurgo não implementado"
+      "evidence": "D03 retenção/expurgo de payload não aprovado; expurgo não implementado (proposta: 7 dias após estado final, DECISOES_PROPRIETARIO_OMNI_PRINT.md)"
     },
     {
       "id": "B18",
       "title": "Remoção posterior de tombstone de requisição",
       "status": "BLOCKED_HUMAN_GATE",
-      "evidence": "D03 remoção de tombstone de requisição não aprovada"
+      "evidence": "D03 remoção de tombstone de requisição não aprovada (proposta: nunca remover)"
     },
     {
       "id": "B19",
       "title": "Retenção/arquivamento de marca inicial",
       "status": "BLOCKED_HUMAN_GATE",
-      "evidence": "D03 retenção/arquivamento da marca inicial (ressalva histórica mantida no gate)"
+      "evidence": "D03 retenção/arquivamento da marca inicial (ressalva histórica mantida no gate; proposta: permanente)"
     },
     {
       "id": "B20",
@@ -328,7 +328,7 @@
       "id": "I12",
       "title": "Logout/revogação e ACK atrasado",
       "status": "BLOCKED_HUMAN_GATE",
-      "evidence": "G-AUTH: logout comum não incrementa sessionVersion (revogação por sessionVersion = PASS em S15)"
+      "evidence": "G-AUTH: logout comum não incrementa sessionVersion (revogação por sessionVersion = PASS em S15; ACK atrasado após revogação registrado sem reenvio = PASS em S31); decisão em DECISOES_PROPRIETARIO_OMNI_PRINT.md"
     },
     {
       "id": "I13",

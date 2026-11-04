@@ -38,9 +38,9 @@ Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/pri
 | B14 | Duas confirmações concorrentes de segunda via | PASS_REAL_SOFTWARE | S25 (duas confirmações concorrentes da segunda via → 1 job) |
 | B15 | Múltiplas vias com aceite/falha/incerteza parcial | PASS_SIMULATED_TRANSPORT | S26 (2 vias: aceite + falha → PARCIAL; retry só da não enviada) |
 | B16 | Evidência/callback duplicado e atrasado | PASS_REAL_SOFTWARE | S22 (UNKNOWN tardio não rebaixa; NO_EFFECT após aceite → RESULT_CONFLICT) + S09 |
-| B17 | Retenção de payload sem remoção de dedup | BLOCKED_HUMAN_GATE | D03 retenção/expurgo de payload não aprovado; expurgo não implementado |
-| B18 | Remoção posterior de tombstone de requisição | BLOCKED_HUMAN_GATE | D03 remoção de tombstone de requisição não aprovada |
-| B19 | Retenção/arquivamento de marca inicial | BLOCKED_HUMAN_GATE | D03 retenção/arquivamento da marca inicial (ressalva histórica mantida no gate) |
+| B17 | Retenção de payload sem remoção de dedup | BLOCKED_HUMAN_GATE | D03 retenção/expurgo de payload não aprovado; expurgo não implementado (proposta: 7 dias após estado final, DECISOES_PROPRIETARIO_OMNI_PRINT.md) |
+| B18 | Remoção posterior de tombstone de requisição | BLOCKED_HUMAN_GATE | D03 remoção de tombstone de requisição não aprovada (proposta: nunca remover) |
+| B19 | Retenção/arquivamento de marca inicial | BLOCKED_HUMAN_GATE | D03 retenção/arquivamento da marca inicial (ressalva histórica mantida no gate; proposta: permanente) |
 | B20 | Auditoria e falha de persistência | PASS_REAL_SOFTWARE | eventos por transição; S21/S23 (rollback integral, sem auditoria parcial) |
 | B21 | Dois jobs compartilham fila física | PASS_SIMULATED_TRANSPORT | S19/S26 (um destino admite uma tentativa por vez; fila serializada) |
 | B22 | REPRINT histórico concorre com INITIAL | PASS_REAL_SOFTWARE | S24 (REPRINT histórico fecha INITIAL; sequencial) |
@@ -59,7 +59,7 @@ Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/pri
 | I09 | Substituição/renomeação de computador ou fila | PASS_SIMULATED_TRANSPORT | unit PRINTER_NOT_FOUND + S16 (revogar/parear novo computador) |
 | I10 | Binding revogado antes e depois de início | PASS_REAL_SOFTWARE | S16 (instalação revogada derruba vínculos; antes da T3 → BINDING_CHANGED) |
 | I11 | Troca de loja/configuração durante solicitação | PASS_REAL_SOFTWARE | S15 (STORE_CONTEXT_CONFLICT) + geração/descartes no cliente |
-| I12 | Logout/revogação e ACK atrasado | BLOCKED_HUMAN_GATE | G-AUTH: logout comum não incrementa sessionVersion (revogação por sessionVersion = PASS em S15) |
+| I12 | Logout/revogação e ACK atrasado | BLOCKED_HUMAN_GATE | G-AUTH: logout comum não incrementa sessionVersion (revogação por sessionVersion = PASS em S15; ACK atrasado após revogação registrado sem reenvio = PASS em S31); decisão em DECISOES_PROPRIETARIO_OMNI_PRINT.md |
 | I13 | Input de bytes, HTML, host/porta/URL/path/credenciais | PASS_REAL_SOFTWARE | S18 (host/porta/bytes/URL/HTML recusados como campos desconhecidos) |
 | I14 | Origin/CSRF e consultas/replays sem autorização | PASS_REAL_SOFTWARE | S15 (Origin/CSRF) + S04 (consultas cruzadas) |
 | I15 | Adaptador aceita; conexão/resposta HTTP se perde | PASS_SIMULATED_TRANSPORT | S09 (resposta HTTP perdida em claim/report) |

@@ -338,7 +338,15 @@ export class DirectPrintCore {
       ORDER BY a.started_at LIMIT $3`, [mine, installationId, this.policy.maxClaim])
     for (const a of open) {
       if (!a.payload_cipher) continue
-      const payload = this.crypto.open(a.payload_cipher, "payload:" + a.store_id + ":" + a.job_id + ":" + a.copy_id + ":" + a.payload_hash)
+      let payload: Buffer
+      try {
+        payload = this.crypto.open(a.payload_cipher, "payload:" + a.store_id + ":" + a.job_id + ":" + a.copy_id + ":" + a.payload_hash)
+      } catch (error) {
+        // Content key rotated while this attempt was in flight: skip the redelivery (the lease lapses into UNKNOWN,
+        // never a resend) instead of failing the whole claim and stalling the agent's new copies (D03).
+        if (error instanceof PrintError && error.code === "CONTENT_UNAVAILABLE") continue
+        throw error
+      }
       out.push({ attemptId: a.attempt_id, jobId: a.job_id, copyId: a.copy_id, sendKey: a.send_key, leaseEpoch: String(a.lease_epoch), printerName: a.transport_destination_ref,
         payloadBase64: payload.toString("base64"), payloadHash: a.payload_hash, documentLabel: "OmniGestao " + a.kind + " " + a.ordinal, redelivery: true, leaseRemainingMs: Number(a.remaining) })
     }

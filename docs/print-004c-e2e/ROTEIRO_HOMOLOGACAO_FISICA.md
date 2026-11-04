@@ -5,6 +5,7 @@ Pré-condições (gates humanos, nenhum foi aberto por este candidato):
 - D02 (schema) e D04 (transporte por agente local) aprovados pelo proprietário; D03 (limites/retenção/chaves) com valores definidos; D05 (hardware) com consentimento.
 - Migration recortada a partir de `tools/print-004c-e2e/candidate-migrations/future/` e aplicada **em ambiente de homologação** (nunca produção sem janela aprovada), com `00` fora de transação e conferência de `indisvalid`.
 - Release aprovada registrada em `lib/printing/direct/activation.ts` (`APPROVED_RELEASE`) por commit revisado; `OMNI_PRINT_DIRECT_ENABLED=1`, `OMNI_PRINT_DIRECT_RELEASE=<id>`, `OMNI_PRINT_CONTENT_KEY` e `OMNI_PRINT_SIGNING_KEY` (32 bytes base64url, distintas) somente no ambiente de homologação.
+- Banco de homologação = branch Neon separado (nunca o banco da loja), com o D02 aplicado pelo plano de `DECISOES_PROPRIETARIO_OMNI_PRINT.md` (lock_timeout, `00` fora de transação). As variáveis acima ficam com escopo **Preview fixado na branch de homologação** na Vercel (Preview sem branch vale para todas as branches), apontando para esse branch Neon; **nunca** escopo Production. Conferir se a proteção de deployment da Vercel barra o agente (usar o bypass de automação só nesse deployment). Ao final: remover as variáveis, remover os deployments de homologação (deployments antigos mantêm as variáveis) e revogar o agente.
 - Loja piloto com usuário ADMIN (configurar) e CAIXA (vender); terminal PDV cadastrado.
 
 ## 1. Impressora
@@ -58,3 +59,32 @@ Pré-condições (gates humanos, nenhum foi aberto por este candidato):
 - Revogar o agente piloto (Configurações → Revogar) e confirmar que ele para (credencial recusada).
 - Registrar evidências (fotos, logs do agente sem a credencial, prints da tela) e preencher F01–F07 na matriz.
 - Somente após aprovação escrita: `PHYSICAL_HOMOLOGATION=PASS` e decisão sobre empacotamento/assinatura do agente e execução como serviço.
+
+## 8. Critérios de parada
+
+Interromper, revogar o agente (Configurações → Revogar) e registrar o ocorrido se acontecer **qualquer** um destes:
+
+- um mesmo cupom sai duas vezes sem pedido de 2ª via;
+- sai cupom de venda que não foi confirmada no servidor;
+- a gaveta abre;
+- aparece dado de cliente real no cupom de teste;
+- qualquer venda da loja deixa de gravar ou fica lenta durante o teste.
+
+## 9. Registro de execução
+
+Cada linha começa **NÃO EXECUTADO**. Só muda com evidência anexada (foto do papel, trecho do log do agente sem a credencial, print da tela) e o nome de quem executou. Nenhuma linha pode ser preenchida por inferência ou por resultado simulado.
+
+| Caso | Passo do roteiro | Resultado | Evidência | Executor / data |
+|---|---|---|---|---|
+| F01 Windows + Chrome / Edge | §3, §5.3 | NÃO EXECUTADO | | |
+| F02 bobina 58 / 80 mm | §1.4, §3 | NÃO EXECUTADO | | |
+| F03 frio/quente, reinício, desligamento, sem papel | §6 | NÃO EXECUTADO | | |
+| F04 duas vias, falha parcial, resposta perdida real | §5, §6 | NÃO EXECUTADO | | |
+| F05 fila trocada/removida, vínculo revogado | §6, §7 | NÃO EXECUTADO | | |
+| F06 gaveta desligada | §4.2 | NÃO EXECUTADO | | |
+| F07 navegador (A4/fallback) em Chrome e Edge | §5.3 | NÃO EXECUTADO | | |
+| I18 cancelamento após aceite na fila | observar a fila do Windows | NÃO EXECUTADO | | |
+| I20 fila offline com entrega tardia | §6 (impressora desligada com fila ativa) | NÃO EXECUTADO | | |
+| Tempo venda → papel (meta < 3 s) | §3.3 | NÃO EXECUTADO | | |
+
+`PHYSICAL_HOMOLOGATION=PASS` só com todas as linhas preenchidas com evidência e aprovação escrita do proprietário.

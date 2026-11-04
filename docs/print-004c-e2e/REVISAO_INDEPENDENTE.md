@@ -61,3 +61,20 @@ disparar.
 | `main` segue com os mocks desatualizados | relatado (fora do escopo desta PR; correção própria na main) |
 | `run-pilot-e2e.mjs` frágil a homônimos dos 4 campos | observação; script do piloto não alterado |
 | restante do E2E do piloto nunca rodou no CI | confirmado pela rodada de CI do novo commit |
+
+## Rodada 5 (gates para decisão do proprietário, sobre `8edd892`) — REQUEST_CHANGES → APPROVE
+
+Escopo: `DECISOES_PROPRIETARIO_OMNI_PRINT.md`, `d02-rehearsal.pg.test.ts`, `d02/rollback_print_candidate.sql`, cenários S31–S33,
+correção em `core.ts` (claim), roteiro físico e matriz. Primeira passada: **REQUEST_CHANGES** (5 P2, 9 P3). Segunda passada,
+após as correções: **APPROVE** (sem P0/P1/P2; 8 P3, tratados abaixo).
+
+| Achado | Tratamento |
+|---|---|
+| P2 expurgo descrito como exigindo mudança de schema (o schema já permite expurgo em sentido único) | texto corrigido; S33 prova expurgo, recusa de segundo expurgo/restauração/DELETE e dedup preservada |
+| P2 documento citava a rodada 5 antes de existir | esta seção registra a rodada com o veredito real |
+| P2 proteção contra travar vendas dependia de `PGOPTIONS` | guarda dentro do arquivo (`CUT_GUARD`), ensaiada sem `PGOPTIONS`; endpoint direto Neon (não `-pooler`) e papel da aplicação exigidos |
+| P2 ordem com o `migrate deploy` do build | plano com duas pastas, `migrate resolve --applied` de ambas antes do merge, conferência em `_prisma_migrations`, `--rolled-back` no rollback |
+| P2 rollback sob carga não ensaiado | medido: `AccessExclusiveLock` nos pais; locks em ordem (`vendas` primeiro), `lock_timeout` 2 s; teste 4 com venda aberta; rollback preferido = desligar o recurso |
+| P3 estado parcial, pior caso, chaves/`keyRef`, fallback por bytes, retenção incompleta, D04 (PID/reinício), Preview por branch, S31 sem prova do atraso, robustez do d02 | corrigidos (texto, `run-loop.ps1`, asserção `STARTED`, testes independentes, `searchParams`, porta 5432) |
+| P3 (achado na revisão) `claim()` falhava inteiro com chave rotacionada durante envio | **corrigido** em `core.ts`; S32 (falha sem a correção) |
+| P3 2ª passada: relatório §7.2 desatualizado; heartbeat/login "não esperam" amplo demais; transação única (ii) não ensaiada; aviso de `migrate dev` na pasta (i); expurgo de `details` apagaria a prova do incerto; redação PW10/PW11; S32/S33 podiam passar sem exercitar o caminho; diretório temporário | corrigidos: §7.2 reescrito; texto restrito a "enquanto aguarda"; ensaio aplica `CUT_II` (01+02 numa transação); aviso registrado; expurgo de `details` só de eventos sem prova; redação ajustada; asserções de lease vigente e linhas afetadas; temp em `beforeAll`/`afterAll` |

@@ -4,6 +4,10 @@ Running 11 tests using 1 worker
 
 
 
+
+
+
+
 [1/11] e2e\specs\print-direct-004c.spec.ts:154:5 › PW1 impressão automática: venda CONFIRMADA → fila da impressora do terminal, sem janela/diálogo/preview
 [2/11] e2e\specs\print-direct-004c.spec.ts:174:5 › PW2 venda PENDENTE (falha de rede no writer) nunca chama a impressão direta
 [3/11] e2e\specs\print-direct-004c.spec.ts:188:5 › PW3 impressora desligada → aviso claro sem repetir a venda; religada → Tentar novamente imprime uma vez
@@ -15,11 +19,11 @@ Running 11 tests using 1 worker
 [9/11] e2e\specs\print-direct-004c.spec.ts:274:5 › PW9 resultado incerto: nada é reenviado; navegador exige confirmação e sai como SEGUNDA VIA
 [10/11] e2e\specs\print-direct-004c.spec.ts:295:5 › PW10 venda fora do contrato (KG) → volta ao fluxo anterior (automático e manual); nada térmico, nada pelo navegador
 [11/11] e2e\specs\print-direct-004c.spec.ts:305:5 › PW11 venda KG com impressão automática desligada → diálogo manual existente
-  11 passed (58.8s)
-(node:12244) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+  11 passed (38.4s)
+(node:21752) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-(node:24208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:2612) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:24208) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
-(node:24208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:2612) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:2612) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)

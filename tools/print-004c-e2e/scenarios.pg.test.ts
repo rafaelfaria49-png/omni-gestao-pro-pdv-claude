@@ -5,11 +5,13 @@
  * Run: tools/print-004c-e2e/run-pg.mjs (resets a print_lab_* database and sets PRINT_PG_URL).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { randomBytes } from "node:crypto"
 import { mkdtempSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import * as direct from "@/lib/printing/direct/http"
 import { DirectPrintCore } from "@/lib/printing/direct/core"
+import { PrintCrypto } from "@/lib/printing/direct/codec"
 import { validateEscPos } from "@/lib/printing/direct/renderer"
 import { browserRequest, commercialDigest, confirmedSale, depsFor, IDS, LabServer, labPrisma, labRuntime, prismaDatabase, seed, sessionOf, withPolicy, type Database, type EnabledRuntime, type Session } from "./lab-env"
 import { Agent } from "../omni-print-agent/agent.mjs"
@@ -659,5 +661,87 @@ describe.skipIf(!URL_)("OMNI-PRINT-004C — direct print end-to-end (simulated t
     expect((await mk("caixa-2-device")).status).toBe(200)
     expect((await bind({}, false)).status).toBe(200)
     await drain(agentA)
+  })
+
+  it("S31 G-AUTH (I12): sessão revogada DEPOIS do envio — o ACK atrasado do agente é registrado, nada é reenviado e a sessão antiga perde acesso", async () => {
+    const journal = path.join(journals, "gauth.jsonl")
+    // Bytes reach the spooler, then the network to the server drops before the report (the ACK is delayed).
+    const delayed = newAgent(tokenA, spoolerA, server, { hooks: { afterSubmitBeforeJournal: () => { server.faults.refuseAll = true } } }, journal)
+    try {
+      const sale = await confirmedSale(prisma, IDS.storeA)
+      const r = await createJob(sale.id)
+      const before = outputs(spoolerA)
+      await delayed.tick().catch(() => undefined)
+      expect(outputs(spoolerA) - before).toBe(1)
+      const [pending] = await prisma.$queryRawUnsafe<Json[]>(`SELECT a.result FROM public.print_attempts a WHERE a.job_id=$1::uuid`, r.body.job.jobId)
+      expect(pending.result).toBe("STARTED") // the ACK really is still missing on the server
+      // While the ACK is pending, the cashier session is revoked (sessionVersion+1 = the effect of a global logout).
+      await prisma.$executeRawUnsafe(`UPDATE public.admin_users SET "sessionVersion"="sessionVersion"+1 WHERE id=$1`, IDS.caixaA)
+      server.faults.refuseAll = false
+      await drain(delayed) // the report is authenticated by the agent credential, not by the user session
+      expect((await getJob(r.body.job.jobId)).status).toBe(401) // old session (version 0) lost access
+      expect((await createJob(sale.id)).status).toBe(401)
+      const v = (await getJob(r.body.job.jobId, sessionOf(IDS.caixaA, 1))).body.job
+      expect(v.phase).toBe("IN_PRINTER_QUEUE") // late ACK recorded: the evidence of the paper is kept
+      await drain(agentA)
+      expect(outputs(spoolerA) - before).toBe(1) // never re-sent
+    } finally {
+      server.faults.refuseAll = false
+      delayed.releaseLock()
+      await prisma.$executeRawUnsafe(`UPDATE public.admin_users SET "sessionVersion"=0 WHERE id=$1`, IDS.caixaA)
+    }
+  })
+
+  it("S32 D03 rotação da chave de conteúdo com tentativa em voo: o claim não trava; a via em voo nunca é reenviada; venda nova imprime", async () => {
+    const saved = runtime
+    runtime = withPolicy(runtime, { dispatchLeaseMs: 1000, sendLeaseMs: 1000 })
+    try {
+      const s1 = await confirmedSale(prisma, IDS.storeA)
+      const j1 = (await createJob(s1.id)).body.job.jobId
+      server.faults.dropResponseOnce.add("/api/print/agent/claim")
+      await agentA.tick().catch(() => undefined) // attempt STARTED for this instance; the agent never saw it
+      const [live] = await prisma.$queryRawUnsafe<Json[]>(`SELECT c.lease_until>clock_timestamp() live FROM public.print_copies c WHERE c.job_id=$1::uuid`, j1)
+      expect(live.live).toBe(true) // the redelivery path is really exercised (lease still valid)
+      const before = outputs(spoolerA)
+      const rotated = new PrintCrypto(randomBytes(32), randomBytes(32))
+      runtime = { ...runtime, crypto: rotated } // keys rotated
+      await expect(agentA.tick()).resolves.toBeTypeOf("number") // redelivery skipped, the claim answers normally
+      expect(outputs(spoolerA)).toBe(before)
+      await sleep(1200) // lease lapses → UNKNOWN, never re-sent
+      expect((await getJob(j1)).body.job.phase).toBe("UNCERTAIN")
+      runtime = { ...saved, crypto: rotated } // normal leases again (a 1 s lease is below the agent send budget)
+      const s2 = await confirmedSale(prisma, IDS.storeA)
+      const j2 = (await createJob(s2.id)).body.job.jobId
+      await agentA.tick() // answers the query for the old attempt (NOT_FOUND_IN_JOURNAL → stays UNKNOWN, printer released)
+      await drain(agentA)
+      expect(outputs(spoolerA) - before).toBe(1)
+      expect((await getJob(j2)).body.job.phase).toBe("IN_PRINTER_QUEUE")
+      expect((await getJob(j1)).body.job.phase).toBe("UNCERTAIN")
+    } finally { runtime = saved }
+  })
+
+  it("S33 D03 expurgo de conteúdo em via finalizada: único sentido, sem DELETE; a identidade anti-duplicata continua valendo", async () => {
+    const s = await confirmedSale(prisma, IDS.storeA)
+    const r = await createJob(s.id)
+    await drain(agentA)
+    const jobId = r.body.job.jobId
+    expect((await getJob(jobId)).body.job.phase).toBe("IN_PRINTER_QUEUE")
+    const x = (q: string) => prisma.$executeRawUnsafe(q, jobId)
+    expect(await x(`UPDATE public.print_copies SET payload_cipher=NULL,payload_key_ref=NULL,payload_purged_at=now() WHERE job_id=$1::uuid`)).toBeGreaterThan(0)
+    expect(await x(`UPDATE public.print_jobs SET snapshot_cipher=NULL,snapshot_key_ref=NULL,snapshot_purged_at=now() WHERE id=$1::uuid`)).toBeGreaterThan(0)
+    expect(await x(`UPDATE public.print_requests SET command=NULL,command_purged_at=now() WHERE job_id=$1::uuid`)).toBeGreaterThan(0)
+    expect(await x(`UPDATE public.print_events SET details=NULL,details_purged_at=now()
+      WHERE document_id=(SELECT document_id FROM public.print_jobs WHERE id=$1::uuid) AND details IS NOT NULL`)).toBeGreaterThan(0)
+    // One way only: no second purge stamp, no restored content, no deleted ledger rows.
+    await expect(x(`UPDATE public.print_copies SET payload_purged_at=now()+interval '1 day' WHERE job_id=$1::uuid`)).rejects.toThrow(/p004/)
+    await expect(x(`UPDATE public.print_copies SET payload_cipher='\\x00'::bytea,payload_key_ref='k',payload_purged_at=NULL WHERE job_id=$1::uuid`)).rejects.toThrow(/p004|payload_ck/)
+    await expect(x(`DELETE FROM public.print_copies WHERE job_id=$1::uuid`)).rejects.toThrow(/p004/)
+    await expect(x(`DELETE FROM public.print_jobs WHERE id=$1::uuid`)).rejects.toThrow(/p004/)
+    // The anti-duplicate identity survives the purge: a new INITIAL for the same sale converges and nothing prints.
+    const before = outputs(spoolerA)
+    const again = await createJob(s.id)
+    expect(again.body.job.jobId).toBe(jobId)
+    await drain(agentA)
+    expect(outputs(spoolerA)).toBe(before)
   })
 })

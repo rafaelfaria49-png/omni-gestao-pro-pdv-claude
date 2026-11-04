@@ -22,6 +22,7 @@ const steps = [
   ["pg-synthetic-004b-regression", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_syn", "tools/print-004c-e2e/synthetic-regression.pg.test.ts"], {}],
   ["pg-two-agent-processes", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_two", "tools/print-004c-e2e/two-agents.pg.test.ts"], { PRINT_EVIDENCE_FILE: path.join(out, "p1-1-two-processes.jsonl") }],
   ["pg-index-strategy", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_idx", "tools/print-004c-e2e/index-strategy.pg.test.ts"], { PRINT_LAB_LAYOUT: "baseline" }],
+  ["pg-d02-rehearsal", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_d02", "tools/print-004c-e2e/d02-rehearsal.pg.test.ts"], { PRINT_LAB_LAYOUT: "baseline" }],
   ["pg-future-layout-apply", [t("tools/print-004c-e2e/pg-lab.mjs"), "reset", "print_lab_future"], { PRINT_LAB_LAYOUT: "future" }],
   ["playwright-pdv-classic", [t("tools/print-004c-e2e/run-playwright.mjs")], {}],
 ]

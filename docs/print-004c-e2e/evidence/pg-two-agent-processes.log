@@ -5,8 +5,8 @@ reset print_lab_two
 
  Test Files  1 passed (1)
       Tests  1 passed (1)
-   Start at  13:14:02
-   Duration  4.95s (transform 286ms, setup 0ms, import 397ms, tests 4.33s, environment 0ms)
+   Start at  23:22:09
+   Duration  5.29s (transform 263ms, setup 0ms, import 367ms, tests 4.72s, environment 0ms)
 
-(node:17056) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:10480) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
