@@ -5,8 +5,8 @@ reset print_lab_syn
 
  Test Files  1 passed (1)
       Tests  3 passed (3)
-   Start at  00:49:49
-   Duration  805ms (transform 291ms, setup 0ms, import 393ms, tests 264ms, environment 0ms)
+   Start at  14:24:57
+   Duration  1.22s (transform 396ms, setup 0ms, import 534ms, tests 396ms, environment 0ms)
 
-(node:27720) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:7668) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)

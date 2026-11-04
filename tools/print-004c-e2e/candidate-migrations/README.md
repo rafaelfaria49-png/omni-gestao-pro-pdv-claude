@@ -29,6 +29,9 @@ espera, e ele termina `indisvalid = true`.
 INVALID, `DROP INDEX CONCURRENTLY` e repetir. Depois aplicar `01` (futura) e `02` em transação. Não usar `IF NOT EXISTS`
 para mascarar índice homônimo pré-existente. As FKs novas apontam para tabelas filhas vazias (validação instantânea).
 
+**Recorte D02-A (preparado, não aplicado):** as migrations numeradas geradas a partir destes arquivos ficam em
+`tools/print-d02/migrations/` e são aplicadas só pelo roteiro `docs/print-004c-e2e/RUNBOOK_D02.md`.
+
 ## Aplicação em laboratório
 
 ```

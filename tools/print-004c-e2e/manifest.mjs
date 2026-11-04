@@ -14,7 +14,9 @@ const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004
   // D01-A1: reimpressão registrada pelo Histórico de vendas e pela Conferência do caixa.
   "components/dashboard/vendas/direct-reprint-panel.tsx", "components/dashboard/vendas/cupom-nao-fiscal.tsx",
   "components/dashboard/vendas/reimpressao-registrada.static.test.ts", "components/dashboard/vendas/vendas-arquivo-geral.tsx",
-  "components/dashboard/caixa/conferencia-caixa.tsx", "lib/vendas/venda-cupom-mapper.ts", "lib/vendas/venda-cupom-mapper.test.ts"]
+  "components/dashboard/caixa/conferencia-caixa.tsx", "lib/vendas/venda-cupom-mapper.ts", "lib/vendas/venda-cupom-mapper.test.ts",
+  // D02-A: migrations recortadas, ferramenta do operador e exclusão de loja com registros de impressão.
+  "tools/print-d02", "app/api/stores/[id]/route.ts", ".gitattributes"]
 const files = []
 const walk = (rel) => {
   const abs = path.join(root, rel)

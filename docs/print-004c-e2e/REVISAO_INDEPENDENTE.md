@@ -103,3 +103,23 @@ adaptado, S35 e PW19 novos. Sem P0/P1/P2.
 | confirmação do navegador no PDV dizia "0 via(s)" quando o servidor pede confirmação sem via exposta | texto próprio: venda fora da janela da 1ª via sai como SEGUNDA VIA e fica registrada |
 | `pdv-scale-visor` (browser) e `cadastros-cliente-assistido` (validate) seguem em `ubuntu-latest` com Playwright | pendência fora desta PR, registrada em `D01_A1_REIMPRESSAO_REGISTRADA.md` (a #327 dispara o visor) |
 | venda antiga sem via sai SEGUNDA VIA também pelo PDV | conservador e coerente; registrado como residual para a homologação física |
+
+## Rodadas 8 e 9 (D02-A, migrations seguras, sobre `1b2912c`) — REQUEST_CHANGES → APPROVE
+
+Escopo: `tools/print-d02/` (recorte, gerador, ferramenta do operador, 3 pastas preparadas, `APLICACAO.json`, testes),
+`store-print-links.ts` e a rota `DELETE /api/stores/[id]`, `.gitattributes`, `RUNBOOK_D02.md`, `D02_MIGRATIONS_SEGURAS.md`.
+
+Rodada 8: **REQUEST_CHANGES** (2 P2, 8 P3). Rodada 9: **APPROVE** (sem P0/P1/P2; 2 P3).
+
+| Achado | Tratamento |
+|---|---|
+| P2 o teste PG novo quebrava o `npm test` sem banco (o corpo do `describe` roda na coleta mesmo pulado) | `template` só é calculado com `PRINT_PG_URL`; sem banco: 1 arquivo pulado, nenhuma falha |
+| P2 o roteiro mandava remover `tools/print-d02/migrations` no merge, o que quebraria a guarda, o gerador e a ferramenta | o roteiro manda manter a pasta (as promovidas são comparadas com ela) |
+| P3 `--chave=valor` cortava no segundo "=" (contornava a recusa por `pgbouncer=true`) | separa no primeiro "=" |
+| P3 várias linhas em `_prisma_migrations` (falha → `--rolled-back` → aplicada) sem ordem definida | ordena por `started_at`; a linha aplicada prevalece; cenário 7 cobre com `resolve` |
+| P3 roteiro sem `export` nem sintaxe do PowerShell; rollback sem `-d` | Git Bash com `export` + equivalente PowerShell; rollback com `-d "$D02_DATABASE_URL"` e `status` antes/depois |
+| P3 guarda do build fora do CI | workflow novo `omni-print-d02-guard.yml` (`generate --check` + `d02-guard`) |
+| P3 janela entre `resolve` e merge não provada | cenário 1: `migrate deploy` com o diretório da `main` responde "No pending migrations" |
+| P3 redação da senha incompleta; comentário inexato em `cut.mjs` | `redact()` cobre a forma crua e a codificada; comentário corrigido |
+| P3 (rodada 9) workflow não disparava ao alterar só o ensaio | `d02-rehearsal.pg.test.ts` incluído em `paths` |
+| P3 (rodada 9) aviso LF→CRLF nos arquivos de evidência | cosmético; checksums de migration têm `eol=lf` próprio |
