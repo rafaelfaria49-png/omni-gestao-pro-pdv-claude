@@ -85,6 +85,21 @@ Não corrigidos (registrados em §5): SKU alterado depois da venda (inclui repla
 
 Falhas pré-existentes nesta máquina (iguais na base `origin/main`): `app/api/vendas/[id]/cancelar/route.test.ts` (27) e o antigo `devolucao/route.test.ts` — o CI é a referência para esses.
 
+### 3.1 CI da PR #331 (GOALs PDV-F8-CI-RUNNER-CORRECTIVE-001 e PDV-F8-E2E-ASSERTION-CORRECTIVE-001)
+
+| Head | Resultado | Causa / correção |
+|---|---|---|
+| 47b0f33..2364a4a | Chromium não instalava | Playwright 1.52.0 × ubuntu-latest (26.04) → 4 jobs fixados em `ubuntu-24.04` (ramos validate/e2e-authenticated, pilot authenticated, visor browser); texto idêntico ao da PR #327 → merge entre as duas **sem conflito** (verificado com `git merge-tree`) |
+| 98495c4 | E2E 33/34 — spec 11:66 | asserção pressupunha 1 linha; o Clássico cria uma linha por bipe → 2 linhas na tela + banco: 1 venda, 2 unidades, R$20, identidade do produto |
+| 2927860 | E2E 33/34 — F8 sem diálogo | snapshot: comprovante pós-venda aberto ao enviar F8 (PDV ignora atalho com overlay — correto) → fechar o pós-venda antes, como o spec 10 |
+| 5bcc514 | E2E 33/34 — clique +1 | localizador caía no `div` de texto; botões +/− ganharam `aria-label` e o teste usa o nome |
+| 8723ffc | F8 **PASS**; 01-padaria falhou no logout (cookie de sessão) | branch não toca auth/logout; passou nas 2 execuções anteriores; **re-execução do mesmo commit: 34/34** → intermitente comprovado |
+| **54fe86d** | **10/10 checks · E2E 34/34 · spec 11 PASS (19,8 s)** | último commit: audit-log da recusa fora do updater (P3 da revalidação) |
+
+Banco no E2E (spec 11): uma venda de origem com 2 unidades / R$20; uma devolução `troca` de R$10 com vale de R$10 criado e consumido (saldo 0, 1 uso); estoque P 10→8→9 e G 10→9; **zero** `MovimentacaoFinanceira` `devolucao_pdv`; venda `parcialmente_devolvida`; reabrir F8 mostra "Devolvido: 1". Nenhum skip, `.only`, `fixme` ou `continue-on-error`.
+
+Revisão independente revalidada sobre 74cd687..8723ffc: **APPROVE_WITH_LIMITATIONS** (sem gate enfraquecido; P2-A/P2-B/P3-2 corretos). Achado P3 do audit-log duplicado corrigido em 54fe86d. Restantes P3 (lista de recusas só no F8 e não no fechamento; tentativa incerta sem descarte manual) → §5.
+
 ## 4. BLOQUEADO_POR_POLITICA
 
 | Caminho | Gate | O que falta |
@@ -95,13 +110,14 @@ Falhas pré-existentes nesta máquina (iguais na base `origin/main`): `app/api/v
 
 ## 5. PENDENTE_DE_HOMOLOGACAO
 
-1. **E2E navegador** `e2e/cadastros-ramos/11-pdv-f8-troca-imediata.spec.ts` (build de produção, NextAuth real, PG descartável) — escrito e incluído no workflow `Ramos e Cadastros`; **não rodado localmente** (o runner exige o serviço de CI). Resultado só vale após o CI do PR.
+1. E2E F8: **PASS no CI** (§3.1). Pendente só o smoke com operador logado (item 6).
 2. **Fila offline legada**: reembolsos `tipo: "devolucao"` já enfileirados e não gravados passam a ser recusados; saem da fila, entram no audit-log e aparecem no painel F8. O dinheiro já saiu da gaveta — **precisa lançamento manual pelo Financeiro** (decisão operacional).
 3. **Vendas só locais** (nunca sincronizadas): devolução fica pendente até a venda chegar ao servidor (`VENDA_ORIGEM_NAO_ENCONTRADA`); se a venda nunca chegar, tenta para sempre com o vale local.
 4. **Venda nova pendente após a troca**: o vale existe no servidor mas não fica reservado; se outro caixa o gastar antes, a venda cai em `CREDITO_VALE_INSUFICIENTE` (fail-closed, recuperável, sem perda).
 5. **Política para linhas virtuais/serviço** (geram vale sem estoque) e **SKU alterado depois da venda** (recusa falsa `ITEM_NAO_CONSTA_NA_VENDA`).
 6. **Smoke logado com operador** na loja piloto.
-7. `docs/ai/CURRENT_STATUS.md` não alterado: nada mudou em `main`.
+7. Recusas definitivas aparecem só no painel F8 (não no fechamento de caixa); tentativa incerta não tem descarte manual (fail-safe intencional).
+8. `docs/ai/CURRENT_STATUS.md` não alterado: nada mudou em `main`.
 
 ## 6. Arquivos
 
