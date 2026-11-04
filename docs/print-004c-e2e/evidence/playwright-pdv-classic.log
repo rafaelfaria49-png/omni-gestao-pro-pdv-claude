@@ -27,11 +27,11 @@ Running 19 tests using 1 worker
 [17/19] e2e\specs\print-direct-004c.spec.ts:505:5 › PW17 Omni Print desligado na loja: diálogo antigo idêntico, nenhuma chamada nova
 [18/19] e2e\specs\print-direct-004c.spec.ts:514:5 › PW18 venda fora do contrato (KG) ou servidor com o recurso fechado: volta ao fluxo antigo sem registrar nada
 [19/19] e2e\specs\print-direct-004c.spec.ts:537:5 › PW19 registro de impressão indisponível: nada imprime, nada volta ao fluxo antigo, a janela aberta é fechada
-  19 passed (59.8s)
-(node:13012) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+  19 passed (1.3m)
+(node:19660) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-(node:9880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:7992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:9880) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
-(node:9880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:7992) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:7992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)

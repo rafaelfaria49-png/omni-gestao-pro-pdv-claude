@@ -23,6 +23,10 @@ const steps = [
   ["pg-two-agent-processes", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_two", "tools/print-004c-e2e/two-agents.pg.test.ts"], { PRINT_EVIDENCE_FILE: path.join(out, "p1-1-two-processes.jsonl") }],
   ["pg-index-strategy", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_idx", "tools/print-004c-e2e/index-strategy.pg.test.ts"], { PRINT_LAB_LAYOUT: "baseline" }],
   ["pg-d02-rehearsal", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_d02", "tools/print-004c-e2e/d02-rehearsal.pg.test.ts"], { PRINT_LAB_LAYOUT: "baseline" }],
+  // D02-A: migrations recortadas, guarda do build e ferramenta do operador (RUNBOOK_D02.md).
+  ["d02-generator-check", [t("tools/print-d02/generate.mjs"), "--check"], {}],
+  ["d02-guard", [t("node_modules/vitest/vitest.mjs"), "run", "tools/print-d02/d02-guard.test.ts"], {}],
+  ["pg-d02-migrations", [t("tools/print-004c-e2e/run-pg.mjs"), "print_lab_d02m", "tools/print-d02/d02-migrations.pg.test.ts"], { PRINT_LAB_LAYOUT: "baseline" }],
   ["pg-future-layout-apply", [t("tools/print-004c-e2e/pg-lab.mjs"), "reset", "print_lab_future"], { PRINT_LAB_LAYOUT: "future" }],
   ["playwright-pdv-classic", [t("tools/print-004c-e2e/run-playwright.mjs")], {}],
 ]

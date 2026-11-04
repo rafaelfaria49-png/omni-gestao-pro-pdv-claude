@@ -5,8 +5,8 @@ reset print_lab_idx
 
  Test Files  1 passed (1)
       Tests  2 passed (2)
-   Start at  00:50:01
-   Duration  4.46s (transform 268ms, setup 0ms, import 365ms, tests 3.85s, environment 0ms)
+   Start at  14:25:14
+   Duration  4.68s (transform 333ms, setup 0ms, import 452ms, tests 3.92s, environment 0ms)
 
-(node:8108) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:22984) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)

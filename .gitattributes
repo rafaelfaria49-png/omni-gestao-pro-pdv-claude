@@ -1,0 +1,4 @@
+# OMNI-PRINT D02-A: o checksum que o Prisma grava em _prisma_migrations é o SHA-256 dos bytes do migration.sql.
+# Estas migrations precisam de LF em qualquer checkout (Windows com core.autocrlf=true geraria outro checksum).
+tools/print-d02/migrations/** text eol=lf
+prisma/migrations/*_omni_print_d02_*/migration.sql text eol=lf
