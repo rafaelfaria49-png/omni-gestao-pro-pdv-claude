@@ -1294,6 +1294,7 @@ export function TrocasDevolucao({
                               variant="ghost"
                               className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                               disabled={l.maxReturn <= 0 || currentQty <= 0}
+                              aria-label={`Devolver uma unidade a menos de ${l.name}`}
                               onClick={() => {
                                 const val = Math.max(0, currentQty - 1)
                                 setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
@@ -1313,6 +1314,7 @@ export function TrocasDevolucao({
                               variant="ghost"
                               className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                               disabled={l.maxReturn <= 0 || currentQty >= l.maxReturn}
+                              aria-label={`Devolver mais uma unidade de ${l.name}`}
                               onClick={() => {
                                 const val = Math.min(l.maxReturn, currentQty + 1)
                                 setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))

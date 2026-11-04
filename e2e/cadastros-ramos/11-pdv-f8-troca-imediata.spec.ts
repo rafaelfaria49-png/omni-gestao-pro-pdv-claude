@@ -161,8 +161,8 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     await dialog.getByPlaceholder("Somente números").fill(CPF)
     await dialog.getByPlaceholder("Nome completo").fill("Cliente Sintético E2E")
     await dialog.getByRole("button", { name: "Troca Imediata" }).click()
-    const linha = dialog.locator("div").filter({ has: page.getByText(/Vendido: 2/) }).last()
-    await linha.getByRole("button").nth(1).click() // + 1 a devolver
+    await dialog.getByRole("button", { name: `Devolver mais uma unidade de ${P.nome}` }).click()
+    await expect(dialog.getByRole("button", { name: "Finalizar Troca Imediata" })).toBeDisabled() // ainda sem item novo
     const novo = dialog.getByLabel("Bipe ou busca do novo produto")
     await novo.fill(G.sku)
     await novo.press("Enter")
