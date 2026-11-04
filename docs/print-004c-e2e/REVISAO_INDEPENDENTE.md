@@ -78,3 +78,16 @@ após as correções: **APPROVE** (sem P0/P1/P2; 8 P3, tratados abaixo).
 | P3 estado parcial, pior caso, chaves/`keyRef`, fallback por bytes, retenção incompleta, D04 (PID/reinício), Preview por branch, S31 sem prova do atraso, robustez do d02 | corrigidos (texto, `run-loop.ps1`, asserção `STARTED`, testes independentes, `searchParams`, porta 5432) |
 | P3 (achado na revisão) `claim()` falhava inteiro com chave rotacionada durante envio | **corrigido** em `core.ts`; S32 (falha sem a correção) |
 | P3 2ª passada: relatório §7.2 desatualizado; heartbeat/login "não esperam" amplo demais; transação única (ii) não ensaiada; aviso de `migrate dev` na pasta (i); expurgo de `details` apagaria a prova do incerto; redação PW10/PW11; S32/S33 podiam passar sem exercitar o caminho; diretório temporário | corrigidos: §7.2 reescrito; texto restrito a "enquanto aguarda"; ensaio aplica `CUT_II` (01+02 numa transação); aviso registrado; expurgo de `details` só de eventos sem prova; redação ajustada; asserções de lease vigente e linhas afetadas; temp em `beforeAll`/`afterAll` |
+
+## Rodada 6 (D01-A1, reimpressão registrada, sobre `f639248`) — REQUEST_CHANGES → APPROVE
+
+Escopo: `direct-reprint-panel.tsx`, `cupom-nao-fiscal.tsx`, Histórico/Conferência, `browserFallback` com origem REPRINT,
+`UNSUPPORTED_DIRECT_PRINT`, cartão de configuração, PW12–PW18, S34. Primeira passada: **REQUEST_CHANGES** (1 P2, 10 P3).
+Segunda passada: **APPROVE** (sem P0/P1/P2; 3 P3).
+
+| Achado | Tratamento |
+|---|---|
+| P2 consentimento da cópia pelo navegador não ficava preso ao risco (duas abas com risco > 0 imprimiam sem nova confirmação) | origem REPRINT exige token assinado (cotação ou reconfirmação do servidor) comparado ao risco atual; S34 e PW15 cobrem duas abas com risco; mutação comprova |
+| P3 texto do cartão; motivo térmico; via na fila invisível; limite de bytes em laço; `COMMAND_LIMIT` ambíguo; erro de outra venda; `role`/`aria-live`; acompanhamento de 90 s; gravação ao abrir; consentimento expirado | corrigidos (ressalva KG; `UNCERTAIN_RESULT`; `queuedCopies`; térmica escondida com aviso; `COPIES_LIMIT`; erro oculto e zerado por venda; mensagem só no bloco; "Conferir de novo"; painel começa parado; nova cotação automática) |
+| P3 2ª passada: volta ao fluxo antigo sem explicação | corrigido: linha explicando que a venda segue o fluxo atual, sem registro |
+| P3 2ª passada: API do PDV aceita `confirm: true` sem token; térmica sem segundo clique | registrados como riscos residuais em `D01_A1_REIMPRESSAO_REGISTRADA.md` (fora do escopo A1; sem caminho de interface) |

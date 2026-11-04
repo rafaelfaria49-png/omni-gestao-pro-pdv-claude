@@ -112,7 +112,9 @@ export class DirectPrintCore {
       return { consent, possibleAdditionalCopy: exposure.rows.some(r => potentialStates.includes(r.state)) || exposure.browserCopies > 0,
         browserCopies: exposure.browserCopies,
         uncertainCopies: exposure.rows.filter(r => r.state === "UNKNOWN" || r.state === "SENDING").length,
-        acceptedCopies: exposure.rows.filter(r => r.state === "SPOOLER_ACCEPTED" || r.state === "TRANSPORT_ACCEPTED").length }
+        acceptedCopies: exposure.rows.filter(r => r.state === "SPOOLER_ACCEPTED" || r.state === "TRANSPORT_ACCEPTED").length,
+        // Copies still waiting for the agent: a reprint replaces them (they are cancelled, never printed in addition).
+        queuedCopies: exposure.rows.filter(r => r.state === "REGISTERED" || r.state === "READY").length }
     })
   }
 
@@ -123,7 +125,9 @@ export class DirectPrintCore {
     const c: Row = { storeId: text(storeId, 160), saleId: text(v.saleId, 160), kind: v.kind, terminalId: text(v.terminalId, 160),
       deliveryMode: "THERMAL_BOUND", bindingVersionId: null, browserContextId: null, copies: v.copies ?? 1,
       reasonCode: v.reasonCode ?? null, previousJobId: null }
-    check((c.kind === "INITIAL" || c.kind === "REPRINT") && Number.isInteger(c.copies) && c.copies > 0 && c.copies <= this.policy.maxCopies, "COMMAND_LIMIT", 400)
+    check(c.kind === "INITIAL" || c.kind === "REPRINT", "COMMAND_LIMIT", 400)
+    // Own code: a copies/policy mismatch is a configuration error, never a reason to fall back to the unregistered flow.
+    check(Number.isInteger(c.copies) && c.copies > 0 && c.copies <= this.policy.maxCopies, "COPIES_LIMIT", 400)
     check(c.kind === "REPRINT" ? reasons.includes(c.reasonCode) && typeof v.consent === "string" : c.reasonCode === null && v.consent === undefined, "REASON_REQUIRED", 400)
     check(Buffer.byteLength(canonical(c)) + (typeof v.consent === "string" ? v.consent.length : 0) <= this.policy.commandBytes, "COMMAND_LIMIT", 400)
     return this.db.transaction(async sql => {
@@ -380,23 +384,52 @@ export class DirectPrintCore {
    * is marked SEGUNDA VIA. The HTML is rendered and escaped server-side from the confirmed sale.
    */
   async browserFallback(auth: Principal, storeId: string, input: unknown) {
-    const v = shape(input, ["saleId", "confirm", "uiContextId"])
+    const v = shape(input, ["saleId", "confirm", "uiContextId", "origin", "consent"])
     const saleId = text(v.saleId, 160)
+    // D01-A1: a reprint from the sales history / cash conference is a second copy by definition — always marked as one,
+    // and printed only against a signed consent whose disclosed risk is still the current one (like the thermal REPRINT).
+    check(v.origin === undefined || v.origin === "PDV" || v.origin === "REPRINT", "INVALID_INPUT", 400)
+    const reprint = v.origin === "REPRINT"
+    if (reprint) check(typeof v.consent === "string", "RISK_CONFIRMATION_REQUIRED", 400)
     return this.db.transaction(async sql => {
       const actor = await authorize(sql, auth, storeId)
       const source = await this.source(sql, storeId, saleId)
       const d = await this.doc(sql, storeId, saleId)
       const exposure = await this.exposure(sql, d.id)
       const possible = exposure.rows.some(r => potentialStates.includes(r.state)) || exposure.browserCopies > 0
-      if (possible && v.confirm !== true) return { requiresConfirmation: true as const, possibleAdditionalCopy: true,
+      const risk = { possibleAdditionalCopy: possible,
         uncertainCopies: exposure.rows.filter(r => r.state === "UNKNOWN" || r.state === "SENDING").length,
-        acceptedCopies: exposure.rows.filter(r => r.state === "SPOOLER_ACCEPTED" || r.state === "TRANSPORT_ACCEPTED").length, browserCopies: exposure.browserCopies }
+        acceptedCopies: exposure.rows.filter(r => r.state === "SPOOLER_ACCEPTED" || r.state === "TRANSPORT_ACCEPTED").length,
+        browserCopies: exposure.browserCopies, queuedCopies: exposure.rows.filter(r => r.state === "REGISTERED" || r.state === "READY").length }
+      if (reprint && !(await this.browserConsentHolds(sql, text(v.consent, 8192), storeId, d.id, actor.principalId, exposure.hash))) {
+        const consent = this.crypto.sign("browser-reprint-v1", { storeId, documentId: d.id, principalId: actor.principalId,
+          exposureHash: exposure.hash, expires: Date.now() + this.policy.riskMs })
+        return { requiresConfirmation: true as const, ...risk, consent }
+      }
+      if (!reprint && possible && v.confirm !== true) return { requiresConfirmation: true as const, ...risk }
       const cancelled = await sql.exec(`UPDATE public.print_copies SET state='CANCELLED' WHERE document_id=$1::uuid AND state IN ('REGISTERED','READY','PRE_SEND_FAILED')`, [d.id])
-      const mark = possible ? "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR" : "VIA IMPRESSA PELO NAVEGADOR"
+      const mark = reprint ? "SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR" : possible ? "SEGUNDA VIA - IMPRESSAO PELO NAVEGADOR" : "VIA IMPRESSA PELO NAVEGADOR"
       await this.event(sql, { store_id: storeId, document_id: d.id }, "BROWSER_FALLBACK_PRINTED", actor.principalId,
-        { mark, possibleAdditionalCopy: possible, cancelledThermalCopies: cancelled, physicalPrintConfirmed: false })
+        { mark, origin: reprint ? "REPRINT" : "PDV", possibleAdditionalCopy: possible, cancelledThermalCopies: cancelled, physicalPrintConfirmed: false })
       return { requiresConfirmation: false as const, mark, html: renderBrowserHtml(source.input, source.mode, mark) }
     })
+  }
+
+  /**
+   * Browser reprint consent (D01-A1): either the reprint quote the operator saw (risk-consent-v1) or the re-confirmation
+   * the server issued (browser-reprint-v1). It holds only for the same store, document, principal, before expiry and while
+   * the disclosed exposure is unchanged; a forged token is refused, a stale one asks again.
+   */
+  private async browserConsentHolds(sql: Sql, token: string, storeId: string, documentId: string, principalId: string, currentHash: string) {
+    let c: Row, quoted = false
+    try { c = this.crypto.verify("browser-reprint-v1", token) } catch { c = this.crypto.verify("risk-consent-v1", token); quoted = true }
+    if (c.storeId !== storeId || c.documentId !== documentId || c.principalId !== principalId || !(Number(c.expires) > Date.now())) return false
+    if (!quoted) return c.exposureHash === currentHash
+    // The quote's hash excludes its own reprint intent. Once that intent printed (thermal, another tab) the quote is stale;
+    // while unused, the exclusion changes nothing and the hash is compared exactly as quoteReprint computed it.
+    if (typeof c.intentId !== "string" || !UUID.test(c.intentId)) return false
+    if ((await sql.query("SELECT 1 FROM public.print_jobs WHERE intent_id=$1::uuid", [c.intentId])).length > 0) return false
+    return c.exposureHash === (await this.exposure(sql, documentId, c.intentId)).hash
   }
 
   /** A READY copy that can no longer start is closed safely (no attempt exists, so nothing was sent). */

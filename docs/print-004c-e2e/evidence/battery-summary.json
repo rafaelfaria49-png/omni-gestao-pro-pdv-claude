@@ -1,6 +1,6 @@
 {
   "goal": "OMNI-PRINT-004C-INTEGRACAO-END-TO-END-001",
-  "at": "2026-11-04T02:23:23.095Z",
+  "at": "2026-11-04T03:15:37.286Z",
   "transport": "SIMULATED (FakeSpooler) + real Windows PowerShell host without printer",
   "physicalPrint": "NOT_TESTED_NO_PRINTER",
   "steps": [
@@ -25,40 +25,40 @@
       "status": "PASS",
       "exitCode": 0,
       "tests": "31 passed (31)",
-      "seconds": 5,
-      "logSha256": "7bafe6024938dcd4a3e021c9d1af3aef47c600303acfcf55efd69e695d738543"
+      "seconds": 7,
+      "logSha256": "8fedc49a13a1210bc277ed2c99231d053fb9525fe4dbf723781249afe8159ee7"
     },
     {
       "step": "pg-scenarios",
       "status": "PASS",
       "exitCode": 0,
-      "tests": "33 passed (33)",
-      "seconds": 15,
-      "logSha256": "b75a03f2f5d5460a5b7c3ce60b905596cf76f36f5ec551b1ba982905ec3bccde"
+      "tests": "34 passed (34)",
+      "seconds": 14,
+      "logSha256": "e42285572f23be09d3ee1fc2e3acd7b95eb590004fc139cb889fadf2bfc3332a"
     },
     {
       "step": "pg-synthetic-004b-regression",
       "status": "PASS",
       "exitCode": 0,
       "tests": "3 passed (3)",
-      "seconds": 4,
-      "logSha256": "934c02f4236a8f23081f041a5eac8d5b450c9f6862d36db148edf10d3513eeea"
+      "seconds": 3,
+      "logSha256": "af60e01e6dd690c126b940fcdc8a42194cc355c33b07f684b1351dcb08efaf9d"
     },
     {
       "step": "pg-two-agent-processes",
       "status": "PASS",
       "exitCode": 0,
       "tests": "1 passed (1)",
-      "seconds": 9,
-      "logSha256": "c77f8c4cfd4a930e6b9f32aa771e19bb96315980efa49c2e598b1c23b20330e7"
+      "seconds": 7,
+      "logSha256": "29ac4d51fb768d5becfcfc782ea3db931e1ea953db6d5c0d29abb1f85fe93674"
     },
     {
       "step": "pg-index-strategy",
       "status": "PASS",
       "exitCode": 0,
       "tests": "2 passed (2)",
-      "seconds": 7,
-      "logSha256": "b959b21713e8fba3432753b7e6db22e0914ccb9dbbd792ac78db23146ee794fa"
+      "seconds": 6,
+      "logSha256": "135f17e6991b4b13a7ed083cec402144d90b36e31a332ac82eaea88899ca3d45"
     },
     {
       "step": "pg-d02-rehearsal",
@@ -66,7 +66,7 @@
       "exitCode": 0,
       "tests": "5 passed (5)",
       "seconds": 18,
-      "logSha256": "6ce82be26b5fbeb317da18f90f04fdeed8360bace87356ee9bbbc66bddb9e6d8"
+      "logSha256": "21747222369f8e943866badcabb68710be50cbcc9ae271619bdee2c4c2b26037"
     },
     {
       "step": "pg-future-layout-apply",
@@ -80,9 +80,9 @@
       "step": "playwright-pdv-classic",
       "status": "PASS",
       "exitCode": 0,
-      "tests": "11 passed (38.4s)",
-      "seconds": 41,
-      "logSha256": "d1342ab5fc0145e4a83d18770b352696743ab8731fe4993eab613c994e4be5fb"
+      "tests": "18 passed (55.9s)",
+      "seconds": 59,
+      "logSha256": "61513eb80a0ea07fac6312c8237e124ad6315bfc5faea31c53d0c92a09dcbdbb"
     }
   ]
 }

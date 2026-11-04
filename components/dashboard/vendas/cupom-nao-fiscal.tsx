@@ -15,6 +15,7 @@ import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
 import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { printPdvSaleReceipt, type PrintJobResult } from "@/lib/pdv-print-runtime"
+import { DirectReprintPanel } from "./direct-reprint-panel"
 import type { PdvReceiptInput } from "@/lib/escpos"
 import {
   PDV_NON_FISCAL_NOTICE,
@@ -59,6 +60,8 @@ export interface CupomData {
   status?: string
   tipoVenda?: string
   observacaoGeral?: string
+  /** `Venda.id` da linha no servidor — identidade da venda no registro de impressões (D01-A1). */
+  vendaId?: string
 }
 
 interface CupomNaoFiscalProps {
@@ -67,6 +70,11 @@ interface CupomNaoFiscalProps {
   data: CupomData
   /** Usado pelo pós-venda da Venda Completa; histórico mantém ação manual. */
   autoPrint?: boolean
+  /**
+   * Reimpressão do Histórico/Conferência (D01-A1): loja da venda. Com a impressão direta ligada na loja, imprimir passa
+   * pelo registro de impressões (SEGUNDA VIA registrada); sem ela, o fluxo abaixo segue idêntico.
+   */
+  reprintStoreId?: string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -234,7 +242,7 @@ function toPdvReceiptInput(d: CupomData): PdvReceiptInput {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: CupomNaoFiscalProps) {
+export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false, reprintStoreId }: CupomNaoFiscalProps) {
   const { toast } = useToast()
   const { impressaoConfig } = useStoreSettings()
   const isCancelada = data.status === "cancelada"
@@ -243,6 +251,12 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
   const [printing, setPrinting] = useState(false)
   const [printError, setPrintError] = useState("")
   const [printed, setPrinted] = useState(false)
+  // Venda fora do contrato da impressão direta ou servidor com o recurso fechado: volta ao fluxo existente.
+  const [legacyFor, setLegacyFor] = useState<string | null>(null)
+  const registered = !!reprintStoreId && !!data.vendaId && impressaoConfig.impressaoDireta && !autoPrint && legacyFor !== data.vendaId
+  const useLegacyFlow = useCallback(() => setLegacyFor(data.vendaId ?? null), [data.vendaId])
+  // O Histórico reaproveita o diálogo para outra venda: erro/estado de impressão de uma venda nunca aparece em outra.
+  useEffect(() => { setPrintError(""); setPrinted(false) }, [data.vendaId])
 
   const handleImprimir = useCallback(async (forceBrowserFallback = false) => {
     setPrinting(true)
@@ -459,14 +473,24 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
 
           {/* Actions */}
           <div className="shrink-0 border-t border-border px-5 py-4">
-            {printError && (
+            {!registered && printError && (
               <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{printError}</span>
               </div>
             )}
+            {!registered && !!data.vendaId && legacyFor === data.vendaId && (
+              <p className="mb-2 text-xs text-muted-foreground" data-testid="reprint-legacy-notice">
+                Esta venda segue o fluxo atual de impressão, sem registro de segunda via.
+              </p>
+            )}
+            {registered && reprintStoreId && data.vendaId && (
+              <div className="mb-2">
+                <DirectReprintPanel key={data.vendaId} storeId={reprintStoreId} saleId={data.vendaId} numeroVenda={data.numeroPedido} onLegacy={useLegacyFlow} />
+              </div>
+            )}
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
+              {!registered && <Button
                 variant={printError ? "default" : "outline"}
                 className="h-10 flex-1 gap-2 border-border text-sm"
                 disabled={printing}
@@ -474,8 +498,8 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
               >
                 {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : printed ? <CheckCircle2 className="h-4 w-4" /> : <Printer className="h-4 w-4" />}
                 {printing ? "Enviando…" : printed ? "Imprimir 2ª via" : "Enviar para térmica"}
-              </Button>
-              {printError && (
+              </Button>}
+              {!registered && printError && (
                 <Button
                   variant="outline"
                   className="h-10 flex-1 gap-2 border-border text-sm"

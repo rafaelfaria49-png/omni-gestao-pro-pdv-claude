@@ -74,6 +74,11 @@ export function ImpressaoDiretaAgenteCard() {
           <div className="min-w-0">
             <Label htmlFor="impressao-direta-switch">Usar impressão direta nesta loja</Label>
             <p className="text-xs text-muted-foreground">Vale para os terminais com impressora vinculada abaixo. Desligado por padrão.</p>
+            <p className="text-xs text-muted-foreground" data-testid="impressao-direta-escopo">
+              A impressão automática atende, por enquanto, só o PDV Clássico. Os outros PDVs continuam imprimindo como hoje.
+              Reimpressões pelo Histórico de vendas e pela Conferência do caixa ficam registradas e saem como SEGUNDA VIA, exceto
+              vendas fora do contrato da impressão direta (como as de peso/KG), que seguem o fluxo atual.
+            </p>
           </div>
           <Switch id="impressao-direta-switch" checked={impressaoConfig.impressaoDireta} disabled={busy} onCheckedChange={(v) => void setStoreFlag(v)} />
         </div>

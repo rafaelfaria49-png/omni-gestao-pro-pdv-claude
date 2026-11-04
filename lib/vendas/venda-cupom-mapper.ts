@@ -43,6 +43,8 @@ export type CupomDataMapeado = {
   cashTendered?: number
   troco?: number
   status?: string
+  /** `Venda.id` (servidor) — identidade da venda no registro de impressões (D01-A1). */
+  vendaId?: string
 }
 
 function round2(n: number): number {
@@ -88,5 +90,6 @@ export function mapVendaDetalheToCupom(d: VendaDetalhe, loja: CupomLojaInfo): Cu
     cashTendered: d.cashTendered ?? undefined,
     troco,
     status: d.status,
+    vendaId: d.dbId || undefined,
   }
 }

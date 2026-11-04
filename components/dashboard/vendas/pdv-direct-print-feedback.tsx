@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertTriangle, CheckCircle2, Loader2, Printer, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { directPrintClient, directPrintErrorMessage, type ReprintQuote } from "@/lib/printing/direct/client"
+import { directPrintClient, directPrintErrorMessage, UNSUPPORTED_DIRECT_PRINT, type ReprintQuote } from "@/lib/printing/direct/client"
 import type { JobView } from "@/lib/printing/direct/status"
 
 /** Sale CONFIRMED by the server (serverId = Venda.id). A pending sale never produces a request. */
@@ -15,8 +15,6 @@ export interface PdvDirectPrintFeedbackProps {
   /** The sale cannot use direct print (KG/fractional, item limit, payment form…): hand back to the existing manual print. */
   onUnsupported?: () => void
 }
-/** Server answers meaning "this receipt is outside the direct-print contract", not a transient failure. */
-const UNSUPPORTED = new Set(["DOCUMENT_INELIGIBLE", "KG_RECEIPT_BLOCKED", "UNSUPPORTED_QUANTITY", "UNSUPPORTED_PAYMENT", "ITEM_LIMIT", "INVALID_MONEY", "INVALID_PAYMENT", "THERMAL_PROFILE_UNSUPPORTED"])
 
 type Risk = { possibleAdditionalCopy: boolean; uncertainCopies: number; acceptedCopies: number; browserCopies: number }
 type Ui =
@@ -80,7 +78,7 @@ export function PdvDirectPrintFeedback({ request, onDismiss, onUnsupported }: Pd
     const r = await directPrintClient.createInitial(request.storeId, { saleId: request.saleId, terminalId: request.terminalId,
       copies: Math.min(2, Math.max(1, request.copies)), uiContextId: newContextId() })
     if (generation.current !== gen) return
-    if (!r.ok && UNSUPPORTED.has(r.error) && unsupportedRef.current) { unsupportedRef.current(); return }
+    if (!r.ok && UNSUPPORTED_DIRECT_PRINT.has(r.error) && unsupportedRef.current) { unsupportedRef.current(); return }
     if (!r.ok) { setUi({ kind: "error", message: directPrintErrorMessage(r.error) }); return }
     show(gen, r.value.job)
   }, [request, show])

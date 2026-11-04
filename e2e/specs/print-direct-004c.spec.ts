@@ -7,12 +7,13 @@ import { mkdtempSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import * as direct from "../../lib/printing/direct/http"
-import { commercialDigest, depsFor, IDS, LabServer, labPrisma, labRuntime, prismaDatabase, seed, sessionOf, withPolicy, type EnabledRuntime } from "../../tools/print-004c-e2e/lab-env"
+import { commercialDigest, confirmedSale, depsFor, IDS, LabServer, labPrisma, labRuntime, prismaDatabase, seed, sessionOf, withPolicy, type EnabledRuntime } from "../../tools/print-004c-e2e/lab-env"
 import { ORIGIN, STORE, TERMINAL, seedStorage } from "../fixtures/print-direct"
 import { fork, type ChildProcess } from "node:child_process"
 
 type Json = Record<string, any>
-declare global { interface Window { __legacy: { auto: number; dialog: number }; __printCfg: Json; __browser: { open: number; print: number; childPrint: number; html: string } } }
+declare global { interface Window { __legacy: { auto: number; dialog: number }; __printCfg: Json; __browser: { open: number; print: number; childPrint: number; html: string }
+  __cupom: Json; __reprintStore: string | undefined; __legacyPrint: { thermal: number; html: number } } }
 
 const URL_ = process.env.PRINT_PG_URL
 test.skip(!URL_, "PRINT_PG_URL (print_lab_*) required")
@@ -67,7 +68,7 @@ test.afterEach(async () => { await stopAgent(); expect(errors).toEqual([]) })
 async function handle(route: Route) {
   const req = route.request(), url = new URL(req.url())
   if (url.origin !== ORIGIN) { errors.push("external " + req.url()); await route.abort(); return }
-  if (req.method() === "GET" && ["/", "/fixture.js", "/favicon.ico"].includes(url.pathname)) { await route.continue(); return }
+  if (req.method() === "GET" && ["/", "/fixture.js", "/favicon.ico", "/reprint", "/reprint.js"].includes(url.pathname)) { await route.continue(); return }
   const ok = (body: unknown) => route.fulfill({ status: 200, json: body })
   const key = `${req.method()} ${url.pathname}`
   if (url.pathname.startsWith("/api/print/direct/")) {
@@ -309,4 +310,216 @@ test("PW11 venda KG com impressão automática desligada → diálogo manual exi
   await feedback(page).getByRole("button", { name: "Imprimir comprovante" }).click()
   await expect.poll(() => legacy(page)).toEqual({ auto: 0, dialog: 1 })
   await expect(feedback(page)).toHaveCount(0)
+})
+
+// ── D01-A1: reimpressão registrada pelo Histórico de vendas / Conferência do caixa (mesmo diálogo real: CupomNaoFiscal) ──
+const panel = (page: Page) => page.getByTestId("direct-reprint-panel")
+const legacyPrint = (page: Page) => page.evaluate(() => window.__legacyPrint)
+const asCaixa = () => depsFor(db, runtime, sessionOf(IDS.caixaA))
+const jobRequest = (saleId: string, uiContextId: string) => new Request(ORIGIN + "/api/print/direct/jobs", { method: "POST",
+  headers: { origin: ORIGIN, "content-type": "application/json", "x-assistec-loja-id": STORE },
+  body: JSON.stringify({ saleId, kind: "INITIAL", terminalId: TERMINAL.id, uiContextId }) })
+/** INITIAL through the real API (as the PDV does), accepted by the real agent with the simulated spooler. */
+async function printInitial(saleId: string) {
+  const res = await direct.createJob(jobRequest(saleId, "pw-initial"), asCaixa())
+  const body = await res.json() as Json
+  expect(res.status, JSON.stringify(body)).toBe(200)
+  return body.job.jobId as string
+}
+const jobPhase = async (jobId: string) => ((await (await direct.getJob(new Request(ORIGIN + "/api/print/direct/jobs/" + jobId,
+  { headers: { origin: ORIGIN, "x-assistec-loja-id": STORE } }), asCaixa(), jobId)).json()) as Json).job.phase as string
+const reprintEvents = async (saleId: string) => prisma.$queryRawUnsafe<Json[]>(`SELECT e.details->>'mark' mark,e.details->>'origin' origin FROM public.print_events e
+  JOIN public.print_documents d ON d.id=e.document_id WHERE d.sale_id=$1 AND e.event_type='BROWSER_FALLBACK_PRINTED' ORDER BY e.created_at`, saleId)
+const jobsOf = async (saleId: string) => prisma.$queryRawUnsafe<Json[]>(`SELECT j.kind FROM public.print_jobs j JOIN public.print_documents d ON d.id=j.document_id
+  WHERE d.sale_id=$1 ORDER BY j.created_at`, saleId)
+
+/** The panel writes nothing to the server until the operator asks to reprint (P3-9 of review round 6). */
+const startReprint = (page: Page) => panel(page).getByRole("button", { name: "Reimprimir como 2ª via" }).click()
+const documentsOf = async (saleId: string) => prisma.$queryRawUnsafe<Json[]>(`SELECT 1 FROM public.print_documents WHERE sale_id=$1`, saleId)
+
+async function mountReprint(page: Page, saleId: string, cfg: Json = {}) {
+  const storage: Record<string, string> = {}
+  seedStorage({ setItem: (k, v) => { storage[k] = v } })
+  const [row] = await prisma.$queryRawUnsafe<Json[]>(`SELECT "pedidoId",total FROM public.vendas WHERE id=$1`, saleId)
+  const cupom = { numeroPedido: row.pedidoId, at: new Date().toISOString(), lojaNome: "Loja Sintética A", total: Number(row.total), status: "concluida", vendaId: saleId,
+    itens: [{ nome: "Café coado — grão especial", quantidade: 2, precoUnitario: 7.5, lineTotal: 15 }], pagamentos: [{ label: "Dinheiro", valor: Number(row.total) }] }
+  await page.addInitScript(([entries, printCfg, data, store]) => {
+    for (const [k, v] of Object.entries(entries as Record<string, string>)) localStorage.setItem(k, v)
+    window.__printCfg = printCfg as Json
+    window.__cupom = data as Json
+    window.__reprintStore = store as string
+    window.__browser = { open: 0, print: 0, childPrint: 0, html: "" }
+    window.print = () => { window.__browser.print++ }
+    window.open = (() => { window.__browser.open++; return { document: { open() {}, write(h: string) { window.__browser.html += h }, close() {} }, focus() {}, print() { window.__browser.childPrint++ }, close() {} } }) as unknown as typeof window.open
+  }, [storage, { impressaoDireta: true, ...cfg }, cupom, STORE] as const)
+  await page.goto("/reprint")
+}
+
+test("PW12 reimpressão registrada (Histórico/Conferência) pela térmica do caixa: risco informado, sai SEGUNDA VIA, nada pelo fluxo antigo", async ({ page }) => {
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  const before = (await spooled()).length
+  await printInitial(sale.id)
+  await expect.poll(async () => (await spooled()).length, { timeout: 15000 }).toBe(before + 1)
+  await mountReprint(page, sale.id)
+  await expect(panel(page)).toContainText("Reimpressão registrada")
+  expect(printCalls.filter(c => !c.includes("terminal-status"))).toEqual([]) // opening the receipt writes nothing
+  await startReprint(page)
+  await expect(panel(page)).toContainText("1 via(s) desta venda pode(m) já ter saído")
+  await expect(panel(page)).toContainText("SEGUNDA VIA")
+  await expect(page.getByRole("button", { name: "Enviar para térmica" })).toHaveCount(0) // legacy unregistered print is gone
+  expect((await spooled()).length).toBe(before + 1) // nothing before the explicit choice
+  await panel(page).getByRole("button", { name: "Imprimir 2ª via na impressora do caixa" }).click()
+  await expect(panel(page)).toContainText("Segunda via enviada à fila da impressora", { timeout: 15000 })
+  expect((await spooled()).length).toBe(before + 2)
+  expect((await spooled()).at(-1)!.text).toContain("SEGUNDA VIA - REIMPRESSAO")
+  expect((await jobsOf(sale.id)).map(j => j.kind)).toEqual(["INITIAL", "REPRINT"])
+  expect(await legacyPrint(page)).toEqual({ thermal: 0, html: 0 })
+  expect(await browserCounts(page)).toMatchObject({ open: 0, print: 0, childPrint: 0 })
+})
+
+test("PW13 reimpressão registrada pelo navegador: HTML do servidor marcado SEGUNDA VIA - REIMPRESSAO, evento auditável, nada térmico", async ({ page }) => {
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  const before = (await spooled()).length
+  await printInitial(sale.id)
+  await expect.poll(async () => (await spooled()).length, { timeout: 15000 }).toBe(before + 1)
+  await mountReprint(page, sale.id)
+  await startReprint(page)
+  await expect(panel(page)).toContainText("pode(m) já ter saído")
+  await panel(page).getByRole("button", { name: "Imprimir 2ª via pelo navegador" }).click()
+  await expect(panel(page)).toContainText("Impressão do navegador aberta")
+  const b = await browserCounts(page)
+  expect([b.open, b.childPrint]).toEqual([1, 1])
+  expect(b.html).toContain("SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR")
+  expect(b.html).not.toContain("<script")
+  expect(await reprintEvents(sale.id)).toEqual([{ mark: "SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR", origin: "REPRINT" }])
+  await page.waitForTimeout(1500)
+  expect((await spooled()).length).toBe(before + 1)
+  expect(await legacyPrint(page)).toEqual({ thermal: 0, html: 0 })
+})
+
+test("PW14 venda sem via registrada: reimpressão sai SEGUNDA VIA mesmo assim e fecha a 1ª via (nenhum 'original' depois)", async ({ page }) => {
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  const before = (await spooled()).length
+  await mountReprint(page, sale.id)
+  await expect(panel(page)).toContainText("Reimpressão registrada")
+  expect(await documentsOf(sale.id)).toEqual([])
+  await startReprint(page)
+  await expect(panel(page)).toContainText("Nenhuma via desta venda foi registrada como impressa")
+  await panel(page).getByRole("button", { name: "Imprimir 2ª via pelo navegador" }).click()
+  await expect(panel(page)).toContainText("Impressão do navegador aberta")
+  expect((await browserCounts(page)).html).toContain("SEGUNDA VIA - REIMPRESSAO PELO NAVEGADOR")
+  const res = await direct.createJob(jobRequest(sale.id, "pw14"), asCaixa())
+  expect(((await res.json()) as Json).error).toBe("BROWSER_COPY_ALREADY_ISSUED")
+  await page.waitForTimeout(1500)
+  expect((await spooled()).length).toBe(before)
+})
+
+test("PW15 duas abas: navegador pede nova confirmação quando outra aba já imprimiu; térmica nas duas abas converge em 1 via", async ({ page, context }) => {
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  const other = await context.newPage()
+  await mountReprint(page, sale.id)
+  await mountReprint(other, sale.id)
+  await startReprint(page)
+  await startReprint(other)
+  await expect(panel(page)).toContainText("Nenhuma via desta venda foi registrada")
+  await expect(panel(other)).toContainText("Nenhuma via desta venda foi registrada")
+  await panel(page).getByRole("button", { name: "Imprimir 2ª via pelo navegador" }).click()
+  await expect(panel(page)).toContainText("Impressão do navegador aberta")
+  // The other tab still shows the old quote: the server refuses to print without a new confirmation.
+  await panel(other).getByRole("button", { name: "Imprimir 2ª via pelo navegador" }).click()
+  await expect(panel(other)).toContainText("Confirme de novo: a situação das vias mudou")
+  await expect(panel(other)).toContainText("1 via(s) desta venda pode(m) já ter saído")
+  expect((await browserCounts(other)).html).toBe("")
+  expect(await reprintEvents(sale.id)).toHaveLength(1)
+  await panel(other).getByRole("button", { name: "Confirmar 2ª via pelo navegador" }).click()
+  await expect(panel(other)).toContainText("Impressão do navegador aberta")
+  expect(await reprintEvents(sale.id)).toHaveLength(2)
+
+  // Thermal from two tabs with the same quote: the second click converges on the job of the first (one paper).
+  const sale2 = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  const p1 = await context.newPage(), p2 = await context.newPage()
+  await mountReprint(p1, sale2.id)
+  await mountReprint(p2, sale2.id)
+  await startReprint(p1)
+  await startReprint(p2)
+  await expect(panel(p1)).toContainText("Nenhuma via")
+  await expect(panel(p2)).toContainText("Nenhuma via")
+  const before = (await spooled()).length
+  await Promise.all([panel(p1).getByRole("button", { name: "Imprimir 2ª via na impressora do caixa" }).click(),
+    panel(p2).getByRole("button", { name: "Imprimir 2ª via na impressora do caixa" }).click()])
+  await expect(panel(p1)).toContainText("Segunda via enviada à fila da impressora", { timeout: 15000 })
+  await expect(panel(p2)).toContainText("Segunda via enviada à fila da impressora", { timeout: 15000 })
+  await page.waitForTimeout(1500)
+  expect((await spooled()).length - before).toBe(1)
+  expect((await jobsOf(sale2.id)).map(j => j.kind)).toEqual(["REPRINT"])
+
+  // Both tabs already see a risk (copy accepted by the printer): the browser copy of the second tab asks again.
+  const sale3 = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  const s3before = (await spooled()).length
+  await printInitial(sale3.id)
+  await expect.poll(async () => (await spooled()).length, { timeout: 15000 }).toBe(s3before + 1)
+  const r1 = await context.newPage(), r2 = await context.newPage()
+  await mountReprint(r1, sale3.id)
+  await mountReprint(r2, sale3.id)
+  await startReprint(r1)
+  await startReprint(r2)
+  await expect(panel(r1)).toContainText("1 via(s) desta venda pode(m) já ter saído")
+  await expect(panel(r2)).toContainText("1 via(s) desta venda pode(m) já ter saído")
+  await panel(r1).getByRole("button", { name: "Imprimir 2ª via pelo navegador" }).click()
+  await expect(panel(r1)).toContainText("Impressão do navegador aberta")
+  await panel(r2).getByRole("button", { name: "Imprimir 2ª via pelo navegador" }).click()
+  await expect(panel(r2)).toContainText("Confirme de novo: a situação das vias mudou")
+  await expect(panel(r2)).toContainText("2 via(s) desta venda pode(m) já ter saído")
+  expect((await browserCounts(r2)).html).toBe("")
+  expect(await reprintEvents(sale3.id)).toHaveLength(1)
+  await Promise.all([other.close(), p1.close(), p2.close(), r1.close(), r2.close()])
+})
+
+test("PW16 resultado incerto da 1ª via: reimpressão informa o risco, sai uma SEGUNDA VIA e nada é reenviado sozinho", async ({ page }) => {
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  await pushFault("TIMEOUT_AFTER")
+  const initial = await printInitial(sale.id)
+  await expect.poll(() => jobPhase(initial), { timeout: 20000 }).toBe("UNCERTAIN")
+  const afterInitial = (await spooled()).length
+  await mountReprint(page, sale.id)
+  await startReprint(page)
+  await expect(panel(page)).toContainText("pode(m) já ter saído")
+  await panel(page).getByRole("button", { name: "Imprimir 2ª via na impressora do caixa" }).click()
+  await expect(panel(page)).toContainText("Segunda via enviada à fila da impressora", { timeout: 15000 })
+  await page.waitForTimeout(1500)
+  expect((await spooled()).length - afterInitial).toBe(1)
+  expect((await spooled()).at(-1)!.text).toContain("SEGUNDA VIA - REIMPRESSAO")
+  expect(await jobPhase(initial)).toBe("UNCERTAIN")
+})
+
+test("PW17 Omni Print desligado na loja: diálogo antigo idêntico, nenhuma chamada nova", async ({ page }) => {
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  await mountReprint(page, sale.id, { impressaoDireta: false })
+  await page.getByRole("button", { name: "Enviar para térmica" }).click()
+  await expect.poll(() => legacyPrint(page)).toEqual({ thermal: 1, html: 0 })
+  await expect(panel(page)).toHaveCount(0)
+  expect(printCalls).toEqual([])
+})
+
+test("PW18 venda fora do contrato (KG) ou servidor com o recurso fechado: volta ao fluxo antigo sem registrar nada", async ({ page, context }) => {
+  const kg = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  await prisma.$executeRawUnsafe(`UPDATE public.vendas SET payload=payload||'{"manualKg":true}'::jsonb WHERE id=$1`, kg.id)
+  await mountReprint(page, kg.id)
+  await startReprint(page)
+  await expect(page.getByRole("button", { name: "Enviar para térmica" })).toBeVisible()
+  await expect(page.getByTestId("reprint-legacy-notice")).toContainText("sem registro de segunda via")
+  await expect(panel(page)).toHaveCount(0)
+  await page.getByRole("button", { name: "Enviar para térmica" }).click()
+  await expect.poll(() => legacyPrint(page)).toEqual({ thermal: 1, html: 0 })
+  expect(await reprintEvents(kg.id)).toEqual([])
+
+  runtime = { enabled: false, reason: "OWNER_APPROVAL_REQUIRED" } as unknown as EnabledRuntime
+  const sale = await confirmedSale(prisma, STORE, { terminalId: TERMINAL.id })
+  const p2 = await context.newPage()
+  await mountReprint(p2, sale.id)
+  await startReprint(p2)
+  await expect(p2.getByRole("button", { name: "Enviar para térmica" })).toBeVisible()
+  await expect(panel(p2)).toHaveCount(0)
+  expect(await jobsOf(sale.id)).toEqual([])
+  await p2.close()
 })

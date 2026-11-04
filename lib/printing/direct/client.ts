@@ -7,9 +7,11 @@ import type { JobView } from "./status"
 export type DirectTerminalStatus =
   | { configured: false }
   | { configured: true; printerName: string; profileId: string; agentOnline: boolean; printerOnline: boolean | null; destinationBlocked: boolean }
-export type ReprintQuote = { consent: string; possibleAdditionalCopy: boolean; uncertainCopies: number; acceptedCopies: number; browserCopies: number }
+export type ReprintQuote = { consent: string; possibleAdditionalCopy: boolean; uncertainCopies: number; acceptedCopies: number; browserCopies: number; queuedCopies: number }
 export type BrowserFallback =
-  | { requiresConfirmation: true; possibleAdditionalCopy: true; uncertainCopies: number; acceptedCopies: number; browserCopies: number }
+  | { requiresConfirmation: true; possibleAdditionalCopy: boolean; uncertainCopies: number; acceptedCopies: number; browserCopies: number; queuedCopies: number
+      /** Reprint origin only: re-confirmation bound to the risk just disclosed (D01-A1). */
+      consent?: string }
   | { requiresConfirmation: false; mark: string; html: string }
 export type DirectResult<T> = { ok: true; value: T } | { ok: false; error: string; status: number }
 
@@ -42,7 +44,7 @@ export const directPrintClient = {
   quoteReprint: (storeId: string, saleId: string) => request<{ quote: ReprintQuote }>(storeId, "/api/print/direct/reprint-quote", { saleId }),
   createReprint: (storeId: string, input: { saleId: string; terminalId: string; reasonCode: string; consent: string; uiContextId: string }) =>
     request<{ job: JobView }>(storeId, "/api/print/direct/jobs", { ...input, kind: "REPRINT" }),
-  browserFallback: (storeId: string, input: { saleId: string; confirm: boolean }) =>
+  browserFallback: (storeId: string, input: { saleId: string; confirm: boolean; origin?: "PDV" | "REPRINT"; consent?: string }) =>
     request<{ fallback: BrowserFallback }>(storeId, "/api/print/direct/browser-fallback", input),
   adminList: (storeId: string) => request<{ installations: AdminInstallation[]; bindings: AdminBinding[] }>(storeId, "/api/print/direct/admin"),
   adminAction: <T>(storeId: string, body: Record<string, unknown>) => request<T>(storeId, "/api/print/direct/admin", body),
@@ -51,6 +53,12 @@ export type AdminInstallation = { installationId: string; label: string; revoked
   lastSeenAt: string | null; agentVersion: string | null; printers: Array<{ name: string; online: boolean; status: string; isDefault: boolean; portKind: string }> }
 export type AdminBinding = { bindingId: string; terminalId: string; terminalLabel: string; installationId: string; printerName: string; profileId: string; restrictedToBrowser: boolean }
 
+/**
+ * Server answers meaning "this receipt is outside the direct-print contract", not a transient failure. The byte limits
+ * (command/snapshot/payload) are refused before any copy exists (S21: zero effects), so the existing flow is safe (D01-A1).
+ */
+export const UNSUPPORTED_DIRECT_PRINT: ReadonlySet<string> = new Set(["DOCUMENT_INELIGIBLE", "KG_RECEIPT_BLOCKED", "UNSUPPORTED_QUANTITY", "UNSUPPORTED_PAYMENT", "ITEM_LIMIT",
+  "INVALID_MONEY", "INVALID_PAYMENT", "THERMAL_PROFILE_UNSUPPORTED", "COMMAND_LIMIT", "SNAPSHOT_LIMIT", "PAYLOAD_LIMIT"])
 /** Transient failures keep the last known state; definitive answers replace it. */
 export const isTransientDirectError = (r: { error: string; status: number }) => r.error === "NETWORK" || r.status === 0 || r.status >= 500 || r.status === 429
 
@@ -69,6 +77,7 @@ export function directPrintErrorMessage(code: string): string {
     case "UNAUTHENTICATED": case "SESSION_REVOKED": return "Sua sessão expirou. Entre novamente para imprimir."
     case "FORBIDDEN": return "Seu usuário não tem permissão para imprimir nesta loja."
     case "RATE_LIMIT": return "Muitas solicitações de impressão. Aguarde um instante."
+    case "COPIES_LIMIT": return "O número de vias configurado está acima do permitido. Revise a configuração de impressão."
     case "AUTHORIZATION_EXPIRED": case "COPY_NOT_RETRYABLE": return "Não é possível tentar novamente esta via. Use a segunda via."
     case "STALE_RISK": case "RISK_CONFIRMATION_REQUIRED": return "A situação das vias mudou. Confirme a segunda via novamente."
     case "DIRECT_PRINT_DISABLED": return "Impressão direta indisponível neste ambiente."
