@@ -63,7 +63,7 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated?connect_timeout=1
@@ -192,7 +192,7 @@ jobs:
   e2e-authenticated:
     # App integrada (build de produção + next start) contra PostgreSQL descartável,
     # login NextAuth real e usuários sintéticos. Sem credenciais produtivas.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
       postgres:
