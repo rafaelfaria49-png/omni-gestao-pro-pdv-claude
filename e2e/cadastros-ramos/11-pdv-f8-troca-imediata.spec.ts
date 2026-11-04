@@ -63,7 +63,10 @@ async function venderDuasEmDinheiro(page: Page, bipe: Locator) {
     await bipe.fill(P.sku)
     await bipe.press("Enter")
   }
-  await expect(cartRow(page, P.nome)).toHaveCount(1)
+  // O Clássico cria uma linha por bipe (pushCartLine): não pressupor agrupamento.
+  // Prova a identidade e as 2 unidades pelas linhas do produto P (nenhum outro item).
+  await expect(cartRow(page, P.nome)).toHaveCount(2)
+  await expect(page.locator(`[title="${G.nome}"]`)).toHaveCount(0)
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await page.keyboard.press("F12")
   const modal = page.getByRole("dialog", { name: "Finalizar Pagamento" })
@@ -123,7 +126,18 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     const antes = await db.venda.count({ where: { storeId: B } })
     await venderDuasEmDinheiro(page, bipe)
     await expect.poll(() => db.venda.count({ where: { storeId: B } }), { timeout: 30_000 }).toBe(antes + 1)
-    origem = (await db.venda.findFirstOrThrow({ where: { storeId: B, itens: { some: { nome: P.nome } } }, orderBy: { at: "desc" } })).pedidoId
+    const vendaOrigem = await db.venda.findFirstOrThrow({
+      where: { storeId: B, itens: { some: { nome: P.nome } } },
+      orderBy: { at: "desc" },
+      include: { itens: true },
+    })
+    origem = vendaOrigem.pedidoId
+    // Uma venda de origem: 2 unidades do produto P, R$20, independente de 1 ou 2 linhas.
+    expect(await db.venda.count({ where: { storeId: B, itens: { some: { nome: P.nome } } } })).toBe(1)
+    expect(vendaOrigem.itens.every((i) => i.inventoryId === prodP.id)).toBe(true)
+    expect(vendaOrigem.itens.reduce((s, i) => s + i.quantidade, 0)).toBe(2)
+    expect(vendaOrigem.itens.reduce((s, i) => s + i.lineTotal, 0)).toBe(20)
+    expect(vendaOrigem.total).toBe(20)
     await expect.poll(async () => (await db.produto.findUniqueOrThrow({ where: { id: prodP.id } })).stock).toBe(8)
   })
 
