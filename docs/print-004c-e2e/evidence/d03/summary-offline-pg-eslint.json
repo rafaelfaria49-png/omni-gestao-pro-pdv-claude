@@ -1,0 +1,23 @@
+{
+  "goal": "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001",
+  "at": "2026-11-04T21:12:32.808Z",
+  "node": "v24.22.2",
+  "productionExecution": false,
+  "physicalPrint": "PENDING_NO_HARDWARE",
+  "steps": [
+    {
+      "step": "offline-pg",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 7,
+      "tests": "10 passed (10)"
+    },
+    {
+      "step": "eslint",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 28,
+      "tests": null
+    }
+  ]
+}

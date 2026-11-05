@@ -76,11 +76,12 @@ function psqlFile(file: string, lockTimeout?: string): Promise<PsqlResult> {
   else delete env.PGOPTIONS
   const started = Date.now()
   return new Promise(resolve => {
-    const p = spawn(path.join(BIN, "psql.exe"), ["-h", u.hostname, "-p", u.port || "5432", "-U", decodeURIComponent(u.username), "-d", u.pathname.slice(1),
+    const p = spawn(path.join(BIN, process.platform === "win32" ? "psql.exe" : "psql"), ["-h", u.hostname, "-p", u.port || "5432", "-U", decodeURIComponent(u.username), "-d", u.pathname.slice(1),
       "-v", "ON_ERROR_STOP=1", "-X", "-q", "-f", file], { env, windowsHide: true })
     let out = ""
     p.stdout.on("data", d => { out += d })
     p.stderr.on("data", d => { out += d })
+    p.on("error", () => resolve({ code: -1, out: "PSQL_START_FAILED", ms: Date.now() - started }))
     p.on("close", code => resolve({ code, out, ms: Date.now() - started }))
   })
 }

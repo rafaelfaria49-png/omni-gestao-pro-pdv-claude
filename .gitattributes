@@ -2,3 +2,5 @@
 # Estas migrations precisam de LF em qualquer checkout (Windows com core.autocrlf=true geraria outro checksum).
 tools/print-d02/migrations/** text eol=lf
 prisma/migrations/*_omni_print_d02_*/migration.sql text eol=lf
+# The agent is a shebang entry point; Vitest/Vite cannot evaluate a CRLF hashbang on Windows.
+tools/omni-print-agent/agent.mjs text eol=lf

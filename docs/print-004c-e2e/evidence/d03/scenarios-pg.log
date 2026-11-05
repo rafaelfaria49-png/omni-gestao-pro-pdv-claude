@@ -1,0 +1,12 @@
+reset print_lab_d03_regression
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d03
+
+
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+   Start at  18:01:13
+   Duration  36.97s (transform 360ms, setup 0ms, import 491ms, tests 36.29s, environment 0ms)
+
+
+exit=0

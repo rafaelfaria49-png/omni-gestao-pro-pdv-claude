@@ -28,6 +28,8 @@ export const REASON_LABELS: Readonly<Record<string, string>> = Object.freeze({
   AUTHORIZATION_LOST: "a autorização de impressão expirou",
   BINDING_CHANGED: "o terminal ou a impressora vinculada foi alterado",
   RISK_CHANGED: "a situação das vias mudou; confirme a segunda via novamente",
+  REPRINT_REPLACED: "substituída por uma segunda via",
+  EXPLICIT_FALLBACK: "substituída pela impressão no navegador",
 })
 
 const LABELS: Readonly<Record<CopyPhase, string>> = Object.freeze({

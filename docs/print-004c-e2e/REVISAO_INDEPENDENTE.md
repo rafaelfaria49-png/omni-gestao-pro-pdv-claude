@@ -1,5 +1,9 @@
 # Revisões independentes — OMNI-PRINT-004C
 
+## D03-A — APPROVE (delta sobre 027bba5c)
+
+Revisão independente de código e documentos, somente leitura: sem achados pendentes após corrigir a data do cancelamento, a portabilidade do runner D02 e o procedimento de rotação com o gate global. Relatório próprio: [REVISAO_INDEPENDENTE_D03.md](REVISAO_INDEPENDENTE_D03.md). Evidências D03: `evidence/d03/VALIDACAO_D03.json`; checks remotos e homologação física são gates separados.
+
 Revisores: agentes separados, somente leitura (sem editar, sem banco, sem push), com acesso ao diff completo e aos logs.
 
 ## Rodada 1 — REQUEST_CHANGES
