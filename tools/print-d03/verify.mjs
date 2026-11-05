@@ -25,7 +25,7 @@ export const steps = [
   ["d02-rehearsal", pg("print_lab_d03_d02r", "tools/print-004c-e2e/d02-rehearsal.pg.test.ts"), { PRINT_LAB_LAYOUT: "baseline" }],
   ["playwright", ["tools/print-004c-e2e/run-playwright.mjs"]],
   ["typecheck", ["--max-old-space-size=4096", "node_modules/typescript/lib/tsc.js", "--noEmit"]],
-  ["eslint", ["node_modules/eslint/bin/eslint.js", "lib/printing/direct/retention.ts", "lib/printing/direct/core.ts", "lib/printing/direct/status.ts", "lib/printing/direct/codec.ts", "lib/printing/direct/activation.ts", "lib/printing/direct/homologation.mjs", "lib/printing/direct/homologation.test.ts", "tools/print-d05", "tools/print-d03", "tools/print-004c-e2e/pg-lab.mjs", "tools/print-004c-e2e/d02-rehearsal.pg.test.ts", "tools/print-004c-e2e/manifest.mjs", "tools/print-004c-e2e/matrix-80.mjs", "--ignore-pattern", "tools/print-d05/.artifacts/**"]],
+  ["eslint", ["node_modules/eslint/bin/eslint.js", "lib/printing/direct/retention.ts", "lib/printing/direct/core.ts", "lib/printing/direct/status.ts", "lib/printing/direct/codec.ts", "lib/printing/direct/activation.ts", "lib/printing/direct/homologation.mjs", "lib/printing/direct/homologation.test.ts", "tools/print-d05", "tools/print-d03", "tools/print-004c-e2e/pg-lab.mjs", "tools/print-004c-e2e/d02-rehearsal.pg.test.ts", "tools/print-004c-e2e/two-agents.pg.test.ts", "tools/print-004c-e2e/agent-host.mjs", "tools/print-004c-e2e/manifest.mjs", "tools/print-004c-e2e/matrix-80.mjs", "--ignore-pattern", "tools/print-d05/.artifacts/**"]],
   ["build", ["scripts/vercel-build.mjs"]],
 ]
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

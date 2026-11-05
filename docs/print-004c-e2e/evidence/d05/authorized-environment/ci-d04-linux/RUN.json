@@ -1,0 +1,8 @@
+{
+  "platform": "linux",
+  "node": "v24.22.2",
+  "githubRunId": "42117677050",
+  "githubRunAttempt": "1",
+  "commit": "7c957a54c7074eb1a03d049fdd6dbca5f50a3d12",
+  "localChanges": false
+}

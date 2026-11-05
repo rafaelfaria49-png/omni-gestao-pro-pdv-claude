@@ -61,3 +61,13 @@ Sem outros P0/P1/P2 encontrados. Seed usa upsert sem reset e estoque canônico/i
 inalterados; produção continua fechada. Não leu segredos, banco ou hardware, nem instalou/imprimiu.
 Prova real redigida posterior: `authorized-environment/STRICT_TLS.json`; publicação Preview depende do CI do commit específico.
 Nome do operador e janela não foram preenchidos na resposta humana; execução física permanece PENDING.
+
+Parecer posteriormente vinculado ao SHA `76ec7c363b915b871c6e91f55a17ceda862d9fb9`; prova TLS efetiva conferida pelo revisor.
+CI D02/D04/D05 PASS nesse head; D03 falhou na coordenação do harness de kill (sem alteração do agente produtivo).
+O corretivo de coordenação e o novo SHA exigem revisão/CI próprios antes de configurar/ativar Preview.
+
+Corretivo do harness: **APPROVE técnico, sem P0/P1/P2 pendentes**, após revisão do cancelamento do observador e da barreira
+restrita ao host simulado. Agent, FakeSpooler e políticas inalterados. Asserções originais mantidas e reforçadas com
+sendKey morto em UNKNOWN, único SUBMITTING/única chamada daquela venda e exit real antes da recuperação. Resultado local
+final PASS, com12 vendas,12 chamadas simuladas,3 processos,11 SPOOLER_ACCEPTED/1 UNKNOWN e max1 por venda; ESLint PASS.
+O SHA corrigido será vinculado ao parecer após congelamento. CI próprio obrigatório; FAIL anterior permanece preservado.

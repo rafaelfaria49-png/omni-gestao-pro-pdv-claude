@@ -15,27 +15,33 @@ Substituir a pasta pelo ZIP recebido do CI da PR revisada e por sua extração. 
 $D05Package = 'C:\HomologacaoD05\omni-print-agent'
 $D05Zip = 'C:\HomologacaoD05\omni-print-agent-0.2.0-d04.zip'
 $D05ExpectedSha = 'f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a'
+$D05Node = 'C:\Users\rafae\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
+$D05InstallRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgentApp-D05'
+$D05DataRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgent-D05'
+$D05TaskName = 'OmniPrintAgent-Lab-D05'
 if ((Get-FileHash -LiteralPath $D05Zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $D05ExpectedSha) { throw 'ZIP divergente: parar' }
-node --version # 24.x >=24.12.0; confirmar qual node será usado
+& $D05Node --version # 24.x >=24.12.0; no RAFACELL foi verificado 24.22.1
 $PSVersionTable.PSVersion # PowerShell 5.1
 [Security.Principal.WindowsIdentity]::GetCurrent().User.Value # registrar SID autorizado
 Get-CimInstance Win32_Printer | Select-Object Name,DriverName,PortName,WorkOffline,PrinterStatus
 Get-PnpDevice -PresentOnly | Where-Object InstanceId -like 'USBPRINT*' | Select-Object Status,FriendlyName,InstanceId
 Set-Location -LiteralPath $D05Package
-.\windows\Install-Agent.ps1 # somente PLANO; verifica manifesto/Node/SID, não instala
+.\windows\Install-Agent.ps1 -NodePath $D05Node -InstallRoot $D05InstallRoot -DataRoot $D05DataRoot -TaskName $D05TaskName # somente PLANO
 ```
 
 Registrar Windows, Node/caminho, PowerShell, Chrome/Edge, modelo/série da impressora, nome exato da fila, driver/versão,
 USB/porta e largura. Bobina 58 mm só com guia/adaptação suportada pelo fabricante. Largura não suportada: N/A somente
 com justificativa e aprovação humana; falta de equipamento ou autorização continua BLOCKED.
+Usar diretórios/tarefa exclusivos acima; não reutilizar configuração, credencial ou diário de outra instalação. O `node`
+genérico do PATH pode ter outra versão. Em outro computador, identificar um Node24 autorizado e ajustar apenas esse caminho.
 
 ## 2. Somente após aprovação do ambiente, equipamento e instalação
 
 ```powershell
-.\windows\Install-Agent.ps1 -Apply -AuthorizedLab
-$D05Install = Get-Content -LiteralPath "$env:LOCALAPPDATA\OmniPrintAgentApp\installation.json" -Raw | ConvertFrom-Json
+.\windows\Install-Agent.ps1 -NodePath $D05Node -InstallRoot $D05InstallRoot -DataRoot $D05DataRoot -TaskName $D05TaskName -Apply -AuthorizedLab
+$D05Install = Get-Content -LiteralPath (Join-Path $D05InstallRoot 'installation.json') -Raw | ConvertFrom-Json
 & $D05Install.nodePath (Join-Path $D05Install.releaseRoot 'agent.mjs') printers --data-dir $D05Install.dataRoot
-.\windows\Diagnose-Agent.ps1
+.\windows\Diagnose-Agent.ps1 -InstallRoot $D05InstallRoot
 Get-ScheduledTask -TaskName $D05Install.taskName | Select-Object TaskName,State,Principal,Settings,Triggers
 ```
 
@@ -52,8 +58,8 @@ ligado ao banco de teste e ao SHA/release autorizado. Não registrar a linha com
 ```powershell
 # Preencher somente na sessão protegida, sem gravação de histórico/transcrição do segredo.
 & $D05Install.nodePath (Join-Path $D05Install.releaseRoot 'agent.mjs') pair --data-dir $D05Install.dataRoot --server https://DOMINIO-HOMOLOGACAO --code XXXX-XXXX-XXXX
-.\windows\Diagnose-Agent.ps1 -ProbeCredential -AuthorizedLab
-.\windows\Start-Agent.ps1 -Apply -AuthorizedLab
+.\windows\Diagnose-Agent.ps1 -InstallRoot $D05InstallRoot -ProbeCredential -AuthorizedLab
+.\windows\Start-Agent.ps1 -InstallRoot $D05InstallRoot -Apply -AuthorizedLab
 ```
 
 Conferir online e vincular terminal/fila/largura pelo navegador autorizado. Ligar impressão somente na loja sintética.
@@ -95,12 +101,12 @@ Duplicidade, gaveta, venda sem confirmação, dado real ou risco financeiro: par
 Para parada normal, pausar pedidos, preservar relatos, revogar a instalação no sistema e então:
 
 ```powershell
-.\windows\Stop-Agent.ps1 -Apply -AuthorizedLab
-.\windows\Diagnose-Agent.ps1
+.\windows\Stop-Agent.ps1 -InstallRoot $D05InstallRoot -Apply -AuthorizedLab
+.\windows\Diagnose-Agent.ps1 -InstallRoot $D05InstallRoot
 # Atualização somente de pacote revisado e com consentimento; tarefa continua desabilitada.
-.\windows\Update-Agent.ps1 -PackageRoot 'C:\HomologacaoD05\PACOTE-REVISADO' -Apply -AuthorizedLab
+.\windows\Update-Agent.ps1 -InstallRoot $D05InstallRoot -PackageRoot 'C:\HomologacaoD05\PACOTE-REVISADO' -Apply -AuthorizedLab
 # Retirada só depois de revogar no servidor e preservar as evidências/diário:
-.\windows\Uninstall-Agent.ps1 -Apply -AuthorizedLab -RevocationConfirmed
+.\windows\Uninstall-Agent.ps1 -InstallRoot $D05InstallRoot -Apply -AuthorizedLab -RevocationConfirmed
 ```
 
 Atualizar e desinstalar são alternativas conforme a etapa; não executar ambas por copiar este bloco. Não apagar UNKNOWN,

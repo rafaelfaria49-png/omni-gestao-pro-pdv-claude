@@ -20,7 +20,7 @@ não cadastrada. Não foi criado GOAL adicional nem editado estado/ledger de out
 | POSTGRES_TESTS | PASS CI: retenção 17/17, offline 10/10, cenários 35/35, dois agentes 1/1, D02 8/8 + ensaio 5/5 |
 | WINDOWS_TESTS | PASS CI: recuperação 24/24 + 6 provas, instalação/tarefa/update/uninstall e DPAPI segundo usuário no runner descartável; nenhuma instalação física |
 | PLAYWRIGHT | PASS 19/19 no CI e local, Chromium e spooler simulado |
-| CI_STATUS | PASS histórico D03/D04/D05 no código `1613ef6`; novo delta de ambiente/ativação aguarda CI do commit específico |
+| CI_STATUS | Em `76ec7c3`, D02/D04/D05 PASS, D03 FAIL no ponto de kill do harness; corretivo de teste local aprovado, novo CI pendente |
 | INDEPENDENT_REVIEW | APPROVE para preparação e delta corrigido; novo parecer condicionado ao SHA/CI e TLS efetivo; detalhes em REVISAO_INDEPENDENTE_D05.md |
 | PHYSICAL_HOMOLOGATION | PENDING |
 | PRODUCTION_UNCHANGED | zero acesso/escrita/migration/deploy/env; APPROVED_RELEASE=null; impressão e cron desligados |
@@ -61,6 +61,9 @@ e `APLICACAO.json` produtivos não mudaram. O gerador oficial de HASHES inclui o
 - Windows: computador/usuário/SID consentidos. Diagnóstico somente leitura: POS-80/USB005/driver 11.3.0.1; a primeira
   observação foi offline e a mais recente normal, sem alteração de fila pelo agente; zero jobs. USB/capacidade/papel real
   ainda exigem conferência presencial. Bobina disponível80mm; suporte58mm não presumido.
+- Pacote D04 extraído/verificado fora do repositório. Install-Agent executado somente em modo PLAN, com Node24.22.1,
+  diretórios `OmniPrintAgentApp-D05`/`OmniPrintAgent-D05` e tarefa `OmniPrintAgent-Lab-D05`; nenhuma dessas pastas/tarefa
+  foi criada. Roteiro usa destinos explícitos para preservar instalações/credenciais/diários de outra frente.
 
 O plano free/Hobby foi escolhido sem upgrade nem autorização de custos pagos. O ambiente não recebe dados/clientes reais.
 Instalação/pareamento/tarefa/impressão ainda não iniciados. A resposta humana mantém nome/janela como placeholders;
@@ -123,6 +126,16 @@ Os logs originais e hashes ficam preservados; resultados FAIL não são reclassi
   tentativa de prova Prisma usou uma asserção inadequada sobre pg_stat_ssl do backend: consulta conectou, mas o teste
   recebeu false/null atrás do proxy. A prova corrigida usa parâmetros strict e `\conninfo` libpq, preservando essa tentativa
   como falha de método, sem atribuir TLS externo ao valor do backend.
+- CI D03 `42117677163` attempt1 (`76ec7c3`) falhou apenas em `killedInFlight=false`: i6 descartava resposta de claim com
+  lease20s e esperava6s; a lentidão também era armada depois de publicar o job. PG/D02/Playwright/typecheck/lint/build
+  passaram nessa execução; mutações não rodaram. Artefato/digest e FAIL preservados em `ci-d03-first-failure/` e
+  `CI_D03_FIRST_FAILURE.json`. O corretivo altera somente o harness simulado: aviso IPC depois do fsync no submit,
+  listener/fault armados antes de criar job, perda de claim separada do ponto kill, journal SUBMITTING conferido e exit
+  real aguardado. Barreira síncrona limitada60s existe apenas no host simulado; observador do pai limita30s, tem cancelamento
+  em finally/afterAll e handler imediato, sem rejeições/timers tardios em falha de preparação. Mantém asserts anteriores e
+  exige UNKNOWN do sendKey morto, um submit e uma chamada para aquela venda.
+  Cenário local corrigido e ESLint PASS; novo CI obrigatório. Perdas de claim vazio no teste de rajada não são tratadas
+  como prova de perda de entrega; os cenários dedicados anteriores mantêm essa cobertura.
 
 Regressão local também aprovou retenção 17/17, offline 10/10+135/135, cenários 35/35, dois agentes 1/1, 004B 3/3,
 ensaio D02 5/5, Playwright 19/19, recuperação 30/30, typecheck e ESLint. A fonte canônica do resultado integral aprovado
