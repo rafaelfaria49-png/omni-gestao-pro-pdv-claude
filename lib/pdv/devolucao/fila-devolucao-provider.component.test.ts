@@ -213,6 +213,14 @@ describe("fila de devoluções — encaminhamento no mesmo tick", () => {
     expect(net.devPosts.length).toBe(posts)
     expect(dev()).toMatchObject({ syncPending: false, conciliacao: { ref: "AUD-9" } })
   })
+  it("encaminhada em OUTRA aba: o reenvio recusado guarda a referência do servidor e estorna o vale local", async () => {
+    net.devResponse = { status: 409, body: { code: "DEVOLUCAO_ENCAMINHADA_FINANCEIRO", error: "já encaminhada", detail: { ref: "AUD-OUTRA" } } }
+    seed([devPendente()])
+    await mount()
+    await waitFor(() => expect(dev().syncRejectedCode).toBe("DEVOLUCAO_ENCAMINHADA_FINANCEIRO"))
+    expect(dev()).toMatchObject({ syncPending: false, conciliacao: { ref: "AUD-OUTRA", categoria: "VALE_EMITIDO", valorDeclarado: 10 } })
+    expect(rt().customerCredits[CPF]!.saldo).toBe(0)
+  })
 })
 
 describe("espelho de devolução confirmada pelo servidor", () => {

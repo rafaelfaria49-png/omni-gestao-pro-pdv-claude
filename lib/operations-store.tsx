@@ -3051,7 +3051,7 @@ export function OperationsProvider({
 
   /** Aplica o desfecho do servidor a uma devolução da fila (ver `classificarRespostaDevolucao`). */
   const aplicarRespostaDevolucao = useCallback(async (devId: string, res: Response, lj: string) => {
-    const body = (await res.json().catch(() => null)) as { code?: string; error?: string } | null
+    const body = (await res.json().catch(() => null)) as { code?: string; error?: string; detail?: { ref?: unknown } } | null
     const desfecho = classificarRespostaDevolucao(res.status, body?.code)
     if (desfecho === "aguardar") {
       console.warn("[devolucao-persist] HTTP", res.status, devId, "lojaId:", lj, "code:", body?.code ?? "")
@@ -3117,7 +3117,17 @@ export function OperationsProvider({
         ...estornado,
         devolucoes: prev.devolucoes.map((d) =>
           d.id === devId
-            ? { ...d, syncPending: false, syncBlocked: undefined, syncRejectedCode: body?.code, syncRejectedReason: body?.error ?? "" }
+            ? {
+                ...d,
+                syncPending: false,
+                syncBlocked: undefined,
+                syncRejectedCode: body?.code,
+                syncRejectedReason: body?.error ?? "",
+                // Encaminhada por outra aba/terminal: guarda a referência do servidor.
+                ...(body?.code === "DEVOLUCAO_ENCAMINHADA_FINANCEIRO" && typeof body.detail?.ref === "string"
+                  ? { conciliacao: { ref: body.detail.ref, at: new Date().toISOString(), operador: "outro terminal", categoria: d.tipo === "devolucao" ? "DINHEIRO_ENTREGUE" : d.creditIssued > 0 ? "VALE_EMITIDO" : "INTENCAO_SEM_EFEITO", valorDeclarado: d.tipo === "devolucao" ? d.lines.reduce((t, l) => t + (l.valor || 0), 0) : d.creditIssued } }
+                  : {}),
+              }
             : d,
         ),
       }
