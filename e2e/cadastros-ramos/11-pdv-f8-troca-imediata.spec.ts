@@ -204,7 +204,8 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
   })
 
   await test.step("SKU alterado depois da venda: o SKU novo acha a venda antiga e o devolvível continua 1", async () => {
-    await page.keyboard.press("Escape")
+    // Foco no campo de busca: o Escape é dele; fecha pelo X do diálogo.
+    await page.getByRole("dialog", { name: /Troca \/ Devolução/ }).getByRole("button", { name: "Close", exact: true }).click()
     await expect(page.getByRole("dialog", { name: /Troca \/ Devolução/ })).toHaveCount(0)
     const novoSku = `${P.sku}-RENOMEADO`
     await db.produto.update({ where: { id: prodP.id }, data: { sku: novoSku } })
