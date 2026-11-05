@@ -1,0 +1,59 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+ ❯ tools/print-d02/d02-guard.test.ts (0 test)
+ ❯ lib/vendas/venda-cupom-mapper.test.ts (0 test)
+ ❯ lib/printing/direct/direct-print.test.ts (0 test)
+ ❯ tools/print-d03/options.test.ts (0 test)
+ ❯ tools/omni-print-agent/spooler-windows.test.ts (0 test)
+ ❯ lib/printing/direct/store-print-links.test.ts (0 test)
+ ❯ tools/omni-print-agent/agent.test.ts (0 test)
+ ❯ components/dashboard/vendas/reimpressao-registrada.static.test.ts (0 test)
+ ❯ lib/printing/direct/legacy-raw-guard.test.ts (0 test)
+
+ Test Files  9 failed (9)
+      Tests  no tests
+   Start at  13:56:43
+   Duration  1.91s (transform 0ms, setup 0ms, import 0ms, tests 0ms, environment 4ms)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/vendas/venda-cupom-mapper.test.ts [ lib/vendas/venda-cupom-mapper.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804676-hchsqfhtyog' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\42703ad59d4e0b9e8d4d2df019bfe649ddabb83f'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tools/omni-print-agent/agent.test.ts [ tools/omni-print-agent/agent.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804844-brr61mcjj6l' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\095023215dea7b06b997c3383481a0d1e6393c1b'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tools/omni-print-agent/spooler-windows.test.ts [ tools/omni-print-agent/spooler-windows.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804830-wd5m3myy3me' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\e1c8d99e3e9f1dc005dcef84f9b9cd8bb48f832d'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tools/print-d02/d02-guard.test.ts [ tools/print-d02/d02-guard.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804632-7006gug3r59' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\6b8a7dee87d65ff285d8f4d3b623bb1c0a874635'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tools/print-d03/options.test.ts [ tools/print-d03/options.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804820-ko191g5xrcr' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\1ea98b2d3febd9add258370fd153de1f0bbd2bb6'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  components/dashboard/vendas/reimpressao-registrada.static.test.ts [ components/dashboard/vendas/reimpressao-registrada.static.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804894-e77hot5w2fr' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\d2df55225d7991af8982bee62fa06377d68cebaa'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  lib/printing/direct/direct-print.test.ts [ lib/printing/direct/direct-print.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804701-q06gtveji7c' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\2a3015529f34ba9947bbdde8e1741dc08cf61f4f'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  lib/printing/direct/legacy-raw-guard.test.ts [ lib/printing/direct/legacy-raw-guard.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804989-9m8rqomoqgs' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\2aaceec9e67cfc34770751ef27c63c8c82056a47'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  lib/printing/direct/store-print-links.test.ts [ lib/printing/direct/store-print-links.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\.tmp-1793897804857-0b6ihj3mmjj' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\1rZ1CLmXqaseP1ei4eaN3\ssr\f869e54d0d3fe3010181b15f7acd53d51bdbd8c6'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+exit=1

@@ -1,0 +1,24 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+ ❯ tools/print-d04/recovery.test.ts (0 test)
+ ❯ tools/print-d04/verify-artifact.test.ts (0 test)
+
+ Test Files  2 failed (2)
+      Tests  no tests
+   Start at  13:57:06
+   Duration  1.55s (transform 0ms, setup 0ms, import 0ms, tests 0ms, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d04/recovery.test.ts [ tools/print-d04/recovery.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\zeVcmj2jP54Lu-lqXkf9j\ssr\.tmp-1793897827618-u73uakgkgxa' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\zeVcmj2jP54Lu-lqXkf9j\ssr\f7c6b5d64e6f17989f25abbacc8bda0d42434ac5'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tools/print-d04/verify-artifact.test.ts [ tools/print-d04/verify-artifact.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\zeVcmj2jP54Lu-lqXkf9j\ssr\.tmp-1793897828276-m7480gtbc4' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\zeVcmj2jP54Lu-lqXkf9j\ssr\2a0a75c07afc61a257c50f46971639e063889bbe'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+exit=1

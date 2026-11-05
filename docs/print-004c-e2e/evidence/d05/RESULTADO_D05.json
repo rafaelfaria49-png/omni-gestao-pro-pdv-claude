@@ -1,0 +1,45 @@
+{
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "status": "D05_PREPARED",
+  "codeSha": "1613ef6dfb564a81ba4713644d9bd2696d7e87f5",
+  "pullRequest": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/334",
+  "D05_SOFTWARE_READY": "PASS_PREPARATION",
+  "D05_HARDWARE_READY": "BLOCKED_OWNER_APPROVAL_AND_EQUIPMENT",
+  "D05_PHYSICAL_TESTS": {
+    "executed": 0,
+    "blocked": 18
+  },
+  "D01_D04_REGRESSION": "PASS_CI",
+  "POSTGRES_TESTS": "PASS_CI_LOCAL_D02_P1001_PRESERVED",
+  "WINDOWS_TESTS": "PASS_DISPOSABLE_CI_NO_PHYSICAL_INSTALL",
+  "PLAYWRIGHT": "PASS_19_OF_19_CI_AND_LOCAL",
+  "CI_STATUS": "PASS_3_WORKFLOWS_6_JOBS_CODE_SHA",
+  "INDEPENDENT_REVIEW": "APPROVE_PREPARATION_NO_OPEN_P0_P1_P2",
+  "PHYSICAL_HOMOLOGATION": "PENDING",
+  "PRODUCTION_UNCHANGED": {
+    "actions": 0,
+    "databaseAccess": false,
+    "writes": 0,
+    "migrations": false,
+    "deploy": false,
+    "environmentChanges": false,
+    "approvedRelease": null,
+    "directPrint": "DISABLED",
+    "cron": "DISABLED"
+  },
+  "RELEASE_RECOMMENDATION": "HOLD_DRAFT_NO_MERGE_WAIT_EXPLICIT_GATES",
+  "humanGates": {
+    "NEON_TEST_BRANCH": "PENDING_OWNER_APPROVAL",
+    "VERCEL_TEST_PREVIEW": "PENDING_OWNER_APPROVAL",
+    "WINDOWS_PHYSICAL_INSTALL": "PENDING_OWNER_APPROVAL",
+    "REAL_PRINTER_USE": "PENDING_OWNER_APPROVAL",
+    "D05_PHYSICAL_EXECUTION": "PENDING_OWNER_APPROVAL"
+  },
+  "homologationTransport": "PENDING_EXPLICIT_APPROVAL_REVIEWED_PREVIEW_ONLY_COMMIT",
+  "localAttempts": "MIXED_NOT_GLOBAL_PASS_SEE_LOCAL_RESULTS",
+  "rollback": "PLANO_AMBIENTE_D05.md",
+  "operatorInstructions": "CHECKLIST_OPERADOR_D05.md",
+  "physicalRecord": "H01-H18.template.json",
+  "temporaryLocalPostgres": "STOPPED_DATA_PRESERVED",
+  "worktree": "PRESERVED_FOR_CONTINUATION_NOT_IDLE"
+}

@@ -1,0 +1,3 @@
+# Preserve original log bytes: summary.json records SHA-256 of the captured bytes.
+# Recognize Windows CRLF while still checking actual trailing spaces and blank EOF.
+**/*.log -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

@@ -25,4 +25,23 @@ Vercel, sem contornar as proteções.
 
 Compatibilidade do delta: caminhos da preparação D05 não colidem com alterações da PR #331 (`b0de724b4abac15258e498a7a44ab700348ebe17`)
 ou de main (`37acc3b7e71d20dcbe623e6a2f87347e54f49ee6`). Isso não equivale a execução funcional combinada de #331 e #327;
-nenhuma delas foi mergeada pelo executor. Revisão de proveniência do SHA e evidências finais será consolidada na entrega.
+nenhuma delas foi mergeada pelo executor.
+
+## Conferência independente do CI
+
+**APPROVE final técnico da preparação no SHA `1613ef6dfb564a81ba4713644d9bd2696d7e87f5`.** O revisor consultou as APIs
+GitHub de PR/artefatos/jobs e confirmou a PR #334 draft, base #327, head e checkout técnico
+`e4697c02873d48d334ecce6a76bd31376767d467`. Todos os seis jobs de D03/D04/D05 concluíram com sucesso.
+
+Reexecutou apenas os verificadores de leitura, sem repetir as baterias: D03 run `42071630703` attempt 1, 16 etapas;
+D04 run `42071630936` attempt 1, Windows 7 etapas e Linux 3. Os resultados são idênticos aos `CI_*.json`; digests obtidos
+independentemente da API conferem com os ZIPs, hashes dos logs, exit 0 e proveniência run/attempt/checkout. As oito
+mutações têm exit 1, asserção real e fonte restaurada. Build CI contém `MIGRATION_SKIPPED` e `PROXY_PRISMA_ARTIFACT_VERIFIED`.
+
+D05 run `42071630596`: artefatos Linux/Windows, ZIP interno, contentId, 17 arquivos + manifesto conferidos, assinatura
+ausente e 18 casos BLOCKED. Logs de instalação/DPAPI D04 conferidos: tarefa Interactive/Limited/IgnoreNew, atualização
+preserva journal/instance, desinstalação mantém histórico, outro usuário recusa DPAPI. Tudo restrito ao runner descartável.
+
+Os logs locais com timestamp têm hashes corretos e proveniência WIP explícita; falhas da sandbox/D02 local não são
+atribuídas a sucesso nem ao SHA remoto. O commit documental posterior apenas incorpora essas provas e o manifesto
+oficial. A igualdade de fontes com o código testado é conferida antes da entrega; aprovação física continua PENDING.

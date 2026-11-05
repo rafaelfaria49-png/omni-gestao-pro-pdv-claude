@@ -1,0 +1,114 @@
+{
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "runId": "2026-11-05T16-56-40-027Z",
+  "at": "2026-11-05T16:56:40.040Z",
+  "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+  "workingTreeChanged": true,
+  "node": "v24.22.1",
+  "platform": "win32",
+  "productionAccess": false,
+  "productionWrites": 0,
+  "windowsPhysicalInstallation": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "d05-tests",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "786b6d40c46677f9fcb948157a7db9bbe42a8768b855d972f8c74e400352f855"
+    },
+    {
+      "step": "d05-plan",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "79a614bc8e5f0e00b0b4dfacc162fe576f813dec61df07a81a9d67138774f5f3"
+    },
+    {
+      "step": "generator",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "69b65a382307e13a58e48a30b55c1fb432e902425e153cc7265a2a00edf1c31c"
+    },
+    {
+      "step": "d02-generator",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "d093662a9b07a9a75722658642531c22f1c746090be143cc53af55ef43995297"
+    },
+    {
+      "step": "unit",
+      "status": "FAIL",
+      "exit": 1,
+      "signal": null,
+      "processError": null,
+      "seconds": 4,
+      "sha256": "6fd7e8ae07d3d6b3e62b16788d46088c6df43a15ecee5c304321a7c274acf745"
+    },
+    {
+      "step": "offline-regression",
+      "status": "FAIL",
+      "exit": 1,
+      "signal": null,
+      "processError": null,
+      "seconds": 20,
+      "sha256": "fca89c5a6a7ee372499b30e93acd5f220c1ca0c22d86fae806a0239a0028edb3"
+    },
+    {
+      "step": "recovery",
+      "status": "FAIL",
+      "exit": 1,
+      "signal": null,
+      "processError": null,
+      "seconds": 3,
+      "sha256": "4c9acc3c812d8ea31bf8d4eb4a7806a8676a493e20ffea788332548f74eb29ec"
+    },
+    {
+      "step": "package",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "368d5943c6c4abd47e71ce465f45b9c6a982077fb0f12cd672c715abbd39cba6"
+    },
+    {
+      "step": "package-integrity",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "e6349bdc32bfe522b1734859b69ce71ef4de17a1a16c6d84f28d298eb9e12716"
+    },
+    {
+      "step": "d05-eslint",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 28,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "powershell-parse",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 8,
+      "sha256": "b6aa105adb1389fc898ea0567c3ed6b0a21b08bf29d08c28324fda2a3183e498"
+    }
+  ]
+}
