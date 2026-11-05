@@ -57,7 +57,14 @@ Subagente revisor com contexto limpo, somente leitura, sobre `3c12aa2..HEAD` den
 |---|---|---|
 | 1 (`7372d4e`) | REQUEST_CHANGES | **P1** encaminhar não impedia gravação posterior do mesmo `localId` (outra aba/flush) → escritor toma o mesmo advisory lock e recusa `DEVOLUCAO_ENCAMINHADA_FINANCEIRO`; `stateRef` síncrono; "Tentar novamente" travado. **P2** histórico legado não resolvido falhava aberto → `HISTORICO_DEVOLUCAO_NAO_RESOLVIDO`. **P2** resumo contava encaminhadas como confirmadas e escondia bloqueios → corrigido + contador. **P3** posição com nomes repetidos, referência com itens em dobro, POST duplicado em voo → corrigidos. |
 | 2 (`ae7a2da`) | **APPROVE_WITH_LIMITATIONS — sem P0/P1/P2**; limitações só de política/homologação | Ordem de locks sem ciclo (venda `FOR UPDATE` → advisory; encaminhamento só advisory; cancelamento só venda); rota legada `tipo: devolucao` intacta. P3 cosmético (referência ausente na aba que recebeu a recusa) → corrigido no commit seguinte. P3 operacional: medir antes do go-live quantas `itens_devolucao_venda` legadas têm `inventoryId` nulo (falha fechado as travaria) — exige leitura de produção, fora deste GOAL. |
-| 3 | ver §3.2 | |
+| 3 (`a107d27`) | **APPROVE** | Nenhum defeito técnico corrigível restante; o relatório confere com o código e os testes (PG 31/31, jsdom 28/28 refeitos pelo revisor). |
+
+### 3.1 CI da PR #331
+
+| Head | Resultado |
+|---|---|
+| `ae7a2da` | visor e piloto PASS; Ramos e Cadastros: E2E **33/34**. O que falhou foi o passo novo do spec 11 (o `Escape` era consumido pelo campo de busca, então o diálogo F8 não fechava). As asserções novas de `produtoId` e de `ItemDevolucaoVenda.inventoryId` passaram antes desse passo. |
+| `dd85b65` | spec 11 fecha o F8 pelo X — CI em execução no fechamento deste relatório; o resultado final fica na PR. |
 
 Compatibilidade: `git merge-tree` sem conflito contra `origin/main` (`37acc3b`, não andou) e contra a PR #327 (`027bba5`); a #327 não toca devolução, operations-store nem fechamento.
 
