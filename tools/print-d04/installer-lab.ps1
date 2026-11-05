@@ -1,11 +1,12 @@
 param([Parameter(Mandatory=$true)][string]$PackageRoot)
 $ErrorActionPreference='Stop'
+trap { Write-Output $_.ScriptStackTrace; throw }
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows' -or -not $env:RUNNER_TEMP) { throw 'GITHUB_DISPOSABLE_WINDOWS_RUNNER_ONLY' }
 $lab = Join-Path $env:RUNNER_TEMP ('omni-d04-' + [Guid]::NewGuid().ToString('N'))
 $app = Join-Path $lab 'app'; $data = Join-Path $lab 'data'
 $task = 'OmniPrintAgent-Lab-' + [Guid]::NewGuid().ToString('N')
 $scripts=Join-Path $PackageRoot 'windows'
-$node=(Get-Command node.exe -CommandType Application).Source
+$node=(Get-Command node.exe -CommandType Application | Select-Object -First 1).Source
 $installed=$false
 function Assert($Condition,[string]$Code) { if (-not $Condition) { throw $Code } }
 try {

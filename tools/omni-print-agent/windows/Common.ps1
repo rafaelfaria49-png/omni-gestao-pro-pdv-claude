@@ -10,7 +10,7 @@ function Assert-Lab($Apply, $AuthorizedLab) {
   if ($Apply -and -not $AuthorizedLab) { throw 'AUTHORIZED_ISOLATED_LAB_REQUIRED' }
 }
 function Get-Node([string]$NodePath) {
-  if (-not $NodePath) { $NodePath = (Get-Command node.exe -CommandType Application).Source }
+  if (-not $NodePath) { $NodePath = (Get-Command node.exe -CommandType Application | Select-Object -First 1).Source }
   $NodePath = [IO.Path]::GetFullPath($NodePath)
   if (-not (Test-Path -LiteralPath $NodePath -PathType Leaf)) { throw 'NODE_NOT_FOUND' }
   $version = & $NodePath -p 'process.versions.node'
