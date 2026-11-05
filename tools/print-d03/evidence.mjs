@@ -29,7 +29,7 @@ const steps = expected.map(step => {
 })
 const mutationFile = path.join(dir, "mutations.json")
 const mutations = existsSync(mutationFile) ? JSON.parse(readFileSync(mutationFile, "utf8")) : null
-steps.push({ step: "mutation", status: !thisRun || !mutations ? "PENDING" : mutations.sourceRestored && mutations.results.length === 8 && mutations.results.every(r => r.status === "KILLED") ? "PASS" : "FAIL" })
+steps.push({ step: "mutation", status: !thisRun || !mutations ? "PENDING" : mutations.sourceRestored && mutations.results.length === 8 && mutations.results.every(r => r.status === "KILLED" && Number.isInteger(r.exit) && r.exit !== 0) ? "PASS" : "FAIL" })
 const status = steps.some(s => s.status === "FAIL") ? "FAIL" : steps.every(s => s.status === "PASS") ? "PASS" : "PENDING"
 writeFileSync(path.join(dir, "VALIDACAO_D03.json"), JSON.stringify({ goal: "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001", at: new Date().toISOString(),
   status, provenance: provenance ?? { source: "LOCAL_LOGS" }, productionExecution: false, physicalHomologation: "PENDING", steps }, null, 2) + "\n")

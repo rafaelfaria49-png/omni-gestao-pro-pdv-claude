@@ -27,7 +27,7 @@ const walk = (rel) => {
 roots.forEach(walk)
 const sha = (rel) => {
   const buf = readFileSync(path.join(root, rel))
-  const text = /\.(ts|tsx|mjs|js|json|md|sql|log|jsonl|prisma|ps1|yml)$/.test(rel) ? Buffer.from(buf.toString("utf8").replace(/\r\n/g, "\n")) : buf
+  const text = /\.(ts|tsx|mjs|js|json|md|sql|log|jsonl|prisma|ps1|yml|gitattributes|gitignore)$/.test(rel) ? Buffer.from(buf.toString("utf8").replace(/\r\n/g, "\n")) : buf
   return createHash("sha256").update(text).digest("hex")
 }
 const entries = Object.fromEntries(files.map(f => [f, sha(f)]))

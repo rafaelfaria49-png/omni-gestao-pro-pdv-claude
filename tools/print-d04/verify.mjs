@@ -12,9 +12,9 @@ const packageRoot=path.join(root,'tools/print-d04/.artifacts/omni-print-agent')
 const ps=(file,args=[])=>({command:'powershell.exe',args:['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',file,...args]})
 const steps=[
   ...regression.map(([name,args,env])=>[name,args,name==='two-agents-pg'?{...env,PRINT_EVIDENCE_FILE:path.join(out,'two-agents.jsonl')}:env]),
-  ['recovery',['node_modules/vitest/vitest.mjs','run','tools/print-d04/recovery.test.ts','--maxWorkers=1']],
+  ['recovery',['node_modules/vitest/vitest.mjs','run','tools/print-d04/recovery.test.ts','tools/print-d04/verify-artifact.test.ts','--maxWorkers=1']],
   ['package',['tools/print-d04/package.mjs']],
-  ['d04-eslint',['node_modules/eslint/bin/eslint.js','tools/omni-print-agent','tools/print-d04','tools/print-d03/verify.mjs','tools/print-004c-e2e/agent-host.mjs']],
+  ['d04-eslint',['node_modules/eslint/bin/eslint.js','tools/omni-print-agent','tools/print-d04','tools/print-d03/verify.mjs','tools/print-004c-e2e/agent-host.mjs','--ignore-pattern','tools/print-d04/.artifacts/**']],
   ...(process.platform==='win32' ? [
     ['powershell-parse',ps('tools/print-d04/parse-powershell.ps1')],
     ...(process.env.GITHUB_ACTIONS==='true' ? [

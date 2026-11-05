@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "headSha": "683b0178ad844d10191e7fb2a0c96d28270297b1",
+  "checkoutSha": "387d02e6b170401cdc2047169dd39916a94ca544",
+  "runId": 41946614613,
+  "runAttempt": 1,
+  "artifactId": 13377894130,
+  "artifactName": "omni-print-d04-linux-evidence",
+  "artifactDigest": "sha256:d4742acb1bfc3fd28c42792892bf48700e1c3bf7738ddca112746aff1c1dde4d",
+  "platform": "linux",
+  "steps": [
+    {
+      "step": "recovery",
+      "status": "PASS",
+      "tests": "18 passed | 6 skipped (24)",
+      "sha256": "cdc9bc39c64c19897b46b501fd8fc6c5571b03295e0370b04e557dea7e8270aa"
+    },
+    {
+      "step": "package",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "c824df74ccee4b8008282fdfaf7dded65ccbb7caf503e26c30beff0d1940c67c"
+    },
+    {
+      "step": "d04-eslint",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    }
+  ],
+  "physicalHomologation": "PENDING"
+}

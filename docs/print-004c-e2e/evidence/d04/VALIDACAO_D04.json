@@ -5,11 +5,11 @@
     "node": "v24.22.1",
     "githubRunId": null,
     "githubRunAttempt": null,
-    "commit": "5fd8743ce0c67c0847b09429f1b9e6ae5cae1e5a",
+    "commit": "683b0178ad844d10191e7fb2a0c96d28270297b1",
     "localChanges": true
   },
   "sameRun": true,
-  "currentHead": "5fd8743ce0c67c0847b09429f1b9e6ae5cae1e5a",
+  "currentHead": "683b0178ad844d10191e7fb2a0c96d28270297b1",
   "status": "PENDING",
   "productionWrites": 0,
   "physicalHomologation": "PENDING",
@@ -17,80 +17,119 @@
   "steps": [
     {
       "step": "generator",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "69b65a382307e13a58e48a30b55c1fb432e902425e153cc7265a2a00edf1c31c"
     },
     {
       "step": "d02-generator",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "d093662a9b07a9a75722658642531c22f1c746090be143cc53af55ef43995297"
     },
     {
       "step": "unit",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "78 passed (78)",
+      "sha256": "ba68281fa3056496bb1d30f554d2b92a911bef4d10ab85149748bcbbe9293cc9"
     },
     {
       "step": "offline-regression",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "135 passed (135)",
+      "sha256": "67f00b751fb64a999a6441f45c059c69dd5384890d5c801a96b494dba4264038"
     },
     {
       "step": "retention-pg",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "17 passed (17)",
+      "sha256": "1dc2cac93a0b90b8f037c88b2e4ce13b5360c9b4cc6fb648573384dee1c44d78"
     },
     {
       "step": "offline-pg",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "10 passed (10)",
+      "sha256": "9f4479d98345dbffbe0aa66e92fb7542fb92719b3d64d8341510f913aba7cd83"
     },
     {
       "step": "scenarios-pg",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "35 passed (35)",
+      "sha256": "52be0d357d9a247365a7cd00f3de88fdb4aa8ae0aa507b50be3e64f1b312e885"
     },
     {
       "step": "two-agents-pg",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "1 passed (1)",
+      "sha256": "cea55900c5e3b06182c2763ed3fbcf3870765695b7b3c35e1f5fec5e443262bf"
     },
     {
       "step": "synthetic-pg",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "3 passed (3)",
+      "sha256": "64b8dea283b3569dfc7b479d1296c68f9f9414c183e1356760df120bad432102"
     },
     {
       "step": "d02-pg",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "8 passed (8)",
+      "sha256": "4ae12bf3bf87e6ce4d49e2cd947de2cae351b9ce7ebb2e0c71a5797d428df914"
     },
     {
       "step": "d02-rehearsal",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "5 passed (5)",
+      "sha256": "1427265b60f54669bf77280d81570469e585600ad252dfb380ff8e5ad241340c"
     },
     {
       "step": "playwright",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": "19 passed (2.4m)",
+      "sha256": "bf4176aeac4b9ce963462841f4ecae493249bd0b01d9cf724292202b522cd95c"
     },
     {
       "step": "typecheck",
+      "status": "PENDING"
+    },
+    {
+      "step": "eslint",
       "status": "PASS",
       "exit": 0,
       "tests": null,
       "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
     },
     {
-      "step": "eslint",
-      "status": "PENDING"
-    },
-    {
       "step": "build",
-      "status": "PENDING"
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "90b69481086c480ff11350bc0bba327ad2d626cae9462cadd930b38d5182cc2a"
     },
     {
       "step": "recovery",
       "status": "PASS",
       "exit": 0,
-      "tests": "23 passed (23)",
-      "sha256": "c913cc67a3ff4ac7031adf279c26b6ae7d150bd55c253fcbbd557c774f95b69f"
+      "tests": "24 passed (24)",
+      "sha256": "fadd3e42d168b1f58b7e3450cb506a986c8b2a3af5ef0cab72b1f6d58210974e"
     },
     {
       "step": "package",
       "status": "PASS",
       "exit": 0,
       "tests": null,
-      "sha256": "c1444cb3c0f0f54fd9140773f052d87c52bac253eb2e465d7a763162af8118cc"
+      "sha256": "a5e1f9fc33ae66f8ce7acb93e3012445fa19eb59fb0057c8115e88701435bf6f"
     },
     {
       "step": "d04-eslint",
