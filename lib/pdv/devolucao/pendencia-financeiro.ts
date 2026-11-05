@@ -101,16 +101,20 @@ async function valorReferencia(
   if (!venda) return null
   const keys = await saleProductKeyResolver(tx, storeId, venda, itens.flatMap((i) => [i.inventoryId, i.produtoId]))
   const fator = fatorValorPago(venda.total, venda.itens)
-  let total = 0
+  // Itens repetidos no pedido somam por produto e nunca passam do vendido.
+  const pedido = new Map<string, number>()
   for (const req of itens) {
     const k = keys.resolve(req.inventoryId, req.produtoId)
-    if (!k) continue
+    if (k) pedido.set(k, (pedido.get(k) ?? 0) + Math.max(0, Math.round(req.quantidade)))
+  }
+  let total = 0
+  for (const [k, qPedida] of pedido) {
     const linhas = venda.itens.filter((i) => (i.inventoryId ?? "").trim() === k)
     const q = linhas.reduce((s, i) => s + (i.quantidade || 0), 0)
     const lt = linhas.reduce((s, i) => s + (i.lineTotal || 0), 0)
-    if (q > 0) total += (lt / q) * Math.min(q, Math.max(0, Math.round(req.quantidade))) * fator
+    if (q > 0) total += (lt / q) * Math.min(q, qPedida) * fator
   }
-  return arred(total)
+  return arred(Math.min(total, venda.total))
 }
 
 export async function encaminharPendenciaDevolucao(

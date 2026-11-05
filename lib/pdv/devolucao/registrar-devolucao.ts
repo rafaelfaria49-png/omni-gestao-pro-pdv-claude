@@ -77,6 +77,8 @@ export type DevolucaoErrorCode =
   | "ITENS_DUPLICADOS"
   | "ITEM_SEM_LASTRO_BLOQUEADO"
   | "DEVOLUCAO_KG_BLOQUEADA"
+  | "DEVOLUCAO_ENCAMINHADA_FINANCEIRO"
+  | "HISTORICO_DEVOLUCAO_NAO_RESOLVIDO"
 
 export class DevolucaoBusinessError extends Error {
   constructor(
@@ -292,12 +294,29 @@ export async function registrarDevolucaoInTransaction(
       ? ((await tx.venda.findFirst({ where: { id: locked[0]!.id, storeId }, select: VENDA_SELECT })) as VendaLocked | null)
       : null
 
+  // ── 1b. Mesma chave do encaminhamento ao Financeiro (pendencia-financeiro.ts):
+  // devolução já encaminhada como "não gravada" NUNCA é gravada depois — senão o
+  // cliente recebe o vale aqui e a compensação do Financeiro (crédito em dobro).
+  const chavePendencia = `devolucao-pendencia:${storeId}:${input.localId}`
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${chavePendencia}))`
+  const encaminhada = await tx.auditoriaFinanceira.findFirst({
+    where: { storeId, entidade: "devolucao_pdv_pendencia", entidadeId: chavePendencia },
+    select: { id: true },
+  })
+
   // ── 2. Idempotência APÓS o lock (o vencedor concorrente já está visível) ───
   const existing = await tx.devolucaoVenda.findUnique({
     where: { storeId_localId: { storeId, localId: input.localId } },
     select: EXISTING_SELECT,
   })
   if (existing) return classifyReplay(tx, input, existing, venda)
+  if (encaminhada) {
+    throw new DevolucaoBusinessError(
+      "DEVOLUCAO_ENCAMINHADA_FINANCEIRO",
+      `A devolução ${input.localId} já foi encaminhada ao Financeiro como não gravada (ref. ${encaminhada.id}). Nada foi gravado — trate com o Financeiro.`,
+      { localId: input.localId, ref: encaminhada.id },
+    )
+  }
 
   if (locked.length === 0) {
     throw new DevolucaoBusinessError(
@@ -336,7 +355,17 @@ export async function registrarDevolucaoInTransaction(
   }
   const jaDevolvido = new Map<string, number>()
   for (const it of anteriores) {
-    const k = canon(it.inventoryId) || `?${normInv(it.inventoryId)}`
+    const k = canon(it.inventoryId)
+    // Devolução anterior cuja chave não casa com nenhuma linha da venda (legado gravado
+    // por SKU depois renomeado): o devolvido não é contável → recusa em vez de liberar
+    // a mesma unidade de novo.
+    if (!k) {
+      throw new DevolucaoBusinessError(
+        "HISTORICO_DEVOLUCAO_NAO_RESOLVIDO",
+        `A venda ${vendaLocalId} tem devolução anterior com item não identificável (${normInv(it.inventoryId) || "sem código"}). Nada foi gravado — exige conferência manual.`,
+        { vendaLocalId, inventoryId: normInv(it.inventoryId) },
+      )
+    }
     jaDevolvido.set(k, (jaDevolvido.get(k) ?? 0) + (it.quantidade || 0))
   }
 

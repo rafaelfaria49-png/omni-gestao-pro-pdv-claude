@@ -2050,7 +2050,14 @@ function PainelPendenciasDevolucao({
             {(podeRetomar || podeEncaminhar) && (
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 {podeRetomar && (
-                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => onRetomar(p.dev.id)}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={encaminhando !== null}
+                    onClick={() => onRetomar(p.dev.id)}
+                  >
                     Tentar novamente
                   </Button>
                 )}

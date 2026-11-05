@@ -64,7 +64,8 @@ export function bloqueioPersistenteVendaOrigem(
 }
 
 export function estadoPendencia(d: DevolucaoRecord): EstadoPendencia | null {
-  if (d.conciliacao?.ref) return "ENCAMINHADA_FINANCEIRO"
+  // Outra aba/terminal encaminhou: o servidor recusa a gravação com este código.
+  if (d.conciliacao?.ref || d.syncRejectedCode === "DEVOLUCAO_ENCAMINHADA_FINANCEIRO") return "ENCAMINHADA_FINANCEIRO"
   if (d.syncRejectedCode) return "RECUSA_DEFINITIVA"
   if (d.syncPending !== true) return null
   if (d.syncBlocked) return "BLOQUEIO_PERSISTENTE"
@@ -159,6 +160,8 @@ export type ResumoTrocasSessao = {
   diferencasRecebidas: number
   pendentes: number
   aguardandoVendaOrigem: number
+  /** Bloqueio persistente (retentativa parada) — qualquer categoria. */
+  bloqueados: number
   recusasDefinitivas: number
   conciliacaoManual: number
   encaminhadas: number
@@ -176,7 +179,8 @@ export function resumoTrocasDevolucoesSessao(
 ): ResumoTrocasSessao {
   const daSessao = (s?: string) => !sessaoId || s === sessaoId
   const devs = devolucoes.filter((d) => daSessao(d.sessaoId))
-  const confirmadas = devs.filter((d) => d.syncPending !== true && !d.syncRejectedCode)
+  // Encaminhada ao Financeiro NÃO foi gravada (vale local estornado): não conta como confirmada.
+  const confirmadas = devs.filter((d) => d.syncPending !== true && !d.syncRejectedCode && !d.conciliacao?.ref)
   const pend = listarPendenciasDevolucao(devs)
   let creditosUtilizados = 0
   let diferencasRecebidas = 0
@@ -195,6 +199,7 @@ export function resumoTrocasDevolucoesSessao(
     diferencasRecebidas: arred(diferencasRecebidas),
     pendentes: pend.filter((p) => p.estado === "AGUARDANDO_SINCRONIZACAO").length,
     aguardandoVendaOrigem: pend.filter((p) => p.estado === "AGUARDANDO_VENDA_ORIGEM").length,
+    bloqueados: pend.filter((p) => p.estado === "BLOQUEIO_PERSISTENTE").length,
     recusasDefinitivas: pend.filter((p) => p.estado === "RECUSA_DEFINITIVA").length,
     conciliacaoManual: pend.filter((p) => p.exigeConciliacaoManual).length,
     encaminhadas: pend.filter((p) => p.estado === "ENCAMINHADA_FINANCEIRO").length,

@@ -556,6 +556,54 @@ describe.skipIf(!url)("F8 troca imediata — integração real (PG descartável)
     expect(await db.auditoriaFinanceira.count({ where: { storeId } })).toBe(0)
   })
 
+  it("encaminhada ao Financeiro NUNCA é gravada depois (mesmo localId): sem vale/estoque em dobro", async () => {
+    const id = `VDA-F8-ENC-${randomUUID().slice(0, 8)}`
+    const enc = await encaminhar({ localId: "DEV-ENC-1", vendaLocalId: id, categoria: "VALE_EMITIDO", estado: "BLOQUEIO_PERSISTENTE", valorDeclarado: 10 })
+    expect(enc.status).toBe(200)
+    // A venda de origem chega depois e outra aba reenvia a mesma devolução.
+    const sale: SalePayload = { id, at: new Date().toISOString(), total: 10, sessaoId, customerCpf: CPF, customerName: NOME, lines: [{ inventoryId: "CAM-P", name: "CAM-P", quantity: 1, unitPrice: 10, lineTotal: 10 }], paymentBreakdown: { dinheiro: 10 } }
+    expect((await postVenda(new Request("http://localhost/api/ops/venda-persist", { method: "POST", headers: headers(), body: JSON.stringify({ sale }) }))).status).toBe(200)
+    const r = await devolver({ localId: "DEV-ENC-1", vendaLocalId: id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] })
+    expect(r.status).toBe(409)
+    expect(r.body.code).toBe("DEVOLUCAO_ENCAMINHADA_FINANCEIRO")
+    expect(await db.devolucaoVenda.count({ where: { storeId } })).toBe(0)
+    expect(await saldoVale()).toBe(0)
+    expect(await stock("CAM-P")).toBe(9)
+  })
+
+  it("corrida encaminhar × gravar o mesmo localId (5 rodadas): exatamente um vence, nunca os dois", async () => {
+    for (let i = 0; i < 5; i++) {
+      const origem = await vender([{ sku: "MEIA", qty: 1, unit: 5 }], { dinheiro: 5 })
+      const localId = `DEV-CORR-${i}`
+      const [enc, dev] = await Promise.all([
+        encaminhar({ localId, vendaLocalId: origem.id, categoria: "VALE_EMITIDO", estado: "BLOQUEIO_PERSISTENTE", valorDeclarado: 5, itens: [{ inventoryId: "MEIA", quantidade: 1 }] }),
+        devolver({ localId, vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "MEIA", quantidade: 1 }] }),
+      ])
+      const gravou = dev.status === 200
+      const encaminhou = enc.status === 200
+      expect(gravou !== encaminhou, JSON.stringify({ enc: enc.body, dev: dev.body })).toBe(true)
+      if (gravou) expect(enc.body.code).toBe("DEVOLUCAO_JA_GRAVADA")
+      else expect(dev.body.code).toBe("DEVOLUCAO_ENCAMINHADA_FINANCEIRO")
+      expect(await db.devolucaoVenda.count({ where: { storeId, localId } })).toBe(gravou ? 1 : 0)
+      expect(await db.auditoriaFinanceira.count({ where: { storeId, entidadeId: `devolucao-pendencia:${storeId}:${localId}` } })).toBe(encaminhou ? 1 : 0)
+    }
+  })
+
+  it("devolução LEGADA com item não identificável: falha fechado (não libera a mesma unidade de novo)", async () => {
+    const origem = await vender([{ sku: "CAM-P", qty: 2, unit: 10 }], { dinheiro: 20 })
+    // Legado: a main antiga gravava o que o client mandava (SKU de então, hoje inexistente).
+    await db.devolucaoVenda.create({
+      data: { storeId, localId: "DEV-LEGADO-1", vendaLocalId: origem.id, tipo: "vale_credito", valorTotal: 10, creditoEmitido: 0, clienteDoc: CPF, itens: { create: [{ inventoryId: "SKU-QUE-NAO-EXISTE-MAIS", nome: "Camiseta P", quantidade: 1, valorUnitario: 10, valorTotal: 10 }] } },
+    })
+    const r = await devolver({ localId: "DEV-POS-LEGADO", vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] })
+    expect(r.status).toBe(409)
+    expect(r.body.code).toBe("HISTORICO_DEVOLUCAO_NAO_RESOLVIDO")
+    expect(await saldoVale()).toBe(0)
+    expect(await stock("CAM-P")).toBe(8)
+    const e = await eleg(origem.id)
+    expect(e.body.vendas[0].lines[0].bloqueioDevolucao).toMatch(/conferência manual/)
+  })
+
   it("permissão de devolução ausente: a gravação é negada antes de qualquer IO", async () => {
     const origem = await vender([{ sku: "CAM-P", qty: 1, unit: 10 }], { dinheiro: 10 })
     h.perms = permsCom({ devolucao: false })

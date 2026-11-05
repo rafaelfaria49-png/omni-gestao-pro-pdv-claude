@@ -717,10 +717,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 </p>
                 {(resumoTrocas.pendentes > 0 ||
                   resumoTrocas.aguardandoVendaOrigem > 0 ||
+                  resumoTrocas.bloqueados > 0 ||
                   resumoTrocas.recusasDefinitivas > 0 ||
                   resumoTrocas.encaminhadas > 0) && (
                   <p className="min-w-0 text-destructive" data-testid="fechamento-trocas-pendencias">
-                    Pendentes: {resumoTrocas.pendentes} · Aguardando venda de origem: {resumoTrocas.aguardandoVendaOrigem} · Recusas
+                    Pendentes: {resumoTrocas.pendentes} · Aguardando venda de origem: {resumoTrocas.aguardandoVendaOrigem} · Bloqueio persistente:{" "}
+                    {resumoTrocas.bloqueados} · Recusas
                     definitivas: {resumoTrocas.recusasDefinitivas} · Exigem conciliação manual: {resumoTrocas.conciliacaoManual} ·
                     Encaminhadas ao Financeiro: {resumoTrocas.encaminhadas}. Trate no F8 (Troca/Devolução); nenhum dinheiro é lançado
                     automaticamente.

@@ -87,13 +87,22 @@ export async function saleProductKeyResolver(
   const alias = new Map<string, string>()
   const lines = (venda.payload as { lines?: unknown } | null)?.lines
   const itensOrdenados = [...venda.itens].sort((a, b) => str(a.id).localeCompare(str(b.id)))
+  // Nome repetido entre produtos DIFERENTES torna a posição ambígua: sem casamento por posição.
+  const chavesPorNome = new Map<string, Set<string>>()
+  for (const it of venda.itens) {
+    const n = str(it.nome)
+    const set = chavesPorNome.get(n) ?? new Set<string>()
+    set.add(str(it.inventoryId))
+    chavesPorNome.set(n, set)
+  }
+  const posicaoSegura = [...chavesPorNome.values()].every((set) => set.size <= 1)
   if (Array.isArray(lines)) {
     lines.forEach((raw, idx) => {
       const l = (raw ?? {}) as Record<string, unknown>
       const pid = str(l.produtoId)
       const inv = str(l.inventoryId)
       let alvo = pid && saleKeys.has(pid) ? pid : inv && saleKeys.has(inv) ? inv : ""
-      if (!alvo && lines.length === itensOrdenados.length) {
+      if (!alvo && posicaoSegura && lines.length === itensOrdenados.length) {
         const it = itensOrdenados[idx]
         if (it && str(it.inventoryId) && str(it.nome) === str(l.name)) alvo = str(it.inventoryId)
       }

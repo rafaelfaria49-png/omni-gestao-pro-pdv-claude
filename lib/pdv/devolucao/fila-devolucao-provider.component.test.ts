@@ -177,6 +177,7 @@ describe("fila de devoluções — venda de origem ausente", () => {
     expect(rt().inventory.find((i) => i.id === "CAM-P")!.stock).toBe(estoqueAntes - 1)
     expect(rt().sales[0]!.lines.map((l) => l.qtyReturned ?? 0)).toEqual([0, 0])
     // Segundo encaminhamento é no-op (sem estorno em dobro) e a fila não reenvia.
+    expect(net.devPosts).toHaveLength(0)
     await act(async () => {
       rt().registrarEncaminhamentoDevolucao("DEV-2026-0001-AAAAAAAA", { ref: "AUD-2", at: "x", operador: "x", categoria: "VALE_EMITIDO", valorDeclarado: 10 })
     })
@@ -194,6 +195,23 @@ describe("fila de devoluções — venda de origem ausente", () => {
     await waitFor(() => expect(dev().syncRejectedCode).toBe("ITEM_SEM_LASTRO_BLOQUEADO"))
     expect(dev().syncPending).toBe(false)
     expect(rt().customerCredits[CPF]!.saldo).toBe(0)
+  })
+})
+
+describe("fila de devoluções — encaminhamento no mesmo tick", () => {
+  it("encaminhar e disparar o flush no MESMO tick não reenvia a devolução (stateRef síncrono)", async () => {
+    seed([devPendente({ syncWaitingCode: "AGUARDANDO_VENDA_ORIGEM", syncWaitingSince: new Date().toISOString(), syncAttempts: 1 })])
+    await mount()
+    await waitFor(() => expect(net.devPosts.length).toBeGreaterThanOrEqual(1))
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    const posts = net.devPosts.length
+    await act(async () => {
+      rt().registrarEncaminhamentoDevolucao("DEV-2026-0001-AAAAAAAA", { ref: "AUD-9", at: "x", operador: "Sup", categoria: "VALE_EMITIDO", valorDeclarado: 10 })
+      window.dispatchEvent(new Event("online"))
+    })
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    expect(net.devPosts.length).toBe(posts)
+    expect(dev()).toMatchObject({ syncPending: false, conciliacao: { ref: "AUD-9" } })
   })
 })
 

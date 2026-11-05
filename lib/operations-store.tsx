@@ -527,6 +527,8 @@ export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
   "ITENS_DUPLICADOS",
   "ITEM_SEM_LASTRO_BLOQUEADO",
   "DEVOLUCAO_KG_BLOQUEADA",
+  "DEVOLUCAO_ENCAMINHADA_FINANCEIRO",
+  "HISTORICO_DEVOLUCAO_NAO_RESOLVIDO",
 ])
 
 /** Item do estoque local correspondente à linha devolvida: Produto.id (dbId) antes do SKU. */
@@ -1176,6 +1178,8 @@ export function OperationsProvider({
   })
   const [opsDbReady, setOpsDbReady] = useState(false)
   const stateRef = useRef(state)
+  /** Devoluções com POST em voo na retentativa (PDV-F8-FINALIZACAO-COMPLETA-001). */
+  const devolucoesEmVooRef = useRef(new Set<string>())
   const lastSentOpsRef = useRef<string>("")
   const bootstrapDoneRef = useRef(false)
   /**
@@ -3122,10 +3126,15 @@ export function OperationsProvider({
 
   const flushPendingDevolucoes = useCallback(() => {
     // Bloqueio persistente NÃO entra na retentativa automática (só retomada manual).
-    const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true && !d.syncBlocked)
+    // Um envio por devolução em voo: gatilhos concorrentes (boot/online/foco/intervalo)
+    // não duplicam POST nem inflam `syncAttempts`.
+    const pending = stateRef.current.devolucoes.filter(
+      (d) => d.syncPending === true && !d.syncBlocked && !devolucoesEmVooRef.current.has(d.id),
+    )
     if (pending.length === 0) return
     const lj = opsLojaIdFromStorageKey(storageKey)
     for (const dev of pending) {
+      devolucoesEmVooRef.current.add(dev.id)
       const itensServidor = dev.lines.map((it) => {
         const sale = stateRef.current.sales.find((s) => s.id === dev.saleId)
         const saleLine = sale?.lines.find((l) => l.inventoryId === it.inventoryId)
@@ -3167,6 +3176,9 @@ export function OperationsProvider({
         .then((res) => aplicarRespostaDevolucao(dev.id, res, lj))
         .catch((err: unknown) => {
           console.warn("[devolucao-persist] re-sync rede", dev.id, "lojaId:", lj, err)
+        })
+        .finally(() => {
+          devolucoesEmVooRef.current.delete(dev.id)
         })
     }
   }, [storageKey, aplicarRespostaDevolucao])
@@ -4032,7 +4044,7 @@ export function OperationsProvider({
         userLabel: `${conciliacao.operador} (reconciliação supervisionada)`,
         detail: `[devolucao ENCAMINHADA AO FINANCEIRO — NÃO GRAVADA] ${devolucaoId} | venda ${dev.saleId} | ref ${conciliacao.ref} | ${conciliacao.categoria} ${conciliacao.valorDeclarado.toFixed(2)}${aindaNaFila ? " | saiu da fila; vale/estoque locais desfeitos" : ""}`,
       })
-      setState((prev) => {
+      const build = (prev: OpsState): OpsState => {
         const d = prev.devolucoes.find((x) => x.id === devolucaoId)
         if (!d || d.conciliacao?.ref) return prev
         // Ainda na fila: o servidor nunca gravou — sai da fila e desfaz os efeitos locais.
@@ -4044,7 +4056,12 @@ export function OperationsProvider({
             x.id === devolucaoId ? { ...x, syncPending: false, syncBlocked: undefined, conciliacao } : x,
           ),
         }
-      })
+      }
+      // Publica JÁ em `stateRef`: um flush no mesmo tick (online/foco/intervalo) não pode
+      // reenviar a devolução que acabou de ser encaminhada.
+      const next = build(cur)
+      stateRef.current = next
+      setState((prev) => (prev === cur ? next : build(prev)))
     },
     [],
   )

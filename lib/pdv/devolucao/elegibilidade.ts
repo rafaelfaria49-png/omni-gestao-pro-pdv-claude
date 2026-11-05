@@ -119,13 +119,18 @@ export async function buscarVendasElegiveis(
     ])
     const canon = (k: string | null | undefined, pid?: string | null) => keys.resolve(k, pid)
     const retorno = new Map<string, number>()
+    let historicoNaoResolvido = false
     for (const d of devolvidos) {
       if (d.devolucao.vendaLocalId !== r.pedidoId) continue
       const k = canon(d.inventoryId)
       if (k) retorno.set(k, (retorno.get(k) ?? 0) + (d.quantidade || 0))
+      else historicoNaoResolvido = true
     }
+    // Mesma regra do escritor: devolvido anterior não contável bloqueia a venda inteira.
     const bloqueio = (k: string): string | undefined =>
-      isVirtualSaleLine(k) || !keys.isProduto(k)
+      historicoNaoResolvido
+        ? "Não devolvível: há devolução anterior desta venda com item não identificável — exige conferência manual."
+        : isVirtualSaleLine(k) || !keys.isProduto(k)
         ? `Não devolvível: ${ITEM_SEM_LASTRO_MENSAGEM}`
         : keys.isPeso(k)
           ? "Não devolvível: produto vendido por peso (bloqueado até aprovação do schema R3)."
