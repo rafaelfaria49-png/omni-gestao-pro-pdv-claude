@@ -2,7 +2,7 @@
 
 Totais: PASS_REAL_SOFTWARE=55 · PASS_SIMULATED_TRANSPORT=13 · BLOCKED_HUMAN_GATE=3 · DEFERRED_PHYSICAL_HARDWARE=9
 
-Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts. D04: tools/print-d04/recovery.test.ts, D04_WINDOWS_AGENT.md e evidence/d04/; hardware/logon/reboot reais no RUNBOOK_D05.md permanecem pendentes.
+Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts. D04: tools/print-d04/recovery.test.ts, D04_WINDOWS_AGENT.md e evidence/d04/; hardware/logon/reboot reais no RUNBOOK_D05.md permanecem pendentes. D05_PREPARED: PLANO_AMBIENTE_D05.md, CHECKLIST_OPERADOR_D05.md e evidence/d05/H01-H18.template.json; 18 casos BLOCKED, sem promoção de resultado físico.
 
 | ID | Caso | Resultado | Evidência |
 |---|---|---|---|

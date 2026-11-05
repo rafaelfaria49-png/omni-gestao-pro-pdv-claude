@@ -99,6 +99,6 @@ const totals = rows.reduce((a, r) => (a[r.status] = (a[r.status] ?? 0) + 1, a), 
 const out = path.join(root, "docs/print-004c-e2e")
 writeFileSync(path.join(out, "matriz-80.json"), JSON.stringify({ totals, rows }, null, 2))
 writeFileSync(path.join(out, "MATRIZ_80.md"), `# Matriz de 80 casos — OMNI-PRINT-004C\n\nTotais: ${Object.entries(totals).map(([k, v]) => `${k}=${v}`).join(" · ")}\n\n` +
-  "Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts. D04: tools/print-d04/recovery.test.ts, D04_WINDOWS_AGENT.md e evidence/d04/; hardware/logon/reboot reais no RUNBOOK_D05.md permanecem pendentes.\n\n" +
+  "Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts. D04: tools/print-d04/recovery.test.ts, D04_WINDOWS_AGENT.md e evidence/d04/; hardware/logon/reboot reais no RUNBOOK_D05.md permanecem pendentes. D05_PREPARED: PLANO_AMBIENTE_D05.md, CHECKLIST_OPERADOR_D05.md e evidence/d05/H01-H18.template.json; 18 casos BLOCKED, sem promoção de resultado físico.\n\n" +
   "| ID | Caso | Resultado | Evidência |\n|---|---|---|---|\n" + rows.map(r => `| ${r.id} | ${r.title} | ${r.status} | ${r.evidence} |`).join("\n") + "\n")
 console.log(JSON.stringify(totals))

@@ -4,6 +4,25 @@ Estado: **PENDING**. Todas as linhas abaixo começam **NÃO EXECUTADO**. D04-A a
 não autoriza instalar no caixa, criar branch Neon, configurar Preview, parear, imprimir ou declarar homologação.
 `APPROVED_RELEASE=null`. Não houve operação produtiva nesta entrega.
 
+Preparação técnica D05: **D05_PREPARED**, branch `codex/omni-print-d05-homologacao-fisica-001` baseada no head
+`0e9eb95d578c6c57e7e7f4b8b71355f460d970a4` da #327, com #332/#333 integradas. Nenhum caso físico foi executado.
+Plano de ambiente e rollback: [PLANO_AMBIENTE_D05.md](PLANO_AMBIENTE_D05.md). Comandos e consentimentos:
+[CHECKLIST_OPERADOR_D05.md](CHECKLIST_OPERADOR_D05.md). Relatório: [RELATORIO_D05.md](RELATORIO_D05.md).
+Registro inicial com H01–H18 BLOCKED: `evidence/d05/H01-H18.template.json`. Copiar para a pasta privada de uma execução
+futura; não substituir o template por resultados. Verificador offline:
+
+```powershell
+node --test tools/print-d05/readiness.test.mjs
+node tools/print-d05/readiness.mjs check
+node tools/print-d04/package.mjs tools/print-d05/.artifacts
+node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent
+```
+
+Esses comandos preparam/validam arquivos locais. Não instalam agente, não acessam banco e não autorizam hardware.
+Preview Git automático desta branch está bloqueado em `vercel.json`. Release de homologação planejada, não ativa:
+`OMNI-PRINT-D05-HOMOLOGACAO-1`. O runtime atual exige commit de ativação exclusiva de Preview, a revisar **após** liberação
+específica do transporte; manter o release produtivo NULL. Variáveis sozinhas não abrem o gate atual.
+
 ## Próxima liberação necessária
 
 O proprietário deve definir por escrito: local/bancada ou loja piloto, data, operador responsável, consentimento da loja,

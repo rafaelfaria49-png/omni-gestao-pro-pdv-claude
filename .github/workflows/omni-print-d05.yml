@@ -1,0 +1,35 @@
+name: Omni Print D05 — preparação sem hardware
+on:
+  pull_request:
+    paths:
+      - 'tools/print-d05/**'
+      - 'tools/omni-print-agent/**'
+      - 'docs/print-004c-e2e/**'
+      - 'lib/printing/direct/activation.ts'
+      - 'vercel.json'
+      - '.github/workflows/omni-print-d05.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-preparation:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: node --test tools/print-d05/readiness.test.mjs
+      - run: node tools/print-d05/readiness.mjs check
+      - run: node tools/print-d04/package.mjs tools/print-d05/.artifacts
+      - run: node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omni-print-d05-preparation-${{ matrix.os }}
+          path: |
+            tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip
+            tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip.sha256
+            docs/print-004c-e2e/evidence/d05/H01-H18.template.json
