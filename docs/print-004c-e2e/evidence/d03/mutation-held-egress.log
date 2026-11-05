@@ -1,0 +1,35 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d03-mutation
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 4062ms
+     × R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved 3815ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  18:17:10
+   Duration  4.70s (transform 333ms, setup 0ms, import 458ms, tests 4.06s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tools/print-d03/retention.pg.test.ts:151:41
+    149|     await core.report(installA, { attemptId: sent.attemptId, sendKey: …
+    150|     await core.report(installA, { attemptId: sent.attemptId, sendKey: …
+    151|     expect((await run()).purged.copies).toBe(0)
+       |                                         ^
+    152|     await core.report(installA, { attemptId: sent.attemptId, sendKey: …
+    153|     const proofs = await db.query("SELECT id,evidence_key,evidence_has…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

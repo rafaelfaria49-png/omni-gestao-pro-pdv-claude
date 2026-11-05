@@ -1,0 +1,4727 @@
+{
+  "originalCounts": {
+    "PASS": 53,
+    "FAIL": 0,
+    "DEFERRED": 27
+  },
+  "run": "core-6909ccad",
+  "executedProofs": 35,
+  "sourceFiles": [
+    {
+      "path": "lib/print-core-synthetic/authority.ts",
+      "sha256": "12605D1B289CCC6623CA124A559A0BC306E8D3F12DFF86FE25907CE65E43E980"
+    },
+    {
+      "path": "lib/print-core-synthetic/codec.ts",
+      "sha256": "1161FC9828E0E5256BCE376B498F3A88B7685F54F7ECE44F8C22C21FD2FB25D4"
+    },
+    {
+      "path": "lib/print-core-synthetic/core.ts",
+      "sha256": "722044B2760683F4624149102263CC4337181EDF814709AFB4C4D053E9D3E560"
+    },
+    {
+      "path": "lib/print-core-synthetic/db.ts",
+      "sha256": "F8223440DDAC689944882724B17F05CEF88B7B9CC520D35AAF938EE70984028E"
+    },
+    {
+      "path": "lib/print-core-synthetic/sale.ts",
+      "sha256": "2DEC67E55144F085426B4D60932BC695A3C6F06017EBF27A893B6A1BFAE1B442"
+    },
+    {
+      "path": "lib/print-core-synthetic/simulator.ts",
+      "sha256": "EA5AA1535AE88B90B3AB74C975077117D1D4BA7CE0DF4A6B6EB97C7A806B4FFE"
+    },
+    {
+      "path": "tools/print-core-004b/gate-b-run.ts",
+      "sha256": "4B138B4A76EC59CD4E14C71B750922A7040B90F482E0CE6694FA051527F84A1C"
+    }
+  ],
+  "cases": [
+    {
+      "id": "B01",
+      "scenario": "Duas criações INITIAL concorrentes, keys distintas",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Barreira sincroniza transações reais; somente um slot e job; perdedor relê vencedor, sem duas outboxes efetivas.",
+      "proofs": [
+        {
+          "id": "CORE-CONCURRENT-INITIAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 198,
+          "endLine": 210,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 204,
+              "endLine": 204,
+              "expression": "assert.equal(out[0].jobId, out[1].jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 206,
+              "endLine": 206,
+              "expression": "assert.equal(count.n, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 208,
+              "endLine": 208,
+              "expression": "assert.ok([a01!.principalId, storeUser!.principalId].includes(author.principal_id))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B02",
+      "scenario": "Duas abas, manual versus automático e dois usuários",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Concorrência converge ao mesmo slot loja/documento/família; origem UI e principal não abrem outro inicial.",
+      "proofs": [
+        {
+          "id": "CORE-CONCURRENT-INITIAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 198,
+          "endLine": 210,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 204,
+              "endLine": 204,
+              "expression": "assert.equal(out[0].jobId, out[1].jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 206,
+              "endLine": 206,
+              "expression": "assert.equal(count.n, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 208,
+              "endLine": 208,
+              "expression": "assert.ok([a01!.principalId, storeUser!.principalId].includes(author.principal_id))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B03",
+      "scenario": "Dois terminais/destinos ou versão/vias diferentes",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SEMANTIC-CONFLICT",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Conflito semântico explícito; não imprime silenciosamente em ambos os destinos.",
+      "proofs": [
+        {
+          "id": "CORE-SEMANTIC-CONFLICT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 211,
+          "endLine": 219,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 217,
+              "endLine": 217,
+              "expression": "assert.equal(out.filter(r => r.status === \"fulfilled\").length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 218,
+              "endLine": 218,
+              "expression": "assert.equal((out.find(r => r.status === \"rejected\") as PromiseRejectedResult).reason.code, \"INITIAL_SEMANTIC_CONFLICT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-NORMALIZATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 551,
+          "endLine": 566,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 555,
+              "endLine": 555,
+              "expression": "assert.equal(canonical(p1.command), canonical(p2.command))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 556,
+              "endLine": 556,
+              "expression": "assert.notEqual(p1.key, p2.key)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 560,
+              "endLine": 560,
+              "expression": "rejects(() => core.create(a01, p1.key, { ...p1.command, [field]: value }), \"REQUEST_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 562,
+              "endLine": 562,
+              "expression": "assert.equal((await core.create(a01, p2.key, p2.command)).jobId, j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 564,
+              "endLine": 564,
+              "expression": "rejects(() => core.create(a01, changedCopies.key, changedCopies.command), \"INITIAL_SEMANTIC_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 565,
+              "endLine": 565,
+              "expression": "rejects(() => core.create(a01, p1.key, { ...p1.command, riskHash: { recurse: true } }), \"INVALID_COMMAND\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B04",
+      "scenario": "Replay idêntico, resposta perdida após commit",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesma key encontra job/hash/estado; contagem de jobs/vias/tentativas não aumenta.",
+      "proofs": [
+        {
+          "id": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 220,
+          "endLine": 232,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 225,
+              "endLine": 225,
+              "expression": "rejects(() => core.create(a01, job.p.key, { ...job.p.command, copies: 2 }), \"REQUEST_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 226,
+              "endLine": 226,
+              "expression": "rejects(() => core.create(storeUser, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 227,
+              "endLine": 227,
+              "expression": "rejects(() => core.get(userB, storeA, job.j.jobId), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 228,
+              "endLine": 228,
+              "expression": "rejects(() => core.get(a01, storeB, job.j.jobId), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 229,
+              "endLine": 229,
+              "expression": "rejects(() => core.create(a01, randomUUID(), job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 230,
+              "endLine": 230,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === job.copies[0].send_key).length, 0)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B05",
+      "scenario": "Replay alterado e outra identidade com key conhecida",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Conflito ou negação de acesso após guard; nenhum job/dado de outra loja é revelado.",
+      "proofs": [
+        {
+          "id": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 220,
+          "endLine": 232,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 225,
+              "endLine": 225,
+              "expression": "rejects(() => core.create(a01, job.p.key, { ...job.p.command, copies: 2 }), \"REQUEST_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 226,
+              "endLine": 226,
+              "expression": "rejects(() => core.create(storeUser, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 227,
+              "endLine": 227,
+              "expression": "rejects(() => core.get(userB, storeA, job.j.jobId), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 228,
+              "endLine": 228,
+              "expression": "rejects(() => core.get(a01, storeB, job.j.jobId), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 229,
+              "endLine": 229,
+              "expression": "rejects(() => core.create(a01, randomUUID(), job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 230,
+              "endLine": 230,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === job.copies[0].send_key).length, 0)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B06",
+      "scenario": "Crash/rollback antes do commit T1",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum efeito/outbox visível e nenhum snapshot parcial elegível para envio.",
+      "proofs": [
+        {
+          "id": "CORE-ATOMIC-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 233,
+          "endLine": 246,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 238,
+              "endLine": 238,
+              "expression": "rejects(() => new PrintCoreSynthetic(failing, crypto, boundary, policy).create(a01, p.key, p.command), \"INJECTED_AUDIT_FAILURE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 240,
+              "endLine": 240,
+              "expression": "assert.equal(state.n, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 240,
+              "endLine": 240,
+              "expression": "assert.equal(state.initial_state, \"OPEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 242,
+              "endLine": 242,
+              "expression": "assert.equal(j.state, \"REGISTERED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 245,
+              "endLine": 245,
+              "expression": "assert.equal(l.epoch, \"1\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B07",
+      "scenario": "Crash após T1 e antes de T2/T3",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Job selado recuperável; autorização reavaliada; só vias sem tentativa podem ser assumidas por CAS.",
+      "proofs": [
+        {
+          "id": "CORE-ATOMIC-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 233,
+          "endLine": 246,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 238,
+              "endLine": 238,
+              "expression": "rejects(() => new PrintCoreSynthetic(failing, crypto, boundary, policy).create(a01, p.key, p.command), \"INJECTED_AUDIT_FAILURE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 240,
+              "endLine": 240,
+              "expression": "assert.equal(state.n, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 240,
+              "endLine": 240,
+              "expression": "assert.equal(state.initial_state, \"OPEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 242,
+              "endLine": 242,
+              "expression": "assert.equal(j.state, \"REGISTERED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 245,
+              "endLine": 245,
+              "expression": "assert.equal(l.epoch, \"1\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B08",
+      "scenario": "Dois executores disputam uma via",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-TWO-EXECUTORS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Só um CAS inicia tentativa; epoch cresce; outro executor não entra no adaptador.",
+      "proofs": [
+        {
+          "id": "CORE-TWO-EXECUTORS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 247,
+          "endLine": 254,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 252,
+              "endLine": 252,
+              "expression": "assert.equal(out.filter(r => r.status === \"fulfilled\").length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 253,
+              "endLine": 253,
+              "expression": "assert.equal((out.find(r => r.status === \"rejected\") as PromiseRejectedResult).reason.code, \"LEASE_HELD\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B09",
+      "scenario": "Lease expira antes de T3 e executor antigo acorda",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-LEASE-FENCING",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Epoch antigo falha no CAS; nova posse não deixa duas tentativas potencialmente efetivas.",
+      "proofs": [
+        {
+          "id": "CORE-LEASE-FENCING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 255,
+          "endLine": 263,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 260,
+              "endLine": 260,
+              "expression": "assert.ok(BigInt(l2.epoch) > BigInt(l1.epoch))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 261,
+              "endLine": 261,
+              "expression": "rejects(() => core.start(a01, storeA, job.j.jobId, job.copies[0].id, \"old-executor\", l1.epoch), \"LEASE_OR_COPY_INVALID\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B10",
+      "scenario": "Crash após T3 antes da chamada e após envio antes de T4",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Ambos ficam incertos sem prova; recuperação nunca reenvia só por ausência de recibo.",
+      "proofs": [
+        {
+          "id": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 264,
+          "endLine": 281,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 268,
+              "endLine": 268,
+              "expression": "assert.equal(result.resultKnown, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 272,
+              "endLine": 272,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"UNKNOWN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 273,
+              "endLine": 273,
+              "expression": "rejects(() => restart.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 274,
+              "endLine": 274,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === result.attemptId).length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 277,
+              "endLine": 277,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 279,
+              "endLine": 279,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"TRANSPORT_ACCEPTED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-CRASH-BEFORE-CALL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 476,
+          "endLine": 489,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 484,
+              "endLine": 484,
+              "expression": "rejects(() => restart.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"blind-retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 485,
+              "endLine": 485,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === started.attemptId).length, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 487,
+              "endLine": 487,
+              "expression": "assert.equal(destination.held_attempt_id, started.attemptId)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B11",
+      "scenario": "Revogação concorre com T3",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVOCATION",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVOCATION-CONCURRENT-T3",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Commit de revogação anterior bloqueia; tentativa já autorizada preserva possibilidade de efeito, bloqueando vias futuras.",
+      "proofs": [
+        {
+          "id": "CORE-REVOCATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 388,
+          "endLine": 402,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 393,
+              "endLine": 393,
+              "expression": "rejects(() => core.start(a01, storeA, beforeJob.j.jobId, l.cp.id, l.l.owner, l.l.epoch), \"DELEGATION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 398,
+              "endLine": 398,
+              "expression": "assert.ok(proof)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 400,
+              "endLine": 400,
+              "expression": "assert.equal((await core.get(a01, storeA, afterJob.j.jobId)).state, \"TRANSPORT_ACCEPTED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-REVOCATION-CONCURRENT-T3",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 499,
+          "endLine": 524,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 518,
+              "endLine": 518,
+              "expression": "assert.equal(waiting.length, 1, \"Revocation must actually wait for the T3 delegation lock in PostgreSQL\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 521,
+              "endLine": 521,
+              "expression": "assert.ok(proof)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 522,
+              "endLine": 522,
+              "expression": "rejects(() => core.ready(a01, storeA, job.j.jobId, job.copies[1].id, \"after-revocation\"), \"DELEGATION_REVOKED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B12",
+      "scenario": "Correção/cancelamento da venda concorre com criação/envio",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-FINGERPRINT",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Leitura/versão consistente aborta snapshot desatualizado; após ponto de ordenação registra janela e bloqueia vias posteriores.",
+      "proofs": [
+        {
+          "id": "CORE-FINGERPRINT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 572,
+          "endLine": 599,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 586,
+              "endLine": 586,
+              "expression": "assert.notEqual((await saleSnapshot(db1, storeA, v.sale, 100)).version, prev.version)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 588,
+              "endLine": 588,
+              "expression": "assert.notEqual((await saleSnapshot(db1, storeA, v.sale, 100)).version, initial.version)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 592,
+              "endLine": 592,
+              "expression": "rejects(() => core.create(a01, p.key, p.command), \"DOCUMENT_VERSION_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 594,
+              "endLine": 594,
+              "expression": "assert.equal(cancellation, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 597,
+              "endLine": 597,
+              "expression": "rejects(() => saleSnapshot(db1, storeA, v.sale, 100), \"DOCUMENT_INELIGIBLE\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-REVIEW-REGRESSIONS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 600,
+          "endLine": 638,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 603,
+              "endLine": 603,
+              "expression": "assert.ok(p.key)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 604,
+              "endLine": 604,
+              "expression": "rejects(() => core.prepare(unbound, command(\"legacy\")), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 608,
+              "endLine": 608,
+              "expression": "rejects(() => core.start(a01, storeA, inactive.j.jobId, l.cp.id, l.l.owner, l.l.epoch), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 609,
+              "endLine": 609,
+              "expression": "rejects(() => core.prepare(a01, command(\"inactive\")), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 616,
+              "endLine": 616,
+              "expression": "rejects(() => core.prepare(a01, command(name)), code)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 621,
+              "endLine": 621,
+              "expression": "rejects(() => core.start(a01, storeA, sealed.j.jobId, l3.cp.id, l3.l.owner, l3.l.epoch), \"DOCUMENT_VERSION_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 625,
+              "endLine": 625,
+              "expression": "rejects(() => core.create(a01, cancellation.key, cancellation.command), \"DOCUMENT_INELIGIBLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 636,
+              "endLine": 636,
+              "expression": "rejects(() => creation, \"DOCUMENT_VERSION_CONFLICT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B13",
+      "scenario": "Bindings e previousJobId de outra loja",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CROSS-SCOPE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Constraints/relações e autorização impedem cruzamento inclusive por inserção concorrente; referência inválida não liga cadeia.",
+      "proofs": [
+        {
+          "id": "CORE-CROSS-SCOPE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 403,
+          "endLine": 422,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 405,
+              "endLine": 405,
+              "expression": "rejects(() => core.prepare(a01, command(\"cross\", { bindingVersionId: f(\"sharedB\").binding })), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 407,
+              "endLine": 407,
+              "expression": "rejects(async () => core.prepare(a01, command(\"cross\", { kind: \"REPRINT\", reasonCode: \"LOST\", consent: quote.consent, previousJobId: (await rows(\"SELECT id FROM public.print_jobs WHERE store_id=$1 LIMIT 1\", [storeB]))[0].id })), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 409,
+              "endLine": 409,
+              "expression": "rejects(() => core.ready(a01, storeA, j.j.jobId, other.copies[0].id, \"cross\"), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 412,
+              "endLine": 413,
+              "expression": "sqlReject(() => db1.exec(\"INSERT INTO public.print_attempts(id,store_id,document_id,job_id,copy_id,number,lease_epoch,destination_id,result) VALUES($1::uuid,$2,$3::uuid,$4::uuid,$5::uuid,1,$6,$7::uuid,'STARTED')\",\n        [randomUUID(), storeA, j.j.documentId, j.j.jobId, other.copies[0].id, BigInt(lOther.epoch), f(\"cross\").destination]), \"23503\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 414,
+              "endLine": 414,
+              "expression": "assert.ok(known)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 417,
+              "endLine": 417,
+              "expression": "rejects(() => core.reconcile(crypto.sign(\"synthetic-proof-v1\", body)), \"PROOF_SCOPE_MISMATCH\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 420,
+              "endLine": 420,
+              "expression": "rejects(async () => core.prepare(a01, command(\"cross\", { kind: \"REPRINT\", reasonCode: \"LOST\", consent: fake })), \"INVALID_PROOF\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 421,
+              "endLine": 421,
+              "expression": "assert.ok(p.key)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B14",
+      "scenario": "Duas confirmações concorrentes de segunda via",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPRINT-COALESCENCE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Uma intenção ativa por documento; outra preparação conflita ou encontra a mesma; risco incerto exige confirmação adicional.",
+      "proofs": [
+        {
+          "id": "CORE-REPRINT-COALESCENCE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 328,
+          "endLine": 337,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 330,
+              "endLine": 330,
+              "expression": "assert.equal(quote1.intentId, quote2.intentId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 336,
+              "endLine": 336,
+              "expression": "assert.equal(out[0].jobId, out[1].jobId)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B15",
+      "scenario": "Múltiplas vias com aceite/falha/incerteza parcial",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Cada copyId tem progresso próprio; retry seguro somente da via comprovadamente não enviada; aceitas/incertas intactas.",
+      "proofs": [
+        {
+          "id": "CORE-PARTIAL-COPIES",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 282,
+          "endLine": 296,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 288,
+              "endLine": 288,
+              "expression": "assert.equal((await core.get(a01, storeA, job.j.jobId)).state, \"PARTIAL\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 289,
+              "endLine": 289,
+              "expression": "rejects(() => core.ready(a01, storeA, job.j.jobId, first.cp.id, \"repeat-all\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 294,
+              "endLine": 294,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === first.cp.send_key).length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 295,
+              "endLine": 295,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === second.cp.send_key).length, 2)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B16",
+      "scenario": "Evidência/callback duplicado e atrasado",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Evento deduplicado por tentativa; evidência preservada, sem nova outbox ou downgrade de aceite conhecido.",
+      "proofs": [
+        {
+          "id": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 264,
+          "endLine": 281,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 268,
+              "endLine": 268,
+              "expression": "assert.equal(result.resultKnown, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 272,
+              "endLine": 272,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"UNKNOWN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 273,
+              "endLine": 273,
+              "expression": "rejects(() => restart.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 274,
+              "endLine": 274,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === result.attemptId).length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 277,
+              "endLine": 277,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 279,
+              "endLine": 279,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"TRANSPORT_ACCEPTED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B17",
+      "scenario": "Retenção de payload sem remoção de dedup",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Apagar bytes não remove slot/recibo; replay autorizado retorna metadados/expiração; sem reconstrução automática.",
+      "proofs": [
+        {
+          "id": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 640,
+          "endLine": 664,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 644,
+              "endLine": 644,
+              "expression": "rejects(() => short.create(a01, expired.key, expired.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 648,
+              "endLine": 648,
+              "expression": "assert.equal(await short.expireSafeCopies(a01, storeA, job.j.jobId), 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 650,
+              "endLine": 650,
+              "expression": "assert.equal(dto.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 651,
+              "endLine": 651,
+              "expression": "rejects(() => short.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"regenerate\"), \"DELEGATION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 653,
+              "endLine": 653,
+              "expression": "rejects(() => short.create(a01, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_hash, beforeHash.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_cipher, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 662,
+              "endLine": 662,
+              "expression": "rejects(() => core.prepare(a01, command(\"requestPurge\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B18",
+      "scenario": "Remoção posterior de tombstone de requisição",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Grant antigo continua expirado/inválido; requestKey velha não é reemitida nem aceita como comando novo.",
+      "proofs": [
+        {
+          "id": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 640,
+          "endLine": 664,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 644,
+              "endLine": 644,
+              "expression": "rejects(() => short.create(a01, expired.key, expired.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 648,
+              "endLine": 648,
+              "expression": "assert.equal(await short.expireSafeCopies(a01, storeA, job.j.jobId), 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 650,
+              "endLine": 650,
+              "expression": "assert.equal(dto.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 651,
+              "endLine": 651,
+              "expression": "rejects(() => short.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"regenerate\"), \"DELEGATION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 653,
+              "endLine": 653,
+              "expression": "rejects(() => short.create(a01, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_hash, beforeHash.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_cipher, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 662,
+              "endLine": 662,
+              "expression": "rejects(() => core.prepare(a01, command(\"requestPurge\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B19",
+      "scenario": "Retenção/arquivamento de marca inicial",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Documento ainda imprimível mantém slot; cleanup não reabre INITIAL; eventual fechamento de elegibilidade é atômico.",
+      "proofs": [
+        {
+          "id": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 640,
+          "endLine": 664,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 644,
+              "endLine": 644,
+              "expression": "rejects(() => short.create(a01, expired.key, expired.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 648,
+              "endLine": 648,
+              "expression": "assert.equal(await short.expireSafeCopies(a01, storeA, job.j.jobId), 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 650,
+              "endLine": 650,
+              "expression": "assert.equal(dto.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 651,
+              "endLine": 651,
+              "expression": "rejects(() => short.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"regenerate\"), \"DELEGATION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 653,
+              "endLine": 653,
+              "expression": "rejects(() => short.create(a01, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_hash, beforeHash.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_cipher, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 662,
+              "endLine": 662,
+              "expression": "rejects(() => core.prepare(a01, command(\"requestPurge\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-HISTORICAL-CLOSURE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 297,
+          "endLine": 306,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 300,
+              "endLine": 300,
+              "expression": "assert.equal(j.kind, \"REPRINT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 302,
+              "endLine": 302,
+              "expression": "assert.equal(d.initial_state, \"HISTORICAL_CLOSED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 302,
+              "endLine": 302,
+              "expression": "assert.equal(d.initial_intent_id, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 303,
+              "endLine": 303,
+              "expression": "rejects(() => core.prepare(a01, command(\"historical\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 305,
+              "endLine": 305,
+              "expression": "assert.equal(saved.previous_job_id, null)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B20",
+      "scenario": "Auditoria e falha de persistência",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Transição e auditoria duráveis no mesmo commit; erro do banco antes de T3 impede efeito; falha depois preserva incerteza.",
+      "proofs": [
+        {
+          "id": "CORE-ATOMIC-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 233,
+          "endLine": 246,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 238,
+              "endLine": 238,
+              "expression": "rejects(() => new PrintCoreSynthetic(failing, crypto, boundary, policy).create(a01, p.key, p.command), \"INJECTED_AUDIT_FAILURE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 240,
+              "endLine": 240,
+              "expression": "assert.equal(state.n, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 240,
+              "endLine": 240,
+              "expression": "assert.equal(state.initial_state, \"OPEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 242,
+              "endLine": 242,
+              "expression": "assert.equal(j.state, \"REGISTERED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 245,
+              "endLine": 245,
+              "expression": "assert.equal(l.epoch, \"1\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 423,
+          "endLine": 439,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 425,
+              "endLine": 425,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_jobs SET snapshot_hash=$1 WHERE id=$2::uuid\", [\"a\".repeat(64), job.j.jobId]), \"P0001\", \"immutable\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 426,
+              "endLine": 426,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_copies SET payload_hash=$1 WHERE id=$2::uuid\", [\"b\".repeat(64), job.copies[0].id]), \"P0001\", \"immutable\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 427,
+              "endLine": 427,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_copies SET state='UNKNOWN' WHERE id=$1::uuid\", [job.copies[0].id]), \"P0001\", \"illegal copy transition\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 428,
+              "endLine": 432,
+              "expression": "sqlReject(() => db1.transaction(async sql => {\n        await sql.exec(\"UPDATE public.print_jobs SET snapshot_cipher=NULL,snapshot_key_ref=NULL,snapshot_purged_at=clock_timestamp() WHERE id=$1::uuid\", [job.j.jobId])\n        // FK is immediate and store/document typed.\n        await sql.exec(\"UPDATE public.print_copies SET retry_suppressed_by_job_id=$1::uuid WHERE id=$2::uuid\", [(await rows(\"SELECT id FROM public.print_jobs WHERE store_id=$1 LIMIT 1\", [storeB]))[0].id, job.copies[0].id])\n      }), \"23503\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 433,
+              "endLine": 433,
+              "expression": "assert.equal(unchanged.present, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 436,
+              "endLine": 436,
+              "expression": "rejects(() => failStart.execute(a01, storeA, job.j.jobId, l.cp.id, l.l.owner, l.l.epoch, \"ACCEPT\"), \"INJECTED_T3_ROLLBACK\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 437,
+              "endLine": 437,
+              "expression": "assert.equal(attempts.n, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 438,
+              "endLine": 438,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === l.cp.send_key).length, 0)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 525,
+          "endLine": 541,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 530,
+              "endLine": 530,
+              "expression": "assert.ok(proof)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 535,
+              "endLine": 535,
+              "expression": "rejects(() => new PrintCoreSynthetic(failing, crypto, boundary, policy).reconcile(proof), \"INJECTED_T4_AUDIT_FAILURE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 536,
+              "endLine": 536,
+              "expression": "assert.equal((await core.get(a01, storeA, job.j.jobId)).state, \"SENDING\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 538,
+              "endLine": 538,
+              "expression": "assert.equal((await core.get(a01, storeA, job.j.jobId)).state, \"UNKNOWN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 540,
+              "endLine": 540,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === started.attemptId).length, 1)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B21",
+      "scenario": "Dois jobs compartilham fila física",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Exclusão por destino impede intercalar vias; autorização e conteúdo permanecem separados por loja.",
+      "proofs": [
+        {
+          "id": "CORE-SHARED-DESTINATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 373,
+          "endLine": 387,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 380,
+              "endLine": 380,
+              "expression": "rejects(() => core.start(userB, storeB, b.j.jobId, b.copies[0].id, lb.owner, lb.epoch), \"DESTINATION_BLOCKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 382,
+              "endLine": 382,
+              "expression": "rejects(() => core.start(userB, storeB, b.j.jobId, b.copies[0].id, lb.owner, lb.epoch), \"DESTINATION_BLOCKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 384,
+              "endLine": 384,
+              "expression": "assert.ok(proof)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B22",
+      "scenario": "REPRINT histórico concorre com INITIAL",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-INITIAL-RACE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesma guarda/constraint fecha slot atomicamente; marca histórica não inventa job anterior; perdedor reavalia exposição ou recebe conflito.",
+      "proofs": [
+        {
+          "id": "CORE-HISTORICAL-INITIAL-RACE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 307,
+          "endLine": 317,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 312,
+              "endLine": 312,
+              "expression": "assert.equal(out.filter(r => r.status === \"fulfilled\").length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 314,
+              "endLine": 314,
+              "expression": "assert.ok([\"STALE_RISK\", \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\"].includes(reason))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 316,
+              "endLine": 316,
+              "expression": "assert.equal(n.n, 1)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B23",
+      "scenario": "INITIAL após REPRINT histórico e após cleanup",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "INITIAL_CLOSED_BY_HISTORICAL_REPRINT sobrevive à retenção; aceite/incerteza da segunda via não abre novo caminho inicial.",
+      "proofs": [
+        {
+          "id": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 640,
+          "endLine": 664,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 644,
+              "endLine": 644,
+              "expression": "rejects(() => short.create(a01, expired.key, expired.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 648,
+              "endLine": 648,
+              "expression": "assert.equal(await short.expireSafeCopies(a01, storeA, job.j.jobId), 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 650,
+              "endLine": 650,
+              "expression": "assert.equal(dto.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 651,
+              "endLine": 651,
+              "expression": "rejects(() => short.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"regenerate\"), \"DELEGATION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 653,
+              "endLine": 653,
+              "expression": "rejects(() => short.create(a01, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_hash, beforeHash.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_cipher, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 662,
+              "endLine": 662,
+              "expression": "rejects(() => core.prepare(a01, command(\"requestPurge\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B24",
+      "scenario": "Emissão substituta seguida de reconciliação antiga como não enviada",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "RETRY_SUPPRESSED_BY_ADDITIONAL_INTENT impede retry da via antiga mesmo após prova posterior; outra emissão exige novo ato.",
+      "proofs": [
+        {
+          "id": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 338,
+          "endLine": 356,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 342,
+              "endLine": 342,
+              "expression": "assert.equal(p.command.previousJobId, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 345,
+              "endLine": 345,
+              "expression": "assert.equal(cp.retry_suppressed_by_job_id, replacement.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 347,
+              "endLine": 347,
+              "expression": "rejects(() => core.ready(a01, storeA, old.j.jobId, l.cp.id, \"late-retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 351,
+              "endLine": 351,
+              "expression": "rejects(() => core.start(a01, storeA, replacement.jobId, newCopy.id, newLease.owner, newLease.epoch), \"STALE_RISK\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B25",
+      "scenario": "Executor A pausa após T3, posse do destino vence, B de outro job/loja disputa e A retorna",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Gate não libera B sem prova/fila serializadora; nenhum intercalamento, aliases físicos compartilham a exclusão.",
+      "proofs": [
+        {
+          "id": "CORE-SHARED-DESTINATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 373,
+          "endLine": 387,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 380,
+              "endLine": 380,
+              "expression": "rejects(() => core.start(userB, storeB, b.j.jobId, b.copies[0].id, lb.owner, lb.epoch), \"DESTINATION_BLOCKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 382,
+              "endLine": 382,
+              "expression": "rejects(() => core.start(userB, storeB, b.j.jobId, b.copies[0].id, lb.owner, lb.epoch), \"DESTINATION_BLOCKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 384,
+              "endLine": 384,
+              "expression": "assert.ok(proof)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "B26",
+      "scenario": "INITIAL A4 concorre com INITIAL térmico",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-A4-THERMAL-SLOT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesmo slot documental entre deliveryModes; destino/modo diferente retorna conflito, sem dois jobs iniciais.",
+      "proofs": [
+        {
+          "id": "CORE-A4-THERMAL-SLOT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 318,
+          "endLine": 327,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 324,
+              "endLine": 324,
+              "expression": "assert.equal(out.filter(r => r.status === \"fulfilled\").length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 325,
+              "endLine": 325,
+              "expression": "assert.equal((out.find(r => r.status === \"rejected\") as PromiseRejectedResult).reason.code, \"INITIAL_SEMANTIC_CONFLICT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "F01",
+      "scenario": "Windows + Chrome e Windows + Edge",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Executar separadamente cada navegador na versão registrada, com mecanismo real de transporte/pareamento e políticas de acesso local; mock não vale.",
+      "proofs": []
+    },
+    {
+      "id": "F02",
+      "scenario": "Perfil térmico 58 mm e 80 mm",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Cada combinação impressora/driver/perfil registra instalação sanitizada, legibilidade, corte, largura, acentos e totais; sem pressupor POS-80/USB005.",
+      "proofs": []
+    },
+    {
+      "id": "F03",
+      "scenario": "Frio/quente, reinício, desligamento e falta de papel",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Massa sintética; observar ACEITO_* versus papel, incerteza e retomada sem duplicação cega; medir sem usar 63 testes históricos.",
+      "proofs": []
+    },
+    {
+      "id": "F04",
+      "scenario": "Duas vias, falha parcial e resposta perdida real",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Progresso por via corresponde à evidência; não repetir conjunto após incerteza; risco/segunda via visíveis.",
+      "proofs": []
+    },
+    {
+      "id": "F05",
+      "scenario": "Fila padrão trocada/removida e binding revogado",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Nenhum documento aparece na fila substituta/padrão; registrar janela de envio já autorizado sem prometer interromper papel.",
+      "proofs": []
+    },
+    {
+      "id": "F06",
+      "scenario": "Gaveta desligada e teste sintético",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Verificar fisicamente ausência de pulso em inicial/segunda via/teste e inexistência de dados reais; comando só em GOAL próprio.",
+      "proofs": []
+    },
+    {
+      "id": "F07",
+      "scenario": "A4 e fallback em Chrome/Edge",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Diálogo permite escolha explícita; cancelamento, múltiplas cópias e popup não são contabilizados como impressão física pelo Omni.",
+      "proofs": []
+    },
+    {
+      "id": "I01",
+      "scenario": "A01/PLATFORM com loja explícita",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Contexto A01 confiável de fixture usa guards reais; integração com endpoint/sessão de autenticação real não foi autorizada.",
+      "acceptanceCriterion": "Autoridade vem da sessão real; documento/terminal/binding da loja validados; ausência de loja recusada.",
+      "proofs": []
+    },
+    {
+      "id": "I02",
+      "scenario": "STORE autorizado com módulo/papel efetivos",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Papéis, módulos e vínculos STORE de fixture exercitam os guards reais; requireEnterprise/rotas/sessão real continuam fora do núcleo.",
+      "acceptanceCriterion": "Guards enterprise reais permitem somente escopo e ação autorizados; não depender de mocks de auth para este aceite.",
+      "proofs": []
+    },
+    {
+      "id": "I03",
+      "scenario": "Usuário sem permissão, módulo ou de outra loja",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUTHORITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "403/404 sanitizado, nenhum job elegível nem dado do recurso; role/storeId fornecidos no corpo não concedem acesso.",
+      "proofs": [
+        {
+          "id": "CORE-AUTHORITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 159,
+          "endLine": 169,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 160,
+              "endLine": 160,
+              "expression": "rejects(() => core.prepare(null, command(\"auth\")), \"UNAUTHENTICATED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 161,
+              "endLine": 161,
+              "expression": "rejects(() => core.prepare(tech, command(\"auth\")), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 162,
+              "endLine": 162,
+              "expression": "rejects(() => core.prepare(userB, command(\"auth\")), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 163,
+              "endLine": 163,
+              "expression": "rejects(() => core.prepare({ ...a01!, observedSessionVersion: 1 }, command(\"auth\")), \"SESSION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 164,
+              "endLine": 164,
+              "expression": "rejects(() => core.prepare(noModule, { ...command(\"auth\"), storeId: moduleLessStore }), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 165,
+              "endLine": 165,
+              "expression": "rejects(() => core.prepare(a01, { ...command(\"auth\"), storeId: \"\" }), \"INVALID_TEXT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 167,
+              "endLine": 167,
+              "expression": "assert.equal(permitted.command.storeId, storeA)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 220,
+          "endLine": 232,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 225,
+              "endLine": 225,
+              "expression": "rejects(() => core.create(a01, job.p.key, { ...job.p.command, copies: 2 }), \"REQUEST_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 226,
+              "endLine": 226,
+              "expression": "rejects(() => core.create(storeUser, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 227,
+              "endLine": 227,
+              "expression": "rejects(() => core.get(userB, storeA, job.j.jobId), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 228,
+              "endLine": 228,
+              "expression": "rejects(() => core.get(a01, storeB, job.j.jobId), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 229,
+              "endLine": 229,
+              "expression": "rejects(() => core.create(a01, randomUUID(), job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 230,
+              "endLine": 230,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === job.copies[0].send_key).length, 0)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I04",
+      "scenario": "Reader canônico PDV/sales e propriedade da venda",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Reader isolado usa SELECT coerente, projeção e mapper existentes. Não foi extraído/conectado o reader da rota canônica nem alterada sua ACL.",
+      "acceptanceCriterion": "Leitura por loja + identidade; extrair reader sem relaxar rota sales existente nem ACL paralela; projeção mínima.",
+      "proofs": []
+    },
+    {
+      "id": "I05",
+      "scenario": "Documento inexistente, pendente, cancelado ou em quarentena",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ELIGIBILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Pedido recusado; impressão não cria/recupera/confirma venda nem resolve status comercial.",
+      "proofs": [
+        {
+          "id": "CORE-ELIGIBILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 567,
+          "endLine": 570,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 568,
+              "endLine": 568,
+              "expression": "rejects(() => core.prepare(a01, command(name)), \"DOCUMENT_INELIGIBLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 569,
+              "endLine": 569,
+              "expression": "rejects(() => core.prepare(a01, command(\"auth\", { saleId: prefix + \"-missing\" })), \"NOT_FOUND\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-REVIEW-REGRESSIONS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 600,
+          "endLine": 638,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 603,
+              "endLine": 603,
+              "expression": "assert.ok(p.key)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 604,
+              "endLine": 604,
+              "expression": "rejects(() => core.prepare(unbound, command(\"legacy\")), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 608,
+              "endLine": 608,
+              "expression": "rejects(() => core.start(a01, storeA, inactive.j.jobId, l.cp.id, l.l.owner, l.l.epoch), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 609,
+              "endLine": 609,
+              "expression": "rejects(() => core.prepare(a01, command(\"inactive\")), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 616,
+              "endLine": 616,
+              "expression": "rejects(() => core.prepare(a01, command(name)), code)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 621,
+              "endLine": 621,
+              "expression": "rejects(() => core.start(a01, storeA, sealed.j.jobId, l3.cp.id, l3.l.owner, l3.l.epoch), \"DOCUMENT_VERSION_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 625,
+              "endLine": 625,
+              "expression": "rejects(() => core.create(a01, cancellation.key, cancellation.command), \"DOCUMENT_INELIGIBLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 636,
+              "endLine": 636,
+              "expression": "rejects(() => creation, \"DOCUMENT_VERSION_CONFLICT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I06",
+      "scenario": "Terminal/impressora incompatíveis e deviceId forjado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Vínculos e terminal ACTIVE são testados no banco. Identidade/prova real de instalação, computador ou impressora requer gate de adaptador.",
+      "acceptanceCriterion": "Recusa por associação/prova; deviceId e lock lógico isolados não autorizam instalação/destino.",
+      "proofs": []
+    },
+    {
+      "id": "I07",
+      "scenario": "Pareamento, desafio repetido e segredo compartilhado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Pareamento/challenge/segredos por instalação reais fora do 004B. HMAC de fixture não certifica esse mecanismo.",
+      "acceptanceCriterion": "Somente configurador autorizado e prova de instalação; replay/expiração/challenge cruzado negados; segredo não aparece no browser/logs.",
+      "proofs": []
+    },
+    {
+      "id": "I08",
+      "scenario": "Duas lojas no computador e dois terminais na loja",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "O banco usa duas lojas e terminais com destino compartilhado sintético; o cenário de duas lojas no computador com pareamento real está pendente.",
+      "acceptanceCriterion": "Isolamento por binding/loja, concessões restritas e comportamento compartilhado somente quando explicitamente configurado.",
+      "proofs": []
+    },
+    {
+      "id": "I09",
+      "scenario": "Substituição/renomeação de computador ou fila",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Provisionamento, substituição e renomeação de fila/computador exigem instalação/prova reais. Nenhuma fila Windows foi consultada.",
+      "acceptanceCriterion": "Novo binding/prova; jobs antigos preservam destino/versionamento; nenhuma seleção da padrão do Windows.",
+      "proofs": []
+    },
+    {
+      "id": "I10",
+      "scenario": "Binding revogado antes e depois de início",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Revalidação de binding existe no núcleo, mas o workflow completo de revogação/configuração por instalação não foi integrado/homologado. Delegação sintética tem prova separada.",
+      "acceptanceCriterion": "Antes: cancelamento seguro; depois: consulta/possível incerteza e bloqueio de vias futuras, sem alegar recolher papel.",
+      "proofs": []
+    },
+    {
+      "id": "I11",
+      "scenario": "Troca de loja/configuração durante solicitação",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Loja e destino são fixos no ledger; troca de contexto da UI, descarte de resposta e handlers reais não foram conectados.",
+      "acceptanceCriterion": "Resposta original não atua no novo contexto; conteúdo/destino antigos não são alterados ou reenviados.",
+      "proofs": []
+    },
+    {
+      "id": "I12",
+      "scenario": "Logout/revogação e ACK atrasado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Revogação de delegação/sessionVersion sintéticas testadas; logout global e ACK de instalação real não foram alterados nem certificados.",
+      "acceptanceCriterion": "Jobs sem tentativa ficam bloqueados; recibo autenticado antigo somente registra evidência, não renova sessão nem inicia via.",
+      "proofs": []
+    },
+    {
+      "id": "I13",
+      "scenario": "Input de bytes, HTML, host/porta/URL/path/credenciais",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-INPUT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Shape estrito recusa campos livres e não encaminha /api/print/raw para STORE.",
+      "proofs": [
+        {
+          "id": "CORE-INPUT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 170,
+          "endLine": 179,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 171,
+              "endLine": 171,
+              "expression": "rejects(() => core.prepare(a01, { ...command(\"auth\"), [field]: \"forged\" }), \"UNKNOWN_FIELD\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 172,
+              "endLine": 172,
+              "expression": "rejects(() => core.prepare(a01, command(\"auth\", { copies: 3 })), \"COMMAND_LIMIT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 173,
+              "endLine": 173,
+              "expression": "rejects(() => new PrintCoreSynthetic(db1, crypto, boundary, { ...policy, maxItems: 1 }).prepare(a01, command(\"maxItems\")), \"ITEM_LIMIT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 176,
+              "endLine": 176,
+              "expression": "rejects(() => small.create(a01, p.key, p.command), \"COMMAND_LIMIT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 178,
+              "endLine": 178,
+              "expression": "rejects(() => limited.prepare(storeUser, command(\"auth\")), \"RATE_LIMIT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I14",
+      "scenario": "Origin/CSRF e consultas/replays sem autorização",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Não há API pública nova. Origin/CSRF/cache/headers e sessão de consulta real requerem gate de integração.",
+      "acceptanceCriterion": "Operações de criação, consulta e configuração protegidas; key conhecida não concede acesso; headers de cache não expõem conteúdo.",
+      "proofs": []
+    },
+    {
+      "id": "I15",
+      "scenario": "Adaptador aceita; conexão/resposta HTTP se perde",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Via desconhecida ou aceita conforme prova; consulta usa tentativa original; sem retry implícito do SDK/HTTP.",
+      "proofs": [
+        {
+          "id": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 264,
+          "endLine": 281,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 268,
+              "endLine": 268,
+              "expression": "assert.equal(result.resultKnown, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 272,
+              "endLine": 272,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"UNKNOWN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 273,
+              "endLine": 273,
+              "expression": "rejects(() => restart.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 274,
+              "endLine": 274,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === result.attemptId).length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 277,
+              "endLine": 277,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 279,
+              "endLine": 279,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"TRANSPORT_ACCEPTED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 525,
+          "endLine": 541,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 530,
+              "endLine": 530,
+              "expression": "assert.ok(proof)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 535,
+              "endLine": 535,
+              "expression": "rejects(() => new PrintCoreSynthetic(failing, crypto, boundary, policy).reconcile(proof), \"INJECTED_T4_AUDIT_FAILURE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 536,
+              "endLine": 536,
+              "expression": "assert.equal((await core.get(a01, storeA, job.j.jobId)).state, \"SENDING\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 538,
+              "endLine": 538,
+              "expression": "assert.equal((await core.get(a01, storeA, job.j.jobId)).state, \"UNKNOWN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 540,
+              "endLine": 540,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === started.attemptId).length, 1)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I16",
+      "scenario": "Falha comprovada antes de envio",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nova tentativa manual só daquela via, com payload/destino iguais e reautorização; prova ausente mantém desconhecido.",
+      "proofs": [
+        {
+          "id": "CORE-PARTIAL-COPIES",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 282,
+          "endLine": 296,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 288,
+              "endLine": 288,
+              "expression": "assert.equal((await core.get(a01, storeA, job.j.jobId)).state, \"PARTIAL\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 289,
+              "endLine": 289,
+              "expression": "rejects(() => core.ready(a01, storeA, job.j.jobId, first.cp.id, \"repeat-all\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 294,
+              "endLine": 294,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === first.cp.send_key).length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 295,
+              "endLine": 295,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === second.cp.send_key).length, 2)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I17",
+      "scenario": "Timeout, lease vencido e consulta não encontrado",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum deles isoladamente autoriza reenvio; negar retorno a PRONTO sem prova de invalidar envio tardio.",
+      "proofs": [
+        {
+          "id": "CORE-CRASH-BEFORE-CALL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 476,
+          "endLine": 489,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 484,
+              "endLine": 484,
+              "expression": "rejects(() => restart.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"blind-retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 485,
+              "endLine": 485,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === started.attemptId).length, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 487,
+              "endLine": 487,
+              "expression": "assert.equal(destination.held_attempt_id, started.attemptId)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-SHARED-DESTINATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 373,
+          "endLine": 387,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 380,
+              "endLine": 380,
+              "expression": "rejects(() => core.start(userB, storeB, b.j.jobId, b.copies[0].id, lb.owner, lb.epoch), \"DESTINATION_BLOCKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 382,
+              "endLine": 382,
+              "expression": "rejects(() => core.start(userB, storeB, b.j.jobId, b.copies[0].id, lb.owner, lb.epoch), \"DESTINATION_BLOCKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 384,
+              "endLine": 384,
+              "expression": "assert.ok(proof)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I18",
+      "scenario": "Cancelamento solicitado após aceite/spooler",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Cancelamento seguro de vias locais não comprova cancelamento de fila/spooler nem ausência de papel.",
+      "acceptanceCriterion": "Registro distingue pedido de cancelamento e efeito; eventual exclusão da fila não prova ausência de papel.",
+      "proofs": []
+    },
+    {
+      "id": "I19",
+      "scenario": "Capacidades ausentes/limitadas do adaptador",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Não existe adaptador real neste GOAL; capacidades, prazos de dedup e consultas de fornecedor precisam de evidência própria.",
+      "acceptanceCriterion": "UNSUPPORTED/UNKNOWN explícitos; sem spooler/availability/query fictícios; dedup respeita prazo/escopo documentado.",
+      "proofs": []
+    },
+    {
+      "id": "I20",
+      "scenario": "Fila offline com entrega tardia",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Pausa/egresso tardio simulados não homologam fila offline, autenticação ou entrega real após revogação.",
+      "acceptanceCriterion": "Aceite interno já significa possível efeito; nenhuma nova autorização offline; revogação e risco tardio demonstrados.",
+      "proofs": []
+    },
+    {
+      "id": "I21",
+      "scenario": "Segundo job de reimpressão e venda histórica sem anterior",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nova intenção ligada quando há job; histórico usa null/UNKNOWN; ambos autorizam documento/loja e marcam segunda via.",
+      "proofs": [
+        {
+          "id": "CORE-HISTORICAL-CLOSURE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 297,
+          "endLine": 306,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 300,
+              "endLine": 300,
+              "expression": "assert.equal(j.kind, \"REPRINT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 302,
+              "endLine": 302,
+              "expression": "assert.equal(d.initial_state, \"HISTORICAL_CLOSED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 302,
+              "endLine": 302,
+              "expression": "assert.equal(d.initial_intent_id, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 303,
+              "endLine": 303,
+              "expression": "rejects(() => core.prepare(a01, command(\"historical\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 305,
+              "endLine": 305,
+              "expression": "assert.equal(saved.previous_job_id, null)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 357,
+          "endLine": 372,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 367,
+              "endLine": 367,
+              "expression": "assert.equal((await core.get(a01, storeA, j.jobId)).state, \"TRANSPORT_ACCEPTED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I22",
+      "scenario": "Segunda via após resultado incerto",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Ato explícito e reconhecimento do risco de cópia adicional; estado anterior não é apagado nem marcado sucesso.",
+      "proofs": [
+        {
+          "id": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 338,
+          "endLine": 356,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 342,
+              "endLine": 342,
+              "expression": "assert.equal(p.command.previousJobId, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 345,
+              "endLine": 345,
+              "expression": "assert.equal(cp.retry_suppressed_by_job_id, replacement.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 347,
+              "endLine": 347,
+              "expression": "rejects(() => core.ready(a01, storeA, old.j.jobId, l.cp.id, \"late-retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 351,
+              "endLine": 351,
+              "expression": "rejects(() => core.start(a01, storeA, replacement.jobId, newCopy.id, newLease.owner, newLease.epoch), \"STALE_RISK\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I23",
+      "scenario": "Fallback explícito antes/depois de envio possível",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Substituição lógica e supressão são testadas; UI/handoff/fallback reais não foram habilitados.",
+      "acceptanceCriterion": "Antes cancela disputa térmica; depois nova intenção com risco; não abre HTML e baixa .bin em paralelo.",
+      "proofs": []
+    },
+    {
+      "id": "I24",
+      "scenario": "Gaveta em inicial, segunda via e teste",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SYNTHETIC-TEST",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum job documental dispara gaveta; nenhuma resposta genérica de cupom representa essa ação.",
+      "proofs": [
+        {
+          "id": "CORE-SYNTHETIC-TEST",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 440,
+          "endLine": 450,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 448,
+              "endLine": 448,
+              "expression": "assert.equal(d.document_kind, \"SYNTHETIC\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 448,
+              "endLine": 448,
+              "expression": "assert.equal(d.sale_id, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 449,
+              "endLine": 449,
+              "expression": "assert.equal(j.kind, \"TEST\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 180,
+          "endLine": 197,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 184,
+              "endLine": 184,
+              "expression": "assert.equal(byteHash(clear), j.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(\"SYNTHETIC_PRIVATE_FIELD\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(Buffer.from([27])))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 186,
+              "endLine": 186,
+              "expression": "assert.ok(clear.includes(\"\\\\uFFFD\") || clear.includes(\"�\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 187,
+              "endLine": 187,
+              "expression": "assert.equal(JSON.parse(clear.toString()).drawer, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 188,
+              "endLine": 188,
+              "expression": "assert.notEqual(job.copies[0].payload_hash, job.copies[1].payload_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.state, \"TRANSPORT_ACCEPTED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.physicalPrintConfirmed, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"cipher\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"password\"))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I25",
+      "scenario": "Integridade comercial em sucesso, erro, retry e crash",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-COMMERCIAL-INTEGRITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Spies/ledger isolado provam zero chamadas/escritas a venda, pagamento, caixa, recebimento e estoque; só domínio de impressão/auditoria muda.",
+      "proofs": [
+        {
+          "id": "CORE-COMMERCIAL-INTEGRITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 679,
+          "endLine": 688,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 680,
+              "endLine": 680,
+              "expression": "assert.equal(transportGuard.attempts.length, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 681,
+              "endLine": 681,
+              "expression": "assert.equal(runtimeSqlJournal.filter(s => s.target && !s.target.startsWith(\"print_\")).length, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 682,
+              "endLine": 682,
+              "expression": "assert.deepEqual(after, afterCorrections, \"Print core changed commercial baseline after explicit owner correction checkpoint\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 684,
+              "endLine": 684,
+              "expression": "assert.deepEqual(changed.sort(), [...new Set(mutationJournal.map(m => m.table))].sort())"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 685,
+              "endLine": 685,
+              "expression": "assert.ok(mutationJournal.length > 0 && mutationJournal.every(m => m.writer === \"OWNER_FIXTURE_ONLY\"))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I26",
+      "scenario": "Rate limit, payload expirado e grant invalidado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Limites, rate limit e retenção são somente fixtures finitas. D03 produtivo, incluindo composição loja/terminal, não está aprovado.",
+      "acceptanceCriterion": "Respostas preservam recibos/slots e não provocam fallback, novo comando ou bypass; consulta continua autorizada.",
+      "proofs": []
+    },
+    {
+      "id": "I27",
+      "scenario": "Concessão adulterada, callback falso e replay entre instalações",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "MAC/AAD/correlação de fixture são testados; assinatura, segredo e replay entre instalações reais requerem gate de adaptador.",
+      "acceptanceCriterion": "Assinatura/prova, destino/hash/epoch/TTL e vínculo negam efeito e evidência falsos; sem segredos no erro.",
+      "proofs": []
+    },
+    {
+      "id": "I28",
+      "scenario": "Segunda via/fallback omite previousJobId com job incerto conhecido",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Servidor descobre toda exposição por loja/documento; omissão não dispensa reconhecimento do risco.",
+      "proofs": [
+        {
+          "id": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 338,
+          "endLine": 356,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 342,
+              "endLine": 342,
+              "expression": "assert.equal(p.command.previousJobId, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 345,
+              "endLine": 345,
+              "expression": "assert.equal(cp.retry_suppressed_by_job_id, replacement.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 347,
+              "endLine": 347,
+              "expression": "rejects(() => core.ready(a01, storeA, old.j.jobId, l.cp.id, \"late-retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 351,
+              "endLine": 351,
+              "expression": "rejects(() => core.start(a01, storeA, replacement.jobId, newCopy.id, newLease.owner, newLease.epoch), \"STALE_RISK\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I29",
+      "scenario": "Risco muda entre preparação, T1 e T3; reconhecimento aponta outra via/revisão",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-STALE-RISK-T0-T1",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "riskRevision e confirmação server-side são revalidadas; mudança relevante exige nova confirmação e impede efeito adicional.",
+      "proofs": [
+        {
+          "id": "CORE-STALE-RISK-T0-T1",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 490,
+          "endLine": 498,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 494,
+              "endLine": 494,
+              "expression": "rejects(() => core.create(a01, additional.key, additional.command), \"STALE_RISK\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 495,
+              "endLine": 495,
+              "expression": "assert.ok(proof)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 357,
+          "endLine": 372,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 367,
+              "endLine": 367,
+              "expression": "assert.equal((await core.get(a01, storeA, j.jobId)).state, \"TRANSPORT_ACCEPTED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 338,
+          "endLine": 356,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 342,
+              "endLine": 342,
+              "expression": "assert.equal(p.command.previousJobId, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 345,
+              "endLine": 345,
+              "expression": "assert.equal(cp.retry_suppressed_by_job_id, replacement.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 347,
+              "endLine": 347,
+              "expression": "rejects(() => core.ready(a01, storeA, old.j.jobId, l.cp.id, \"late-retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 351,
+              "endLine": 351,
+              "expression": "rejects(() => core.start(a01, storeA, replacement.jobId, newCopy.id, newLease.owner, newLease.epoch), \"STALE_RISK\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I30",
+      "scenario": "Via substituta autorizada e resposta antiga reconciliada depois",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Evidência antiga é preservada, mas supressão de retry não é removida; não resulta em duas entregas por recuperação tardia.",
+      "proofs": [
+        {
+          "id": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 338,
+          "endLine": 356,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 342,
+              "endLine": 342,
+              "expression": "assert.equal(p.command.previousJobId, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 345,
+              "endLine": 345,
+              "expression": "assert.equal(cp.retry_suppressed_by_job_id, replacement.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 347,
+              "endLine": 347,
+              "expression": "rejects(() => core.ready(a01, storeA, old.j.jobId, l.cp.id, \"late-retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 351,
+              "endLine": 351,
+              "expression": "rejects(() => core.start(a01, storeA, replacement.jobId, newCopy.id, newLease.owner, newLease.epoch), \"STALE_RISK\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "I31",
+      "scenario": "A4/fallback com destino lógico e replay de criação",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "A4 tem somente identidade/slot/replay lógico. Execução é bloqueada com A4_LOGICAL_ONLY antes de T3; navegador legado não foi alterado.",
+      "acceptanceCriterion": "deliveryMode BROWSER_A4 aceita somente contexto lógico, uma via; nenhuma fila física é atestada, popup/reentrega não ocorre no replay.",
+      "proofs": []
+    },
+    {
+      "id": "P01",
+      "scenario": "Normalização de comando equivalente",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Defaults selados, ordem de campos e uiContextId não alteram commandHash semântico; payloadHash tem domínio separado.",
+      "proofs": [
+        {
+          "id": "CORE-NORMALIZATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 551,
+          "endLine": 566,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 555,
+              "endLine": 555,
+              "expression": "assert.equal(canonical(p1.command), canonical(p2.command))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 556,
+              "endLine": 556,
+              "expression": "assert.notEqual(p1.key, p2.key)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 560,
+              "endLine": 560,
+              "expression": "rejects(() => core.create(a01, p1.key, { ...p1.command, [field]: value }), \"REQUEST_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 562,
+              "endLine": 562,
+              "expression": "assert.equal((await core.create(a01, p2.key, p2.command)).jobId, j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 564,
+              "endLine": 564,
+              "expression": "rejects(() => core.create(a01, changedCopies.key, changedCopies.command), \"INITIAL_SEMANTIC_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 565,
+              "endLine": 565,
+              "expression": "rejects(() => core.create(a01, p1.key, { ...p1.command, riskHash: { recurse: true } }), \"INVALID_COMMAND\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P02",
+      "scenario": "Mesmo key com comando diferente",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mudar documento, versão, destino, vias ou confirmação gera conflito; key não substitui autorização.",
+      "proofs": [
+        {
+          "id": "CORE-NORMALIZATION",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 551,
+          "endLine": 566,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 555,
+              "endLine": 555,
+              "expression": "assert.equal(canonical(p1.command), canonical(p2.command))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 556,
+              "endLine": 556,
+              "expression": "assert.notEqual(p1.key, p2.key)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 560,
+              "endLine": 560,
+              "expression": "rejects(() => core.create(a01, p1.key, { ...p1.command, [field]: value }), \"REQUEST_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 562,
+              "endLine": 562,
+              "expression": "assert.equal((await core.create(a01, p2.key, p2.command)).jobId, j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 564,
+              "endLine": 564,
+              "expression": "rejects(() => core.create(a01, changedCopies.key, changedCopies.command), \"INITIAL_SEMANTIC_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 565,
+              "endLine": 565,
+              "expression": "rejects(() => core.create(a01, p1.key, { ...p1.command, riskHash: { recurse: true } }), \"INVALID_COMMAND\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-REPLAY-LOST-RESPONSE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 220,
+          "endLine": 232,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 224,
+              "endLine": 224,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 225,
+              "endLine": 225,
+              "expression": "rejects(() => core.create(a01, job.p.key, { ...job.p.command, copies: 2 }), \"REQUEST_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 226,
+              "endLine": 226,
+              "expression": "rejects(() => core.create(storeUser, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 227,
+              "endLine": 227,
+              "expression": "rejects(() => core.get(userB, storeA, job.j.jobId), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 228,
+              "endLine": 228,
+              "expression": "rejects(() => core.get(a01, storeB, job.j.jobId), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 229,
+              "endLine": 229,
+              "expression": "rejects(() => core.create(a01, randomUUID(), job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 230,
+              "endLine": 230,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === job.copies[0].send_key).length, 0)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P03",
+      "scenario": "Texto com ESC/GS/DLE/NUL, C0/C1 e DEL",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURE-CRYPTO-AND-CANONICAL",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum byte comercial consegue produzir comando de corte, gaveta, rede ou shell; controles recusados/sanitizados pela política definida.",
+      "proofs": [
+        {
+          "id": "CORE-PURE-CRYPTO-AND-CANONICAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 665,
+          "endLine": 677,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 666,
+              "endLine": 666,
+              "expression": "assert.equal(canonical({ b: 2, a: 1 }), canonical({ a: 1, b: 2 }))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 667,
+              "endLine": 667,
+              "expression": "assert.equal(cleanData(\"\\u001b\\u001d\\u0010\\u0000\\u007f\\u0080\"), \"�\".repeat(6))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 668,
+              "endLine": 668,
+              "expression": "assert.equal(hash(\"command\", { a: 1 }), hash(\"command\", { a: 1 }))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 669,
+              "endLine": 669,
+              "expression": "assert.notEqual(hash(\"command\", { a: 1 }), hash(\"payload\", { a: 1 }))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 671,
+              "endLine": 671,
+              "expression": "assert.deepEqual(crypto.open(sealed, \"scope-a\"), bytes)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 672,
+              "endLine": 672,
+              "expression": "rejects(async () => crypto.open(sealed, \"scope-b\"), \"CONTENT_UNAVAILABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 674,
+              "endLine": 674,
+              "expression": "rejects(async () => crypto.open(tampered, \"scope-a\"), \"CONTENT_UNAVAILABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 675,
+              "endLine": 675,
+              "expression": "assert.deepEqual(intentProjection({ riskRevision: \"1\", riskHash: \"a\", consentHash: \"x\", copies: 1 }), { copies: 1 })"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 676,
+              "endLine": 676,
+              "expression": "assert.equal(summarize([{ ordinal: 1, state: \"UNKNOWN\", payload_cipher: Buffer.alloc(1), payload_expires_at: new Date(Date.now()+1000) }]).copies[0].canRetry, false)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 180,
+          "endLine": 197,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 184,
+              "endLine": 184,
+              "expression": "assert.equal(byteHash(clear), j.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(\"SYNTHETIC_PRIVATE_FIELD\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(Buffer.from([27])))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 186,
+              "endLine": 186,
+              "expression": "assert.ok(clear.includes(\"\\\\uFFFD\") || clear.includes(\"�\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 187,
+              "endLine": 187,
+              "expression": "assert.equal(JSON.parse(clear.toString()).drawer, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 188,
+              "endLine": 188,
+              "expression": "assert.notEqual(job.copies[0].payload_hash, job.copies[1].payload_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.state, \"TRANSPORT_ACCEPTED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.physicalPrintConfirmed, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"cipher\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"password\"))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P04",
+      "scenario": "HTML, atributos, logo e rodapé maliciosos",
+      "originalLayer": "PURO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "HTML, atributos, logo e rodapé dos renderers reais ainda precisam de revisão. O renderer novo emite somente JSON de fixture; nenhum HTML é executado.",
+      "acceptanceCriterion": "Escape/allowlist impedem execução, URL livre e conteúdo ativo; campos internos também são tratados como dados.",
+      "proofs": []
+    },
+    {
+      "id": "P05",
+      "scenario": "Encoding e largura 58/80 mm",
+      "originalLayer": "PURO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "58/80 mm e encoding térmico exigem renderer/driver/perfil reais. JSON UTF-8 de fixture não homologa largura ou caracteres do equipamento.",
+      "acceptanceCriterion": "Renderer determinístico por perfil; tratamento explícito de caracteres sem representação; total/quantidade não são truncados.",
+      "proofs": []
+    },
+    {
+      "id": "P06",
+      "scenario": "Snapshot imutável por via",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesmo snapshot/renderer/perfil gera mesmos bytes/hash; marcação ordinal gera hash específico quando muda conteúdo.",
+      "proofs": [
+        {
+          "id": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 180,
+          "endLine": 197,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 184,
+              "endLine": 184,
+              "expression": "assert.equal(byteHash(clear), j.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(\"SYNTHETIC_PRIVATE_FIELD\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(Buffer.from([27])))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 186,
+              "endLine": 186,
+              "expression": "assert.ok(clear.includes(\"\\\\uFFFD\") || clear.includes(\"�\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 187,
+              "endLine": 187,
+              "expression": "assert.equal(JSON.parse(clear.toString()).drawer, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 188,
+              "endLine": 188,
+              "expression": "assert.notEqual(job.copies[0].payload_hash, job.copies[1].payload_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.state, \"TRANSPORT_ACCEPTED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.physicalPrintConfirmed, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"cipher\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"password\"))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 423,
+          "endLine": 439,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 425,
+              "endLine": 425,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_jobs SET snapshot_hash=$1 WHERE id=$2::uuid\", [\"a\".repeat(64), job.j.jobId]), \"P0001\", \"immutable\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 426,
+              "endLine": 426,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_copies SET payload_hash=$1 WHERE id=$2::uuid\", [\"b\".repeat(64), job.copies[0].id]), \"P0001\", \"immutable\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 427,
+              "endLine": 427,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_copies SET state='UNKNOWN' WHERE id=$1::uuid\", [job.copies[0].id]), \"P0001\", \"illegal copy transition\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 428,
+              "endLine": 432,
+              "expression": "sqlReject(() => db1.transaction(async sql => {\n        await sql.exec(\"UPDATE public.print_jobs SET snapshot_cipher=NULL,snapshot_key_ref=NULL,snapshot_purged_at=clock_timestamp() WHERE id=$1::uuid\", [job.j.jobId])\n        // FK is immediate and store/document typed.\n        await sql.exec(\"UPDATE public.print_copies SET retry_suppressed_by_job_id=$1::uuid WHERE id=$2::uuid\", [(await rows(\"SELECT id FROM public.print_jobs WHERE store_id=$1 LIMIT 1\", [storeB]))[0].id, job.copies[0].id])\n      }), \"23503\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 433,
+              "endLine": 433,
+              "expression": "assert.equal(unchanged.present, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 436,
+              "endLine": 436,
+              "expression": "rejects(() => failStart.execute(a01, storeA, job.j.jobId, l.cp.id, l.l.owner, l.l.epoch, \"ACCEPT\"), \"INJECTED_T3_ROLLBACK\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 437,
+              "endLine": 437,
+              "expression": "assert.equal(attempts.n, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 438,
+              "endLine": 438,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === l.cp.send_key).length, 0)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P07",
+      "scenario": "Agregação de vias aceitas/incertas/falhas",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Resumo PARCIAL não esconde a via incerta; ações calculadas por via nunca incluem repetir tudo.",
+      "proofs": [
+        {
+          "id": "CORE-PARTIAL-COPIES",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 282,
+          "endLine": 296,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 288,
+              "endLine": 288,
+              "expression": "assert.equal((await core.get(a01, storeA, job.j.jobId)).state, \"PARTIAL\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 289,
+              "endLine": 289,
+              "expression": "rejects(() => core.ready(a01, storeA, job.j.jobId, first.cp.id, \"repeat-all\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 294,
+              "endLine": 294,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === first.cp.send_key).length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 295,
+              "endLine": 295,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === second.cp.send_key).length, 2)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P08",
+      "scenario": "Matriz de transições inválidas",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-LEASE-FENCING",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Lease vencido, timeout, cancelamento pós-envio ou ausência de query não produzem FALHA_ANTES_ENVIO ou sucesso físico.",
+      "proofs": [
+        {
+          "id": "CORE-LEASE-FENCING",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 255,
+          "endLine": 263,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 260,
+              "endLine": 260,
+              "expression": "assert.ok(BigInt(l2.epoch) > BigInt(l1.epoch))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 261,
+              "endLine": 261,
+              "expression": "rejects(() => core.start(a01, storeA, job.j.jobId, job.copies[0].id, \"old-executor\", l1.epoch), \"LEASE_OR_COPY_INVALID\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-CRASH-UNKNOWN",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 264,
+          "endLine": 281,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 268,
+              "endLine": 268,
+              "expression": "assert.equal(result.resultKnown, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 272,
+              "endLine": 272,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"UNKNOWN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 273,
+              "endLine": 273,
+              "expression": "rejects(() => restart.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"retry\"), \"COPY_NOT_RETRYABLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 274,
+              "endLine": 274,
+              "expression": "assert.equal(boundary.calls.filter(x => x.attemptId === result.attemptId).length, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 277,
+              "endLine": 277,
+              "expression": "assert.equal(replay.replay, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 279,
+              "endLine": 279,
+              "expression": "assert.equal((await restart.get(a01, storeA, job.j.jobId)).state, \"TRANSPORT_ACCEPTED\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 423,
+          "endLine": 439,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 425,
+              "endLine": 425,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_jobs SET snapshot_hash=$1 WHERE id=$2::uuid\", [\"a\".repeat(64), job.j.jobId]), \"P0001\", \"immutable\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 426,
+              "endLine": 426,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_copies SET payload_hash=$1 WHERE id=$2::uuid\", [\"b\".repeat(64), job.copies[0].id]), \"P0001\", \"immutable\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 427,
+              "endLine": 427,
+              "expression": "sqlReject(() => db1.exec(\"UPDATE public.print_copies SET state='UNKNOWN' WHERE id=$1::uuid\", [job.copies[0].id]), \"P0001\", \"illegal copy transition\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 428,
+              "endLine": 432,
+              "expression": "sqlReject(() => db1.transaction(async sql => {\n        await sql.exec(\"UPDATE public.print_jobs SET snapshot_cipher=NULL,snapshot_key_ref=NULL,snapshot_purged_at=clock_timestamp() WHERE id=$1::uuid\", [job.j.jobId])\n        // FK is immediate and store/document typed.\n        await sql.exec(\"UPDATE public.print_copies SET retry_suppressed_by_job_id=$1::uuid WHERE id=$2::uuid\", [(await rows(\"SELECT id FROM public.print_jobs WHERE store_id=$1 LIMIT 1\", [storeB]))[0].id, job.copies[0].id])\n      }), \"23503\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 433,
+              "endLine": 433,
+              "expression": "assert.equal(unchanged.present, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 436,
+              "endLine": 436,
+              "expression": "rejects(() => failStart.execute(a01, storeA, job.j.jobId, l.cp.id, l.l.owner, l.l.epoch, \"ACCEPT\"), \"INJECTED_T3_ROLLBACK\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 437,
+              "endLine": 437,
+              "expression": "assert.equal(attempts.n, 0)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 438,
+              "endLine": 438,
+              "expression": "assert.equal(boundary.calls.filter(x => x.sendKey === l.cp.send_key).length, 0)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P09",
+      "scenario": "Segunda via e teste versus gaveta",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SYNTHETIC-TEST",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Payload de todo job documental não contém pulso de gaveta; marcações de segunda via/teste preservadas.",
+      "proofs": [
+        {
+          "id": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 180,
+          "endLine": 197,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 184,
+              "endLine": 184,
+              "expression": "assert.equal(byteHash(clear), j.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(\"SYNTHETIC_PRIVATE_FIELD\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(Buffer.from([27])))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 186,
+              "endLine": 186,
+              "expression": "assert.ok(clear.includes(\"\\\\uFFFD\") || clear.includes(\"�\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 187,
+              "endLine": 187,
+              "expression": "assert.equal(JSON.parse(clear.toString()).drawer, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 188,
+              "endLine": 188,
+              "expression": "assert.notEqual(job.copies[0].payload_hash, job.copies[1].payload_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.state, \"TRANSPORT_ACCEPTED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.physicalPrintConfirmed, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"cipher\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"password\"))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-SYNTHETIC-TEST",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 440,
+          "endLine": 450,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 448,
+              "endLine": 448,
+              "expression": "assert.equal(d.document_kind, \"SYNTHETIC\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 448,
+              "endLine": 448,
+              "expression": "assert.equal(d.sale_id, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 449,
+              "endLine": 449,
+              "expression": "assert.equal(j.kind, \"TEST\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P10",
+      "scenario": "Documentos PENDING/quarentena e estado comercial",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ELIGIBILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Referência local não vira confirmada; status servidor não elegível é recusado; flags locais antigas não inventam nova elegibilidade.",
+      "proofs": [
+        {
+          "id": "CORE-ELIGIBILITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 567,
+          "endLine": 570,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 568,
+              "endLine": 568,
+              "expression": "rejects(() => core.prepare(a01, command(name)), \"DOCUMENT_INELIGIBLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 569,
+              "endLine": 569,
+              "expression": "rejects(() => core.prepare(a01, command(\"auth\", { saleId: prefix + \"-missing\" })), \"NOT_FOUND\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-REVIEW-REGRESSIONS",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 600,
+          "endLine": 638,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 603,
+              "endLine": 603,
+              "expression": "assert.ok(p.key)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 604,
+              "endLine": 604,
+              "expression": "rejects(() => core.prepare(unbound, command(\"legacy\")), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 608,
+              "endLine": 608,
+              "expression": "rejects(() => core.start(a01, storeA, inactive.j.jobId, l.cp.id, l.l.owner, l.l.epoch), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 609,
+              "endLine": 609,
+              "expression": "rejects(() => core.prepare(a01, command(\"inactive\")), \"NOT_FOUND\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 616,
+              "endLine": 616,
+              "expression": "rejects(() => core.prepare(a01, command(name)), code)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 621,
+              "endLine": 621,
+              "expression": "rejects(() => core.start(a01, storeA, sealed.j.jobId, l3.cp.id, l3.l.owner, l3.l.epoch), \"DOCUMENT_VERSION_CONFLICT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 625,
+              "endLine": 625,
+              "expression": "rejects(() => core.create(a01, cancellation.key, cancellation.command), \"DOCUMENT_INELIGIBLE\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 636,
+              "endLine": 636,
+              "expression": "rejects(() => creation, \"DOCUMENT_VERSION_CONFLICT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P11",
+      "scenario": "Limites de comando, itens, vias e payload",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-INPUT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Excedente falha antes do efeito sem truncar valores comerciais; uma via padrão e teto duas.",
+      "proofs": [
+        {
+          "id": "CORE-INPUT",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 170,
+          "endLine": 179,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 171,
+              "endLine": 171,
+              "expression": "rejects(() => core.prepare(a01, { ...command(\"auth\"), [field]: \"forged\" }), \"UNKNOWN_FIELD\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 172,
+              "endLine": 172,
+              "expression": "rejects(() => core.prepare(a01, command(\"auth\", { copies: 3 })), \"COMMAND_LIMIT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 173,
+              "endLine": 173,
+              "expression": "rejects(() => new PrintCoreSynthetic(db1, crypto, boundary, { ...policy, maxItems: 1 }).prepare(a01, command(\"maxItems\")), \"ITEM_LIMIT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 176,
+              "endLine": 176,
+              "expression": "rejects(() => small.create(a01, p.key, p.command), \"COMMAND_LIMIT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 178,
+              "endLine": 178,
+              "expression": "rejects(() => limited.prepare(storeUser, command(\"auth\")), \"RATE_LIMIT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P12",
+      "scenario": "Grant expirado/revogado e replay após cleanup",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Grant sem recibo e sem validade produz REQUEST_EXPIRED; nunca é tratado como nova key livre.",
+      "proofs": [
+        {
+          "id": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 640,
+          "endLine": 664,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 644,
+              "endLine": 644,
+              "expression": "rejects(() => short.create(a01, expired.key, expired.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 648,
+              "endLine": 648,
+              "expression": "assert.equal(await short.expireSafeCopies(a01, storeA, job.j.jobId), 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 650,
+              "endLine": 650,
+              "expression": "assert.equal(dto.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 651,
+              "endLine": 651,
+              "expression": "rejects(() => short.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"regenerate\"), \"DELEGATION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 653,
+              "endLine": 653,
+              "expression": "rejects(() => short.create(a01, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_hash, beforeHash.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_cipher, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 662,
+              "endLine": 662,
+              "expression": "rejects(() => core.prepare(a01, command(\"requestPurge\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P13",
+      "scenario": "Minimização e logs",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUTHORITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "DTO/logs excluem OS, senha/padrão, CPF desnecessário, token, bytes e erro bruto; contexto técnico permanece correlacionável.",
+      "proofs": [
+        {
+          "id": "CORE-POSITIVE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 180,
+          "endLine": 197,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 184,
+              "endLine": 184,
+              "expression": "assert.equal(byteHash(clear), j.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(\"SYNTHETIC_PRIVATE_FIELD\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 185,
+              "endLine": 185,
+              "expression": "assert.ok(!clear.includes(Buffer.from([27])))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 186,
+              "endLine": 186,
+              "expression": "assert.ok(clear.includes(\"\\\\uFFFD\") || clear.includes(\"�\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 187,
+              "endLine": 187,
+              "expression": "assert.equal(JSON.parse(clear.toString()).drawer, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 188,
+              "endLine": 188,
+              "expression": "assert.notEqual(job.copies[0].payload_hash, job.copies[1].payload_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.state, \"TRANSPORT_ACCEPTED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 194,
+              "endLine": 194,
+              "expression": "assert.equal(dto.physicalPrintConfirmed, false)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"cipher\"))"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 195,
+              "endLine": 195,
+              "expression": "assert.ok(!JSON.stringify(dto).includes(\"password\"))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        },
+        {
+          "id": "CORE-AUTHORITY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 159,
+          "endLine": 169,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 160,
+              "endLine": 160,
+              "expression": "rejects(() => core.prepare(null, command(\"auth\")), \"UNAUTHENTICATED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 161,
+              "endLine": 161,
+              "expression": "rejects(() => core.prepare(tech, command(\"auth\")), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 162,
+              "endLine": 162,
+              "expression": "rejects(() => core.prepare(userB, command(\"auth\")), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 163,
+              "endLine": 163,
+              "expression": "rejects(() => core.prepare({ ...a01!, observedSessionVersion: 1 }, command(\"auth\")), \"SESSION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 164,
+              "endLine": 164,
+              "expression": "rejects(() => core.prepare(noModule, { ...command(\"auth\"), storeId: moduleLessStore }), \"FORBIDDEN\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 165,
+              "endLine": 165,
+              "expression": "rejects(() => core.prepare(a01, { ...command(\"auth\"), storeId: \"\" }), \"INVALID_TEXT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 167,
+              "endLine": 167,
+              "expression": "assert.equal(permitted.command.storeId, storeA)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P14",
+      "scenario": "Venda histórica sem job anterior",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "REPRINT com sourceOriginal UNKNOWN e previousJobId null; nenhum sucesso/job anterior é fabricado.",
+      "proofs": [
+        {
+          "id": "CORE-HISTORICAL-CLOSURE",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 297,
+          "endLine": 306,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 300,
+              "endLine": 300,
+              "expression": "assert.equal(j.kind, \"REPRINT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 302,
+              "endLine": 302,
+              "expression": "assert.equal(d.initial_state, \"HISTORICAL_CLOSED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 302,
+              "endLine": 302,
+              "expression": "assert.equal(d.initial_intent_id, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 303,
+              "endLine": 303,
+              "expression": "rejects(() => core.prepare(a01, command(\"historical\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 305,
+              "endLine": 305,
+              "expression": "assert.equal(saved.previous_job_id, null)"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P15",
+      "scenario": "Ações permitidas com payload expirado",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Consultar metadados continua possível quando autorizado; retry/regeneração do mesmo job bloqueados.",
+      "proofs": [
+        {
+          "id": "CORE-PURGE-REQUEST-EXPIRY",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 640,
+          "endLine": 664,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 644,
+              "endLine": 644,
+              "expression": "rejects(() => short.create(a01, expired.key, expired.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 648,
+              "endLine": 648,
+              "expression": "assert.equal(await short.expireSafeCopies(a01, storeA, job.j.jobId), 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 650,
+              "endLine": 650,
+              "expression": "assert.equal(dto.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 651,
+              "endLine": 651,
+              "expression": "rejects(() => short.ready(a01, storeA, job.j.jobId, job.copies[0].id, \"regenerate\"), \"DELEGATION_REVOKED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 653,
+              "endLine": 653,
+              "expression": "rejects(() => short.create(a01, job.p.key, job.p.command), \"REQUEST_EXPIRED\")"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_hash, beforeHash.snapshot_hash)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 655,
+              "endLine": 655,
+              "expression": "assert.equal(afterHash.snapshot_cipher, null)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.jobId, job.j.jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 658,
+              "endLine": 658,
+              "expression": "assert.equal(coalesced.contentExpired, true)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 662,
+              "endLine": 662,
+              "expression": "rejects(() => core.prepare(a01, command(\"requestPurge\")), \"INITIAL_CLOSED_BY_HISTORICAL_REPRINT\")"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    },
+    {
+      "id": "P16",
+      "scenario": "Equivalência de intenção entre principais autorizados",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "commandHash por recibo inclui principal, mas projeção de equivalência inicial exclui autor; coalescer não transfere responsabilidade.",
+      "proofs": [
+        {
+          "id": "CORE-CONCURRENT-INITIAL",
+          "file": "tools/print-core-004b/gate-b-run.ts",
+          "line": 198,
+          "endLine": 210,
+          "assertions": [
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 204,
+              "endLine": 204,
+              "expression": "assert.equal(out[0].jobId, out[1].jobId)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 206,
+              "endLine": 206,
+              "expression": "assert.equal(count.n, 1)"
+            },
+            {
+              "file": "tools/print-core-004b/gate-b-run.ts",
+              "line": 208,
+              "endLine": 208,
+              "expression": "assert.ok([a01!.principalId, storeUser!.principalId].includes(author.principal_id))"
+            }
+          ],
+          "run": "core-6909ccad",
+          "resultFile": "original/tools/print-core-004b/evidence/gate-b-results.json"
+        }
+      ]
+    }
+  ]
+}

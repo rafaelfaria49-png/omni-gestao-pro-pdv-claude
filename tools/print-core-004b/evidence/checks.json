@@ -1,0 +1,57 @@
+{
+  "node": "v24.19.0",
+  "typescript": "5.7.3",
+  "typecheck": {
+    "status": "PASS"
+  },
+  "lint": {
+    "status": "PASS"
+  },
+  "isolatedCoreBuild": {
+    "status": "PASS",
+    "sha256": "95B291E69724E123879CA06D1F99612E8CF616D1EFD9B5BECD0DCC78C30D5428",
+    "externalImports": [
+      {
+        "path": "node:crypto",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:crypto",
+        "kind": "require-call",
+        "external": true
+      }
+    ]
+  },
+  "sqlReproducibility": {
+    "status": "PASS",
+    "original": "4F05F943112DF35AFE986CA8BC1B4CFCF15FC53B0AFA23328C5E9A786F2FD97F",
+    "final": "E55A0340E266681556CA238E2D59019DE10E9439FEECAEB8AFF3CCE92DE8D6DD"
+  },
+  "fullApplicationBuild": {
+    "status": "BLOCKED_NOT_RUN",
+    "command": "npm run build -> node scripts/vercel-build.mjs",
+    "inspected": [
+      {
+        "file": "scripts/vercel-build.mjs",
+        "sha256": "6460B591F477F31CD72B5F2E5713FBB20F828C14F7819CB544B311B081CDAC86"
+      },
+      {
+        "file": "next.config.mjs",
+        "sha256": "29ECCA3AFE9AD5592B6283F4E27187A766BA2FF45159A0279F6D0AC9393E5F26"
+      }
+    ],
+    "reasons": [
+      "Build wrapper invokes npx for Prisma generation and Next. Implicit downloads are prohibited.",
+      "Isolated worktree has no node_modules and no generated/prisma. Shared dependency/cache outputs must not be mutated.",
+      "Next PWA emits public/* outside the laboratory allowlist. Application build/config changes are not authorized."
+    ],
+    "remoteMigrationsExecuted": false,
+    "dependenciesInstalled": false,
+    "focusedCoreBundleIsNotApplicationBuild": true
+  },
+  "materializedPrismaValidate": {
+    "status": "FAIL",
+    "message": "node.exe failed; status=null; spawnSync C:\\Users\\rafae\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe ETIMEDOUT"
+  }
+}

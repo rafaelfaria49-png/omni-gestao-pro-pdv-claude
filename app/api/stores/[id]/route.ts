@@ -13,6 +13,7 @@ import {
 } from "@/lib/stores-api-access"
 import { diffScalarFields } from "@/lib/config-audit/diff"
 import { recordConfigAuditFromSession } from "@/lib/config-audit/record"
+import { isPrintForeignKeyViolation, STORE_HAS_PRINT_RECORDS, storeHasPrintRecords } from "@/lib/printing/direct/store-print-links"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -100,6 +101,11 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
       )
     }
 
+    // D02-A: registros de impressão são auditoria (FK sem cascata); a mensagem diz o motivo em vez do erro genérico.
+    if (await storeHasPrintRecords(prisma, id)) {
+      return NextResponse.json({ ok: false, error: STORE_HAS_PRINT_RECORDS, impressao: true }, { status: 409 })
+    }
+
     await prisma.store.delete({ where: { id } })
 
     try {
@@ -121,6 +127,9 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     return NextResponse.json({ ok: true })
   } catch (e) {
     const code = e && typeof e === "object" && "code" in e ? String((e as { code: string }).code) : ""
+    if (isPrintForeignKeyViolation(e)) {
+      return NextResponse.json({ ok: false, error: STORE_HAS_PRINT_RECORDS, impressao: true }, { status: 409 })
+    }
     if (code === "P2003") {
       return NextResponse.json(
         {

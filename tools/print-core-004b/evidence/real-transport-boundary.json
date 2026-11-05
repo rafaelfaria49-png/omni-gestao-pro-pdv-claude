@@ -1,0 +1,15 @@
+{
+  "run": "core-6909ccad",
+  "node": "v24.19.0",
+  "instrumented": [
+    "fetch",
+    "WebSocket",
+    "net.Socket.connect",
+    "http/https.request/get",
+    "dgram",
+    "child_process"
+  ],
+  "attemptedCalls": [],
+  "realTransportCalls": 0,
+  "nativePostgresLoopbackOnly": true
+}

@@ -1,0 +1,40 @@
+{
+  "goal": "OMNI-PRINT-D04-WINDOWS-AGENT-FINALIZACAO-001",
+  "provenance": {
+    "platform": "win32",
+    "node": "v24.22.1",
+    "githubRunId": null,
+    "githubRunAttempt": null,
+    "commit": "683b0178ad844d10191e7fb2a0c96d28270297b1",
+    "localChanges": true
+  },
+  "productionWrites": 0,
+  "realPairing": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "typecheck",
+      "status": "FAIL",
+      "exit": 4294967295,
+      "seconds": 417,
+      "tests": null,
+      "sha256": "cd790921c1c18009f727598dec1284ed2486bfc0fd4d39198792f53c13bd0291"
+    },
+    {
+      "step": "d04-eslint",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 9,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "powershell-parse",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1,
+      "tests": null,
+      "sha256": "e1d17856cba043f50faa61ea8ea6e2c711f0fc19bcd9577b34a618e4ad267e62"
+    }
+  ]
+}

@@ -22,6 +22,11 @@ export type PdvImpressaoConfig = {
   viasCupom: number
   imprimirOs: boolean
   imprimirCrediario: boolean
+  /**
+   * OMNI-PRINT-004C (candidato): usar a impressora vinculada ao terminal via agente local.
+   * Desligado por padrão; só tem efeito com o gate do servidor aberto e o terminal vinculado.
+   */
+  impressaoDireta: boolean
 }
 
 export const BOBINA_CHARS: Record<BobinaTamanho, number> = {
@@ -42,6 +47,7 @@ export function defaultPdvImpressaoConfig(): PdvImpressaoConfig {
     viasCupom: 1,
     imprimirOs: true,
     imprimirCrediario: true,
+    impressaoDireta: false,
   }
 }
 
@@ -76,6 +82,7 @@ export function parseImpressaoFromPrinterConfig(printerConfig: unknown): PdvImpr
     viasCupom: vias,
     imprimirOs: raw.imprimirOs !== false && raw.imprimirOs !== "false",
     imprimirCrediario: raw.imprimirCrediario !== false && raw.imprimirCrediario !== "false",
+    impressaoDireta: raw.impressaoDireta === true,
   }
 }
 

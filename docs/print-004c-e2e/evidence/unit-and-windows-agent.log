@@ -1,0 +1,11 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-print-e2e-004c
+
+
+ Test Files  5 passed (5)
+      Tests  37 passed (37)
+   Start at  14:24:15
+   Duration  8.35s (transform 630ms, setup 0ms, import 921ms, tests 8.50s, environment 1ms)
+
+(node:14252) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)

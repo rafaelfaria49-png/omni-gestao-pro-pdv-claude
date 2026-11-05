@@ -1,0 +1,122 @@
+[
+  {
+    "id": "R02-owner-print_installations",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_installations",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_destinations",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_destinations",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_bindings",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_bindings",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_delegations",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_delegations",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_documents",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_documents",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_jobs",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_jobs",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_requests",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-owner-print_copies",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_copies",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_attempts",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_attempts",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "R02-owner-print_events",
+    "status": "PASS",
+    "sqlstate": "P0001",
+    "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+  },
+  {
+    "id": "R02-runtime-print_events",
+    "status": "PASS",
+    "sqlstate": "42501",
+    "message": "permission denied"
+  },
+  {
+    "id": "DDL-ROLLBACK-CONFLICT",
+    "status": "PASS",
+    "sqlstate": "42P07",
+    "message": "already exists"
+  }
+]

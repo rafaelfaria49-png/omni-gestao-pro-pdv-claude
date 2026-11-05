@@ -1,0 +1,436 @@
+{
+  "run": "core-6909ccad",
+  "node": "v24.19.0",
+  "postgres": "actual local PostgreSQL",
+  "status": "PASS",
+  "runtime": "omni_004b_runtime_bf24468d",
+  "independentTransactionBackendPids": [
+    26064,
+    28920,
+    16816
+  ],
+  "controlledBarriers": true,
+  "policy": {
+    "requestMs": 120000,
+    "authorizationMs": 240000,
+    "contentMs": 300000,
+    "leaseMs": 5000,
+    "riskMs": 60000,
+    "maxCopies": 2,
+    "maxItems": 100,
+    "maxBytes": 65536,
+    "maxRequestsPerMinute": 200,
+    "expiredRequestRetentionMs": 1
+  },
+  "results": [
+    {
+      "id": "CORE-AUTHORITY",
+      "status": "PASS",
+      "milliseconds": 100,
+      "detail": {
+        "pureCanonicalGuardsUsed": true,
+        "actualSessionEndpoint": false
+      }
+    },
+    {
+      "id": "CORE-INPUT",
+      "status": "PASS",
+      "milliseconds": 21,
+      "detail": null
+    },
+    {
+      "id": "CORE-POSITIVE",
+      "status": "PASS",
+      "milliseconds": 138,
+      "detail": {
+        "jobId": "62366536-5f7a-491a-a3bd-e3dcbfbe744f",
+        "copies": 2,
+        "resultLevel": "TRANSPORT_ACCEPTED"
+      }
+    },
+    {
+      "id": "CORE-CONCURRENT-INITIAL",
+      "status": "PASS",
+      "milliseconds": 98,
+      "detail": {
+        "jobId": "7c128dd5-8a34-4a64-a633-7e073d4a6705",
+        "independentRuntimeClients": 2,
+        "controlledBarrier": true,
+        "authorPreserved": true
+      }
+    },
+    {
+      "id": "CORE-SEMANTIC-CONFLICT",
+      "status": "PASS",
+      "milliseconds": 31,
+      "detail": null
+    },
+    {
+      "id": "CORE-REPLAY-LOST-RESPONSE",
+      "status": "PASS",
+      "milliseconds": 84,
+      "detail": {
+        "persistedReceiptAfterNewClient": true,
+        "sendCalls": 0
+      }
+    },
+    {
+      "id": "CORE-ATOMIC-T1",
+      "status": "PASS",
+      "milliseconds": 43,
+      "detail": null
+    },
+    {
+      "id": "CORE-TWO-EXECUTORS",
+      "status": "PASS",
+      "milliseconds": 33,
+      "detail": null
+    },
+    {
+      "id": "CORE-LEASE-FENCING",
+      "status": "PASS",
+      "milliseconds": 136,
+      "detail": null
+    },
+    {
+      "id": "CORE-CRASH-UNKNOWN",
+      "status": "PASS",
+      "milliseconds": 1633,
+      "detail": {
+        "attemptId": "cb671afc-5330-4bd0-b4e0-df948b342dd7",
+        "sendCalls": 1,
+        "lateAcceptanceNeverDowngraded": true
+      }
+    },
+    {
+      "id": "CORE-PARTIAL-COPIES",
+      "status": "PASS",
+      "milliseconds": 5149,
+      "detail": null
+    },
+    {
+      "id": "CORE-HISTORICAL-CLOSURE",
+      "status": "PASS",
+      "milliseconds": 68,
+      "detail": null
+    },
+    {
+      "id": "CORE-HISTORICAL-INITIAL-RACE",
+      "status": "PASS",
+      "milliseconds": 121,
+      "detail": null
+    },
+    {
+      "id": "CORE-A4-THERMAL-SLOT",
+      "status": "PASS",
+      "milliseconds": 59,
+      "detail": {
+        "browserOpened": false,
+        "logicalSlotOnly": true
+      }
+    },
+    {
+      "id": "CORE-REPRINT-COALESCENCE",
+      "status": "PASS",
+      "milliseconds": 272,
+      "detail": null
+    },
+    {
+      "id": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+      "status": "PASS",
+      "milliseconds": 264,
+      "detail": {
+        "suppressionSurvivesProof": true,
+        "externalExposureRequiresNewAcknowledgement": true,
+        "explicitReconfirmationAllowsProgress": true
+      }
+    },
+    {
+      "id": "CORE-RISK-NOT-SELF-INVALIDATING",
+      "status": "PASS",
+      "milliseconds": 459,
+      "detail": null
+    },
+    {
+      "id": "CORE-SHARED-DESTINATION",
+      "status": "PASS",
+      "milliseconds": 1687,
+      "detail": {
+        "sharedDestination": "632c2c81-6c68-4cc5-87f0-97d79f66f1bd",
+        "differentStores": true,
+        "leaseNeverFreedGate": true
+      }
+    },
+    {
+      "id": "CORE-REVOCATION",
+      "status": "PASS",
+      "milliseconds": 88,
+      "detail": {
+        "actualLogoutChangedOrCertified": false,
+        "syntheticDelegationOnly": true
+      }
+    },
+    {
+      "id": "CORE-CROSS-SCOPE",
+      "status": "PASS",
+      "milliseconds": 107,
+      "detail": null
+    },
+    {
+      "id": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+      "status": "PASS",
+      "milliseconds": 60,
+      "detail": null
+    },
+    {
+      "id": "CORE-SYNTHETIC-TEST",
+      "status": "PASS",
+      "milliseconds": 43,
+      "detail": null
+    },
+    {
+      "id": "CORE-MISSING-COPY-COMMIT",
+      "status": "PASS",
+      "milliseconds": 34,
+      "detail": null
+    },
+    {
+      "id": "CORE-CRASH-BEFORE-CALL",
+      "status": "PASS",
+      "milliseconds": 1578,
+      "detail": {
+        "noCallObserved": true,
+        "absenceOfCallAloneNotAReleaseProof": true
+      }
+    },
+    {
+      "id": "CORE-STALE-RISK-T0-T1",
+      "status": "PASS",
+      "milliseconds": 93,
+      "detail": null
+    },
+    {
+      "id": "CORE-REVOCATION-CONCURRENT-T3",
+      "status": "PASS",
+      "milliseconds": 137,
+      "detail": {
+        "observedWait": [
+          {
+            "pid": 28920,
+            "wait_event_type": "Lock",
+            "wait_event": "transactionid"
+          }
+        ],
+        "noPhysicalRecallClaim": true
+      }
+    },
+    {
+      "id": "CORE-AUDIT-FAILURE-AFTER-T3",
+      "status": "PASS",
+      "milliseconds": 1587,
+      "detail": null
+    },
+    {
+      "id": "CORE-A4-LOGICAL-ONLY",
+      "status": "PASS",
+      "milliseconds": 100,
+      "detail": {
+        "browserOpened": false,
+        "transportAcceptanceFabricated": false
+      }
+    },
+    {
+      "id": "CORE-NORMALIZATION",
+      "status": "PASS",
+      "milliseconds": 127,
+      "detail": null
+    },
+    {
+      "id": "CORE-ELIGIBILITY",
+      "status": "PASS",
+      "milliseconds": 37,
+      "detail": null
+    },
+    {
+      "id": "CORE-FINGERPRINT",
+      "status": "PASS",
+      "milliseconds": 109,
+      "detail": {
+        "exactFloatBits": true,
+        "quantityType": "Int",
+        "kgCertified": false,
+        "postSELECTDeviceAtomicityClaimed": false
+      }
+    },
+    {
+      "id": "CORE-REVIEW-REGRESSIONS",
+      "status": "PASS",
+      "milliseconds": 194,
+      "detail": {
+        "reviewFindings": [
+          "missing-session-column",
+          "inactive-terminal",
+          "invalid-payment-discount",
+          "legacy-store-fallback"
+        ],
+        "adversarialChecksExecuted": true
+      }
+    },
+    {
+      "id": "CORE-PURGE-REQUEST-EXPIRY",
+      "status": "PASS",
+      "milliseconds": 2256,
+      "detail": {
+        "hashesAndSlotsRemain": true,
+        "noRegeneration": true
+      }
+    },
+    {
+      "id": "CORE-PURE-CRYPTO-AND-CANONICAL",
+      "status": "PASS",
+      "milliseconds": 3,
+      "detail": null
+    },
+    {
+      "id": "CORE-COMMERCIAL-INTEGRITY",
+      "status": "PASS",
+      "milliseconds": 1,
+      "detail": {
+        "comparison": "per-table sorted row identities plus digest, not counts",
+        "changedOnlyByOwnerFixture": [
+          "pdv_terminais",
+          "venda_itens",
+          "vendas"
+        ],
+        "runtimeCommercialDmlPrivileges": false,
+        "commercialMutationsByPrintCore": 0
+      }
+    }
+  ],
+  "syntheticBoundaryCalls": [
+    {
+      "attemptId": "84d9f375-14bc-484b-9221-c2017b609f0e",
+      "sendKey": "1ca9bdcb-979a-43d5-a3bf-1e6b2f7949ad",
+      "payloadHash": "786f44a97ec91958952b2f441d0e3b0cfe0f395c6ed777e7580dfac8fefcb046",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "ec01fdd9-811b-4ae9-a9f9-2910db3b7de8",
+      "sendKey": "69be5a26-b816-4087-8823-52db224ce8c9",
+      "payloadHash": "5c1be6586acb7928b00ab2081a133f27bfed04f28ca2c784c8ff9c088bac81b4",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "76b520b1-0258-42b7-8445-3329068b52c7",
+      "sendKey": "185f4919-6487-42a7-9d25-38bca4933c43",
+      "payloadHash": "2819a323e392bf92a3fdb1a3a5ad9a751aa00adb1a11e34419fae51cf5f54b52",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "cb671afc-5330-4bd0-b4e0-df948b342dd7",
+      "sendKey": "8744e4b0-b02c-444b-9f73-50f3b9375f8d",
+      "payloadHash": "bb7a4e1f614d54d98fbbc1da8a506e3f7347caaaa775fb2bcb1affe9995fc0dd",
+      "outcome": "CRASH_AFTER_ACCEPT"
+    },
+    {
+      "attemptId": "82624fef-404e-4263-bfa1-6629f3d56b60",
+      "sendKey": "9a145917-9e67-4d48-8f45-6c069ad2f1b4",
+      "payloadHash": "ff98a0cddb370a981a1eb96f1ce31f9e5f1cefb3e3914219c59a56d4d9fbf32b",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "298eba22-6258-4c37-8d20-560281fc4869",
+      "sendKey": "a8c2e30f-2c35-4f3d-be0d-48e2f6629dde",
+      "payloadHash": "f662df8f165b2d46bab6332e93f4618f9ba9c2f7473d7776fab9f6d89e2f732c",
+      "outcome": "NO_EFFECT"
+    },
+    {
+      "attemptId": "76975794-90ab-467b-b553-0ced6f515669",
+      "sendKey": "a8c2e30f-2c35-4f3d-be0d-48e2f6629dde",
+      "payloadHash": "f662df8f165b2d46bab6332e93f4618f9ba9c2f7473d7776fab9f6d89e2f732c",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "b5fcac53-3bcb-45c8-9357-c8a8724c4a70",
+      "sendKey": "acc27a6c-c749-49ab-8696-e0400b48d58c",
+      "payloadHash": "42464e3fb8da5682cdc15406fc1e38c1603817e656181d94614d6f1c828d9e5a",
+      "outcome": "UNKNOWN"
+    },
+    {
+      "attemptId": "ef300b57-abea-4f43-9708-70f559a283fd",
+      "sendKey": "75ad85e3-d6c1-4d6b-b981-5bb729cbb850",
+      "payloadHash": "07d9fa415d51c836b34165c333b909f962df2abb7e1ae94f3c351ae1f0c716e3",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "1d5699ab-54c3-4681-bc50-a51443166feb",
+      "sendKey": "19a8d070-4183-45fd-80ca-39a3aabed3ec",
+      "payloadHash": "eace8d883e2a51f40f2d36522936fae8cdd99edd2008b1f09f9b4e2754bb12ec",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "cbc62ad2-21e5-4463-aec8-389a92071930",
+      "sendKey": "a943bfa6-961e-4376-84d0-ac52b6fd430a",
+      "payloadHash": "ee4d43c5c61ed0899cc9afbdac8415d7fb1487a63482094bd17b65a572f96abd",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "90163508-3b8e-4a44-b6c5-f9affe74678a",
+      "sendKey": "aa7b0bee-912f-441a-814e-af592da34c7e",
+      "payloadHash": "81fb89dca9686dac890659db4d8665e8fe88bf1986f53bf976ef2e42ad37bb4e",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "13beb430-549e-4e8a-8444-e83611a47f58",
+      "sendKey": "5fa690b4-b934-47ac-be74-fa38a6127e6b",
+      "payloadHash": "545191cf662e5a5c8a6e9c9e85c51bb5ff587a8d087b25765b54af4a4e65af13",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "e697d525-e8f0-41e8-8958-f6b6a48f5264",
+      "sendKey": "e98e7a92-15fb-41f6-b728-8ba2868ceeee",
+      "payloadHash": "d629657caf23a474714a7b81c8998f431315fc5f3c8458ad8b13c8289df8ec25",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "42e7ed15-ade8-4b1a-87b6-c83ad7c4f545",
+      "sendKey": "8ccc7fe0-b079-4909-b625-425604370c28",
+      "payloadHash": "761ebb499fe2735cefe7b671d37d2403c4b92b983847e417a8628262e26fe3ab",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "8245afae-e106-431e-b54e-98d719ea08e5",
+      "sendKey": "3d0ab8a8-fd19-4ad6-8e54-f3fb4d2e9964",
+      "payloadHash": "d5287090c1a5d35407bf71081e36c98a3cd4dbc4cc1b15f92d14adcf51354db6",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "6ac07d06-1930-43c4-96fd-ef66aa84e933",
+      "sendKey": "125c289a-2d48-413d-8b36-a709e6e609f0",
+      "payloadHash": "9e3eededdcf732a7ac5bea63788df7cb950106e3daa3248d589110b5df32e1a0",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "4ff236a1-1acf-43b1-b254-1cc81e283c03",
+      "sendKey": "bbfd7896-965f-4c38-98e1-00ff23b2bf5d",
+      "payloadHash": "dd5ffca91704226f8f591492f88a1593569d2b32ed15f857e0ebb0e5d99cc3a9",
+      "outcome": "ACCEPT"
+    },
+    {
+      "attemptId": "f87825e4-524b-4581-b671-a1943ef02221",
+      "sendKey": "70514019-5437-45c6-9e09-d17041ed3efa",
+      "payloadHash": "3a1a21a02a964d689b0279bea588f21564c443dfcb27e79bb382eee5e03d7536",
+      "outcome": "ACCEPT"
+    }
+  ],
+  "realTransportCalls": 0,
+  "commercialMutationsByPrintCore": 0,
+  "productionWrites": 0,
+  "limits": [
+    "No live session endpoint/logout",
+    "No physical/transport/browser pairing validation",
+    "Synthetic JSON renderer only",
+    "No KG certification",
+    "Ephemeral keys cannot decrypt after process exit; hashes and ledger remain"
+  ]
+}
