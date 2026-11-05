@@ -62,7 +62,7 @@ export async function recoverHosts(file) {
     durableRecord(file, { op: 'CLOSED', nonce: r.nonce, recovery: result.state })
   }
 }
-export async function acquireLease(journalFile, { transport = path.basename(journalFile)==='journal.jsonl' } = {}) {
+async function takeLease(journalFile, { transport = path.basename(journalFile)==='journal.jsonl' } = {}) {
   mkdirSync(path.dirname(journalFile), { recursive: true })
   let cmd
   if (process.platform === 'win32') cmd = psCommand(['-Operation', 'lease', '-LeasePath', journalFile + '.guard', '-OwnerPath', journalFile + '.lock', '-TargetPid', String(process.pid)])
@@ -122,4 +122,12 @@ export async function acquireLease(journalFile, { transport = path.basename(jour
     }
     return lease
   } catch (e) { child.stdin.end('\n'); throw e }
+}
+export async function acquireLease(journalFile, options) {
+  // A killed parent's guard can take a scheduling turn to observe EOF. Wait only for OS release, never delete a lock.
+  const deadline=Date.now()+1500
+  for(;;) {
+    try { return await takeLease(journalFile,options) }
+    catch(e) { if(e.message!=='AGENT_ALREADY_RUNNING'||Date.now()>=deadline)throw e;await new Promise(r=>setTimeout(r,50)) }
+  }
 }

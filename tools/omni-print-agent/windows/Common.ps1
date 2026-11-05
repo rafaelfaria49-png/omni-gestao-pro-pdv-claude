@@ -71,7 +71,11 @@ function New-PrivateDirectory([string]$Dir, [string]$Sid) {
   $acl = New-Object Security.AccessControl.DirectorySecurity
   $acl.SetAccessRuleProtection($true,$false)
   $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier($Sid)))
-  foreach ($id in @($Sid,'S-1-5-18')) { $rule = New-Object Security.AccessControl.FileSystemAccessRule($id,'FullControl','ContainerInherit,ObjectInherit','None','Allow'); $acl.AddAccessRule($rule) }
+  foreach ($id in @($Sid,'S-1-5-18')) {
+    $identity=New-Object Security.Principal.SecurityIdentifier($id)
+    $rule=[Security.AccessControl.FileSystemAccessRule]::new($identity,'FullControl','ContainerInherit,ObjectInherit','None','Allow')
+    $acl.AddAccessRule($rule)
+  }
   Set-Acl -LiteralPath $Dir -AclObject $acl
 }
 function Enter-Maintenance([string]$Root) {
@@ -90,7 +94,12 @@ function Get-Installation([string]$InstallRoot) {
 }
 function Get-OwnedTask($Metadata) {
   $task = Get-ScheduledTask -TaskPath '\' -TaskName $Metadata.taskName -ErrorAction SilentlyContinue
-  if ($task -and ($task.Description -ne ('OmniPrint D04 owner ' + $Metadata.ownerSid) -or $task.Principal.UserId -ne $Metadata.ownerSid -or
+  $taskSid=$null
+  if($task) {
+    if($task.Principal.UserId -match '^S-1-') { $taskSid=$task.Principal.UserId }
+    else { $taskSid=([Security.Principal.NTAccount]::new($task.Principal.UserId)).Translate([Security.Principal.SecurityIdentifier]).Value }
+  }
+  if ($task -and ($task.Description -ne ('OmniPrint D04 owner ' + $Metadata.ownerSid) -or $taskSid -ne $Metadata.ownerSid -or
       @($task.Actions).Count -ne 1 -or $task.Actions[0].Execute -ne $Metadata.nodePath -or $task.Actions[0].Arguments -ne $Metadata.taskArguments)) { throw 'TASK_OWNERSHIP_UNPROVEN' }
   return $task
 }

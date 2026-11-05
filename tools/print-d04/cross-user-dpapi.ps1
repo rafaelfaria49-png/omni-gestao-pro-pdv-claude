@@ -10,7 +10,7 @@ try {
   $account=New-LocalUser -Name $userName -Password $password -AccountNeverExpires -Description 'Disposable D04 CI DPAPI test only'
   $created=$true
   $acl=Get-Acl -LiteralPath $dir
-  $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($account.SID.Value,'Modify','ContainerInherit,ObjectInherit','None','Allow')))
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($account.SID,'Modify','ContainerInherit,ObjectInherit','None','Allow'))
   Set-Acl -LiteralPath $dir -AclObject $acl
   $cipher=ConvertTo-SecureString 'synthetic-cross-user-d04' -AsPlainText -Force | ConvertFrom-SecureString
   [IO.File]::WriteAllText((Join-Path $dir 'cipher.txt'),$cipher)
