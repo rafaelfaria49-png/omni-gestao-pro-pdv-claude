@@ -1,7 +1,7 @@
 // Omni Print local agent — wire protocol helpers (no dependencies). OMNI-PRINT-004C candidate.
 import { createHash } from "node:crypto"
 
-export const AGENT_VERSION = "omni-print-agent/0.1.0-004c"
+export const AGENT_VERSION = "omni-print-agent/0.2.0-d04"
 export const REASONS = Object.freeze({
   PRINTER_NOT_FOUND: "PRINTER_NOT_FOUND", PRINTER_OFFLINE: "PRINTER_OFFLINE", PRINTER_PAUSED: "PRINTER_PAUSED",
   PRINTER_ERROR: "PRINTER_ERROR", PAPER_OUT: "PAPER_OUT", SPOOLER_UNAVAILABLE: "SPOOLER_UNAVAILABLE",
@@ -56,9 +56,16 @@ export function createClient({ serverUrl, token, fetchImpl = globalThis.fetch, t
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
-      const res = await fetchImpl(origin + path, { method: "POST", redirect: "error", signal: ctrl.signal,
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) }, body: JSON.stringify(body ?? {}) })
-      const text = await res.text()
+      let res, text
+      try {
+        res = await fetchImpl(origin + path, { method: "POST", redirect: "error", signal: ctrl.signal,
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) }, body: JSON.stringify(body ?? {}) })
+        text = await res.text()
+      } catch (err) {
+        // Only a transport failure is retryable. A local TypeError elsewhere must stop the agent.
+        if (err instanceof TypeError || err?.name === 'AbortError' || err?.name === 'TimeoutError') err.transportFailure = true
+        throw err
+      }
       if (text.length > 4 * 1024 * 1024) throw new HttpError(502, "RESPONSE_TOO_LARGE")
       let json = {}
       try { json = text ? JSON.parse(text) : {} } catch { throw new HttpError(res.status, "INVALID_JSON") }

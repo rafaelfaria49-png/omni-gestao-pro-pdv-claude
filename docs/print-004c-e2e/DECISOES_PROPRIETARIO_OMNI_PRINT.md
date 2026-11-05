@@ -221,53 +221,21 @@ backup/rollback. Antes dessas aprovações, **nada é aplicado em produção**.
 
 ## D04 — Agente Windows (transporte real)
 
-**Situação atual:**
+**D04-A_CONFIRMED:** o proprietário autorizou a preparação da tarefa ao logon, instalação controlada e recuperação.
+A autorização desta sessão limita operações modificadoras a VM/laboratório isolado. Instalação em caixa real, pareamento
+real, impressão, homologação física e produção continuam sem liberação.
 
-- **O que é:** processo Node sem dependências (`tools/omni-print-agent/`), com os comandos `printers`, `pair` e `run`.
-- **Conexões:** só de saída, por HTTPS; não abre porta.
-- **Credencial e diário:** credencial protegida por DPAPI **do usuário do Windows**. Diário durável e trava de uma
-  instância por diário (`journal.jsonl.lock`, com o PID do agente). Cada tentativa fica presa à instância que a iniciou
-  (P1-1: dois processos, kill -9, zero duplicatas).
-- **O que falta:** não há instalação como serviço nem pacote assinado. O transporte real nunca foi ligado em produção.
-- **Residuais conhecidos, a resolver no empacotamento do agente (entrega própria, depois do piloto):**
-  - se o agente for morto à força, o host PowerShell que ele abriu pode ficar órfão (o PID do host fica só na memória do
-    agente). Mitigação no piloto: reiniciar o computador ou encerrar o `powershell.exe` órfão pelo Gerenciador de Tarefas;
-  - se o PID gravado na trava for reaproveitado por outro processo após reinício, o agente recusa iniciar com
-    `AGENT_ALREADY_RUNNING` até a trava ser removida. É seguro: ele recusa, não duplica.
+Implementação e procedimentos atuais: `tools/omni-print-agent/README.md` e `D04_WINDOWS_AGENT.md`. O pacote sem assinatura
+digital contém scripts de plano/aplicação, tarefa Interactive/Limited do mesmo SID, reinício limitado e diagnóstico.
+DPAPI, instância e diário são preservados. Trava e hosts usam autoridade do SO e identidade de criação, inclusive no
+tratamento de PID reaproveitado. Host antigo sem identidade comprovável bloqueia a retomada, sem ser morto por suposição.
 
-**Risco de não resolver:** sem o agente não há impressão direta. Uma instalação improvisada (por exemplo, rodando como
-outro usuário do Windows) faz a credencial não abrir e o agente parar.
+**Substitui os procedimentos preliminares desta seção:** não usar o laço ilimitado antigo, não apagar `.lock` para forçar
+partida e não apagar a pasta de dados ao desinstalar. A desinstalação controlada remove a tarefa e preserva todo o histórico.
 
-**Alternativas de execução:**
-
-- **A (recomendada para piloto)** — **tarefa agendada "ao fazer logon"** do usuário do caixa, executando um laço de
-  reinício.
-  - **Usuário:** é o mesmo da credencial DPAPI, e não pede privilégio de sistema.
-  - **Reinício:** o Agendador não reinicia o processo por código de saída, então o laço faz isso. Ele reinicia em caso de
-    erro e para quando o agente encerra normalmente (credencial revogada ou parada manual).
-- **B** — serviço do Windows (LocalSystem). Mais robusto sem usuário logado, mas exige mudar a proteção da credencial para
-  escopo da máquina (código) e dá mais privilégio ao processo.
-- **C** — janela aberta manualmente. Aceitável só durante a homologação.
-
-**Procedimentos preparados (opção A).** São texto para a pessoa autorizada executar na loja; **nada foi executado
-remotamente**:
-
-| Ação | Passos |
-|---|---|
-| Instalar | 1) Node 24 LTS; 2) copiar `tools/omni-print-agent/` (sem `*.test.ts`) para `C:\OmniPrintAgent\`; 3) `node C:\OmniPrintAgent\agent.mjs printers`; 4) gerar o código na tela **a partir do navegador do caixa**; 5) `node C:\OmniPrintAgent\agent.mjs pair --server https://<domínio> --code XXXX-XXXX-XXXX`, **com o mesmo usuário do Windows que vai rodar o agente**; 6) criar `C:\OmniPrintAgent\run-loop.ps1` com `do { node C:\OmniPrintAgent\agent.mjs run; $c = $LASTEXITCODE; if ($c -ne 0) { Start-Sleep 10 } } while ($c -ne 0)`; 7) `Register-ScheduledTask -TaskName "OmniPrintAgent" -Action (New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File C:\OmniPrintAgent\run-loop.ps1") -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME) -Settings (New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0)` |
-| Conferir | na tela, computador **online** e fila listada; `Get-NetTCPConnection -OwningProcess (Get-Process node).Id` mostra só saídas 443 |
-| Atualizar | `Stop-ScheduledTask OmniPrintAgent` (e conferir que nenhum `node` do agente segue rodando); substituir os arquivos de `C:\OmniPrintAgent\` **sem tocar** em `%LOCALAPPDATA%\OmniPrintAgent\` (diário, instância, credencial); `Start-ScheduledTask OmniPrintAgent`; conferir a versão na tela |
-| Recuperar após reinício | automático: a tarefa sobe no logon e o diário se recupera; uma via "incerta" continua incerta e **nunca é reenviada** (S11). Se recusar com `AGENT_ALREADY_RUNNING` sem nenhum `node` do agente rodando, apagar `%LOCALAPPDATA%\OmniPrintAgent\journal.jsonl.lock` |
-| Desinstalar | 1) **Revogar** na tela (o servidor passa a recusar a credencial e o agente para sozinho); 2) `Stop-ScheduledTask` e `Unregister-ScheduledTask OmniPrintAgent`; 3) conferir que não há via "incerta" aguardando decisão; 4) apagar `C:\OmniPrintAgent\` e `%LOCALAPPDATA%\OmniPrintAgent\`. **Nunca** apagar a pasta de dados antes de revogar |
-
-**Consequência para o lojista:** o computador do caixa precisa do Node 24 e de um login do Windows fixo para o caixa.
-Depois de instalado, o agente sobe sozinho quando esse usuário entra no Windows.
-
-**Depende de aprovação expressa:** liberar o transporte real (agente) para a loja piloto; a opção A/B/C; quem instala;
-consentimento da loja para instalar software no computador do caixa. Empacotamento assinado e encerramento automático do
-host órfão ficam para depois do piloto.
-
-> ☐ D04 = A (recomendada) · instalador: ____ · ☐ B · ☐ C (só homologação)
+Referências da configuração: [principal Interactive/Limited](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal),
+[limites de reinício e instâncias](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset).
+O logon/reboot real no equipamento e o papel serão verificados pelo `RUNBOOK_D05.md`, ainda PENDING.
 
 ---
 

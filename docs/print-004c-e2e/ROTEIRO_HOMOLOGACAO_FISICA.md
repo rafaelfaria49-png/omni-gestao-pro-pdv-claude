@@ -1,5 +1,8 @@
 # Roteiro de homologação física na loja — OMNI-PRINT-004C
 
+**D05 PENDING — não executado.** Checklist operacional atualizado: [RUNBOOK_D05.md](RUNBOOK_D05.md). D04-A liberou a
+preparação do software; não liberou instalação/pareamento/impressão real ou configuração de banco/Preview nesta sessão.
+
 Pré-condições (gates humanos, nenhum foi aberto por este candidato):
 
 - D02 (schema) e D04 (transporte por agente local) aprovados pelo proprietário; D03 (limites/retenção/chaves) com valores definidos; D05 (hardware) com consentimento.
@@ -17,11 +20,11 @@ Pré-condições (gates humanos, nenhum foi aberto por este candidato):
 
 ## 2. Instalação e pareamento autorizado do agente
 
-1. Instalar Node 24 LTS no computador do caixa (autorizado pelo proprietário). Copiar a pasta `tools/omni-print-agent/` (sem `*.test.ts`) para `C:\OmniPrintAgent\`.
-2. `node C:\OmniPrintAgent\agent.mjs printers` → a fila do passo 1 deve aparecer.
+1. Após autorização própria de D05, seguir o pacote íntegro e os scripts em `tools/omni-print-agent/README.md`, com Node 24 >=24.12. Não usar cópia manual nem laço de reinício antigo. A tarefa é instalada desabilitada no usuário autorizado.
+2. Usar o comando `printers` do release instalado e o `dataRoot` registrados em `installation.json` → a fila do passo 1 deve aparecer.
 3. No OmniGestão, **a partir do navegador do próprio caixa**, Configurações → PDV → "Impressão direta pelo agente local" → "Gerar código de pareamento" (válido 10 min, uso único).
-4. No caixa: `node C:\OmniPrintAgent\agent.mjs pair --server https://<domínio-homologação> --code XXXX-XXXX-XXXX`. Conferir que `%LOCALAPPDATA%\OmniPrintAgent\config.json` contém a credencial **cifrada** (DPAPI), nunca em claro.
-5. `node C:\OmniPrintAgent\agent.mjs run` (janela visível no piloto). Na configuração, o computador deve aparecer **online** com a impressora listada.
+4. Usar `agent.mjs pair --data-dir <dataRoot> --server https://<domínio-homologação> --code XXXX-XXXX-XXXX` do release instalado, no mesmo SID da tarefa. Conferir DPAPI pelo diagnóstico; não exibir nem fotografar `config.json`.
+5. Fazer diagnóstico e iniciar pela tarefa controlada conforme README. Na configuração, o computador deve aparecer **online** com a impressora listada.
 6. Vincular o terminal: escolher computador, fila e bobina (58/80), manter "Somente este navegador" marcado, "Vincular". Ligar "Usar impressão direta nesta loja". Ligar "Imprimir automaticamente" no cartão de impressão, se for o caso.
 7. Confirmar que o agente não abre porta: `Get-NetTCPConnection -OwningProcess (Get-Process node).Id` → somente conexões de saída 443.
 

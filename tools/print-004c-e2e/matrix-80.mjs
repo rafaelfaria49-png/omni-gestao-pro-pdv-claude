@@ -37,7 +37,7 @@ const E = {
   B07: [S, "S10/PW6 (sem T3: lease vence → não enviado, retry explícito imprime uma vez)"],
   B08: [S, "S25 + two-agents.pg (2 processos reais, mesma credencial, perdas de resposta, kill -9: 0 duplicatas em 3 execuções)"],
   B09: [S, "S10/S12 (lease vencido: nada é reivindicável, sem impressão tardia)"],
-  B10: [S, "S11 (crash após envio: UNKNOWN) + S12 + two-agents (kill -9 e reinício)"],
+  B10: [S, "S11/S12 + two-agents + D04 recovery: kill real, UNKNOWN durável, PID reaproveitado, host órfão e nenhuma duplicata; papel D05 pendente"],
   B11: [R, "S15 (revogação antes da T3 → cópia expirada, nada enviado; sequencial)"],
   B12: [R, "S14 (cancelamento/correção após o job → cópia cancelada)"],
   B13: [R, "S04 (vínculos/agentes/provas de outra loja recusados)"],
@@ -99,6 +99,6 @@ const totals = rows.reduce((a, r) => (a[r.status] = (a[r.status] ?? 0) + 1, a), 
 const out = path.join(root, "docs/print-004c-e2e")
 writeFileSync(path.join(out, "matriz-80.json"), JSON.stringify({ totals, rows }, null, 2))
 writeFileSync(path.join(out, "MATRIZ_80.md"), `# Matriz de 80 casos — OMNI-PRINT-004C\n\nTotais: ${Object.entries(totals).map(([k, v]) => `${k}=${v}`).join(" · ")}\n\n` +
-  "Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts.\n\n" +
+  "Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts. D04: tools/print-d04/recovery.test.ts, D04_WINDOWS_AGENT.md e evidence/d04/; hardware/logon/reboot reais no RUNBOOK_D05.md permanecem pendentes.\n\n" +
   "| ID | Caso | Resultado | Evidência |\n|---|---|---|---|\n" + rows.map(r => `| ${r.id} | ${r.title} | ${r.status} | ${r.evidence} |`).join("\n") + "\n")
 console.log(JSON.stringify(totals))

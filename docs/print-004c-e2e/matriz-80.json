@@ -160,7 +160,7 @@
       "id": "B10",
       "title": "Crash após T3 antes da chamada e após envio antes de T4",
       "status": "PASS_SIMULATED_TRANSPORT",
-      "evidence": "S11 (crash após envio: UNKNOWN) + S12 + two-agents (kill -9 e reinício)"
+      "evidence": "S11/S12 + two-agents + D04 recovery: kill real, UNKNOWN durável, PID reaproveitado, host órfão e nenhuma duplicata; papel D05 pendente"
     },
     {
       "id": "B11",

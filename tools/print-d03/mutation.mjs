@@ -40,7 +40,7 @@ try {
         env: { ...process.env, PRINT_PG_URL: url, DATABASE_URL: url, DIRECT_URL: url, FORCE_COLOR: "0", NO_COLOR: "1" } })
     const log = ((r.stdout ?? "") + (r.stderr ?? "")).replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
     // A collection error, crash or timeout never counts as killing a mutant.
-    const killed = r.status !== 0 && /AssertionError|expected .* to |promise resolved .* instead of rejecting/.test(log) && /1 failed/.test(log)
+    const killed = Number.isInteger(r.status) && r.status !== 0 && /AssertionError|expected .* to |promise resolved .* instead of rejecting/.test(log) && /1 failed/.test(log)
     results.push({ mutant: name, test, status: killed ? "KILLED" : "SURVIVED_OR_INVALID", exit: r.status })
     writeFileSync(path.join(out, `mutation-${name}.log`), log + `\nexit=${r.status}\n`)
     console.log(`${name}: ${results.at(-1).status}`)

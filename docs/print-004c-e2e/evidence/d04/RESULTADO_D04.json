@@ -1,0 +1,30 @@
+{
+  "goal": "OMNI-PRINT-D04-WINDOWS-AGENT-FINALIZACAO-001",
+  "validatedRuntimeHead": "683b0178ad844d10191e7fb2a0c96d28270297b1",
+  "source": "VERIFIED_CI_ARTIFACTS",
+  "D04_CODE_READY": "YES",
+  "WINDOWS_AGENT_TESTS": "PASS",
+  "INSTALLER_VALIDATION": "PASS",
+  "RECOVERY_TESTS": "PASS",
+  "D01_D02_D03_REGRESSION": "PASS",
+  "TYPECHECK": "PASS",
+  "LINT": "PASS",
+  "BUILD": "PASS",
+  "CI": "PASS",
+  "INDEPENDENT_REVIEW": "APPROVE",
+  "PR_STATE": "DRAFT",
+  "D05_RUNBOOK_READY": "YES",
+  "D05_PHYSICAL_TEST": "PENDING",
+  "APPROVED_RELEASE": null,
+  "productionWrites": 0,
+  "realPairing": false,
+  "realPrinting": false,
+  "packageSha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+  "packageSigned": false,
+  "proofs": [
+    "ci-windows-683b017.json",
+    "ci-linux-683b017.json",
+    "ci-d03-683b017.json"
+  ],
+  "latestConsolidatedCommitChecks": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/333/checks"
+}

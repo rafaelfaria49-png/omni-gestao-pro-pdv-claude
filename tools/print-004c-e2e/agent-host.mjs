@@ -22,7 +22,7 @@ let agent = null, loop = null
 process.on("message", async (m) => {
   if (m.cmd === "start") {
     try {
-      agent = new Agent({ serverUrl, token: m.token, spooler, journalFile, statusTimeoutMs: 500, submitTimeoutMs: 2500, minSendBudgetMs: 3000 })
+      agent = await Agent.create({ serverUrl, token: m.token, spooler, journalFile, statusTimeoutMs: 500, submitTimeoutMs: 2500, minSendBudgetMs: 3000 })
       loop = agent.run({ pollMs: 200, heartbeatMs: 1000 })
       process.send({ id: m.id, ok: true, pid: process.pid })
     } catch (e) { process.send({ id: m.id, ok: false, error: String(e?.message ?? e) }) }

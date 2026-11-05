@@ -2,7 +2,7 @@
 
 Totais: PASS_REAL_SOFTWARE=55 · PASS_SIMULATED_TRANSPORT=13 · BLOCKED_HUMAN_GATE=3 · DEFERRED_PHYSICAL_HARDWARE=9
 
-Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts.
+Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/print-004c-e2e/scenarios.pg.test.ts; PW# = e2e/specs/print-direct-004c.spec.ts; unit = lib/printing/direct/*.test.ts e tools/omni-print-agent/*.test.ts. D04: tools/print-d04/recovery.test.ts, D04_WINDOWS_AGENT.md e evidence/d04/; hardware/logon/reboot reais no RUNBOOK_D05.md permanecem pendentes.
 
 | ID | Caso | Resultado | Evidência |
 |---|---|---|---|
@@ -31,7 +31,7 @@ Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/pri
 | B07 | Crash após T1 e antes de T2/T3 | PASS_SIMULATED_TRANSPORT | S10/PW6 (sem T3: lease vence → não enviado, retry explícito imprime uma vez) |
 | B08 | Dois executores disputam uma via | PASS_SIMULATED_TRANSPORT | S25 + two-agents.pg (2 processos reais, mesma credencial, perdas de resposta, kill -9: 0 duplicatas em 3 execuções) |
 | B09 | Lease expira antes de T3 e executor antigo acorda | PASS_SIMULATED_TRANSPORT | S10/S12 (lease vencido: nada é reivindicável, sem impressão tardia) |
-| B10 | Crash após T3 antes da chamada e após envio antes de T4 | PASS_SIMULATED_TRANSPORT | S11 (crash após envio: UNKNOWN) + S12 + two-agents (kill -9 e reinício) |
+| B10 | Crash após T3 antes da chamada e após envio antes de T4 | PASS_SIMULATED_TRANSPORT | S11/S12 + two-agents + D04 recovery: kill real, UNKNOWN durável, PID reaproveitado, host órfão e nenhuma duplicata; papel D05 pendente |
 | B11 | Revogação concorre com T3 | PASS_REAL_SOFTWARE | S15 (revogação antes da T3 → cópia expirada, nada enviado; sequencial) |
 | B12 | Correção/cancelamento da venda concorre com criação/envio | PASS_REAL_SOFTWARE | S14 (cancelamento/correção após o job → cópia cancelada) |
 | B13 | Bindings e previousJobId de outra loja | PASS_REAL_SOFTWARE | S04 (vínculos/agentes/provas de outra loja recusados) |
