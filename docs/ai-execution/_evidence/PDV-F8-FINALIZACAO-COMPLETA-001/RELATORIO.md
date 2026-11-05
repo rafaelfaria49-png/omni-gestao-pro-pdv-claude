@@ -88,4 +88,5 @@ Compatibilidade: `git merge-tree` sem conflito contra `origin/main` (`37acc3b`, 
 
 Novos: `lib/pdv/devolucao/{pendencias,pendencia-financeiro}.ts`, `app/api/ops/devolucao/pendencias/route.ts`, `lib/pdv/devolucao/fila-devolucao-provider.component.test.ts`.
 Alterados: `lib/pdv/devolucao/{product-keys,registrar-devolucao,elegibilidade,troca-imediata.pg.test}.ts`, `app/api/ops/devolucao/route.ts`, `lib/operations-store.tsx`, `lib/operations-sale-types.ts`, `components/dashboard/vendas/trocas-devolucao.tsx`, `components/dashboard/caixa/fechamento-caixa-modal.tsx`, `lib/pdv/trocas-devolucao-f8.component.test.ts`, `e2e/cadastros-ramos/11-pdv-f8-troca-imediata.spec.ts`.
-Intocados: auth, proxy, `prisma/schema.prisma`, migrations, workflows, outros GOALs/worktrees e WIPs do checkout principal.
+Intocados neste GOAL (`3c12aa2..HEAD`): auth, proxy, `prisma/schema.prisma`, migrations, workflows, outros GOALs/worktrees e WIPs do checkout principal.
+Na PR como um todo (contra a `main`) há 3 workflows alterados, de GOALs anteriores: `ramos-cadastros.yml` (`paths` do F8, `47b0f33`) e o runner fixado em `ubuntu-24.04` em `ramos-cadastros.yml`, `platform-pilot.yml` e `pdv-scale-visor.yml` (`5a36b78`, `98495c4` — hunks idênticos aos da PR #327).
