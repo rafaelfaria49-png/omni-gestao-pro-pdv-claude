@@ -9,7 +9,7 @@ import { root } from './readiness.mjs'
 const runId = new Date().toISOString().replaceAll(/[:.]/g, '-')
 const out = path.join(root, 'docs/print-004c-e2e/evidence/d05', runId)
 const steps = [
-  ['d05-tests', ['--test', 'tools/print-d05/readiness.test.mjs']],
+  ['d05-tests', ['--test', 'tools/print-d05/readiness.test.mjs', 'tools/print-d05/isolation.test.mjs']],
   ['d05-plan', ['tools/print-d05/readiness.mjs', 'check']],
   ...regression.map(([name, args, env]) => [name, args, name === 'two-agents-pg' ? { ...env, PRINT_EVIDENCE_FILE: path.join(out, 'two-agents.jsonl') } : env]),
   ['recovery', ['node_modules/vitest/vitest.mjs', 'run', 'tools/print-d04/recovery.test.ts', 'tools/print-d04/verify-artifact.test.ts', '--maxWorkers=1']],

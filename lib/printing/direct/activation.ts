@@ -1,4 +1,5 @@
 import { PrintCrypto } from "./codec"
+import { D05_TARGET, d05IsolationErrors } from "./homologation.mjs"
 
 /**
  * OMNI-PRINT-004C — candidate gate. Direct print stays OFF unless ALL hold:
@@ -43,14 +44,15 @@ export const CANDIDATE_POLICY: DirectPrintPolicy = Object.freeze({
 })
 
 export type DirectPrintRuntime =
-  | { enabled: true; mode: "APPROVED" | "LAB"; crypto: PrintCrypto; policy: DirectPrintPolicy }
+  | { enabled: true; mode: "APPROVED" | "LAB" | "HOMOLOGATION"; crypto: PrintCrypto; policy: DirectPrintPolicy }
   | { enabled: false; reason: string }
 
 export function directPrintRuntimeFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): DirectPrintRuntime {
   const lab = env.OMNI_PRINT_DIRECT_LAB === "1" && env.NODE_ENV !== "production"
   const approved = APPROVED_RELEASE !== null && env.OMNI_PRINT_DIRECT_ENABLED === "1" && env.OMNI_PRINT_DIRECT_RELEASE === APPROVED_RELEASE
-  if (!lab && !approved) return { enabled: false, reason: "OWNER_APPROVAL_REQUIRED" }
+  const homologation = env.OMNI_PRINT_DIRECT_ENABLED === "1" && env.OMNI_PRINT_DIRECT_RELEASE === D05_TARGET.release && d05IsolationErrors(env).length === 0
+  if (!lab && !approved && !homologation) return { enabled: false, reason: "OWNER_APPROVAL_REQUIRED" }
   const crypto = PrintCrypto.fromBase64(env.OMNI_PRINT_CONTENT_KEY, env.OMNI_PRINT_SIGNING_KEY)
   if (!crypto) return { enabled: false, reason: "PRINT_KEYS_REQUIRED" }
-  return { enabled: true, mode: approved ? "APPROVED" : "LAB", crypto, policy: CANDIDATE_POLICY }
+  return { enabled: true, mode: approved ? "APPROVED" : homologation ? "HOMOLOGATION" : "LAB", crypto, policy: CANDIDATE_POLICY }
 }

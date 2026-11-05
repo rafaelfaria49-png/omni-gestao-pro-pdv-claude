@@ -1,7 +1,8 @@
 # D05 — homologação física preparada, não executada
 
-Estado: **PENDING**. Todas as linhas abaixo começam **NÃO EXECUTADO**. D04-A autoriza a preparação do software;
-não autoriza instalar no caixa, criar branch Neon, configurar Preview, parear, imprimir ou declarar homologação.
+Estado físico: **PENDING**. Todas as linhas abaixo permanecem **NÃO EXECUTADO**. O proprietário autorizou em 2026-11-05
+o ambiente exclusivo D05 e a instalação no RAFACELL/usuário consentido, sujeitos aos requisitos registrados no plano.
+Neon QA novo já preparado; Preview/transporte aguardam commit revisado, CI verde e isolamento. Nome/janela ainda pendentes.
 `APPROVED_RELEASE=null`. Não houve operação produtiva nesta entrega.
 
 Preparação técnica D05: **D05_PREPARED**, branch `codex/omni-print-d05-homologacao-fisica-001` baseada no head
@@ -19,17 +20,18 @@ node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print
 ```
 
 Esses comandos preparam/validam arquivos locais. Não instalam agente, não acessam banco e não autorizam hardware.
-Preview Git automático desta branch está bloqueado em `vercel.json`. Release de homologação planejada, não ativa:
-`OMNI-PRINT-D05-HOMOLOGACAO-1`. O runtime atual exige commit de ativação exclusiva de Preview, a revisar **após** liberação
-específica do transporte; manter o release produtivo NULL. Variáveis sozinhas não abrem o gate atual.
+Preview Git automático desta branch está bloqueado em `vercel.json`. Release de homologação ainda não publicada:
+`OMNI-PRINT-D05-HOMOLOGACAO-1`. O novo runtime é restrito ao Preview/projeto/branch/banco autorizados, com validação TLS
+estrita; exige revisão e CI do commit específico. Release produtivo NULL. O `PLAN.json` é o snapshot histórico inicial;
+estado atual em `evidence/d05/authorized-environment/`, sem valores de segredos.
 
 ## Próxima liberação necessária
 
-O proprietário deve definir por escrito: local/bancada ou loja piloto, data, operador responsável, consentimento da loja,
-computadores/usuários Windows, impressora POS-80 USB e autorização de ambiente de homologação. Só depois preparar banco
-isolado e Preview fixado na branch autorizada, pelo RUNBOOK_D02; chaves sintéticas distintas pelo RUNBOOK_D03; registrar
-release de homologação revisada sem tocar Production. Não reutilizar dados/clientes reais. Conferir acesso HTTPS do agente
-ao deployment, incluindo proteção de deployment, sem relaxar TLS ou seguir redirects.
+O proprietário já confirmou RAFACELL, `RAFACELL\rafae`/SID terminado 1002, consentimento e POS-80 USB/USB005, bobina80mm.
+Faltam nome do operador e dia/horário presencial; os placeholders da resposta não são uma janela válida. Diagnosticar
+a fila offline antes de imprimir. 58 mm depende de suporte real e N/A aprovado. Conferir acesso HTTPS do agente
+ao deployment e isolamento comprovado, sem relaxar TLS ou seguir redirects. Reinício, interrupção do atendimento e falhas
+provocadas aguardam confirmação presencial própria. Não instalar, parear ou imprimir antes dos requisitos pendentes.
 
 Registrar antes de iniciar: PR/SHA, SHA-256 do ZIP, assinatura ausente, operador, loja de teste, terminal, SID/usuário
 Windows, versão do Windows/Node/Chrome/Edge, modelo e número de série da impressora, USB/porta, nome exato da fila, driver

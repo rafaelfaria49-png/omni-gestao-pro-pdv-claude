@@ -58,6 +58,7 @@ export function validatePlan(plan, activation, vercel) {
   const deployment = vercel.git?.deploymentEnabled
   if (!deployment || deployment[branch] !== false || Object.entries(deployment).some(([name, enabled]) => enabled !== false || name.includes('*'))) errors.push('AUTOMATIC_DEPLOYMENT_NOT_BLOCKED')
   if (vercel.crons?.length !== 0) errors.push('CRON_MUST_REMAIN_DISABLED')
+  if (vercel.buildCommand !== 'node tools/print-d05/build-preview.mjs') errors.push('D05_ISOLATED_BUILD_REQUIRED')
   if (JSON.stringify(plan.agent) !== JSON.stringify(packagePin)) errors.push('D04_PACKAGE_PIN_CHANGED')
   return errors
 }

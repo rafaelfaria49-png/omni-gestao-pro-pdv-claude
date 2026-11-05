@@ -13,18 +13,18 @@ não cadastrada. Não foi criado GOAL adicional nem editado estado/ledger de out
 
 | Indicador | Resultado nesta preparação |
 |---|---|
-| D05_SOFTWARE_READY | PASS_PREPARATION — código `1613ef6`, validação offline e CI Linux/Windows aprovados; transporte ainda não ativado |
-| D05_HARDWARE_READY | BLOCKED — equipamento, operador e consentimentos não fornecidos |
+| D05_SOFTWARE_READY | PASS_PREPARATION em `1613ef6`; nova fase autorizada com dez testes D05 e 87 testes unitários PASS; commit/CI novos pendentes |
+| D05_HARDWARE_READY | PENDING — RAFACELL/usuário/SID e consentimento confirmados; POS-80/USB005/driver 11.3.0.1 observados; nome do operador, janela e prova física pendentes |
 | D05_PHYSICAL_TESTS | 0/18 executados; 18 BLOCKED no template; nenhuma foto/contagem física produzida |
 | D01_D04_REGRESSION | PASS no CI do código D05; offline 135/135, core/agente Windows 78/78, 004B 3/3 |
 | POSTGRES_TESTS | PASS CI: retenção 17/17, offline 10/10, cenários 35/35, dois agentes 1/1, D02 8/8 + ensaio 5/5 |
 | WINDOWS_TESTS | PASS CI: recuperação 24/24 + 6 provas, instalação/tarefa/update/uninstall e DPAPI segundo usuário no runner descartável; nenhuma instalação física |
 | PLAYWRIGHT | PASS 19/19 no CI e local, Chromium e spooler simulado |
-| CI_STATUS | PASS: D03/D04/D05, três workflows e seis jobs no código `1613ef6`; parent pós-merge 6/6 workflows PASS |
-| INDEPENDENT_REVIEW | APPROVE para preparação; dois P2 corrigidos; conferência final de artefatos em REVISAO_INDEPENDENTE_D05.md |
+| CI_STATUS | PASS histórico D03/D04/D05 no código `1613ef6`; novo delta de ambiente/ativação aguarda CI do commit específico |
+| INDEPENDENT_REVIEW | APPROVE para preparação e delta corrigido; novo parecer condicionado ao SHA/CI e TLS efetivo; detalhes em REVISAO_INDEPENDENTE_D05.md |
 | PHYSICAL_HOMOLOGATION | PENDING |
 | PRODUCTION_UNCHANGED | zero acesso/escrita/migration/deploy/env; APPROVED_RELEASE=null; impressão e cron desligados |
-| RELEASE_RECOMMENDATION | manter draft, sem merge ou liberação produtiva; aguardar gates físicos/ambiente |
+| RELEASE_RECOMMENDATION | manter draft; Preview D05 autorizado somente após revisão/CI/isolamento; sem merge ou liberação produtiva |
 
 Pacote D04 reproduzido com gerador oficial: `omni-print-agent-0.2.0-d04.zip`, SHA-256
 `f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a`, contentId
@@ -33,23 +33,52 @@ Node 24 >=24.12 e PowerShell 5.1; mesma identidade Windows/DPAPI CurrentUser. Ne
 
 ## Mudanças e limites
 
-Plano de recursos e segredos sem valores em `tools/print-d05/PLAN.json`; nenhum recurso externo criado. Preview automático
-da branch D05 bloqueado antes do primeiro push. Validador offline confere os gates fechados, escopo Preview da branch,
+`tools/print-d05/PLAN.json` preserva a proposta histórica anterior à aprovação; os campos pending são fixture de preparação.
+O registro atual é `evidence/d05/authorized-environment/`. Preview automático
+da branch D05 bloqueado antes do primeiro push. Validador offline confere o plano inicial com gates fechados, escopo Preview da branch,
 release produtivo NULL, ZIP/manifesto/arquivos e registros H01–H18 com hashes de evidência. Testes sintéticos do validador
 não são evidências físicas. `VALID` exige revisão humana da veracidade e do papel.
 
-O plano explicita dois bloqueios técnicos operacionais: o runtime atual não habilita Preview com APPROVED_RELEASE=null,
-e o cliente D04 não envia header de bypass Vercel. A autorização futura do transporte deve anteceder commit revisado de
-ativação exclusiva de Preview e solução de acesso compatível. Não houve alteração de runtime/protocolo/PDV/schema/D01–D04.
-O gerador oficial de HASHES.json foi estendido para incluir a preparação D05 e sua proteção de deploy.
+Após autorização escrita, o novo delta acrescenta modo HOMOLOGATION restrito a Preview, projeto, branch, release e banco
+fixados. O wrapper valida o alvo antes de chamar o build original. Production continua NULL/fechada. D04 não mudou;
+o projeto Vercel correto não exige header de bypass. Nenhum Preview foi configurado/publicado nesta fase até esta revisão.
+O ajuste mínimo no `resolve` D02 traduz TLS libpq verify-full/verify-ca para os parâmetros strict do Prisma; SQL, migrations
+e `APLICACAO.json` produtivos não mudaram. O gerador oficial de HASHES inclui os novos arquivos e suas evidências.
 
-## Provas verificadas do código
+## Ambiente autorizado e provas atuais
+
+- Neon: organização QA free `org-young-bar-55840347`; projeto novo `super-credit-72834107`; branch raiz sem parent
+  `br-billowing-cake-b627zsxv`; endpoint `ep-nameless-boat-b6y438an`; banco `omni_print_d05`. Zero tabelas antes do baseline
+  versionado. D02 aplicado/verificado e três migrations registradas em mirror externo. Nenhuma origem produtiva consultada.
+- Seed idempotente pelo estoque canônico: uma loja sintética, dois usuários independentes, dois terminais, três produtos,
+  estoque total300 e três movimentos. Zero vendas/jobs; impressão direta/automática e gaveta da loja desligadas.
+- Retenção: papel sem superuser/createdb/createrole/bypassrls/inherit/membership; grants D03, sem SELECT em vendas nem DELETE
+  em eventos. Cron desativado. Chaves/senhas independentes em DPAPI CurrentUser fora do repositório e sem valores nas provas.
+- TLS: `STRICT_TLS.json` comprova leitura com Prisma require+sslaccept=strict e conexão libpq verify-full com CAs públicas,
+  pelo `\conninfo` do cliente. `pg_stat_ssl` atrás do proxy não foi usado como prova do trecho externo.
+- Vercel: projeto `prj_wjkHKw2jFQfY8regMYtkYXwgavuz`, team `team_IInBSQbKO8P5XpAsvz16Kc3g`, Hobby; repositório/ID conferidos,
+  sem alteração global/Production. Variáveis herdadas serão sobrepostas só na branch D05, com integrações desabilitadas.
+- Windows: computador/usuário/SID consentidos. Diagnóstico somente leitura: POS-80/USB005/driver 11.3.0.1; a primeira
+  observação foi offline e a mais recente normal, sem alteração de fila pelo agente; zero jobs. USB/capacidade/papel real
+  ainda exigem conferência presencial. Bobina disponível80mm; suporte58mm não presumido.
+
+O plano free/Hobby foi escolhido sem upgrade nem autorização de custos pagos. O ambiente não recebe dados/clientes reais.
+Instalação/pareamento/tarefa/impressão ainda não iniciados. A resposta humana mantém nome/janela como placeholders;
+foi solicitada apenas essa informação faltante, sem reabrir a autorização já concedida.
+
+Incidente de coleta: o CLI Vercel retornou o valor de `WHATSAPP_VERIFY_TOKEN` legado junto aos metadados e o incluiu no
+resultado da ferramenta. O proprietário foi informado. O valor não foi copiado para arquivos, relatórios ou branch D05;
+coletas seguintes descartam todos os valores antes da saída. D05 usará token/segredo próprios e integrações desabilitadas.
+Não foi feita rotação global/produtiva fora do escopo autorizado.
+
+## Provas verificadas da preparação inicial
 
 PR draft [#334](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/334), base #327. Código aprovado/testado:
 `1613ef6dfb564a81ba4713644d9bd2696d7e87f5`; checkout técnico dos runners
 `e4697c02873d48d334ecce6a76bd31376767d467` (merge sintético GitHub, sem merge de branch realizado pelo executor).
-As atualizações finais só consolidam documentos/evidências/HASHES; fontes, workflows, plano e runtime são idênticos ao código
-testado. O commit de consolidação usa `[skip ci]` para não repetir baterias aprovadas por mudança somente de evidências.
+O commit documental `4f60faa19e12a5b5515c28abe82b5c98fe87a952` só consolidou documentos/evidências/HASHES; suas fontes,
+workflows, plano e runtime são idênticos ao código testado. Esse commit usou `[skip ci]`. A fase autorizada posterior
+altera runtime/ferramentas e exige novo CI/revisão próprios antes de ativar Preview.
 O SHA final da entrega é informado na PR/conversa; não se escreve o próprio hash dentro do commit.
 
 | Execução | Evidência conferida |
@@ -70,7 +99,8 @@ funcional da combinação completa com #331 nem merge; esse limite não é conve
 
 ## Falhas e tentativas locais
 
-Todas as pastas locais com timestamp são WIP sobre `0e9eb95` e `workingTreeChanged=true`, sem serem atribuídas ao SHA do CI.
+Pastas locais da preparação inicial são WIP sobre `0e9eb95`; as novas indicam `4f60faa`, sempre com `workingTreeChanged=true`,
+sem serem atribuídas ao SHA do CI.
 Os logs originais e hashes ficam preservados; resultados FAIL não são reclassificados:
 
 - Primeiro npm ci foi bloqueado por DNS na sandbox; repetição autorizada das dependências na worktree própria concluiu.
@@ -85,6 +115,14 @@ Os logs originais e hashes ficam preservados; resultados FAIL não são reclassi
   passaram fora dela e no CI Windows; não se removeu a verificação de identidade para fazer o teste passar.
 - A revisão independente encontrou dois P2 do novo registro: equipamento/versões ausentes e aceite anterior aos testes.
   Ambos foram corrigidos e revalidados; nenhum P0/P1/P2 corrigível ficou pendente.
+- Na fase autorizada, revisão encontrou P1 TLS Prisma sem strict e P2 PrivateRoot igual à raiz. Corrigidos com testes
+  negativos; dez testes D05 e 87 unitários passaram fora da sandbox, além de ESLint e typecheck. Tentativa inicial Vitest
+  na sandbox falhou antes de executar testes por EPERM no rename do TEMP; não é PASS.
+- Uma repetição do seed falhou por conectividade antes da transação; a repetição posterior foi idempotente e verificada.
+  Uma consulta D02 com TLS estrito falhou por timeout TCP; repetição de leitura passou, sem relaxar TLS. A primeira
+  tentativa de prova Prisma usou uma asserção inadequada sobre pg_stat_ssl do backend: consulta conectou, mas o teste
+  recebeu false/null atrás do proxy. A prova corrigida usa parâmetros strict e `\conninfo` libpq, preservando essa tentativa
+  como falha de método, sem atribuir TLS externo ao valor do backend.
 
 Regressão local também aprovou retenção 17/17, offline 10/10+135/135, cenários 35/35, dois agentes 1/1, 004B 3/3,
 ensaio D02 5/5, Playwright 19/19, recuperação 30/30, typecheck e ESLint. A fonte canônica do resultado integral aprovado
@@ -95,9 +133,10 @@ após os gates humanos, com pacote/evidências necessários, portanto não é tr
 
 ## Pendências humanas, operador e rollback
 
-Liberar separadamente os cinco gates de `PLANO_AMBIENTE_D05.md` com alvos, consentimentos, local/data/janela e operador,
-mais a ativação do transporte da release de homologação. Equipamento: POS-80 USB, driver/fila, Windows autorizado,
-Chrome/Edge, bobinas 58/80 conforme suporte, e dois caixas para H15. N/A só por capacidade não suportada e aprovação;
+Autorizações de ambiente exclusivo, computador/SID e consentimento já recebidas. Faltam nome do operador, dia/horário
+presencial e confirmação por evento para reboot/interrupção/falhas provocadas. Preview/transporte exigem CI/revisão do
+novo commit e prova de isolamento. Equipamento: POS-80 USB e bobina80mm; Chrome/Edge e dois caixas para H15.
+N/A só por capacidade não suportada e aprovação;
 falta de teste/equipamento permanece BLOCKED.
 
 Comandos prontos: `CHECKLIST_OPERADOR_D05.md`. Execução/casos: `RUNBOOK_D05.md` e `ROTEIRO_HOMOLOGACAO_FISICA.md`.

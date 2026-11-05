@@ -1,0 +1,15 @@
+{
+  "projectId": "super-credit-72834107",
+  "branchId": "br-billowing-cake-b627zsxv",
+  "beforeAnyApplicationSchema": [
+    {
+      "database_name": "omni_print_d05",
+      "role_name": "omni_print_d05_app",
+      "postgres_version": "17.11 (9045acd)",
+      "initial_public_table_count": 0
+    }
+  ],
+  "anonymousAccess": false,
+  "passwordRequired": true,
+  "source": "NEW_PROJECT_CREATED_WITHOUT_PARENT_AND_READ_ONLY_SQL_CHECK"
+}

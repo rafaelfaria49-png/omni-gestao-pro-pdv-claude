@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto'
 import { branch, cases, json, makeRecord, root, validatePlan, validateRecord, verifyEvidenceFiles, verifyPackage } from './readiness.mjs'
 
 test('preparation cannot open a human gate, transport, global Preview, production or automatic deployment', () => {
-  const plan = json(path.join(root, 'tools/print-d05/PLAN.json')), activation = 'export const APPROVED_RELEASE: string | null = null', vercel = { git: { deploymentEnabled: { [branch]: false } }, crons: [] }
+  const plan = json(path.join(root, 'tools/print-d05/PLAN.json')), activation = 'export const APPROVED_RELEASE: string | null = null', vercel = { git: { deploymentEnabled: { [branch]: false } }, crons: [], buildCommand: 'node tools/print-d05/build-preview.mjs' }
   assert.deepEqual(validatePlan(plan, activation, vercel), [])
   const mutate = change => { const p = structuredClone(plan); change(p); assert.ok(validatePlan(p, activation, vercel).length) }
   mutate(p => { p.gates.REAL_PRINTER_USE = 'APPROVED' })
@@ -18,6 +18,7 @@ test('preparation cannot open a human gate, transport, global Preview, productio
   mutate(p => { p.production.approvedRelease = 'D05' })
   assert.ok(validatePlan(plan, activation.replace('= null', '= "D05"'), vercel).length)
   assert.ok(validatePlan(plan, activation, { ...vercel, git: { deploymentEnabled: { [branch]: false, '*': true } } }).length)
+  assert.ok(validatePlan(plan, activation, { ...vercel, buildCommand: 'node scripts/vercel-build.mjs' }).length)
 })
 test('missing case, duplicate case, unsupported status and unapproved N/A fail', () => {
   const r = makeRecord(); assert.deepEqual(validateRecord(r), [])

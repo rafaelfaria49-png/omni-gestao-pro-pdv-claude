@@ -45,3 +45,19 @@ preserva journal/instance, desinstalação mantém histórico, outro usuário re
 Os logs locais com timestamp têm hashes corretos e proveniência WIP explícita; falhas da sandbox/D02 local não são
 atribuídas a sucesso nem ao SHA remoto. O commit documental posterior apenas incorpora essas provas e o manifesto
 oficial. A igualdade de fontes com o código testado é conferida antes da entrega; aprovação física continua PENDING.
+
+## Fase de ambiente autorizada pelo proprietário
+
+Revisão separada do delta posterior a `4f60faa19e12a5b5515c28abe82b5c98fe87a952`, ainda sem atribuição a SHA de CI.
+Parecer: **APPROVE técnico do delta corrigido, pendente de vinculação ao novo SHA/CI e comprovação TLS efetiva**.
+
+| Achado | Correção verificada |
+|---|---|
+| P1 — sslmode=require sem sslaccept permitia o default accept_invalid_certs do Prisma6 | D05 exige require+strict; libpq usa verify-full com CAs públicas; resolve D02 traduz verify-ca/full para strict e preserva bundle em sslcert; sem mudança de SQL/migrations |
+| P2 — diretório privado igual à raiz do repositório escapava do teste de prefixo | helper puro recusa igualdade/descendentes antes de IO, usado por leitura/escrita; PowerShell também recusa igualdade antes de criar diretório |
+
+O revisor reexecutou somente dez testes offline, todos PASS, incluindo os negativos TLS/paths e a conversão D02.
+Sem outros P0/P1/P2 encontrados. Seed usa upsert sem reset e estoque canônico/idempotente; D04 e migrations produtivas
+inalterados; produção continua fechada. Não leu segredos, banco ou hardware, nem instalou/imprimiu.
+Prova real redigida posterior: `authorized-environment/STRICT_TLS.json`; publicação Preview depende do CI do commit específico.
+Nome do operador e janela não foram preenchidos na resposta humana; execução física permanece PENDING.

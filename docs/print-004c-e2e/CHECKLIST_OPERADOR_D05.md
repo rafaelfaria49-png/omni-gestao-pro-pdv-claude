@@ -2,6 +2,8 @@
 
 **Preparado; não executar instalação, pareamento ou impressão antes dos gates do PLANO_AMBIENTE_D05.md.**
 Usar bancada isolada, dados sintéticos e o usuário Windows consentido. Não abrir PowerShell como outro administrador.
+Autorização recebida: RAFACELL, `RAFACELL\rafae`, SID terminado1002 e POS-80/USB005. Faltam nome do operador e janela
+presencial; aguardar também Preview isolado com commit revisado/CI verde. A fila observada offline exige diagnóstico.
 Não instalar Node, driver ou software adicional sem consentimento próprio. Pacote D04 **sem assinatura digital**.
 Fotos/logs nunca devem mostrar tokens, código de pareamento, chaves, URL de banco ou `config.json`.
 

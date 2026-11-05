@@ -1,0 +1,8 @@
+alvo: banco=omni_print_d05 host=ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech papel=omni_print_d05_app PostgreSQL 17.11 (9045acd)
+20261105120000_omni_print_d02_idx_vendas: registrada como aplicada
+20261105120100_omni_print_d02_idx_terminais: registrada como aplicada
+20261105120200_omni_print_d02_core: registrada como aplicada
+{"state":"CORE_APPLIED","indexes":{"p004_vendas_id_store_uq":"valid","p004_term_id_store_uq":"valid"},"objects":{"tables":11,"functions":7},"prisma":{"20261105120000_omni_print_d02_idx_vendas":{"checksum":"3d4071fd9ca776a70c071c900b4e053633cd197346f7f56fdf1007ad171b8262","finished":true,"rolledBack":false},"20261105120100_omni_print_d02_idx_terminais":{"checksum":"cd1d44b52ae2b4e44c05996e95f713e2213d1a6758a4daf31a2b692bf086837f","finished":true,"rolledBack":false},"20261105120200_omni_print_d02_core":{"checksum":"570786a3a4ab42aaa645672b6b08ed8451515807dff80819925a285ee05ecb47","finished":true,"rolledBack":false}},"triggers":46,"foreignKeys":39}
+VERIFY PASS
+
+exit=0
