@@ -83,6 +83,12 @@ describe('D04 recovery invariants', { timeout: 120_000 }, () => {
     await expect(a.run({pollMs:1})).rejects.toThrow('LOCAL_FATAL')
     expect(existsSync(f+'.lock')).toBe(false)
   })
+  it('a local TypeError is fatal while fetch TypeError remains recoverable',async()=>{
+    const f=path.join(temp(),'j'),a=make(f,{fetchImpl:async()=>response({ok:true})})
+    a.tick=async()=>{throw new TypeError('LOCAL_FATAL')}
+    await expect(a.run({pollMs:1})).rejects.toThrow('LOCAL_FATAL')
+    expect(existsSync(f+'.lock')).toBe(false)
+  })
   it('fatal/revoked/intentional stops do not restart; transient failure has a finite budget', () => {
     for(const exit of [0,65]) expect(restartDecision({exit,signal:null,halted:false,starts:[]})).toBe('STOP')
     expect(restartDecision({exit:1,signal:null,halted:true,starts:[]})).toBe('STOP')
@@ -184,7 +190,7 @@ describe.skipIf(process.platform!=='win32')('D04 real Windows, synthetic data on
     const protectedValue=await sp.protect('synthetic-'+randomUUID())
     expect(protectedValue).not.toContain('synthetic-')
     expect(await sp.unprotect(protectedValue)).toMatch(/^synthetic-/)
-    const legacy=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',"ConvertTo-SecureString 'synthetic-legacy-only' -AsPlainText -Force | ConvertFrom-SecureString"],{env:windowsEnv,encoding:'utf8',windowsHide:true})
+    const legacy=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',"ConvertTo-SecureString 'synthetic-legacy-only' -AsPlainText -Force | ConvertFrom-SecureString"],{env:{...windowsEnv,NODE_ENV:process.env.NODE_ENV},encoding:'utf8',windowsHide:true})
     expect(legacy.status).toBe(0)
     expect(await sp.unprotect(legacy.stdout.trim())).toBe('synthetic-legacy-only')
     await expect(sp.unprotect('not-a-dpapi-cipher')).rejects.toThrow('DPAPI_UNPROTECT_FAILED')

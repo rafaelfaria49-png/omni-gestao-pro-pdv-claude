@@ -56,9 +56,16 @@ export function createClient({ serverUrl, token, fetchImpl = globalThis.fetch, t
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
-      const res = await fetchImpl(origin + path, { method: "POST", redirect: "error", signal: ctrl.signal,
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) }, body: JSON.stringify(body ?? {}) })
-      const text = await res.text()
+      let res, text
+      try {
+        res = await fetchImpl(origin + path, { method: "POST", redirect: "error", signal: ctrl.signal,
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) }, body: JSON.stringify(body ?? {}) })
+        text = await res.text()
+      } catch (err) {
+        // Only a transport failure is retryable. A local TypeError elsewhere must stop the agent.
+        if (err instanceof TypeError || err?.name === 'AbortError' || err?.name === 'TimeoutError') err.transportFailure = true
+        throw err
+      }
       if (text.length > 4 * 1024 * 1024) throw new HttpError(502, "RESPONSE_TOO_LARGE")
       let json = {}
       try { json = text ? JSON.parse(text) : {} } catch { throw new HttpError(res.status, "INVALID_JSON") }

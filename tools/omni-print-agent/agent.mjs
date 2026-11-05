@@ -162,7 +162,7 @@ export class Agent {
         const code = String(err?.code ?? err?.message ?? '')
         this.log({ event: "loop_error", code: /^[A-Z_0-9]{1,64}$/.test(code) ? code : 'NETWORK_OR_RUNTIME_ERROR' })
         if (err instanceof HttpError && err.status === 401) { this.log({ event: "credential_rejected" }); this.stopReason = 'REVOKED'; this.stopped = true; break }
-        const transient = err instanceof HttpError ? err.status >= 500 || [404, 408, 409, 429].includes(err.status) : err instanceof TypeError || err?.name === 'AbortError' || err?.name === 'TimeoutError'
+        const transient = err instanceof HttpError ? err.status >= 500 || [404, 408, 409, 429].includes(err.status) : err?.transportFailure === true
         if (!transient) throw err
         await sleep(backoff); backoff = Math.min(backoff * 2, 30_000)
       }
