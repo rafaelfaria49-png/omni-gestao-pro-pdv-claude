@@ -3,13 +3,14 @@
 // so a web page cannot reach it (no 127.0.0.1 assumption, no CORS/PNA surface, no SSRF relay).
 // It pulls jobs leased to its installation, prints RAW to the bound queue and reports a spooler-level result.
 // A spooler acceptance is NOT a physical print confirmation and is never reported as one.
-import { readFileSync, writeFileSync, mkdirSync, existsSync, openSync, closeSync, unlinkSync } from "node:fs"
+import { readFileSync, writeFileSync, mkdirSync, existsSync, openSync, closeSync, unlinkSync, fsyncSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import { AGENT_VERSION, createClient, HttpError, normalizeServerUrl, REASONS, sha256Hex, validateEscPos } from "./protocol.mjs"
 import { Journal, PHASE } from "./journal.mjs"
+import { acquireLease } from './runtime.mjs'
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const PERMANENT_REPORT_ERRORS = new Set(["INVALID_REPORT", "PROOF_SCOPE_MISMATCH", "PROOF_CONFLICT", "RESULT_CONFLICT", "NOT_FOUND"])
@@ -19,6 +20,10 @@ function withTimeout(promise, ms) {
 }
 
 export class Agent {
+  static async create(opts) {
+    const lease = await acquireLease(opts.journalFile, {transport:true})
+    try { return new Agent({ ...opts, lease }) } catch (e) { await lease.release(); throw e }
+  }
   /**
    * @param {{ serverUrl: string, token: string, journalFile: string, spooler: any, fetchImpl?: typeof fetch,
    *   statusTimeoutMs?: number, submitTimeoutMs?: number, hooks?: { afterSubmitBeforeJournal?: () => void }, log?: (e: object) => void }} opts
@@ -26,7 +31,6 @@ export class Agent {
   constructor(opts) {
     this.serverUrl = normalizeServerUrl(opts.serverUrl)
     this.call = createClient({ serverUrl: this.serverUrl, token: opts.token, fetchImpl: opts.fetchImpl })
-    this.journal = new Journal(opts.journalFile)
     this.spooler = opts.spooler
     this.statusTimeoutMs = opts.statusTimeoutMs ?? 10_000
     this.submitTimeoutMs = opts.submitTimeoutMs ?? 20_000
@@ -35,26 +39,31 @@ export class Agent {
     this.hooks = opts.hooks ?? {}
     this.log = opts.log ?? (() => {})
     this.stopped = false
+    this.stopReason = 'INTENTIONAL'
+    this.shouldStop = opts.shouldStop ?? (() => false)
+    this.lease = opts.lease ?? null
     this.lockFile = opts.journalFile + ".lock"
-    this.acquireLock()
+    mkdirSync(path.dirname(this.lockFile), { recursive: true })
+    if (!this.lease) this.acquireLock()
+    try {
+    this.journal = new Journal(opts.journalFile)
     // Stable identity of THIS journal: the server fences attempts to it, so only this process can get a redelivery.
     const idFile = opts.journalFile + ".instance"
-    if (!existsSync(idFile)) { try { writeFileSync(idFile, randomUUID(), { flag: "wx" }) } catch { /* created concurrently */ } }
+    if (!existsSync(idFile)) { const fd = openSync(idFile, 'wx'); try { writeFileSync(fd, randomUUID()); fsyncSync(fd) } finally { closeSync(fd) } }
     this.instanceId = readFileSync(idFile, "utf8").trim()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(this.instanceId)) throw new Error('INSTANCE_CORRUPT')
     this.journal.recover()
+    } catch (e) { if (!this.lease) this.releaseLock(); throw e }
   }
 
   /** One process per journal: a second agent on the same journal would break the sendKey dedup authority. */
   acquireLock() {
     try { const fd = openSync(this.lockFile, "wx"); writeFileSync(fd, String(process.pid)); closeSync(fd); return }
     catch (e) { if (e?.code !== "EEXIST") throw e }
-    const pid = Number(readFileSync(this.lockFile, "utf8"))
-    let alive = false
-    try { if (pid > 0) { process.kill(pid, 0); alive = true } } catch { alive = false }
-    if (alive) throw new Error("AGENT_ALREADY_RUNNING")
-    writeFileSync(this.lockFile, String(process.pid)) // stale lock of a dead process
+    // Synchronous constructor is for isolated existing harnesses only. Recovery uses create() + OS lease.
+    throw new Error("AGENT_ALREADY_RUNNING")
   }
-  releaseLock() { try { unlinkSync(this.lockFile) } catch { /* already gone */ } }
+  releaseLock() { if (this.lease) return this.lease.release(); try { if (readFileSync(this.lockFile, 'utf8') === String(process.pid)) unlinkSync(this.lockFile) } catch { /* already gone */ } }
 
   async heartbeat() {
     let printers = []
@@ -84,6 +93,7 @@ export class Agent {
 
   /** One dispatch. The journal entry is durable BEFORE the spooler sees a byte; a known sendKey is never resubmitted. */
   async handle(d, receivedAt = Date.now()) {
+    if (this.lease && !this.lease.alive()) throw new Error('LEASE_LOST')
     const known = this.journal.get(d.sendKey)
     // sendKey identifies the copy's effect. Only a NEW attempt after a PROVEN no-effect may submit again;
     // anything that might have reached the spooler (SUBMITTING/ACCEPTED/UNKNOWN/TOMBSTONE) is never resubmitted.
@@ -104,6 +114,8 @@ export class Agent {
     // A dispatch that waited behind others must not reach the printer after the server already reports it uncertain.
     const remaining = Number(d.leaseRemainingMs ?? Infinity) - (Date.now() - receivedAt)
     if (!(remaining >= this.minSendBudgetMs)) return close(PHASE.NO_EFFECT, REASONS.TIMEOUT_BEFORE_SUBMIT) // NaN fails closed
+    if (this.stopped || this.shouldStop()) return close(PHASE.NO_EFFECT, REASONS.TIMEOUT_BEFORE_SUBMIT)
+    if (this.lease && !this.lease.alive()) throw new Error('LEASE_LOST')
     this.journal.append({ sendKey: d.sendKey, attemptId: d.attemptId, phase: PHASE.SUBMITTING })
     let result
     try { result = await withTimeout(this.spooler.submit(d.printerName, bytes, d.documentLabel), this.submitTimeoutMs) }
@@ -132,63 +144,50 @@ export class Agent {
     const receivedAt = Date.now()
     for (const q of r.queries ?? []) await this.answerQuery(q)
     // Each outcome is reported right away, not behind the remaining dispatches (keeps it inside its lease).
-    for (const d of r.dispatches ?? []) { await this.handle(d, receivedAt); await this.flushReports().catch(() => undefined) }
+    for (const d of r.dispatches ?? []) { if (this.stopped || this.shouldStop()) break; await this.handle(d, receivedAt); await this.flushReports() }
     await this.flushReports()
     return (r.dispatches ?? []).length
   }
 
   async run({ pollMs = 1000, heartbeatMs = 5000 } = {}) {
     let lastBeat = 0, backoff = pollMs
-    while (!this.stopped) {
+    try { while (!this.stopped && !this.shouldStop()) {
       try {
+        if (this.lease && !this.lease.alive()) throw new Error('LEASE_LOST')
         if (Date.now() - lastBeat >= heartbeatMs) { await this.heartbeat(); lastBeat = Date.now() }
         const n = await this.tick()
         backoff = pollMs
         if (n === 0) await sleep(pollMs)
       } catch (err) {
-        this.log({ event: "loop_error", code: err?.code ?? err?.message })
-        if (err instanceof HttpError && err.status === 401) { this.log({ event: "credential_rejected" }); this.stopped = true; break }
+        const code = String(err?.code ?? err?.message ?? '')
+        this.log({ event: "loop_error", code: /^[A-Z_0-9]{1,64}$/.test(code) ? code : 'NETWORK_OR_RUNTIME_ERROR' })
+        if (err instanceof HttpError && err.status === 401) { this.log({ event: "credential_rejected" }); this.stopReason = 'REVOKED'; this.stopped = true; break }
+        const transient = err instanceof HttpError ? err.status >= 500 || [404, 408, 409, 429].includes(err.status) : err instanceof TypeError || err?.name === 'AbortError' || err?.name === 'TimeoutError'
+        if (!transient) throw err
         await sleep(backoff); backoff = Math.min(backoff * 2, 30_000)
       }
+    } } finally {
+      const closed = (await this.spooler.close?.()) !== false
+      // A live unproven host retains its durable registry. The next create() reaps it before recovery.
+      await this.releaseLock()
+      if (!closed) throw new Error('HOST_EXIT_UNPROVEN')
     }
-    this.releaseLock()
+    return this.stopReason
   }
   stop() { this.stopped = true }
 }
 
 // ── CLI ──
 const CONFIG_DIR = path.join(process.env.LOCALAPPDATA || os.homedir(), "OmniPrintAgent")
-const CONFIG_FILE = path.join(CONFIG_DIR, "config.json")
 
-async function cli(argv) {
+export async function cli(argv, deps = {}) {
   const [cmd, ...rest] = argv
   const arg = (name) => { const i = rest.indexOf("--" + name); return i >= 0 ? rest[i + 1] : undefined }
-  const { WindowsSpooler } = await import("./spooler-windows.mjs")
-  const spooler = new WindowsSpooler({ dir: CONFIG_DIR })
-  try {
-    if (cmd === "printers") { console.log(JSON.stringify(await spooler.listPrinters(), null, 2)); return }
-    if (cmd === "pair") {
-      const serverUrl = normalizeServerUrl(arg("server")), code = arg("code")
-      if (!code) throw new Error("--code obrigatorio")
-      const r = await createClient({ serverUrl })("/api/print/agent/pair", { code, agentVersion: AGENT_VERSION })
-      mkdirSync(CONFIG_DIR, { recursive: true })
-      writeFileSync(CONFIG_FILE, JSON.stringify({ serverUrl, installationId: r.installationId, storeId: r.storeId, token: await spooler.protect(r.token) }, null, 2))
-      console.log(`Pareado: instalacao ${r.installationId} (loja ${r.storeId}). Credencial protegida por DPAPI em ${CONFIG_FILE}.`)
-      return
-    }
-    if (cmd === "run") {
-      if (!existsSync(CONFIG_FILE)) throw new Error("Agente nao pareado. Use: agent.mjs pair --server https://... --code XXXX-XXXX-XXXX")
-      const cfg = JSON.parse(readFileSync(CONFIG_FILE, "utf8"))
-      const agent = new Agent({ serverUrl: cfg.serverUrl, token: await spooler.unprotect(cfg.token), spooler,
-        journalFile: path.join(CONFIG_DIR, "journal.jsonl"), log: (e) => console.log(new Date().toISOString(), JSON.stringify(e)) })
-      process.on("SIGINT", () => agent.stop())
-      await agent.run()
-      return
-    }
-    console.log("Uso: node agent.mjs printers | pair --server <https://dominio> --code <XXXX-XXXX-XXXX> | run")
-  } finally { if (cmd !== "run") spooler.close() }
+  const { runCli } = await import('./lifecycle.mjs')
+  const configDir = arg('data-dir') ? path.resolve(arg('data-dir')) : CONFIG_DIR
+  return runCli(cmd, arg, { configDir, configFile: path.join(configDir, 'config.json'), ...deps })
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  cli(process.argv.slice(2)).catch((e) => { console.error(e?.message ?? e); process.exitCode = 1 })
+  cli(process.argv.slice(2)).catch((e) => { const c = String(e?.code ?? e?.message ?? ''); console.error(/^[A-Z_0-9]{1,64}$/.test(c) ? c : 'AGENT_FATAL'); process.exitCode = 65 })
 }

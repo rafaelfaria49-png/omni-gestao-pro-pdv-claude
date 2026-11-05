@@ -17,17 +17,17 @@ const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004
   "components/dashboard/caixa/conferencia-caixa.tsx", "lib/vendas/venda-cupom-mapper.ts", "lib/vendas/venda-cupom-mapper.test.ts",
   // D02-A: migrations recortadas, ferramenta do operador e exclusão de loja com registros de impressão.
   "tools/print-d02", "app/api/stores/[id]/route.ts", ".gitattributes",
-  "tools/print-d03", ".github/workflows/omni-print-d03.yml"]
+  "tools/print-d03", ".github/workflows/omni-print-d03.yml", "tools/print-d04", ".github/workflows/omni-print-d04.yml"]
 const files = []
 const walk = (rel) => {
   const abs = path.join(root, rel)
-  if (statSync(abs).isDirectory()) for (const n of readdirSync(abs).sort()) walk(path.posix.join(rel, n))
+  if (statSync(abs).isDirectory()) for (const n of readdirSync(abs).sort()) { if (n !== '.artifacts') walk(path.posix.join(rel, n)) }
   else if (!rel.endsWith("HASHES.json")) files.push(rel)
 }
 roots.forEach(walk)
 const sha = (rel) => {
   const buf = readFileSync(path.join(root, rel))
-  const text = /\.(ts|tsx|mjs|js|json|md|sql|log|jsonl|prisma)$/.test(rel) ? Buffer.from(buf.toString("utf8").replace(/\r\n/g, "\n")) : buf
+  const text = /\.(ts|tsx|mjs|js|json|md|sql|log|jsonl|prisma|ps1|yml)$/.test(rel) ? Buffer.from(buf.toString("utf8").replace(/\r\n/g, "\n")) : buf
   return createHash("sha256").update(text).digest("hex")
 }
 const entries = Object.fromEntries(files.map(f => [f, sha(f)]))

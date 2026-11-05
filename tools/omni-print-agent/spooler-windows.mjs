@@ -5,14 +5,33 @@ import { spawn } from "node:child_process"
 import { writeFileSync, mkdirSync } from "node:fs"
 import path from "node:path"
 import os from "node:os"
+import { randomUUID } from 'node:crypto'
+import { durableRecord, windowsEnv } from './runtime.mjs'
 
 const HOST_PS1 = String.raw`
+param([int]$AgentPid, [string]$AgentStarted, [string]$HostNonce)
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.Encoding]::UTF8
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false
+Add-Type -AssemblyName System.Security
 Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices;
 public static class OmniRaw {
+  static System.Diagnostics.Process watchedParent, hostProcess;
+  [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
+  [DllImport("kernel32.dll")] static extern bool TerminateProcess(IntPtr h, uint code);
+  public static void WatchParent(int pid, string expected) {
+    watchedParent = System.Diagnostics.Process.GetProcessById(pid);
+    var handle = watchedParent.Handle; // static Process references keep the SafeHandles alive
+    if (expected != "" && watchedParent.StartTime.ToFileTimeUtc().ToString() != expected) throw new Exception("PARENT_IDENTITY_MISMATCH");
+    hostProcess = System.Diagnostics.Process.GetCurrentProcess();
+    var thread = new System.Threading.Thread(() => {
+      uint result = WaitForSingleObject(handle, 0xffffffff);
+      // WAIT_OBJECT_0 proves parent death; an invalid monitor also closes this host, with a fatal status.
+      TerminateProcess(hostProcess.Handle, result == 0 ? 0u : 65u);
+    });
+    thread.IsBackground = true; thread.Start();
+  }
   [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public class DOCINFO { public string pDocName; public string pOutputFile; public string pDataType; }
   [DllImport("winspool.drv", EntryPoint="OpenPrinterW", SetLastError=true, CharSet=CharSet.Unicode)] static extern bool OpenPrinter(string n, out IntPtr h, IntPtr d);
   [DllImport("winspool.drv", SetLastError=true)] static extern bool ClosePrinter(IntPtr h);
@@ -40,6 +59,9 @@ public static class OmniRaw {
 }
 "@
 function Out-Json($o) { [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress -Depth 4)); [Console]::Out.Flush() }
+[OmniRaw]::WatchParent($AgentPid, $AgentStarted)
+$selfProcess = [Diagnostics.Process]::GetCurrentProcess()
+Out-Json @{ id = 0; ok = $true; pid = $PID; started = $selfProcess.StartTime.ToFileTimeUtc().ToString(); image = $selfProcess.MainModule.FileName; nonce = $HostNonce }
 function Get-Status($name) {
   $svc = Get-Service -Name Spooler -ErrorAction SilentlyContinue
   if (-not $svc -or $svc.Status -ne 'Running') { return @{ exists = $false; serviceUp = $false } }
@@ -65,11 +87,21 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
       $r = [OmniRaw]::Send([string]$req.printer, [string]$req.doc, [Convert]::FromBase64String([string]$req.data))
       Out-Json @{ id = $req.id; ok = $true; result = $r }
     } elseif ($req.op -eq 'protect') {
-      Out-Json @{ id = $req.id; ok = $true; value = (ConvertTo-SecureString -String ([string]$req.value) -AsPlainText -Force | ConvertFrom-SecureString) }
+      # Same DPAPI CurrentUser + UTF-16LE + hexadecimal representation as Windows PowerShell SecureString.
+      # Explicit API avoids inherited PowerShell module-version differences; old config remains readable.
+      $plain = [Text.Encoding]::Unicode.GetBytes([string]$req.value)
+      try {
+        $cipher = [Security.Cryptography.ProtectedData]::Protect($plain,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+        Out-Json @{ id = $req.id; ok = $true; value = [BitConverter]::ToString($cipher).Replace('-','').ToLowerInvariant() }
+      } finally { [Array]::Clear($plain,0,$plain.Length) }
     } elseif ($req.op -eq 'unprotect') {
-      $s = ConvertTo-SecureString -String ([string]$req.value); $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
-      try { $v = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
-      Out-Json @{ id = $req.id; ok = $true; value = $v }
+      $hex=[string]$req.value
+      if ($hex.Length -gt 16384 -or $hex -notmatch '^(?:[a-fA-F0-9]{2}){32,}$') { throw 'DPAPI_CIPHER_INVALID' }
+      $cipher=New-Object byte[] ($hex.Length / 2)
+      for($i=0;$i -lt $cipher.Length;$i++) { $cipher[$i]=[Convert]::ToByte($hex.Substring($i*2,2),16) }
+      $plain=[Security.Cryptography.ProtectedData]::Unprotect($cipher,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+      try { Out-Json @{id=$req.id;ok=$true;value=[Text.Encoding]::Unicode.GetString($plain)} }
+      finally { [Array]::Clear($plain,0,$plain.Length) }
     } else { Out-Json @{ id = $req.id; ok = $false; error = 'UNKNOWN_OP' } }
   } catch { Out-Json @{ id = $req.id; ok = $false; error = $_.Exception.Message } }
 }
@@ -80,23 +112,40 @@ export class WindowsSpooler {
    * @param {{ dir?: string, powershell?: string, requestTimeoutMs?: number, hostCommand?: { command: string, args: string[] } }} [opts]
    * hostCommand replaces the PowerShell host (tests only); the protocol is the same JSON lines.
    */
-  constructor({ dir = path.join(os.tmpdir(), "omni-print-agent"), powershell = "powershell.exe", requestTimeoutMs = 15_000, hostCommand = null } = {}) {
+  constructor({ dir = path.join(os.tmpdir(), "omni-print-agent"), powershell = path.join(process.env.SystemRoot || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'), requestTimeoutMs = 15_000, hostCommand = null, registryFile = null, parentStarted = '' } = {}) {
     this.kind = "WINDOWS_SPOOLER"
     this.dir = dir; this.powershell = powershell; this.requestTimeoutMs = requestTimeoutMs; this.hostCommand = hostCommand
     this.host = null; this.seq = 0; this.dying = new Set()
+    this.registryFile = registryFile; this.parentStarted = parentStarted
   }
   /** Every host owns its pending map and buffer: a dying old host can never reject or orphan a newer one (P2-2). */
   ensure() {
     if (this.host) return this.host
     let command = this.hostCommand?.command, args = this.hostCommand?.args
+    const nonce = randomUUID()
     if (!command) {
       mkdirSync(this.dir, { recursive: true })
       const script = path.join(this.dir, "omni-print-host.ps1")
       writeFileSync(script, "\ufeff" + HOST_PS1)
-      command = this.powershell; args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script]
+      command = this.powershell; args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, '-AgentPid', String(process.pid), '-AgentStarted', this.parentStarted, '-HostNonce', nonce]
     }
-    const child = spawn(command, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] })
+    const child = spawn(command, args, { windowsHide: true, env: windowsEnv, stdio: ["pipe", "pipe", "pipe"] })
     const host = { child, pid: child.pid, pending: new Map(), buffer: "", exited: false, exitWaiters: [] }
+    // Tests with an injected host are never armed for a real printer. The production host must introduce itself.
+    host.ready = this.hostCommand ? Promise.resolve() : new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('HOST_START_TIMEOUT')), 60_000)
+      host.pending.set(0, { resolve: m => {
+        clearTimeout(timer)
+        try {
+          if (m.pid !== child.pid || m.nonce !== nonce || !m.started || !m.image) throw new Error('HOST_IDENTITY_UNPROVEN')
+          if (this.registryFile) { durableRecord(this.registryFile, { op: 'OPEN', ...m, nonce }); host.registered = true; host.nonce = nonce }
+          resolve()
+        } catch (e) { reject(e) }
+      }, reject: e => { clearTimeout(timer); reject(e) } })
+    })
+    // Attach a rejection handler immediately, even if startup is being reset before request() awaits it.
+    host.ready.catch(() => {})
+    child.stdin.on('error', () => {})
     child.stdout.setEncoding("utf8")
     child.stdout.on("data", (chunk) => {
       host.buffer += chunk
@@ -111,6 +160,7 @@ export class WindowsSpooler {
     child.on("error", () => { if (child.pid === undefined && !host.exited) { host.exited = true; host.pending.forEach(w => w.reject(Object.assign(new Error("HOST_SPAWN_FAILED"), { phase: "BEFORE" }))); host.pending.clear(); if (this.host === host) this.host = null; for (const r of host.exitWaiters.splice(0)) r() } })
     child.on("exit", () => {
       host.exited = true
+      if (host.registered && this.registryFile) { try { durableRecord(this.registryFile, { op: 'CLOSED', nonce: host.nonce }) } catch { /* recovery will verify the process identity on next startup */ } }
       for (const w of host.pending.values()) w.reject(Object.assign(new Error("HOST_EXITED"), { phase: "KILLED" }))
       host.pending.clear()
       if (this.host === host) this.host = null
@@ -119,8 +169,10 @@ export class WindowsSpooler {
     this.host = host
     return host
   }
-  request(op, args, timeoutMs = this.requestTimeoutMs) {
+  async request(op, args, timeoutMs = this.requestTimeoutMs) {
     const host = this.ensure()
+    await host.ready
+    if (host.exited) throw new Error('HOST_EXITED')
     const id = ++this.seq
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { host.pending.delete(id); reject(Object.assign(new Error("HOST_TIMEOUT"), { timeout: true })) }, timeoutMs)
@@ -136,7 +188,8 @@ export class WindowsSpooler {
     if (this.host) { this.dying.add(this.host); this.host = null }
     const pending = [...this.dying].filter(h => !h.exited)
     await Promise.all(pending.map(host => {
-      try { spawn("taskkill.exe", ["/PID", String(host.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }).on("error", () => host.child.kill("SIGKILL")) } catch { host.child.kill("SIGKILL") }
+      // ChildProcess owns the process handle on Windows. Never terminate a newly reused PID or its tree.
+      try { host.child.kill('SIGKILL') } catch { /* observed exit below is the only success criterion */ }
       return new Promise((resolve) => {
         const timer = setTimeout(resolve, waitMs)
         host.exitWaiters.push(() => { clearTimeout(timer); resolve() })

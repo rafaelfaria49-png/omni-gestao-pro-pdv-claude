@@ -9,7 +9,7 @@ mkdirSync(out, { recursive: true })
 const unit = ["node_modules/vitest/vitest.mjs", "run", "lib/printing/direct", "tools/omni-print-agent", "tools/print-d03/options.test.ts", "tools/print-d02/d02-guard.test.ts",
   "components/dashboard/vendas/reimpressao-registrada.static.test.ts", "lib/vendas/venda-cupom-mapper.test.ts"]
 const pg = (db, file) => ["tools/print-004c-e2e/run-pg.mjs", db, file]
-const steps = [
+export const steps = [
   ["generator", ["tools/print-004c-e2e/generate-agent-migration.mjs", "--check"]],
   ["d02-generator", ["tools/print-d02/generate.mjs", "--check"]],
   ["unit", unit, { PRINT_WINDOWS_SPOOLER_TEST: process.platform === "win32" ? "1" : "0" }],
@@ -28,6 +28,7 @@ const steps = [
   ["eslint", ["node_modules/eslint/bin/eslint.js", "lib/printing/direct/retention.ts", "lib/printing/direct/core.ts", "lib/printing/direct/status.ts", "lib/printing/direct/codec.ts", "lib/printing/direct/activation.ts", "tools/print-d03", "tools/print-004c-e2e/pg-lab.mjs", "tools/print-004c-e2e/d02-rehearsal.pg.test.ts", "tools/print-004c-e2e/manifest.mjs", "tools/print-004c-e2e/matrix-80.mjs"]],
   ["build", ["scripts/vercel-build.mjs"]],
 ]
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const summary = { goal: "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001", at: new Date().toISOString(), node: process.version,
   productionExecution: false, physicalPrint: "PENDING_NO_HARDWARE", steps: [] }
 const selected = process.argv.slice(2)
@@ -46,3 +47,4 @@ for (const [name, args, extra] of steps) {
   writeFileSync(path.join(out, selected.length ? `summary-${selected.join("-")}.json` : "summary.json"), JSON.stringify(summary, null, 2) + "\n")
 }
 process.exitCode = summary.steps.every(s => s.status === "PASS") ? 0 : 1
+}

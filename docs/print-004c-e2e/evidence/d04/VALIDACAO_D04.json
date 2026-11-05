@@ -1,0 +1,118 @@
+{
+  "goal": "OMNI-PRINT-D04-WINDOWS-AGENT-FINALIZACAO-001",
+  "provenance": {
+    "platform": "win32",
+    "node": "v24.22.1",
+    "githubRunId": null,
+    "githubRunAttempt": null,
+    "commit": "5fd8743ce0c67c0847b09429f1b9e6ae5cae1e5a",
+    "localChanges": true
+  },
+  "sameRun": true,
+  "currentHead": "5fd8743ce0c67c0847b09429f1b9e6ae5cae1e5a",
+  "status": "PENDING",
+  "productionWrites": 0,
+  "physicalHomologation": "PENDING",
+  "realPairing": false,
+  "steps": [
+    {
+      "step": "generator",
+      "status": "PENDING"
+    },
+    {
+      "step": "d02-generator",
+      "status": "PENDING"
+    },
+    {
+      "step": "unit",
+      "status": "PENDING"
+    },
+    {
+      "step": "offline-regression",
+      "status": "PENDING"
+    },
+    {
+      "step": "retention-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "offline-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "d02-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PENDING"
+    },
+    {
+      "step": "playwright",
+      "status": "PENDING"
+    },
+    {
+      "step": "typecheck",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "eslint",
+      "status": "PENDING"
+    },
+    {
+      "step": "build",
+      "status": "PENDING"
+    },
+    {
+      "step": "recovery",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "23 passed (23)",
+      "sha256": "c913cc67a3ff4ac7031adf279c26b6ae7d150bd55c253fcbbd557c774f95b69f"
+    },
+    {
+      "step": "package",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "c1444cb3c0f0f54fd9140773f052d87c52bac253eb2e465d7a763162af8118cc"
+    },
+    {
+      "step": "d04-eslint",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "powershell-parse",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "b6aa105adb1389fc898ea0567c3ed6b0a21b08bf29d08c28324fda2a3183e498"
+    },
+    {
+      "step": "installer",
+      "status": "PENDING"
+    },
+    {
+      "step": "cross-user-dpapi",
+      "status": "PENDING"
+    }
+  ]
+}

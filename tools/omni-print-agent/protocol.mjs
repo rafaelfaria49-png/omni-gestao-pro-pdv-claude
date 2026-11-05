@@ -1,7 +1,7 @@
 // Omni Print local agent — wire protocol helpers (no dependencies). OMNI-PRINT-004C candidate.
 import { createHash } from "node:crypto"
 
-export const AGENT_VERSION = "omni-print-agent/0.1.0-004c"
+export const AGENT_VERSION = "omni-print-agent/0.2.0-d04"
 export const REASONS = Object.freeze({
   PRINTER_NOT_FOUND: "PRINTER_NOT_FOUND", PRINTER_OFFLINE: "PRINTER_OFFLINE", PRINTER_PAUSED: "PRINTER_PAUSED",
   PRINTER_ERROR: "PRINTER_ERROR", PAPER_OUT: "PAPER_OUT", SPOOLER_UNAVAILABLE: "SPOOLER_UNAVAILABLE",
