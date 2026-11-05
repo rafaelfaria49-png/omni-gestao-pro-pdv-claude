@@ -13,7 +13,7 @@ export const PDV_KEYMAP: readonly PdvShortcut[] = [
   { key: "Delete", desc: "Cancelar item selecionado (ou último do carrinho)" },
   { key: "F6", desc: "Cancelar venda" },
   { key: "F7", desc: "Venda em espera (colocar / retomar)" },
-  { key: "F8", desc: "Foco no campo de bipe" },
+  { key: "F8", desc: "Troca / Devolução (troca imediata, vale-troca)" },
   { key: "F9", desc: "Receber conta (atalho legado, mesmo fluxo do F5)" },
   { key: "F10", desc: "Desconto (abre pagamento com desconto)" },
   { key: "F12", desc: "Pagamento múltiplo (split em várias formas)" },

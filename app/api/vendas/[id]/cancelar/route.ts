@@ -36,6 +36,17 @@ import { avaliarSessaoParaEstorno } from "@/lib/vendas/estorno-sessao-guard"
 import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 import { auth } from "@/auth"
 
+/**
+ * Conflito detectado DENTRO da transação, depois do lock da venda (PDV-F8-TROCA-IMEDIATA-001):
+ * a transação reverte inteira e a rota responde 409 — nada é estornado pela metade.
+ */
+class CancelamentoConflitoError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message)
+    this.name = "CancelamentoConflitoError"
+  }
+}
+
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -209,6 +220,7 @@ export async function POST(
         id: true,
         tipo: true,
         valorTotal: true,
+        creditoEmitido: true,
         itens: { select: { inventoryId: true, quantidade: true } },
       },
     })
@@ -258,6 +270,49 @@ export async function POST(
     }> = []
 
     await prisma.$transaction(async (tx) => {
+      // 00. Lock da venda + releitura (PDV-F8-TROCA-IMEDIATA-001). A devolução também trava
+      // esta linha: sem o lock aqui, uma devolução que comitasse entre a leitura acima e o
+      // update abaixo ficava fora do netting (estoque reposto duas vezes, vale + estorno
+      // integral). Cancelamento concorrente também cai aqui (status já cancelada).
+      await tx.$queryRaw`SELECT "id" FROM "vendas" WHERE "id" = ${venda.id} AND "storeId" = ${storeId} FOR UPDATE`
+      const atual = await tx.venda.findUnique({ where: { id: venda.id }, select: { status: true } })
+      if (!atual || atual.status === "cancelada") {
+        throw new CancelamentoConflitoError("venda_ja_cancelada", "Esta venda já foi cancelada anteriormente")
+      }
+      const devolucoesAgora = await tx.devolucaoVenda.findMany({
+        where: { storeId, vendaLocalId: pedidoId },
+        select: { id: true, creditoEmitido: true },
+      })
+      if (devolucoesAgora.length !== devolucoes.length) {
+        throw new CancelamentoConflitoError(
+          "devolucao_concorrente",
+          "Uma devolução desta venda foi registrada durante o cancelamento. Nada foi alterado — confira e refaça.",
+        )
+      }
+      // Vale emitido por devolução SEM saída legada: o netting abaixo só desconta do
+      // dinheiro. Com parte paga em vale ou a prazo, estornar restauraria vale/título
+      // E manteria o vale da devolução — bloqueia em vez de dar valor em dobro.
+      const devIdsAgora = devolucoesAgora.map((d) => d.id)
+      if (devIdsAgora.length > 0) {
+        const comSaida = new Set(
+          (
+            await tx.movimentacaoFinanceira.findMany({
+              where: { storeId, referenciaId: { in: devIdsAgora }, tipo: "saida", origem: "devolucao_pdv" },
+              select: { referenciaId: true },
+            })
+          ).map((m) => m.referenciaId),
+        )
+        const valeSemSaida = devolucoesAgora.some((d) => !comSaida.has(d.id) && (d.creditoEmitido ?? 0) > 0)
+        const pagoComValeOuPrazo =
+          (await tx.usoCreditoCliente.count({ where: { storeId, vendaId: pedidoId } })) > 0 || titulosDaVenda.length > 0
+        if (valeSemSaida && pagoComValeOuPrazo) {
+          throw new CancelamentoConflitoError(
+            "vale_emitido_bloqueia_cancelamento",
+            "Esta venda teve vale-troca emitido em devolução e foi paga com vale ou a prazo: o cancelamento automático daria valor em dobro. Trate pelo Financeiro.",
+          )
+        }
+      }
+
       // 0. Estorno do Crédito/Vale consumido (PDV-TROCAS-VALE-HARDENING-PRE-PUBLISH-002).
       // Restaura EXATAMENTE a soma dos `UsoCreditoCliente` desta venda — numa compra
       // mista, somente a parcela de crédito/vale. Nada entra nem sai do caixa: vale
@@ -416,9 +471,19 @@ export async function POST(
         if (devIds.length > 0) {
           const refunds = await tx.movimentacaoFinanceira.findMany({
             where: { storeId, referenciaId: { in: devIds }, tipo: "saida", origem: "devolucao_pdv" },
-            select: { valor: true },
+            select: { valor: true, referenciaId: true },
           })
-          valorJaRefund = arredonda2(refunds.reduce((s, m) => s + (m.valor ?? 0), 0))
+          // Valor já restituído por devolução: a saída legada quando existe; senão o
+          // vale emitido (PDV-F8-TROCA-IMEDIATA-INTEGRACAO-SEGURA-001 — vale-troca não
+          // gera mais saída financeira, mas continua sendo valor já entregue ao cliente).
+          const saidaPorDev = new Map<string, number>()
+          for (const m of refunds) {
+            const k = m.referenciaId ?? ""
+            saidaPorDev.set(k, (saidaPorDev.get(k) ?? 0) + (m.valor ?? 0))
+          }
+          valorJaRefund = arredonda2(
+            devolucoes.reduce((s, d) => s + (saidaPorDev.has(d.id) ? saidaPorDev.get(d.id)! : d.creditoEmitido ?? 0), 0),
+          )
         }
         const valorEstorno = arredonda2(Math.max(0, valorEntrada - valorJaRefund))
         if (valorEstorno > 0) {
@@ -513,6 +578,9 @@ export async function POST(
       },
     })
   } catch (e) {
+    if (e instanceof CancelamentoConflitoError) {
+      return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: 409 })
+    }
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[vendas/cancelar]", msg)
     return NextResponse.json(

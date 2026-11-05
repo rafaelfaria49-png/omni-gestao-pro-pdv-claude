@@ -1643,7 +1643,10 @@ export function PdvClassic({
           if (heldSalesEnabled) setVendaEsperaOpen(true)
           break
         case "F8":
-          goBipe()
+          // PDV-F8-TROCA-IMEDIATA-001: F8 abre Troca/Devolução (mesmo painel do menu
+          // Ctrl), em paridade com Assistência/Supermercado. O bipe segue no Esc/F3.
+          setShellAdvancedOpen(false)
+          setShowDevolucaoModal(true)
           break
         case "F9":
           // Alias legado — mesmo fluxo do F5 (Receber conta).
