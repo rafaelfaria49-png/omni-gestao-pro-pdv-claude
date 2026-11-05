@@ -22,6 +22,8 @@ export const revalidate = 0
 
 const itemSchema = z.object({
   inventoryId: z.string().optional(),
+  /** Chave histórica da linha (Produto.id) vinda da elegibilidade — autoridade de identidade. */
+  produtoId: z.string().optional(),
   nome: z.string().default(""),
   quantidade: z.number().int().min(1),
   // Aceitos por compatibilidade com clientes antigos; IGNORADOS — o servidor deriva

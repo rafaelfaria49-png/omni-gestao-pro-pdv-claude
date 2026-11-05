@@ -19,6 +19,8 @@ import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
+import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { listarPendenciasDevolucao, type PendenciaDevolucao } from "@/lib/pdv/devolucao/pendencias"
 import {
   PENDING_SALE_DESCRIPTION,
   PENDING_SALE_TITLE,
@@ -47,7 +49,43 @@ type ServerDevolucaoOk = {
   creditoEmitido: number
   saldoCreditoCliente: number
   operador: string
-  itens: Array<{ inventoryId: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
+  itens: Array<{ inventoryId: string; produtoId?: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
+}
+
+/** Linha de venda como a tela usa: `produtoId` = identidade histórica; bloqueio = sem política. */
+type LinhaVendaF8 = SaleRecord["lines"][number] & { bloqueioDevolucao?: string }
+
+/**
+ * Funde linhas repetidas do mesmo item (o Clássico cria uma linha por bipe): a tela e o
+ * teto trabalham por item, nunca contam o mesmo produto duas vezes.
+ */
+export function fundirLinhasPorItem(lines: LinhaVendaF8[]): LinhaVendaF8[] {
+  const out: LinhaVendaF8[] = []
+  const idx = new Map<string, number>()
+  for (const l of lines) {
+    const i = idx.get(l.inventoryId)
+    if (i === undefined) {
+      idx.set(l.inventoryId, out.length)
+      out.push({ ...l })
+      continue
+    }
+    const cur = out[i]!
+    cur.quantity += l.quantity
+    cur.lineTotal = Math.round((cur.lineTotal + l.lineTotal) * 100) / 100
+    cur.qtyReturned = (cur.qtyReturned ?? 0) + (l.qtyReturned ?? 0)
+    cur.produtoId = cur.produtoId || l.produtoId
+    cur.bloqueioDevolucao = cur.bloqueioDevolucao || l.bloqueioDevolucao
+  }
+  return out
+}
+
+/** Motivo de bloqueio por política da linha (servidor informa; offline: linha virtual). */
+export function bloqueioLinhaDevolucao(l: LinhaVendaF8): string | null {
+  if (l.bloqueioDevolucao) return l.bloqueioDevolucao
+  if (isVirtualSaleLine(l.inventoryId)) {
+    return "Não devolvível: serviço/item avulso não gera vale nem volta ao estoque (sem política aprovada)."
+  }
+  return null
 }
 
 /** O que o espelho local precisa para registrar uma devolução já gravada no servidor. */
@@ -131,7 +169,16 @@ export function TrocasDevolucao({
 } = {}) {
   const { config } = useConfigEmpresa()
   const { toast } = useToast()
-  const { sales, devolucoes, registrarDevolucao, inventory, finalizeSaleTransaction, caixa } = useOperationsStore()
+  const {
+    sales,
+    devolucoes,
+    registrarDevolucao,
+    inventory,
+    finalizeSaleTransaction,
+    caixa,
+    retomarDevolucaoPendente,
+    registrarEncaminhamentoDevolucao,
+  } = useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
   const { sessaoId } = useCaixa()
   const searchParams = useSearchParams()
@@ -167,8 +214,57 @@ export function TrocasDevolucao({
   useEffect(() => {
     pendingDevRef.current = lerTentativaIncerta(lojaAtivaId)
   }, [lojaAtivaId])
-  /** Devoluções que o servidor recusou em definitivo (fila offline) — precisam de tratamento manual. */
-  const recusadas = useMemo(() => devolucoes.filter((d) => !!d.syncRejectedCode), [devolucoes])
+  /**
+   * Pendências do terminal (fila, venda de origem ausente, bloqueio persistente, recusas,
+   * encaminhadas) — PDV-F8-FINALIZACAO-COMPLETA-001. Só leitura + ações supervisionadas.
+   */
+  const pendencias = useMemo(() => listarPendenciasDevolucao(devolucoes), [devolucoes])
+  const [justificativas, setJustificativas] = useState<Record<string, string>>({})
+  const [encaminhando, setEncaminhando] = useState<string | null>(null)
+
+  const encaminharAoFinanceiro = async (p: PendenciaDevolucao) => {
+    if (!lojaAtivaId || encaminhando) return
+    const justificativa = (justificativas[p.dev.id] ?? "").trim()
+    if (!justificativa) {
+      toast({ title: "Justificativa obrigatória", description: "Descreva o que foi entregue ao cliente.", variant: "destructive" })
+      return
+    }
+    setEncaminhando(p.dev.id)
+    try {
+      const res = await fetch("/api/ops/devolucao/pendencias", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
+        body: JSON.stringify({
+          localId: p.dev.id,
+          vendaLocalId: p.dev.saleId,
+          categoria: p.categoria,
+          estado: p.estado === "AGUARDANDO_SINCRONIZACAO" ? "BLOQUEIO_PERSISTENTE" : p.estado,
+          valorDeclarado: p.valorDeclarado,
+          motivoRecusa: p.dev.syncRejectedReason || p.dev.syncRejectedCode || p.motivo,
+          justificativa,
+          itens: p.dev.lines.map((l) => ({ inventoryId: l.inventoryId, ...(l.produtoId ? { produtoId: l.produtoId } : {}), nome: l.name, quantidade: l.quantity })),
+        }),
+      })
+      const j = (await res.json().catch(() => null)) as { ok?: boolean; ref?: string; at?: string; operador?: string; error?: string } | null
+      if (!res.ok || !j?.ok || !j.ref) {
+        toast({ title: "Encaminhamento não registrado", description: j?.error || `HTTP ${res.status}`, variant: "destructive" })
+        return
+      }
+      registrarEncaminhamentoDevolucao(p.dev.id, {
+        ref: j.ref,
+        at: j.at || new Date().toISOString(),
+        operador: j.operador || "—",
+        categoria: p.categoria,
+        valorDeclarado: p.valorDeclarado,
+      })
+      toast({ title: "Encaminhado ao Financeiro", description: `Referência ${j.ref}. Nenhum lançamento foi criado.` })
+    } catch {
+      toast({ title: "Sem conexão", description: "O encaminhamento exige conexão com o servidor. Nada foi alterado.", variant: "destructive" })
+    } finally {
+      setEncaminhando(null)
+    }
+  }
   /**
    * Troca cuja devolução JÁ foi gravada no servidor mas a nova venda não concluiu:
    * o vale existe (persistido) e o reenvio só refaz a venda — nunca outra devolução.
@@ -268,7 +364,8 @@ export function TrocasDevolucao({
     if (!sale || saleSource === "servidor") return
     const fresh = sales.find((x) => x.id === sale.id)
     if (!fresh) return
-    if (JSON.stringify(fresh.lines) !== JSON.stringify(sale.lines)) setSale(fresh)
+    const lines = fundirLinhasPorItem(fresh.lines as LinhaVendaF8[])
+    if (JSON.stringify(lines) !== JSON.stringify(sale.lines)) setSale({ ...fresh, lines })
   }, [sales, sale, saleSource])
 
   const nomeLoja =
@@ -279,6 +376,7 @@ export function TrocasDevolucao({
     setTrocaRecovery(null)
     // Tentativa incerta (sem resposta) NÃO é descartada ao trocar de venda: a próxima
     // gravação reenvia a original primeiro (ver gravarDevolucaoConfirmada).
+    s = { ...s, lines: fundirLinhasPorItem(s.lines as LinhaVendaF8[]) }
     setSale(s)
     setCandidateSales(null)
     setCandidateLabel("")
@@ -557,6 +655,11 @@ export function TrocasDevolucao({
     for (const l of linhasComMax) {
       const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
       if (q > 0) {
+        const bloqueio = bloqueioLinhaDevolucao(l)
+        if (bloqueio) {
+          toast({ title: "Item não devolvível", description: `${l.name}: ${bloqueio}`, variant: "destructive" })
+          return null
+        }
         if (q > l.maxReturn) {
           toast({ title: "Quantidade inválida", description: `${l.name}: máximo ${l.maxReturn}`, variant: "destructive" })
           return null
@@ -619,11 +722,16 @@ export function TrocasDevolucao({
       clienteNome: args.nome,
       clienteDoc: args.cpf,
       motivo: motivo.trim(),
-      itens: args.lines.map((l) => ({
-        inventoryId: l.inventoryId,
-        nome: sale.lines.find((x) => x.inventoryId === l.inventoryId)?.name ?? "",
-        quantidade: l.quantity,
-      })),
+      itens: args.lines.map((l) => {
+        const sl = sale.lines.find((x) => x.inventoryId === l.inventoryId)
+        // Identidade histórica (Produto.id da venda) quando o servidor a informou.
+        return {
+          inventoryId: l.inventoryId,
+          ...(sl?.produtoId ? { produtoId: sl.produtoId } : {}),
+          nome: sl?.name ?? "",
+          quantidade: l.quantity,
+        }
+      }),
       payload: { ...args.payload, localId },
     }
     const mirror = { saleId: sale.id, ...args, motivo: motivo.trim() }
@@ -655,7 +763,7 @@ export function TrocasDevolucao({
       serverConfirmed: {
         localId: data.localId,
         creditIssued: data.creditoEmitido,
-        lines: data.itens.map((i) => ({ inventoryId: i.inventoryId, name: i.nome, quantity: i.quantidade, valor: i.valorTotal })),
+        lines: data.itens.map((i) => ({ inventoryId: i.inventoryId, ...(i.produtoId ? { produtoId: i.produtoId } : {}), name: i.nome, quantity: i.quantidade, valor: i.valorTotal })),
       },
     })
   }
@@ -1026,18 +1134,18 @@ export function TrocasDevolucao({
 
   return (
     <div className="space-y-6 w-full">
-      {recusadas.length > 0 && (
-        <div role="alert" data-testid="devolucoes-recusadas" className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 text-xs text-foreground space-y-1">
-          <p className="font-semibold">
-            {recusadas.length === 1 ? "1 devolução deste terminal foi recusada" : `${recusadas.length} devoluções deste terminal foram recusadas`} pelo servidor e NÃO está gravada
-          </p>
-          {recusadas.slice(0, 5).map((d) => (
-            <p key={d.id}>
-              <span className="font-mono">{d.id}</span> · venda <span className="font-mono">{d.saleId}</span> · {d.syncRejectedReason || d.syncRejectedCode}
-              {d.tipo === "devolucao" ? " — reembolso em dinheiro já entregue: registre a saída manualmente com o Financeiro." : d.creditIssued > 0 ? " — vale local estornado; confira com o cliente." : ""}
-            </p>
-          ))}
-        </div>
+      {pendencias.length > 0 && (
+        <PainelPendenciasDevolucao
+          pendencias={pendencias}
+          justificativas={justificativas}
+          onJustificativa={(id, v) => setJustificativas((prev) => ({ ...prev, [id]: v }))}
+          onRetomar={(id) => {
+            retomarDevolucaoPendente(id)
+            toast({ title: "Retomada enviada", description: `${id}: reenviada com o mesmo identificador.` })
+          }}
+          onEncaminhar={encaminharAoFinanceiro}
+          encaminhando={encaminhando}
+        />
       )}
       {(!sale || showSearch) && (
         <Card className="bg-card border-border shadow-sm">
@@ -1274,6 +1382,7 @@ export function TrocasDevolucao({
                   <div className="space-y-2">
                     {linhasComMax.map((l) => {
                       const currentQty = parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0
+                      const bloqueio = bloqueioLinhaDevolucao(l)
                       return (
                         <div
                           key={l.inventoryId}
@@ -1282,8 +1391,11 @@ export function TrocasDevolucao({
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-xs text-foreground truncate">{l.name}</p>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{l.maxReturn}</span>
+                              Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{bloqueio ? 0 : l.maxReturn}</span>
                             </p>
+                            {bloqueio && (
+                              <p className="text-[10px] text-destructive mt-0.5" data-testid="linha-bloqueada-devolucao">{bloqueio}</p>
+                            )}
                           </div>
 
                           {/* Incrementador +/- Premium Compacto */}
@@ -1313,7 +1425,7 @@ export function TrocasDevolucao({
                               size="icon"
                               variant="ghost"
                               className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                              disabled={l.maxReturn <= 0 || currentQty >= l.maxReturn}
+                              disabled={!!bloqueio || l.maxReturn <= 0 || currentQty >= l.maxReturn}
                               aria-label={`Devolver mais uma unidade de ${l.name}`}
                               onClick={() => {
                                 const val = Math.min(l.maxReturn, currentQty + 1)
@@ -1872,6 +1984,102 @@ function CupomTroca({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+const CATEGORIA_TEXTO: Record<PendenciaDevolucao["categoria"], string> = {
+  DINHEIRO_ENTREGUE: "reembolso em dinheiro já entregue",
+  VALE_EMITIDO: "vale local emitido",
+  INTENCAO_SEM_EFEITO: "sem efeito financeiro",
+}
+
+const ESTADO_TEXTO: Record<PendenciaDevolucao["estado"], string> = {
+  AGUARDANDO_SINCRONIZACAO: "Na fila",
+  AGUARDANDO_VENDA_ORIGEM: "Aguardando venda de origem",
+  BLOQUEIO_PERSISTENTE: "Bloqueio persistente",
+  RECUSA_DEFINITIVA: "Recusada",
+  ENCAMINHADA_FINANCEIRO: "Encaminhada ao Financeiro",
+}
+
+/**
+ * Pendências de devolução DESTE terminal. Ações: retomada controlada (mesmo localId) e
+ * encaminhamento supervisionado ao Financeiro — registro auditável, nunca lançamento.
+ */
+function PainelPendenciasDevolucao({
+  pendencias,
+  justificativas,
+  onJustificativa,
+  onRetomar,
+  onEncaminhar,
+  encaminhando,
+}: {
+  pendencias: PendenciaDevolucao[]
+  justificativas: Record<string, string>
+  onJustificativa: (id: string, v: string) => void
+  onRetomar: (id: string) => void
+  onEncaminhar: (p: PendenciaDevolucao) => void
+  encaminhando: string | null
+}) {
+  const manuais = pendencias.filter((p) => p.exigeConciliacaoManual).length
+  return (
+    <div role="alert" data-testid="devolucoes-pendencias" className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 text-xs text-foreground space-y-2 min-w-0">
+      <p className="font-semibold">
+        {pendencias.length === 1 ? "1 devolução deste terminal" : `${pendencias.length} devoluções deste terminal`} sem confirmação definitiva do servidor
+        {manuais > 0 ? ` · ${manuais} exige(m) conciliação manual` : ""}
+      </p>
+      {pendencias.slice(0, 8).map((p) => {
+        const podeRetomar = p.estado === "BLOQUEIO_PERSISTENTE" || p.estado === "AGUARDANDO_VENDA_ORIGEM"
+        const podeEncaminhar =
+          p.estado === "BLOQUEIO_PERSISTENTE" || (p.estado === "RECUSA_DEFINITIVA" && p.categoria !== "INTENCAO_SEM_EFEITO")
+        return (
+          <div key={p.dev.id} data-testid="pendencia-devolucao" data-estado={p.estado} className="rounded-md border border-border bg-background p-2 space-y-1 min-w-0">
+            <p className="min-w-0 break-words">
+              <span className="font-semibold">{ESTADO_TEXTO[p.estado]}</span> · <span className="font-mono">{p.dev.id}</span> · venda{" "}
+              <span className="font-mono">{p.dev.saleId}</span> · {CATEGORIA_TEXTO[p.categoria]}
+              {p.valorDeclarado > 0 ? ` (${formatBrl(p.valorDeclarado)})` : ""}
+            </p>
+            <p className="text-muted-foreground break-words">{p.motivo}</p>
+            {p.dev.conciliacao && (
+              <p className="text-muted-foreground">
+                Ref. <span className="font-mono">{p.dev.conciliacao.ref}</span> · {p.dev.conciliacao.operador}
+              </p>
+            )}
+            {p.categoria === "DINHEIRO_ENTREGUE" && p.estado !== "ENCAMINHADA_FINANCEIRO" && (
+              <p className="text-destructive">Dinheiro já entregue sem lançamento: encaminhe ao Financeiro. Nenhuma saída é criada automaticamente.</p>
+            )}
+            {(podeRetomar || podeEncaminhar) && (
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                {podeRetomar && (
+                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => onRetomar(p.dev.id)}>
+                    Tentar novamente
+                  </Button>
+                )}
+                {podeEncaminhar && (
+                  <>
+                    <Input
+                      aria-label={`Justificativa da pendência ${p.dev.id}`}
+                      placeholder="Justificativa (o que o cliente recebeu)"
+                      className="h-7 text-xs flex-1 min-w-0"
+                      value={justificativas[p.dev.id] ?? ""}
+                      onChange={(e) => onJustificativa(p.dev.id, e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={encaminhando !== null}
+                      onClick={() => onEncaminhar(p)}
+                    >
+                      {encaminhando === p.dev.id ? "Encaminhando…" : "Encaminhar ao Financeiro"}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

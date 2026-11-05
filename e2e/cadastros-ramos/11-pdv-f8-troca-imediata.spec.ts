@@ -98,9 +98,9 @@ async function abrirTrocaPorF8(page: Page) {
   return dialog
 }
 
-async function buscarPorSku(dialog: Locator) {
+async function buscarPorSku(dialog: Locator, sku = P.sku) {
   const busca = dialog.getByLabel("Venda, cliente ou código de barras do produto")
-  await busca.fill(P.sku)
+  await busca.fill(sku)
   await busca.press("Enter")
   await expect(dialog.getByText(/Disponível:/)).toBeVisible({ timeout: 20_000 })
 }
@@ -170,7 +170,12 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     // Reembolso bloqueado por política; sobra/dinheiro não aparece.
     await expect(dialog.getByRole("button", { name: "Reembolso (bloqueado)" })).toBeDisabled()
     await expect(dialog.getByText("Devolver dinheiro")).toHaveCount(0)
+    // Identidade histórica (PDV-F8-FINALIZACAO-COMPLETA-001): o navegador envia o Produto.id
+    // que a venda gravou — o SKU é só identificador de busca.
+    const devRequest = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/ops/devolucao")
     await dialog.getByRole("button", { name: "Finalizar Troca Imediata" }).click()
+    const enviado = (await devRequest).postDataJSON() as { itens: Array<{ inventoryId?: string; produtoId?: string; quantidade: number }> }
+    expect(enviado.itens).toEqual([expect.objectContaining({ produtoId: prodP.id, quantidade: 1 })])
     await expect(page.getByRole("dialog", { name: /Comprovante — Troca/i })).toBeVisible({ timeout: 30_000 })
   })
 
@@ -178,6 +183,7 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     await expect.poll(() => db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: origem } }), { timeout: 30_000 }).toBe(1)
     const dev = await db.devolucaoVenda.findFirstOrThrow({ where: { storeId: B, vendaLocalId: origem } })
     expect(dev).toMatchObject({ tipo: "troca", valorTotal: 10, creditoEmitido: 10, clienteDoc: CPF })
+    expect((await db.itemDevolucaoVenda.findMany({ where: { devolucaoId: dev.id }, select: { inventoryId: true } })).map((i) => i.inventoryId)).toEqual([prodP.id])
     expect(await db.movimentacaoFinanceira.count({ where: { storeId: B, origem: "devolucao_pdv" } })).toBe(0)
     await expect.poll(async () => (await db.produto.findUniqueOrThrow({ where: { id: prodG.id } })).stock, { timeout: 30_000 }).toBe(9)
     expect((await db.produto.findUniqueOrThrow({ where: { id: prodP.id } })).stock).toBe(9)
@@ -194,6 +200,17 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     await expect(page.getByRole("dialog", { name: /Troca \/ Devolução/ })).toHaveCount(0)
     const dialog = await abrirTrocaPorF8(page)
     await buscarPorSku(dialog)
+    await expect(dialog.getByText(/Vendido: 2 · Devolvido: 1 · Disponível:/)).toBeVisible()
+  })
+
+  await test.step("SKU alterado depois da venda: o SKU novo acha a venda antiga e o devolvível continua 1", async () => {
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("dialog", { name: /Troca \/ Devolução/ })).toHaveCount(0)
+    const novoSku = `${P.sku}-RENOMEADO`
+    await db.produto.update({ where: { id: prodP.id }, data: { sku: novoSku } })
+    const dialog = await abrirTrocaPorF8(page)
+    await buscarPorSku(dialog, novoSku)
+    await expect(dialog.getByText(origem)).toBeVisible()
     await expect(dialog.getByText(/Vendido: 2 · Devolvido: 1 · Disponível:/)).toBeVisible()
   })
 

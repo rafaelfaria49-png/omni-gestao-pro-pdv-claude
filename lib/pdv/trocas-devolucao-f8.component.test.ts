@@ -5,7 +5,7 @@
  * busca no servidor → bipe do novo item → devolução CONFIRMADA → nova venda com vale.
  */
 import { createElement } from "react"
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const rt = vi.hoisted(() => ({
@@ -15,6 +15,10 @@ const rt = vi.hoisted(() => ({
   fetch: vi.fn(),
   calls: [] as string[],
   devolucoes: [] as unknown[],
+  retomar: vi.fn(),
+  encaminhar: vi.fn(),
+  bodies: [] as Array<Record<string, unknown>>,
+  venda: undefined as unknown,
 }))
 
 const VENDA = {
@@ -39,6 +43,8 @@ vi.mock("@/lib/operations-store", () => ({
     caixa: { isOpen: true },
     registrarDevolucao: rt.registrar,
     finalizeSaleTransaction: rt.finalize,
+    retomarDevolucaoPendente: rt.retomar,
+    registrarEncaminhamentoDevolucao: rt.encaminhar,
   }),
 }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-sintetica" }) }))
@@ -57,7 +63,7 @@ vi.mock("@/lib/thermal-print", () => ({
   escapeHtml: (s: string) => s,
 }))
 
-import { TrocasDevolucao } from "@/components/dashboard/vendas/trocas-devolucao"
+import { TrocasDevolucao, fundirLinhasPorItem } from "@/components/dashboard/vendas/trocas-devolucao"
 
 const json = (status: number, body: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
 
@@ -74,6 +80,10 @@ let devolucaoResponder: (body: Record<string, unknown>) => Response | Promise<Re
 beforeEach(() => {
   rt.calls.length = 0
   rt.devolucoes.length = 0
+  rt.bodies.length = 0
+  rt.venda = VENDA
+  rt.retomar.mockReset()
+  rt.encaminhar.mockReset()
   rt.finalize.mockReset().mockImplementation(async () => {
     rt.calls.push("finalize")
     return { ok: true, saleId: "VDA-2026-0043" }
@@ -84,12 +94,19 @@ beforeEach(() => {
   rt.fetch.mockReset().mockImplementation(async (url: string, init?: RequestInit) => {
     if (url.startsWith("/api/ops/devolucao/elegibilidade")) {
       rt.calls.push("busca")
-      return json(200, { criterio: "pedido", vendas: [VENDA] })
+      return json(200, { criterio: "pedido", vendas: [rt.venda] })
     }
     if (url === "/api/ops/devolucao") {
       const body = JSON.parse(String(init?.body))
+      rt.bodies.push(body)
       rt.calls.push(`devolucao:${body.localId}`)
       return devolucaoResponder(body)
+    }
+    if (url === "/api/ops/devolucao/pendencias") {
+      const body = JSON.parse(String(init?.body))
+      rt.calls.push(`pendencia:${body.localId}`)
+      rt.bodies.push(body)
+      return json(200, { ok: true, ref: "AUD-REF-1", at: "2026-11-04T12:00:00.000Z", operador: "Supervisor Sintético", idempotente: false })
     }
     throw new Error(`fetch inesperado ${url}`)
   })
@@ -102,7 +119,7 @@ async function abrirVendaPeloServidor() {
   const busca = screen.getByLabelText("Venda, cliente ou código de barras do produto")
   fireEvent.change(busca, { target: { value: VENDA.id } })
   await act(async () => { fireEvent.keyDown(busca, { key: "Enter" }) })
-  await screen.findByText(/Disponível:/)
+  await screen.findAllByText(/Disponível:/)
 }
 
 async function prepararTroca() {
@@ -119,11 +136,69 @@ async function prepararTroca() {
 
 describe("F8 — troca imediata na mesma tela", () => {
   it("recusa definitiva da fila offline aparece no painel (reembolso legado → Financeiro)", async () => {
-    rt.devolucoes.push({ id: "DEV-2026-0003", saleId: "VDA-1", tipo: "devolucao", mode: "somente_estoque", creditIssued: 0, lines: [], syncRejectedCode: "REEMBOLSO_DINHEIRO_BLOQUEADO_POR_POLITICA", syncRejectedReason: "Reembolso bloqueado" })
+    rt.devolucoes.push({ id: "DEV-2026-0003", saleId: "VDA-1", tipo: "devolucao", mode: "somente_estoque", creditIssued: 0, lines: [{ inventoryId: "CAM-P", name: "Camiseta P", quantity: 1, valor: 10 }], syncRejectedCode: "REEMBOLSO_DINHEIRO_BLOQUEADO_POR_POLITICA", syncRejectedReason: "Reembolso bloqueado" })
     render(createElement(TrocasDevolucao))
-    const alerta = screen.getByTestId("devolucoes-recusadas")
+    const alerta = screen.getByTestId("devolucoes-pendencias")
     expect(alerta.textContent).toMatch(/DEV-2026-0003/)
-    expect(alerta.textContent).toMatch(/registre a saída manualmente com o Financeiro/)
+    expect(alerta.textContent).toMatch(/reembolso em dinheiro já entregue/)
+    expect(alerta.textContent).toMatch(/Nenhuma saída é criada automaticamente/)
+    expect(alerta.textContent).toMatch(/1 exige\(m\) conciliação manual/)
+  })
+
+  it("encaminhar ao Financeiro exige justificativa, registra a referência e NUNCA grava devolução", async () => {
+    rt.devolucoes.push({ id: "DEV-2026-0004", saleId: "VDA-1", tipo: "vale_credito", mode: "vale_credito", creditIssued: 10, lines: [{ inventoryId: "CAM-P", produtoId: "prod-cuid-1", name: "Camiseta P", quantity: 1, valor: 10 }], syncRejectedCode: "ITEM_NAO_CONSTA_NA_VENDA", syncRejectedReason: "não consta" })
+    render(createElement(TrocasDevolucao))
+    fireEvent.click(screen.getByRole("button", { name: "Encaminhar ao Financeiro" }))
+    expect(rt.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Justificativa obrigatória" }))
+    expect(rt.calls).toEqual([])
+    fireEvent.change(screen.getByLabelText("Justificativa da pendência DEV-2026-0004"), { target: { value: "Cliente levou o vale impresso" } })
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Encaminhar ao Financeiro" })) })
+    expect(rt.calls).toEqual(["pendencia:DEV-2026-0004"])
+    expect(rt.bodies[0]).toMatchObject({ categoria: "VALE_EMITIDO", estado: "RECUSA_DEFINITIVA", valorDeclarado: 10, itens: [{ inventoryId: "CAM-P", produtoId: "prod-cuid-1", quantidade: 1 }] })
+    expect(rt.encaminhar).toHaveBeenCalledWith("DEV-2026-0004", expect.objectContaining({ ref: "AUD-REF-1", categoria: "VALE_EMITIDO", valorDeclarado: 10 }))
+  })
+
+  it("AGUARDANDO_VENDA_ORIGEM e bloqueio persistente: motivo visível, retomada controlada e reconciliação só no bloqueio", async () => {
+    const base = { saleId: "VDA-LOCAL-9", tipo: "vale_credito", mode: "vale_credito", creditIssued: 10, lines: [{ inventoryId: "CAM-P", name: "Camiseta P", quantity: 1, valor: 10 }], syncPending: true, syncWaitingCode: "AGUARDANDO_VENDA_ORIGEM", syncWaitingSince: "2026-11-04T10:00:00.000Z", syncAttempts: 2 }
+    rt.devolucoes.push({ ...base, id: "DEV-ESPERA" }, { ...base, id: "DEV-BLOQ", syncBlocked: true, syncAttempts: 6 })
+    render(createElement(TrocasDevolucao))
+    const itens = screen.getAllByTestId("pendencia-devolucao")
+    const espera = itens.find((el) => el.textContent?.includes("DEV-ESPERA"))!
+    const bloq = itens.find((el) => el.textContent?.includes("DEV-BLOQ"))!
+    expect(espera.dataset.estado).toBe("AGUARDANDO_VENDA_ORIGEM")
+    expect(espera.textContent).toMatch(/venda de origem ainda não chegou/)
+    expect(espera.querySelector("input")).toBeNull() // sem reconciliação enquanto espera
+    expect(bloq.dataset.estado).toBe("BLOQUEIO_PERSISTENTE")
+    expect(bloq.textContent).toMatch(/retentativa automática parou/)
+    expect(bloq.textContent).toMatch(/6 tentativa/)
+    fireEvent.click(within(bloq).getByRole("button", { name: "Tentar novamente" }))
+    expect(rt.retomar).toHaveBeenCalledWith("DEV-BLOQ")
+    expect(within(bloq).getByRole("button", { name: "Encaminhar ao Financeiro" })).toBeTruthy()
+  })
+
+  it("linha de SERVIÇO vinda do servidor: bloqueada com motivo, + desabilitado; produto real envia produtoId", async () => {
+    rt.venda = {
+      ...VENDA,
+      lines: [
+        { inventoryId: "__servico__instalacao", produtoId: "__servico__instalacao", name: "Instalação", quantity: 1, unitPrice: 50, lineTotal: 50, qtyReturned: 0, bloqueioDevolucao: "Não devolvível: serviço sem política" },
+        { inventoryId: "CAM-P", produtoId: "prod-cuid-1", name: "Camiseta P", quantity: 2, unitPrice: 10, lineTotal: 20, qtyReturned: 0 },
+      ],
+    }
+    await abrirVendaPeloServidor()
+    expect(screen.getByTestId("linha-bloqueada-devolucao").textContent).toMatch(/serviço sem política/)
+    expect((screen.getByRole("button", { name: "Devolver mais uma unidade de Instalação" }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole("button", { name: "Devolver mais uma unidade de Camiseta P" }))
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Confirmar/ })) })
+    await waitFor(() => expect(rt.bodies).toHaveLength(1))
+    expect(rt.bodies[0]!.itens).toEqual([{ inventoryId: "CAM-P", produtoId: "prod-cuid-1", nome: "Camiseta P", quantidade: 1 }])
+  })
+
+  it("linhas repetidas do mesmo item (uma por bipe) viram UMA linha com totais somados", () => {
+    const l = (q: number, r = 0) => ({ inventoryId: "CAM-P", name: "Camiseta P", quantity: q, unitPrice: 10, lineTotal: q * 10, qtyReturned: r })
+    expect(fundirLinhasPorItem([l(1), l(1, 1), { ...l(1), inventoryId: "MEIA", name: "Meia" }])).toEqual([
+      { ...l(2), qtyReturned: 1, produtoId: undefined, bloqueioDevolucao: undefined },
+      { ...l(1), inventoryId: "MEIA", name: "Meia" },
+    ])
   })
 
   it("busca no servidor e respeita o devolvível agregado (2 vendidas − 1 devolvida = 1)", async () => {

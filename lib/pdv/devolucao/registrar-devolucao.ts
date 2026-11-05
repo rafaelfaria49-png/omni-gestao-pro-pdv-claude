@@ -23,7 +23,7 @@ import type { Prisma } from "@/generated/prisma"
 import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
-import { canonicalProductKeyResolver } from "@/lib/pdv/devolucao/product-keys"
+import { canonicalProductKeyResolver, saleProductKeyResolver, type SaleForKeys } from "@/lib/pdv/devolucao/product-keys"
 
 export type DevolucaoTipo = "vale_credito" | "somente_estoque" | "troca" | "devolucao"
 
@@ -40,7 +40,11 @@ export type RegistrarDevolucaoInput = {
   ledgerOperator: string | null
   motivo: string
   observacao: string
-  itens: Array<{ inventoryId?: string; nome?: string; quantidade: number }>
+  /**
+   * `produtoId` = chave histórica da linha (Produto.id) devolvida pela elegibilidade;
+   * `inventoryId` = o que o PDV conhece (SKU/EAN/ID) — só identificador de busca.
+   */
+  itens: Array<{ inventoryId?: string; produtoId?: string; nome?: string; quantidade: number }>
   payload?: Record<string, unknown>
 }
 
@@ -57,7 +61,8 @@ export type RegistrarDevolucaoOk = {
   saldoCreditoCliente: number
   /** Operador gravado no documento (auditoria do comprovante). */
   operador: string
-  itens: Array<{ inventoryId: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
+  /** `inventoryId` = chave do client (SKU/EAN); `produtoId` = Produto.id histórico gravado. */
+  itens: Array<{ inventoryId: string; produtoId?: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
 }
 
 export type DevolucaoErrorCode =
@@ -70,6 +75,8 @@ export type DevolucaoErrorCode =
   | "CLIENTE_DOC_OBRIGATORIO"
   | "LOCAL_ID_CONFLITO"
   | "ITENS_DUPLICADOS"
+  | "ITEM_SEM_LASTRO_BLOQUEADO"
+  | "DEVOLUCAO_KG_BLOQUEADA"
 
 export class DevolucaoBusinessError extends Error {
   constructor(
@@ -81,6 +88,9 @@ export class DevolucaoBusinessError extends Error {
     this.name = "DevolucaoBusinessError"
   }
 }
+
+export const ITEM_SEM_LASTRO_MENSAGEM =
+  "serviço, item avulso ou linha sem produto em estoque não gera vale nem volta ao estoque — ainda não há política aprovada para esse caso. Nada foi gravado."
 
 export const REEMBOLSO_BLOQUEADO_MENSAGEM =
   "Reembolso em dinheiro bloqueado: ainda não há fluxo financeiro aprovado para tirar dinheiro do caixa em devoluções. Use Vale-Troca ou Troca Imediata."
@@ -159,20 +169,63 @@ const EXISTING_SELECT = {
   itens: { select: { inventoryId: true, nome: true, quantidade: true, valorUnitario: true, valorTotal: true } },
 } as const
 
+const VENDA_SELECT = {
+  id: true,
+  status: true,
+  total: true,
+  payload: true,
+  itens: { select: { id: true, inventoryId: true, nome: true, quantidade: true, lineTotal: true } },
+} as const
+
+type VendaLocked = SaleForKeys & {
+  id: string
+  status: string
+  total: number
+  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number; lineTotal: number }>
+}
+
+/**
+ * Resolve chaves de produto ancoradas na venda (identidade histórica) quando ela
+ * existe; sem venda (replay de legado) cai no catálogo atual.
+ */
+async function keyResolverFor(
+  tx: Prisma.TransactionClient,
+  storeId: string,
+  venda: VendaLocked | null,
+  extra: Array<string | null | undefined>,
+): Promise<(key: string | null | undefined, produtoId?: string | null) => string> {
+  if (venda) {
+    const r = await saleProductKeyResolver(tx, storeId, venda, extra)
+    return (k, pid) => r.resolve(k, pid) || `?${normInv(pid) || normInv(k)}`
+  }
+  const canon = await canonicalProductKeyResolver(tx, storeId, extra)
+  return (k, pid) => canon(normInv(pid) || k)
+}
+
 async function classifyReplay(
   tx: Prisma.TransactionClient,
   input: RegistrarDevolucaoInput,
   existing: ExistingDev,
+  vendaArg?: VendaLocked | null,
 ): Promise<RegistrarDevolucaoOk> {
   const docNorm = input.clienteDoc.replace(/\D/g, "")
-  const canon = await canonicalProductKeyResolver(tx, input.storeId, [
-    ...input.itens.map((i) => i.inventoryId),
+  const venda =
+    vendaArg !== undefined
+      ? vendaArg
+      : ((await tx.venda.findFirst({
+          where: { storeId: input.storeId, pedidoId: existing.vendaLocalId },
+          select: VENDA_SELECT,
+        })) as VendaLocked | null)
+  // Mesma identidade histórica do escritor: SKU renomeado depois da gravação não
+  // transforma o reenvio idêntico em "conflito" (que viraria uma 2ª devolução).
+  const canon = await keyResolverFor(tx, input.storeId, venda, [
+    ...input.itens.flatMap((i) => [i.inventoryId, i.produtoId]),
     ...existing.itens.map((i) => i.inventoryId),
   ])
   const fpPedido = devolucaoFingerprint({
     ...input,
     clienteDoc: docNorm,
-    itens: input.itens.map((i) => ({ inventoryId: canon(i.inventoryId), quantidade: i.quantidade })),
+    itens: input.itens.map((i) => ({ inventoryId: canon(i.inventoryId, i.produtoId), quantidade: i.quantidade })),
   })
   const fpExistente = devolucaoFingerprint({
     vendaLocalId: existing.vendaLocalId,
@@ -182,7 +235,7 @@ async function classifyReplay(
   })
   // Devolve a chave que o client conhece (SKU/código) — a do banco é o Produto.id.
   const chaveDoClient = (dbKey: string | null) =>
-    input.itens.find((r) => canon(r.inventoryId) === canon(dbKey))?.inventoryId?.trim() || normInv(dbKey)
+    input.itens.find((r) => canon(r.inventoryId, r.produtoId) === canon(dbKey))?.inventoryId?.trim() || normInv(dbKey)
   if (fpPedido !== fpExistente) {
     throw new DevolucaoBusinessError(
       "LOCAL_ID_CONFLITO",
@@ -203,6 +256,7 @@ async function classifyReplay(
     operador: existing.operador,
     itens: existing.itens.map((i) => ({
       inventoryId: chaveDoClient(i.inventoryId),
+      produtoId: normInv(i.inventoryId),
       nome: i.nome,
       quantidade: i.quantidade,
       valorUnitario: i.valorUnitario,
@@ -233,12 +287,17 @@ export async function registrarDevolucaoInTransaction(
   const locked = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id" FROM "vendas" WHERE "pedidoId" = ${vendaLocalId} AND "storeId" = ${storeId} FOR UPDATE`
 
+  const venda =
+    locked.length > 0
+      ? ((await tx.venda.findFirst({ where: { id: locked[0]!.id, storeId }, select: VENDA_SELECT })) as VendaLocked | null)
+      : null
+
   // ── 2. Idempotência APÓS o lock (o vencedor concorrente já está visível) ───
   const existing = await tx.devolucaoVenda.findUnique({
     where: { storeId_localId: { storeId, localId: input.localId } },
     select: EXISTING_SELECT,
   })
-  if (existing) return classifyReplay(tx, input, existing)
+  if (existing) return classifyReplay(tx, input, existing, venda)
 
   if (locked.length === 0) {
     throw new DevolucaoBusinessError(
@@ -248,10 +307,6 @@ export async function registrarDevolucaoInTransaction(
     )
   }
 
-  const venda = await tx.venda.findFirst({
-    where: { id: locked[0]!.id, storeId },
-    select: { id: true, status: true, total: true, itens: { select: { inventoryId: true, nome: true, quantidade: true, lineTotal: true } } },
-  })
   if (!venda) {
     throw new DevolucaoBusinessError("VENDA_ORIGEM_NAO_ENCONTRADA", `Venda ${vendaLocalId} não encontrada.`, { vendaLocalId })
   }
@@ -264,14 +319,15 @@ export async function registrarDevolucaoInTransaction(
     where: { devolucao: { storeId, vendaLocalId } },
     select: { inventoryId: true, quantidade: true },
   })
-  const canon = await canonicalProductKeyResolver(tx, storeId, [
-    ...venda.itens.map((i) => i.inventoryId),
+  // Identidade HISTÓRICA: a chave gravada na venda (Produto.id). SKU/EAN só localizam.
+  const keys = await saleProductKeyResolver(tx, storeId, venda, [
     ...anteriores.map((i) => i.inventoryId),
-    ...input.itens.map((i) => i.inventoryId),
+    ...input.itens.flatMap((i) => [i.inventoryId, i.produtoId]),
   ])
+  const canon = (k: string | null | undefined, pid?: string | null) => keys.resolve(k, pid)
   const vendido = new Map<string, { quantidade: number; lineTotal: number; nome: string }>()
   for (const it of venda.itens) {
-    const k = canon(it.inventoryId)
+    const k = normInv(it.inventoryId)
     if (!k) continue
     const cur = vendido.get(k) ?? { quantidade: 0, lineTotal: 0, nome: it.nome }
     cur.quantidade += it.quantidade || 0
@@ -280,7 +336,7 @@ export async function registrarDevolucaoInTransaction(
   }
   const jaDevolvido = new Map<string, number>()
   for (const it of anteriores) {
-    const k = canon(it.inventoryId)
+    const k = canon(it.inventoryId) || `?${normInv(it.inventoryId)}`
     jaDevolvido.set(k, (jaDevolvido.get(k) ?? 0) + (it.quantidade || 0))
   }
 
@@ -291,8 +347,8 @@ export async function registrarDevolucaoInTransaction(
   /** Mesma linha com a chave que o client mandou (espelho local por SKU). */
   const chavesClient: string[] = []
   for (const req of input.itens) {
-    const k = canon(req.inventoryId)
-    if (vistos.has(k)) {
+    const k = canon(req.inventoryId, req.produtoId)
+    if (k && vistos.has(k)) {
       throw new DevolucaoBusinessError("ITENS_DUPLICADOS", "Item repetido na mesma devolução.", { inventoryId: k })
     }
     vistos.add(k)
@@ -300,7 +356,22 @@ export async function registrarDevolucaoInTransaction(
     if (!orig || orig.quantidade <= 0) {
       throw new DevolucaoBusinessError(
         "ITEM_NAO_CONSTA_NA_VENDA",
-        `O item ${req.nome || k || "(sem código)"} não consta na venda ${vendaLocalId}.`,
+        `O item ${req.nome || normInv(req.inventoryId) || "(sem código)"} não consta na venda ${vendaLocalId}.`,
+        { inventoryId: normInv(req.inventoryId), produtoId: normInv(req.produtoId) },
+      )
+    }
+    // Sem lastro (serviço, avulso, O.S. ou linha sem Produto): sem política aprovada,
+    // não há vale nem entrada de estoque — recusa explícita, nada é gravado.
+    if (isVirtualSaleLine(k) || !keys.isProduto(k)) {
+      throw new DevolucaoBusinessError("ITEM_SEM_LASTRO_BLOQUEADO", `${orig.nome}: ${ITEM_SEM_LASTRO_MENSAGEM}`, {
+        inventoryId: k,
+        virtual: isVirtualSaleLine(k),
+      })
+    }
+    if (keys.isPeso(k)) {
+      throw new DevolucaoBusinessError(
+        "DEVOLUCAO_KG_BLOQUEADA",
+        `${orig.nome}: devolução de produto vendido por peso está bloqueada até a aprovação do schema de lastro (R3). Nada foi gravado.`,
         { inventoryId: k },
       )
     }
@@ -375,12 +446,9 @@ export async function registrarDevolucaoInTransaction(
 
   // ── 5. Estoque — ENTRADA compensatória pelo boundary canônico ──────────────
   for (const it of itensCalc) {
-    if (isVirtualSaleLine(it.inventoryId)) continue
-    const produto = await tx.produto.findFirst({
-      where: { storeId, OR: [{ id: it.inventoryId }, { sku: it.inventoryId }, { barcode: it.inventoryId }] },
-      select: { id: true },
-    })
-    if (!produto) continue
+    // `it.inventoryId` é o Produto.id histórico (garantido por `isProduto` acima):
+    // nunca busca por SKU/EAN de hoje, que pode ser de outro produto.
+    const produto = { id: it.inventoryId }
     const mov = await applyStockMutationTx(
       tx as unknown as StockLedgerTx,
       { storeId, principal: null, source: "ops-devolucao", operatorLabel: input.ledgerOperator },
@@ -395,7 +463,6 @@ export async function registrarDevolucaoInTransaction(
       },
     )
     if (!mov.ok) {
-      if (mov.code === "NOT_FOUND") continue
       throw new Error(`[devolucao] devolução ao estoque falhou: ${mov.code} ${mov.message}`)
     }
   }
@@ -437,7 +504,7 @@ export async function registrarDevolucaoInTransaction(
     creditoEmitido,
     saldoCreditoCliente: await saldoAtivoCliente(tx, storeId, docNorm),
     operador: input.operador,
-    itens: itensCalc.map((i, idx) => ({ ...i, inventoryId: chavesClient[idx] || i.inventoryId })),
+    itens: itensCalc.map((i, idx) => ({ ...i, inventoryId: chavesClient[idx] || i.inventoryId, produtoId: i.inventoryId })),
   }
 }
 

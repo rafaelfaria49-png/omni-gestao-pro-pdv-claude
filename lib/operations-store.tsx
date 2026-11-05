@@ -5,6 +5,11 @@ import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
 import type { Orcamento } from "@/lib/orcamento-types"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { appendAuditLog } from "@/lib/audit-log"
+import {
+  AGUARDANDO_VENDA_ORIGEM,
+  bloqueioPersistenteVendaOrigem,
+  distribuirQtyReturned,
+} from "@/lib/pdv/devolucao/pendencias"
 import { OPS_KEY_LEGACY } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
@@ -520,7 +525,47 @@ export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
   "QUANTIDADE_EXCEDE_DEVOLVIVEL",
   "CLIENTE_DOC_OBRIGATORIO",
   "ITENS_DUPLICADOS",
+  "ITEM_SEM_LASTRO_BLOQUEADO",
+  "DEVOLUCAO_KG_BLOQUEADA",
 ])
+
+/** Item do estoque local correspondente à linha devolvida: Produto.id (dbId) antes do SKU. */
+function inventoryMatchesDevLine(
+  inv: { id: string; dbId?: string },
+  line: { inventoryId: string; produtoId?: string },
+  inventory: Array<{ id: string; dbId?: string }>,
+): boolean {
+  const pid = (line.produtoId ?? "").trim()
+  if (pid && inventory.some((i) => i.dbId === pid || i.id === pid)) return inv.dbId === pid || inv.id === pid
+  return inv.id === line.inventoryId
+}
+
+/**
+ * Desfaz no estado LOCAL o que a devolução não gravada havia aplicado (vale, estoque,
+ * devolvido da venda). Nunca toca o servidor: ele não gravou nada.
+ */
+function estornarEfeitosLocaisDevolucao<S extends {
+  inventory: Array<{ id: string; dbId?: string; stock: number }>
+  customerCredits: Record<string, { nome: string; saldo: number }>
+  sales: SaleRecord[]
+}>(prev: S, dev: DevolucaoRecord): S {
+  const customerCredits = { ...prev.customerCredits }
+  if (dev.mode === "vale_credito" && dev.creditIssued > 0 && customerCredits[dev.customerCpf]) {
+    const atual = customerCredits[dev.customerCpf]!
+    customerCredits[dev.customerCpf] = { ...atual, saldo: Math.max(0, Math.round((atual.saldo - dev.creditIssued) * 100) / 100) }
+  }
+  const sales = prev.sales.map((sv) => {
+    if (sv.id !== dev.saleId) return sv
+    let lines = sv.lines
+    for (const back of dev.lines) lines = distribuirQtyReturned(lines, back.inventoryId, -back.quantity)
+    return { ...sv, lines }
+  })
+  const inventory = prev.inventory.map((i) => {
+    const back = dev.lines.find((x) => inventoryMatchesDevLine(i, x, prev.inventory))
+    return back ? { ...i, stock: i.stock - back.quantity } : i
+  })
+  return { ...prev, inventory, customerCredits, sales }
+}
 
 /**
  * Desfecho de uma devolução da fila local frente à resposta do servidor:
@@ -716,9 +761,23 @@ interface OperationsContextType {
     serverConfirmed?: {
       localId: string
       creditIssued: number
-      lines: { inventoryId: string; name: string; quantity: number; valor: number }[]
+      lines: { inventoryId: string; produtoId?: string; name: string; quantity: number; valor: number }[]
     }
   }) => { ok: true; devolucaoId: string; creditIssued: number } | { ok: false; reason: string }
+  /**
+   * PDV-F8-FINALIZACAO-COMPLETA-001 — retomada CONTROLADA de devolução em bloqueio
+   * persistente: reabre a janela de espera e reenvia uma vez (mesmo localId).
+   */
+  retomarDevolucaoPendente: (devolucaoId: string) => void
+  /**
+   * Registra localmente o encaminhamento ao Financeiro (referência do servidor). Se a
+   * devolução ainda estava na fila, sai dela e os efeitos locais (vale/estoque) são
+   * desfeitos — o servidor nunca a gravou. O registro fica como evidência.
+   */
+  registrarEncaminhamentoDevolucao: (
+    devolucaoId: string,
+    conciliacao: NonNullable<DevolucaoRecord["conciliacao"]>,
+  ) => void
   registrarOperacaoCaixa: (input: {
     sessaoId: string
     tipo: "sangria" | "suprimento"
@@ -2992,6 +3051,34 @@ export function OperationsProvider({
     const desfecho = classificarRespostaDevolucao(res.status, body?.code)
     if (desfecho === "aguardar") {
       console.warn("[devolucao-persist] HTTP", res.status, devId, "lojaId:", lj, "code:", body?.code ?? "")
+      if (body?.code !== "VENDA_ORIGEM_NAO_ENCONTRADA") return
+      // Estado explícito AGUARDANDO_VENDA_ORIGEM: conta tentativas e, passado o limite,
+      // PARA a retentativa automática (bloqueio persistente) — nada de tentar para sempre.
+      const now = Date.now()
+      const nowIso = new Date(now).toISOString()
+      const atualizar = (dev: DevolucaoRecord, sales: SaleRecord[]): DevolucaoRecord => {
+        const next: DevolucaoRecord = {
+          ...dev,
+          syncWaitingCode: AGUARDANDO_VENDA_ORIGEM,
+          syncWaitingSince: dev.syncWaitingSince || nowIso,
+          syncAttempts: (dev.syncAttempts ?? 0) + 1,
+          syncLastAttemptAt: nowIso,
+        }
+        const vendaNaFila = sales.some((sv) => sv.id === dev.saleId && sv.syncPending === true)
+        return bloqueioPersistenteVendaOrigem(next, now, vendaNaFila) ? { ...next, syncBlocked: true } : next
+      }
+      const antes = stateRef.current.devolucoes.find((d) => d.id === devId && d.syncPending === true)
+      if (antes && !antes.syncBlocked && atualizar(antes, stateRef.current.sales).syncBlocked) {
+        appendAuditLog({
+          action: "devolucao_vale",
+          userLabel: "PDV (fila offline)",
+          detail: `[devolucao BLOQUEIO PERSISTENTE — VENDA DE ORIGEM AUSENTE NO SERVIDOR] ${devId} | venda ${antes.saleId} | tentativas ${(antes.syncAttempts ?? 0) + 1} | retentativa automática parada; exige reconciliação supervisionada`,
+        })
+      }
+      setState((prev) => ({
+        ...prev,
+        devolucoes: prev.devolucoes.map((d) => (d.id === devId && d.syncPending === true ? atualizar(d, prev.sales) : d)),
+      }))
       return
     }
     // Auditoria FORA do updater (StrictMode/replay executam o updater mais de uma vez).
@@ -3007,42 +3094,26 @@ export function OperationsProvider({
       const dev = prev.devolucoes.find((d) => d.id === devId)
       if (!dev || dev.syncPending !== true) return prev
       if (desfecho === "confirmada") {
-        return { ...prev, devolucoes: prev.devolucoes.map((d) => (d.id === devId ? { ...d, syncPending: false } : d)) }
+        return {
+          ...prev,
+          devolucoes: prev.devolucoes.map((d) =>
+            d.id === devId ? { ...d, syncPending: false, syncWaitingCode: undefined, syncBlocked: undefined } : d,
+          ),
+        }
       }
       if (desfecho === "reidentificar") {
         const novoId = `${devId.replace(/-[0-9A-F]{8}$/, "")}-${devolucaoIdSuffix()}`
         return { ...prev, devolucoes: prev.devolucoes.map((d) => (d.id === devId ? { ...d, id: novoId } : d)) }
       }
       // Recusa definitiva: sai da fila; desfaz o vale e o devolvido locais (o servidor não gravou).
+      // O registro FICA (evidência) com o motivo — painel F8 e fechamento mostram.
       console.warn("[devolucao-persist] recusa definitiva", devId, body?.code)
-      const customerCredits = { ...prev.customerCredits }
-      if (dev.mode === "vale_credito" && dev.creditIssued > 0 && customerCredits[dev.customerCpf]) {
-        const atual = customerCredits[dev.customerCpf]!
-        customerCredits[dev.customerCpf] = { ...atual, saldo: Math.max(0, Math.round((atual.saldo - dev.creditIssued) * 100) / 100) }
-      }
-      const sales = prev.sales.map((s) =>
-        s.id !== dev.saleId
-          ? s
-          : {
-              ...s,
-              lines: s.lines.map((l) => {
-                const back = dev.lines.find((x) => x.inventoryId === l.inventoryId)
-                return back ? { ...l, qtyReturned: Math.max(0, (l.qtyReturned ?? 0) - back.quantity) } : l
-              }),
-            },
-      )
-      const inventory = prev.inventory.map((i) => {
-        const back = dev.lines.find((x) => x.inventoryId === i.id)
-        return back ? { ...i, stock: i.stock - back.quantity } : i
-      })
+      const estornado = estornarEfeitosLocaisDevolucao(prev, dev)
       return {
-        ...prev,
-        inventory,
-        customerCredits,
-        sales,
+        ...estornado,
         devolucoes: prev.devolucoes.map((d) =>
           d.id === devId
-            ? { ...d, syncPending: false, syncRejectedCode: body?.code, syncRejectedReason: body?.error ?? "" }
+            ? { ...d, syncPending: false, syncBlocked: undefined, syncRejectedCode: body?.code, syncRejectedReason: body?.error ?? "" }
             : d,
         ),
       }
@@ -3050,7 +3121,8 @@ export function OperationsProvider({
   }, [])
 
   const flushPendingDevolucoes = useCallback(() => {
-    const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true)
+    // Bloqueio persistente NÃO entra na retentativa automática (só retomada manual).
+    const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true && !d.syncBlocked)
     if (pending.length === 0) return
     const lj = opsLojaIdFromStorageKey(storageKey)
     for (const dev of pending) {
@@ -3058,8 +3130,10 @@ export function OperationsProvider({
         const sale = stateRef.current.sales.find((s) => s.id === dev.saleId)
         const saleLine = sale?.lines.find((l) => l.inventoryId === it.inventoryId)
         const valorUnitario = saleLine ? (saleLine.lineTotal / saleLine.quantity) : 0
+        const produtoId = it.produtoId || saleLine?.produtoId
         return {
           inventoryId: it.inventoryId,
+          ...(produtoId ? { produtoId } : {}),
           nome: it.name,
           quantidade: it.quantity,
           valorUnitario,
@@ -3723,21 +3797,18 @@ export function OperationsProvider({
       // `setState` funcional o crédito só apareceria no próximo render e a troca
       // falhava com "Saldo de crédito insuficiente".
       const build = (cur: OpsState): OpsState => {
+        // Estoque local pelo Produto.id confirmado (SKU pode ter mudado/sido reutilizado).
         const inventory = cur.inventory.map((i) => {
-          const back = serverConfirmed.lines.find((l) => l.inventoryId === i.id)
+          const back = serverConfirmed.lines.find((l) => inventoryMatchesDevLine(i, l, cur.inventory))
           return back ? { ...i, stock: i.stock + back.quantity } : i
         })
-        const sales = cur.sales.map((s) =>
-          s.id !== saleId
-            ? s
-            : {
-                ...s,
-                lines: s.lines.map((l) => {
-                  const back = serverConfirmed.lines.find((x) => x.inventoryId === l.inventoryId)
-                  return back ? { ...l, qtyReturned: (l.qtyReturned ?? 0) + back.quantity } : l
-                }),
-              },
-        )
+        // Linhas repetidas do mesmo item (uma por bipe): distribui, sem contar em dobro.
+        const sales = cur.sales.map((sv) => {
+          if (sv.id !== saleId) return sv
+          let ls = sv.lines
+          for (const back of serverConfirmed.lines) ls = distribuirQtyReturned(ls, back.inventoryId, back.quantity)
+          return { ...sv, lines: ls }
+        })
         const customerCredits = { ...cur.customerCredits }
         if (credit > 0) {
           const atual = customerCredits[k]?.saldo ?? 0
@@ -3796,9 +3867,21 @@ export function OperationsProvider({
     const outLines: DevolucaoRecord["lines"] = []
 
     for (const req of lines) {
-      const saleLine = saleCopy.lines.find((l) => l.inventoryId === req.inventoryId)
+      // Linhas repetidas do mesmo item (uma por bipe) contam juntas.
+      const doItem = saleCopy.lines.filter((l) => l.inventoryId === req.inventoryId)
+      const saleLine = doItem[0]
+        ? {
+            ...doItem[0],
+            quantity: doItem.reduce((t, l) => t + l.quantity, 0),
+            lineTotal: doItem.reduce((t, l) => t + l.lineTotal, 0),
+            qtyReturned: doItem.reduce((t, l) => t + (l.qtyReturned ?? 0), 0),
+          }
+        : undefined
       if (!saleLine) {
         return { ok: false, reason: `Item não consta na venda: ${req.inventoryId}` }
+      }
+      if (isVirtualSaleLine(req.inventoryId)) {
+        return { ok: false, reason: "Serviço/item avulso não gera vale nem volta ao estoque (sem política aprovada)." }
       }
       const already = saleLine.qtyReturned ?? 0
       const canReturn = saleLine.quantity - already
@@ -3814,7 +3897,7 @@ export function OperationsProvider({
       const unit = saleLine.lineTotal / saleLine.quantity
       const valor = Math.round(unit * req.quantity * 100) / 100
       inv.stock += req.quantity
-      saleLine.qtyReturned = already + req.quantity
+      saleCopy.lines = distribuirQtyReturned(saleCopy.lines, req.inventoryId, req.quantity)
       creditIssued += mode === "vale_credito" ? valor : 0
       outLines.push({
         inventoryId: req.inventoryId,
@@ -3904,6 +3987,67 @@ export function OperationsProvider({
 
     return { ok: true, devolucaoId, creditIssued: mode === "vale_credito" ? creditIssued : 0 }
   }, [storageKey, aplicarRespostaDevolucao])
+
+  const retomarDevolucaoPendente = useCallback<OperationsContextType["retomarDevolucaoPendente"]>(
+    (devolucaoId) => {
+      const cur = stateRef.current
+      const dev = cur.devolucoes.find((d) => d.id === devolucaoId)
+      if (!dev || dev.syncPending !== true) return
+      // Nova janela de espera (tentativas zeradas); o reenvio usa o MESMO localId.
+      const next = {
+        ...cur,
+        devolucoes: cur.devolucoes.map((d) =>
+          d.id === devolucaoId
+            ? { ...d, syncBlocked: undefined, syncAttempts: 0, syncWaitingSince: new Date().toISOString() }
+            : d,
+        ),
+      }
+      stateRef.current = next
+      setState((prev) => ({
+        ...prev,
+        devolucoes: prev.devolucoes.map((d) =>
+          d.id === devolucaoId && d.syncPending === true
+            ? { ...d, syncBlocked: undefined, syncAttempts: 0, syncWaitingSince: next.devolucoes.find((x) => x.id === devolucaoId)!.syncWaitingSince }
+            : d,
+        ),
+      }))
+      appendAuditLog({
+        action: "devolucao_vale",
+        userLabel: "PDV (retomada manual)",
+        detail: `[devolucao RETOMADA MANUAL] ${devolucaoId} | venda ${dev.saleId} | estado anterior ${dev.syncBlocked ? "bloqueio persistente" : dev.syncWaitingCode ?? "fila"}`,
+      })
+      flushPendingDevolucoes()
+    },
+    [flushPendingDevolucoes],
+  )
+
+  const registrarEncaminhamentoDevolucao = useCallback<OperationsContextType["registrarEncaminhamentoDevolucao"]>(
+    (devolucaoId, conciliacao) => {
+      const cur = stateRef.current
+      const dev = cur.devolucoes.find((d) => d.id === devolucaoId)
+      if (!dev || dev.conciliacao?.ref) return
+      const aindaNaFila = dev.syncPending === true
+      appendAuditLog({
+        action: "devolucao_vale",
+        userLabel: `${conciliacao.operador} (reconciliação supervisionada)`,
+        detail: `[devolucao ENCAMINHADA AO FINANCEIRO — NÃO GRAVADA] ${devolucaoId} | venda ${dev.saleId} | ref ${conciliacao.ref} | ${conciliacao.categoria} ${conciliacao.valorDeclarado.toFixed(2)}${aindaNaFila ? " | saiu da fila; vale/estoque locais desfeitos" : ""}`,
+      })
+      setState((prev) => {
+        const d = prev.devolucoes.find((x) => x.id === devolucaoId)
+        if (!d || d.conciliacao?.ref) return prev
+        // Ainda na fila: o servidor nunca gravou — sai da fila e desfaz os efeitos locais.
+        // Já recusada: os efeitos locais já foram desfeitos na recusa.
+        const base = d.syncPending === true ? estornarEfeitosLocaisDevolucao(prev, d) : prev
+        return {
+          ...base,
+          devolucoes: prev.devolucoes.map((x) =>
+            x.id === devolucaoId ? { ...x, syncPending: false, syncBlocked: undefined, conciliacao } : x,
+          ),
+        }
+      })
+    },
+    [],
+  )
 
   const registrarOperacaoCaixa = useCallback<OperationsContextType["registrarOperacaoCaixa"]>(
     async ({ sessaoId, tipo, valor, motivo, localId, operador }) => {
@@ -4010,6 +4154,8 @@ export function OperationsProvider({
       sincronizarCreditoLocal,
       finalizeSaleTransaction,
       registrarDevolucao,
+      retomarDevolucaoPendente,
+      registrarEncaminhamentoDevolucao,
       registrarOperacaoCaixa,
       refreshSalesFromServer,
       retrySyncSale,
@@ -4048,6 +4194,8 @@ export function OperationsProvider({
       sincronizarCreditoLocal,
       finalizeSaleTransaction,
       registrarDevolucao,
+      retomarDevolucaoPendente,
+      registrarEncaminhamentoDevolucao,
       registrarOperacaoCaixa,
       refreshSalesFromServer,
       retrySyncSale,

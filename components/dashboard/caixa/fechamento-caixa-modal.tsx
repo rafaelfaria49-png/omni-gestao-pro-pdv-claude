@@ -26,6 +26,7 @@ import { ConferenciaCaixa } from "./conferencia-caixa"
 import { useSession } from "next-auth/react"
 import { useCaixa } from "./caixa-provider"
 import { ensureLedger, useOperationsStore } from "@/lib/operations-store"
+import { resumoTrocasDevolucoesSessao } from "@/lib/pdv/devolucao/pendencias"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
@@ -70,7 +71,7 @@ const TAB_TRIGGER =
 
 export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalProps) {
   const { caixa, fecharCaixa, sessaoId } = useCaixa()
-  const { dailyLedger, sales } = useOperationsStore()
+  const { dailyLedger, sales, devolucoes } = useOperationsStore()
   const { empresaDocumentos, lojaAtivaId, getEnderecoDocumentos } = useLojaAtiva()
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaAtivaId)
@@ -142,6 +143,16 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     [sales, sessaoId, caixa.dataAbertura],
   )
   const totalPendentesSessao = pendentesSessao.reduce((t, s) => t + (Number(s.total) || 0), 0)
+  // PDV-F8-FINALIZACAO-COMPLETA-001 — trocas/devoluções da sessão: só leitura. Não lança
+  // dinheiro, não mexe no saldo; pendências e recusas ficam visíveis para a conferência.
+  const resumoTrocas = useMemo(() => {
+    const abertura = caixa.dataAbertura ? new Date(caixa.dataAbertura).getTime() : 0
+    const devsSessao = (devolucoes ?? []).filter((d) =>
+      sessaoId && d.sessaoId ? d.sessaoId === sessaoId : abertura > 0 && Date.parse(d.at) >= abertura,
+    )
+    return resumoTrocasDevolucoesSessao(devsSessao, filterSalesDaSessao(sales, { sessaoId, dataAbertura: caixa.dataAbertura }), null)
+  }, [devolucoes, sales, sessaoId, caixa.dataAbertura])
+  const temTrocas = Object.values(resumoTrocas).some((v) => v > 0)
   const [cienteDasPendentes, setCienteDasPendentes] = useState(false)
 
   // Vendas da sessão × Recebido (origem e forma) × Gaveta — fonte única da tela, da
@@ -693,6 +704,30 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
           </div>
 
           <div className="shrink-0 border-t border-border bg-card px-3 py-2.5 sm:px-4">
+            {temTrocas && (
+              <div
+                className="mb-2 flex min-w-0 flex-col gap-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-foreground"
+                data-testid="fechamento-trocas-devolucoes"
+              >
+                <p className="min-w-0 font-semibold">Trocas e devoluções desta sessão (informativo — não altera o caixa)</p>
+                <p className="min-w-0">
+                  Trocas: {resumoTrocas.trocas} · Devoluções confirmadas: {resumoTrocas.devolucoesConfirmadas} · Vales emitidos:{" "}
+                  {fmt(resumoTrocas.creditosEmitidos)} · Vales utilizados: {fmt(resumoTrocas.creditosUtilizados)} · Diferenças recebidas
+                  (além do vale): {fmt(resumoTrocas.diferencasRecebidas)}
+                </p>
+                {(resumoTrocas.pendentes > 0 ||
+                  resumoTrocas.aguardandoVendaOrigem > 0 ||
+                  resumoTrocas.recusasDefinitivas > 0 ||
+                  resumoTrocas.encaminhadas > 0) && (
+                  <p className="min-w-0 text-destructive" data-testid="fechamento-trocas-pendencias">
+                    Pendentes: {resumoTrocas.pendentes} · Aguardando venda de origem: {resumoTrocas.aguardandoVendaOrigem} · Recusas
+                    definitivas: {resumoTrocas.recusasDefinitivas} · Exigem conciliação manual: {resumoTrocas.conciliacaoManual} ·
+                    Encaminhadas ao Financeiro: {resumoTrocas.encaminhadas}. Trate no F8 (Troca/Devolução); nenhum dinheiro é lançado
+                    automaticamente.
+                  </p>
+                )}
+              </div>
+            )}
             {pendentesSessao.length > 0 && (
               <div
                 className="mb-2 flex min-w-0 flex-col gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"

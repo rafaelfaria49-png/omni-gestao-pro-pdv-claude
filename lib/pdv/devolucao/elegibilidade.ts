@@ -13,8 +13,9 @@
 import type { Prisma } from "@/generated/prisma"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { saleFromDbRow } from "@/lib/vendas/sale-from-db-row"
-import { canonicalProductKeyResolver } from "@/lib/pdv/devolucao/product-keys"
-import { fatorValorPago } from "@/lib/pdv/devolucao/registrar-devolucao"
+import { saleProductKeyResolver } from "@/lib/pdv/devolucao/product-keys"
+import { fatorValorPago, ITEM_SEM_LASTRO_MENSAGEM } from "@/lib/pdv/devolucao/registrar-devolucao"
+import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 
 export const ELEGIBILIDADE_LIMITE = 10
 
@@ -22,7 +23,15 @@ type ReadClient = Pick<Prisma.TransactionClient, "venda" | "produto" | "itemDevo
 
 export type VendaElegivel = SaleRecord & {
   /** Linhas com o saldo devolvível calculado no servidor. */
-  lines: Array<SaleRecord["lines"][number] & { qtyReturned: number }>
+  lines: Array<
+    SaleRecord["lines"][number] & {
+      qtyReturned: number
+      /** Chave HISTÓRICA da linha (`ItemVenda.inventoryId` = Produto.id): enviar na devolução. */
+      produtoId: string
+      /** Motivo quando a linha não pode ser devolvida por política (serviço/avulso/KG/sem cadastro). */
+      bloqueioDevolucao?: string
+    }
+  >
 }
 
 export type BuscaElegibilidadeResult = {
@@ -99,23 +108,29 @@ export async function buscarVendasElegiveis(
     where: { devolucao: { storeId, vendaLocalId: { in: pedidoIds } } },
     select: { inventoryId: true, quantidade: true, devolucao: { select: { vendaLocalId: true } } },
   })
-  // Chaves do payload (SKU), do ItemVenda (Produto.id) e das devoluções → Produto.id.
-  const payloadKeys = rows.flatMap((r) => {
-    const lines = (r.payload as { lines?: Array<{ inventoryId?: string; produtoId?: string }> } | null)?.lines
-    return Array.isArray(lines) ? lines.flatMap((l) => [l?.inventoryId, l?.produtoId]) : []
-  })
-  const canon = await canonicalProductKeyResolver(client, storeId, [
-    ...rows.flatMap((r) => r.itens.map((i) => i.inventoryId)),
-    ...devolvidos.map((d) => d.inventoryId),
-    ...payloadKeys,
-  ])
-  const retorno = new Map<string, number>()
-  for (const d of devolvidos) {
-    const k = `${d.devolucao.vendaLocalId}::${canon(d.inventoryId)}`
-    retorno.set(k, (retorno.get(k) ?? 0) + (d.quantidade || 0))
-  }
+  const vendas: VendaElegivel[] = []
+  for (const r of rows) {
+    // Identidade HISTÓRICA por venda (mesmo resolvedor do escritor): SKU renomeado ou
+    // reutilizado depois da venda não troca o produto da linha.
+    const payloadLines = (r.payload as { lines?: Array<{ inventoryId?: string; produtoId?: string }> } | null)?.lines
+    const keys = await saleProductKeyResolver(client, storeId, r, [
+      ...devolvidos.filter((d) => d.devolucao.vendaLocalId === r.pedidoId).map((d) => d.inventoryId),
+      ...(Array.isArray(payloadLines) ? payloadLines.flatMap((l) => [l?.inventoryId, l?.produtoId]) : []),
+    ])
+    const canon = (k: string | null | undefined, pid?: string | null) => keys.resolve(k, pid)
+    const retorno = new Map<string, number>()
+    for (const d of devolvidos) {
+      if (d.devolucao.vendaLocalId !== r.pedidoId) continue
+      const k = canon(d.inventoryId)
+      if (k) retorno.set(k, (retorno.get(k) ?? 0) + (d.quantidade || 0))
+    }
+    const bloqueio = (k: string): string | undefined =>
+      isVirtualSaleLine(k) || !keys.isProduto(k)
+        ? `Não devolvível: ${ITEM_SEM_LASTRO_MENSAGEM}`
+        : keys.isPeso(k)
+          ? "Não devolvível: produto vendido por peso (bloqueado até aprovação do schema R3)."
+          : undefined
 
-  const vendas: VendaElegivel[] = rows.map((r) => {
     const sale = saleFromDbRow({
       pedidoId: r.pedidoId,
       total: r.total,
@@ -130,7 +145,7 @@ export async function buscarVendasElegiveis(
     // Quantidade/valor por item vêm do banco (ItemVenda), não do payload do client.
     const porItem = new Map<string, { quantidade: number; lineTotal: number; nome: string }>()
     for (const it of r.itens) {
-      const k = canon(it.inventoryId)
+      const k = (it.inventoryId ?? "").trim()
       if (!k) continue
       const cur = porItem.get(k) ?? { quantidade: 0, lineTotal: 0, nome: it.nome }
       cur.quantidade += it.quantidade || 0
@@ -144,30 +159,36 @@ export async function buscarVendasElegiveis(
     const usados = new Set<string>()
     const lines: VendaElegivel["lines"] = []
     for (const base of sale.lines) {
-      const k = canon((base as { produtoId?: string }).produtoId || base.inventoryId)
-      const db = porItem.get(k)
+      const k = canon(base.inventoryId, (base as { produtoId?: string }).produtoId)
+      const db = k ? porItem.get(k) : undefined
       if (!db || usados.has(k)) continue
       usados.add(k)
+      const b = bloqueio(k)
       lines.push({
         ...base,
         quantity: db.quantidade,
         lineTotal: db.lineTotal,
-        qtyReturned: retorno.get(`${r.pedidoId}::${k}`) ?? 0,
+        qtyReturned: retorno.get(k) ?? 0,
+        produtoId: k,
+        ...(b ? { bloqueioDevolucao: b } : {}),
       })
     }
     for (const [k, v] of porItem) {
       if (usados.has(k)) continue
+      const b = bloqueio(k)
       lines.push({
         inventoryId: k,
         name: v.nome,
         unitPrice: v.quantidade > 0 ? v.lineTotal / v.quantidade : 0,
         quantity: v.quantidade,
         lineTotal: v.lineTotal,
-        qtyReturned: retorno.get(`${r.pedidoId}::${k}`) ?? 0,
+        qtyReturned: retorno.get(k) ?? 0,
+        produtoId: k,
+        ...(b ? { bloqueioDevolucao: b } : {}),
       } as VendaElegivel["lines"][number])
     }
-    return { ...sale, lines }
-  })
+    vendas.push({ ...sale, lines })
+  }
 
   return { criterio, produtoNome, vendas }
 }

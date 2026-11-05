@@ -170,7 +170,8 @@ export interface DevolucaoRecord {
   saleId: string
   customerCpf: string
   customerName: string
-  lines: { inventoryId: string; name: string; quantity: number; valor: number }[]
+  /** `produtoId` = Produto.id histórico confirmado pelo servidor (identidade; SKU é só busca). */
+  lines: { inventoryId: string; produtoId?: string; name: string; quantity: number; valor: number }[]
   mode: "vale_credito" | "somente_estoque"
   creditIssued: number
   /** true = devolução gravada localmente mas ainda não confirmada no servidor. */
@@ -189,6 +190,18 @@ export interface DevolucaoRecord {
    */
   syncRejectedCode?: string
   syncRejectedReason?: string
+  /**
+   * PDV-F8-FINALIZACAO-COMPLETA-001 — espera explícita: `AGUARDANDO_VENDA_ORIGEM` quando o
+   * servidor ainda não conhece a venda de origem. Nada foi gravado no servidor.
+   */
+  syncWaitingCode?: "AGUARDANDO_VENDA_ORIGEM"
+  syncWaitingSince?: string
+  syncAttempts?: number
+  syncLastAttemptAt?: string
+  /** Bloqueio persistente: a retentativa automática parou; só retomada manual ou reconciliação. */
+  syncBlocked?: boolean
+  /** Encaminhamento ao Financeiro (registro auditável no servidor — não é lançamento). */
+  conciliacao?: { ref: string; at: string; operador: string; categoria: string; valorDeclarado: number }
 }
 
 export interface CaixaOperacaoRecord {
