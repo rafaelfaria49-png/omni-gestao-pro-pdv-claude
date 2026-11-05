@@ -1,0 +1,20 @@
+✔ D05 build accepts only the reviewed Preview and never runs a step before isolation (3.0578ms)
+✔ foreign database, role, database name, missing TLS and pooled DIRECT_URL fail closed (0.7049ms)
+✔ private state rejects the repository itself and descendants before IO, allowing a sibling (0.6556ms)
+✔ D02 resolve preserves strict libpq TLS in the Prisma URL and retains previous modes (0.3659ms)
+✔ operator diagnostics redact full URLs, encoded passwords and independent secrets (1.0019ms)
+✔ preparation cannot open a human gate, transport, global Preview, production or automatic deployment (6.5183ms)
+✔ missing case, duplicate case, unsupported status and unapproved N/A fail (1.3407ms)
+✔ software/spooler success and a bare owner name cannot become physical PASS (1.1274ms)
+✔ complete synthetic record validates shape only; physical artifacts and human truth remain separate (3.4672ms)
+✔ artifact verifier refuses missing, changed and escaping evidence and wrong packages (9.9444ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 192.1806
+
+exit=0

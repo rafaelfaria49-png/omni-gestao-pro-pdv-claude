@@ -1,0 +1,43 @@
+name: Omni Print D05 — preparação sem hardware
+on:
+  pull_request:
+    paths:
+      - 'tools/print-d05/**'
+      - 'tools/omni-print-agent/**'
+      - 'docs/print-004c-e2e/**'
+      - 'lib/printing/direct/**'
+      - 'tools/print-d02/d02.mjs'
+      - 'vercel.json'
+      - '.github/workflows/omni-print-d05.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-preparation:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: node --test tools/print-d05/readiness.test.mjs tools/print-d05/isolation.test.mjs
+      - run: node tools/print-d05/readiness.mjs check
+      - name: Parse do armazenamento DPAPI sem executar alterações
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $D05Tokens = $null; $D05Errors = $null
+          [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'tools/print-d05/private-state.ps1'), [ref]$D05Tokens, [ref]$D05Errors)
+          if ($D05Errors.Count) { throw 'D05_POWERSHELL_PARSE_FAILED' }
+      - run: node tools/print-d04/package.mjs tools/print-d05/.artifacts
+      - run: node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omni-print-d05-preparation-${{ matrix.os }}
+          path: |
+            tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip
+            tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip.sha256
+            docs/print-004c-e2e/evidence/d05/H01-H18.template.json

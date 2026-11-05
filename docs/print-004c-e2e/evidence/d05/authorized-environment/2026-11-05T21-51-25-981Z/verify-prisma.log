@@ -1,0 +1,14 @@
+PARADO (2): consulta falhou: psql: error: connection to server at "ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech" (15.229.115.3), port 5432 failed: Connection timed out (0x0000274C/10060)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech" (15.228.0.140), port 5432 failed: Connection timed out (0x0000274C/10060)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech" (56.125.127.1), port 5432 failed: Connection timed out (0x0000274C/10060)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech" (2600:1f1e:9f8:3d1d:e201:3447:4cb7:12f2), port 5432 failed: Network is unreachable (0x00002743/10051)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech" (2600:1f1e:9f8:3d06:fb26:39b:87f2:4d22), port 5432 failed: Network is unreachable (0x00002743/10051)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech" (2600:1f1e:9f8:3d2c:3353:3d76:a38f:3c28), port 5432 failed: Network is unreachable (0x00002743/10051)
+	Is the server running on that host and accepting TCP/IP connections?
+
+exit=2

@@ -1,0 +1,42 @@
+{
+  "operation": "retention-prepare",
+  "at": "2026-11-05T19:33:48.210Z",
+  "projectId": "super-credit-72834107",
+  "branchId": "br-billowing-cake-b627zsxv",
+  "database": "omni_print_d05",
+  "source": "NEW_EMPTY_TEST_PROJECT",
+  "productionAccess": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "retention-role-exists",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "8a65ad2b9638bbd33e1b00cf8acb210dd719061b6703ce30bd68aa1ca490b124"
+    },
+    {
+      "step": "retention-create-role",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "retention-grants",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "retention-role-attributes",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "dd520e9c19d598dc4e8bf010cd24e75eec2c80ef530153a7eb44dd01a680a8ca"
+    },
+    {
+      "step": "retention-permissions",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "af020b5dd26f6fab7f9f4e954095b2115fe86657985c684115d3b907abf3e180"
+    }
+  ]
+}

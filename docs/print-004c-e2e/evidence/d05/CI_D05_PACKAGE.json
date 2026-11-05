@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "headSha": "1613ef6dfb564a81ba4713644d9bd2696d7e87f5",
+  "runId": 42071630596,
+  "jobs": [
+    {
+      "id": 127400816511,
+      "name": "offline-preparation (ubuntu-24.04)",
+      "status": "success"
+    },
+    {
+      "id": 127400816601,
+      "name": "offline-preparation (windows-2022)",
+      "status": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": 13436346693,
+      "name": "omni-print-d05-preparation-ubuntu-24.04",
+      "digest": "sha256:636f8686fca28f851f03a49eb1676530be372ac764d8363d502a447ae2f25dd3",
+      "package": {
+        "version": "0.2.0-d04",
+        "sha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+        "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+        "signed": false
+      },
+      "manifestFiles": 17,
+      "physicalCases": 18,
+      "physicalBlocked": 18,
+      "status": "PASS"
+    },
+    {
+      "artifactId": 13435239340,
+      "name": "omni-print-d05-preparation-windows-2022",
+      "digest": "sha256:d8aaa9c6057680a0ec3293f4728316b5855ce7774bd717dbf8564f06e95abe0c",
+      "package": {
+        "version": "0.2.0-d04",
+        "sha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+        "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+        "signed": false
+      },
+      "manifestFiles": 17,
+      "physicalCases": 18,
+      "physicalBlocked": 18,
+      "status": "PASS"
+    }
+  ],
+  "physicalHomologation": "PENDING"
+}

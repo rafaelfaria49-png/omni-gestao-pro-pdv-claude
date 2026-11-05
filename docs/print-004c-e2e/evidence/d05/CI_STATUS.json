@@ -1,0 +1,37 @@
+{
+  "codeSha": "1613ef6dfb564a81ba4713644d9bd2696d7e87f5",
+  "checkedAt": "2026-11-05T17:23:27.447Z",
+  "workflows": [
+    {
+      "id": 42071630936,
+      "name": "Omni Print D04 — agente Windows",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 7,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42071630936/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42071630936/logs",
+      "workflow_id": 407569987
+    },
+    {
+      "id": 42071630596,
+      "name": "Omni Print D05 — preparação sem hardware",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 1,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42071630596/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42071630596/logs",
+      "workflow_id": 408422269
+    },
+    {
+      "id": 42071630703,
+      "name": "Omni Print D03 — retenção segura",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 12,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42071630703/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42071630703/logs",
+      "workflow_id": 407417517
+    }
+  ],
+  "physicalHomologation": "PENDING"
+}

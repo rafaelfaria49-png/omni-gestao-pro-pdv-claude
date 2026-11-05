@@ -1,0 +1,111 @@
+{
+  "status": "MIXED_LOCAL_ATTEMPTS_NOT_GLOBAL_PASS",
+  "runs": [
+    {
+      "directory": "2026-11-05T16-56-40-027Z",
+      "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+      "workingTreeChanged": true,
+      "node": "v24.22.1",
+      "platform": "win32",
+      "pass": [
+        "d05-tests",
+        "d05-plan",
+        "generator",
+        "d02-generator",
+        "package",
+        "package-integrity",
+        "d05-eslint",
+        "powershell-parse"
+      ],
+      "fail": [
+        "unit",
+        "offline-regression",
+        "recovery"
+      ],
+      "logHashesVerified": true
+    },
+    {
+      "directory": "2026-11-05T16-57-41-940Z",
+      "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+      "workingTreeChanged": true,
+      "node": "v24.22.1",
+      "platform": "win32",
+      "pass": [
+        "d05-tests",
+        "d05-plan",
+        "generator",
+        "d02-generator",
+        "offline-regression",
+        "typecheck",
+        "eslint",
+        "package",
+        "package-integrity",
+        "d05-eslint",
+        "powershell-parse"
+      ],
+      "fail": [
+        "unit",
+        "retention-pg",
+        "offline-pg",
+        "scenarios-pg",
+        "two-agents-pg",
+        "synthetic-pg",
+        "d02-pg",
+        "d02-rehearsal",
+        "playwright",
+        "build",
+        "recovery"
+      ],
+      "logHashesVerified": true
+    },
+    {
+      "directory": "2026-11-05T16-59-22-834Z",
+      "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+      "workingTreeChanged": true,
+      "node": "v24.22.1",
+      "platform": "win32",
+      "pass": [
+        "unit"
+      ],
+      "fail": [],
+      "logHashesVerified": true
+    },
+    {
+      "directory": "2026-11-05T17-01-25-697Z",
+      "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+      "workingTreeChanged": true,
+      "node": "v24.22.1",
+      "platform": "win32",
+      "pass": [
+        "retention-pg",
+        "offline-pg",
+        "scenarios-pg",
+        "two-agents-pg",
+        "synthetic-pg",
+        "d02-rehearsal",
+        "playwright",
+        "recovery"
+      ],
+      "fail": [
+        "d02-pg"
+      ],
+      "logHashesVerified": true
+    },
+    {
+      "directory": "2026-11-05T17-04-09-598Z",
+      "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+      "workingTreeChanged": true,
+      "node": "v24.22.1",
+      "platform": "win32",
+      "pass": [
+        "d05-tests",
+        "d05-plan",
+        "d05-eslint"
+      ],
+      "fail": [],
+      "logHashesVerified": true
+    }
+  ],
+  "canonicalPassingEvidence": "CI_D03_linux.json + CI_D04_win32.json + CI_D04_linux.json + CI_D05_PACKAGE.json",
+  "physicalHomologation": "PENDING"
+}

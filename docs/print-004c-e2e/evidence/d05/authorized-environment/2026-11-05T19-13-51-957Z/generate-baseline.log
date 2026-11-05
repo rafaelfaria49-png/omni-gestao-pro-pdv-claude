@@ -1,0 +1,3356 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
+-- CreateEnum
+CREATE TYPE "StoreProfile" AS ENUM ('ASSISTENCIA', 'VARIEDADES', 'SUPERMERCADO');
+
+-- CreateEnum
+CREATE TYPE "SubscriptionPlan" AS ENUM ('BRONZE', 'PRATA', 'OURO');
+
+-- CreateEnum
+CREATE TYPE "MarketingMediaJobKind" AS ENUM ('IMAGE', 'VOICE', 'VIDEO', 'AVATAR', 'REUNIAO', 'AUTOMACAO');
+
+-- CreateEnum
+CREATE TYPE "MarketplaceProvider" AS ENUM ('mercado_livre', 'shopee', 'amazon', 'magalu');
+
+-- CreateEnum
+CREATE TYPE "MarketplaceConnectionStatus" AS ENUM ('disconnected', 'connected', 'error', 'syncing');
+
+-- CreateEnum
+CREATE TYPE "MarketplaceProductLinkStatus" AS ENUM ('not_published', 'published', 'error');
+
+-- CreateEnum
+CREATE TYPE "MarketplaceProductSyncStatus" AS ENUM ('idle', 'pending', 'synced', 'sync_error');
+
+-- CreateEnum
+CREATE TYPE "StatusOrdemServico" AS ENUM ('Aberto', 'EmAnalise', 'Pronto', 'Entregue');
+
+-- CreateEnum
+CREATE TYPE "VendaNumeracaoOrigem" AS ENUM ('LEGACY_CLIENT', 'SERVER_V1', 'IMPORTED');
+
+-- CreateEnum
+CREATE TYPE "FinancialAccountType" AS ENUM ('cash', 'bank', 'pix', 'credit_card');
+
+-- CreateEnum
+CREATE TYPE "FinancialTransactionType" AS ENUM ('income', 'expense');
+
+-- CreateEnum
+CREATE TYPE "FinancialTransactionStatus" AS ENUM ('pending', 'paid', 'canceled');
+
+-- CreateEnum
+CREATE TYPE "SessaoCaixaStatus" AS ENUM ('ABERTA', 'FECHADA');
+
+-- CreateEnum
+CREATE TYPE "OmniAgentCommandStatus" AS ENUM ('PENDENTE', 'AGUARDANDO_CONFIRMACAO', 'EXECUTADO', 'ERRO');
+
+-- CreateEnum
+CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'ADMIN', 'GERENTE', 'OPERADOR', 'CAIXA', 'TECNICO', 'VENDEDOR');
+
+-- CreateEnum
+CREATE TYPE "FiscalStatusVenda" AS ENUM ('NAO_FISCAL', 'PENDENTE', 'EMITINDO', 'EM_CONTINGENCIA', 'AUTORIZADA', 'REJEITADA', 'CANCELADA_FISCAL', 'BLOQUEADA_FISCAL');
+
+-- CreateEnum
+CREATE TYPE "StatusNotaFiscal" AS ENUM ('RASCUNHO', 'VALIDANDO', 'ASSINADA', 'TRANSMITINDO', 'AUTORIZADA', 'REJEITADA', 'DENEGADA', 'CONTINGENCIA', 'CANCELADA', 'INUTILIZADA', 'ERRO');
+
+-- CreateEnum
+CREATE TYPE "ModeloFiscal" AS ENUM ('NFCE', 'SAT', 'NFE');
+
+-- CreateEnum
+CREATE TYPE "AmbienteFiscal" AS ENUM ('HOMOLOGACAO', 'PRODUCAO');
+
+-- CreateEnum
+CREATE TYPE "TipoEmissao" AS ENUM ('NORMAL', 'CONTINGENCIA_OFFLINE');
+
+-- CreateEnum
+CREATE TYPE "RegimeTributario" AS ENUM ('SIMPLES_NACIONAL', 'SIMPLES_NACIONAL_EXCESSO', 'REGIME_NORMAL', 'MEI');
+
+-- CreateEnum
+CREATE TYPE "FiscalProviderTipo" AS ENUM ('STUB_HOMOLOGACAO', 'SEFAZ_DIRETO', 'GATEWAY_FOCUS', 'GATEWAY_PLUGNOTAS', 'GATEWAY_ENOTAS', 'GATEWAY_NFEIO', 'SAT_LOCAL');
+
+-- CreateEnum
+CREATE TYPE "CertificadoStatus" AS ENUM ('PENDENTE_VALIDACAO', 'ATIVO', 'EXPIRADO', 'REVOGADO', 'INVALIDO');
+
+-- CreateEnum
+CREATE TYPE "TipoEventoFiscal" AS ENUM ('CANCELAMENTO', 'CARTA_CORRECAO', 'INUTILIZACAO', 'CONTINGENCIA_ENVIO');
+
+-- CreateEnum
+CREATE TYPE "StatusEventoFiscal" AS ENUM ('PENDENTE', 'AUTORIZADO', 'REJEITADO');
+
+-- CreateEnum
+CREATE TYPE "FiscalJobTipo" AS ENUM ('EMISSAO', 'CANCELAMENTO', 'INUTILIZACAO', 'CONTINGENCIA_TRANSMISSAO', 'CONSULTA');
+
+-- CreateEnum
+CREATE TYPE "FiscalJobStatus" AS ENUM ('PENDENTE', 'PROCESSANDO', 'AGUARDANDO_RETRY', 'CONCLUIDO', 'FALHA', 'CANCELADO');
+
+-- CreateEnum
+CREATE TYPE "ContadorCompetenciaStatus" AS ENUM ('aberta', 'enviada', 'com_pendencia', 'fechada');
+
+-- CreateEnum
+CREATE TYPE "ContadorItemStatus" AS ENUM ('pendente', 'enviado', 'conferido', 'resolvido');
+
+-- CreateEnum
+CREATE TYPE "ContadorDocumentoCategoria" AS ENUM ('fiscal', 'financeiro', 'folha', 'juridico', 'outro');
+
+-- CreateEnum
+CREATE TYPE "ContadorUsuarioStatus" AS ENUM ('ativo', 'suspenso');
+
+-- CreateEnum
+CREATE TYPE "ContadorPapelExterno" AS ENUM ('leitura', 'conferencia');
+
+-- CreateEnum
+CREATE TYPE "ContadorAcessoStatus" AS ENUM ('ativo', 'suspenso', 'revogado');
+
+-- CreateEnum
+CREATE TYPE "ContadorObrigacaoTipo" AS ENUM ('envio_documento', 'pagamento_guia', 'conferencia', 'declaracao', 'entrega_arquivo', 'fechamento', 'tarefa');
+
+-- CreateEnum
+CREATE TYPE "ContadorObrigacaoRecorrencia" AS ENUM ('mensal', 'nenhuma');
+
+-- CreateEnum
+CREATE TYPE "ContadorGuiaOrigem" AS ENUM ('manual', 'contador');
+
+-- CreateTable
+CREATE TABLE "stores" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "cnpj" TEXT NOT NULL DEFAULT '',
+    "phone" TEXT NOT NULL DEFAULT '',
+    "logoUrl" TEXT NOT NULL DEFAULT '',
+    "address" JSONB,
+    "profile" "StoreProfile" NOT NULL DEFAULT 'ASSISTENCIA',
+    "subscriptionPlan" "SubscriptionPlan" NOT NULL DEFAULT 'BRONZE',
+    "codigoNumeracaoVenda" VARCHAR(8),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "moduleAccess" JSONB DEFAULT '{"version":1,"modules":["home","pdv","sales","cash","catalog","stock","reports","settings"]}',
+
+    CONSTRAINT "stores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marketplace_connections" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "provider" "MarketplaceProvider" NOT NULL,
+    "accountName" TEXT NOT NULL,
+    "status" "MarketplaceConnectionStatus" NOT NULL DEFAULT 'disconnected',
+    "accessToken" TEXT NOT NULL DEFAULT '',
+    "refreshToken" TEXT NOT NULL DEFAULT '',
+    "metadata" JSONB,
+    "lastSyncAt" TIMESTAMP(3),
+    "lastSyncMessage" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "marketplace_connections_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marketplace_sync_logs" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "produtoId" TEXT,
+    "productLinkId" TEXT,
+    "message" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "marketplace_sync_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marketplace_product_links" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "produtoId" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "provider" "MarketplaceProvider" NOT NULL,
+    "externalId" TEXT,
+    "status" "MarketplaceProductLinkStatus" NOT NULL DEFAULT 'not_published',
+    "syncStatus" "MarketplaceProductSyncStatus" NOT NULL DEFAULT 'idle',
+    "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "stock" INTEGER NOT NULL DEFAULT 0,
+    "publishedAt" TIMESTAMP(3),
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "marketplace_product_links_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_contacts" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "waExternalId" TEXT NOT NULL DEFAULT '',
+    "phoneDigits" TEXT NOT NULL,
+    "displayName" TEXT NOT NULL DEFAULT '',
+    "profilePicUrl" TEXT NOT NULL DEFAULT '',
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "whatsapp_contacts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_conversations" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "contactId" TEXT NOT NULL,
+    "clienteId" TEXT,
+    "externalThreadId" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'open',
+    "assignedToUserId" TEXT NOT NULL DEFAULT '',
+    "humanMode" BOOLEAN NOT NULL DEFAULT false,
+    "lastMessagePreview" TEXT NOT NULL DEFAULT '',
+    "lastMessageAt" TIMESTAMP(3),
+    "unreadCount" INTEGER NOT NULL DEFAULT 0,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "whatsapp_conversations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_messages" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "conversationId" TEXT NOT NULL,
+    "direction" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "messageType" TEXT NOT NULL DEFAULT 'text',
+    "externalMessageId" TEXT NOT NULL DEFAULT '',
+    "payload" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "whatsapp_messages_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_automations" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "triggerType" TEXT NOT NULL DEFAULT 'keyword',
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "priority" INTEGER NOT NULL DEFAULT 0,
+    "conditions" JSONB,
+    "actions" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "whatsapp_automations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_quick_replies" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "shortcut" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "category" TEXT NOT NULL DEFAULT '',
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "whatsapp_quick_replies_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_etiquetas" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "nome" TEXT NOT NULL,
+    "cor" TEXT NOT NULL DEFAULT '#10b981',
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "whatsapp_etiquetas_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_conversa_etiquetas" (
+    "id" TEXT NOT NULL,
+    "conversationId" TEXT NOT NULL,
+    "etiquetaId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "whatsapp_conversa_etiquetas_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_ai_settings" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "tone" TEXT NOT NULL DEFAULT 'consultivo',
+    "systemPrompt" TEXT NOT NULL DEFAULT '',
+    "suggestionsEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "maxContextMessages" INTEGER NOT NULL DEFAULT 12,
+    "metadata" JSONB,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "whatsapp_ai_settings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_automation_logs" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "automationId" TEXT,
+    "level" TEXT NOT NULL DEFAULT 'info',
+    "action" TEXT NOT NULL,
+    "message" TEXT NOT NULL DEFAULT '',
+    "payload" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "whatsapp_automation_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_phone_numbers" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "phoneNumberId" TEXT NOT NULL,
+    "wabaId" TEXT NOT NULL DEFAULT '',
+    "displayPhone" TEXT NOT NULL DEFAULT '',
+    "tokenEnvKey" TEXT NOT NULL DEFAULT 'WHATSAPP_ACCESS_TOKEN',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "whatsapp_phone_numbers_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marketing_posts" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "titulo" TEXT NOT NULL,
+    "canal" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'rascunho',
+    "conteudo" TEXT NOT NULL DEFAULT '',
+    "legenda" TEXT NOT NULL DEFAULT '',
+    "hashtags" TEXT NOT NULL DEFAULT '',
+    "cta" TEXT NOT NULL DEFAULT '',
+    "imagemUrl" TEXT NOT NULL DEFAULT '',
+    "scheduledAt" TIMESTAMP(3),
+    "publishedAt" TIMESTAMP(3),
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "marketing_posts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marketing_ia_posts" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "caption" TEXT NOT NULL,
+    "productName" TEXT NOT NULL DEFAULT '',
+    "tone" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'GENERATED',
+    "scheduledFor" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "marketing_ia_posts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "store_settings" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "contactEmail" TEXT NOT NULL DEFAULT '',
+    "contactWhatsapp" TEXT NOT NULL DEFAULT '',
+    "contactWhatsappDono" TEXT NOT NULL DEFAULT '',
+    "receiptFooter" TEXT NOT NULL DEFAULT '',
+    "printerConfig" JSONB,
+    "cardFees" JSONB,
+    "marketingMediaCredits" INTEGER NOT NULL DEFAULT 50,
+    "mascotCharacterSeed" TEXT NOT NULL DEFAULT '',
+    "mascotPromptBase" TEXT NOT NULL DEFAULT '',
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "store_settings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marketing_media_jobs" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "kindV2" "MarketingMediaJobKind",
+    "characterSeed" TEXT,
+    "promptBase" TEXT,
+    "socialNetworkStatus" JSONB,
+    "meta" JSONB,
+    "creditsAfter" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "marketing_media_jobs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ia_conversations" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "title" TEXT NOT NULL DEFAULT '',
+    "model" TEXT NOT NULL DEFAULT 'auto',
+    "brandVoiceEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ia_conversations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ia_messages" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "conversationId" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "meta" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ia_messages_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "clientes_importados" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "kind" TEXT NOT NULL DEFAULT 'PF',
+    "document" TEXT NOT NULL DEFAULT '',
+    "documentKey" TEXT,
+    "phone" TEXT,
+    "email" TEXT,
+    "city" TEXT NOT NULL DEFAULT '',
+    "tags" JSONB,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "totalSpent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "lastPurchaseAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "clientes_importados_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ordens_servico" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "numero" TEXT,
+    "payload" JSONB,
+    "clienteId" TEXT,
+    "equipamento" TEXT NOT NULL DEFAULT '',
+    "defeito" TEXT NOT NULL DEFAULT '',
+    "laudoTecnico" TEXT,
+    "valorBase" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "status" "StatusOrdemServico" NOT NULL DEFAULT 'Aberto',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ordens_servico_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "garantia_ordem_servico" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "ordemServicoId" TEXT NOT NULL,
+    "prazoDias" INTEGER NOT NULL,
+    "cobertura" TEXT NOT NULL DEFAULT '',
+    "observacoes" TEXT NOT NULL DEFAULT '',
+    "dataInicio" TIMESTAMP(3) NOT NULL,
+    "dataFim" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'ativa',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "garantia_ordem_servico_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ordem_servico_item" (
+    "id" TEXT NOT NULL,
+    "ordemServicoId" TEXT NOT NULL,
+    "produtoId" TEXT,
+    "tipo" TEXT NOT NULL DEFAULT 'peca',
+    "descricao" TEXT NOT NULL DEFAULT '',
+    "quantidade" INTEGER NOT NULL,
+    "precoUnitario" DOUBLE PRECISION NOT NULL,
+    "observacao" TEXT NOT NULL DEFAULT '',
+
+    CONSTRAINT "ordem_servico_item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "estoque_produtos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "sku" TEXT,
+    "barcode" TEXT,
+    "name" TEXT NOT NULL,
+    "brand" TEXT NOT NULL DEFAULT '',
+    "supplierName" TEXT NOT NULL DEFAULT '',
+    "stock" INTEGER NOT NULL DEFAULT 0,
+    "price_cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "category" TEXT,
+    "warrantyDays" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'Ativo',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "estoque_produtos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "movimentacoes_estoque" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "produtoId" TEXT,
+    "produtoSku" TEXT,
+    "produtoNome" TEXT NOT NULL,
+    "tipo" TEXT NOT NULL,
+    "origem" TEXT NOT NULL DEFAULT 'manual',
+    "quantidade" INTEGER NOT NULL,
+    "estoqueAntes" INTEGER NOT NULL,
+    "estoqueDepois" INTEGER NOT NULL,
+    "custoUnitario" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "custoMedioAntes" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "custoMedioDepois" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "documento" TEXT,
+    "fornecedor" TEXT,
+    "motivo" TEXT,
+    "observacao" TEXT,
+    "usuario" TEXT,
+    "idempotencyKey" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "movimentacoes_estoque_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "depositos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "nome" TEXT NOT NULL,
+    "codigo" TEXT NOT NULL,
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+    "principal" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "depositos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "produto_depositos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "produtoId" TEXT NOT NULL,
+    "depositoId" TEXT NOT NULL,
+    "quantidade" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "produto_depositos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "inventario_sessoes" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'aberta',
+    "operador" TEXT,
+    "depositoId" TEXT,
+    "nome" TEXT,
+    "observacao" TEXT,
+    "iniciadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finalizadoEm" TIMESTAMP(3),
+    "payload" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "inventario_sessoes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "inventario_contagens" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "sessaoId" TEXT NOT NULL,
+    "produtoId" TEXT,
+    "codigoBipado" TEXT NOT NULL,
+    "produtoNomeSnapshot" TEXT,
+    "produtoSkuSnapshot" TEXT,
+    "estoqueSistemaSnapshot" INTEGER,
+    "quantidadeContada" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'encontrado',
+    "primeiroBipeEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ultimoBipeEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "payload" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "inventario_contagens_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tecnicos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "email" TEXT NOT NULL DEFAULT '',
+    "phone" TEXT NOT NULL DEFAULT '',
+    "role" TEXT NOT NULL DEFAULT '',
+    "specialty" TEXT NOT NULL DEFAULT '',
+    "commissionPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "tecnicos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "equipamentos_modelos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "brand" TEXT NOT NULL DEFAULT '',
+    "type" TEXT NOT NULL DEFAULT '',
+    "year" INTEGER NOT NULL DEFAULT 0,
+    "compatibleParts" JSONB,
+    "commonDefects" JSONB,
+    "recommendedChecklist" JSONB,
+    "averageRepairTime" TEXT NOT NULL DEFAULT '',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "equipamentos_modelos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "product_media" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'image',
+    "source" TEXT NOT NULL DEFAULT 'manual',
+    "isPrimary" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "product_media_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marketplace_listings" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'draft',
+    "title" TEXT NOT NULL DEFAULT '',
+    "description" TEXT NOT NULL DEFAULT '',
+    "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "externalId" TEXT NOT NULL DEFAULT '',
+    "publishedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "marketplace_listings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "servicos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "category" TEXT NOT NULL DEFAULT '',
+    "avgTime" TEXT NOT NULL DEFAULT '',
+    "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "margin" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "warrantyDays" INTEGER NOT NULL DEFAULT 0,
+    "terms" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'Ativo',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "servicos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ledger_snapshots" (
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "date" TEXT NOT NULL,
+    "payload" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ledger_snapshots_pkey" PRIMARY KEY ("storeId","date")
+);
+
+-- CreateTable
+CREATE TABLE "app_loja_settings" (
+    "id" TEXT NOT NULL,
+    "perfilLoja" TEXT NOT NULL DEFAULT 'assistencia',
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "app_loja_settings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "logs_auditoria" (
+    "id" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "action" TEXT NOT NULL,
+    "userLabel" TEXT NOT NULL,
+    "detail" TEXT NOT NULL,
+    "metadata" TEXT,
+    "source" TEXT NOT NULL DEFAULT 'dashboard',
+
+    CONSTRAINT "logs_auditoria_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "whatsapp_pending_actions" (
+    "id" TEXT NOT NULL,
+    "phoneKey" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "payload" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "whatsapp_pending_actions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "categorias_produto" (
+    "id" TEXT NOT NULL,
+    "lojaId" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "nome" TEXT NOT NULL,
+
+    CONSTRAINT "categorias_produto_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fornecedores" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "legalName" TEXT NOT NULL DEFAULT '',
+    "contactName" TEXT NOT NULL DEFAULT '',
+    "document" TEXT NOT NULL DEFAULT '',
+    "email" TEXT NOT NULL DEFAULT '',
+    "phone" TEXT NOT NULL DEFAULT '',
+    "whatsapp" TEXT NOT NULL DEFAULT '',
+    "address" TEXT NOT NULL DEFAULT '',
+    "productsProvided" TEXT NOT NULL DEFAULT '',
+    "avgLeadTime" TEXT NOT NULL DEFAULT '',
+    "paymentTerms" TEXT NOT NULL DEFAULT '',
+    "notes" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "fornecedores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "categorias_cadastro" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'geral',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "categorias_cadastro_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "marcas_cadastro" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT '',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "marcas_cadastro_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contas_pagar_titulos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "fornecedorId" TEXT,
+    "localKey" TEXT,
+    "payload" JSONB,
+    "descricao" TEXT NOT NULL DEFAULT '',
+    "valor" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "vencimento" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'pendente',
+    "numeroDocumento" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contas_pagar_titulos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contas_receber_titulos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "localKey" TEXT,
+    "payload" JSONB,
+    "descricao" TEXT NOT NULL DEFAULT '',
+    "cliente" TEXT NOT NULL DEFAULT '',
+    "valor" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "vencimento" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'pendente',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contas_receber_titulos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "carteiras_financeiras" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "nome" TEXT NOT NULL,
+    "tipo" TEXT NOT NULL DEFAULT 'caixa',
+    "saldoInicial" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "saldoAtual" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+    "cor" TEXT NOT NULL DEFAULT '#6366f1',
+    "icone" TEXT NOT NULL DEFAULT 'wallet',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "carteiras_financeiras_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "movimentacoes_financeiras" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "tipo" TEXT NOT NULL DEFAULT 'entrada',
+    "origem" TEXT NOT NULL DEFAULT 'manual',
+    "referenciaId" TEXT,
+    "descricao" TEXT NOT NULL DEFAULT '',
+    "valor" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "carteiraId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "movimentacoes_financeiras_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "series_venda" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "ano" INTEGER NOT NULL,
+    "prefixo" VARCHAR(8) NOT NULL,
+    "proximoNumero" INTEGER NOT NULL DEFAULT 1,
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "series_venda_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vendas" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "pedidoId" TEXT NOT NULL,
+    "clientSaleId" VARCHAR(128),
+    "idempotencyHash" CHAR(64),
+    "idempotencyHashVersion" INTEGER,
+    "serieVendaId" TEXT,
+    "anoNumero" INTEGER,
+    "numeroSequencial" INTEGER,
+    "numeradaEm" TIMESTAMP(3),
+    "numeracaoOrigem" "VendaNumeracaoOrigem",
+    "payload" JSONB,
+    "total" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "clienteNome" TEXT,
+    "clienteId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'concluida',
+    "operador" TEXT,
+    "canceladaEm" TIMESTAMP(3),
+    "canceladaPor" TEXT,
+    "motivoCancelamento" TEXT,
+    "contaReceberTituloId" TEXT,
+    "terminalId" TEXT,
+    "fiscalStatus" "FiscalStatusVenda" NOT NULL DEFAULT 'NAO_FISCAL',
+
+    CONSTRAINT "vendas_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "venda_itens" (
+    "id" TEXT NOT NULL,
+    "vendaId" TEXT NOT NULL,
+    "inventoryId" TEXT,
+    "nome" TEXT NOT NULL DEFAULT '',
+    "quantidade" INTEGER NOT NULL DEFAULT 1,
+    "precoUnitario" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "lineTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+    CONSTRAINT "venda_itens_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "devolucoes_venda" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "localId" TEXT NOT NULL,
+    "vendaLocalId" TEXT NOT NULL DEFAULT '',
+    "sessaoId" TEXT,
+    "tipo" TEXT NOT NULL,
+    "valorTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "creditoEmitido" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "clienteNome" TEXT NOT NULL DEFAULT '',
+    "clienteDoc" TEXT NOT NULL DEFAULT '',
+    "operador" TEXT NOT NULL DEFAULT '',
+    "motivo" TEXT NOT NULL DEFAULT '',
+    "observacao" TEXT NOT NULL DEFAULT '',
+    "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "payload" JSONB,
+
+    CONSTRAINT "devolucoes_venda_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "itens_devolucao_venda" (
+    "id" TEXT NOT NULL,
+    "devolucaoId" TEXT NOT NULL,
+    "inventoryId" TEXT,
+    "nome" TEXT NOT NULL DEFAULT '',
+    "quantidade" INTEGER NOT NULL DEFAULT 1,
+    "valorUnitario" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+    CONSTRAINT "itens_devolucao_venda_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "clientes_creditos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "clienteDoc" TEXT NOT NULL,
+    "clienteNome" TEXT NOT NULL DEFAULT '',
+    "clienteId" TEXT,
+    "devolucaoId" TEXT,
+    "vendaOrigemId" TEXT NOT NULL DEFAULT '',
+    "valorOriginal" DOUBLE PRECISION NOT NULL,
+    "saldoAtual" DOUBLE PRECISION NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'ativo',
+    "validoAte" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "clientes_creditos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "usos_credito_cliente" (
+    "id" TEXT NOT NULL,
+    "creditoId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "vendaId" TEXT NOT NULL DEFAULT '',
+    "valor" DOUBLE PRECISION NOT NULL,
+    "saldoAntes" DOUBLE PRECISION NOT NULL,
+    "saldoDepois" DOUBLE PRECISION NOT NULL,
+    "operador" TEXT NOT NULL DEFAULT '',
+    "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "usos_credito_cliente_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "users" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "pin" TEXT NOT NULL,
+    "pinHash" TEXT,
+    "role" TEXT NOT NULL DEFAULT 'CAIXA',
+    "credits" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Usage" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "cost" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Usage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CreditPurchase" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "package" TEXT NOT NULL,
+    "credits" INTEGER NOT NULL,
+    "amount" INTEGER NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PAID',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CreditPurchase_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "financial_accounts" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "type" "FinancialAccountType" NOT NULL DEFAULT 'cash',
+    "balance" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "financial_accounts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "financial_categories" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "name" TEXT NOT NULL,
+    "type" "FinancialTransactionType" NOT NULL,
+    "color" TEXT NOT NULL DEFAULT '#6366f1',
+    "icon" TEXT NOT NULL DEFAULT 'tag',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "financial_categories_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "financial_transactions" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "accountId" TEXT NOT NULL,
+    "categoryId" TEXT,
+    "clienteId" TEXT,
+    "vendaId" TEXT,
+    "osId" TEXT,
+    "type" "FinancialTransactionType" NOT NULL,
+    "status" "FinancialTransactionStatus" NOT NULL DEFAULT 'pending',
+    "description" TEXT NOT NULL DEFAULT '',
+    "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "dueDate" TIMESTAMP(3) NOT NULL,
+    "paidAt" TIMESTAMP(3),
+    "competencyDate" TIMESTAMP(3),
+    "paymentMethod" TEXT,
+    "notes" TEXT,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "financial_transactions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "financial_attachments" (
+    "id" TEXT NOT NULL,
+    "transactionId" TEXT NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "fileUrl" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "financial_attachments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fechamentos_financeiros" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "tipo" TEXT NOT NULL DEFAULT 'diario',
+    "dataReferencia" TEXT NOT NULL,
+    "mes" INTEGER NOT NULL,
+    "ano" INTEGER NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'fechado',
+    "saldoSistema" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "saldoInformado" DOUBLE PRECISION,
+    "diferenca" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "observacao" TEXT,
+    "snapshotDRE" JSONB,
+    "fechadoPor" TEXT,
+    "reabertoPor" TEXT,
+    "fechadoEm" TIMESTAMP(3),
+    "reabertoEm" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "fechamentos_financeiros_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "conciliacoes_financeiras" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "carteiraId" TEXT NOT NULL,
+    "dataReferencia" TEXT NOT NULL,
+    "saldoSistema" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "saldoInformado" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "diferenca" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'pendente',
+    "observacao" TEXT,
+    "conciliadoPor" TEXT,
+    "conciliadoEm" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "conciliacoes_financeiras_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "auditorias_financeiras" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL DEFAULT 'loja-1',
+    "entidade" TEXT NOT NULL,
+    "entidadeId" TEXT,
+    "acao" TEXT NOT NULL,
+    "antes" JSONB,
+    "depois" JSONB,
+    "usuarioId" TEXT,
+    "usuarioNome" TEXT,
+    "ip" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "auditorias_financeiras_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "sessoes_caixa" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "operador" TEXT NOT NULL DEFAULT '',
+    "saldoInicial" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "saldoFinal" DOUBLE PRECISION,
+    "saldoContado" DOUBLE PRECISION,
+    "observacao" TEXT NOT NULL DEFAULT '',
+    "status" "SessaoCaixaStatus" NOT NULL DEFAULT 'ABERTA',
+    "abertaEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "fechadaEm" TIMESTAMP(3),
+    "terminalId" TEXT,
+    "payload" JSONB,
+
+    CONSTRAINT "sessoes_caixa_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "caixa_operacoes" (
+    "id" TEXT NOT NULL,
+    "sessaoId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "tipo" TEXT NOT NULL,
+    "valor" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "motivo" TEXT NOT NULL DEFAULT '',
+    "operador" TEXT NOT NULL DEFAULT '',
+    "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "payload" JSONB,
+
+    CONSTRAINT "caixa_operacoes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "pdv_terminais" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+    "lockedByDeviceId" TEXT,
+    "lockedByOperador" TEXT,
+    "lockedAt" TIMESTAMP(3),
+    "heartbeatAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "pdv_terminais_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "omni_agent_commands" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "canal" TEXT NOT NULL DEFAULT 'texto_interno',
+    "comandoOriginal" TEXT NOT NULL,
+    "interpretacao" JSONB NOT NULL,
+    "status" "OmniAgentCommandStatus" NOT NULL,
+    "resultado" JSONB,
+    "executadoEm" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "omni_agent_commands_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "omni_agent_automations" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "triggerKey" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "commandTemplate" TEXT NOT NULL,
+    "priority" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "omni_agent_automations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "omni_agent_automation_runs" (
+    "id" TEXT NOT NULL,
+    "automationId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "eventKey" TEXT NOT NULL,
+    "entityId" TEXT,
+    "comandoGerado" TEXT NOT NULL,
+    "commandId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "omni_agent_automation_runs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "omni_agent_configs" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "agentName" TEXT NOT NULL DEFAULT 'Omni',
+    "tone" TEXT NOT NULL DEFAULT 'consultivo',
+    "basePrompt" TEXT NOT NULL DEFAULT '',
+    "autonomyLevel" TEXT NOT NULL DEFAULT 'medio',
+    "defaultChannel" TEXT NOT NULL DEFAULT 'texto_interno',
+    "businessHoursStart" TEXT NOT NULL DEFAULT '08:00',
+    "businessHoursEnd" TEXT NOT NULL DEFAULT '18:00',
+    "businessHoursDays" TEXT[] DEFAULT ARRAY['seg', 'ter', 'qua', 'qui', 'sex']::TEXT[],
+    "extraConfirmIntents" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "omni_agent_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "omni_agent_memories" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "clienteId" TEXT,
+    "tipo" TEXT NOT NULL,
+    "titulo" TEXT NOT NULL,
+    "conteudo" TEXT NOT NULL,
+    "tags" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "origem" TEXT NOT NULL DEFAULT 'manual',
+    "criadoPor" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'ativo',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "omni_agent_memories_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "admin_user_stores" (
+    "id" TEXT NOT NULL,
+    "adminUserId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "admin_user_stores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "admin_users" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "email" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "role" "UserRole" NOT NULL DEFAULT 'OPERADOR',
+    "lojaId" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "accessScope" TEXT DEFAULT 'STORE',
+    "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
+    "sessionVersion" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "stripeCustomerId" TEXT,
+    "stripeSubscriptionId" TEXT,
+    "stripePriceId" TEXT,
+    "subscriptionStatus" TEXT,
+    "planName" TEXT,
+    "billingInterval" TEXT,
+    "creditsIA" INTEGER NOT NULL DEFAULT 0,
+    "creditsUsed" INTEGER NOT NULL DEFAULT 0,
+    "currentPeriodEnd" TIMESTAMP(3),
+
+    CONSTRAINT "admin_users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "configuracoes_fiscais_loja" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "fiscalEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "ambiente" "AmbienteFiscal" NOT NULL DEFAULT 'HOMOLOGACAO',
+    "modeloFiscal" "ModeloFiscal" NOT NULL DEFAULT 'NFCE',
+    "razaoSocial" TEXT NOT NULL DEFAULT '',
+    "nomeFantasia" TEXT NOT NULL DEFAULT '',
+    "cnpj" TEXT NOT NULL DEFAULT '',
+    "inscricaoEstadual" TEXT NOT NULL DEFAULT '',
+    "inscricaoMunicipal" TEXT NOT NULL DEFAULT '',
+    "regimeTributario" "RegimeTributario" NOT NULL DEFAULT 'SIMPLES_NACIONAL',
+    "crt" INTEGER NOT NULL DEFAULT 1,
+    "logradouro" TEXT NOT NULL DEFAULT '',
+    "numero" TEXT NOT NULL DEFAULT '',
+    "complemento" TEXT NOT NULL DEFAULT '',
+    "bairro" TEXT NOT NULL DEFAULT '',
+    "codigoMunicipioIbge" TEXT NOT NULL DEFAULT '',
+    "municipio" TEXT NOT NULL DEFAULT '',
+    "uf" TEXT NOT NULL DEFAULT '',
+    "cep" TEXT NOT NULL DEFAULT '',
+    "codigoPais" TEXT NOT NULL DEFAULT '1058',
+    "fone" TEXT NOT NULL DEFAULT '',
+    "email" TEXT NOT NULL DEFAULT '',
+    "cscId" TEXT NOT NULL DEFAULT '',
+    "cscTokenRef" TEXT,
+    "provider" "FiscalProviderTipo" NOT NULL DEFAULT 'STUB_HOMOLOGACAO',
+    "providerConfig" JSONB,
+    "providerTokenRef" TEXT,
+    "certificadoAtivoId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "configuracoes_fiscais_loja_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "certificados_digitais" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "apelido" TEXT NOT NULL DEFAULT '',
+    "tipo" TEXT NOT NULL DEFAULT 'A1',
+    "titularCn" TEXT NOT NULL DEFAULT '',
+    "cnpjTitular" TEXT NOT NULL DEFAULT '',
+    "serialNumber" TEXT NOT NULL DEFAULT '',
+    "fingerprint" TEXT NOT NULL DEFAULT '',
+    "validoDe" TIMESTAMP(3),
+    "validoAte" TIMESTAMP(3),
+    "status" "CertificadoStatus" NOT NULL DEFAULT 'PENDENTE_VALIDACAO',
+    "ativo" BOOLEAN NOT NULL DEFAULT false,
+    "blobRef" TEXT,
+    "senhaRef" TEXT,
+    "uploadedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "certificados_digitais_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "series_fiscais" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "modelo" "ModeloFiscal" NOT NULL DEFAULT 'NFCE',
+    "ambiente" "AmbienteFiscal" NOT NULL DEFAULT 'HOMOLOGACAO',
+    "serie" INTEGER NOT NULL DEFAULT 1,
+    "proximoNumero" INTEGER NOT NULL DEFAULT 1,
+    "descricao" TEXT NOT NULL DEFAULT '',
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "series_fiscais_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "notas_fiscais" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "vendaId" TEXT NOT NULL,
+    "modelo" "ModeloFiscal" NOT NULL DEFAULT 'NFCE',
+    "ambiente" "AmbienteFiscal" NOT NULL,
+    "tipoEmissao" "TipoEmissao" NOT NULL DEFAULT 'NORMAL',
+    "status" "StatusNotaFiscal" NOT NULL DEFAULT 'RASCUNHO',
+    "vigente" BOOLEAN NOT NULL DEFAULT true,
+    "serieFiscalId" TEXT,
+    "serie" INTEGER,
+    "numero" INTEGER,
+    "chaveAcesso" TEXT,
+    "protocolo" TEXT,
+    "cStat" TEXT,
+    "xMotivo" TEXT,
+    "dataAutorizacao" TIMESTAMP(3),
+    "digestValue" TEXT,
+    "qrCodeData" TEXT,
+    "urlConsulta" TEXT,
+    "valorTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorDesconto" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorFrete" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorTotalTributos" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "snapshotEmitente" JSONB,
+    "snapshotDestinatario" JSONB,
+    "snapshotPagamento" JSONB,
+    "xmlAssinado" TEXT,
+    "xmlAutorizado" TEXT,
+    "xmlStorageRef" TEXT,
+    "certificadoId" TEXT,
+    "localKey" TEXT,
+    "tentativas" INTEGER NOT NULL DEFAULT 0,
+    "ultimoErro" TEXT,
+    "emitidaPor" TEXT,
+    "dataContingencia" TIMESTAMP(3),
+    "justContingencia" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "notas_fiscais_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "notas_fiscais_itens" (
+    "id" TEXT NOT NULL,
+    "notaFiscalId" TEXT NOT NULL,
+    "itemVendaId" TEXT,
+    "produtoId" TEXT,
+    "numeroItem" INTEGER NOT NULL DEFAULT 1,
+    "codigoProduto" TEXT NOT NULL DEFAULT '',
+    "descricao" TEXT NOT NULL DEFAULT '',
+    "gtin" TEXT,
+    "ncm" TEXT NOT NULL DEFAULT '',
+    "cest" TEXT,
+    "cfop" TEXT NOT NULL DEFAULT '',
+    "cst" TEXT,
+    "csosn" TEXT,
+    "origemMercadoria" INTEGER NOT NULL DEFAULT 0,
+    "unidadeComercial" TEXT NOT NULL DEFAULT 'UN',
+    "quantidade" DOUBLE PRECISION NOT NULL DEFAULT 1,
+    "valorUnitario" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorBruto" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorDesconto" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "baseCalculoIcms" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "aliquotaIcms" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorIcms" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "valorTributos" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "notas_fiscais_itens_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "eventos_fiscais" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "notaFiscalId" TEXT NOT NULL,
+    "tipo" "TipoEventoFiscal" NOT NULL,
+    "sequencia" INTEGER NOT NULL DEFAULT 1,
+    "status" "StatusEventoFiscal" NOT NULL DEFAULT 'PENDENTE',
+    "protocolo" TEXT,
+    "cStat" TEXT,
+    "xMotivo" TEXT,
+    "justificativa" TEXT,
+    "xmlEvento" TEXT,
+    "xmlRetorno" TEXT,
+    "dataEvento" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "operador" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "eventos_fiscais_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fiscal_emissao_jobs" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "vendaId" TEXT NOT NULL,
+    "notaFiscalId" TEXT,
+    "tipo" "FiscalJobTipo" NOT NULL DEFAULT 'EMISSAO',
+    "status" "FiscalJobStatus" NOT NULL DEFAULT 'PENDENTE',
+    "tentativas" INTEGER NOT NULL DEFAULT 0,
+    "maxTentativas" INTEGER NOT NULL DEFAULT 5,
+    "proximaTentativaEm" TIMESTAMP(3),
+    "prioridade" INTEGER NOT NULL DEFAULT 0,
+    "lockOwner" TEXT,
+    "lockedAt" TIMESTAMP(3),
+    "lockExpiresAt" TIMESTAMP(3),
+    "dedupeKey" TEXT,
+    "payload" JSONB,
+    "ultimoErro" TEXT,
+    "concluidoEm" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "fiscal_emissao_jobs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fiscal_logs" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "vendaId" TEXT,
+    "notaFiscalId" TEXT,
+    "eventoFiscalId" TEXT,
+    "jobId" TEXT,
+    "nivel" TEXT NOT NULL DEFAULT 'INFO',
+    "acao" TEXT NOT NULL DEFAULT '',
+    "cStat" TEXT,
+    "xMotivo" TEXT,
+    "mensagem" TEXT NOT NULL DEFAULT '',
+    "detalhe" JSONB,
+    "operador" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "fiscal_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_competencias" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "ano" INTEGER NOT NULL,
+    "mes" INTEGER NOT NULL,
+    "status" "ContadorCompetenciaStatus" NOT NULL DEFAULT 'aberta',
+    "versao" INTEGER NOT NULL DEFAULT 1,
+    "snapshot" JSONB,
+    "snapshotHash" TEXT,
+    "fechadaEm" TIMESTAMP(3),
+    "fechadaPorId" TEXT,
+    "reabertaEm" TIMESTAMP(3),
+    "reabertaPorId" TEXT,
+    "reabertaMotivo" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_competencias_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_documentos" (
+    "id" TEXT NOT NULL,
+    "competenciaId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "categoria" "ContadorDocumentoCategoria" NOT NULL,
+    "titulo" TEXT NOT NULL,
+    "nomeArquivo" TEXT NOT NULL,
+    "mime" TEXT NOT NULL,
+    "bytes" INTEGER NOT NULL,
+    "sha256" TEXT NOT NULL,
+    "storageRef" TEXT NOT NULL,
+    "status" "ContadorItemStatus" NOT NULL DEFAULT 'pendente',
+    "vencimento" TIMESTAMP(3),
+    "enviadoPorTipo" TEXT NOT NULL,
+    "enviadoPorId" TEXT NOT NULL,
+    "versaoDeId" TEXT,
+    "excluidoEm" TIMESTAMP(3),
+    "excluidoPorId" TEXT,
+    "excluidoMotivo" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_documentos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_pacotes" (
+    "id" TEXT NOT NULL,
+    "competenciaId" TEXT NOT NULL,
+    "versao" INTEGER NOT NULL,
+    "manifestoHash" TEXT NOT NULL,
+    "storageRef" TEXT NOT NULL,
+    "bytes" INTEGER NOT NULL,
+    "geradoPorTipo" TEXT NOT NULL,
+    "geradoPorId" TEXT NOT NULL,
+    "geradoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "contador_pacotes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_pacote_itens" (
+    "id" TEXT NOT NULL,
+    "pacoteId" TEXT NOT NULL,
+    "caminho" TEXT NOT NULL,
+    "bytes" INTEGER NOT NULL,
+    "sha256" TEXT NOT NULL,
+    "fonte" TEXT NOT NULL,
+
+    CONSTRAINT "contador_pacote_itens_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_comentarios" (
+    "id" TEXT NOT NULL,
+    "competenciaId" TEXT NOT NULL,
+    "documentoId" TEXT,
+    "autorTipo" TEXT NOT NULL,
+    "autorId" TEXT NOT NULL,
+    "visibilidade" TEXT NOT NULL,
+    "texto" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "contador_comentarios_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_eventos" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "competenciaId" TEXT,
+    "tipo" TEXT NOT NULL,
+    "atorTipo" TEXT NOT NULL,
+    "atorId" TEXT NOT NULL,
+    "entidade" TEXT,
+    "entidadeId" TEXT,
+    "origem" TEXT,
+    "metadata" JSONB,
+    "ip" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "contador_eventos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_usuarios" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "nome" TEXT NOT NULL,
+    "senhaHash" TEXT NOT NULL,
+    "status" "ContadorUsuarioStatus" NOT NULL DEFAULT 'ativo',
+    "tokenVersion" INTEGER NOT NULL DEFAULT 1,
+    "ultimoLoginEm" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_usuarios_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_convites" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "papel" "ContadorPapelExterno" NOT NULL DEFAULT 'leitura',
+    "tokenHash" TEXT NOT NULL,
+    "expiraEm" TIMESTAMP(3) NOT NULL,
+    "usadoEm" TIMESTAMP(3),
+    "revogadoEm" TIMESTAMP(3),
+    "revogadoPorId" TEXT,
+    "criadoPorId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_convites_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_acessos" (
+    "id" TEXT NOT NULL,
+    "usuarioId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "papel" "ContadorPapelExterno" NOT NULL,
+    "status" "ContadorAcessoStatus" NOT NULL DEFAULT 'ativo',
+    "concedidoPorId" TEXT NOT NULL,
+    "concedidoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "suspensoEm" TIMESTAMP(3),
+    "suspensoPorId" TEXT,
+    "revogadoEm" TIMESTAMP(3),
+    "revogadoPorId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_acessos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_sessoes_externas" (
+    "id" TEXT NOT NULL,
+    "usuarioId" TEXT NOT NULL,
+    "expiraEm" TIMESTAMP(3) NOT NULL,
+    "revogadoEm" TIMESTAMP(3),
+    "ultimoUsoEm" TIMESTAMP(3),
+    "ipHash" TEXT,
+    "userAgentResumo" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_sessoes_externas_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_obrigacao_templates" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "titulo" TEXT NOT NULL,
+    "descricao" TEXT,
+    "tipo" "ContadorObrigacaoTipo" NOT NULL,
+    "diaVencimento" INTEGER,
+    "recorrencia" "ContadorObrigacaoRecorrencia" NOT NULL DEFAULT 'mensal',
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+    "criadoPorTipo" TEXT NOT NULL,
+    "criadoPorId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_obrigacao_templates_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_obrigacoes" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "competenciaId" TEXT NOT NULL,
+    "templateId" TEXT,
+    "titulo" TEXT NOT NULL,
+    "descricao" TEXT,
+    "tipo" "ContadorObrigacaoTipo" NOT NULL,
+    "vencimento" TIMESTAMP(3),
+    "status" "ContadorItemStatus" NOT NULL DEFAULT 'pendente',
+    "criadoPorTipo" TEXT NOT NULL,
+    "criadoPorId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_obrigacoes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "contador_guias" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "competenciaId" TEXT NOT NULL,
+    "obrigacaoId" TEXT,
+    "titulo" TEXT NOT NULL,
+    "valorCentavos" INTEGER NOT NULL,
+    "vencimento" TIMESTAMP(3) NOT NULL,
+    "origem" "ContadorGuiaOrigem" NOT NULL,
+    "pdfDocumentoId" TEXT,
+    "comprovanteDocumentoId" TEXT,
+    "pagaEm" TIMESTAMP(3),
+    "criadoPorTipo" TEXT NOT NULL,
+    "criadoPorId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contador_guias_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_empregadores" (
+    "id" TEXT NOT NULL,
+    "storeGestoraId" TEXT NOT NULL,
+    "tipoInscricao" VARCHAR(12) NOT NULL,
+    "inscricao" VARCHAR(32) NOT NULL,
+    "nome" VARCHAR(240) NOT NULL,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'ATIVO',
+    "versaoAtual" INTEGER NOT NULL DEFAULT 1,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "dp_empregadores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_empregador_versoes" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "versao" INTEGER NOT NULL,
+    "tipoInscricao" VARCHAR(12) NOT NULL,
+    "inscricao" VARCHAR(32) NOT NULL,
+    "nome" VARCHAR(240) NOT NULL,
+    "endereco" JSONB,
+    "regime" VARCHAR(80),
+    "validFrom" DATE NOT NULL,
+    "validTo" DATE,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "supersedesId" TEXT,
+    "supersededAt" TIMESTAMP(3),
+    "autorId" TEXT NOT NULL,
+    "motivo" TEXT NOT NULL,
+
+    CONSTRAINT "dp_empregador_versoes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_estabelecimentos" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "tipoInscricao" VARCHAR(12) NOT NULL,
+    "inscricao" VARCHAR(32) NOT NULL,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'ATIVO',
+    "versaoAtual" INTEGER NOT NULL DEFAULT 1,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dp_estabelecimentos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_estabelecimento_versoes" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "estabelecimentoId" TEXT NOT NULL,
+    "versao" INTEGER NOT NULL,
+    "nome" VARCHAR(240) NOT NULL,
+    "endereco" JSONB,
+    "lotacaoRef" VARCHAR(80),
+    "validFrom" DATE NOT NULL,
+    "validTo" DATE,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "supersedesId" TEXT,
+    "supersededAt" TIMESTAMP(3),
+    "autorId" TEXT NOT NULL,
+    "motivo" TEXT NOT NULL,
+
+    CONSTRAINT "dp_estabelecimento_versoes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_unidades_vinculo" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "estabelecimentoId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "validFrom" DATE NOT NULL,
+    "validTo" DATE,
+    "aprovadoPorId" TEXT NOT NULL,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "motivo" TEXT NOT NULL,
+
+    CONSTRAINT "dp_unidades_vinculo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_acessos" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "adminUserId" TEXT NOT NULL,
+    "capacidades" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "concedidoPorId" TEXT NOT NULL,
+    "concedidoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "revogadoPorId" TEXT,
+    "revogadoEm" TIMESTAMP(3),
+    "motivo" TEXT NOT NULL,
+
+    CONSTRAINT "dp_acessos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_pessoas" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "cpfCipher" TEXT,
+    "cpfHash" VARCHAR(64),
+    "versaoAtual" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dp_pessoas_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_pessoa_versoes" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "pessoaId" TEXT NOT NULL,
+    "versao" INTEGER NOT NULL,
+    "nome" VARCHAR(240),
+    "nascimento" DATE,
+    "endereco" JSONB,
+    "cpfCipher" TEXT,
+    "cpfHash" VARCHAR(64),
+    "validFrom" DATE,
+    "validTo" DATE,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "supersedesId" TEXT,
+    "autorId" TEXT NOT NULL,
+    "motivo" TEXT NOT NULL,
+
+    CONSTRAINT "dp_pessoa_versoes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_pessoa_usuarios" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "pessoaId" TEXT NOT NULL,
+    "adminUserId" TEXT NOT NULL,
+    "validFrom" DATE NOT NULL,
+    "validTo" DATE,
+    "autorId" TEXT NOT NULL,
+    "motivo" TEXT NOT NULL,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dp_pessoa_usuarios_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_pessoa_tecnicos" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "pessoaId" TEXT NOT NULL,
+    "tecnicoId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "validFrom" DATE NOT NULL,
+    "validTo" DATE,
+    "autorId" TEXT NOT NULL,
+    "motivo" TEXT NOT NULL,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dp_pessoa_tecnicos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_vinculos" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "pessoaId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "matricula" VARCHAR(64),
+    "admissao" DATE,
+    "termino" DATE,
+    "regime" VARCHAR(80),
+    "categoria" VARCHAR(80),
+    "status" VARCHAR(20) NOT NULL DEFAULT 'RASCUNHO',
+    "versaoAtual" INTEGER NOT NULL DEFAULT 0,
+    "arquivadoEm" TIMESTAMP(3),
+    "arquivadoPorId" TEXT,
+    "motivoArquivo" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dp_vinculos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_contrato_versoes" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "vinculoId" TEXT NOT NULL,
+    "estabelecimentoId" TEXT,
+    "versao" INTEGER NOT NULL,
+    "cargo" VARCHAR(160),
+    "cbo" VARCHAR(12),
+    "tipoContrato" VARCHAR(80),
+    "salarioBase" DECIMAL(18,2),
+    "unidadeSalario" VARCHAR(24),
+    "jornadaSemanal" DECIMAL(8,2),
+    "divisor" INTEGER,
+    "cctRef" VARCHAR(160),
+    "validFrom" DATE,
+    "validTo" DATE,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "supersedesId" TEXT,
+    "supersededAt" TIMESTAMP(3),
+    "autorId" TEXT NOT NULL,
+    "motivo" TEXT NOT NULL,
+
+    CONSTRAINT "dp_contrato_versoes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_documentos" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "pessoaId" TEXT NOT NULL,
+    "vinculoId" TEXT,
+    "storeId" TEXT NOT NULL,
+    "categoria" VARCHAR(64) NOT NULL,
+    "classificacao" VARCHAR(32) NOT NULL,
+    "origem" VARCHAR(32) NOT NULL,
+    "nomeArquivo" VARCHAR(180) NOT NULL,
+    "storageRef" TEXT NOT NULL,
+    "mime" VARCHAR(80) NOT NULL,
+    "bytes" INTEGER NOT NULL,
+    "sha256" VARCHAR(64) NOT NULL,
+    "versaoDeId" TEXT,
+    "enviadoPorId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dp_documentos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dp_auditorias" (
+    "id" TEXT NOT NULL,
+    "empregadorId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "atorId" TEXT NOT NULL,
+    "comandoId" VARCHAR(100) NOT NULL,
+    "acao" VARCHAR(80) NOT NULL,
+    "entidade" VARCHAR(80) NOT NULL,
+    "entidadeId" TEXT NOT NULL,
+    "payloadHash" VARCHAR(64) NOT NULL,
+    "justificativa" TEXT,
+    "diffSaneado" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dp_auditorias_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "stores_codigoNumeracaoVenda_key" ON "stores"("codigoNumeracaoVenda");
+
+-- CreateIndex
+CREATE INDEX "stores_profile_idx" ON "stores"("profile");
+
+-- CreateIndex
+CREATE INDEX "marketplace_connections_storeId_idx" ON "marketplace_connections"("storeId");
+
+-- CreateIndex
+CREATE INDEX "marketplace_connections_storeId_provider_idx" ON "marketplace_connections"("storeId", "provider");
+
+-- CreateIndex
+CREATE INDEX "marketplace_sync_logs_storeId_idx" ON "marketplace_sync_logs"("storeId");
+
+-- CreateIndex
+CREATE INDEX "marketplace_sync_logs_connectionId_createdAt_idx" ON "marketplace_sync_logs"("connectionId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "marketplace_sync_logs_storeId_produtoId_createdAt_idx" ON "marketplace_sync_logs"("storeId", "produtoId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "marketplace_sync_logs_productLinkId_createdAt_idx" ON "marketplace_sync_logs"("productLinkId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "marketplace_product_links_storeId_idx" ON "marketplace_product_links"("storeId");
+
+-- CreateIndex
+CREATE INDEX "marketplace_product_links_storeId_produtoId_idx" ON "marketplace_product_links"("storeId", "produtoId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "marketplace_product_links_connectionId_produtoId_key" ON "marketplace_product_links"("connectionId", "produtoId");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_contacts_storeId_idx" ON "whatsapp_contacts"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "whatsapp_contacts_storeId_phoneDigits_key" ON "whatsapp_contacts"("storeId", "phoneDigits");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_conversations_storeId_lastMessageAt_idx" ON "whatsapp_conversations"("storeId", "lastMessageAt");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_conversations_contactId_idx" ON "whatsapp_conversations"("contactId");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_conversations_clienteId_idx" ON "whatsapp_conversations"("clienteId");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_messages_storeId_createdAt_idx" ON "whatsapp_messages"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_messages_conversationId_createdAt_idx" ON "whatsapp_messages"("conversationId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_automations_storeId_enabled_idx" ON "whatsapp_automations"("storeId", "enabled");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_quick_replies_storeId_idx" ON "whatsapp_quick_replies"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "whatsapp_quick_replies_storeId_shortcut_key" ON "whatsapp_quick_replies"("storeId", "shortcut");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_etiquetas_storeId_idx" ON "whatsapp_etiquetas"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "whatsapp_etiquetas_storeId_nome_key" ON "whatsapp_etiquetas"("storeId", "nome");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_conversa_etiquetas_conversationId_idx" ON "whatsapp_conversa_etiquetas"("conversationId");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_conversa_etiquetas_etiquetaId_idx" ON "whatsapp_conversa_etiquetas"("etiquetaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "whatsapp_conversa_etiquetas_conversationId_etiquetaId_key" ON "whatsapp_conversa_etiquetas"("conversationId", "etiquetaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "whatsapp_ai_settings_storeId_key" ON "whatsapp_ai_settings"("storeId");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_automation_logs_storeId_createdAt_idx" ON "whatsapp_automation_logs"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_automation_logs_action_idx" ON "whatsapp_automation_logs"("action");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "whatsapp_phone_numbers_phoneNumberId_key" ON "whatsapp_phone_numbers"("phoneNumberId");
+
+-- CreateIndex
+CREATE INDEX "whatsapp_phone_numbers_storeId_idx" ON "whatsapp_phone_numbers"("storeId");
+
+-- CreateIndex
+CREATE INDEX "marketing_posts_storeId_status_idx" ON "marketing_posts"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "marketing_posts_storeId_scheduledAt_idx" ON "marketing_posts"("storeId", "scheduledAt");
+
+-- CreateIndex
+CREATE INDEX "marketing_posts_storeId_createdAt_idx" ON "marketing_posts"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "marketing_ia_posts_storeId_createdAt_idx" ON "marketing_ia_posts"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "store_settings_storeId_key" ON "store_settings"("storeId");
+
+-- CreateIndex
+CREATE INDEX "marketing_media_jobs_storeId_createdAt_idx" ON "marketing_media_jobs"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ia_conversations_storeId_updatedAt_idx" ON "ia_conversations"("storeId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "ia_messages_storeId_createdAt_idx" ON "ia_messages"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ia_messages_conversationId_createdAt_idx" ON "ia_messages"("conversationId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "clientes_importados_storeId_idx" ON "clientes_importados"("storeId");
+
+-- CreateIndex
+CREATE INDEX "clientes_importados_storeId_documentKey_idx" ON "clientes_importados"("storeId", "documentKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "clientes_importados_storeId_documentKey_key" ON "clientes_importados"("storeId", "documentKey");
+
+-- CreateIndex
+CREATE INDEX "ordens_servico_storeId_idx" ON "ordens_servico"("storeId");
+
+-- CreateIndex
+CREATE INDEX "ordens_servico_clienteId_idx" ON "ordens_servico"("clienteId");
+
+-- CreateIndex
+CREATE INDEX "ordens_servico_numero_idx" ON "ordens_servico"("numero");
+
+-- CreateIndex
+CREATE INDEX "ordens_servico_status_idx" ON "ordens_servico"("status");
+
+-- CreateIndex
+CREATE INDEX "garantia_ordem_servico_storeId_idx" ON "garantia_ordem_servico"("storeId");
+
+-- CreateIndex
+CREATE INDEX "garantia_ordem_servico_ordemServicoId_idx" ON "garantia_ordem_servico"("ordemServicoId");
+
+-- CreateIndex
+CREATE INDEX "garantia_ordem_servico_status_idx" ON "garantia_ordem_servico"("status");
+
+-- CreateIndex
+CREATE INDEX "ordem_servico_item_ordemServicoId_idx" ON "ordem_servico_item"("ordemServicoId");
+
+-- CreateIndex
+CREATE INDEX "ordem_servico_item_produtoId_idx" ON "ordem_servico_item"("produtoId");
+
+-- CreateIndex
+CREATE INDEX "estoque_produtos_storeId_idx" ON "estoque_produtos"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "estoque_produtos_storeId_sku_key" ON "estoque_produtos"("storeId", "sku");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "estoque_produtos_storeId_barcode_key" ON "estoque_produtos"("storeId", "barcode");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_estoque_storeId_idx" ON "movimentacoes_estoque"("storeId");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_estoque_storeId_produtoId_idx" ON "movimentacoes_estoque"("storeId", "produtoId");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_estoque_storeId_createdAt_idx" ON "movimentacoes_estoque"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "movimentacoes_estoque_storeId_idempotencyKey_key" ON "movimentacoes_estoque"("storeId", "idempotencyKey");
+
+-- CreateIndex
+CREATE INDEX "depositos_storeId_idx" ON "depositos"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "depositos_storeId_codigo_key" ON "depositos"("storeId", "codigo");
+
+-- CreateIndex
+CREATE INDEX "produto_depositos_storeId_idx" ON "produto_depositos"("storeId");
+
+-- CreateIndex
+CREATE INDEX "produto_depositos_storeId_produtoId_idx" ON "produto_depositos"("storeId", "produtoId");
+
+-- CreateIndex
+CREATE INDEX "produto_depositos_depositoId_idx" ON "produto_depositos"("depositoId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "produto_depositos_produtoId_depositoId_key" ON "produto_depositos"("produtoId", "depositoId");
+
+-- CreateIndex
+CREATE INDEX "inventario_sessoes_storeId_idx" ON "inventario_sessoes"("storeId");
+
+-- CreateIndex
+CREATE INDEX "inventario_sessoes_storeId_status_idx" ON "inventario_sessoes"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "inventario_contagens_storeId_idx" ON "inventario_contagens"("storeId");
+
+-- CreateIndex
+CREATE INDEX "inventario_contagens_sessaoId_idx" ON "inventario_contagens"("sessaoId");
+
+-- CreateIndex
+CREATE INDEX "inventario_contagens_storeId_status_idx" ON "inventario_contagens"("storeId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "inventario_contagens_sessaoId_codigoBipado_key" ON "inventario_contagens"("sessaoId", "codigoBipado");
+
+-- CreateIndex
+CREATE INDEX "tecnicos_storeId_idx" ON "tecnicos"("storeId");
+
+-- CreateIndex
+CREATE INDEX "tecnicos_name_idx" ON "tecnicos"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tecnicos_id_storeId_key" ON "tecnicos"("id", "storeId");
+
+-- CreateIndex
+CREATE INDEX "equipamentos_modelos_storeId_idx" ON "equipamentos_modelos"("storeId");
+
+-- CreateIndex
+CREATE INDEX "equipamentos_modelos_brand_idx" ON "equipamentos_modelos"("brand");
+
+-- CreateIndex
+CREATE INDEX "equipamentos_modelos_name_idx" ON "equipamentos_modelos"("name");
+
+-- CreateIndex
+CREATE INDEX "product_media_storeId_idx" ON "product_media"("storeId");
+
+-- CreateIndex
+CREATE INDEX "product_media_productId_idx" ON "product_media"("productId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "product_media_productId_url_key" ON "product_media"("productId", "url");
+
+-- CreateIndex
+CREATE INDEX "marketplace_listings_storeId_idx" ON "marketplace_listings"("storeId");
+
+-- CreateIndex
+CREATE INDEX "marketplace_listings_productId_idx" ON "marketplace_listings"("productId");
+
+-- CreateIndex
+CREATE INDEX "marketplace_listings_channel_idx" ON "marketplace_listings"("channel");
+
+-- CreateIndex
+CREATE INDEX "marketplace_listings_status_idx" ON "marketplace_listings"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "marketplace_listings_storeId_channel_externalId_key" ON "marketplace_listings"("storeId", "channel", "externalId");
+
+-- CreateIndex
+CREATE INDEX "servicos_storeId_idx" ON "servicos"("storeId");
+
+-- CreateIndex
+CREATE INDEX "servicos_name_idx" ON "servicos"("name");
+
+-- CreateIndex
+CREATE INDEX "logs_auditoria_createdAt_idx" ON "logs_auditoria"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "logs_auditoria_action_idx" ON "logs_auditoria"("action");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "whatsapp_pending_actions_phoneKey_key" ON "whatsapp_pending_actions"("phoneKey");
+
+-- CreateIndex
+CREATE INDEX "categorias_produto_lojaId_idx" ON "categorias_produto"("lojaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "categorias_produto_lojaId_slug_key" ON "categorias_produto"("lojaId", "slug");
+
+-- CreateIndex
+CREATE INDEX "fornecedores_storeId_idx" ON "fornecedores"("storeId");
+
+-- CreateIndex
+CREATE INDEX "fornecedores_name_idx" ON "fornecedores"("name");
+
+-- CreateIndex
+CREATE INDEX "categorias_cadastro_storeId_idx" ON "categorias_cadastro"("storeId");
+
+-- CreateIndex
+CREATE INDEX "categorias_cadastro_type_idx" ON "categorias_cadastro"("type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "categorias_cadastro_storeId_type_name_key" ON "categorias_cadastro"("storeId", "type", "name");
+
+-- CreateIndex
+CREATE INDEX "marcas_cadastro_storeId_idx" ON "marcas_cadastro"("storeId");
+
+-- CreateIndex
+CREATE INDEX "marcas_cadastro_type_idx" ON "marcas_cadastro"("type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "marcas_cadastro_storeId_type_name_key" ON "marcas_cadastro"("storeId", "type", "name");
+
+-- CreateIndex
+CREATE INDEX "contas_pagar_titulos_storeId_idx" ON "contas_pagar_titulos"("storeId");
+
+-- CreateIndex
+CREATE INDEX "contas_pagar_titulos_fornecedorId_idx" ON "contas_pagar_titulos"("fornecedorId");
+
+-- CreateIndex
+CREATE INDEX "contas_pagar_titulos_status_idx" ON "contas_pagar_titulos"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contas_pagar_titulos_storeId_localKey_key" ON "contas_pagar_titulos"("storeId", "localKey");
+
+-- CreateIndex
+CREATE INDEX "contas_receber_titulos_storeId_idx" ON "contas_receber_titulos"("storeId");
+
+-- CreateIndex
+CREATE INDEX "contas_receber_titulos_cliente_idx" ON "contas_receber_titulos"("cliente");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contas_receber_titulos_storeId_localKey_key" ON "contas_receber_titulos"("storeId", "localKey");
+
+-- CreateIndex
+CREATE INDEX "carteiras_financeiras_storeId_idx" ON "carteiras_financeiras"("storeId");
+
+-- CreateIndex
+CREATE INDEX "carteiras_financeiras_storeId_ativo_idx" ON "carteiras_financeiras"("storeId", "ativo");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_financeiras_storeId_idx" ON "movimentacoes_financeiras"("storeId");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_financeiras_tipo_idx" ON "movimentacoes_financeiras"("tipo");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_financeiras_origem_idx" ON "movimentacoes_financeiras"("origem");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_financeiras_referenciaId_idx" ON "movimentacoes_financeiras"("referenciaId");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_financeiras_carteiraId_idx" ON "movimentacoes_financeiras"("carteiraId");
+
+-- CreateIndex
+CREATE INDEX "movimentacoes_financeiras_createdAt_idx" ON "movimentacoes_financeiras"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "series_venda_storeId_ativo_idx" ON "series_venda"("storeId", "ativo");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "series_venda_storeId_ano_key" ON "series_venda"("storeId", "ano");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "series_venda_prefixo_ano_key" ON "series_venda"("prefixo", "ano");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "series_venda_id_storeId_key" ON "series_venda"("id", "storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "vendas_pedidoId_key" ON "vendas"("pedidoId");
+
+-- CreateIndex
+CREATE INDEX "vendas_storeId_idx" ON "vendas"("storeId");
+
+-- CreateIndex
+CREATE INDEX "vendas_storeId_status_idx" ON "vendas"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "vendas_clienteId_idx" ON "vendas"("clienteId");
+
+-- CreateIndex
+CREATE INDEX "vendas_contaReceberTituloId_idx" ON "vendas"("contaReceberTituloId");
+
+-- CreateIndex
+CREATE INDEX "vendas_storeId_terminalId_idx" ON "vendas"("storeId", "terminalId");
+
+-- CreateIndex
+CREATE INDEX "vendas_storeId_fiscalStatus_idx" ON "vendas"("storeId", "fiscalStatus");
+
+-- CreateIndex
+CREATE INDEX "vendas_storeId_anoNumero_numeroSequencial_idx" ON "vendas"("storeId", "anoNumero", "numeroSequencial");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "vendas_storeId_clientSaleId_key" ON "vendas"("storeId", "clientSaleId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "vendas_serieVendaId_numeroSequencial_key" ON "vendas"("serieVendaId", "numeroSequencial");
+
+-- CreateIndex
+CREATE INDEX "venda_itens_vendaId_idx" ON "venda_itens"("vendaId");
+
+-- CreateIndex
+CREATE INDEX "devolucoes_venda_storeId_at_idx" ON "devolucoes_venda"("storeId", "at");
+
+-- CreateIndex
+CREATE INDEX "devolucoes_venda_storeId_vendaLocalId_idx" ON "devolucoes_venda"("storeId", "vendaLocalId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "devolucoes_venda_storeId_localId_key" ON "devolucoes_venda"("storeId", "localId");
+
+-- CreateIndex
+CREATE INDEX "itens_devolucao_venda_devolucaoId_idx" ON "itens_devolucao_venda"("devolucaoId");
+
+-- CreateIndex
+CREATE INDEX "clientes_creditos_storeId_clienteDoc_status_idx" ON "clientes_creditos"("storeId", "clienteDoc", "status");
+
+-- CreateIndex
+CREATE INDEX "clientes_creditos_storeId_clienteId_idx" ON "clientes_creditos"("storeId", "clienteId");
+
+-- CreateIndex
+CREATE INDEX "usos_credito_cliente_creditoId_idx" ON "usos_credito_cliente"("creditoId");
+
+-- CreateIndex
+CREATE INDEX "usos_credito_cliente_storeId_idx" ON "usos_credito_cliente"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_pin_key" ON "users"("pin");
+
+-- CreateIndex
+CREATE INDEX "users_role_idx" ON "users"("role");
+
+-- CreateIndex
+CREATE INDEX "CreditPurchase_userId_createdAt_idx" ON "CreditPurchase"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "financial_accounts_storeId_idx" ON "financial_accounts"("storeId");
+
+-- CreateIndex
+CREATE INDEX "financial_accounts_storeId_active_idx" ON "financial_accounts"("storeId", "active");
+
+-- CreateIndex
+CREATE INDEX "financial_categories_storeId_idx" ON "financial_categories"("storeId");
+
+-- CreateIndex
+CREATE INDEX "financial_categories_storeId_type_idx" ON "financial_categories"("storeId", "type");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_storeId_idx" ON "financial_transactions"("storeId");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_storeId_type_idx" ON "financial_transactions"("storeId", "type");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_storeId_status_idx" ON "financial_transactions"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_storeId_dueDate_idx" ON "financial_transactions"("storeId", "dueDate");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_accountId_idx" ON "financial_transactions"("accountId");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_categoryId_idx" ON "financial_transactions"("categoryId");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_osId_idx" ON "financial_transactions"("osId");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_vendaId_idx" ON "financial_transactions"("vendaId");
+
+-- CreateIndex
+CREATE INDEX "financial_attachments_transactionId_idx" ON "financial_attachments"("transactionId");
+
+-- CreateIndex
+CREATE INDEX "fechamentos_financeiros_storeId_idx" ON "fechamentos_financeiros"("storeId");
+
+-- CreateIndex
+CREATE INDEX "fechamentos_financeiros_storeId_tipo_idx" ON "fechamentos_financeiros"("storeId", "tipo");
+
+-- CreateIndex
+CREATE INDEX "fechamentos_financeiros_storeId_mes_ano_idx" ON "fechamentos_financeiros"("storeId", "mes", "ano");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fechamentos_financeiros_storeId_tipo_dataReferencia_key" ON "fechamentos_financeiros"("storeId", "tipo", "dataReferencia");
+
+-- CreateIndex
+CREATE INDEX "conciliacoes_financeiras_storeId_idx" ON "conciliacoes_financeiras"("storeId");
+
+-- CreateIndex
+CREATE INDEX "conciliacoes_financeiras_carteiraId_idx" ON "conciliacoes_financeiras"("carteiraId");
+
+-- CreateIndex
+CREATE INDEX "conciliacoes_financeiras_storeId_dataReferencia_idx" ON "conciliacoes_financeiras"("storeId", "dataReferencia");
+
+-- CreateIndex
+CREATE INDEX "conciliacoes_financeiras_storeId_status_idx" ON "conciliacoes_financeiras"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "auditorias_financeiras_storeId_idx" ON "auditorias_financeiras"("storeId");
+
+-- CreateIndex
+CREATE INDEX "auditorias_financeiras_storeId_entidade_idx" ON "auditorias_financeiras"("storeId", "entidade");
+
+-- CreateIndex
+CREATE INDEX "auditorias_financeiras_storeId_entidadeId_idx" ON "auditorias_financeiras"("storeId", "entidadeId");
+
+-- CreateIndex
+CREATE INDEX "auditorias_financeiras_storeId_createdAt_idx" ON "auditorias_financeiras"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "sessoes_caixa_storeId_status_idx" ON "sessoes_caixa"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "sessoes_caixa_storeId_abertaEm_idx" ON "sessoes_caixa"("storeId", "abertaEm");
+
+-- CreateIndex
+CREATE INDEX "sessoes_caixa_storeId_terminalId_status_idx" ON "sessoes_caixa"("storeId", "terminalId", "status");
+
+-- CreateIndex
+CREATE INDEX "caixa_operacoes_sessaoId_idx" ON "caixa_operacoes"("sessaoId");
+
+-- CreateIndex
+CREATE INDEX "caixa_operacoes_storeId_at_idx" ON "caixa_operacoes"("storeId", "at");
+
+-- CreateIndex
+CREATE INDEX "pdv_terminais_storeId_status_idx" ON "pdv_terminais"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "pdv_terminais_storeId_heartbeatAt_idx" ON "pdv_terminais"("storeId", "heartbeatAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "pdv_terminais_storeId_code_key" ON "pdv_terminais"("storeId", "code");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_commands_storeId_createdAt_idx" ON "omni_agent_commands"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_commands_storeId_status_idx" ON "omni_agent_commands"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_automations_storeId_enabled_idx" ON "omni_agent_automations"("storeId", "enabled");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_automations_storeId_triggerKey_idx" ON "omni_agent_automations"("storeId", "triggerKey");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_automation_runs_storeId_createdAt_idx" ON "omni_agent_automation_runs"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_automation_runs_automationId_createdAt_idx" ON "omni_agent_automation_runs"("automationId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "omni_agent_configs_storeId_key" ON "omni_agent_configs"("storeId");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_memories_storeId_clienteId_createdAt_idx" ON "omni_agent_memories"("storeId", "clienteId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "omni_agent_memories_storeId_status_createdAt_idx" ON "omni_agent_memories"("storeId", "status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "admin_user_stores_storeId_idx" ON "admin_user_stores"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "admin_user_stores_adminUserId_storeId_key" ON "admin_user_stores"("adminUserId", "storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "admin_users_email_key" ON "admin_users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "admin_users_stripeCustomerId_key" ON "admin_users"("stripeCustomerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "admin_users_stripeSubscriptionId_key" ON "admin_users"("stripeSubscriptionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "configuracoes_fiscais_loja_storeId_key" ON "configuracoes_fiscais_loja"("storeId");
+
+-- CreateIndex
+CREATE INDEX "configuracoes_fiscais_loja_fiscalEnabled_idx" ON "configuracoes_fiscais_loja"("fiscalEnabled");
+
+-- CreateIndex
+CREATE INDEX "certificados_digitais_storeId_idx" ON "certificados_digitais"("storeId");
+
+-- CreateIndex
+CREATE INDEX "certificados_digitais_storeId_ativo_idx" ON "certificados_digitais"("storeId", "ativo");
+
+-- CreateIndex
+CREATE INDEX "certificados_digitais_validoAte_idx" ON "certificados_digitais"("validoAte");
+
+-- CreateIndex
+CREATE INDEX "series_fiscais_storeId_idx" ON "series_fiscais"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "series_fiscais_storeId_modelo_serie_ambiente_key" ON "series_fiscais"("storeId", "modelo", "serie", "ambiente");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "notas_fiscais_chaveAcesso_key" ON "notas_fiscais"("chaveAcesso");
+
+-- CreateIndex
+CREATE INDEX "notas_fiscais_storeId_idx" ON "notas_fiscais"("storeId");
+
+-- CreateIndex
+CREATE INDEX "notas_fiscais_storeId_status_idx" ON "notas_fiscais"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "notas_fiscais_vendaId_idx" ON "notas_fiscais"("vendaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "notas_fiscais_storeId_modelo_serie_numero_ambiente_key" ON "notas_fiscais"("storeId", "modelo", "serie", "numero", "ambiente");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "notas_fiscais_storeId_localKey_key" ON "notas_fiscais"("storeId", "localKey");
+
+-- CreateIndex
+CREATE INDEX "notas_fiscais_itens_notaFiscalId_idx" ON "notas_fiscais_itens"("notaFiscalId");
+
+-- CreateIndex
+CREATE INDEX "eventos_fiscais_storeId_idx" ON "eventos_fiscais"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "eventos_fiscais_notaFiscalId_tipo_sequencia_key" ON "eventos_fiscais"("notaFiscalId", "tipo", "sequencia");
+
+-- CreateIndex
+CREATE INDEX "fiscal_emissao_jobs_status_proximaTentativaEm_idx" ON "fiscal_emissao_jobs"("status", "proximaTentativaEm");
+
+-- CreateIndex
+CREATE INDEX "fiscal_emissao_jobs_storeId_idx" ON "fiscal_emissao_jobs"("storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fiscal_emissao_jobs_storeId_dedupeKey_key" ON "fiscal_emissao_jobs"("storeId", "dedupeKey");
+
+-- CreateIndex
+CREATE INDEX "fiscal_logs_storeId_createdAt_idx" ON "fiscal_logs"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "fiscal_logs_notaFiscalId_idx" ON "fiscal_logs"("notaFiscalId");
+
+-- CreateIndex
+CREATE INDEX "contador_competencias_storeId_status_idx" ON "contador_competencias"("storeId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_competencias_storeId_ano_mes_key" ON "contador_competencias"("storeId", "ano", "mes");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_competencias_id_storeId_key" ON "contador_competencias"("id", "storeId");
+
+-- CreateIndex
+CREATE INDEX "contador_documentos_competenciaId_categoria_idx" ON "contador_documentos"("competenciaId", "categoria");
+
+-- CreateIndex
+CREATE INDEX "contador_documentos_storeId_status_idx" ON "contador_documentos"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "contador_documentos_sha256_idx" ON "contador_documentos"("sha256");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_documentos_id_competenciaId_key" ON "contador_documentos"("id", "competenciaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_documentos_id_competenciaId_storeId_key" ON "contador_documentos"("id", "competenciaId", "storeId");
+
+-- CreateIndex
+CREATE INDEX "contador_pacotes_competenciaId_geradoEm_idx" ON "contador_pacotes"("competenciaId", "geradoEm");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_pacotes_competenciaId_versao_key" ON "contador_pacotes"("competenciaId", "versao");
+
+-- CreateIndex
+CREATE INDEX "contador_pacote_itens_pacoteId_idx" ON "contador_pacote_itens"("pacoteId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_pacote_itens_pacoteId_caminho_key" ON "contador_pacote_itens"("pacoteId", "caminho");
+
+-- CreateIndex
+CREATE INDEX "contador_comentarios_competenciaId_createdAt_idx" ON "contador_comentarios"("competenciaId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "contador_comentarios_documentoId_createdAt_idx" ON "contador_comentarios"("documentoId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "contador_eventos_storeId_createdAt_idx" ON "contador_eventos"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "contador_eventos_competenciaId_createdAt_idx" ON "contador_eventos"("competenciaId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "contador_eventos_tipo_idx" ON "contador_eventos"("tipo");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_usuarios_email_key" ON "contador_usuarios"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_convites_tokenHash_key" ON "contador_convites"("tokenHash");
+
+-- CreateIndex
+CREATE INDEX "contador_convites_email_storeId_idx" ON "contador_convites"("email", "storeId");
+
+-- CreateIndex
+CREATE INDEX "contador_convites_storeId_createdAt_idx" ON "contador_convites"("storeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "contador_acessos_storeId_status_idx" ON "contador_acessos"("storeId", "status");
+
+-- CreateIndex
+CREATE INDEX "contador_acessos_usuarioId_status_idx" ON "contador_acessos"("usuarioId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_acessos_usuarioId_storeId_key" ON "contador_acessos"("usuarioId", "storeId");
+
+-- CreateIndex
+CREATE INDEX "contador_sessoes_externas_usuarioId_idx" ON "contador_sessoes_externas"("usuarioId");
+
+-- CreateIndex
+CREATE INDEX "contador_sessoes_externas_expiraEm_idx" ON "contador_sessoes_externas"("expiraEm");
+
+-- CreateIndex
+CREATE INDEX "contador_obrigacao_templates_storeId_ativo_idx" ON "contador_obrigacao_templates"("storeId", "ativo");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_obrigacao_templates_id_storeId_key" ON "contador_obrigacao_templates"("id", "storeId");
+
+-- CreateIndex
+CREATE INDEX "contador_obrigacoes_competenciaId_status_idx" ON "contador_obrigacoes"("competenciaId", "status");
+
+-- CreateIndex
+CREATE INDEX "contador_obrigacoes_storeId_status_idx" ON "contador_obrigacoes"("storeId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_obrigacoes_templateId_competenciaId_key" ON "contador_obrigacoes"("templateId", "competenciaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_obrigacoes_id_storeId_key" ON "contador_obrigacoes"("id", "storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_obrigacoes_id_competenciaId_storeId_key" ON "contador_obrigacoes"("id", "competenciaId", "storeId");
+
+-- CreateIndex
+CREATE INDEX "contador_guias_competenciaId_vencimento_idx" ON "contador_guias"("competenciaId", "vencimento");
+
+-- CreateIndex
+CREATE INDEX "contador_guias_storeId_vencimento_idx" ON "contador_guias"("storeId", "vencimento");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contador_guias_id_storeId_key" ON "contador_guias"("id", "storeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_empregadores_storeGestoraId_tipoInscricao_inscricao_key" ON "dp_empregadores"("storeGestoraId", "tipoInscricao", "inscricao");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_empregadores_id_storeGestoraId_key" ON "dp_empregadores"("id", "storeGestoraId");
+
+-- CreateIndex
+CREATE INDEX "dp_empregador_versoes_empregadorId_validFrom_idx" ON "dp_empregador_versoes"("empregadorId", "validFrom");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_empregador_versoes_empregadorId_versao_key" ON "dp_empregador_versoes"("empregadorId", "versao");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_empregador_versoes_id_empregadorId_key" ON "dp_empregador_versoes"("id", "empregadorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_estabelecimentos_empregadorId_tipoInscricao_inscricao_key" ON "dp_estabelecimentos"("empregadorId", "tipoInscricao", "inscricao");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_estabelecimentos_id_empregadorId_key" ON "dp_estabelecimentos"("id", "empregadorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_estabelecimento_versoes_estabelecimentoId_versao_key" ON "dp_estabelecimento_versoes"("estabelecimentoId", "versao");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_estabelecimento_versoes_id_empregadorId_key" ON "dp_estabelecimento_versoes"("id", "empregadorId");
+
+-- CreateIndex
+CREATE INDEX "dp_unidades_vinculo_storeId_validTo_idx" ON "dp_unidades_vinculo"("storeId", "validTo");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_unidades_vinculo_empregadorId_storeId_validFrom_key" ON "dp_unidades_vinculo"("empregadorId", "storeId", "validFrom");
+
+-- CreateIndex
+CREATE INDEX "dp_acessos_empregadorId_storeId_adminUserId_idx" ON "dp_acessos"("empregadorId", "storeId", "adminUserId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_pessoas_empregadorId_cpfHash_key" ON "dp_pessoas"("empregadorId", "cpfHash");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_pessoas_id_empregadorId_key" ON "dp_pessoas"("id", "empregadorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_pessoa_versoes_pessoaId_versao_key" ON "dp_pessoa_versoes"("pessoaId", "versao");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_pessoa_versoes_id_empregadorId_key" ON "dp_pessoa_versoes"("id", "empregadorId");
+
+-- CreateIndex
+CREATE INDEX "dp_pessoa_usuarios_empregadorId_adminUserId_idx" ON "dp_pessoa_usuarios"("empregadorId", "adminUserId");
+
+-- CreateIndex
+CREATE INDEX "dp_pessoa_tecnicos_empregadorId_tecnicoId_idx" ON "dp_pessoa_tecnicos"("empregadorId", "tecnicoId");
+
+-- CreateIndex
+CREATE INDEX "dp_vinculos_empregadorId_storeId_status_idx" ON "dp_vinculos"("empregadorId", "storeId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_vinculos_empregadorId_matricula_key" ON "dp_vinculos"("empregadorId", "matricula");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_vinculos_id_empregadorId_key" ON "dp_vinculos"("id", "empregadorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_vinculos_id_empregadorId_pessoaId_key" ON "dp_vinculos"("id", "empregadorId", "pessoaId");
+
+-- CreateIndex
+CREATE INDEX "dp_contrato_versoes_empregadorId_vinculoId_validFrom_idx" ON "dp_contrato_versoes"("empregadorId", "vinculoId", "validFrom");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_contrato_versoes_vinculoId_versao_key" ON "dp_contrato_versoes"("vinculoId", "versao");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_contrato_versoes_id_empregadorId_key" ON "dp_contrato_versoes"("id", "empregadorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_documentos_storageRef_key" ON "dp_documentos"("storageRef");
+
+-- CreateIndex
+CREATE INDEX "dp_documentos_empregadorId_storeId_vinculoId_idx" ON "dp_documentos"("empregadorId", "storeId", "vinculoId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_documentos_id_empregadorId_key" ON "dp_documentos"("id", "empregadorId");
+
+-- CreateIndex
+CREATE INDEX "dp_auditorias_empregadorId_createdAt_idx" ON "dp_auditorias"("empregadorId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dp_auditorias_storeId_atorId_comandoId_key" ON "dp_auditorias"("storeId", "atorId", "comandoId");
+
+-- AddForeignKey
+ALTER TABLE "marketplace_connections" ADD CONSTRAINT "marketplace_connections_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_sync_logs" ADD CONSTRAINT "marketplace_sync_logs_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_sync_logs" ADD CONSTRAINT "marketplace_sync_logs_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "marketplace_connections"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_sync_logs" ADD CONSTRAINT "marketplace_sync_logs_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "estoque_produtos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_sync_logs" ADD CONSTRAINT "marketplace_sync_logs_productLinkId_fkey" FOREIGN KEY ("productLinkId") REFERENCES "marketplace_product_links"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_product_links" ADD CONSTRAINT "marketplace_product_links_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_product_links" ADD CONSTRAINT "marketplace_product_links_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "estoque_produtos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_product_links" ADD CONSTRAINT "marketplace_product_links_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "marketplace_connections"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_contacts" ADD CONSTRAINT "whatsapp_contacts_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_conversations" ADD CONSTRAINT "whatsapp_conversations_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_conversations" ADD CONSTRAINT "whatsapp_conversations_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "whatsapp_contacts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_conversations" ADD CONSTRAINT "whatsapp_conversations_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "clientes_importados"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_messages" ADD CONSTRAINT "whatsapp_messages_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_messages" ADD CONSTRAINT "whatsapp_messages_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "whatsapp_conversations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_automations" ADD CONSTRAINT "whatsapp_automations_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_quick_replies" ADD CONSTRAINT "whatsapp_quick_replies_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_etiquetas" ADD CONSTRAINT "whatsapp_etiquetas_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_conversa_etiquetas" ADD CONSTRAINT "whatsapp_conversa_etiquetas_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "whatsapp_conversations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_conversa_etiquetas" ADD CONSTRAINT "whatsapp_conversa_etiquetas_etiquetaId_fkey" FOREIGN KEY ("etiquetaId") REFERENCES "whatsapp_etiquetas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_ai_settings" ADD CONSTRAINT "whatsapp_ai_settings_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_automation_logs" ADD CONSTRAINT "whatsapp_automation_logs_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_automation_logs" ADD CONSTRAINT "whatsapp_automation_logs_automationId_fkey" FOREIGN KEY ("automationId") REFERENCES "whatsapp_automations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "whatsapp_phone_numbers" ADD CONSTRAINT "whatsapp_phone_numbers_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketing_posts" ADD CONSTRAINT "marketing_posts_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketing_ia_posts" ADD CONSTRAINT "marketing_ia_posts_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "store_settings" ADD CONSTRAINT "store_settings_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketing_media_jobs" ADD CONSTRAINT "marketing_media_jobs_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ia_conversations" ADD CONSTRAINT "ia_conversations_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ia_messages" ADD CONSTRAINT "ia_messages_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ia_messages" ADD CONSTRAINT "ia_messages_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "ia_conversations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "clientes_importados" ADD CONSTRAINT "clientes_importados_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ordens_servico" ADD CONSTRAINT "ordens_servico_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ordens_servico" ADD CONSTRAINT "ordens_servico_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "clientes_importados"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "garantia_ordem_servico" ADD CONSTRAINT "garantia_ordem_servico_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "garantia_ordem_servico" ADD CONSTRAINT "garantia_ordem_servico_ordemServicoId_fkey" FOREIGN KEY ("ordemServicoId") REFERENCES "ordens_servico"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ordem_servico_item" ADD CONSTRAINT "ordem_servico_item_ordemServicoId_fkey" FOREIGN KEY ("ordemServicoId") REFERENCES "ordens_servico"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ordem_servico_item" ADD CONSTRAINT "ordem_servico_item_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "estoque_produtos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "estoque_produtos" ADD CONSTRAINT "estoque_produtos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "movimentacoes_estoque" ADD CONSTRAINT "movimentacoes_estoque_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "movimentacoes_estoque" ADD CONSTRAINT "movimentacoes_estoque_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "estoque_produtos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "depositos" ADD CONSTRAINT "depositos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "produto_depositos" ADD CONSTRAINT "produto_depositos_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "estoque_produtos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "produto_depositos" ADD CONSTRAINT "produto_depositos_depositoId_fkey" FOREIGN KEY ("depositoId") REFERENCES "depositos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "inventario_sessoes" ADD CONSTRAINT "inventario_sessoes_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "inventario_contagens" ADD CONSTRAINT "inventario_contagens_sessaoId_fkey" FOREIGN KEY ("sessaoId") REFERENCES "inventario_sessoes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tecnicos" ADD CONSTRAINT "tecnicos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "equipamentos_modelos" ADD CONSTRAINT "equipamentos_modelos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "product_media" ADD CONSTRAINT "product_media_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "product_media" ADD CONSTRAINT "product_media_productId_fkey" FOREIGN KEY ("productId") REFERENCES "estoque_produtos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_listings" ADD CONSTRAINT "marketplace_listings_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marketplace_listings" ADD CONSTRAINT "marketplace_listings_productId_fkey" FOREIGN KEY ("productId") REFERENCES "estoque_produtos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "servicos" ADD CONSTRAINT "servicos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "categorias_produto" ADD CONSTRAINT "categorias_produto_lojaId_fkey" FOREIGN KEY ("lojaId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fornecedores" ADD CONSTRAINT "fornecedores_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "categorias_cadastro" ADD CONSTRAINT "categorias_cadastro_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "marcas_cadastro" ADD CONSTRAINT "marcas_cadastro_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contas_pagar_titulos" ADD CONSTRAINT "contas_pagar_titulos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contas_pagar_titulos" ADD CONSTRAINT "contas_pagar_titulos_fornecedorId_fkey" FOREIGN KEY ("fornecedorId") REFERENCES "fornecedores"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contas_receber_titulos" ADD CONSTRAINT "contas_receber_titulos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "carteiras_financeiras" ADD CONSTRAINT "carteiras_financeiras_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "movimentacoes_financeiras" ADD CONSTRAINT "movimentacoes_financeiras_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "movimentacoes_financeiras" ADD CONSTRAINT "movimentacoes_financeiras_carteiraId_fkey" FOREIGN KEY ("carteiraId") REFERENCES "carteiras_financeiras"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "series_venda" ADD CONSTRAINT "series_venda_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vendas" ADD CONSTRAINT "vendas_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vendas" ADD CONSTRAINT "vendas_serieVendaId_storeId_fkey" FOREIGN KEY ("serieVendaId", "storeId") REFERENCES "series_venda"("id", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vendas" ADD CONSTRAINT "vendas_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "clientes_importados"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vendas" ADD CONSTRAINT "vendas_contaReceberTituloId_fkey" FOREIGN KEY ("contaReceberTituloId") REFERENCES "contas_receber_titulos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "venda_itens" ADD CONSTRAINT "venda_itens_vendaId_fkey" FOREIGN KEY ("vendaId") REFERENCES "vendas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "devolucoes_venda" ADD CONSTRAINT "devolucoes_venda_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "devolucoes_venda" ADD CONSTRAINT "devolucoes_venda_sessaoId_fkey" FOREIGN KEY ("sessaoId") REFERENCES "sessoes_caixa"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "itens_devolucao_venda" ADD CONSTRAINT "itens_devolucao_venda_devolucaoId_fkey" FOREIGN KEY ("devolucaoId") REFERENCES "devolucoes_venda"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "clientes_creditos" ADD CONSTRAINT "clientes_creditos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "clientes_creditos" ADD CONSTRAINT "clientes_creditos_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "clientes_importados"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "clientes_creditos" ADD CONSTRAINT "clientes_creditos_devolucaoId_fkey" FOREIGN KEY ("devolucaoId") REFERENCES "devolucoes_venda"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "usos_credito_cliente" ADD CONSTRAINT "usos_credito_cliente_creditoId_fkey" FOREIGN KEY ("creditoId") REFERENCES "clientes_creditos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "usos_credito_cliente" ADD CONSTRAINT "usos_credito_cliente_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Usage" ADD CONSTRAINT "Usage_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CreditPurchase" ADD CONSTRAINT "CreditPurchase_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_accounts" ADD CONSTRAINT "financial_accounts_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_categories" ADD CONSTRAINT "financial_categories_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "financial_accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "financial_categories"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_attachments" ADD CONSTRAINT "financial_attachments_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "financial_transactions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fechamentos_financeiros" ADD CONSTRAINT "fechamentos_financeiros_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "conciliacoes_financeiras" ADD CONSTRAINT "conciliacoes_financeiras_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "conciliacoes_financeiras" ADD CONSTRAINT "conciliacoes_financeiras_carteiraId_fkey" FOREIGN KEY ("carteiraId") REFERENCES "carteiras_financeiras"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "auditorias_financeiras" ADD CONSTRAINT "auditorias_financeiras_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sessoes_caixa" ADD CONSTRAINT "sessoes_caixa_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "caixa_operacoes" ADD CONSTRAINT "caixa_operacoes_sessaoId_fkey" FOREIGN KEY ("sessaoId") REFERENCES "sessoes_caixa"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "pdv_terminais" ADD CONSTRAINT "pdv_terminais_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "omni_agent_commands" ADD CONSTRAINT "omni_agent_commands_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "omni_agent_automations" ADD CONSTRAINT "omni_agent_automations_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "omni_agent_automation_runs" ADD CONSTRAINT "omni_agent_automation_runs_automationId_fkey" FOREIGN KEY ("automationId") REFERENCES "omni_agent_automations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "omni_agent_automation_runs" ADD CONSTRAINT "omni_agent_automation_runs_commandId_fkey" FOREIGN KEY ("commandId") REFERENCES "omni_agent_commands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "omni_agent_configs" ADD CONSTRAINT "omni_agent_configs_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "omni_agent_memories" ADD CONSTRAINT "omni_agent_memories_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "omni_agent_memories" ADD CONSTRAINT "omni_agent_memories_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "clientes_importados"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "admin_user_stores" ADD CONSTRAINT "admin_user_stores_adminUserId_fkey" FOREIGN KEY ("adminUserId") REFERENCES "admin_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "admin_user_stores" ADD CONSTRAINT "admin_user_stores_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "configuracoes_fiscais_loja" ADD CONSTRAINT "configuracoes_fiscais_loja_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "certificados_digitais" ADD CONSTRAINT "certificados_digitais_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "series_fiscais" ADD CONSTRAINT "series_fiscais_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notas_fiscais" ADD CONSTRAINT "notas_fiscais_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notas_fiscais" ADD CONSTRAINT "notas_fiscais_vendaId_fkey" FOREIGN KEY ("vendaId") REFERENCES "vendas"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notas_fiscais" ADD CONSTRAINT "notas_fiscais_serieFiscalId_fkey" FOREIGN KEY ("serieFiscalId") REFERENCES "series_fiscais"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notas_fiscais" ADD CONSTRAINT "notas_fiscais_certificadoId_fkey" FOREIGN KEY ("certificadoId") REFERENCES "certificados_digitais"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notas_fiscais_itens" ADD CONSTRAINT "notas_fiscais_itens_notaFiscalId_fkey" FOREIGN KEY ("notaFiscalId") REFERENCES "notas_fiscais"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "eventos_fiscais" ADD CONSTRAINT "eventos_fiscais_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "eventos_fiscais" ADD CONSTRAINT "eventos_fiscais_notaFiscalId_fkey" FOREIGN KEY ("notaFiscalId") REFERENCES "notas_fiscais"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fiscal_emissao_jobs" ADD CONSTRAINT "fiscal_emissao_jobs_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fiscal_logs" ADD CONSTRAINT "fiscal_logs_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_competencias" ADD CONSTRAINT "contador_competencias_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_documentos" ADD CONSTRAINT "contador_documentos_competenciaId_storeId_fkey" FOREIGN KEY ("competenciaId", "storeId") REFERENCES "contador_competencias"("id", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_documentos" ADD CONSTRAINT "contador_documentos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_documentos" ADD CONSTRAINT "contador_documentos_versaoDeId_competenciaId_storeId_fkey" FOREIGN KEY ("versaoDeId", "competenciaId", "storeId") REFERENCES "contador_documentos"("id", "competenciaId", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_pacotes" ADD CONSTRAINT "contador_pacotes_competenciaId_fkey" FOREIGN KEY ("competenciaId") REFERENCES "contador_competencias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_pacote_itens" ADD CONSTRAINT "contador_pacote_itens_pacoteId_fkey" FOREIGN KEY ("pacoteId") REFERENCES "contador_pacotes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_comentarios" ADD CONSTRAINT "contador_comentarios_competenciaId_fkey" FOREIGN KEY ("competenciaId") REFERENCES "contador_competencias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_comentarios" ADD CONSTRAINT "contador_comentarios_documentoId_competenciaId_fkey" FOREIGN KEY ("documentoId", "competenciaId") REFERENCES "contador_documentos"("id", "competenciaId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_eventos" ADD CONSTRAINT "contador_eventos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_eventos" ADD CONSTRAINT "contador_eventos_competenciaId_storeId_fkey" FOREIGN KEY ("competenciaId", "storeId") REFERENCES "contador_competencias"("id", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_convites" ADD CONSTRAINT "contador_convites_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_acessos" ADD CONSTRAINT "contador_acessos_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "contador_usuarios"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_acessos" ADD CONSTRAINT "contador_acessos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_sessoes_externas" ADD CONSTRAINT "contador_sessoes_externas_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "contador_usuarios"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_obrigacao_templates" ADD CONSTRAINT "contador_obrigacao_templates_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_obrigacoes" ADD CONSTRAINT "contador_obrigacoes_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_obrigacoes" ADD CONSTRAINT "contador_obrigacoes_competenciaId_storeId_fkey" FOREIGN KEY ("competenciaId", "storeId") REFERENCES "contador_competencias"("id", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_obrigacoes" ADD CONSTRAINT "contador_obrigacoes_templateId_storeId_fkey" FOREIGN KEY ("templateId", "storeId") REFERENCES "contador_obrigacao_templates"("id", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_guias" ADD CONSTRAINT "contador_guias_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_guias" ADD CONSTRAINT "contador_guias_competenciaId_storeId_fkey" FOREIGN KEY ("competenciaId", "storeId") REFERENCES "contador_competencias"("id", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_guias" ADD CONSTRAINT "contador_guias_obrigacaoId_competenciaId_storeId_fkey" FOREIGN KEY ("obrigacaoId", "competenciaId", "storeId") REFERENCES "contador_obrigacoes"("id", "competenciaId", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_guias" ADD CONSTRAINT "contador_guias_pdfDocumentoId_competenciaId_storeId_fkey" FOREIGN KEY ("pdfDocumentoId", "competenciaId", "storeId") REFERENCES "contador_documentos"("id", "competenciaId", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contador_guias" ADD CONSTRAINT "contador_guias_comprovanteDocumentoId_competenciaId_storeI_fkey" FOREIGN KEY ("comprovanteDocumentoId", "competenciaId", "storeId") REFERENCES "contador_documentos"("id", "competenciaId", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_empregadores" ADD CONSTRAINT "dp_empregadores_storeGestoraId_fkey" FOREIGN KEY ("storeGestoraId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_empregador_versoes" ADD CONSTRAINT "dp_empregador_versoes_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_empregador_versoes" ADD CONSTRAINT "dp_empregador_versoes_supersedesId_empregadorId_fkey" FOREIGN KEY ("supersedesId", "empregadorId") REFERENCES "dp_empregador_versoes"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_estabelecimentos" ADD CONSTRAINT "dp_estabelecimentos_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_estabelecimento_versoes" ADD CONSTRAINT "dp_estabelecimento_versoes_estabelecimentoId_empregadorId_fkey" FOREIGN KEY ("estabelecimentoId", "empregadorId") REFERENCES "dp_estabelecimentos"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_estabelecimento_versoes" ADD CONSTRAINT "dp_estabelecimento_versoes_supersedesId_empregadorId_fkey" FOREIGN KEY ("supersedesId", "empregadorId") REFERENCES "dp_estabelecimento_versoes"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_unidades_vinculo" ADD CONSTRAINT "dp_unidades_vinculo_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_unidades_vinculo" ADD CONSTRAINT "dp_unidades_vinculo_estabelecimentoId_empregadorId_fkey" FOREIGN KEY ("estabelecimentoId", "empregadorId") REFERENCES "dp_estabelecimentos"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_unidades_vinculo" ADD CONSTRAINT "dp_unidades_vinculo_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_acessos" ADD CONSTRAINT "dp_acessos_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_acessos" ADD CONSTRAINT "dp_acessos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_acessos" ADD CONSTRAINT "dp_acessos_adminUserId_fkey" FOREIGN KEY ("adminUserId") REFERENCES "admin_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_pessoas" ADD CONSTRAINT "dp_pessoas_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_pessoa_versoes" ADD CONSTRAINT "dp_pessoa_versoes_pessoaId_empregadorId_fkey" FOREIGN KEY ("pessoaId", "empregadorId") REFERENCES "dp_pessoas"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_pessoa_versoes" ADD CONSTRAINT "dp_pessoa_versoes_supersedesId_empregadorId_fkey" FOREIGN KEY ("supersedesId", "empregadorId") REFERENCES "dp_pessoa_versoes"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_pessoa_usuarios" ADD CONSTRAINT "dp_pessoa_usuarios_pessoaId_empregadorId_fkey" FOREIGN KEY ("pessoaId", "empregadorId") REFERENCES "dp_pessoas"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_pessoa_usuarios" ADD CONSTRAINT "dp_pessoa_usuarios_adminUserId_fkey" FOREIGN KEY ("adminUserId") REFERENCES "admin_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_pessoa_tecnicos" ADD CONSTRAINT "dp_pessoa_tecnicos_pessoaId_empregadorId_fkey" FOREIGN KEY ("pessoaId", "empregadorId") REFERENCES "dp_pessoas"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_pessoa_tecnicos" ADD CONSTRAINT "dp_pessoa_tecnicos_tecnicoId_storeId_fkey" FOREIGN KEY ("tecnicoId", "storeId") REFERENCES "tecnicos"("id", "storeId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_vinculos" ADD CONSTRAINT "dp_vinculos_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_vinculos" ADD CONSTRAINT "dp_vinculos_pessoaId_empregadorId_fkey" FOREIGN KEY ("pessoaId", "empregadorId") REFERENCES "dp_pessoas"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_vinculos" ADD CONSTRAINT "dp_vinculos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_contrato_versoes" ADD CONSTRAINT "dp_contrato_versoes_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_contrato_versoes" ADD CONSTRAINT "dp_contrato_versoes_vinculoId_empregadorId_fkey" FOREIGN KEY ("vinculoId", "empregadorId") REFERENCES "dp_vinculos"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_contrato_versoes" ADD CONSTRAINT "dp_contrato_versoes_estabelecimentoId_empregadorId_fkey" FOREIGN KEY ("estabelecimentoId", "empregadorId") REFERENCES "dp_estabelecimentos"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_contrato_versoes" ADD CONSTRAINT "dp_contrato_versoes_supersedesId_empregadorId_fkey" FOREIGN KEY ("supersedesId", "empregadorId") REFERENCES "dp_contrato_versoes"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_documentos" ADD CONSTRAINT "dp_documentos_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_documentos" ADD CONSTRAINT "dp_documentos_pessoaId_empregadorId_fkey" FOREIGN KEY ("pessoaId", "empregadorId") REFERENCES "dp_pessoas"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_documentos" ADD CONSTRAINT "dp_documentos_vinculoId_empregadorId_pessoaId_fkey" FOREIGN KEY ("vinculoId", "empregadorId", "pessoaId") REFERENCES "dp_vinculos"("id", "empregadorId", "pessoaId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_documentos" ADD CONSTRAINT "dp_documentos_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_documentos" ADD CONSTRAINT "dp_documentos_versaoDeId_empregadorId_fkey" FOREIGN KEY ("versaoDeId", "empregadorId") REFERENCES "dp_documentos"("id", "empregadorId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_auditorias" ADD CONSTRAINT "dp_auditorias_empregadorId_fkey" FOREIGN KEY ("empregadorId") REFERENCES "dp_empregadores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_auditorias" ADD CONSTRAINT "dp_auditorias_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dp_auditorias" ADD CONSTRAINT "dp_auditorias_atorId_fkey" FOREIGN KEY ("atorId") REFERENCES "admin_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+
+exit=0

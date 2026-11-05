@@ -1,0 +1,34 @@
+{
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "baseCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+  "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+  "release": { "id": "OMNI-PRINT-D05-HOMOLOGACAO-1", "status": "PLANNED_NOT_ACTIVE", "activation": "BLOCKED_PENDING_REVIEWED_PREVIEW_ONLY_COMMIT" },
+  "gates": {
+    "NEON_TEST_BRANCH": "PENDING_OWNER_APPROVAL",
+    "VERCEL_TEST_PREVIEW": "PENDING_OWNER_APPROVAL",
+    "WINDOWS_PHYSICAL_INSTALL": "PENDING_OWNER_APPROVAL",
+    "REAL_PRINTER_USE": "PENDING_OWNER_APPROVAL",
+    "D05_PHYSICAL_EXECUTION": "PENDING_OWNER_APPROVAL"
+  },
+  "database": { "provider": "Neon", "source": "NON_PRODUCTION_SYNTHETIC_ONLY", "created": false, "projectId": null, "branchId": null, "endpointId": null, "databaseName": null },
+  "vercel": { "environment": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "created": false, "projectId": null, "deploymentId": null, "url": null },
+  "transport": { "enabled": false },
+  "agent": {
+    "version": "0.2.0-d04",
+    "sha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+    "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+    "signed": false
+  },
+  "environment": [
+    { "name": "DATABASE_URL", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "TEST_DATABASE_SECRET_STORE" },
+    { "name": "DIRECT_URL", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "TEST_DATABASE_SECRET_STORE" },
+    { "name": "AUTH_SECRET", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "INDEPENDENT_TEMPORARY_SECRET_STORE" },
+    { "name": "OMNI_PRINT_CONTENT_KEY", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "INDEPENDENT_TEMPORARY_32_BYTE_SECRET_STORE" },
+    { "name": "OMNI_PRINT_SIGNING_KEY", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "INDEPENDENT_TEMPORARY_DISTINCT_32_BYTE_SECRET_STORE" },
+    { "name": "OMNI_PRINT_DIRECT_RELEASE", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "REVIEWED_HOMOLOGATION_RELEASE" },
+    { "name": "OMNI_PRINT_DIRECT_ENABLED", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "DISABLED_UNTIL_TRANSPORT_APPROVAL" },
+    { "name": "MIGRATION_AUTHORITY_ENABLED", "target": "preview", "gitBranch": "codex/omni-print-d05-homologacao-fisica-001", "source": "MUST_BE_FALSE" }
+  ],
+  "production": { "approvedRelease": null, "databaseAccess": false, "writes": 0, "directPrint": "DISABLED", "cron": "DISABLED" },
+  "cleanup": { "automaticDeletion": false, "separateOwnerApprovalRequired": true, "preserveUnknownAndHistory": true, "preserveEvidenceBeforeDeletion": true }
+}
