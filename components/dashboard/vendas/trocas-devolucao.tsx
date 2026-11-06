@@ -701,6 +701,11 @@ export function TrocasDevolucao({
     if (incerta && incerta.fp !== fp) {
       const anterior = await postDevolucaoServidor(lojaAtivaId, incerta.body)
       if (anterior.kind === "network") return { ...anterior, localId: incerta.localId }
+      // Recusa transitória (403/401 antes do replay, período fechado…): não prova que a
+      // anterior NÃO foi gravada — mantém a tentativa incerta em vez de abrir outro localId.
+      if (anterior.kind === "rejected" && classificarRespostaDevolucao(anterior.status, anterior.code) === "aguardar") {
+        return { ...anterior, localId: incerta.localId }
+      }
       definirTentativa(null)
       if (anterior.kind === "ok") {
         espelharDevolucao(incerta.mirror, anterior.data)

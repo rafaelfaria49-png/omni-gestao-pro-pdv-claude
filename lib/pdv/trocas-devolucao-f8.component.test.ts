@@ -262,6 +262,30 @@ describe("F8 — troca imediata na mesma tela", () => {
     expect(ids[2]).not.toBe(ids[1]) // definitiva: nada gravado com aquele id → intenção nova
   })
 
+  it("tentativa incerta + 403 no reenvio: a anterior NÃO é descartada nem vira outro localId (R3 P3)", async () => {
+    let n = 0
+    devolucaoResponder = (b) => {
+      n += 1
+      if (n === 1) throw new TypeError("Failed to fetch") // gravada? resposta perdida
+      if (n === 2) return json(403, { error: "Sem permissão para registrar devoluções." })
+      return json(200, { ...devOk(String(b.localId)), idempotente: true })
+    }
+    await prepararTroca()
+    await act(async () => { fireEvent.click(screen.getByText("Finalizar Troca Imediata")) })
+    await waitFor(() => expect(rt.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Sem confirmação do servidor" })))
+    // Intenção diferente: o reenvio da ORIGINAL recebe 403 (antes da checagem de replay).
+    fireEvent.click(screen.getByText("Vale-Troca"))
+    await act(async () => { fireEvent.click(screen.getByText("Confirmar Devolução")) })
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+    // Permissão volta: o próximo envio ainda é a ORIGINAL (confirmada como replay), nunca um localId novo.
+    await act(async () => { fireEvent.click(screen.getByText("Confirmar Devolução")) })
+    await waitFor(() => expect(rt.toast).toHaveBeenCalledWith(expect.objectContaining({ description: expect.stringMatching(/FOI gravada/) })))
+    const ids = rt.calls.filter((c) => c.startsWith("devolucao:"))
+    expect(ids).toHaveLength(3)
+    expect(new Set(ids).size).toBe(1)
+    expect(rt.finalize).not.toHaveBeenCalled()
+  })
+
   it("nova venda falha: vale preservado e 'Concluir nova venda' refaz SÓ a venda", async () => {
     rt.finalize.mockImplementationOnce(async () => { rt.calls.push("finalize"); return { ok: false, reason: "Estoque insuficiente." } })
     await prepararTroca()
