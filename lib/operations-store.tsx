@@ -1917,12 +1917,10 @@ export function OperationsProvider({
       })
       const latest = stateRef.current.sales.find((item) => saleMatches(item, token))
       // Os saldos do snapshot KG podem chegar depois de um catálogo mais novo: invalida a
-      // versão conhecida (se a recarga falhar, os próximos checks baixam o catálogo de novo)
-      // e recarrega o catálogo autoritativo para que o saldo mais recente prevaleça na tela.
-      if (kg) {
-        catalogSyncRef.current?.invalidate()
-        void catalogSyncRef.current?.check({ force: true })
-      }
+      // versão conhecida para que o próximo check do catálogo (intervalo/foco/aviso) baixe o
+      // snapshot autoritativo mesmo sem mudança de versão — até conseguir um válido.
+      // Sem fetch aqui: a confirmação não dispara rede extra no meio do pós-venda.
+      if (kg) catalogSyncRef.current?.invalidate()
       return kg ? selectManualKgSnapshot(latest ?? kg.sale, kg.sale) : undefined
     },
     [storageKey],

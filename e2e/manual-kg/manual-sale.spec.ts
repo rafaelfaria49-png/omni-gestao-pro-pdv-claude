@@ -37,7 +37,10 @@ async function enterTerminal(page: Page) {
  const usar = page.getByRole("button", { name: "Usar", exact: true }).first(), without = page.getByText("Continuar sem terminal")
  const bipe = page.getByPlaceholder("Bipe ou digite o código do produto")
  await usar.or(without).or(bipe).first().waitFor()
- if (await usar.isVisible()) await usar.click(); else if (await without.isVisible()) await without.click()
+ // O runner semeia a sessão de caixa SEM terminal; a sessão é por terminal (F-01 002A). Escolher
+ // um PDV qualquer tornava o resultado dependente da ordem entre o clique e a reconciliação do
+ // caixa ("Caixa Fechado" no PDV sem sessão). Coerente com o fixture: continuar sem terminal.
+ if (await without.isVisible()) await without.click(); else if (await usar.isVisible()) await usar.click()
  await expect(bipe).toBeVisible()
  await expect(page.getByRole("button", { name: "Resumo do Caixa" })).toBeVisible()
  return bipe
