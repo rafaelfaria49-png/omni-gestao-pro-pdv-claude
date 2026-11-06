@@ -35,6 +35,23 @@ describe("comprovante não fiscal com venda por peso", () => {
     expect(text).not.toMatch(/0\.35x/)
   })
 
+  it("fallback HTML do navegador (pós-venda/impressão automática) imprime peso e preço/kg; UN idêntico", async () => {
+    const { printPdvSaleReceipt } = await import("@/lib/pdv-print-runtime")
+    const write = vi.fn<(html: string) => void>()
+    vi.spyOn(window, "open").mockReturnValue({ document: { open: vi.fn(), write, close: vi.fn() } } as unknown as Window)
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("Sem bridge") }))
+    const input: PdvReceiptInput = {
+      nomeFantasia: "Padaria sintética", cnpj: "", subtotal: 13, taxes: 0, discount: 0, total: 13, dataHora: "2026-11-06T12:00:00Z",
+      itens: [{ name: "Queijo", quantity: 0.35, unitPrice: 20, lineTotal: 7, quantityUnit: "KG" }, { name: "Pão", quantity: 2, unitPrice: 3, lineTotal: 6 }],
+    }
+    expect(await printPdvSaleReceipt({ config: defaultPdvImpressaoConfig(), input, forceBrowserFallback: true })).toMatchObject({ ok: true, via: "html" })
+    const printed = nb(new DOMParser().parseFromString(write.mock.calls[0]?.[0] ?? "", "text/html").body.textContent ?? "")
+    expect(printed).toContain("0,350 kg Queijo — R$ 20,00/kg = R$ 7,00")
+    expect(printed).toContain("2x Pão — R$ 6,00")
+    expect(printed).not.toMatch(/0\.35x/)
+    vi.unstubAllGlobals(); vi.restoreAllMocks()
+  })
+
   it("Histórico/Conferência: o mapeador leva a unidade KG até o cupom exibido", async () => {
     const { CupomNaoFiscal } = await import("@/components/dashboard/vendas/cupom-nao-fiscal")
     const detalhe = {
