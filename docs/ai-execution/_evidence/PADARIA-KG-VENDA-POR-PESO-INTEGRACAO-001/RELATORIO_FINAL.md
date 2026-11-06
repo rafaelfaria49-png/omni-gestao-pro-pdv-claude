@@ -100,3 +100,11 @@ PostgreSQL 17.10 descartável no scratchpad (initdb próprio, porta 55479), Node
 ## Próximo passo exato
 
 Revisão humana desta PR draft. Depois: concluir A4 da #315 (login do runtime, read-only) com autorização própria; integrar #331 sobre esta pilha mantendo devolução KG bloqueada; agendar a coleta física do protocolo da Toledo na loja.
+
+## Adendo — PADARIA-KG-PR335-CI-RUNNER-FIX-001 (2026-11-06)
+
+- Causa: Playwright instalado não suporta chromium em `ubuntu26.04-x64` (`ubuntu-latest`).
+- Correção `8497849`: `runs-on: ubuntu-24.04` só em ramos-cadastros (validate, e2e-authenticated), platform-pilot (authenticated), pdv-scale-visor (browser), cadastros-cliente-assistido (validate). Sem mudança de código, asserts, dependências ou versão do Playwright.
+- YAML validado (js-yaml; actionlint indisponível localmente).
+- CI em `8497849`: 13/13 checks PASS — e2e-authenticated 8m51s, authenticated 4m30s, browser 1m24s, 2× postgres-integration, 5× validate (typecheck/lint/build), Vercel Preview.
+- PR #335 segue DRAFT; PRODUCTION_WRITES=0; revisão independente R6 APPROVE inalterada (motor não mudou).
