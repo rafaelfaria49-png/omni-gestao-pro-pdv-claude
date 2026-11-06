@@ -126,6 +126,50 @@ export function createCatalogSyncController<T>(deps: CatalogSyncDeps<T>) {
 
 export type CatalogSyncController<T> = ReturnType<typeof createCatalogSyncController<T>>
 
+/** Atrasos da revalidação após o catálogo ser invalidado fora do controlador (ms). */
+export const CATALOG_REVALIDATION_DELAYS_MS = [2_000, 5_000, 15_000, 30_000, 60_000, 120_000] as const
+
+/**
+ * Invalida a versão conhecida e agenda recargas forçadas até uma aplicar um snapshot válido,
+ * INDEPENDENTE de haver tela observando o catálogo. Cada falha passa ao próximo atraso; após o
+ * último, a versão segue inválida e o próximo check comum (montagem do PDV, intervalo, foco,
+ * aviso de cadastro) baixa o catálogo. Devolve o cancelamento (troca de loja / desmontagem).
+ */
+export function scheduleCatalogRevalidation(
+  controller: Pick<CatalogSyncController<unknown>, "invalidate" | "check">,
+  opts: {
+    delaysMs?: readonly number[]
+    setTimer?: (fn: () => void, ms: number) => unknown
+    clearTimer?: (handle: unknown) => void
+    onSettled?: (status: CatalogCheckStatus) => void
+  } = {},
+): () => void {
+  const delays = opts.delaysMs ?? CATALOG_REVALIDATION_DELAYS_MS
+  const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms))
+  const clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>))
+  let cancelled = false
+  let handle: unknown = null
+  controller.invalidate()
+  const attempt = (index: number) => {
+    if (cancelled || index >= delays.length) return
+    handle = setTimer(() => {
+      handle = null
+      if (cancelled) return
+      void controller.check({ force: true }).then((status) => {
+        if (cancelled) return
+        opts.onSettled?.(status)
+        if (status !== "updated" && status !== "disposed") attempt(index + 1)
+      })
+    }, delays[index])
+  }
+  attempt(0)
+  return () => {
+    cancelled = true
+    if (handle !== null) clearTimer(handle)
+    handle = null
+  }
+}
+
 export type CatalogChangedMessage = {
   type: "catalog-changed"
   storeId: string

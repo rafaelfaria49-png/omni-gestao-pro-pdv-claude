@@ -146,6 +146,7 @@ import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
 import {
   CATALOG_SYNC_INTERVAL_MS,
   createCatalogSyncController,
+  scheduleCatalogRevalidation,
   subscribeCatalogChanged,
   type CatalogCheckStatus,
   type CatalogSyncController,
@@ -1342,6 +1343,8 @@ export function OperationsProvider({
   // Checks automáticos (foco/aba/rede/intervalo) só com um PDV montado: o provider envolve o
   // dashboard inteiro e outras telas não devem pagar o polling. Aviso de cadastro vale sempre.
   const catalogWatchersRef = useRef(0)
+  /** Revalidação agendada do catálogo após um snapshot KG (independe de watchers). */
+  const catalogRevalidateRef = useRef<(() => void) | null>(null)
   const watchCatalogSync = useCallback(() => {
     catalogWatchersRef.current += 1
     return () => {
@@ -1409,7 +1412,19 @@ export function OperationsProvider({
     document.addEventListener("visibilitychange", onVisibility)
     const unsubscribe = subscribeCatalogChanged(lj, () => sync(true))
     const timer = window.setInterval(onVisibility, CATALOG_SYNC_INTERVAL_MS)
+    let cancelRevalidation: (() => void) | null = null
+    const revalidate = () => {
+      cancelRevalidation?.()
+      cancelRevalidation = scheduleCatalogRevalidation(controller, {
+        onSettled: () => {
+          if (catalogSyncRef.current === controller) setCatalogVersion(controller.knownVersion())
+        },
+      })
+    }
+    catalogRevalidateRef.current = revalidate
     return () => {
+      cancelRevalidation?.()
+      if (catalogRevalidateRef.current === revalidate) catalogRevalidateRef.current = null
       controller.dispose()
       if (catalogSyncRef.current === controller) catalogSyncRef.current = null
       window.removeEventListener("focus", onFocus)
@@ -1916,11 +1931,10 @@ export function OperationsProvider({
         }
       })
       const latest = stateRef.current.sales.find((item) => saleMatches(item, token))
-      // Os saldos do snapshot KG podem chegar depois de um catálogo mais novo: invalida a
-      // versão conhecida para que o próximo check do catálogo (intervalo/foco/aviso) baixe o
-      // snapshot autoritativo mesmo sem mudança de versão — até conseguir um válido.
-      // Sem fetch aqui: a confirmação não dispara rede extra no meio do pós-venda.
-      if (kg) catalogSyncRef.current?.invalidate()
+      // Os saldos do snapshot KG podem chegar depois de um catálogo mais novo: invalida a versão
+      // conhecida e agenda recargas (com retentativa) do catálogo autoritativo, mesmo sem o PDV
+      // montado. A primeira só sai depois do pós-venda (não concorre com a confirmação).
+      if (kg) catalogRevalidateRef.current?.()
       return kg ? selectManualKgSnapshot(latest ?? kg.sale, kg.sale) : undefined
     },
     [storageKey],

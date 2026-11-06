@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   createCatalogSyncController,
   notifyCatalogChanged,
+  scheduleCatalogRevalidation,
   subscribeCatalogChanged,
   type CatalogSnapshot,
 } from "./catalog-sync"
@@ -207,5 +208,57 @@ describe("notifyCatalogChanged / subscribeCatalogChanged", () => {
     await tick()
     expect(cb).not.toHaveBeenCalled()
     off()
+  })
+})
+
+describe("scheduleCatalogRevalidation (snapshot KG fora do catálogo)", () => {
+  function timers() {
+    const queue: Array<{ fn: () => void; ms: number; cleared?: boolean }> = []
+    return {
+      queue,
+      setTimer: (fn: () => void, ms: number) => { const t = { fn, ms }; queue.push(t); return t },
+      clearTimer: (h: unknown) => { (h as { cleared?: boolean }).cleared = true },
+      async fire() { const t = queue.shift()!; if (!t.cleared) t.fn(); for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0)) },
+    }
+  }
+
+  it("sem watchers: invalida, recarrega até um snapshot válido e para", async () => {
+    // 1ª recarga falha, 2ª aplica o saldo autoritativo — nenhuma tela observando o catálogo.
+    const { c, applied } = makeController({ snapshots: [null, snap("v1:1:9", 12)] })
+    c.setKnownVersion("v1:1:9")
+    c.enable()
+    const t = timers()
+    const statuses: string[] = []
+    scheduleCatalogRevalidation(c, { delaysMs: [10, 20, 30], setTimer: t.setTimer, clearTimer: t.clearTimer, onSettled: (st) => statuses.push(st) })
+    expect(c.knownVersion()).toBeNull()
+    await t.fire()
+    expect(statuses).toEqual(["unavailable"])
+    expect(t.queue.map((q) => q.ms)).toEqual([20])
+    await t.fire()
+    expect(statuses).toEqual(["unavailable", "updated"])
+    expect(applied.map((x) => x.items[0]!.price)).toEqual([12])
+    expect(c.knownVersion()).toBe("v1:1:9")
+    expect(t.queue).toHaveLength(0)
+  })
+
+  it("cancelamento (troca de loja/desmontagem) não dispara mais recargas", async () => {
+    const { c, fetchSnapshot } = makeController({ snapshots: [snap("v1:1:9", 12)] })
+    c.enable()
+    const t = timers()
+    const cancel = scheduleCatalogRevalidation(c, { delaysMs: [10], setTimer: t.setTimer, clearTimer: t.clearTimer })
+    cancel()
+    await t.fire()
+    expect(fetchSnapshot).not.toHaveBeenCalled()
+  })
+
+  it("esgotadas as tentativas, a versão continua inválida para o próximo check comum", async () => {
+    const { c } = makeController({ snapshots: [null, null] })
+    c.setKnownVersion("v1:1:1")
+    c.enable()
+    const t = timers()
+    scheduleCatalogRevalidation(c, { delaysMs: [10, 20], setTimer: t.setTimer, clearTimer: t.clearTimer })
+    await t.fire(); await t.fire()
+    expect(t.queue).toHaveLength(0)
+    expect(c.knownVersion()).toBeNull()
   })
 })
