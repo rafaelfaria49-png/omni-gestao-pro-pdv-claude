@@ -1422,6 +1422,7 @@ export function PdvClassic({
         quantity: i.quantity,
         unitPrice: i.price,
         lineTotal: ((saleLineTotalCents(i.quantity, i.price) ?? Math.round(i.price * i.quantity * 100)) / 100),
+        quantityUnit: i.vendaPorPeso ? ("KG" as const) : undefined,
       })),
     }
   }, [
