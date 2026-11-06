@@ -2443,7 +2443,7 @@ export function PdvClassic({
             }
           }
           const result = await finalizeSaleTransaction({
-            ...(cart.some((item) => item.vendaPorPeso) ? { manualKgSale: MANUAL_KG_SALE } : {}),
+            manualKgSale: cart.some((item) => item.vendaPorPeso) ? MANUAL_KG_SALE : undefined,
             lines: saleLines,
             total,
             linkedOsId,

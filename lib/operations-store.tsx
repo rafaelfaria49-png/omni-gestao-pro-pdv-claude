@@ -1913,6 +1913,16 @@ export function OperationsProvider({
     [storageKey],
   )
 
+  /**
+   * Recovery KG: identidade SÓ pela `clientSaleId` — nunca pelo VDA antigo, que pode ser
+   * compartilhado por outra venda em quarentena. `id` vazio nunca casa em `saleMatches`.
+   */
+  const confirmRecoveredKgSale = useCallback(
+    (clientSaleId: string, confirmed: { pedidoId: string; id: string }) =>
+      markSaleConfirmed({ id: "", clientSaleId }, { pedidoId: confirmed.pedidoId, id: confirmed.id, clientSaleId }),
+    [markSaleConfirmed],
+  )
+
   const markSaleBlocked = useCallback((token: { id: string; clientSaleId?: string }, patch?: string | SaleSyncFailurePatch) => {
     if (storageKeyRef.current !== storageKey) return
     const next: SaleSyncFailurePatch = typeof patch === "string" ? { code: patch } : patch ?? {}
@@ -2510,7 +2520,7 @@ export function OperationsProvider({
           }
         }
         if (sale.manualKgSale === MANUAL_KG_SALE && confirmed) {
-          const snapshot = await markSaleConfirmed({ id: sale.id, clientSaleId }, { pedidoId: confirmed.pedidoId, id: confirmed.id, clientSaleId })
+          const snapshot = await confirmRecoveredKgSale(clientSaleId, confirmed)
           if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(lj, { id: confirmed.pedidoId, clientSaleId }, snapshot ?? { ...sale, syncPending: false })
           return { ok: true, saleId: confirmed.pedidoId }
         }
@@ -2533,7 +2543,7 @@ export function OperationsProvider({
         return { ok: false, reason: `Falha de rede: ${msg}` }
       }
     },
-    [emitVendaFinalizadaOnce, markSaleConfirmed, storageKey],
+    [confirmRecoveredKgSale, emitVendaFinalizadaOnce, storageKey],
   )
 
   /**
@@ -2598,7 +2608,7 @@ export function OperationsProvider({
         const local = stateRef.current.sales.find((sale) => sale.clientSaleId === confirmation.clientSaleId)
         if (local?.manualKgSale !== MANUAL_KG_SALE) { ordinary.push(confirmation); continue }
         try {
-          const snapshot = await markSaleConfirmed({ id: local.id, clientSaleId: local.clientSaleId }, { id: confirmation.serverId, pedidoId: confirmation.pedidoId, clientSaleId: confirmation.clientSaleId })
+          const snapshot = await confirmRecoveredKgSale(confirmation.clientSaleId, { id: confirmation.serverId, pedidoId: confirmation.pedidoId })
           if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(opsLojaIdFromStorageKey(storageKey), { id: confirmation.pedidoId, clientSaleId: confirmation.clientSaleId }, snapshot ?? { ...local, syncPending: false })
           kgReconciled++
         } catch { /* A missing current snapshot keeps KG pending, without local effects. */ }
@@ -2623,7 +2633,7 @@ export function OperationsProvider({
       }))
       return kgReconciled + applyRecoveryConfirmations(stateRef.current.sales, confirmations).reconciled
     },
-    [emitVendaFinalizadaOnce, markSaleConfirmed, storageKey],
+    [confirmRecoveredKgSale, emitVendaFinalizadaOnce, storageKey],
   )
 
   const previewQuarantineRecovery = useCallback<

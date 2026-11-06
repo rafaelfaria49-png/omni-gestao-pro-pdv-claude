@@ -69,7 +69,7 @@ export function mapVendaDetalheToCupom(d: VendaDetalhe, loja: CupomLojaInfo): Cu
       ? Math.max(0, round2(d.cashTendered - dinheiro))
       : undefined
 
-  return {
+  const cupom: CupomDataMapeado = {
     numeroPedido: d.id,
     at: d.at,
     lojaNome: loja.nome,
@@ -83,10 +83,12 @@ export function mapVendaDetalheToCupom(d: VendaDetalhe, loja: CupomLojaInfo): Cu
     pagamentos: d.pagamentos,
     total: d.total,
     subtotal,
-    taxes: d.manualKgSale && d.manualKgTax ? d.manualKgTax.taxCents / 100 : Math.max(0, d.total + desconto - subtotalBase),
+    taxes: Math.max(0, d.total + desconto - subtotalBase),
     desconto,
     cashTendered: d.cashTendered ?? undefined,
     troco,
     status: d.status,
   }
+  // KG: a taxa congelada pelo servidor (manualKgTax) prevalece sobre a derivação legada.
+  return d.manualKgSale && d.manualKgTax ? { ...cupom, taxes: d.manualKgTax.taxCents / 100 } : cupom
 }
