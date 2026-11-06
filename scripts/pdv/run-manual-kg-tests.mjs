@@ -50,6 +50,6 @@ try {
   await writeFile(out + "/migration.json", JSON.stringify({ identity, before, after, historicalUnPreserved: true, newMigration: "20261029120000_manual_kg_sale_quantity", productionWrites: 0 }, null, 2))
 } finally { await db.$disconnect() }
 run(["scripts/pdv/verify-manual-kg-migration.mjs"])
-run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-hardening.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/manual-kg/integration.json"], {
-  MANUAL_KG_TEST_DATABASE_URL: url, PDV_MANUAL_KG_RELEASE: "PDV-PADARIA-KG-RELEASE-HARDENING-002", PDV_MANUAL_KG_STORES: "kg-sale-a,kg-sale-b",
+run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-hardening.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "lib/vendas/manual-kg-padaria-flow.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/manual-kg/integration.json"], {
+  MANUAL_KG_TEST_DATABASE_URL: url, PDV_MANUAL_KG_RELEASE: "PDV-PADARIA-KG-RELEASE-HARDENING-002", PDV_MANUAL_KG_STORES: "kg-sale-a,kg-sale-b,kg-pad-a,kg-pad-b",
 })
