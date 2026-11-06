@@ -150,7 +150,10 @@ test("lost response keeps stable sale identity and reload safely reconciles exac
  const retry = await auth.post("/api/ops/venda-persist", { headers: H, data: attempts[0] })
  expect(retry.status()).toBe(200); expect((await retry.json()).replayed).toBe(true)
  await page.unroute("**/api/ops/venda-persist**")
- await pending.getByRole("button", { name: "Reenviar", exact: true }).click()
+ // #326: a verificação automática por clientSaleId pode reconciliar antes do clique manual;
+ // os dois caminhos precisam terminar no MESMO estado (uma venda, uma baixa, snapshot corrigido).
+ const reenviar = pending.getByRole("button", { name: "Reenviar", exact: true })
+ if (await reenviar.isVisible().catch(() => false)) await reenviar.click({ timeout: 5000 }).catch(() => undefined)
  await expect(pending).toBeHidden()
  await page.reload()
  await enterTerminal(page)
