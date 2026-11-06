@@ -106,7 +106,8 @@ test("authenticated cancel restores exact KG once; returns blocked; cross-store 
  const create = await auth.post("/api/ops/venda-persist", { headers: H, data: { sale } }); expect(create.status()).toBe(200)
  const dev = await auth.post("/api/ops/devolucao", { headers: H, data: { localId: "kg-dev-" + randomUUID(), vendaLocalId: sale.id, tipo: "somente_estoque", itens: [{ inventoryId: p.id, quantidade: 1 }] } })
  expect(dev.status()).toBe(409)
- const pre = await auth.post("/api/vendas/" + sale.id + "/cancelar", { headers: H, data: { motivo: "Teste sintético" } }); expect(pre.status()).toBe(403)
+ expect((await dev.json()).code).toBe("DEVOLUCAO_KG_BLOQUEADA")
+ const pre =await auth.post("/api/vendas/" + sale.id + "/cancelar", { headers: H, data: { motivo: "Teste sintético" } }); expect(pre.status()).toBe(403)
  const approval = await auth.post("/api/auth/admin", { headers: { ...H, Origin: baseURL }, data: { pin: process.env.MANUAL_KG_E2E_PIN, action: "estornar_venda", resource: sale.id } }); expect(approval.status()).toBe(200)
  const cancel = await auth.post("/api/vendas/" + sale.id + "/cancelar", { headers: H, data: { motivo: "Teste sintético" } }); expect(cancel.status()).toBe(200)
  expect((await db.produto.findUniqueOrThrow({ where: { id: p.id } })).stock).toBe(10)
@@ -368,4 +369,28 @@ test("PR322 visor streams stay read-only while KG uses only the operator-confirm
  expect(item.lineTotal).toBe(7)
  expect((await db.produto.findUniqueOrThrow({ where: { id: p.id } })).stock).toBe(9.65)
  // Page lifecycle closes the simulated session; explicit disconnect is covered by PR322 contract tests.
+})
+
+test("authenticated F8: UN exchange in a KG store issues credit, a KG sale spends it, and the KG sale stays non-returnable", async () => {
+ const auth = await login("admin"), un = await product("UN", 10), kg = await product("KG", 10), cpf = "52998224725"
+ const origem = { id: "F8-UN-" + randomUUID(), sessaoId: STORE + "-cash", total: 6, customerName: "Cliente sintético", customerCpf: cpf,
+  lines: [{ inventoryId: un.sku!, name: un.name, quantity: 2, unitPrice: 3, lineTotal: 6 }], paymentBreakdown: { dinheiro: 6 } }
+ expect((await auth.post("/api/ops/venda-persist", { headers: H, data: { sale: origem } })).status()).toBe(200)
+ const troca = { localId: "f8-kg-" + randomUUID(), vendaLocalId: origem.id, tipo: "troca", clienteNome: "Cliente sintético", clienteDoc: cpf, sessaoId: STORE + "-cash", itens: [{ inventoryId: un.sku, quantidade: 1 }] }
+ const [first, replay] = await Promise.all([1, 2].map(() => auth.post("/api/ops/devolucao", { headers: H, data: troca })))
+ expect([first.status(), replay.status()]).toEqual([200, 200])
+ expect((await first.json()).creditoEmitido).toBe(3)
+ expect(await db.devolucaoVenda.count({ where: { storeId: STORE, localId: troca.localId } })).toBe(1)
+ expect((await db.produto.findUniqueOrThrow({ where: { id: un.id } })).stock).toBe(9)
+ const nova = { id: "F8-KG-" + randomUUID(), manualKgSale: "classic-manual-kg-v1", sessaoId: STORE + "-cash", total: 3, customerName: "Cliente sintético", customerCpf: cpf,
+  lines: [{ inventoryId: kg.id, name: kg.name, quantity: .15, unitPrice: 20, lineTotal: 3 }], paymentBreakdown: { creditoVale: 3 } }
+ expect((await auth.post("/api/ops/venda-persist", { headers: H, data: { sale: nova } })).status()).toBe(200)
+ expect((await db.produto.findUniqueOrThrow({ where: { id: kg.id } })).stock).toBe(9.85)
+ expect((await db.clienteCredito.aggregate({ where: { storeId: STORE, clienteDoc: cpf, status: "ativo" }, _sum: { saldoAtual: true } }))._sum.saldoAtual ?? 0).toBe(0)
+ const blocked = await auth.post("/api/ops/devolucao", { headers: H, data: { ...troca, localId: "f8-kg-" + randomUUID(), vendaLocalId: nova.id, tipo: "vale_credito", itens: [{ inventoryId: kg.id, quantidade: 1 }] } })
+ expect(blocked.status()).toBe(409)
+ expect((await blocked.json()).code).toBe("DEVOLUCAO_KG_BLOQUEADA")
+ const eleg = await (await auth.get("/api/ops/devolucao/elegibilidade?q=" + encodeURIComponent(nova.id), { headers: H })).json()
+ expect(eleg.vendas[0].lines[0]).toMatchObject({ quantity: .15, bloqueioDevolucao: expect.stringMatching(/KG/) })
+ expect((await db.produto.findUniqueOrThrow({ where: { id: kg.id } })).stock).toBe(9.85)
 })
