@@ -39,7 +39,7 @@ jobs:
       - run: git diff --check
       - run: node scripts/track.mjs verify --all
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
