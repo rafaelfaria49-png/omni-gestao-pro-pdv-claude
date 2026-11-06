@@ -17,7 +17,7 @@
  * REGRA DE OURO DO CICLO DE ESTADO:
  *   status, open, refresh-active, check e `attempt --fail` NÃO escrevem arquivo versionado.
  *   Somente close, block, import, reconcile-blocked, registry, init e sync-adapters escrevem.
- *   open e refresh-active escrevem apenas .aep-active (gitignored).
+ *   open, refresh-active e resume-blocked escrevem apenas .aep-active (gitignored).
  *   state.json representa exclusivamente o ÚLTIMO ESTADO RATIFICADO.
  */
 
@@ -681,6 +681,7 @@ function dispatch(cmd, positional, flags) {
   if (cmd === 'status') return cmdStatus(root, protocol, positional[0], flags);
   if (cmd === 'open') return cmdOpen(root, protocol, positional[0]);
   if (cmd === 'refresh-active') return cmdRefreshActive(root, protocol, positional, flags);
+  if (cmd === 'resume-blocked') return cmdResumeBlocked(root, protocol, positional, flags);
   if (cmd === 'check') return cmdCheck(root, protocol, positional[0]);
   if (cmd === 'close') return cmdClose(root, protocol, positional[0]);
   if (cmd === 'attempt') return cmdAttempt(root, protocol, positional[0], flags);
@@ -752,6 +753,12 @@ function cmdOpen(root, protocol, track) {
       'Não há GOAL elegível. Planejamento é humano — nada a abrir.');
   }
   const meta = goals[0];
+  const executedBlock = readLedger(dir, trackRel(protocol, track))
+    .some((e) => e.goal === meta.id && e.result === 'BLOCKED' && e.source === 'executado');
+  if (executedBlock) {
+    fail(4, 'divergência de estado', `node scripts/track.mjs open ${track}`, 'GOAL com BLOCKED executado ratificado',
+      'Use resume-blocked com autorização específica e plano integrado; open não reinicia tentativas ratificadas.');
+  }
 
   if (existing && existing.goal !== meta.id) {
     fail(5, 'pré-condição de ambiente', `cat ${ACTIVE_FILE}`, `goal=${existing.goal}`,
@@ -1036,6 +1043,242 @@ function cmdRefreshActive(root, protocol, positional, flags) {
 }
 
 // ---------------------------------------------------------------------------
+// resume-blocked — somente marcador; a ratificação histórica continua BLOCKED.
+// O plano integrado declara a origem e o próximo número, nunca recriamos falhas.
+// ---------------------------------------------------------------------------
+
+function cmdResumeBlocked(root, protocol, positional, flags) {
+  const [track] = positional;
+  const goal = flags.goal;
+  const authorization = flags.authorization;
+  const command = 'node scripts/track.mjs resume-blocked <trilha> --goal=<ID> --authorization=<ID-humano> [--dry-run]';
+  if (positional.length !== 1 || !Object.hasOwn(protocol.tracks, track)
+      || typeof goal !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(goal)
+      || typeof authorization !== 'string' || !authorization.trim()
+      || Object.keys(flags).some((k) => !['goal', 'authorization', 'dry-run'].includes(k))
+      || (flags['dry-run'] !== undefined && flags['dry-run'] !== true)) {
+    fail(1, 'erro de uso', command, 'argumentos inválidos', 'Declare trilha, mesmo GOAL e autorização humana específica.');
+  }
+  const reject = (out, cmd = command) => fail(4, 'divergência de estado', cmd, out,
+    'Preserve histórico e tentativas. Resolva pelo rito humano de planejamento/Git; não regenere a sessão.');
+  const readGit = (args) => {
+    const r = git(args, { cwd: root, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
+    if (r.code !== 0) reject(r.stderr || r.stdout, r.cmd);
+    return r.stdout.trimEnd();
+  };
+  const blob = (ref, rel) => {
+    const r = spawnSync('git', ['cat-file', 'blob', `${ref}:${rel}`], {
+      cwd: root, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, maxBuffer: 64 * 1024 * 1024, windowsHide: true,
+    });
+    if (r.status !== 0) reject(r.stderr?.toString() || 'blob ausente', `git cat-file blob ${ref}:${rel}`);
+    return r.stdout;
+  };
+  const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  const sameText = (a, b) => a.toString('utf8').replace(/\r\n/g, '\n') === b.toString('utf8').replace(/\r\n/g, '\n');
+  const validDate = (v) => typeof v === 'string' && Number.isFinite(Date.parse(v));
+  const parseEvents = (bytes) => {
+    if (!Buffer.from(bytes.toString('utf8')).equals(bytes)) reject('ledger não é UTF-8 válido');
+    try { return bytes.toString('utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)); }
+    catch { reject('ledger inválido'); }
+  };
+  const dir = requireTrack(root, protocol, track);
+  const rel = trackRel(protocol, track);
+  const hotRel = `${rel}/goals/${goal}.md`;
+  const closedRel = `${rel}/_closed/goals/${goal}.md`;
+  const ledgerRel = `${rel}/LEDGER.jsonl`;
+  const file = activePath(root);
+  const def = defaultBranch(protocol);
+
+  // Reexecutada imediatamente antes da publicação exclusiva do marcador.
+  const validate = (temp) => {
+    if (readGit(['status', '--porcelain', '--untracked-files=all', '--', '.', ...(temp ? [`:(exclude)${path.basename(temp)}`] : [])])) {
+      reject('árvore ou índice sujo');
+    }
+    const meta = readGoalMeta(path.join(root, hotRel), protocol);
+    const branch = readGit(['rev-parse', '--abbrev-ref', 'HEAD']);
+    if (meta.aep !== AEP_VERSION || meta.id !== goal || meta.track !== track || meta.status !== 'BLOCKED'
+        || meta.branch !== branch || branch === def || branch === 'HEAD' || !worktreeMatches(root, meta.worktree)) {
+      reject('identidade de GOAL, branch ou worktree divergente');
+    }
+    const head = readGit(['rev-parse', '--verify', 'HEAD^{commit}']);
+    const upstream = readGit(['rev-parse', '--verify', `refs/remotes/origin/${def}^{commit}`]);
+    const bases = readGit(['merge-base', '--all', head, upstream]).split('\n');
+    if (bases.length !== 1) reject('base comum ambígua');
+    const [base] = bases;
+    const currentPlan = blob(base, hotRel);
+    // Plano e implementação precisam ter sido integrados legitimamente, não copiados.
+    for (const p of [hotRel, 'scripts/track.mjs', PROTOCOL_REL]) {
+      const approved = blob(base, p);
+      if (!approved.equals(blob(head, p)) || !approved.equals(blob(upstream, p))
+          || !sameText(approved, fs.readFileSync(path.join(root, p)))) reject(`HEAD/base/origin/plano divergentes: ${p}`);
+    }
+    const auth = meta.autorizacao_humana_execucao;
+    const rite = meta.retomada_aep;
+    if (!auth || auth.aprovado !== true || auth.authorization_id !== authorization
+        || !rite || rite.status !== 'BLOCKED_PENDING_OFFICIAL_RITE'
+        || protocol.max_attempts !== 3 || rite.max_attempts !== protocol.max_attempts
+        || !Number.isInteger(meta.plan_rev) || meta.plan_rev < 1 || !meta.plan_ref
+        || new Set(meta.allowlist).size !== meta.allowlist.length) reject('autorização específica ou plano de retomada insuficiente');
+    for (const key of ['source_commit', 'blocked_commit', 'reconciliation_commit']) {
+      if (!/^[a-f0-9]{40}$/.test(rite[key] || '')) reject(`proveniência ausente: ${key}`);
+    }
+    const source = rite.source_commit;
+    const blocked = rite.blocked_commit;
+    const reconciliation = rite.reconciliation_commit;
+    const sourceRef = `refs/remotes/origin/${branch}`;
+    const sourceTip = readGit(['rev-parse', '--verify', `${sourceRef}^{commit}`]);
+    readGit(['merge-base', '--is-ancestor', source, sourceTip]);
+    readGit(['merge-base', '--is-ancestor', source, head]);
+    readGit(['merge-base', '--is-ancestor', blocked, source]);
+    readGit(['merge-base', '--is-ancestor', reconciliation, base]);
+    const originalLedger = blob(source, ledgerRel);
+    if (!originalLedger.equals(blob(blocked, ledgerRel)) || !originalLedger.equals(blob(reconciliation, ledgerRel))) {
+      reject('fonte BLOCKED e reconciliação divergentes');
+    }
+    const parents = readGit(['rev-list', '--parents', '-n', '1', blocked]).split(' ');
+    if (parents.length !== 2) reject('commit BLOCKED sem pai único verificável');
+    const parentLedger = blob(parents[1], ledgerRel);
+    if (!originalLedger.subarray(0, parentLedger.length).equals(parentLedger)) reject('origem não é append-only');
+    const appended = parseEvents(originalLedger.subarray(parentLedger.length));
+    const events = parseEvents(originalLedger);
+    const latest = projectLatestGoalStates(events).get(goal)?.entrada;
+    if (appended.length !== 1 || !latest || !deepEqual(appended[0], latest)
+        || latest.aep !== AEP_VERSION || latest.track !== track || latest.branch !== branch
+        || latest.result !== 'BLOCKED' || latest.source !== 'executado'
+        || !['gate', 'decisao'].includes(latest.blocked_by) || !validDate(latest.ts)
+        || typeof latest.reason !== 'string' || !latest.reason.trim()
+        || !/^[a-f0-9]{40}$/.test(latest.base_commit || '')
+        || !Number.isInteger(latest.attempt) || latest.attempt < 1
+        || !Array.isArray(latest.previous_attempts)
+        || latest.previous_attempts.some((a, i, log) => !a || !Number.isInteger(a.n) || a.n < 1 || a.n >= latest.attempt
+          || (i && a.n <= log[i - 1].n) || !validDate(a.at) || Date.parse(a.at) > Date.parse(latest.ts)
+          || (i && Date.parse(a.at) < Date.parse(log[i - 1].at)) || typeof a.reason !== 'string' || !a.reason.trim())) {
+      reject('evento BLOCKED ratificado ou tentativas divergentes');
+    }
+    if (events.some((e) => e.goal === goal && e.attempt >= protocol.max_attempts)) reject('teto cumulativo de 3/3 esgotado');
+    if (rite.historical_attempt !== latest.attempt || !deepEqual(rite.historical_previous_attempts, latest.previous_attempts)
+        || rite.next_corrective_attempt_required !== latest.attempt + 1) reject('contagem histórica declarada divergente');
+    readGit(['merge-base', '--is-ancestor', latest.base_commit, blocked]);
+    const archive = blob(source, closedRel);
+    const historical = extractBlock(archive.toString('utf8'), 'AEP:META', `${source}:${closedRel}`);
+    if (!historical || historical.id !== goal || historical.track !== track || historical.status !== 'BLOCKED'
+        || historical.branch !== branch || historical.worktree !== meta.worktree || historical.plan_ref !== meta.plan_ref
+        || !Number.isInteger(historical.plan_rev) || historical.plan_rev >= meta.plan_rev) reject('plano revisado ou arquivo fechado histórico divergente');
+    for (const ref of [blocked, reconciliation, base, head, upstream]) {
+      if (!archive.equals(blob(ref, closedRel))) reject('arquivo fechado histórico Git divergente');
+    }
+    if (!sameText(archive, fs.readFileSync(path.join(root, closedRel)))) reject('arquivo fechado histórico local divergente');
+    const proofRel = `${rel}/_closed/reports/RECONCILE-BLOCKED-${source.slice(0, 12)}.json`;
+    let proof;
+    try { proof = JSON.parse(blob(reconciliation, proofRel).toString('utf8')); }
+    catch { reject('evidência de reconciliação ilegível'); }
+    if (proof.aep !== AEP_VERSION || proof.track !== track || proof.goal !== goal || proof.source_ref !== sourceRef
+        || proof.source_commit !== source || proof.result !== 'BLOCKED' || proof.attempt !== latest.attempt
+        || proof.events_appended !== 1 || proof.final_ledger_lines !== events.length
+        || proof.previous_ledger_lines !== events.length - 1 || proof.product_code_changed !== false) reject('evidência de reconciliação divergente');
+    for (const ref of [base, head, upstream]) {
+      if (!blob(reconciliation, proofRel).equals(blob(ref, proofRel))) reject('evidência histórica alterada');
+      const ledger = blob(ref, ledgerRel);
+      if (!ledger.subarray(0, originalLedger.length).equals(originalLedger)
+          || !deepEqual(parseEvents(ledger).filter((e) => e.goal === goal), events.filter((e) => e.goal === goal))) reject('ledger ratificado divergente da origem');
+    }
+    const delta = readGit(['diff', '--name-only', '-z', `${base}..${head}`]).split('\0').filter(Boolean);
+    if (delta.some((p) => structuralRules(protocol).goalsHot.test(p))) reject('item 8: GOAL no delta da execução');
+    if (delta.some((p) => !matchAny(meta.allowlist, p)) || protocol.gates.some((g) => !meta.gates_liberados.includes(g.id)
+        && delta.some((p) => matchAny(g.paths || [], p)))) reject('diff fora da allowlist ou gate não liberado');
+    if (readGit(['diff', '--name-only', `${base}..${head}`, '--', ledgerRel, `${rel}/_closed/`])) reject('histórico/evidência alterado na execução');
+    const problems = Object.keys(protocol.tracks).flatMap((t) => verifyTrack(root, protocol, t));
+    if (problems.length || !sameText(fs.readFileSync(path.join(tracksRoot(root, protocol), 'REGISTRY.md')), renderRegistry(root, protocol))
+        || !sameText(fs.readFileSync(path.join(root, 'docs/ai-execution/GATES.md')), renderGates(protocol))) reject('derivados divergentes');
+    // Só inspeciona marcadores: nenhuma execução ou escrita em outra worktree.
+    for (const line of readGit(['worktree', 'list', '--porcelain']).split('\n')) {
+      if (!line.startsWith('worktree ')) continue;
+      const otherRoot = line.slice(9);
+      if (worktreeMatches(root, otherRoot)) continue;
+      const other = path.join(otherRoot, ACTIVE_FILE);
+      if (fs.existsSync(other)) {
+        const session = readJson(other, 'Preserve a sessão concorrente; esclareça sua identidade no fluxo humano.');
+        if (session.track === track || session.goal === goal) reject('sessão ativa concorrente em outra worktree');
+      }
+    }
+    const resumption = { authorization_id: authorization, source_ref: sourceRef, source_commit: source,
+      blocked_commit: blocked, reconciliation_commit: reconciliation, historical_attempt: latest.attempt,
+      historical_previous_attempts: latest.previous_attempts, blocked_event_sha256: sha256(originalLedger.subarray(parentLedger.length)),
+      historical_archive: closedRel, historical_archive_blob: readGit(['rev-parse', `${source}:${closedRel}`]),
+      historical_archive_sha256: sha256(archive), plan_ref: meta.plan_ref, plan_rev: meta.plan_rev,
+      historical_archive_worktree_sha256: sha256(fs.readFileSync(path.join(root, closedRel))),
+      plan_blob: readGit(['rev-parse', `${base}:${hotRel}`]), base_commit: base,
+      first_attempt: latest.attempt + 1, max_attempts: protocol.max_attempts };
+    let active = null;
+    if (fs.existsSync(file)) {
+      if (!fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink()) reject('sessão existente não é arquivo regular');
+      active = readJson(file, 'Preserve o marcador e as tentativas; resolva pelo rito humano.');
+      const snapshot = { aep: AEP_VERSION, track, goal, goal_file: hotRel, goal_file_abs: toPosix(path.join(root, hotRel)),
+        branch, worktree: root, base_commit: base, default_branch: def, max_attempts: protocol.max_attempts,
+        allowlist: meta.allowlist, gates_liberados: meta.gates_liberados, test_command: meta.test_command,
+        read_budget: meta.read_budget, classe: meta.class, resumption };
+      const prefix = latest.previous_attempts.length;
+      if (Object.entries(snapshot).some(([k, v]) => !deepEqual(active?.[k], v)) || !validDate(active.opened_at)
+          || !Number.isInteger(active.attempt) || active.attempt < resumption.first_attempt || active.attempt > protocol.max_attempts
+          || !Array.isArray(active.attempts_log) || active.attempts_log.length !== prefix + active.attempt - resumption.first_attempt
+          || !deepEqual(active.attempts_log.slice(0, prefix), latest.previous_attempts)
+          || active.attempts_log.slice(prefix).some((a, i, log) => !a || a.n !== resumption.first_attempt + i
+            || !validDate(a.at) || Date.parse(a.at) < Date.parse(i ? log[i - 1].at : active.opened_at)
+            || typeof a.reason !== 'string' || !a.reason.trim())) reject('sessão já aberta ou proveniência/tentativas divergentes');
+    }
+    // Evita colisão futura antes de criar a sessão; close/block repetem a guarda.
+    for (let n = resumption.first_attempt; n <= protocol.max_attempts; n += 1) {
+      for (const dest of [`${rel}/_closed/goals/${goal}-r${meta.plan_rev}-a${n}.md`, `${rel}/_closed/reports/${goal}-a${n}.md`]) {
+        if (fs.existsSync(path.join(root, dest))) reject(`arquivo final já existe: ${dest}`);
+      }
+    }
+    return { meta, head, upstream, base, sourceTip, resumption, active, currentPlan: sha256(currentPlan) };
+  };
+  const checked = validate();
+  const { meta, resumption } = checked;
+  const summary = `${AEP_LABEL} · resume-blocked ${track}${flags['dry-run'] ? ' · DRY-RUN' : ''}\n`
+    + `GOAL: ${goal} · plan_rev ${meta.plan_rev} · BLOCKED ${resumption.historical_attempt}/3 preservado\n`
+    + `próxima corretiva: ${resumption.first_attempt}/3 · base: ${checked.base}\n`
+    + `allowlist aprovada: ${meta.allowlist.join(', ')}\n`;
+  if (checked.active || flags['dry-run']) {
+    process.stdout.write(summary + (checked.active ? `NO-OP: sessão retomada na tentativa ${checked.active.attempt}/3; nenhum arquivo escrito.\n`
+      : 'MODO DRY-RUN: nenhum arquivo ou metadado Git escrito; nenhum evento anexado.\n'));
+    return 0;
+  }
+  const active = { aep: AEP_VERSION, track, goal, goal_file: hotRel, goal_file_abs: toPosix(meta.__file),
+    branch: meta.branch, worktree: root, base_commit: checked.base, default_branch: def,
+    attempt: resumption.first_attempt, max_attempts: protocol.max_attempts, allowlist: meta.allowlist,
+    gates_liberados: meta.gates_liberados, test_command: meta.test_command, read_budget: meta.read_budget,
+    classe: meta.class, opened_at: new Date().toISOString(), attempts_log: resumption.historical_previous_attempts, resumption };
+  const temp = `${file}.resume-${randomUUID()}.tmp`;
+  let fd;
+  let published = false;
+  try {
+    fd = fs.openSync(temp, 'wx', 0o600);
+    fs.writeFileSync(fd, canonicalJson(active));
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    if (!deepEqual(validate(temp), checked)) reject('sessão, HEAD, refs ou plano mudaram durante a retomada');
+    // link é publicação atômica exclusiva: EEXIST jamais sobrescreve uma sessão.
+    fs.linkSync(temp, file);
+    published = true;
+  } catch (err) {
+    if (err instanceof AepError) throw err;
+    fail(5, 'pré-condição de ambiente', command, err.message, 'Publicação atômica recusada; histórico e sessão concorrente preservados. Corrija e repita.');
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch (err) {
+      fail(5, 'pré-condição de ambiente', `ls ${toPosix(temp)}`, err.message,
+        published ? 'Sessão completa já publicada; preserve o marcador. Remova somente este temporário após conferir sua origem, antes de repetir.'
+          : 'Nenhuma sessão publicada; remova somente este temporário próprio antes de repetir. Histórico preservado.');
+    }
+  }
+  process.stdout.write(`${summary}.aep-active criado atomicamente; ledger, arquivos fechados e derivados preservados.\n`);
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
 // check — SOMENTE LEITURA. 12 itens, nesta ordem.
 // ---------------------------------------------------------------------------
 
@@ -1214,16 +1457,87 @@ function stateCommit(root, message, paths) {
   return sha;
 }
 
-function moveGoalToClosed(root, protocol, track, goalId) {
+function closureArchive(root, protocol, track, active) {
+  const rel = trackRel(protocol, track, '_closed', 'goals');
+  const resume = active.resumption;
+  const dest = resume ? `${rel}/${active.goal}-r${resume.plan_rev}-a${active.attempt}.md` : `${rel}/${active.goal}.md`;
+  if (resume) {
+    const historic = path.join(root, resume.historical_archive);
+    if (!Number.isInteger(resume.plan_rev) || !Number.isInteger(active.attempt)
+        || active.attempt < resume.first_attempt || active.attempt > 3 || active.max_attempts !== 3
+        || !fs.existsSync(historic) || createHash('sha256').update(fs.readFileSync(historic)).digest('hex') !== resume.historical_archive_worktree_sha256) {
+      fail(4, 'divergência de estado', 'close/block retomado', 'arquivo histórico ou contagem divergente', 'Preserve a sessão e o histórico; resolva pelo rito humano.');
+    }
+  }
+  if (resume && fs.existsSync(path.join(root, dest))) {
+    fail(4, 'divergência de estado', `ls ${dest}`, 'arquivo fechado já existe', 'Nunca sobrescreva um fechamento anterior. Preserve a sessão e revise a proveniência.');
+  }
+  return dest;
+}
+
+function writeExclusiveClosureFile(file, content, transaction) {
+  const fd = fs.openSync(file, 'wx');
+  transaction.created.add(file);
+  try {
+    fs.writeFileSync(fd, content);
+    fs.fsyncSync(fd);
+  } finally { fs.closeSync(fd); }
+}
+
+// Só a retomada usa esta transação. Os comandos legados mantêm seu fluxo.
+function resumedClosureTransaction(root, protocol, track, active, action) {
+  if (!active.resumption) return action(null);
+  const archiveRel = closureArchive(root, protocol, track, active);
+  const staged = git(['diff', '--cached', '--quiet'], { cwd: root });
+  if (staged.code !== 0) fail(5, 'pré-condição de ambiente', staged.cmd, 'índice já contém mudanças', 'Commit as mudanças autorizadas antes de ratificar a retomada.');
+  const paths = [active.goal_file, archiveRel, trackRel(protocol, track, 'LEDGER.jsonl'),
+    trackRel(protocol, track, 'state.json'), `${protocol.tracks_dir}/REGISTRY.md`, 'docs/ai-execution/GATES.md',
+    trackRel(protocol, track, '_closed', 'reports', `${active.goal}-a${active.attempt}.md`)];
+  const before = new Map(paths.map((p) => {
+    const file = path.join(root, p);
+    return [file, fs.existsSync(file) ? { bytes: fs.readFileSync(file), stat: fs.statSync(file) } : null];
+  }));
+  const indexResult = git(['rev-parse', '--git-path', 'index'], { cwd: root });
+  if (indexResult.code !== 0) fail(5, 'pré-condição de ambiente', indexResult.cmd, indexResult.stderr, 'Índice Git indisponível; preserve a sessão.');
+  const index = path.resolve(root, indexResult.stdout.trim());
+  const indexBefore = fs.readFileSync(index);
+  const head = git(['rev-parse', 'HEAD'], { cwd: root }).stdout.trim();
+  const transaction = { created: new Set() };
+  try { return action(transaction); } catch (err) {
+    if (git(['rev-parse', 'HEAD'], { cwd: root }).stdout.trim() !== head) {
+      fail(4, 'divergência de estado', 'git rev-parse HEAD', 'HEAD mudou durante a ratificação',
+        'Não desfazer um commit existente. Confira o fechamento ratificado e o marcador antes de repetir.');
+    }
+    try {
+      for (const [file, saved] of before) {
+        if (saved) {
+          fs.writeFileSync(file, saved.bytes);
+          fs.utimesSync(file, saved.stat.atime, saved.stat.mtime);
+        } else if (transaction.created.has(file) && fs.existsSync(file)) fs.unlinkSync(file);
+      }
+      fs.writeFileSync(index, indexBefore);
+    } catch (rollbackError) {
+      fail(4, 'divergência de estado', 'rollback do fechamento retomado', rollbackError.message,
+        'Restauração incompleta; preserve a sessão e confira arquivos/índice no rito humano antes de repetir.');
+    }
+    throw err;
+  }
+}
+
+function moveGoalToClosed(root, protocol, track, goalId, active, transaction) {
   const dir = trackDir(root, protocol, track);
   const from = path.join(dir, 'goals', `${goalId}.md`);
-  const to = path.join(dir, '_closed', 'goals', `${goalId}.md`);
+  const destination = closureArchive(root, protocol, track, active || { goal: goalId });
+  const to = path.join(root, destination);
   if (!fs.existsSync(from)) return null;
   fs.mkdirSync(path.dirname(to), { recursive: true });
-  fs.renameSync(from, to);
+  if (active?.resumption) {
+    writeExclusiveClosureFile(to, fs.readFileSync(from), transaction);
+    fs.unlinkSync(from);
+  } else fs.renameSync(from, to);
   return {
     from: `${trackRel(protocol, track)}/goals/${goalId}.md`,
-    to: `${trackRel(protocol, track)}/_closed/goals/${goalId}.md`,
+    to: destination,
   };
 }
 
@@ -1260,10 +1574,19 @@ function cmdClose(root, protocol, track) {
     return 3;
   }
 
+  return resumedClosureTransaction(root, protocol, track, res.active,
+    (transaction) => closeCheckedGoal(root, protocol, track, res, transaction));
+}
+
+function closeCheckedGoal(root, protocol, track, res, transaction) {
   const active = res.active;
   const dir = trackDir(root, protocol, track);
   const ts = new Date().toISOString();
   const reportRel = `${trackRel(protocol, track)}/_closed/reports/${active.goal}-a${active.attempt}.md`;
+  const archiveRel = closureArchive(root, protocol, track, active);
+  if (active.resumption && fs.existsSync(path.join(root, reportRel))) {
+    fail(4, 'divergência de estado', `ls ${reportRel}`, 'relatório anterior já existe', 'Preserve o relatório e a sessão; resolva a colisão pelo rito humano.');
+  }
 
   const line = {
     aep: AEP_VERSION,
@@ -1281,11 +1604,12 @@ function cmdClose(root, protocol, track) {
     upstream: res.upstream,
     previous_attempts: active.attempts_log || [],
     report: reportRel,
+    ...(active.resumption ? { plan_rev: active.resumption.plan_rev, resumed_from: active.resumption, goal_archive: archiveRel } : {}),
   };
   appendLedger(dir, line);
 
   fs.mkdirSync(path.join(dir, '_closed', 'reports'), { recursive: true });
-  fs.writeFileSync(path.join(root, reportRel), [
+  const reportText = [
     `# ${active.goal} — tentativa ${active.attempt}`,
     '',
     `- trilha: \`${track}\``,
@@ -1296,6 +1620,8 @@ function cmdClose(root, protocol, track) {
     `- head_commit: \`${res.headSha}\``,
     `- teste: \`${active.test_command}\` → exit ${res.testCode}`,
     `- upstream: ${res.upstream}`,
+    ...(active.resumption ? [`- origem BLOCKED: \`${active.resumption.blocked_commit}\` (tentativa ${active.resumption.historical_attempt}/3, sem falha artificial)`,
+      `- arquivo desta revisão: \`${archiveRel}\``] : []),
     '',
     '## Caminhos alterados',
     '',
@@ -1311,9 +1637,12 @@ function cmdClose(root, protocol, track) {
     '',
     ...res.items.map((i) => `- [${i.veredito}] ${i.nome} — \`${i.cmd}\` → ${oneLine(i.saida)}`),
     '',
-  ].join('\n'));
+  ].join('\n');
+  if (active.resumption) writeExclusiveClosureFile(path.join(root, reportRel), reportText, transaction);
+  else fs.writeFileSync(path.join(root, reportRel), reportText);
 
-  const moved = moveGoalToClosed(root, protocol, track, active.goal);
+  if (active.resumption) setGoalStatus(path.join(root, active.goal_file), 'DONE');
+  const moved = moveGoalToClosed(root, protocol, track, active.goal, active, transaction);
   const derived = writeState(root, protocol, track);
   const gen = writeGenerated(root, protocol);
 
@@ -1332,7 +1661,7 @@ function cmdClose(root, protocol, track) {
   const proximo = derived.current_goal;
   let veredito;
   if (!proximo) veredito = 'CLEAR';
-  else if ((active.attempts_log || []).length > 0 || derived.risk_tier === 'ALTO' || derived.risk_tier === 'CRITICO') veredito = 'NEW_SESSION';
+  else if (active.resumption || (active.attempts_log || []).length > 0 || derived.risk_tier === 'ALTO' || derived.risk_tier === 'CRITICO') veredito = 'NEW_SESSION';
   else veredito = 'CONTINUE';
 
   const out = [];
@@ -1342,7 +1671,7 @@ function cmdClose(root, protocol, track) {
   out.push(`commit do agente: ${res.headSha}`);
   out.push(`ledger: +1 linha em ${trackRel(protocol, track)}/LEDGER.jsonl`);
   out.push(`relatório: ${reportRel}`);
-  out.push(`GOAL movido: goals/ → _closed/goals/${active.goal}.md`);
+  out.push(`GOAL movido: goals/ → ${archiveRel}`);
   out.push(`state.json: status ${derived.status} · DONE ${derived.counters.goals_done} · BLOCKED ${derived.counters.goals_blocked}`);
   out.push(`REGISTRY.md e GATES.md regenerados`);
   out.push(`${ACTIVE_FILE} REMOVIDO — a sessão do GOAL terminou.`);
@@ -1425,8 +1754,14 @@ function cmdBlock(root, protocol, track, flags) {
 }
 
 function blockGoal(root, protocol, track, active, reason, by) {
+  return resumedClosureTransaction(root, protocol, track, active,
+    (transaction) => ratifyBlock(root, protocol, track, active, reason, by, transaction));
+}
+
+function ratifyBlock(root, protocol, track, active, reason, by, transaction) {
   const dir = trackDir(root, protocol, track);
   const ts = new Date().toISOString();
+  const archiveRel = closureArchive(root, protocol, track, active);
   appendLedger(dir, {
     aep: AEP_VERSION,
     ts,
@@ -1440,11 +1775,12 @@ function blockGoal(root, protocol, track, active, reason, by) {
     branch: active.branch,
     base_commit: active.base_commit,
     previous_attempts: active.attempts_log || [],
+    ...(active.resumption ? { plan_rev: active.resumption.plan_rev, resumed_from: active.resumption, goal_archive: archiveRel } : {}),
   });
 
   const goalFile = path.join(dir, 'goals', `${active.goal}.md`);
   if (fs.existsSync(goalFile)) setGoalStatus(goalFile, 'BLOCKED');
-  const moved = moveGoalToClosed(root, protocol, track, active.goal);
+  const moved = moveGoalToClosed(root, protocol, track, active.goal, active, transaction);
   const derived = writeState(root, protocol, track);
   const gen = writeGenerated(root, protocol);
 
@@ -1466,8 +1802,8 @@ function blockGoal(root, protocol, track, active, reason, by) {
     `commit de estado: ${sha}`,
     `state.json: status ${derived.status}`,
     `${ACTIVE_FILE} REMOVIDO.`,
-    'Desbloqueio é ato HUMANO: mover o arquivo de _closed/goals/ de volta para goals/',
-    'com status READY, ou planejar um GOAL sucessor.',
+    'Desbloqueio exige autorização humana e resume-blocked com plano integrado.',
+    'O teto cumulativo esgotado não pode ser reiniciado.',
     '',
     'CONTEXTO: NEW_SESSION',
     '',
@@ -2920,7 +3256,7 @@ function parseArgs(argv) {
 }
 
 const COMMANDS = new Set(['status', 'open', 'check', 'close', 'attempt', 'block', 'init',
-  'refresh-active', 'import', 'reconcile-blocked', 'registry', 'verify', 'doctor', 'sync-adapters', 'hook']);
+  'refresh-active', 'resume-blocked', 'import', 'reconcile-blocked', 'registry', 'verify', 'doctor', 'sync-adapters', 'hook']);
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -2944,6 +3280,7 @@ function usage() {
     '  status <trilha> [--json]        somente leitura',
     '  open <trilha>                   escreve só .aep-active (gitignored)',
     '  refresh-active pessoas [--dry-run]  amplia sessão existente após plano rev. 6 na base comum',
+    '  resume-blocked <trilha> --goal=<ID> --authorization=<ID-humano> [--dry-run]',
     '  check <trilha>                  somente leitura; 12 verificações',
     '  close <trilha>                  ratifica: ledger + state + registry + commit aep(...)',
     '  attempt <trilha> --fail --reason="..."',

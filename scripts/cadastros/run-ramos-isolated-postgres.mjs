@@ -17,5 +17,5 @@ try {
   if (await db.store.count() || await db.produto.count() || await db.venda.count()) throw new Error("RAMOS_DATABASE_MUST_BE_EMPTY")
 } finally { await db.$disconnect() }
 await mkdir("test-results/ramos", { recursive: true })
-run(["node_modules/vitest/vitest.mjs", "run", "lib/cadastros/business-sales.integration.test.ts", "--maxWorkers=1", "--reporter=default", "--reporter=json", "--outputFile=test-results/ramos/postgres-integration.json"], { ...process.env, RAMOS_TEST_DATABASE_URL: database })
+run(["node_modules/vitest/vitest.mjs", "run", "lib/cadastros/business-sales.integration.test.ts", "lib/vendas/offline-sync.integration.test.ts", "--maxWorkers=1", "--reporter=default", "--reporter=json", "--outputFile=test-results/ramos/postgres-integration.json"], { ...process.env, RAMOS_TEST_DATABASE_URL: database })
 await writeFile("test-results/ramos/postgres-isolation.json", JSON.stringify({ target: "Fresh CI PostgreSQL service on loopback", schemaChanged: false, schemaMaterialization: "db push on empty disposable database", migrationsExecuted: false, productionWrites: 0 }, null, 2) + "\n")

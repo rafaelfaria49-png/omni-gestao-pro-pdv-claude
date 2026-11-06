@@ -1,0 +1,18 @@
+{
+  "goal": "PDV-CADASTROS-SYNC-AUTOMATICO-001",
+  "date": "2026-11-02",
+  "base": "0ddd5a7d5b4a39991189237743b1be7dbbd4d85f",
+  "codeCommit": "6f96f990c0e733f8501ebf41378de2d4d9dfd228",
+  "branch": "claude/pdv-cadastros-sync-automatico-001",
+  "stackedOn": "PR #324",
+  "migrations": 0,
+  "productionWrites": 0,
+  "files": [
+    "CAUSA_RAIZ_E_MAPA.md",
+    "DESENHO_E_CONTRATOS.md",
+    "MATRIZ_TESTES.md",
+    "RISCOS_E_DEPLOY.md",
+    "REVISAO_INDEPENDENTE.md",
+    "RELATORIO_FINAL.md"
+  ]
+}

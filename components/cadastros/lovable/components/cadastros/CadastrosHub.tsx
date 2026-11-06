@@ -61,6 +61,7 @@ import { getProdutoFiscal } from "@/lib/produto-fiscal";
 import { hasInvalidProductCommercial, productCommercialFromMetadata } from "@/lib/cadastros/product-commercial-contract";
 import { formatStockQuantity } from "@/lib/estoque/stock-quantity";
 import { usesClientExperience } from "@/lib/navigation/client-experience";
+import { notifyCatalogChanged } from "@/lib/estoque/catalog-sync";
 import {
   categoriaCriadaSelecionada,
   categoriasAtivasDeServico,
@@ -1458,6 +1459,7 @@ export function ProdutosPanel({
       if (!res.ok) throw new Error(data.error || "Erro ao inativar produtos");
 
       toast.success(`${data.inactivated} produto(s) inativados com sucesso.`);
+      notifyCatalogChanged(storeId);
       setSelectedProductIds(new Set());
       await refresh();
     } catch (e) {
@@ -1535,6 +1537,7 @@ export function ProdutosPanel({
       toast.success(
         `Sucesso: ${data.deleted} produto(s) excluídos permanentemente e ${data.inactivated} produto(s) inativados.`
       );
+      notifyCatalogChanged(storeId);
       setSelectedProductIds(new Set());
       setBulkModalOpen(false);
       await refresh();
@@ -2000,6 +2003,7 @@ export function ProdutosPanel({
                                   return;
                                 }
                                 toast.success(p.status === "Ativo" ? "Produto inativado." : "Produto reativado.");
+                                notifyCatalogChanged(storeId);
                                 await refresh();
                               } catch (e) {
                                 toast.error("Não foi possível atualizar o status do produto.");
@@ -2361,6 +2365,7 @@ export function ProdutosPanel({
                       const res = await deleteProduto(storeId, deleting.id);
                       setDeleteResult(res);
                       if (res.ok) {
+                        notifyCatalogChanged(storeId);
                         await refreshRows();
                         void refreshAlerts();
                         setDeleting(null);

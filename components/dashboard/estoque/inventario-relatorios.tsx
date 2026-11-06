@@ -83,6 +83,7 @@ import { InventarioAssociarProdutoModal } from "@/components/dashboard/estoque/i
 import { InventarioCadastroRapidoModal } from "@/components/dashboard/estoque/inventario-cadastro-rapido-modal"
 import { criarProdutoRapido } from "@/lib/estoque/inventario-cadastro-rapido-submit"
 import type { CadastroRapidoForm } from "@/lib/estoque/inventario-cadastro-rapido"
+import { notifyCatalogChanged } from "@/lib/estoque/catalog-sync"
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -309,6 +310,7 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
           : `${ajusteAlvo.nome}: estoque ajustado para ${res.estoqueDepois}.`,
       })
       setAjusteAlvo(null)
+      notifyCatalogChanged(storeId)
       await carregarRelatorio(relatorio.sessao.id)
     } finally {
       setAplicandoAjuste(false)

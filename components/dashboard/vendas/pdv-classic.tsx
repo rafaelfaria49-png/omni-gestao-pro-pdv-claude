@@ -158,6 +158,8 @@ import {
 } from "@/lib/pdv-finalize-integrity"
 import { createPendingSaleIdentityGuard, PENDING_RETRY_GUIDANCE, type PendingSaleIdentity } from "@/lib/pdv/finalize-modal-contract"
 import { resolveCreditAttribution } from "@/lib/pdv/credit-doc-resolution"
+import { reconcileCartWithCatalog } from "@/lib/pdv/cart-catalog-reconcile"
+import { PdvCatalogDivergencePanel } from "@/components/dashboard/vendas/pdv-catalog-divergence-panel"
 import {
   resolveWeightUnitPrice,
   WEIGHT_PRICE_INVALID_FEEDBACK,
@@ -196,6 +198,10 @@ type CartItem = {
   accessorySelection?: AccessorySelectionV1
   /** Chave determinística produto+modelo+cor para agrupar linhas iguais. */
   cartLineKey?: string
+  /** `Produto.id` (cuid) — identidade imutável enviada ao servidor como `produtoId`. */
+  produtoId?: string
+  /** Preço unitário do catálogo quando o item entrou (base para detectar mudança de cadastro). */
+  catalogUnitPrice?: number
 }
 
 type Product = PdvCatalogProduct
@@ -278,7 +284,7 @@ export function PdvClassic({
   // Caixa: apenas leitura do CaixaStatusBar/CaixaProvider via outros consumers.
   // `useCaixa()` legado (adicionarEntrada/Saida/sessaoId) só era usado pelo
   // `saveOperation` removido — fluxo migrado para o CaixaStatusBar compartilhado.
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens, sales } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, ordens, sales, checkCatalog, watchCatalogSync, releaseSaleAttempt } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
   const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
@@ -865,7 +871,8 @@ export function PdvClassic({
     accessorySelection?: AccessorySelectionV1
     cartLineKey?: string
   }) => {
-    if (blockWeightSale(params, products.find((p) => p.id === params.inventoryId))) return
+    const catalogProduct = products.find((p) => p.id === params.inventoryId)
+    if (blockWeightSale(params, catalogProduct)) return
     const lineId = newPdvLineId(params.inventoryId)
     setCart((prev) => [
       ...prev,
@@ -875,6 +882,7 @@ export function PdvClassic({
         name: params.name,
         price: params.price,
         quantity: params.quantity,
+        ...(catalogProduct?.dbId ? { produtoId: catalogProduct.dbId, catalogUnitPrice: catalogProduct.price } : {}),
         complementos: [],
         vendaPorPeso: params.vendaPorPeso,
         atributosLabel: params.atributosLabel,
@@ -1227,6 +1235,44 @@ export function PdvClassic({
     setCart(cart.filter((item) => item.lineId !== lineId))
   }
 
+  // ── Carrinho × catálogo atualizado sem F5 (PDV-CADASTROS-SYNC-AUTOMATICO-001) ──
+  // Reconfere o carrinho por `Produto.id` sempre que o catálogo muda: SKU/código trocado
+  // só reaponta a linha; preço, saldo e exclusão viram revisão explícita e bloqueiam o
+  // pagamento até o operador decidir. Nunca apaga linha nem muda preço sozinho.
+  const isPdvStockControlled = useCallback(
+    (item: { stock: number; category?: string }) => hasControlledPdvStock(item.stock, item.category),
+    []
+  )
+  const catalogReconcile = useMemo(
+    () => reconcileCartWithCatalog(cart, inventory, { isStockControlled: isPdvStockControlled }),
+    [cart, inventory, isPdvStockControlled]
+  )
+  const catalogDivergences = catalogReconcile.divergences
+  useEffect(() => {
+    if (!catalogReconcile.changed) return
+    // Recalcula sobre o estado mais novo: uma linha incluída no meio não se perde.
+    setCart((prev) => reconcileCartWithCatalog(prev, inventory, { isStockControlled: isPdvStockControlled }).lines)
+  }, [catalogReconcile, inventory, isPdvStockControlled])
+  useEffect(() => {
+    // PDV montado liga os checks automáticos; abrir confere a versão já (navegação vinda do
+    // Cadastros na mesma aba).
+    const stop = watchCatalogSync()
+    void checkCatalog()
+    return stop
+  }, [checkCatalog, watchCatalogSync])
+  const applyCatalogPrice = (lineId: string, catalogPrice: number) => {
+    setCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, price: catalogPrice, catalogUnitPrice: catalogPrice } : i)))
+  }
+  const keepCartPrice = (lineId: string, catalogPrice: number) => {
+    setCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, catalogUnitPrice: catalogPrice } : i)))
+  }
+  const adjustCatalogQuantity = (lineId: string, quantity: number) => {
+    setCart((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, quantity } : i)))
+  }
+  const removeCartLineById = (lineId: string) => {
+    setCart((prev) => prev.filter((i) => i.lineId !== lineId))
+  }
+
   const confirmAttrDialog = () => {
     if (!attrProduct) return
     if (blockWeightSale(attrProduct, products.find((p) => p.id === attrProduct.id))) return
@@ -1570,6 +1616,14 @@ export function PdvClassic({
         toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
         return false
       }
+      if (catalogDivergences.length > 0) {
+        toast({
+          title: "Revise os itens alterados no cadastro",
+          description: "Preço, saldo ou exclusão mudaram com a venda aberta. Decida no aviso acima do carrinho.",
+          duration: 6000,
+        })
+        return false
+      }
       if (!validateBeforeOpenPayment()) {
         focusShellBipe()
         return false
@@ -1579,7 +1633,7 @@ export function PdvClassic({
       setIsPaymentModalOpen(true)
       return true
     },
-    [focusShellBipe, pdvCapabilities, paymentBlockedFeedback, sales, toast, validateBeforeOpenPayment]
+    [catalogDivergences.length, focusShellBipe, pdvCapabilities, paymentBlockedFeedback, sales, toast, validateBeforeOpenPayment]
   )
 
   const openShellShortcut = useCallback(
@@ -1823,6 +1877,8 @@ export function PdvClassic({
         codigoAvulso: i.codigoAvulso,
         accessorySelection: i.accessorySelection,
         cartLineKey: i.cartLineKey,
+        produtoId: i.produtoId,
+        catalogUnitPrice: i.catalogUnitPrice,
       })),
       customer: selectedCustomer
         ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf, phone: selectedCustomer.phone }
@@ -1875,6 +1931,8 @@ export function PdvClassic({
         codigoAvulso: i.codigoAvulso,
         accessorySelection: i.accessorySelection,
         cartLineKey: i.cartLineKey,
+        produtoId: i.produtoId,
+        catalogUnitPrice: i.catalogUnitPrice,
       })),
     )
     if (sale.customer) {
@@ -1989,6 +2047,13 @@ export function PdvClassic({
             openAberturaSignal={voiceOpenCaixaSignal}
             onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
             openFechamentoSignal={fechamentoCaixaSignal}
+          />
+          <PdvCatalogDivergencePanel
+            divergences={catalogDivergences}
+            onApplyCatalogPrice={applyCatalogPrice}
+            onKeepCartPrice={keepCartPrice}
+            onAdjustQuantity={adjustCatalogQuantity}
+            onRemoveLine={removeCartLineById}
           />
           <PdvOmniClassicShell
               isModoRapido={isModoRapido}
@@ -2110,10 +2175,25 @@ export function PdvClassic({
                 setSelectedCustomer(null)
                 setShellCustomerField("CONSUMIDOR")
                 // N5-B1 R2 (P2-06): rascunho encerrado conscientemente — guard
-                // de identidade PENDING liberado (pendência segue syncing).
+                // de identidade PENDING liberado (pendência segue syncing). O store também
+                // libera: carrinho idêntico depois disto é venda NOVA (offline em sequência).
+                const tinhaPendente = pendingSaleIdentityRef.current?.hasPending() === true
+                releaseSaleAttempt?.(pendingSaleIdentityRef.current?.getIdentity())
                 pendingSaleIdentityRef.current?.clear()
                 setShellCancelSaleOpen(false)
-                setShellInfo("Venda cancelada. Sistema limpo.")
+                setShellInfo(
+                  tinhaPendente
+                    ? "Carrinho liberado. A venda anterior NÃO foi cancelada: segue registrada neste terminal, aguardando o servidor."
+                    : "Venda cancelada. Sistema limpo.",
+                )
+                // O shell atual não exibe `info`: com venda pendente, o operador precisa ver que ela NÃO foi cancelada.
+                if (tinhaPendente) {
+                  toast({
+                    title: "Carrinho liberado",
+                    description: "A venda anterior NÃO foi cancelada: segue registrada neste terminal, aguardando o servidor.",
+                    duration: 6000,
+                  })
+                }
                 focusShellBipe()
               }}
               advancedOpen={shellAdvancedOpen}
@@ -2258,6 +2338,11 @@ export function PdvClassic({
             toast({ title: PENDING_RETRY_GUIDANCE.title, description: PENDING_RETRY_GUIDANCE.description, duration: 6000 })
             return false
           }
+          // Cadastro mudou com o modal aberto: nada é cobrado antes da revisão explícita.
+          if (catalogDivergences.length > 0) {
+            toast({ title: "Revise os itens alterados no cadastro", description: "Feche o pagamento e decida no aviso acima do carrinho.", duration: 6000 })
+            return false
+          }
           // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
           // linha de produto sem cadastro BLOQUEIA com os nomes — nunca filtrada
           // em silêncio enquanto o total cheio segue para cobrança. Carrinho intacto.
@@ -2287,6 +2372,7 @@ export function PdvClassic({
               ...(item.isAvulso ? { isAvulso: true as const } : {}),
               ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
               ...(item.accessorySelection ? { accessorySelection: item.accessorySelection } : {}),
+              ...(item.produtoId ? { produtoId: item.produtoId } : {}),
             }))
           // Capturar dados de impressão ANTES de limpar o cart
           // N5-B1 R2 (P2-02): resolução compartilhada do crédito/vale (audit

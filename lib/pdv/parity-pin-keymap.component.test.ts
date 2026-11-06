@@ -23,6 +23,7 @@ const runtime = vi.hoisted(() => ({
   print: { imprimirAutomatico: false, rodapeCupom: "" },
   disabled: new Set<string>(),
   finalize: vi.fn(), toast: vi.fn(), noop: vi.fn(), garantir: vi.fn(), pin: vi.fn(),
+  checkCatalog: vi.fn(async () => undefined), watchCatalogSync: vi.fn(() => () => undefined),
   payment: undefined as PaymentProps | undefined,
   customer: undefined as PickerProps | undefined,
   receipt: undefined as ReceiptProps | undefined,
@@ -32,6 +33,7 @@ vi.mock("@/lib/operations-store", () => ({ useOperationsStore: () => ({
   inventory: runtime.inventory, caixa: runtime.caixa, sales: [], ordens: [],
   finalizeSaleTransaction: runtime.finalize, setInventory: runtime.noop,
   getSaldoCreditoCliente: () => 0, sincronizarCreditoLocal: runtime.noop,
+  checkCatalog: runtime.checkCatalog, watchCatalogSync: runtime.watchCatalogSync,
 }) }))
 vi.mock("@/lib/store-settings-provider", () => ({ useStoreSettings: () => ({
   pdvParams: runtime.params, blob: { pdvParams: runtime.params }, settings: {}, hydrated: true,
