@@ -148,23 +148,46 @@ suite("padaria — estoque KG + venda manual por peso (PostgreSQL real)", () => 
     expect(await prisma.venda.count({ where: { pedidoId: { in: [pagamento.id!, preco.id!, cruzada.id!] } } })).toBe(0)
   })
 
-  it("produto excluído durante a venda (SKU antigo + Produto.id) aborta sem venda, item nem financeiro", async () => {
-    const p = await prisma.produto.create({ data: { id: "kg-pad-del-" + randomUUID(), storeId: A, name: "Queijo excluído", stock: 5, price: 20, metadata: KG, sku: "QJ-DEL-ANTIGO" } })
-    await prisma.produto.update({ where: { id: p.id }, data: { sku: "QJ-DEL-NOVO" } })
-    const sale = venda([{ id: "QJ-DEL-ANTIGO", produtoId: p.id, name: p.name, quantity: 0.35, price: 20 }])
+  /**
+   * Corrida determinística: T1 trava o produto; a venda só é liberada depois que o PostgreSQL
+   * mostra o backend dela ESPERANDO esse lock (pg_stat_activity), então T1 exclui e confirma.
+   */
+  async function vendaDuranteExclusao(p: { id: string }, sale: SalePayload) {
     let release!: () => void, locked!: () => void
     const gate = new Promise<void>((r) => { release = r }), isLocked = new Promise<void>((r) => { locked = r })
     const remover = prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM estoque_produtos WHERE id = ${p.id} FOR UPDATE`
       locked(); await gate
       await tx.produto.delete({ where: { id: p.id } })
-    }, { timeout: 20000, maxWait: 20000 })
+    }, { timeout: 30000, maxWait: 20000 })
     await isLocked
-    const vendaEmCurso = persist(sale)
-    const outcome = vendaEmCurso.then(() => "ok", (e: unknown) => e)
-    await new Promise((r) => setTimeout(r, 500))
+    const outcome = persist(sale).then(() => "ok" as const, (e: unknown) => e)
+    const deadline = Date.now() + 15000
+    for (;;) {
+      const [{ waiting }] = await prisma.$queryRaw<Array<{ waiting: number }>>`
+        SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%estoque_produtos%'`
+      if (waiting > 0) break
+      if (Date.now() > deadline) throw Error("VENDA_NAO_CHEGOU_AO_LOCK")
+      await new Promise((r) => setTimeout(r, 25))
+    }
     release(); await remover
-    expect(await outcome).toBeInstanceOf(Error)
+    return outcome
+  }
+
+  it("KG: produto excluído durante a venda (SKU antigo + Produto.id) aborta com PRODUTO_NAO_RESOLVIDO", async () => {
+    const p = await prisma.produto.create({ data: { id: "kg-pad-del-" + randomUUID(), storeId: A, name: "Queijo excluído", stock: 5, price: 20, metadata: KG, sku: "QJ-DEL-ANTIGO" } })
+    await prisma.produto.update({ where: { id: p.id }, data: { sku: "QJ-DEL-NOVO" } })
+    const sale = venda([{ id: "QJ-DEL-ANTIGO", produtoId: p.id, name: p.name, quantity: 0.35, price: 20 }])
+    expect(await vendaDuranteExclusao(p, sale)).toMatchObject({ code: "PRODUTO_NAO_RESOLVIDO" })
+    expect(await prisma.venda.count({ where: { pedidoId: sale.id! } })).toBe(0)
+    expect(await prisma.movimentacaoFinanceira.count({ where: { referenciaId: sale.id! } })).toBe(0)
+  })
+
+  it("UN ao vivo: NOT_FOUND na baixa (produto excluído após a resolução) aborta sem venda nem financeiro", async () => {
+    const p = await prisma.produto.create({ data: { id: "kg-pad-del-un-" + randomUUID(), storeId: A, name: "Refrigerante excluído", stock: 5, price: 7.5, metadata: {} } })
+    const sale = venda([{ id: p.id, name: p.name, quantity: 2, price: 7.5 }]); delete sale.manualKgSale
+    expect(await vendaDuranteExclusao(p, sale)).toMatchObject({ code: "PRODUTO_NAO_RESOLVIDO" })
     expect(await prisma.venda.count({ where: { pedidoId: sale.id! } })).toBe(0)
     expect(await prisma.movimentacaoFinanceira.count({ where: { referenciaId: sale.id! } })).toBe(0)
   })

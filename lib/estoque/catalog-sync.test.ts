@@ -57,6 +57,21 @@ describe("createCatalogSyncController", () => {
     expect(fetchSnapshot).not.toHaveBeenCalled()
   })
 
+  it("invalidate: recarga forçada que falha não deixa a versão conhecida 'atual' (próximo check baixa)", async () => {
+    // Snapshot KG sobrescreveu saldos locais: a versão remota não mudou, mas o catálogo precisa voltar.
+    let t = 0
+    const { c, applied } = makeController({ versions: ["v1:1:1"], snapshots: [null, snap("v1:1:1", 12)], now: () => t })
+    c.setKnownVersion("v1:1:1")
+    c.enable()
+    c.invalidate()
+    expect(await c.check({ force: true })).toBe("unavailable")
+    expect(c.knownVersion()).toBeNull()
+    t = 10_000
+    expect(await c.check({ force: false })).toBe("updated")
+    expect(applied.map((s) => s.items[0]!.price)).toEqual([12])
+    expect(c.knownVersion()).toBe("v1:1:1")
+  })
+
   it("versão mudou → baixa, aplica e passa a conhecer a versão nova", async () => {
     const { c, applied } = makeController({ versions: ["v1:1:2"], snapshots: [snap("v1:1:2", 12)] })
     c.setKnownVersion("v1:1:1")

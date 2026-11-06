@@ -1078,8 +1078,12 @@ export async function upsertVendaInTransaction(
       if (resolvedProduct?.unit === "KG" && (line.isAvulso || (line.itemType && line.itemType !== "produto") || moneyCents(precoUnitario) !== moneyCents(resolvedProduct.price) || precoUnitario <= 0)) {
         throw new ManualKgSaleError("Produto KG exige preço cadastrado e vínculo de estoque em todas as linhas.")
       }
-      if (!resolvedProduct || resolvedProduct.unit !== "KG") normalizeSaleQuantity(quantidade)
-      else if (saleQuantityGrams(quantidade) === null) throw new ManualKgSaleError("Peso inválido: informe um peso maior que zero, com até 3 casas decimais.")
+      if (!resolvedProduct || resolvedProduct.unit !== "KG") {
+        // Linha física fracionada cujo produto sumiu (ex.: excluído durante a venda): erro de
+        // identidade, não de quantidade — nada é gravado.
+        if (!resolvedProduct && enforceStock && rawInvId && !isVirtualSaleLine(rawInvId) && !Number.isInteger(quantidade)) throw new UnresolvedProductError([rawInvId])
+        normalizeSaleQuantity(quantidade)
+      } else if (saleQuantityGrams(quantidade) === null) throw new ManualKgSaleError("Peso inválido: informe um peso maior que zero, com até 3 casas decimais.")
       const cents = saleLineTotalCents(quantidade, precoUnitario)
       if (cents === null || moneyCents(lineTotal) !== cents) throw new ManualKgSaleError("Total do item divergente do peso e preço. Revise o carrinho.")
       manualKgSubtotalCents += cents

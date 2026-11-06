@@ -340,7 +340,8 @@ function alreadyConfirmedResult(pedidoId: string): ManualSyncResult {
 
 function saleMatches(s: SaleRecord, token: { id: string; clientSaleId?: string }): boolean {
   if (token.clientSaleId && s.clientSaleId === token.clientSaleId) return true
-  return s.id === token.id
+  // `id` vazio nunca identifica venda (recovery KG usa só a clientSaleId).
+  return token.id !== "" && s.id === token.id
 }
 
 function clearSaleSyncFailure(sale: SaleRecord): SaleRecord {
@@ -1915,9 +1916,13 @@ export function OperationsProvider({
         }
       })
       const latest = stateRef.current.sales.find((item) => saleMatches(item, token))
-      // Os saldos do snapshot KG podem chegar depois de um catálogo mais novo: recarrega o
-      // catálogo autoritativo para que o saldo mais recente sempre prevaleça na tela.
-      if (kg) void catalogSyncRef.current?.check({ force: true })
+      // Os saldos do snapshot KG podem chegar depois de um catálogo mais novo: invalida a
+      // versão conhecida (se a recarga falhar, os próximos checks baixam o catálogo de novo)
+      // e recarrega o catálogo autoritativo para que o saldo mais recente prevaleça na tela.
+      if (kg) {
+        catalogSyncRef.current?.invalidate()
+        void catalogSyncRef.current?.check({ force: true })
+      }
       return kg ? selectManualKgSnapshot(latest ?? kg.sale, kg.sale) : undefined
     },
     [storageKey],

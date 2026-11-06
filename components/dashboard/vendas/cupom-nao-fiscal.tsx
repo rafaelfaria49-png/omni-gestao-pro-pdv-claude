@@ -15,12 +15,13 @@ import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
 import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { printPdvSaleReceipt, type PrintJobResult } from "@/lib/pdv-print-runtime"
-import { formatReceiptQuantity, type PdvReceiptInput } from "@/lib/escpos"
+import type { PdvReceiptInput } from "@/lib/escpos"
 import {
   PDV_NON_FISCAL_NOTICE,
   PDV_NON_FISCAL_EXPLANATION,
   buildPdvNonFiscalNoticeHtml,
 } from "@/lib/pdv-non-fiscal-notice"
+import { formatReceiptQuantity } from "@/lib/escpos"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

@@ -83,6 +83,13 @@ export function createCatalogSyncController<T>(deps: CatalogSyncDeps<T>) {
     setKnownVersion(version: unknown): void {
       if (isCatalogVersion(version)) known = version
     },
+    /**
+     * Esquece a versão conhecida: o próximo check baixa o snapshot mesmo que a versão remota
+     * não tenha mudado (ex.: saldos locais sobrescritos por uma confirmação fora do catálogo).
+     */
+    invalidate(): void {
+      known = null
+    },
     /** Só checa depois da carga inicial — evita corrida com o snapshot do mount. */
     enable(): void {
       enabled = true
