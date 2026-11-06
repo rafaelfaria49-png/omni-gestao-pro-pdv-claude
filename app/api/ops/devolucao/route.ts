@@ -1,5 +1,5 @@
-import { MANUAL_KG_SALE, ManualKgSaleError } from "@/lib/vendas/manual-kg-contract"
-import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
+import { ManualKgSaleError } from "@/lib/vendas/manual-kg-contract"
+import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -7,28 +7,31 @@ import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
-import { createSaida } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
-import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
-import type { Prisma } from "@/generated/prisma"
-import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
-import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
+import { isPrismaUniqueConstraintError } from "@/lib/ops-upsert-venda"
+import {
+  DevolucaoBusinessError,
+  assertDevolucaoPermitidaPorPolitica,
+  classifyDevolucaoAfterUniqueConflict,
+  registrarDevolucaoInTransaction,
+  type RegistrarDevolucaoInput,
+} from "@/lib/pdv/devolucao/registrar-devolucao"
 import { z } from "zod"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-function arredonda2(n: number): number {
-  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
-}
-
 const itemSchema = z.object({
   inventoryId: z.string().optional(),
+  /** Chave histórica da linha (Produto.id) vinda da elegibilidade — autoridade de identidade. */
+  produtoId: z.string().optional(),
   nome: z.string().default(""),
   quantidade: z.number().int().min(1),
-  valorUnitario: z.number().min(0).default(0),
-  valorTotal: z.number().min(0).default(0),
+  // Aceitos por compatibilidade com clientes antigos; IGNORADOS — o servidor deriva
+  // unitário e total dos itens persistidos da venda de origem.
+  valorUnitario: z.number().min(0).optional(),
+  valorTotal: z.number().min(0).optional(),
 })
 
 const schema = z.object({
@@ -36,8 +39,9 @@ const schema = z.object({
   vendaLocalId: z.string().default(""),
   sessaoId: z.string().optional(),
   tipo: z.enum(["vale_credito", "somente_estoque", "troca", "devolucao"]),
-  valorTotal: z.number().min(0).default(0),
-  creditoEmitido: z.number().min(0).default(0),
+  // Compatibilidade: valores do client NÃO são autoridade (recalculados no servidor).
+  valorTotal: z.number().min(0).optional(),
+  creditoEmitido: z.number().min(0).optional(),
   clienteNome: z.string().default(""),
   clienteDoc: z.string().default(""),
   operador: z.string().default(""),
@@ -47,6 +51,11 @@ const schema = z.object({
   /** Snapshot JSON da devolução para auditoria. */
   payload: z.record(z.unknown()).optional(),
 })
+
+function businessStatus(e: DevolucaoBusinessError): number {
+  if (e.code === "VENDA_ORIGEM_OBRIGATORIA" || e.code === "ITENS_DUPLICADOS" || e.code === "CLIENTE_DOC_OBRIGATORIO") return 422
+  return 409
+}
 
 export async function POST(req: Request) {
   const moduleDenied = await requireModuleApi(req, "sharedPayment")
@@ -80,18 +89,38 @@ export async function POST(req: Request) {
   if (denied) return denied
 
   const data = parsed.data
-  const session = await auth()
-  const operadorFinal =
-    data.operador?.trim() || (session?.user ? getOperatorLabelFromSession(session) : "")
 
-  // ── Idempotência: se já existir, retornar como sucesso ──────────────────────
-  const existing = await prisma.devolucaoVenda.findUnique({
-    where: { storeId_localId: { storeId: lojaId, localId: data.localId } },
-    select: { id: true, localId: true },
-  })
-  if (existing) {
-    return NextResponse.json({ ok: true, devolucaoId: existing.id, idempotente: true })
+  // Política: reembolso em dinheiro não tem fluxo aprovado. Exceção única: o REENVIO
+  // de um reembolso legado que já está gravado (mesmo localId) é reconhecido como
+  // replay — senão a fila do navegador nunca o confirmaria. Nada é gravado aqui.
+  try {
+    if (data.tipo === "devolucao") {
+      const replay = await classifyDevolucaoAfterUniqueConflict(prisma, {
+        storeId: lojaId,
+        localId: data.localId,
+        vendaLocalId: data.vendaLocalId,
+        tipo: data.tipo,
+        clienteNome: data.clienteNome,
+        clienteDoc: data.clienteDoc,
+        operador: "",
+        ledgerOperator: null,
+        motivo: data.motivo,
+        observacao: data.observacao,
+        itens: data.itens,
+      })
+      if (replay) return NextResponse.json(replay)
+    }
+    assertDevolucaoPermitidaPorPolitica(data.tipo)
+  } catch (e) {
+    if (e instanceof DevolucaoBusinessError) {
+      return NextResponse.json({ error: e.message, code: e.code }, { status: businessStatus(e) })
+    }
+    throw e
   }
+
+  const session = await auth()
+  const sessionLabel = session?.user ? getOperatorLabelFromSession(session) : ""
+  const operadorFinal = data.operador?.trim() || sessionLabel
 
   const lock = await verificarPeriodoFechado(lojaId, new Date())
   if (lock.fechado) {
@@ -101,231 +130,64 @@ export async function POST(req: Request) {
     )
   }
 
-  // ── Validar sessão se fornecida ─────────────────────────────────────────────
+  // Sessão informada precisa ser desta loja. Devolução não move dinheiro do caixa
+  // (vale/estoque), então sessão já FECHADA não bloqueia — só fica registrada.
   if (data.sessaoId) {
     const sessao = await prisma.sessaoCaixa.findFirst({
       where: { id: data.sessaoId, storeId: lojaId },
-      select: { id: true, status: true },
+      select: { id: true },
     })
     if (!sessao) {
       return NextResponse.json({ error: "Sessão de caixa não encontrada." }, { status: 404 })
     }
-    // Aviso (não bloqueia): caixa fechado com override
-    if (sessao.status === "FECHADA") {
-      console.warn(`[ops/devolucao] sessão ${data.sessaoId} já fechada — devolução permitida com override`)
-    }
+  }
+
+  const input: RegistrarDevolucaoInput = {
+    storeId: lojaId,
+    localId: data.localId,
+    vendaLocalId: data.vendaLocalId,
+    sessaoId: data.sessaoId ?? null,
+    tipo: data.tipo,
+    clienteNome: data.clienteNome,
+    clienteDoc: data.clienteDoc,
+    operador: operadorFinal,
+    ledgerOperator: sessionLabel.trim() || null,
+    motivo: data.motivo,
+    observacao: data.observacao,
+    itens: data.itens,
+    payload: data.payload,
   }
 
   try {
-    // Valor autoritativo — pode ser recalculado DENTRO da transação (passo 0) e
-    // é usado fora dela pela integração financeira (createSaida).
-    let valorTotalEfetivo = data.valorTotal
-    const devolucao = await prisma.$transaction(async (tx) => {
-      // 0. Valor autoritativo — quando a venda de origem existe no banco, o valor
-      // devolvido e o crédito emitido são RECALCULADOS dos itens persistidos
-      // (unitário = lineTotal/quantidade da venda original × qtd devolvida) e o
-      // crédito é limitado ao valor efetivamente devolvido — o client nunca é
-      // autoridade financeira. Só substitui quando TODAS as linhas resolvem na
-      // venda original; caso contrário (venda legada fora do banco), mantém os
-      // valores do client com warning.
-      let creditoEfetivo = data.tipo === "somente_estoque" ? 0 : data.creditoEmitido
-      if (data.vendaLocalId) {
-        const vendaOrigem = await tx.venda.findFirst({
-          where: { pedidoId: data.vendaLocalId, storeId: lojaId },
-          select: { payload: true, itens: { select: { inventoryId: true, quantidade: true, lineTotal: true } } },
-        })
-        if (vendaOrigem) {
-          const originPayload = vendaOrigem.payload as Record<string, unknown> | null
-          if (originPayload?.manualKgSale === MANUAL_KG_SALE || vendaOrigem.itens.some((item) => !Number.isInteger(item.quantidade))) {
-            throw new ManualKgSaleError("Devolução de venda em KG indisponível. Solicite cancelamento integral autorizado.")
-          }
-          let totalCalc = 0
-          let todasResolvidas = true
-          for (const it of data.itens) {
-            const orig = vendaOrigem.itens.find((iv) => iv.inventoryId === it.inventoryId)
-            if (!orig || orig.quantidade === null || orig.quantidade <= 0) {
-              todasResolvidas = false
-              break
-            }
-            totalCalc += (orig.lineTotal / orig.quantidade) * it.quantidade
-          }
-          if (todasResolvidas) {
-            valorTotalEfetivo = arredonda2(totalCalc)
-            if (creditoEfetivo > valorTotalEfetivo) {
-              console.warn(
-                "[ops/devolucao] credito-emitido-reduzido-ao-valor-devolvido",
-                JSON.stringify({ localId: data.localId, venda: data.vendaLocalId, creditoEmitido: data.creditoEmitido, valorDevolvido: valorTotalEfetivo }),
-              )
-              creditoEfetivo = valorTotalEfetivo
-            }
-            if (Math.abs(valorTotalEfetivo - data.valorTotal) > 0.01) {
-              console.warn(
-                "[ops/devolucao] valor-total-divergente-do-client",
-                JSON.stringify({ localId: data.localId, client: data.valorTotal, servidor: valorTotalEfetivo }),
-              )
-            }
-          }
-        }
-      }
-
-      // 1. Criar documento de devolução
-      const dev = await tx.devolucaoVenda.create({
-        data: {
-          storeId: lojaId,
-          localId: data.localId,
-          vendaLocalId: data.vendaLocalId,
-          sessaoId: data.sessaoId ?? null,
-          tipo: data.tipo,
-          valorTotal: valorTotalEfetivo,
-          creditoEmitido: creditoEfetivo,
-          clienteNome: data.clienteNome,
-          clienteDoc: data.clienteDoc,
-          operador: operadorFinal,
-          motivo: data.motivo,
-          observacao: data.observacao,
-          payload: data.payload ? (data.payload as Prisma.InputJsonValue) : undefined,
-          itens: {
-            create: data.itens.map((it) => ({
-              inventoryId: it.inventoryId ?? null,
-              nome: it.nome,
-              quantidade: it.quantidade,
-              valorUnitario: it.valorUnitario,
-              valorTotal: it.valorTotal,
-            })),
-          },
-        },
-        include: { itens: true },
-      })
-
-      // 2. Estoque REAL — devolve itens ao estoque + ledger auditável.
-      // CAD-R2-009: cada devolução gera ENTRADA compensatória pelo boundary
-      // canônico (lock + ownership + depósito + ledger na MESMA transação).
-      // Nunca "seta stock de volta": movimento compensatório com idempotência
-      // por (devolução, produto). Guarda legado por (documento, produto,
-      // origem) cobre devoluções pré-009 sem chave.
-      // CAD-R2-009 §5: ledger usa SOMENTE rótulo server-derived da sessão;
-      // `data.operador` (input do client) permanece no documento, fora da
-      // autoridade de estoque.
-      const ledgerOperator = (session?.user ? getOperatorLabelFromSession(session) : "").trim() || null
-      for (const it of data.itens) {
-        const rawInvId = (it.inventoryId ?? "").trim()
-        if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
-        const qty = Math.max(0, Math.round(it.quantidade))
-        if (qty <= 0) continue
-
-        const produto = await tx.produto.findFirst({
-          where: { storeId: lojaId, OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }] },
-          select: { id: true, metadata: true },
-        })
-        if (!produto) continue
-        assertProductCommercialSaleSupported(produto.metadata)
-
-        const jaExiste = await tx.movimentacaoEstoque.findFirst({
-          where: { storeId: lojaId, documento: data.localId, produtoId: produto.id, origem: "devolucao" },
-          select: { id: true },
-        })
-        if (jaExiste) continue
-
-        const dev = await applyStockMutationTx(
-          tx as unknown as StockLedgerTx,
-          { storeId: lojaId, principal: null, source: "ops-devolucao", operatorLabel: ledgerOperator },
-          {
-            kind: "entrada",
-            produtoId: produto.id,
-            quantidade: qty,
-            origem: "devolucao",
-            documento: data.localId,
-            motivo: data.motivo?.trim() || `Devolução ${data.localId}`,
-            idempotencyKey: StockIdempotency.devolucao(data.localId, produto.id),
-          },
-        )
-        if (!dev.ok) {
-          if (dev.code === "NOT_FOUND") continue
-          throw new Error(`[ops/devolucao] devolução ao estoque falhou: ${dev.code} ${dev.message}`)
-        }
-      }
-
-      // 3. Status da Venda — parcialmente_devolvida / devolvida (com base no total devolvido).
-      // Agrega as quantidades de todas as devoluções da venda (inclui a recém-criada) e
-      // compara com o total vendido. Best-effort: venda pode não existir no banco.
-      if (data.vendaLocalId) {
-        const venda = await tx.venda.findFirst({
-          where: { pedidoId: data.vendaLocalId, storeId: lojaId },
-          select: { id: true, status: true, itens: { select: { quantidade: true } } },
-        })
-        if (venda && venda.status !== "cancelada") {
-          const totalVendido = venda.itens.reduce((s, i) => s + (i.quantidade || 0), 0)
-          const devs = await tx.devolucaoVenda.findMany({
-            where: { storeId: lojaId, vendaLocalId: data.vendaLocalId },
-            select: { itens: { select: { quantidade: true } } },
-          })
-          const totalDevolvido = devs.reduce(
-            (s, d) => s + d.itens.reduce((a, i) => a + (i.quantidade || 0), 0),
-            0,
-          )
-          const novoStatus =
-            totalVendido > 0 && totalDevolvido >= totalVendido
-              ? "devolvida"
-              : totalDevolvido > 0
-                ? "parcialmente_devolvida"
-                : venda.status
-          if (novoStatus !== venda.status) {
-            await tx.venda.update({ where: { id: venda.id }, data: { status: novoStatus } })
-          }
-        }
-      }
-
-      // 4. Crédito persistente — cria ClienteCredito quando vale é emitido.
-      // Uma devolução gera crédito UMA única vez: o guard de idempotência por
-      // [storeId, localId] no topo já devolve replay antes daqui, e o crédito é
-      // criado na MESMA transação do documento de devolução.
-      if (creditoEfetivo > 0 && data.tipo !== "somente_estoque") {
-        const docNorm = data.clienteDoc.replace(/\D/g, "")
-        if (docNorm) {
-          await tx.clienteCredito.create({
-            data: {
-              storeId: lojaId,
-              clienteDoc: docNorm,
-              clienteNome: data.clienteNome,
-              devolucaoId: dev.id,
-              vendaOrigemId: data.vendaLocalId,
-              valorOriginal: arredonda2(creditoEfetivo),
-              saldoAtual: arredonda2(creditoEfetivo),
-              status: "ativo",
-            },
-          })
-        }
-      }
-
-      return dev
+    const result = await prisma.$transaction((tx) => registrarDevolucaoInTransaction(tx, input), {
+      maxWait: 15_000,
+      timeout: 20_000,
     })
-
-    // 4. Integração financeira — saída por devolução (fora da tx para não bloquear)
-    // Só cria movimentação se há valor devolvido real (não apenas troca de estoque).
-    // Vale-Troca NÃO é dinheiro novo: a saída financeira representa o valor que
-    // sai do caixa/financeiro pela devolução (reembolso real), nunca entrada
-    // simulada do vale; devolução parcial movimenta somente o valor devolvido.
-    if (valorTotalEfetivo > 0 && data.tipo !== "somente_estoque") {
+    return NextResponse.json(result)
+  } catch (e) {
+    let error: unknown = e
+    // Corrida no mesmo localId sem venda para travar: a transação perdedora já
+    // reverteu; relê FORA dela e classifica (replay idêntico ou conflito).
+    if (isPrismaUniqueConstraintError(e)) {
       try {
-        await createSaida({
-          storeId: lojaId,
-          valor: valorTotalEfetivo,
-          descricao: `Devolução PDV — ${data.localId}${data.clienteNome ? ` | ${data.clienteNome}` : ""}`,
-          origem: "devolucao_pdv",
-          referenciaId: devolucao.id,
-        })
-      } catch (finErr) {
-        // Financeiro não deve bloquear a devolução
-        console.warn("[ops/devolucao] Falha ao criar movimentação financeira:", finErr)
+        const replay = await classifyDevolucaoAfterUniqueConflict(prisma, input)
+        if (replay) return NextResponse.json(replay)
+      } catch (classificationError) {
+        error = classificationError
       }
     }
-
-    return NextResponse.json({ ok: true, devolucaoId: devolucao.id, devolucao })
-  } catch (e) {
-    if (e instanceof ManualKgSaleError || e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) {
-      return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
+    // Guards da venda/estoque KG (#315/#335) que escapem do escritor: 409, nada gravado.
+    if (error instanceof ManualKgSaleError || error instanceof ProductWeightNotOperationalError || error instanceof ProductCommercialInvalidError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
     }
-    const msg = e instanceof Error ? e.message : String(e)
+    if (error instanceof DevolucaoBusinessError) {
+      console.warn("[ops/devolucao] recusada", JSON.stringify({ lojaId, localId: data.localId, code: error.code, ...error.detail }))
+      return NextResponse.json(
+        { error: error.message, code: error.code, ...(error.detail ? { detail: error.detail } : {}) },
+        { status: businessStatus(error) },
+      )
+    }
+    const msg = error instanceof Error ? error.message : String(error)
     console.error("[ops/devolucao]", msg)
     return NextResponse.json({ error: "Falha ao persistir devolução" }, { status: 500 })
   }

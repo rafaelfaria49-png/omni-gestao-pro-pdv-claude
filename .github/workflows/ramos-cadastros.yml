@@ -52,6 +52,10 @@ on:
       - "next.config.mjs"
       - "components/auth/SessionProvider*"
       - "lib/pdv-keymap*"
+      # F8 troca imediata (PDV-F8-TROCA-IMEDIATA-INTEGRACAO-SEGURA-001) — prova 11.
+      - "app/api/ops/devolucao/**"
+      - "lib/pdv/devolucao/**"
+      - "components/dashboard/vendas/trocas-devolucao*"
   workflow_dispatch:
 
 permissions:
@@ -59,6 +63,7 @@ permissions:
 
 jobs:
   validate:
+    # Playwright 1.52.0 não instala o Chromium no ubuntu-26.04 (imagem atual do ubuntu-latest); fixado até atualizar o Playwright.
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -188,6 +193,7 @@ jobs:
   e2e-authenticated:
     # App integrada (build de produção + next start) contra PostgreSQL descartável,
     # login NextAuth real e usuários sintéticos. Sem credenciais produtivas.
+    # Playwright 1.52.0 não instala o Chromium no ubuntu-26.04 (imagem atual do ubuntu-latest); fixado até atualizar o Playwright.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:

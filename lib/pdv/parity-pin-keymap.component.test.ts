@@ -368,12 +368,12 @@ describe("N5-B2 — colisões e modo rápido", () => {
     })
   }
   for (const surface of ["classic", "assistencia", "supermercado"] as const) {
-    it(surface + ": F8 preserva foco/trocas", async () => {
+    it(surface + ": F8 abre trocas/devoluções", async () => {
       await mount(surface)
       key("F8")
       if (surface === "classic") await settle()
-      else expect(screen.getByText("Trocas sintéticas")).toBeTruthy()
-      if (surface === "classic") expect(document.activeElement).toBeInstanceOf(HTMLInputElement)
+      // PDV-F8-TROCA-IMEDIATA-001: o Clássico também abre o painel (antes só focava o bipe).
+      expect(screen.getByText("Trocas sintéticas")).toBeTruthy()
       expect(runtime.finalize).not.toHaveBeenCalled()
     })
     it(surface + ": F9 continua recebimento, sem limpar o carrinho", async () => {
