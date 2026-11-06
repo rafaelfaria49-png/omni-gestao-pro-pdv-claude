@@ -554,14 +554,20 @@ export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
   "PRODUTO_COMERCIAL_INVALIDO",
 ])
 
-/** Item do estoque local correspondente à linha devolvida: Produto.id (dbId) antes do SKU. */
+/**
+ * Item do estoque local correspondente à linha devolvida. Com `produtoId` (Produto.id
+ * confirmado pelo servidor) a correspondência é ESTRITA: sem o item no snapshot local não
+ * há espelho (o servidor já gravou; a próxima sincronização do catálogo traz o saldo) — o
+ * SKU de hoje pode ser de outro produto. Produto por peso (KG) nunca recebe compensação
+ * de unidade: devolução KG é bloqueada e somar UN ao saldo em kg corromperia o espelho.
+ */
 function inventoryMatchesDevLine(
-  inv: { id: string; dbId?: string },
+  inv: { id: string; dbId?: string; vendaPorPeso?: boolean; vendaPesoIndisponivel?: boolean },
   line: { inventoryId: string; produtoId?: string },
-  inventory: Array<{ id: string; dbId?: string }>,
 ): boolean {
+  if (inv.vendaPorPeso || inv.vendaPesoIndisponivel) return false
   const pid = (line.produtoId ?? "").trim()
-  if (pid && inventory.some((i) => i.dbId === pid || i.id === pid)) return inv.dbId === pid || inv.id === pid
+  if (pid) return inv.dbId === pid || inv.id === pid
   return inv.id === line.inventoryId
 }
 
@@ -586,7 +592,7 @@ function estornarEfeitosLocaisDevolucao<S extends {
     return { ...sv, lines }
   })
   const inventory = prev.inventory.map((i) => {
-    const back = dev.lines.find((x) => inventoryMatchesDevLine(i, x, prev.inventory))
+    const back = dev.lines.find((x) => inventoryMatchesDevLine(i, x))
     return back ? { ...i, stock: i.stock - back.quantity } : i
   })
   return { ...prev, inventory, customerCredits, sales }
@@ -3939,7 +3945,7 @@ export function OperationsProvider({
       const build = (cur: OpsState): OpsState => {
         // Estoque local pelo Produto.id confirmado (SKU pode ter mudado/sido reutilizado).
         const inventory = cur.inventory.map((i) => {
-          const back = serverConfirmed.lines.find((l) => inventoryMatchesDevLine(i, l, cur.inventory))
+          const back = serverConfirmed.lines.find((l) => inventoryMatchesDevLine(i, l))
           return back ? { ...i, stock: i.stock + back.quantity } : i
         })
         // Linhas repetidas do mesmo item (uma por bipe): distribui, sem contar em dobro.

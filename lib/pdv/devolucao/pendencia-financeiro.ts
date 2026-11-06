@@ -16,6 +16,7 @@
 import type { Prisma } from "@/generated/prisma"
 import { fatorValorPago } from "@/lib/pdv/devolucao/registrar-devolucao"
 import { saleProductKeyResolver } from "@/lib/pdv/devolucao/product-keys"
+import { isKgItem } from "@/lib/vendas/item-quantity"
 
 export const PENDENCIA_ENTIDADE = "devolucao_pdv_pendencia"
 export const PENDENCIA_ACAO = "encaminhar_financeiro"
@@ -96,7 +97,7 @@ async function valorReferencia(
 ): Promise<number | null> {
   const venda = await tx.venda.findFirst({
     where: { storeId, pedidoId: vendaLocalId },
-    select: { total: true, payload: true, itens: { select: { id: true, inventoryId: true, nome: true, quantidade: true, lineTotal: true } } },
+    select: { total: true, payload: true, itens: { select: { id: true, inventoryId: true, nome: true, quantidade: true, quantidadeKg: true, lineTotal: true } } },
   })
   if (!venda) return null
   const keys = await saleProductKeyResolver(tx, storeId, venda, itens.flatMap((i) => [i.inventoryId, i.produtoId]))
@@ -110,8 +111,15 @@ async function valorReferencia(
   let total = 0
   for (const [k, qPedida] of pedido) {
     const linhas = venda.itens.filter((i) => (i.inventoryId ?? "").trim() === k)
-    const q = linhas.reduce((s, i) => s + (i.quantidade || 0), 0)
     const lt = linhas.reduce((s, i) => s + (i.lineTotal || 0), 0)
+    // Linha KG (#335): `quantidade` é NULL e o peso está em `quantidadeKg`. O pedido da
+    // fila só conhece unidades inteiras, então a referência é a linha inteira (até o peso
+    // vendido) — nunca zero, que esconderia da conciliação o valor que o cliente pagou.
+    if (linhas.some(isKgItem)) {
+      total += lt * fator
+      continue
+    }
+    const q = linhas.reduce((s, i) => s + (i.quantidade || 0), 0)
     if (q > 0) total += (lt / q) * Math.min(q, qPedida) * fator
   }
   return arred(Math.min(total, venda.total))

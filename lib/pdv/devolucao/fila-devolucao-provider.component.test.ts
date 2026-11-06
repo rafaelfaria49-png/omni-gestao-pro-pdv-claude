@@ -40,6 +40,7 @@ async function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
       items: [
         { id: "CAM-P", dbId: "prod-B", name: "Meia (herdou o SKU)", price: 5, stock: 10, cost: 1, category: "T", sku: "CAM-P" },
         { id: "CAM-P-OLD", dbId: "prod-A", name: "Camiseta P", price: 10, stock: 10, cost: 1, category: "T", sku: "CAM-P-OLD" },
+        { id: "PAO", dbId: "prod-pao", name: "Pão francês KG", price: 20, stock: 2.375, cost: 1, category: "T", sku: "PAO", vendaPorPeso: true },
       ],
       version: "v1",
     })
@@ -250,5 +251,31 @@ describe("espelho de devolução confirmada pelo servidor", () => {
     expect(rt().inventory.find((i) => i.id === "CAM-P-OLD")!.stock).toBe(camiseta + 2)
     expect(rt().inventory.find((i) => i.id === "CAM-P")!.stock).toBe(meia)
     expect(net.devPosts).toHaveLength(0) // confirmada: sem reenvio
+  })
+
+  it("espelho local: Produto.id ausente do snapshot não cai no SKU, e saldo KG nunca recebe unidade (R1 P2)", async () => {
+    seed([], [{ ...venda, lines: venda.lines.map((l) => ({ ...l, qtyReturned: 0 })) }])
+    await mount()
+    const antes = rt().inventory.map((i) => [i.id, i.stock])
+    expect(rt().inventory.find((i) => i.id === "PAO")!.stock).toBe(2.375)
+    await act(async () => {
+      rt().registrarDevolucao({
+        saleId: venda.id, lines: [{ inventoryId: "PAO", quantity: 1 }], mode: "vale_credito",
+        customerCpf: CPF, customerName: "Cliente Sintético", tipo: "vale_credito",
+        serverConfirmed: {
+          localId: "DEV-2026-0010-CCCCCCCC", creditIssued: 10,
+          // Produto.id confirmado pelo servidor não está no snapshot local; o SKU de hoje é de um produto KG.
+          lines: [{ inventoryId: "PAO", produtoId: "prod-fora-do-snapshot", name: "Camiseta P", quantity: 1, valor: 10 }],
+        },
+      })
+    })
+    await act(async () => {
+      rt().registrarDevolucao({
+        saleId: venda.id, lines: [{ inventoryId: "PAO", quantity: 1 }], mode: "vale_credito",
+        customerCpf: CPF, customerName: "Cliente Sintético", tipo: "vale_credito",
+        serverConfirmed: { localId: "DEV-2026-0011-DDDDDDDD", creditIssued: 0, lines: [{ inventoryId: "PAO", name: "Legado sem produtoId", quantity: 1, valor: 0 }] },
+      })
+    })
+    expect(rt().inventory.map((i) => [i.id, i.stock])).toEqual(antes)
   })
 })

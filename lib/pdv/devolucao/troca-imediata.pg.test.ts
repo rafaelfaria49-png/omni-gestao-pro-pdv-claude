@@ -402,6 +402,36 @@ describe.skipIf(!url)("F8 troca imediata — integração real (PG descartável)
     expect(await saldoVale()).toBe(10)
   })
 
+  it("NOME repetido entre produtos + SKU herdado na MESMA venda: código ambíguo é recusado, nunca vira o outro produto (R1 P1)", async () => {
+    const camP = await produtoId("CAM-P")
+    const camG = await produtoId("CAM-G")
+    // Mesmo nome nas duas linhas (posição ambígua); preços bem diferentes.
+    const sale: SalePayload = {
+      id: `VDA-F8-${randomUUID().slice(0, 8)}`, at: new Date().toISOString(), total: 25, sessaoId, customerCpf: CPF, customerName: NOME,
+      lines: [
+        { inventoryId: "CAM-P", name: "Camiseta", quantity: 1, unitPrice: 10, lineTotal: 10 },
+        { inventoryId: "CAM-G", name: "Camiseta", quantity: 1, unitPrice: 15, lineTotal: 15 },
+      ],
+      paymentBreakdown: { dinheiro: 25 },
+    }
+    const v = await postVenda(new Request("http://localhost/api/ops/venda-persist", { method: "POST", headers: headers(), body: JSON.stringify({ sale }) }))
+    expect(v.status).toBe(200)
+    await db.itemVenda.updateMany({ where: { venda: { pedidoId: sale.id } }, data: { nome: "Camiseta" } })
+    // CAM-P vira outro código e a CAM-G (vendida na mesma venda) herda "CAM-P".
+    await db.produto.update({ where: { id: camP }, data: { sku: "CAM-P-OLD" } })
+    await db.produto.update({ where: { id: camG }, data: { sku: "CAM-P" } })
+    const [pAntes, gAntes, valeAntes] = [await stockById(camP), await stockById(camG), await saldoVale()]
+    const r = await devolver({ localId: "DEV-AMB-1", vendaLocalId: sale.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] })
+    expect(r.status).toBe(409)
+    expect(r.body.code).toBe("ITEM_NAO_CONSTA_NA_VENDA")
+    expect([await stockById(camP), await stockById(camG), await saldoVale()]).toEqual([pAntes, gAntes, valeAntes])
+    // Com o Produto.id histórico (o que a elegibilidade entrega), devolve o item certo pelo valor certo.
+    const ok = await devolver({ localId: "DEV-AMB-2", vendaLocalId: sale.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", produtoId: camP, quantidade: 1 }] })
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200)
+    expect(ok.body.itens[0]).toMatchObject({ produtoId: camP, valorTotal: 10 })
+    expect(await stockById(camG)).toBe(gAntes)
+  })
+
   it("produto REPETIDO no carrinho (uma linha por bipe): uma linha devolvível com o total, teto somado", async () => {
     const pid = await produtoId("CAM-P")
     const origem = await vender([{ sku: "CAM-P", qty: 1, unit: 10 }, { sku: "CAM-P", qty: 1, unit: 10 }, { sku: "MEIA", qty: 1, unit: 5 }], { dinheiro: 25 })

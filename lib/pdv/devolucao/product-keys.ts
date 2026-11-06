@@ -87,6 +87,8 @@ export async function saleProductKeyResolver(
   // Payload da venda → chave histórica. O upsert cria um ItemVenda por linha, na ordem
   // do payload; casa por posição só quando o nome confere (senão não arrisca).
   const alias = new Map<string, string>()
+  /** Códigos do payload sem vínculo inequívoco a uma linha: só `produtoId`/chave exata decidem. */
+  const ambiguo = new Set<string>()
   const lines = (venda.payload as { lines?: unknown } | null)?.lines
   const itensOrdenados = [...venda.itens].sort((a, b) => str(a.id).localeCompare(str(b.id)))
   // Nome repetido entre produtos DIFERENTES torna a posição ambígua: sem casamento por posição.
@@ -108,10 +110,22 @@ export async function saleProductKeyResolver(
         const it = itensOrdenados[idx]
         if (it && str(it.inventoryId) && str(it.nome) === str(l.name)) alvo = str(it.inventoryId)
       }
-      if (!alvo) return
-      for (const k of [inv, pid, str(l.sku), str(l.barcode)]) if (k && !alias.has(k)) alias.set(k, alvo)
+      const chaves = [inv, pid, str(l.sku), str(l.barcode)].filter(Boolean)
+      // Código que a venda conhecia mas que não se liga a UMA linha (nomes repetidos entre
+      // produtos diferentes): o catálogo de hoje não pode decidir por ele — SKU herdado por
+      // outro produto da mesma venda devolveria o produto errado.
+      if (!alvo) {
+        for (const k of chaves) ambiguo.add(k)
+        return
+      }
+      for (const k of chaves) {
+        const atual = alias.get(k)
+        if (atual === undefined) alias.set(k, alvo)
+        else if (atual !== alvo) ambiguo.add(k)
+      }
     })
   }
+  for (const k of ambiguo) alias.delete(k)
 
   const catalog = await canonicalProductKeyResolver(client, storeId, [...saleKeys, ...extraKeys])
   const produtoIds = new Set<string>()
@@ -134,6 +148,7 @@ export async function saleProductKeyResolver(
     if (saleKeys.has(k)) return k
     const viaVenda = alias.get(k)
     if (viaVenda) return viaVenda
+    if (ambiguo.has(k)) return ""
     const atual = catalog(k)
     // Chave da venda que NÃO é Produto.id (legado/virtual) só casa exatamente: mapear
     // pelo SKU de hoje poderia apontar outro produto que herdou o código.

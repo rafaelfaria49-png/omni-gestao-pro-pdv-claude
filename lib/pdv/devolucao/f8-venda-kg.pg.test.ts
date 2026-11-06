@@ -37,6 +37,7 @@ import { MANUAL_KG_SALE, saleLineTotalCents } from "@/lib/vendas/manual-kg-contr
 import { POST as postDevolucao } from "@/app/api/ops/devolucao/route"
 import { GET as getElegibilidade } from "@/app/api/ops/devolucao/elegibilidade/route"
 import { POST as postCancelar } from "@/app/api/vendas/[id]/cancelar/route"
+import { encaminharPendenciaDevolucao } from "@/lib/pdv/devolucao/pendencia-financeiro"
 
 const url = "postgresql://manual_kg@127.0.0.1:55479/manual_kg_sale_isolated"
 const enabled = process.env.MANUAL_KG_TEST_DATABASE_URL === url
@@ -267,6 +268,20 @@ suite("F8 × venda manual KG — integração em PostgreSQL real", () => {
     expect(r.body.code).toBe("PRODUTO_COMERCIAL_INVALIDO")
     expect(await efeitos(origem.id!, [item.id])).toEqual(antes)
     expect((await eleg(origem.id!)).body.vendas[0].lines[0].bloqueioDevolucao).toMatch(/inválida/)
+  })
+
+  it("encaminhamento ao Financeiro de devolução de venda KG: referência = valor pago da linha KG, nunca zero, sem efeito (R1 P2)", async () => {
+    const queijo = await produto({ name: "Queijo pendência", price: 20, metadata: KG, sku: "QPD", estoque: 3 })
+    const sale = venda([{ id: queijo.id, name: queijo.name, quantity: 1, price: 20 }], { kg: true })
+    await persist(sale)
+    const antes = await efeitos(sale.id!, [queijo.id])
+    const r = await prisma.$transaction((tx) => encaminharPendenciaDevolucao(tx, {
+      storeId: A, localId: "KGF8-PEND-" + randomUUID(), vendaLocalId: sale.id!, categoria: "VALE_EMITIDO", estado: "RECUSA_DEFINITIVA",
+      valorDeclarado: 20, motivoRecusa: "DEVOLUCAO_KG_BLOQUEADA", justificativa: "Vale local emitido antes da integração", usuarioId: "fixture-op", usuarioNome: "Operador Sintético",
+      itens: [{ inventoryId: queijo.id, quantidade: 1 }],
+    }))
+    expect(r).toMatchObject({ vendaOrigemNoServidor: true, valorReferenciaServidor: 20, valorDeclarado: 20 })
+    expect(await efeitos(sale.id!, [queijo.id])).toEqual(antes)
   })
 
   it("isolamento entre lojas: a venda KG da loja A não é vista nem devolvida pela loja B", async () => {
