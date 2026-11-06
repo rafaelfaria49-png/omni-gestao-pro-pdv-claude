@@ -146,7 +146,9 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     // Uma venda de origem: 2 unidades do produto P, R$20, independente de 1 ou 2 linhas.
     expect(await db.venda.count({ where: { storeId: B, itens: { some: { nome: P.nome } } } })).toBe(1)
     expect(vendaOrigem.itens.every((i) => i.inventoryId === prodP.id)).toBe(true)
-    expect(vendaOrigem.itens.reduce((s, i) => s + i.quantidade, 0)).toBe(2)
+    // Linha UN: `quantidade` inteira (só KG grava NULL + `quantidadeKg`, #335).
+    expect(vendaOrigem.itens.every((i) => i.quantidade !== null && i.quantidadeKg === null)).toBe(true)
+    expect(vendaOrigem.itens.reduce((s, i) => s + (i.quantidade ?? 0), 0)).toBe(2)
     expect(vendaOrigem.itens.reduce((s, i) => s + i.lineTotal, 0)).toBe(20)
     expect(vendaOrigem.total).toBe(20)
     await expect.poll(async () => (await db.produto.findUniqueOrThrow({ where: { id: prodP.id } })).stock).toBe(8)

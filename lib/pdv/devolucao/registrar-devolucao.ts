@@ -24,6 +24,9 @@ import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { canonicalProductKeyResolver, saleProductKeyResolver, type SaleForKeys } from "@/lib/pdv/devolucao/product-keys"
+import { MANUAL_KG_SALE } from "@/lib/vendas/manual-kg-contract"
+import { isKgItem } from "@/lib/vendas/item-quantity"
+import { ProductCommercialInvalidError } from "@/lib/cadastros/product-commercial-contract"
 
 export type DevolucaoTipo = "vale_credito" | "somente_estoque" | "troca" | "devolucao"
 
@@ -111,6 +114,25 @@ function normInv(id: string | null | undefined): string {
  * garante apenas pagamentos = `Venda.total`. Sem o fator, item de R$100 vendido com 50%
  * de desconto virava vale de R$100. Acréscimo não é devolvido (fator nunca passa de 1).
  */
+export const DEVOLUCAO_VENDA_KG_MENSAGEM =
+  "Devolução parcial e troca de venda por peso (KG) indisponíveis: o contrato de crédito e reposição por peso depende de validação própria. Use o cancelamento integral autorizado. Nada foi gravado."
+
+/**
+ * Venda por peso confirmada (#315/#335): marcador do protocolo manual KG no payload ou
+ * qualquer linha com `quantidadeKg` (quantidade inteira NULL). A F8 nunca altera essa
+ * venda — nem as linhas UN dela, porque desconto e vale dependem do total KG.
+ */
+export function vendaKgBloqueiaDevolucao(venda: {
+  payload: unknown
+  itens: Array<{ quantidade: number | null; quantidadeKg?: unknown }>
+}): boolean {
+  const payload = venda.payload as { manualKgSale?: unknown } | null
+  return (
+    payload?.manualKgSale === MANUAL_KG_SALE ||
+    venda.itens.some((i) => isKgItem(i) || typeof i.quantidade !== "number" || !Number.isInteger(i.quantidade))
+  )
+}
+
 export function fatorValorPago(total: number, itens: Array<{ lineTotal: number }>): number {
   const soma = itens.reduce((s, i) => s + (Number.isFinite(i.lineTotal) ? i.lineTotal : 0), 0)
   if (!(soma > 0) || !Number.isFinite(total) || total < 0) return 1
@@ -176,14 +198,14 @@ const VENDA_SELECT = {
   status: true,
   total: true,
   payload: true,
-  itens: { select: { id: true, inventoryId: true, nome: true, quantidade: true, lineTotal: true } },
+  itens: { select: { id: true, inventoryId: true, nome: true, quantidade: true, quantidadeKg: true, lineTotal: true } },
 } as const
 
 type VendaLocked = SaleForKeys & {
   id: string
   status: string
   total: number
-  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number; lineTotal: number }>
+  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number | null; quantidadeKg: unknown; lineTotal: number }>
 }
 
 /**
@@ -332,6 +354,10 @@ export async function registrarDevolucaoInTransaction(
   if (venda.status === "cancelada") {
     throw new DevolucaoBusinessError("VENDA_CANCELADA", `A venda ${vendaLocalId} está cancelada: não há o que devolver.`)
   }
+  // ── 2b. Venda KG confirmada: bloqueio da venda inteira, antes de qualquer escrita ──
+  if (vendaKgBloqueiaDevolucao(venda)) {
+    throw new DevolucaoBusinessError("DEVOLUCAO_KG_BLOQUEADA", DEVOLUCAO_VENDA_KG_MENSAGEM, { vendaLocalId })
+  }
 
   // ── 3. Teto por item: vendido − já devolvido (releitura pós-lock) ──────────
   const anteriores = await tx.itemDevolucaoVenda.findMany({
@@ -397,6 +423,8 @@ export async function registrarDevolucaoInTransaction(
         virtual: isVirtualSaleLine(k),
       })
     }
+    // Declaração comercial inválida: mesmo guard da venda (#335) — sem vale nem entrada.
+    if (keys.isComercialInvalido(k)) throw new ProductCommercialInvalidError()
     if (keys.isPeso(k)) {
       throw new DevolucaoBusinessError(
         "DEVOLUCAO_KG_BLOQUEADA",

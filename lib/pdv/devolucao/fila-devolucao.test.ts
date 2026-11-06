@@ -9,7 +9,9 @@ describe("fila de devoluções — resposta do servidor", () => {
   it("2xx confirma; conflito de id reidentifica; recusa de negócio sai da fila; resto aguarda", () => {
     expect(classificarRespostaDevolucao(200, undefined)).toBe("confirmada")
     expect(classificarRespostaDevolucao(409, "LOCAL_ID_CONFLITO")).toBe("reidentificar")
-    for (const code of ["REEMBOLSO_DINHEIRO_BLOQUEADO_POR_POLITICA", "QUANTIDADE_EXCEDE_DEVOLVIVEL", "VENDA_CANCELADA", "CLIENTE_DOC_OBRIGATORIO", "ITEM_NAO_CONSTA_NA_VENDA"]) {
+    for (const code of ["REEMBOLSO_DINHEIRO_BLOQUEADO_POR_POLITICA", "QUANTIDADE_EXCEDE_DEVOLVIVEL", "VENDA_CANCELADA", "CLIENTE_DOC_OBRIGATORIO", "ITEM_NAO_CONSTA_NA_VENDA",
+      // Venda/estoque KG e cadastro comercial (#315/#335 integrados à F8): reenvio não resolve.
+      "DEVOLUCAO_KG_BLOQUEADA", "MANUAL_KG_SALE_BLOCKED", "PRODUTO_POR_PESO_NAO_OPERACIONAL", "PRODUTO_COMERCIAL_INVALIDO"]) {
       expect(classificarRespostaDevolucao(409, code)).toBe("recusada")
     }
     // Venda ainda não sincronizada, período fechado, 5xx e rede: tenta de novo.

@@ -548,6 +548,10 @@ export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
   "DEVOLUCAO_KG_BLOQUEADA",
   "DEVOLUCAO_ENCAMINHADA_FINANCEIRO",
   "HISTORICO_DEVOLUCAO_NAO_RESOLVIDO",
+  // Guards de venda/estoque KG e de cadastro comercial (#315/#335): reenvio não muda.
+  "MANUAL_KG_SALE_BLOCKED",
+  "PRODUTO_POR_PESO_NAO_OPERACIONAL",
+  "PRODUTO_COMERCIAL_INVALIDO",
 ])
 
 /** Item do estoque local correspondente à linha devolvida: Produto.id (dbId) antes do SKU. */

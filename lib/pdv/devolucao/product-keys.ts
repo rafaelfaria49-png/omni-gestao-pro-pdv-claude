@@ -8,7 +8,7 @@
  * Tudo vira o `Produto.id` da loja quando a chave resolve; senão fica como veio.
  */
 import type { Prisma } from "@/generated/prisma"
-import { isProductWeightDeclared } from "@/lib/cadastros/product-commercial-contract"
+import { hasInvalidProductCommercial, isProductWeightDeclared } from "@/lib/cadastros/product-commercial-contract"
 
 type KeyClient = Pick<Prisma.TransactionClient, "produto">
 
@@ -53,6 +53,8 @@ export type SaleProductKeys = {
   isProduto: (saleKey: string) => boolean
   /** Produto vendido por peso (KG/G): devolução bloqueada até aprovação do schema R3. */
   isPeso: (saleKey: string) => boolean
+  /** Declaração comercial inválida (#335): mesmo bloqueio da venda — sem vale nem estoque. */
+  isComercialInvalido: (saleKey: string) => boolean
 }
 
 function str(v: unknown): string {
@@ -114,11 +116,13 @@ export async function saleProductKeyResolver(
   const catalog = await canonicalProductKeyResolver(client, storeId, [...saleKeys, ...extraKeys])
   const produtoIds = new Set<string>()
   const peso = new Set<string>()
+  const invalido = new Set<string>()
   if (saleKeys.size > 0) {
     const rows = await client.produto.findMany({ where: { storeId, id: { in: [...saleKeys] } }, select: { id: true, metadata: true } })
     for (const r of rows) {
       produtoIds.add(r.id)
       if (isProductWeightDeclared(r.metadata)) peso.add(r.id)
+      if (hasInvalidProductCommercial(r.metadata)) invalido.add(r.id)
     }
   }
 
@@ -135,5 +139,5 @@ export async function saleProductKeyResolver(
     // pelo SKU de hoje poderia apontar outro produto que herdou o código.
     return saleKeys.has(atual) && produtoIds.has(atual) ? atual : ""
   }
-  return { resolve, isProduto: (k) => produtoIds.has(k), isPeso: (k) => peso.has(k) }
+  return { resolve, isProduto: (k) => produtoIds.has(k), isPeso: (k) => peso.has(k), isComercialInvalido: (k) => invalido.has(k) }
 }

@@ -14,7 +14,13 @@ import type { Prisma } from "@/generated/prisma"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { saleFromDbRow } from "@/lib/vendas/sale-from-db-row"
 import { saleProductKeyResolver } from "@/lib/pdv/devolucao/product-keys"
-import { fatorValorPago, ITEM_SEM_LASTRO_MENSAGEM } from "@/lib/pdv/devolucao/registrar-devolucao"
+import {
+  DEVOLUCAO_VENDA_KG_MENSAGEM,
+  fatorValorPago,
+  ITEM_SEM_LASTRO_MENSAGEM,
+  vendaKgBloqueiaDevolucao,
+} from "@/lib/pdv/devolucao/registrar-devolucao"
+import { isKgItem } from "@/lib/vendas/item-quantity"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 
 export const ELEGIBILIDADE_LIMITE = 10
@@ -126,12 +132,18 @@ export async function buscarVendasElegiveis(
       if (k) retorno.set(k, (retorno.get(k) ?? 0) + (d.quantidade || 0))
       else historicoNaoResolvido = true
     }
-    // Mesma regra do escritor: devolvido anterior não contável bloqueia a venda inteira.
+    // Mesma regra do escritor: venda KG confirmada e devolvido anterior não contável
+    // bloqueiam a venda inteira.
+    const vendaKg = vendaKgBloqueiaDevolucao(r)
     const bloqueio = (k: string): string | undefined =>
-      historicoNaoResolvido
+      vendaKg
+        ? `Não devolvível: ${DEVOLUCAO_VENDA_KG_MENSAGEM}`
+        : historicoNaoResolvido
         ? "Não devolvível: há devolução anterior desta venda com item não identificável — exige conferência manual."
         : isVirtualSaleLine(k) || !keys.isProduto(k)
         ? `Não devolvível: ${ITEM_SEM_LASTRO_MENSAGEM}`
+        : keys.isComercialInvalido(k)
+          ? "Não devolvível: declaração comercial do produto inválida (revise o cadastro)."
         : keys.isPeso(k)
           ? "Não devolvível: produto vendido por peso (bloqueado até aprovação do schema R3)."
           : undefined
@@ -153,7 +165,9 @@ export async function buscarVendasElegiveis(
       const k = (it.inventoryId ?? "").trim()
       if (!k) continue
       const cur = porItem.get(k) ?? { quantidade: 0, lineTotal: 0, nome: it.nome }
-      cur.quantidade += it.quantidade || 0
+      // Linha KG (#335): quantidade inteira é NULL e o peso está em `quantidadeKg` —
+      // só exibição (a venda inteira já está bloqueada acima).
+      cur.quantidade += isKgItem(it) ? Number(String(it.quantidadeKg)) || 0 : it.quantidade || 0
       cur.lineTotal += it.lineTotal || 0
       porItem.set(k, cur)
     }
