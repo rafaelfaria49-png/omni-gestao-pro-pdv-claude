@@ -1,7 +1,7 @@
 "use client"
 
 import { kgReturnBlocked as saleKgReturnBlocked } from "@/lib/vendas/manual-kg-contract"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Search, Package, Wallet, RotateCcw, Printer, Plus, Minus, X, ShoppingCart } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,11 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { useConfigEmpresa, configPadrao } from "@/lib/config-empresa"
-import { useOperationsStore, type SaleRecord, type InventoryItem } from "@/lib/operations-store"
+import { useOperationsStore, nextDevolucaoId, classificarRespostaDevolucao, type SaleRecord, type InventoryItem } from "@/lib/operations-store"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { buildValeTrocaEscPos } from "@/lib/escpos"
 import { sendEscPosViaProxy, downloadEscPosFile, openThermalHtmlPrint, escapeHtml } from "@/lib/thermal-print"
@@ -21,6 +20,8 @@ import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
+import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { listarPendenciasDevolucao, type PendenciaDevolucao } from "@/lib/pdv/devolucao/pendencias"
 import {
   PENDING_SALE_DESCRIPTION,
   PENDING_SALE_TITLE,
@@ -30,6 +31,130 @@ import {
 
 /** Modos de operação expostos na UI. `troca`/`vale_credito` geram crédito local; `devolucao`/`somente_estoque` não. */
 type DevMode = "devolucao" | "troca" | "vale_credito" | "somente_estoque"
+
+/**
+ * PDV-F8-TROCA-IMEDIATA-INTEGRACAO-SEGURA-001 — política: reembolso em dinheiro
+ * não tem fluxo financeiro aprovado (G-H01..03 / CASH_HANDOVER_RECOVERY). O caminho
+ * fica BLOQUEADO na tela e no servidor; sobra de troca vira vale, nunca dinheiro.
+ */
+export const REEMBOLSO_DINHEIRO_BLOQUEADO = true
+export const REEMBOLSO_BLOQUEADO_TEXTO =
+  "Reembolso em dinheiro bloqueado: ainda não há fluxo financeiro aprovado. Use Vale-Troca ou Troca Imediata."
+
+type ServerDevolucaoOk = {
+  ok: true
+  idempotente: boolean
+  devolucaoId: string
+  localId: string
+  valorTotal: number
+  creditoEmitido: number
+  saldoCreditoCliente: number
+  operador: string
+  itens: Array<{ inventoryId: string; produtoId?: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
+}
+
+/** Linha de venda como a tela usa: `produtoId` = identidade histórica; bloqueio = sem política. */
+type LinhaVendaF8 = SaleRecord["lines"][number] & { bloqueioDevolucao?: string }
+
+/**
+ * Funde linhas repetidas do mesmo item (o Clássico cria uma linha por bipe): a tela e o
+ * teto trabalham por item, nunca contam o mesmo produto duas vezes.
+ */
+export function fundirLinhasPorItem(lines: LinhaVendaF8[]): LinhaVendaF8[] {
+  const out: LinhaVendaF8[] = []
+  const idx = new Map<string, number>()
+  for (const l of lines) {
+    const i = idx.get(l.inventoryId)
+    if (i === undefined) {
+      idx.set(l.inventoryId, out.length)
+      out.push({ ...l })
+      continue
+    }
+    const cur = out[i]!
+    cur.quantity += l.quantity
+    cur.lineTotal = Math.round((cur.lineTotal + l.lineTotal) * 100) / 100
+    cur.qtyReturned = (cur.qtyReturned ?? 0) + (l.qtyReturned ?? 0)
+    cur.produtoId = cur.produtoId || l.produtoId
+    cur.bloqueioDevolucao = cur.bloqueioDevolucao || l.bloqueioDevolucao
+  }
+  return out
+}
+
+/** Motivo de bloqueio por política da linha (servidor informa; offline: linha virtual). */
+export function bloqueioLinhaDevolucao(l: LinhaVendaF8): string | null {
+  if (l.bloqueioDevolucao) return l.bloqueioDevolucao
+  if (isVirtualSaleLine(l.inventoryId)) {
+    return "Não devolvível: serviço/item avulso não gera vale nem volta ao estoque (sem política aprovada)."
+  }
+  return null
+}
+
+/** O que o espelho local precisa para registrar uma devolução já gravada no servidor. */
+type PendingMirror = {
+  saleId: string
+  tipo: "troca" | "vale_credito" | "somente_estoque"
+  lines: { inventoryId: string; quantity: number }[]
+  cpf: string
+  nome: string
+  payload: Record<string, unknown>
+  motivo: string
+}
+
+type ServerDevolucaoResult =
+  | { kind: "ok"; data: ServerDevolucaoOk }
+  | { kind: "rejected"; status: number; message: string; code?: string }
+  /** Sem resposta: o servidor PODE ter gravado — o reenvio usa o MESMO localId. */
+  | { kind: "network"; message: string }
+
+type TentativaIncerta = { fp: string; localId: string; body: Record<string, unknown>; mirror: PendingMirror }
+
+/**
+ * Tentativa sem resposta sobrevive a fechar/reabrir o F8 e a recarregar a aba
+ * (sessionStorage por loja): reabrir e mudar o formulário não pode gerar um 2º localId
+ * para a mesma devolução física. Falha de storage não bloqueia (vale o ref em memória).
+ */
+const tentativaKey = (lojaId: string) => `omnigestao:devolucao-incerta:${lojaId}`
+function lerTentativaIncerta(lojaId: string | null | undefined): TentativaIncerta | null {
+  if (!lojaId) return null
+  try {
+    const raw = sessionStorage.getItem(tentativaKey(lojaId))
+    const v = raw ? (JSON.parse(raw) as TentativaIncerta) : null
+    return v && typeof v.localId === "string" && typeof v.fp === "string" ? v : null
+  } catch {
+    return null
+  }
+}
+function gravarTentativaIncerta(lojaId: string | null | undefined, v: TentativaIncerta | null) {
+  if (!lojaId) return
+  try {
+    if (v) sessionStorage.setItem(tentativaKey(lojaId), JSON.stringify(v))
+    else sessionStorage.removeItem(tentativaKey(lojaId))
+  } catch {
+    /* storage indisponível: segue só em memória */
+  }
+}
+
+async function postDevolucaoServidor(lojaId: string, body: Record<string, unknown>): Promise<ServerDevolucaoResult> {
+  let res: Response
+  try {
+    res = await fetch("/api/ops/devolucao", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify(body),
+    })
+  } catch (e) {
+    return { kind: "network", message: e instanceof Error ? e.message : String(e) }
+  }
+  const json = (await res.json().catch(() => null)) as (Partial<ServerDevolucaoOk> & { error?: string; code?: string }) | null
+  if (res.ok && json && json.ok === true && typeof json.localId === "string") {
+    return { kind: "ok", data: json as ServerDevolucaoOk }
+  }
+  if (res.status >= 500 || !json) {
+    return { kind: "network", message: json?.error || `HTTP ${res.status}` }
+  }
+  return { kind: "rejected", status: res.status, message: json.error || `HTTP ${res.status}`, code: json.code }
+}
 
 export function TrocasDevolucao({
   initialSaleId,
@@ -45,7 +170,16 @@ export function TrocasDevolucao({
 } = {}) {
   const { config } = useConfigEmpresa()
   const { toast } = useToast()
-  const { sales, registrarDevolucao, inventory, finalizeSaleTransaction, caixa } = useOperationsStore()
+  const {
+    sales,
+    devolucoes,
+    registrarDevolucao,
+    inventory,
+    finalizeSaleTransaction,
+    caixa,
+    retomarDevolucaoPendente,
+    registrarEncaminhamentoDevolucao,
+  } = useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
   const { sessaoId } = useCaixa()
   const searchParams = useSearchParams()
@@ -66,6 +200,85 @@ export function TrocasDevolucao({
   } | null>(null)
   const [candidateSales, setCandidateSales] = useState<SaleRecord[] | null>(null)
   const [candidateLabel, setCandidateLabel] = useState("")
+  /** "servidor" = venda e saldo devolvível lidos do banco da loja; "local" = só deste navegador (offline). */
+  const [saleSource, setSaleSource] = useState<"servidor" | "local">("local")
+  const [buscando, setBuscando] = useState(false)
+  /** Uma gravação por vez: duplo clique/Enter não abre duas devoluções. */
+  const [enviando, setEnviando] = useState(false)
+  const enviandoRef = useRef(false)
+  /** Mesma intenção ⇒ mesmo localId: reenvio após resposta perdida é replay, não 2ª devolução. */
+  const pendingDevRef = useRef<TentativaIncerta | null>(null)
+  const definirTentativa = (v: TentativaIncerta | null) => {
+    pendingDevRef.current = v
+    gravarTentativaIncerta(lojaAtivaId, v)
+  }
+  useEffect(() => {
+    pendingDevRef.current = lerTentativaIncerta(lojaAtivaId)
+  }, [lojaAtivaId])
+  /**
+   * Pendências do terminal (fila, venda de origem ausente, bloqueio persistente, recusas,
+   * encaminhadas) — PDV-F8-FINALIZACAO-COMPLETA-001. Só leitura + ações supervisionadas.
+   */
+  const pendencias = useMemo(() => listarPendenciasDevolucao(devolucoes), [devolucoes])
+  const [justificativas, setJustificativas] = useState<Record<string, string>>({})
+  const [encaminhando, setEncaminhando] = useState<string | null>(null)
+
+  const encaminharAoFinanceiro = async (p: PendenciaDevolucao) => {
+    if (!lojaAtivaId || encaminhando) return
+    const justificativa = (justificativas[p.dev.id] ?? "").trim()
+    if (!justificativa) {
+      toast({ title: "Justificativa obrigatória", description: "Descreva o que foi entregue ao cliente.", variant: "destructive" })
+      return
+    }
+    setEncaminhando(p.dev.id)
+    try {
+      const res = await fetch("/api/ops/devolucao/pendencias", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
+        body: JSON.stringify({
+          localId: p.dev.id,
+          vendaLocalId: p.dev.saleId,
+          categoria: p.categoria,
+          estado: p.estado === "AGUARDANDO_SINCRONIZACAO" ? "BLOQUEIO_PERSISTENTE" : p.estado,
+          valorDeclarado: p.valorDeclarado,
+          motivoRecusa: p.dev.syncRejectedReason || p.dev.syncRejectedCode || p.motivo,
+          justificativa,
+          itens: p.dev.lines.map((l) => ({ inventoryId: l.inventoryId, ...(l.produtoId ? { produtoId: l.produtoId } : {}), nome: l.name, quantidade: l.quantity })),
+        }),
+      })
+      const j = (await res.json().catch(() => null)) as { ok?: boolean; ref?: string; at?: string; operador?: string; error?: string } | null
+      if (!res.ok || !j?.ok || !j.ref) {
+        toast({ title: "Encaminhamento não registrado", description: j?.error || `HTTP ${res.status}`, variant: "destructive" })
+        return
+      }
+      registrarEncaminhamentoDevolucao(p.dev.id, {
+        ref: j.ref,
+        at: j.at || new Date().toISOString(),
+        operador: j.operador || "—",
+        categoria: p.categoria,
+        valorDeclarado: p.valorDeclarado,
+      })
+      toast({ title: "Encaminhado ao Financeiro", description: `Referência ${j.ref}. Nenhum lançamento foi criado.` })
+    } catch {
+      toast({ title: "Sem conexão", description: "O encaminhamento exige conexão com o servidor. Nada foi alterado.", variant: "destructive" })
+    } finally {
+      setEncaminhando(null)
+    }
+  }
+  /**
+   * Troca cuja devolução JÁ foi gravada no servidor mas a nova venda não concluiu:
+   * o vale existe (persistido) e o reenvio só refaz a venda — nunca outra devolução.
+   */
+  const [trocaRecovery, setTrocaRecovery] = useState<{
+    saleId: string
+    dev: ServerDevolucaoOk
+    cpf: string
+    nome: string
+    /** Nova venda já registrada (pendente de sincronização) — nunca finalizar de novo. */
+    novaVendaPendenteId?: string
+  } | null>(null)
+  const trocaBipeRef = useRef<HTMLInputElement>(null)
 
   // ── Troca imediata (modo `troca`): mini-carrinho de novos itens ────────────
   type TrocaCartLine = { inventoryId: string; name: string; unitPrice: number; quantity: number }
@@ -73,15 +286,20 @@ export function TrocasDevolucao({
   const [trocaSearch, setTrocaSearch] = useState("")
   /** Forma de pagamento da DIFERENÇA (quando novo > devolvido). */
   const [diffPayMethod, setDiffPayMethod] = useState<"dinheiro" | "pix" | "debito" | "credito">("dinheiro")
-  /** Destino quando devolvido > novo: gerar vale com saldo restante, ou devolver dinheiro. */
-  const [excessHandling, setExcessHandling] = useState<"vale_credito" | "dinheiro">("vale_credito")
+  // Sobra (devolvido > novo) é SEMPRE vale: "devolver dinheiro" saiu — sem fluxo aprovado.
 
   // ── Cupom de troca/devolução (abre automaticamente após confirmar) ────────
   type CupomTrocaData = {
     tipo: "devolucao" | "vale_credito" | "troca" | "somente_estoque"
+    /** localId da devolução (chave de negócio impressa no vale). */
     devolucaoId: string
+    /** id técnico no servidor — ausente quando a devolução ainda está na fila offline. */
+    devolucaoServerId?: string
+    devolucaoPendente?: boolean
     vendaOrigemId: string
     novaVendaId?: string | null
+    /** Nova venda gravada só localmente, aguardando sincronização. */
+    novaVendaPendente?: boolean
     clienteNome: string
     clienteCpf: string
     operador: string
@@ -109,35 +327,59 @@ export function TrocasDevolucao({
     const upper = id.toUpperCase()
     const idNorm = id.replace(/\s/g, "").toUpperCase()
 
-    if (initialSale && (initialSale.id.toUpperCase() === upper || initialSale.id.replace(/\s/g, "").toUpperCase() === idNorm)) {
-      aplicarVenda(initialSale)
-      return
+    // Aberta pelo Histórico: reconsulta o servidor (devolvível agregado de todos os
+    // terminais) e só cai no snapshot/cópia local se o servidor não responder.
+    let cancelado = false
+    const fallback = () => {
+      if (cancelado) return
+      if (initialSale && (initialSale.id.toUpperCase() === upper || initialSale.id.replace(/\s/g, "").toUpperCase() === idNorm)) {
+        aplicarVenda(initialSale)
+        return
+      }
+      const s = sales.find((x) => x.id.toUpperCase() === upper || x.id.replace(/\s/g, "").toUpperCase() === idNorm)
+      if (s) aplicarVenda(s)
     }
-
-    const s = sales.find(
-      (x) =>
-        x.id.toUpperCase() === upper ||
-        x.id.replace(/\s/g, "").toUpperCase() === idNorm
-    )
-    if (s) {
-      aplicarVenda(s)
+    if (lojaAtivaId) {
+      void fetch(`/api/ops/devolucao/elegibilidade?q=${encodeURIComponent(id)}`, {
+        credentials: "include",
+        headers: { "x-assistec-loja-id": lojaAtivaId },
+      })
+        .then(async (res) => {
+          const j = res.ok ? ((await res.json()) as { vendas?: SaleRecord[] }) : null
+          const v = j?.vendas?.find((x) => x.id.toUpperCase() === upper)
+          if (cancelado) return
+          if (v) aplicarVenda(v, "servidor")
+          else fallback()
+        })
+        .catch(fallback)
+      return () => { cancelado = true }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- aplicarVenda estável o suficiente para prefill
-  }, [initialSaleId, initialSale, searchParams, sales])
+    fallback()
+    return () => { cancelado = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill roda por venda pedida, não a cada mudança do store
+  }, [initialSaleId, initialSale, searchParams, lojaAtivaId])
 
   useEffect(() => {
-    if (!sale) return
+    // Venda vinda do servidor já traz o devolvível agregado de TODOS os terminais;
+    // a cópia local pode estar atrasada e não deve sobrescrevê-la.
+    if (!sale || saleSource === "servidor") return
     const fresh = sales.find((x) => x.id === sale.id)
     if (!fresh) return
-    if (JSON.stringify(fresh.lines) !== JSON.stringify(sale.lines)) setSale(fresh)
-  }, [sales, sale])
+    const lines = fundirLinhasPorItem(fresh.lines as LinhaVendaF8[])
+    if (JSON.stringify(lines) !== JSON.stringify(sale.lines)) setSale({ ...fresh, lines })
+  }, [sales, sale, saleSource])
 
   const kgReturnBlocked = !!sale && saleKgReturnBlocked(sale, inventory)
 
   const nomeLoja =
     (config.empresa.nomeFantasia || "").trim() || configPadrao.empresa.nomeFantasia
 
-  const aplicarVenda = (s: SaleRecord) => {
+  const aplicarVenda = (s: SaleRecord, source: "servidor" | "local" = "local") => {
+    setSaleSource(source)
+    setTrocaRecovery(null)
+    // Tentativa incerta (sem resposta) NÃO é descartada ao trocar de venda: a próxima
+    // gravação reenvia a original primeiro (ver gravarDevolucaoConfirmada).
+    s = { ...s, lines: fundirLinhasPorItem(s.lines as LinhaVendaF8[]) }
     setSale(s)
     setCandidateSales(null)
     setCandidateLabel("")
@@ -154,14 +396,76 @@ export function TrocasDevolucao({
     toast({ title: "Venda localizada", description: s.id })
   }
 
-  const encontrarVenda = () => {
+  /**
+   * Busca AUTORITATIVA no servidor da loja (venda | código de barras/SKU/ID | cliente).
+   * Sem conexão cai na busca local deste navegador, sinalizada como "dados locais".
+   */
+  const encontrarVenda = async () => {
     const raw = busca.trim()
     if (!raw) {
       toast({ title: "Informe a busca", description: "ID da venda, nome do cliente ou código do produto.", variant: "destructive" })
       return
     }
+    if (buscando) return
     setCandidateSales(null)
     setCandidateLabel("")
+    if (lojaAtivaId) {
+      setBuscando(true)
+      try {
+        const res = await fetch(`/api/ops/devolucao/elegibilidade?q=${encodeURIComponent(raw)}`, {
+          credentials: "include",
+          headers: { "x-assistec-loja-id": lojaAtivaId },
+        })
+        if (res.ok) {
+          const j = (await res.json()) as { criterio: string; produtoNome?: string; vendas: SaleRecord[] }
+          const vendas = Array.isArray(j.vendas) ? j.vendas : []
+          if (vendas.length === 1) {
+            aplicarVenda(vendas[0]!, "servidor")
+            return
+          }
+          if (vendas.length > 1) {
+            setSaleSource("servidor")
+            setCandidateSales(vendas)
+            setCandidateLabel(
+              j.criterio === "produto"
+                ? `Últimas vendas com “${j.produtoNome ?? raw}” (origem da troca)`
+                : `Vendas encontradas para “${raw}”`,
+            )
+            toast({ title: "Selecione a venda", description: "Escolha de qual cupom sairá a devolução." })
+            return
+          }
+          setSale(null)
+          setLastDevolucao(null)
+          toast({
+            title: "Não encontrado",
+            description:
+              j.criterio === "produto"
+                ? `O produto “${j.produtoNome ?? raw}” não consta em vendas desta loja.`
+                : "Nenhuma venda, cliente ou produto correspondente nesta loja.",
+            variant: "destructive",
+          })
+          return
+        }
+        if (res.status < 500 && res.status !== 0) {
+          const j = (await res.json().catch(() => null)) as { error?: string } | null
+          toast({ title: "Busca recusada", description: j?.error || `HTTP ${res.status}`, variant: "destructive" })
+          return
+        }
+      } catch {
+        /* sem conexão → busca local abaixo */
+      } finally {
+        setBuscando(false)
+      }
+      toast({
+        title: "Sem conexão com o servidor",
+        description: "Mostrando apenas vendas deste navegador. A troca imediata exige conexão.",
+      })
+    }
+    encontrarVendaLocal(raw)
+  }
+
+  const encontrarVendaLocal = (raw: string) => {
+    setSaleSource("local")
 
     const idUpper = raw.toUpperCase()
     const idNorm = raw.replace(/\s/g, "").toUpperCase()
@@ -265,18 +569,32 @@ export function TrocasDevolucao({
   const trocaSearchResults = useMemo<InventoryItem[]>(() => {
     const q = trocaSearch.trim().toLowerCase()
     if (!q) return []
-    const digits = q.replace(/\D/g, "")
-    return inventory
-      .filter((i) => {
-        if (i.name.toLowerCase().includes(q)) return true
-        if (i.id.toLowerCase() === q) return true
-        if (i.sku && i.sku.toLowerCase() === q) return true
-        if (i.barcode && i.barcode === digits) return true
-        if (i.codigo && i.codigo.toLowerCase() === q) return true
-        return false
-      })
-      .slice(0, 8)
+    const exact = findExactTrocaItem(inventory, trocaSearch)
+    const rest = inventory.filter((i) => i !== exact && i.name.toLowerCase().includes(q))
+    return (exact ? [exact, ...rest] : rest).slice(0, 8)
   }, [trocaSearch, inventory])
+
+  /** Leitor de código de barras: Enter com código exato adiciona direto (como no bipe do PDV). */
+  const bipeTrocaItem = () => {
+    const raw = trocaSearch.trim()
+    if (!raw) return
+    const exact = findExactTrocaItem(inventory, raw)
+    if (exact) {
+      addTrocaItem(exact)
+      queueMicrotask(() => trocaBipeRef.current?.focus())
+      return
+    }
+    if (trocaSearchResults.length === 1) {
+      addTrocaItem(trocaSearchResults[0]!)
+      queueMicrotask(() => trocaBipeRef.current?.focus())
+      return
+    }
+    toast({
+      title: "Produto não encontrado",
+      description: `Nenhum produto com código, SKU ou ID “${raw}”.`,
+      variant: "destructive",
+    })
+  }
 
   const addTrocaItem = (item: InventoryItem) => {
     const isService = item.category === "Servicos"
@@ -334,325 +652,443 @@ export function TrocasDevolucao({
     if (mode !== "troca") setTrocaCart([])
   }, [mode, sale?.id])
 
-  /**
-   * Finalização da TROCA IMEDIATA (mode === "troca" + mini-carrinho preenchido):
-   * 1) Registra devolução normalmente (estoque dos itens devolvidos sobe, vale emitido = valorDevolvido);
-   * 2) Cria nova venda via `finalizeSaleTransaction`, abatendo o vale recém-emitido (`creditoVale`) e
-   *    cobrando apenas a diferença na forma escolhida (quando positiva);
-   * 3) Se devolvido > nova compra e cliente escolheu "dinheiro", o saldo remanescente do vale é
-   *    devolvido em dinheiro (debita do `customerCredits` local).
-   */
-  const handleFinalizarTroca = async () => {
-    if (!sale) return
-    if (!caixa.isOpen) {
-      toast({ title: "Caixa fechado", description: "Abra o caixa antes de finalizar a troca.", variant: "destructive" })
-      return
-    }
-    const cpf = normalizeDocDigits(sale.customerCpf || "") || normalizeDocDigits(cpfExtra)
-    const nome = (sale.customerName || nomeExtra).trim()
-    if (!cpf) {
-      toast({ title: "CPF obrigatório", description: "Informe o CPF/CNPJ do cliente para a troca.", variant: "destructive" })
-      return
-    }
-    if (!nome) {
-      toast({ title: "Nome obrigatório", description: "Informe o nome do cliente.", variant: "destructive" })
-      return
-    }
-
-    // Linhas devolvidas (mesma validação do fluxo padrão)
+  /** Linhas a devolver validadas contra o saldo devolvível exibido (o servidor revalida sob lock). */
+  const coletarLinhasDevolucao = (): { inventoryId: string; quantity: number }[] | null => {
     const lines: { inventoryId: string; quantity: number }[] = []
     for (const l of linhasComMax) {
       const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
       if (q > 0) {
+        const bloqueio = bloqueioLinhaDevolucao(l)
+        if (bloqueio) {
+          toast({ title: "Item não devolvível", description: `${l.name}: ${bloqueio}`, variant: "destructive" })
+          return null
+        }
         if (q > l.maxReturn) {
           toast({ title: "Quantidade inválida", description: `${l.name}: máximo ${l.maxReturn}`, variant: "destructive" })
-          return
+          return null
         }
         lines.push({ inventoryId: l.inventoryId, quantity: q })
       }
     }
     if (lines.length === 0) {
-      toast({ title: "Nada a devolver", description: "Informe quantidades do item a trocar.", variant: "destructive" })
+      toast({ title: "Nada a devolver", description: "Informe quantidades do item a devolver.", variant: "destructive" })
+      return null
+    }
+    return lines
+  }
+
+  /**
+   * Grava a devolução NO SERVIDOR e espera a resposta (fonte da verdade de valor,
+   * crédito e saldo devolvível). Só depois espelha localmente, com o mesmo localId.
+   *
+   * Tentativa SEM resposta fica "incerta" (o servidor pode ter gravado). Enquanto
+   * estiver incerta, qualquer nova intenção (CPF corrigido, quantidade mudada, outra
+   * venda) primeiro reenvia a tentativa ORIGINAL com o mesmo localId: se ela tinha
+   * sido gravada, o operador é avisado e nada novo é criado — uma devolução física
+   * nunca vira duas no servidor.
+   */
+  const gravarDevolucaoConfirmada = async (args: {
+    tipo: "troca" | "vale_credito" | "somente_estoque"
+    lines: { inventoryId: string; quantity: number }[]
+    cpf: string
+    nome: string
+    payload: Record<string, unknown>
+  }): Promise<ServerDevolucaoResult & { localId?: string }> => {
+    if (!sale || !lojaAtivaId) return { kind: "rejected", status: 400, message: "Loja ou venda não selecionada." }
+    const fp = [sale.id, args.tipo, args.cpf, ...args.lines.map((l) => `${l.inventoryId}:${l.quantity}`).sort()].join("#")
+
+    const incerta = pendingDevRef.current
+    if (incerta && incerta.fp !== fp) {
+      const anterior = await postDevolucaoServidor(lojaAtivaId, incerta.body)
+      if (anterior.kind === "network") return { ...anterior, localId: incerta.localId }
+      // Recusa transitória (403/401 antes do replay, período fechado…): não prova que a
+      // anterior NÃO foi gravada — mantém a tentativa incerta em vez de abrir outro localId.
+      if (anterior.kind === "rejected" && classificarRespostaDevolucao(anterior.status, anterior.code) === "aguardar") {
+        return { ...anterior, localId: incerta.localId }
+      }
+      definirTentativa(null)
+      if (anterior.kind === "ok") {
+        espelharDevolucao(incerta.mirror, anterior.data)
+        if (incerta.mirror.tipo === "troca" && incerta.mirror.saleId === sale.id) {
+          setTrocaRecovery({ saleId: sale.id, dev: anterior.data, cpf: incerta.mirror.cpf, nome: incerta.mirror.nome })
+        }
+        return {
+          kind: "rejected",
+          status: 409,
+          message: `A tentativa anterior sem confirmação FOI gravada (${anterior.data.localId}, vale ${formatBrl(anterior.data.creditoEmitido)}). Nada novo foi registrado — revise antes de continuar.`,
+        }
+      }
+      // A anterior não foi gravada (recusa de negócio): segue com a intenção nova.
+    }
+
+    const localId = incerta && incerta.fp === fp ? incerta.localId : nextDevolucaoId(devolucoes)
+    const body = {
+      localId,
+      vendaLocalId: sale.id,
+      sessaoId: sessaoId || undefined,
+      tipo: args.tipo,
+      clienteNome: args.nome,
+      clienteDoc: args.cpf,
+      motivo: motivo.trim(),
+      itens: args.lines.map((l) => {
+        const sl = sale.lines.find((x) => x.inventoryId === l.inventoryId)
+        // Identidade histórica (Produto.id da venda) quando o servidor a informou.
+        return {
+          inventoryId: l.inventoryId,
+          ...(sl?.produtoId ? { produtoId: sl.produtoId } : {}),
+          nome: sl?.name ?? "",
+          quantidade: l.quantity,
+        }
+      }),
+      payload: { ...args.payload, localId },
+    }
+    const mirror = { saleId: sale.id, ...args, motivo: motivo.trim() }
+    const r = await postDevolucaoServidor(lojaAtivaId, body)
+    if (r.kind === "ok") {
+      espelharDevolucao(mirror, r.data)
+      definirTentativa(null)
+    } else if (r.kind === "rejected" && classificarRespostaDevolucao(r.status, r.code) !== "aguardar") {
+      // Recusa definitiva (ou localId de outra devolução): nada foi gravado com este id —
+      // a próxima tentativa é intenção nova.
+      definirTentativa(null)
+    } else {
+      // Rede/5xx ou recusa transitória (período fechado, venda ainda não sincronizada):
+      // mantém o MESMO localId — o reenvio é reconhecido como replay se já estiver gravado.
+      definirTentativa({ fp, localId, body, mirror })
+    }
+    return { ...r, localId }
+  }
+
+  /** Espelho local (estoque/crédito/histórico deste navegador) do que o servidor gravou — sem reenvio. */
+  const espelharDevolucao = (m: PendingMirror, data: ServerDevolucaoOk) => {
+    registrarDevolucao({
+      saleId: m.saleId,
+      lines: m.lines,
+      mode: m.tipo === "somente_estoque" ? "somente_estoque" : "vale_credito",
+      customerCpf: m.cpf,
+      customerName: m.nome,
+      sessaoId: sessaoId ?? undefined,
+      tipo: m.tipo,
+      motivo: m.motivo,
+      payload: m.payload,
+      serverConfirmed: {
+        localId: data.localId,
+        creditIssued: data.creditoEmitido,
+        lines: data.itens.map((i) => ({ inventoryId: i.inventoryId, ...(i.produtoId ? { produtoId: i.produtoId } : {}), name: i.nome, quantity: i.quantidade, valor: i.valorTotal })),
+      },
+    })
+  }
+
+  const exigirTitular = (): { cpf: string; nome: string } | null => {
+    if (!sale) return null
+    const cpf = normalizeDocDigits(sale.customerCpf || "") || normalizeDocDigits(cpfExtra)
+    const nome = (sale.customerName || nomeExtra).trim()
+    if (!cpf) {
+      toast({ title: "CPF obrigatório", description: "Informe o CPF/CNPJ do cliente: o vale fica no nome do titular.", variant: "destructive" })
+      return null
+    }
+    if (!nome) {
+      toast({ title: "Nome obrigatório", description: "Informe o nome do cliente.", variant: "destructive" })
+      return null
+    }
+    return { cpf, nome }
+  }
+
+  /**
+   * TROCA IMEDIATA (mesma tela):
+   * 1) devolução gravada e CONFIRMADA no servidor (lock da venda, teto por item,
+   *    vale do valor devolvido criado uma vez) — sem conexão, nada é registrado;
+   * 2) nova venda pelo motor canônico (`finalizeSaleTransaction`), abatendo do vale
+   *    min(devolvido, nova compra) e cobrando só a diferença positiva;
+   * 3) sobra (devolvido > nova) permanece como vale — reembolso em dinheiro bloqueado.
+   * Se (2) falhar, o vale já existe no servidor: a tela guarda a devolução confirmada
+   * e "Concluir nova venda" refaz SÓ a venda (nunca outra devolução).
+   */
+  const handleFinalizarTroca = async () => {
+    if (!sale || enviandoRef.current) return
+    if (!caixa.isOpen) {
+      toast({ title: "Caixa fechado", description: "Abra o caixa antes de finalizar a troca.", variant: "destructive" })
       return
     }
     if (trocaCart.length === 0) {
       toast({ title: "Sem itens novos", description: "Adicione ao menos um produto/serviço à nova compra.", variant: "destructive" })
       return
     }
-
-    const excessoDinheiro = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
-    const creditoFinal = Math.max(0, creditoRestante - excessoDinheiro)
-    const usaVale = valePassivelAbatimento
-    const diff = Math.round((totalNovaCompra - usaVale) * 100) / 100
-
-    const payload = {
-      saleId: sale.id,
-      linhas: lines,
-      modo: "troca_imediata",
-      vendaOriginalId: sale.id,
-      novaVendaId: null,
-      valorDevolvido,
-      totalNovaCompra,
-      diferencaPaga: diff > 0 ? diff : 0,
-      diferencaForma: diff > 0 ? diffPayMethod : null,
-      creditoRestante: creditoFinal,
-      excessoDinheiro,
-      motivo: motivo.trim(),
-    }
-
-    // Step 1 — devolução com modo "vale_credito" (gera saldo local de `valorDevolvido`)
-    const dev = registrarDevolucao({
-      saleId: sale.id,
-      lines,
-      mode: "vale_credito",
-      customerCpf: cpf,
-      customerName: nome,
-      sessaoId: sessaoId ?? undefined,
-      tipo: "troca",
-      motivo: motivo.trim(),
-      payload,
-    })
-    if (!dev.ok) {
-      toast({ title: "Devolução não registrada", description: dev.reason, variant: "destructive" })
-      return
-    }
-    const creditEmitido = dev.creditIssued
-
-    // Step 2 — nova venda abatendo o vale recém-emitido
-    const pb = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: usaVale }
-    if (diff > 0) {
-      if (diffPayMethod === "dinheiro") pb.dinheiro = diff
-      else if (diffPayMethod === "pix") pb.pix = diff
-      else if (diffPayMethod === "debito") pb.cartaoDebito = diff
-      else if (diffPayMethod === "credito") pb.cartaoCredito = diff
-    }
-
-    // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
-    // item novo sem cadastro BLOQUEIA com os nomes — nunca cobrado sem persistir.
+    // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1): item novo sem cadastro
+    // bloqueia ANTES de qualquer gravação — nem a devolução sai.
     const unresolvedTroca = findUnresolvedSaleLines(
       trocaCart.map((l) => ({ inventoryId: l.inventoryId, name: l.name })),
       inventory.map((i) => i.id),
     )
     if (unresolvedTroca.length > 0) {
-      toast({
-        title: "Item não pode ser vendido",
-        description: unresolvedSaleLinesDescription(unresolvedTroca),
-        variant: "destructive",
-      })
+      toast({ title: "Item não pode ser vendido", description: unresolvedSaleLinesDescription(unresolvedTroca), variant: "destructive" })
       return
     }
 
-    const novaVenda = await finalizeSaleTransaction({
-      lines: trocaCart.map((l) => ({ inventoryId: l.inventoryId, quantity: l.quantity, name: l.name, unitPrice: l.unitPrice })),
-      total: totalNovaCompra,
-      paymentBreakdown: pb,
-      customerCpf: cpf,
-      customerName: nome,
-    })
-    if (!novaVenda.ok) {
-      // Não tentamos reverter a devolução automaticamente — o operador deve cancelar a venda manualmente
-      // se necessário. Avisamos com clareza para evitar estado inconsistente silencioso.
-      toast({
-        title: "Devolução registrada, nova venda falhou",
-        description: `${novaVenda.reason} — devolução ${dev.devolucaoId} mantida. Registre a nova venda manualmente.`,
-        variant: "destructive",
-      })
-      return
-    }
+    enviandoRef.current = true
+    setEnviando(true)
+    try {
+      let dev: ServerDevolucaoOk
+      let cpf: string
+      let nome: string
+      let itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
 
-    // PENDING (CORREÇÃO-01): a nova venda ainda NÃO confirmou — sem callback
-    // de conclusão, sem marcar a devolução como concluída, sem cupom. Só
-    // informa o estado honesto e mantém o mini-carrinho; o reenvio usa a MESMA
-    // identidade (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
-    // (O audit devolucao_vale abaixo é trilha honesta da devolução registrada +
-    // venda pendente — não é audit de venda concluída.)
-    if (novaVenda.pending) {
-      appendAuditLog({
-        action: "devolucao_vale",
-        userLabel: `${nomeLoja} (PDV)`,
-        detail: `[troca_imediata PENDENTE — AGUARDANDO CONFIRMAÇÃO] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
-      })
-      toast({
-        title: PENDING_SALE_TITLE,
-        description: PENDING_SALE_DESCRIPTION,
-        duration: 6000,
-      })
-      return
-    }
-
-    onRegistered?.()
-
-    // Excesso em dinheiro: debita o vale local pelo valor a devolver
-    // (o customerCredits ainda guarda `creditoRestante` da devolução; o operador entrega o $ ao cliente)
-    if (creditoRestante > 0 && excessHandling === "dinheiro") {
-      // Não há API direta no store; o crédito persiste como "vale" no localStorage até a Fase 1.
-      // Aqui apenas registramos no audit-log para rastreabilidade operacional.
-      appendAuditLog({
-        action: "devolucao_vale",
-        userLabel: `${nomeLoja} (PDV)`,
-        detail: `[troca_excesso_dinheiro] Troca ${dev.devolucaoId} | venda ${sale.id} | excesso devolvido em dinheiro: ${creditoRestante.toFixed(2)}`,
-      })
-    }
-
-    appendAuditLog({
-      action: "devolucao_vale",
-      userLabel: `${nomeLoja} (PDV)`,
-      detail: `[troca_imediata] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
-    })
-
-    setLastDevolucao({ id: dev.devolucaoId, credit: creditEmitido, nome, cpf })
-
-    // CONFIRMED: abre o cupom de troca (resumo operacional para o cliente).
-    // (PENDING já retornou acima — nunca abre cupom pendente.)
-    const itensDevolvidos = lines.map((req) => {
-      const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
-      const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
-      return {
-        nome: sl?.name ?? req.inventoryId,
-        quantidade: req.quantity,
-        valorTotal: Math.round(valorUnit * req.quantity * 100) / 100,
+      if (trocaRecovery && trocaRecovery.saleId === sale.id && trocaRecovery.novaVendaPendenteId) {
+        toast({
+          title: "Nova venda já registrada",
+          description: `A venda ${trocaRecovery.novaVendaPendenteId} aguarda sincronização: use Vendas → Reenviar sync. Nada novo foi feito.`,
+        })
+        return
       }
-    })
-    const itensNovos = trocaCart.map((l) => ({
-      nome: l.name,
-      quantidade: l.quantity,
-      valorTotal: Math.round(l.unitPrice * l.quantity * 100) / 100,
-    }))
-    const excessoDinheiroFinal = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
-    const saldoFinal = Math.max(0, creditoRestante - excessoDinheiroFinal)
-    setCupomData({
-      tipo: "troca",
-      devolucaoId: dev.devolucaoId,
-      vendaOrigemId: sale.id,
-      novaVendaId: novaVenda.saleId,
-      clienteNome: nome,
-      clienteCpf: cpf,
-      operador: nomeLoja,
-      itensDevolvidos,
-      itensNovos,
-      valorDevolvido,
-      totalNovaCompra,
-      creditoGerado: creditEmitido,
-      creditoUtilizado: valePassivelAbatimento,
-      saldoFinal,
-      diferencaPaga: diff > 0 ? diff : 0,
-      diferencaForma: diff > 0 ? diffPayMethod : null,
-      motivo: motivo.trim(),
-      at: new Date().toISOString(),
-    })
-    setCupomOpen(true)
-
-    toast({
-      title: "Troca finalizada",
-      description:
-        diff > 0
-          ? `Cobrado ${formatBrl(diff)} em ${diffPayMethod}.`
-          : creditoRestante > 0 && excessHandling === "dinheiro"
-            ? `Devolva ${formatBrl(creditoRestante)} em dinheiro ao cliente.`
-            : creditoRestante > 0
-              ? `Crédito de ${formatBrl(creditoRestante)} gerado.`
-              : "Troca casada sem diferença.",
-    })
-
-    // Reset do mini-carrinho (a venda original é atualizada via efeito)
-    setTrocaCart([])
-    setQtyByLine({})
-  }
-
-  const handleRegistrar = () => {
-    if (!sale) return
-    const cpf =
-      normalizeDocDigits(sale.customerCpf || "") || normalizeDocDigits(cpfExtra)
-    const nome = (sale.customerName || nomeExtra).trim()
-    if (!cpf) {
-      toast({ title: "CPF obrigatório", description: "Informe o CPF/CNPJ do cliente para devolução.", variant: "destructive" })
-      return
-    }
-    if (!nome) {
-      toast({ title: "Nome obrigatório", description: "Informe o nome do cliente.", variant: "destructive" })
-      return
-    }
-    const lines: { inventoryId: string; quantity: number }[] = []
-    for (const l of linhasComMax) {
-      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
-      if (q > 0) {
-        if (q > l.maxReturn) {
+      if (trocaRecovery && trocaRecovery.saleId === sale.id) {
+        // Retomada: a devolução já está gravada — só refaz a nova venda.
+        dev = trocaRecovery.dev
+        cpf = trocaRecovery.cpf
+        nome = trocaRecovery.nome
+      } else {
+        if (saleSource !== "servidor") {
           toast({
-            title: "Quantidade inválida",
-            description: `${l.name}: máximo ${l.maxReturn}`,
+            title: "Troca imediata exige conexão",
+            description: "Busque a venda com o servidor disponível. Nada foi registrado.",
             variant: "destructive",
           })
           return
         }
-        lines.push({ inventoryId: l.inventoryId, quantity: q })
+        const titular = exigirTitular()
+        if (!titular) return
+        cpf = titular.cpf
+        nome = titular.nome
+        const lines = coletarLinhasDevolucao()
+        if (!lines) return
+        const r = await gravarDevolucaoConfirmada({
+          tipo: "troca",
+          lines,
+          cpf,
+          nome,
+          payload: { saleId: sale.id, linhas: lines, modo: "troca_imediata", motivo: motivo.trim() },
+        })
+        if (r.kind === "network") {
+          toast({
+            title: "Sem confirmação do servidor",
+            description:
+              "Não foi possível confirmar a devolução. Nenhuma venda nova foi feita. Tente de novo: o reenvio usa o mesmo identificador e nunca duplica.",
+            variant: "destructive",
+          })
+          return
+        }
+        if (r.kind === "rejected") {
+          toast({ title: "Devolução recusada", description: r.message, variant: "destructive" })
+          return
+        }
+        dev = r.data
+        setTrocaRecovery({ saleId: sale.id, dev, cpf, nome })
       }
+      itensDevolvidos = dev.itens.map((i) => ({ nome: i.nome, quantidade: i.quantidade, valorTotal: i.valorTotal }))
+
+      // Valores autoritativos: o devolvido é o que o servidor gravou.
+      const devolvidoServidor = Math.round(dev.valorTotal * 100) / 100
+      const usaVale = Math.round(Math.min(devolvidoServidor, totalNovaCompra) * 100) / 100
+      const diff = Math.round((totalNovaCompra - usaVale) * 100) / 100
+      const sobraVale = Math.round(Math.max(0, devolvidoServidor - totalNovaCompra) * 100) / 100
+
+      const pb = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: usaVale }
+      if (diff > 0) {
+        if (diffPayMethod === "dinheiro") pb.dinheiro = diff
+        else if (diffPayMethod === "pix") pb.pix = diff
+        else if (diffPayMethod === "debito") pb.cartaoDebito = diff
+        else if (diffPayMethod === "credito") pb.cartaoCredito = diff
+      }
+
+      const novaVenda = await finalizeSaleTransaction({
+        lines: trocaCart.map((l) => ({ inventoryId: l.inventoryId, quantity: l.quantity, name: l.name, unitPrice: l.unitPrice })),
+        total: totalNovaCompra,
+        paymentBreakdown: pb,
+        customerCpf: cpf,
+        customerName: nome,
+      })
+      if (!novaVenda.ok) {
+        toast({
+          title: "Vale gerado — nova venda não concluída",
+          description: `${novaVenda.reason} O vale de ${formatBrl(dev.creditoEmitido)} (${dev.localId}) está salvo no CPF do cliente. Corrija e use “Concluir nova venda”.`,
+          variant: "destructive",
+          duration: 9000,
+        })
+        return
+      }
+
+      const auditBase = `dev ${dev.localId} → venda ${novaVenda.saleId} | devolvido ${devolvidoServidor.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | vale usado ${usaVale.toFixed(2)} | diff ${diff.toFixed(2)} (${diff > 0 ? diffPayMethod : "-"}) | sobra em vale ${sobraVale.toFixed(2)}`
+
+      // PENDING (CORREÇÃO-01): a nova venda ainda NÃO confirmou — sem cupom, sem
+      // callback de conclusão e com o mini-carrinho mantido. A devolução e o vale JÁ
+      // estão gravados no servidor (estado de retomada visível); o reenvio da venda
+      // usa a MESMA identidade (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
+      if (novaVenda.pending) {
+        setTrocaRecovery((cur) => (cur ? { ...cur, novaVendaPendenteId: novaVenda.saleId } : cur))
+        appendAuditLog({
+          action: "devolucao_vale",
+          userLabel: `${nomeLoja} (PDV)`,
+          detail: `[troca_imediata DEVOLUÇÃO CONFIRMADA · VENDA PENDENTE — AGUARDANDO CONFIRMAÇÃO] ${auditBase}`,
+        })
+        toast({
+          title: PENDING_SALE_TITLE,
+          description: `Devolução ${dev.localId} e vale confirmados no servidor. ${PENDING_SALE_DESCRIPTION}`,
+          duration: 6000,
+        })
+        return
+      }
+
+      appendAuditLog({ action: "devolucao_vale", userLabel: `${nomeLoja} (PDV)`, detail: `[troca_imediata] ${auditBase}` })
+      onRegistered?.()
+      setTrocaRecovery(null)
+      setLastDevolucao({ id: dev.localId, credit: dev.creditoEmitido, nome, cpf })
+
+      setCupomData({
+        tipo: "troca",
+        devolucaoId: dev.localId,
+        devolucaoServerId: dev.devolucaoId,
+        vendaOrigemId: sale.id,
+        novaVendaId: novaVenda.saleId,
+        clienteNome: nome,
+        clienteCpf: cpf,
+        operador: dev.operador || "—",
+        itensDevolvidos,
+        itensNovos: trocaCart.map((l) => ({ nome: l.name, quantidade: l.quantity, valorTotal: Math.round(l.unitPrice * l.quantity * 100) / 100 })),
+        valorDevolvido: devolvidoServidor,
+        totalNovaCompra,
+        creditoGerado: dev.creditoEmitido,
+        creditoUtilizado: usaVale,
+        saldoFinal: sobraVale,
+        diferencaPaga: diff > 0 ? diff : 0,
+        diferencaForma: diff > 0 ? diffPayMethod : null,
+        motivo: motivo.trim(),
+        at: new Date().toISOString(),
+      })
+      setCupomOpen(true)
+
+      toast({
+        title: "Troca finalizada",
+        description:
+          diff > 0
+            ? `Cobrado ${formatBrl(diff)} em ${diffPayMethod}.`
+            : sobraVale > 0
+              ? `Vale de ${formatBrl(sobraVale)} permanece no CPF do cliente.`
+              : "Troca casada sem diferença.",
+      })
+      setTrocaCart([])
+      setQtyByLine({})
+      setSale(null)
+      setShowSearch(true)
+      setBusca("")
+    } finally {
+      enviandoRef.current = false
+      setEnviando(false)
     }
-    if (lines.length === 0) {
-      toast({ title: "Nada a devolver", description: "Informe quantidades.", variant: "destructive" })
+  }
+
+  const handleRegistrar = async () => {
+    if (!sale || enviandoRef.current) return
+    if (mode === "devolucao" && REEMBOLSO_DINHEIRO_BLOQUEADO) {
+      toast({ title: "Reembolso bloqueado", description: REEMBOLSO_BLOQUEADO_TEXTO, variant: "destructive" })
       return
     }
+    if (mode === "troca") return
+    const titular = exigirTitular()
+    if (!titular) return
+    const { cpf, nome } = titular
+    const lines = coletarLinhasDevolucao()
+    if (!lines) return
+    const tipo: "vale_credito" | "somente_estoque" = mode === "vale_credito" ? "vale_credito" : "somente_estoque"
+    const payload = { saleId: sale.id, linhas: lines, modo: tipo, motivo: motivo.trim() }
 
-    // `troca` e `vale_credito` geram crédito local (vale); `devolucao` e `somente_estoque` não.
-    const localMode: "vale_credito" | "somente_estoque" =
-      mode === "troca" || mode === "vale_credito" ? "vale_credito" : "somente_estoque"
-
-    const r = registrarDevolucao({
-      saleId: sale.id,
-      lines,
-      mode: localMode,
-      customerCpf: cpf,
-      customerName: nome,
-      sessaoId: sessaoId ?? undefined,
-      tipo: mode,
-      motivo: motivo.trim(),
-      payload: { saleId: sale.id, linhas: lines, modo: mode, motivo: motivo.trim() },
-    })
-    if (!r.ok) {
-      toast({ title: "Devolução não registrada", description: r.reason, variant: "destructive" })
-      return
+    enviandoRef.current = true
+    setEnviando(true)
+    let creditIssued = 0
+    let devolucaoLocalId = ""
+    let devolucaoServerId: string | undefined
+    let operadorCupom = "—"
+    let itensDev: { nome: string; quantidade: number; valorTotal: number }[] = []
+    let pendenteSync = false
+    try {
+      const r = saleSource === "servidor" ? await gravarDevolucaoConfirmada({ tipo, lines, cpf, nome, payload }) : null
+      if (r && r.kind === "rejected") {
+        toast({ title: "Devolução recusada", description: r.message, variant: "destructive" })
+        return
+      }
+      if (r && r.kind === "ok") {
+        creditIssued = r.data.creditoEmitido
+        devolucaoLocalId = r.data.localId
+        devolucaoServerId = r.data.devolucaoId
+        operadorCupom = r.data.operador || "—"
+        itensDev = r.data.itens.map((i) => ({ nome: i.nome, quantidade: i.quantidade, valorTotal: i.valorTotal }))
+      } else {
+        if (r && r.kind === "network" && pendingDevRef.current) {
+          // Sem resposta: o servidor PODE ter gravado. Não cria pendência local com outro
+          // id (duplicaria) — o operador reenvia e o mesmo localId vira replay.
+          toast({
+            title: "Sem confirmação do servidor",
+            description: "A devolução pode ou não ter sido gravada. Toque em Confirmar de novo: o reenvio não duplica.",
+            variant: "destructive",
+          })
+          return
+        }
+        // Venda só deste navegador (sem conexão): fila local existente; o servidor
+        // valida tudo de novo ao sincronizar e recusa o que não tiver lastro.
+        const local = registrarDevolucao({
+          saleId: sale.id,
+          lines,
+          mode: tipo,
+          customerCpf: cpf,
+          customerName: nome,
+          sessaoId: sessaoId ?? undefined,
+          tipo,
+          motivo: motivo.trim(),
+          payload,
+        })
+        if (!local.ok) {
+          toast({ title: "Devolução não registrada", description: local.reason, variant: "destructive" })
+          return
+        }
+        pendenteSync = true
+        creditIssued = local.creditIssued
+        devolucaoLocalId = local.devolucaoId
+        itensDev = lines.map((req) => {
+          const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
+          const valorUnit = sl && sl.quantity > 0 ? sl.lineTotal / sl.quantity : 0
+          return { nome: sl?.name ?? req.inventoryId, quantidade: req.quantity, valorTotal: Math.round(valorUnit * req.quantity * 100) / 100 }
+        })
+      }
+    } finally {
+      enviandoRef.current = false
+      setEnviando(false)
     }
 
     appendAuditLog({
       action: "devolucao_vale",
       userLabel: `${nomeLoja} (PDV)`,
-      detail: `${r.devolucaoId} | venda ${sale.id} | modo ${mode} | crédito ${r.creditIssued.toFixed(2)}${motivo.trim() ? ` | motivo ${motivo.trim()}` : ""}`,
+      detail: `${devolucaoLocalId} | venda ${sale.id} | modo ${mode} | crédito ${creditIssued.toFixed(2)}${pendenteSync ? " | PENDENTE DE SINCRONIZAÇÃO" : ""}${motivo.trim() ? ` | motivo ${motivo.trim()}` : ""}`,
     })
 
     onRegistered?.()
+    setLastDevolucao({ id: devolucaoLocalId, credit: creditIssued, nome, cpf })
 
-    setLastDevolucao({
-      id: r.devolucaoId,
-      credit: r.creditIssued,
-      nome,
-      cpf,
-    })
-
-    // Abre cupom de devolução/vale/estoque para conferência do cliente
-    const itensDev = lines.map((req) => {
-      const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
-      const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
-      return {
-        nome: sl?.name ?? req.inventoryId,
-        quantidade: req.quantity,
-        valorTotal: Math.round(valorUnit * req.quantity * 100) / 100,
-      }
-    })
-    const valorDevTotal = itensDev.reduce((s, i) => s + i.valorTotal, 0)
+    const valorDevTotal = Math.round(itensDev.reduce((s, i) => s + i.valorTotal, 0) * 100) / 100
     setCupomData({
-      tipo: mode === "devolucao" || mode === "vale_credito" || mode === "somente_estoque" ? mode : "devolucao",
-      devolucaoId: r.devolucaoId,
+      tipo,
+      devolucaoId: devolucaoLocalId,
+      devolucaoServerId,
+      devolucaoPendente: pendenteSync,
       vendaOrigemId: sale.id,
       novaVendaId: null,
       clienteNome: nome,
       clienteCpf: cpf,
-      operador: nomeLoja,
+      operador: operadorCupom,
       itensDevolvidos: itensDev,
       itensNovos: [],
       valorDevolvido: valorDevTotal,
       totalNovaCompra: 0,
-      creditoGerado: r.creditIssued,
+      creditoGerado: creditIssued,
       creditoUtilizado: 0,
-      saldoFinal: r.creditIssued,
+      saldoFinal: creditIssued,
       diferencaPaga: 0,
       diferencaForma: null,
       motivo: motivo.trim(),
@@ -660,10 +1096,14 @@ export function TrocasDevolucao({
     })
     setCupomOpen(true)
 
-    const gerouCredito = r.creditIssued > 0
+    const gerouCredito = creditIssued > 0
     toast({
-      title: gerouCredito ? "Crédito em haver gerado" : "Devolução registrada",
-      description: gerouCredito ? `${formatBrl(r.creditIssued)} para ${nome}` : "Itens retornaram ao estoque.",
+      title: pendenteSync ? "Devolução pendente de sincronização" : gerouCredito ? "Crédito em haver gerado" : "Devolução registrada",
+      description: pendenteSync
+        ? "Sem conexão: será validada pelo servidor ao sincronizar."
+        : gerouCredito
+          ? `${formatBrl(creditIssued)} para ${nome}`
+          : "Itens retornaram ao estoque.",
     })
   }
 
@@ -705,6 +1145,19 @@ export function TrocasDevolucao({
 
   return (
     <div className="space-y-6 w-full">
+      {pendencias.length > 0 && (
+        <PainelPendenciasDevolucao
+          pendencias={pendencias}
+          justificativas={justificativas}
+          onJustificativa={(id, v) => setJustificativas((prev) => ({ ...prev, [id]: v }))}
+          onRetomar={(id) => {
+            retomarDevolucaoPendente(id)
+            toast({ title: "Retomada enviada", description: `${id}: reenviada com o mesmo identificador.` })
+          }}
+          onEncaminhar={encaminharAoFinanceiro}
+          encaminhando={encaminhando}
+        />
+      )}
       {(!sale || showSearch) && (
         <Card className="bg-card border-border shadow-sm">
           <CardHeader className="pb-4">
@@ -729,15 +1182,25 @@ export function TrocasDevolucao({
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") encontrarVenda()
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        void encontrarVenda()
+                      }
                     }}
+                    autoFocus
+                    aria-label="Venda, cliente ou código de barras do produto"
                     className="h-11 pl-9 font-mono text-sm border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
                   />
                 </div>
               </div>
               <div className="flex items-end">
-                <Button type="button" className="h-11 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6" onClick={encontrarVenda}>
-                  Buscar Venda
+                <Button
+                  type="button"
+                  className="h-11 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6"
+                  onClick={() => void encontrarVenda()}
+                  disabled={buscando}
+                >
+                  {buscando ? "Buscando…" : "Buscar Venda"}
                 </Button>
               </div>
             </div>
@@ -758,7 +1221,7 @@ export function TrocasDevolucao({
                 type="button"
                 variant="outline"
                 className="h-auto w-full flex-col items-start gap-1 py-3 px-4 text-left border-border/80 hover:border-primary hover:bg-background/80 transition-all sm:flex-row sm:items-center sm:justify-between"
-                onClick={() => aplicarVenda(s)}
+                onClick={() => aplicarVenda(s, saleSource)}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-bold text-primary">{s.id}</span>
@@ -887,14 +1350,19 @@ export function TrocasDevolucao({
                     <button
                       type="button"
                       onClick={() => setMode("devolucao")}
-                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
+                      disabled={REEMBOLSO_DINHEIRO_BLOQUEADO}
+                      title={REEMBOLSO_DINHEIRO_BLOQUEADO ? REEMBOLSO_BLOQUEADO_TEXTO : undefined}
+                      aria-label={REEMBOLSO_DINHEIRO_BLOQUEADO ? "Reembolso (bloqueado)" : "Reembolso"}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                         mode === "devolucao"
                           ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
                           : "border-border bg-background hover:bg-muted/50"
                       }`}
                     >
                       <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${mode === "devolucao" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Reembolso</span>
+                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">
+                        Reembolso{REEMBOLSO_DINHEIRO_BLOQUEADO ? " · bloqueado" : ""}
+                      </span>
                     </button>
 
                     {/* Tile 4: Somente Estoque */}
@@ -926,6 +1394,7 @@ export function TrocasDevolucao({
                   <div className="space-y-2">
                     {linhasComMax.map((l) => {
                       const currentQty = parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0
+                      const bloqueio = bloqueioLinhaDevolucao(l)
                       return (
                         <div
                           key={l.inventoryId}
@@ -934,8 +1403,11 @@ export function TrocasDevolucao({
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-xs text-foreground truncate">{l.name}</p>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{l.maxReturn}</span>
+                              Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{bloqueio ? 0 : l.maxReturn}</span>
                             </p>
+                            {bloqueio && (
+                              <p className="text-[10px] text-destructive mt-0.5" data-testid="linha-bloqueada-devolucao">{bloqueio}</p>
+                            )}
                           </div>
 
                           {/* Incrementador +/- Premium Compacto */}
@@ -946,6 +1418,7 @@ export function TrocasDevolucao({
                               variant="ghost"
                               className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                               disabled={l.maxReturn <= 0 || currentQty <= 0}
+                              aria-label={`Devolver uma unidade a menos de ${l.name}`}
                               onClick={() => {
                                 const val = Math.max(0, currentQty - 1)
                                 setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
@@ -964,7 +1437,8 @@ export function TrocasDevolucao({
                               size="icon"
                               variant="ghost"
                               className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                              disabled={l.maxReturn <= 0 || currentQty >= l.maxReturn}
+                              disabled={!!bloqueio || l.maxReturn <= 0 || currentQty >= l.maxReturn}
+                              aria-label={`Devolver mais uma unidade de ${l.name}`}
                               onClick={() => {
                                 const val = Math.min(l.maxReturn, currentQty + 1)
                                 setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
@@ -1004,9 +1478,18 @@ export function TrocasDevolucao({
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
+                          ref={trocaBipeRef}
+                          disabled={enviando}
                           value={trocaSearch}
                           onChange={(e) => setTrocaSearch(e.target.value)}
-                          placeholder="Buscar por nome, SKU, código de barras..."
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              bipeTrocaItem()
+                            }
+                          }}
+                          aria-label="Bipe ou busca do novo produto"
+                          placeholder="Bipe o código de barras ou busque por nome, SKU, ID..."
                           className="pl-8.5 h-7.5 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
                         />
                       </div>
@@ -1062,6 +1545,7 @@ export function TrocasDevolucao({
                                   variant="ghost"
                                   className="h-5 w-5 rounded-md hover:bg-muted"
                                   onClick={() => decTrocaItem(l.inventoryId)}
+                                  disabled={enviando}
                                 >
                                   <Minus className="h-2.5 w-2.5" />
                                 </Button>
@@ -1072,6 +1556,7 @@ export function TrocasDevolucao({
                                   variant="ghost"
                                   className="h-5 w-5 rounded-md hover:bg-muted"
                                   onClick={() => incTrocaItem(l.inventoryId)}
+                                  disabled={enviando}
                                 >
                                   <Plus className="h-2.5 w-2.5" />
                                 </Button>
@@ -1085,6 +1570,7 @@ export function TrocasDevolucao({
                                 variant="ghost"
                                 className="h-5 w-5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-md"
                                 onClick={() => removeTrocaItem(l.inventoryId)}
+                                disabled={enviando}
                               >
                                 <X className="h-2.5 w-2.5" />
                               </Button>
@@ -1115,10 +1601,10 @@ export function TrocasDevolucao({
                         type="button"
                         size="sm"
                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold h-8.5 px-4 rounded-md text-xs"
-                        onClick={() => { if (!kgReturnBlocked) handleRegistrar() }}
-                        disabled={kgReturnBlocked || valorDevolvido <= 0}
+                        onClick={() => { if (!kgReturnBlocked) void handleRegistrar() }}
+                        disabled={kgReturnBlocked || enviando || valorDevolvido <= 0 || (mode === "devolucao" && REEMBOLSO_DINHEIRO_BLOQUEADO)}
                       >
-                        Confirmar Devolução
+                        {enviando ? "Confirmando…" : "Confirmar Devolução"}
                       </Button>
                     </div>
                   </div>
@@ -1177,22 +1663,18 @@ export function TrocasDevolucao({
 
                     {/* Excesso devolvido — escolher destino */}
                     {creditoRestante > 0 && (
-                      <div className="space-y-1 pt-1.5 border-t border-border/60">
-                        <Label className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Sobrou {formatBrl(creditoRestante)} — tratar como:</Label>
-                        <RadioGroup
-                          value={excessHandling}
-                          onValueChange={(v) => setExcessHandling(v as "vale_credito" | "dinheiro")}
-                          className="flex flex-row gap-4"
-                        >
-                          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer text-foreground font-medium">
-                            <RadioGroupItem value="vale_credito" id="ex1" className="h-3.5 w-3.5" />
-                            <span>Gerar vale</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer text-foreground font-medium">
-                            <RadioGroupItem value="dinheiro" id="ex2" className="h-3.5 w-3.5" />
-                            <span>Devolver dinheiro</span>
-                          </label>
-                        </RadioGroup>
+                      <div className="space-y-0.5 pt-1.5 border-t border-border/60" data-testid="troca-sobra-vale">
+                        <p className="text-[11px] font-medium text-foreground">
+                          Sobra de {formatBrl(creditoRestante)} fica como vale no CPF do cliente.
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{REEMBOLSO_BLOQUEADO_TEXTO}</p>
+                      </div>
+                    )}
+
+                    {trocaRecovery && trocaRecovery.saleId === sale.id && (
+                      <div role="status" className="rounded-md border border-primary/40 bg-primary/5 p-2 text-[11px] text-foreground">
+                        Devolução <span className="font-mono font-semibold">{trocaRecovery.dev.localId}</span> já gravada — vale de{" "}
+                        {formatBrl(trocaRecovery.dev.creditoEmitido)} salvo. Ajuste a nova compra e conclua: nenhuma devolução nova será criada.
                       </div>
                     )}
 
@@ -1208,10 +1690,19 @@ export function TrocasDevolucao({
                         type="button"
                         size="sm"
                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold flex-1 h-8.5 text-xs"
-                        onClick={() => { if (!kgReturnBlocked) handleFinalizarTroca() }}
-                        disabled={kgReturnBlocked || trocaCart.length === 0 || valorDevolvido <= 0}
+                        onClick={() => { if (!kgReturnBlocked) void handleFinalizarTroca() }}
+                        disabled={
+                          kgReturnBlocked ||
+                          enviando ||
+                          trocaCart.length === 0 ||
+                          (!(trocaRecovery && trocaRecovery.saleId === sale.id) && valorDevolvido <= 0)
+                        }
                       >
-                        Finalizar Troca Imediata
+                        {enviando
+                          ? "Confirmando…"
+                          : trocaRecovery && trocaRecovery.saleId === sale.id
+                            ? "Concluir nova venda"
+                            : "Finalizar Troca Imediata"}
                       </Button>
                     </div>
                   </div>
@@ -1249,9 +1740,15 @@ function CupomTroca({
   onClose: () => void
   data: {
     tipo: "devolucao" | "vale_credito" | "troca" | "somente_estoque"
+    /** localId da devolução (chave de negócio impressa no vale). */
     devolucaoId: string
+    /** id técnico no servidor — ausente quando a devolução ainda está na fila offline. */
+    devolucaoServerId?: string
+    devolucaoPendente?: boolean
     vendaOrigemId: string
     novaVendaId?: string | null
+    /** Nova venda gravada só localmente, aguardando sincronização. */
+    novaVendaPendente?: boolean
     clienteNome: string
     clienteCpf: string
     operador: string
@@ -1305,7 +1802,9 @@ function CupomTroca({
     if (data.diferencaPaga > 0) linhas.push(`Diferença paga: ${formatBrl(data.diferencaPaga)} (${data.diferencaForma ?? "—"})`)
     if (data.saldoFinal > 0) linhas.push(`Saldo final em haver: ${formatBrl(data.saldoFinal)}`)
     if (data.motivo) linhas.push("", `Motivo: ${data.motivo}`)
-    linhas.push("", `ID devolução: ${data.devolucaoId}`)
+    if (data.novaVendaPendente) linhas.push("Nova venda pendente de sincronização")
+    if (data.devolucaoPendente) linhas.push("Devolução pendente de sincronização")
+    linhas.push("", `ID devolução: ${data.devolucaoId}${data.devolucaoServerId ? ` · servidor ${data.devolucaoServerId}` : ""}`)
     const texto = linhas.filter((l) => l !== null).join("\n")
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       void navigator.clipboard.writeText(texto).then(
@@ -1331,7 +1830,8 @@ function CupomTroca({
       <p style="margin:2px 0;font-size:11px">Data: ${esc(dataLabel)}</p>
       <p style="margin:2px 0;font-size:11px">Operador: ${esc(data.operador)}</p>
       <p style="margin:2px 0;font-size:11px">Venda origem: ${esc(data.vendaOrigemId)}</p>
-      ${data.novaVendaId ? `<p style="margin:2px 0;font-size:11px">Nova venda: ${esc(data.novaVendaId)}</p>` : ""}
+      ${data.novaVendaId ? `<p style="margin:2px 0;font-size:11px">Nova venda: ${esc(data.novaVendaId)}${data.novaVendaPendente ? " (pendente de sincronização)" : ""}</p>` : ""}
+      ${data.devolucaoPendente ? `<p style="margin:2px 0;font-size:11px">Devolução pendente de sincronização</p>` : ""}
       <p style="margin:2px 0;font-size:11px">Cliente: ${esc(data.clienteNome)} (${esc(data.clienteCpf)})</p>
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
       <p style="font-weight:700;margin:4px 0">Itens devolvidos</p>
@@ -1351,7 +1851,7 @@ function CupomTroca({
       ${data.diferencaPaga > 0 ? `<p style="margin:2px 0">Diferença paga: ${formatBrl(data.diferencaPaga)} (${esc(data.diferencaForma ?? "—")})</p>` : ""}
       ${data.saldoFinal > 0 ? `<p style="margin:2px 0"><strong>Saldo em haver: ${formatBrl(data.saldoFinal)}</strong></p>` : ""}
       ${data.motivo ? `<p style="margin:6px 0 2px 0;font-size:11px">Motivo: ${esc(data.motivo)}</p>` : ""}
-      <p style="margin:6px 0 0 0;font-size:10px;color:#555">ID devolução: ${esc(data.devolucaoId)}</p>
+      <p style="margin:6px 0 0 0;font-size:10px;color:#555">ID devolução: ${esc(data.devolucaoId)}${data.devolucaoServerId ? ` · servidor ${esc(data.devolucaoServerId)}` : ""}</p>
       `,
       tipoLabel,
     )
@@ -1386,7 +1886,15 @@ function CupomTroca({
             {data.novaVendaId && (
               <div className="col-span-2">
                 <p className="text-muted-foreground">Nova venda</p>
-                <p className="font-mono font-medium">{data.novaVendaId}</p>
+                <p className="font-mono font-medium">
+                  {data.novaVendaId}
+                  {data.novaVendaPendente ? <span className="ml-1 font-sans text-xs text-muted-foreground">(pendente de sincronização)</span> : null}
+                </p>
+              </div>
+            )}
+            {data.devolucaoPendente && (
+              <div className="col-span-2" role="status">
+                <p className="font-medium text-foreground">Devolução pendente de sincronização — validada pelo servidor ao reconectar.</p>
               </div>
             )}
             <div className="col-span-2">
@@ -1465,7 +1973,10 @@ function CupomTroca({
               <p className="text-xs text-muted-foreground">Motivo: {data.motivo}</p>
             </>
           )}
-          <p className="mt-3 text-[10px] text-muted-foreground">ID: {data.devolucaoId}</p>
+          <p className="mt-3 text-[10px] text-muted-foreground">
+            ID: {data.devolucaoId}
+            {data.devolucaoServerId ? ` · servidor ${data.devolucaoServerId}` : ""}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
@@ -1486,6 +1997,126 @@ function CupomTroca({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+const CATEGORIA_TEXTO: Record<PendenciaDevolucao["categoria"], string> = {
+  DINHEIRO_ENTREGUE: "reembolso em dinheiro já entregue",
+  VALE_EMITIDO: "vale local emitido",
+  INTENCAO_SEM_EFEITO: "sem efeito financeiro",
+}
+
+const ESTADO_TEXTO: Record<PendenciaDevolucao["estado"], string> = {
+  AGUARDANDO_SINCRONIZACAO: "Na fila",
+  AGUARDANDO_VENDA_ORIGEM: "Aguardando venda de origem",
+  BLOQUEIO_PERSISTENTE: "Bloqueio persistente",
+  RECUSA_DEFINITIVA: "Recusada",
+  ENCAMINHADA_FINANCEIRO: "Encaminhada ao Financeiro",
+}
+
+/**
+ * Pendências de devolução DESTE terminal. Ações: retomada controlada (mesmo localId) e
+ * encaminhamento supervisionado ao Financeiro — registro auditável, nunca lançamento.
+ */
+function PainelPendenciasDevolucao({
+  pendencias,
+  justificativas,
+  onJustificativa,
+  onRetomar,
+  onEncaminhar,
+  encaminhando,
+}: {
+  pendencias: PendenciaDevolucao[]
+  justificativas: Record<string, string>
+  onJustificativa: (id: string, v: string) => void
+  onRetomar: (id: string) => void
+  onEncaminhar: (p: PendenciaDevolucao) => void
+  encaminhando: string | null
+}) {
+  const manuais = pendencias.filter((p) => p.exigeConciliacaoManual).length
+  return (
+    <div role="alert" data-testid="devolucoes-pendencias" className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 text-xs text-foreground space-y-2 min-w-0">
+      <p className="font-semibold">
+        {pendencias.length === 1 ? "1 devolução deste terminal" : `${pendencias.length} devoluções deste terminal`} sem confirmação definitiva do servidor
+        {manuais > 0 ? ` · ${manuais} exige(m) conciliação manual` : ""}
+      </p>
+      {pendencias.slice(0, 8).map((p) => {
+        const podeRetomar = p.estado === "BLOQUEIO_PERSISTENTE" || p.estado === "AGUARDANDO_VENDA_ORIGEM"
+        const podeEncaminhar =
+          p.estado === "BLOQUEIO_PERSISTENTE" || (p.estado === "RECUSA_DEFINITIVA" && p.categoria !== "INTENCAO_SEM_EFEITO")
+        return (
+          <div key={p.dev.id} data-testid="pendencia-devolucao" data-estado={p.estado} className="rounded-md border border-border bg-background p-2 space-y-1 min-w-0">
+            <p className="min-w-0 break-words">
+              <span className="font-semibold">{ESTADO_TEXTO[p.estado]}</span> · <span className="font-mono">{p.dev.id}</span> · venda{" "}
+              <span className="font-mono">{p.dev.saleId}</span> · {CATEGORIA_TEXTO[p.categoria]}
+              {p.valorDeclarado > 0 ? ` (${formatBrl(p.valorDeclarado)})` : ""}
+            </p>
+            <p className="text-muted-foreground break-words">{p.motivo}</p>
+            {p.dev.conciliacao && (
+              <p className="text-muted-foreground">
+                Ref. <span className="font-mono">{p.dev.conciliacao.ref}</span> · {p.dev.conciliacao.operador}
+              </p>
+            )}
+            {p.categoria === "DINHEIRO_ENTREGUE" && p.estado !== "ENCAMINHADA_FINANCEIRO" && (
+              <p className="text-destructive">Dinheiro já entregue sem lançamento: encaminhe ao Financeiro. Nenhuma saída é criada automaticamente.</p>
+            )}
+            {(podeRetomar || podeEncaminhar) && (
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                {podeRetomar && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={encaminhando !== null}
+                    onClick={() => onRetomar(p.dev.id)}
+                  >
+                    Tentar novamente
+                  </Button>
+                )}
+                {podeEncaminhar && (
+                  <>
+                    <Input
+                      aria-label={`Justificativa da pendência ${p.dev.id}`}
+                      placeholder="Justificativa (o que o cliente recebeu)"
+                      className="h-7 text-xs flex-1 min-w-0"
+                      value={justificativas[p.dev.id] ?? ""}
+                      onChange={(e) => onJustificativa(p.dev.id, e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={encaminhando !== null}
+                      onClick={() => onEncaminhar(p)}
+                    >
+                      {encaminhando === p.dev.id ? "Encaminhando…" : "Encaminhar ao Financeiro"}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Código de barras, SKU, código interno ou ID exatos (sem diferenciar caixa). */
+export function findExactTrocaItem(inventory: InventoryItem[], raw: string): InventoryItem | null {
+  const q = raw.trim().toLowerCase()
+  if (!q) return null
+  const digits = q.replace(/\D/g, "")
+  return (
+    inventory.find(
+      (i) =>
+        (i.barcode != null && (i.barcode.trim().toLowerCase() === q || (digits.length >= 6 && i.barcode.replace(/\D/g, "") === digits))) ||
+        (i.sku != null && i.sku.trim().toLowerCase() === q) ||
+        (i.codigo != null && String(i.codigo).trim().toLowerCase() === q) ||
+        i.id.toLowerCase() === q ||
+        (i.dbId != null && i.dbId.toLowerCase() === q),
+    ) ?? null
   )
 }
 

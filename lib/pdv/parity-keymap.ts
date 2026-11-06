@@ -40,7 +40,7 @@ export const PDV_PARITY_KEYMAP: readonly SurfaceShortcut[] = [
   { key: "F5", surfaceId: "classic", action: "abre Recebimento de Contas (shellReceivablesOpen)", domain: "recebimento", gate: { kind: "runtime", condition: "caixa aberto + sessão (senão reconsulta)" }, auditRefs: ["A.3", "GAP-P2-04"] },
   { key: "F6", surfaceId: "classic", action: "abre diálogo Cancelar Venda (limpa tudo ao confirmar)", domain: "cancelar-venda", gate: { kind: "none" }, auditRefs: ["A.3"] },
   { key: "F7", surfaceId: "classic", action: "abre Venda em Espera", domain: "espera", gate: CAP("pdv.heldSales"), auditRefs: ["A.3"] },
-  { key: "F8", surfaceId: "classic", action: "foco no campo bipe", domain: "foco", gate: { kind: "none" }, auditRefs: ["A.3"] },
+  { key: "F8", surfaceId: "classic", action: "abre painel de trocas/devoluções", domain: "trocas", gate: { kind: "none" }, auditRefs: ["A.3", "PDV-F8-TROCA-IMEDIATA-001"] },
   { key: "F9", surfaceId: "classic", action: "abre Recebimento de Contas (alias legado do F5)", domain: "recebimento", gate: { kind: "runtime", condition: "caixa aberto + sessão (senão reconsulta)" }, auditRefs: ["A.3"] },
   { key: "F10", surfaceId: "classic", action: "abre PaymentModal — alias exato do F1 (desconto no modal)", domain: "pagamento", gate: { kind: "capability+runtime", key: "sales.paymentMethods", condition: "idêntico ao F1" }, auditRefs: ["A.3", "GAP-P2-04", "GAP-P3-03"] },
   { key: "F12", surfaceId: "classic", action: "abre PaymentModal em modo múltiplo (split)", domain: "pagamento-multiplo", gate: { kind: "capability+runtime", key: "sales.paymentMethods", condition: "exige também pdv.multiplePayments; bloqueio com feedback" }, auditRefs: ["A.3", "GAP-P2-03"] },
