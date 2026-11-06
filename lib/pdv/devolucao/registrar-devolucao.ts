@@ -362,7 +362,7 @@ export async function registrarDevolucaoInTransaction(
   // ── 3. Teto por item: vendido − já devolvido (releitura pós-lock) ──────────
   const anteriores = await tx.itemDevolucaoVenda.findMany({
     where: { devolucao: { storeId, vendaLocalId } },
-    select: { inventoryId: true, quantidade: true },
+    select: { inventoryId: true, quantidade: true, valorTotal: true },
   })
   // Identidade HISTÓRICA: a chave gravada na venda (Produto.id). SKU/EAN só localizam.
   const keys = await saleProductKeyResolver(tx, storeId, venda, [
@@ -380,6 +380,8 @@ export async function registrarDevolucaoInTransaction(
     vendido.set(k, cur)
   }
   const jaDevolvido = new Map<string, number>()
+  /** Valor JÁ restituído por produto (o que as devoluções anteriores de fato gravaram). */
+  const jaRestituidoItem = new Map<string, number>()
   for (const it of anteriores) {
     const k = canon(it.inventoryId)
     // Devolução anterior cuja chave não casa com nenhuma linha da venda (legado gravado
@@ -393,6 +395,7 @@ export async function registrarDevolucaoInTransaction(
       )
     }
     jaDevolvido.set(k, (jaDevolvido.get(k) ?? 0) + (it.quantidade || 0))
+    jaRestituidoItem.set(k, arredonda2((jaRestituidoItem.get(k) ?? 0) + (it.valorTotal || 0)))
   }
 
   const fatorPago = fatorValorPago(venda.total, venda.itens)
@@ -442,14 +445,22 @@ export async function registrarDevolucaoInTransaction(
       )
     }
     // Valor PAGO, não o de tabela: desconto da venda (só no payload) reduz o vale.
-    const unit = (orig.lineTotal / orig.quantidade) * fatorPago
+    // Por ACUMULADO do produto: valor proporcional a (já devolvido + esta) menos o que já
+    // foi restituído. Arredondar cada parcial isoladamente perdia centavos (100 × R$0,0949
+    // viravam 100 × R$0,09 = R$9,00 de R$9,49 pagos); assim a última absorve o resto.
+    const pagoLinha = orig.lineTotal * fatorPago
+    const anterior = jaDevolvido.get(k) ?? 0
+    const valorItem = Math.max(
+      0,
+      arredonda2(arredonda2((pagoLinha * (anterior + qty)) / orig.quantidade) - (jaRestituidoItem.get(k) ?? 0)),
+    )
     chavesClient.push(normInv(req.inventoryId))
     itensCalc.push({
       inventoryId: k,
       nome: orig.nome,
       quantidade: qty,
-      valorUnitario: arredonda2(unit),
-      valorTotal: arredonda2(unit * qty),
+      valorUnitario: arredonda2(valorItem / qty),
+      valorTotal: valorItem,
     })
   }
 

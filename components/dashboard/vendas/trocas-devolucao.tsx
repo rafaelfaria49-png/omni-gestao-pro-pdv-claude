@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { useConfigEmpresa, configPadrao } from "@/lib/config-empresa"
-import { useOperationsStore, nextDevolucaoId, type SaleRecord, type InventoryItem } from "@/lib/operations-store"
+import { useOperationsStore, nextDevolucaoId, classificarRespostaDevolucao, type SaleRecord, type InventoryItem } from "@/lib/operations-store"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { buildValeTrocaEscPos } from "@/lib/escpos"
 import { sendEscPosViaProxy, downloadEscPosFile, openThermalHtmlPrint, escapeHtml } from "@/lib/thermal-print"
@@ -742,10 +742,13 @@ export function TrocasDevolucao({
     if (r.kind === "ok") {
       espelharDevolucao(mirror, r.data)
       definirTentativa(null)
-    } else if (r.kind === "rejected") {
-      // Recusa de negócio: nada foi gravado — a próxima tentativa é intenção nova.
+    } else if (r.kind === "rejected" && classificarRespostaDevolucao(r.status, r.code) !== "aguardar") {
+      // Recusa definitiva (ou localId de outra devolução): nada foi gravado com este id —
+      // a próxima tentativa é intenção nova.
       definirTentativa(null)
     } else {
+      // Rede/5xx ou recusa transitória (período fechado, venda ainda não sincronizada):
+      // mantém o MESMO localId — o reenvio é reconhecido como replay se já estiver gravado.
       definirTentativa({ fp, localId, body, mirror })
     }
     return { ...r, localId }

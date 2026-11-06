@@ -31,8 +31,10 @@ const VENDA = {
   lines: [{ inventoryId: "CAM-P", name: "Camiseta P", quantity: 2, unitPrice: 10, lineTotal: 20, qtyReturned: 1 }],
 }
 
-vi.mock("@/lib/operations-store", () => ({
-  nextDevolucaoId: () => `DEV-2026-0001-${Math.random().toString(16).slice(2, 10).toUpperCase()}`,
+vi.mock("@/lib/operations-store", async (orig) => ({
+  // Classificação real da resposta (recusa definitiva × transitória) — é regra, não estado.
+  classificarRespostaDevolucao: (await orig<typeof import("@/lib/operations-store")>()).classificarRespostaDevolucao,
+  nextDevolucaoId:() => `DEV-2026-0001-${Math.random().toString(16).slice(2, 10).toUpperCase()}`,
   useOperationsStore: () => ({
     sales: [],
     devolucoes: rt.devolucoes,
@@ -241,6 +243,23 @@ describe("F8 — troca imediata na mesma tela", () => {
     const ids = rt.calls.filter((c) => c.startsWith("devolucao:"))
     expect(ids).toHaveLength(2)
     expect(ids[0]).toBe(ids[1])
+  })
+
+  it("recusa TRANSITÓRIA (período fechado): o reenvio usa o MESMO localId; recusa definitiva gera intenção nova (R2 P1)", async () => {
+    let n = 0
+    devolucaoResponder = (b) => {
+      n += 1
+      if (n === 1) return json(409, { error: "Período financeiro fechado.", code: "periodo_fechado" })
+      if (n === 2) return json(409, { error: "Camiseta P: ainda devolvível 0, solicitado 1.", code: "QUANTIDADE_EXCEDE_DEVOLVIVEL" })
+      return json(200, devOk(String(b.localId)))
+    }
+    await prepararTroca()
+    for (let i = 0; i < 3; i++) await act(async () => { fireEvent.click(screen.getByText("Finalizar Troca Imediata")) })
+    await waitFor(() => expect(rt.finalize).toHaveBeenCalledTimes(1))
+    const ids = rt.calls.filter((c) => c.startsWith("devolucao:"))
+    expect(ids).toHaveLength(3)
+    expect(ids[1]).toBe(ids[0]) // transitória: mesma identidade (replay se já gravada)
+    expect(ids[2]).not.toBe(ids[1]) // definitiva: nada gravado com aquele id → intenção nova
   })
 
   it("nova venda falha: vale preservado e 'Concluir nova venda' refaz SÓ a venda", async () => {

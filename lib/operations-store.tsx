@@ -1092,7 +1092,10 @@ function withPendingDevolucaoStock(items: InventoryItem[], devolucoes: Devolucao
       const lineId = typeof line.inventoryId === "string" ? line.inventoryId : ""
       const qty = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
       if (!lineId || qty <= 0) continue
-      const item = adjustedItems.find((i) => i.id === lineId)
+      // Mesma identidade do espelho e do estorno (Produto.id estrito; nunca em produto por
+      // peso): somar unidade pelo SKU num saldo KG não seria desfeito pela recusa depois.
+      const produtoId = typeof line.produtoId === "string" ? line.produtoId : undefined
+      const item = adjustedItems.find((i) => inventoryMatchesDevLine(i, { inventoryId: lineId, produtoId }))
       if (item) {
         item.stock += qty
       }
@@ -3167,7 +3170,13 @@ export function OperationsProvider({
 
   /** Aplica o desfecho do servidor a uma devolução da fila (ver `classificarRespostaDevolucao`). */
   const aplicarRespostaDevolucao = useCallback(async (devId: string, res: Response, lj: string) => {
-    const body = (await res.json().catch(() => null)) as { code?: string; error?: string; detail?: { ref?: unknown } } | null
+    const body = (await res.json().catch(() => null)) as {
+      code?: string
+      error?: string
+      detail?: { ref?: unknown }
+      creditoEmitido?: unknown
+      itens?: Array<{ inventoryId?: unknown; produtoId?: unknown; quantidade?: unknown; valorTotal?: unknown }>
+    } | null
     const desfecho = classificarRespostaDevolucao(res.status, body?.code)
     if (desfecho === "aguardar") {
       console.warn("[devolucao-persist] HTTP", res.status, devId, "lojaId:", lj, "code:", body?.code ?? "")
@@ -3214,10 +3223,35 @@ export function OperationsProvider({
       const dev = prev.devolucoes.find((d) => d.id === devId)
       if (!dev || dev.syncPending !== true) return prev
       if (desfecho === "confirmada") {
+        // O servidor é a autoridade do VALOR (valor pago após desconto, teto da venda):
+        // reconcilia o vale, as linhas e o saldo local do titular com o que foi gravado.
+        const credito = typeof body?.creditoEmitido === "number" && Number.isFinite(body.creditoEmitido)
+          ? Math.round(body.creditoEmitido * 100) / 100
+          : dev.creditIssued
+        const itens = Array.isArray(body?.itens) ? body.itens : []
+        const lines = dev.lines.map((l) => {
+          const it = itens.find((i) => typeof i.inventoryId === "string" && i.inventoryId.trim() === l.inventoryId.trim())
+          if (!it) return l
+          return {
+            ...l,
+            ...(typeof it.produtoId === "string" && it.produtoId.trim() ? { produtoId: it.produtoId.trim() } : {}),
+            ...(typeof it.valorTotal === "number" && Number.isFinite(it.valorTotal) ? { valor: Math.round(it.valorTotal * 100) / 100 } : {}),
+          }
+        })
+        const diferenca = Math.round((credito - dev.creditIssued) * 100) / 100
+        const customerCredits = { ...prev.customerCredits }
+        const titular = customerCredits[dev.customerCpf]
+        if (diferenca !== 0 && titular) {
+          customerCredits[dev.customerCpf] = { ...titular, saldo: Math.max(0, Math.round((titular.saldo + diferenca) * 100) / 100) }
+        }
+        if (diferenca !== 0) console.warn("[devolucao-persist] vale reconciliado com o servidor", devId, dev.creditIssued, "→", credito)
         return {
           ...prev,
+          customerCredits,
           devolucoes: prev.devolucoes.map((d) =>
-            d.id === devId ? { ...d, syncPending: false, syncWaitingCode: undefined, syncBlocked: undefined } : d,
+            d.id === devId
+              ? { ...d, lines, creditIssued: credito, syncPending: false, syncWaitingCode: undefined, syncBlocked: undefined }
+              : d,
           ),
         }
       }

@@ -90,26 +90,27 @@ export async function POST(req: Request) {
 
   const data = parsed.data
 
-  // Política: reembolso em dinheiro não tem fluxo aprovado. Exceção única: o REENVIO
-  // de um reembolso legado que já está gravado (mesmo localId) é reconhecido como
-  // replay — senão a fila do navegador nunca o confirmaria. Nada é gravado aqui.
+  // Replay ANTES de qualquer bloqueio de escrita nova (política, período fechado, sessão):
+  // devolução já gravada com o mesmo localId (resposta perdida) é reconhecida e devolvida
+  // — senão um período fechado depois da gravação respondia `periodo_fechado`, a tela
+  // descartava a tentativa e, reaberto o período, gerava OUTRO localId para a mesma
+  // devolução física (vale e estoque em dobro). Inclui o reembolso legado já gravado.
+  // Nada é gravado aqui; mesmo localId com conteúdo diferente segue LOCAL_ID_CONFLITO.
   try {
-    if (data.tipo === "devolucao") {
-      const replay = await classifyDevolucaoAfterUniqueConflict(prisma, {
-        storeId: lojaId,
-        localId: data.localId,
-        vendaLocalId: data.vendaLocalId,
-        tipo: data.tipo,
-        clienteNome: data.clienteNome,
-        clienteDoc: data.clienteDoc,
-        operador: "",
-        ledgerOperator: null,
-        motivo: data.motivo,
-        observacao: data.observacao,
-        itens: data.itens,
-      })
-      if (replay) return NextResponse.json(replay)
-    }
+    const replay = await classifyDevolucaoAfterUniqueConflict(prisma, {
+      storeId: lojaId,
+      localId: data.localId,
+      vendaLocalId: data.vendaLocalId,
+      tipo: data.tipo,
+      clienteNome: data.clienteNome,
+      clienteDoc: data.clienteDoc,
+      operador: "",
+      ledgerOperator: null,
+      motivo: data.motivo,
+      observacao: data.observacao,
+      itens: data.itens,
+    })
+    if (replay) return NextResponse.json(replay)
     assertDevolucaoPermitidaPorPolitica(data.tipo)
   } catch (e) {
     if (e instanceof DevolucaoBusinessError) {

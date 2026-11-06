@@ -432,6 +432,43 @@ describe.skipIf(!url)("F8 troca imediata — integração real (PG descartável)
     expect(await stockById(camG)).toBe(gAntes)
   })
 
+  it("período fechado DEPOIS da gravação: o reenvio do mesmo localId é replay (200), não `periodo_fechado` (R2 P1)", async () => {
+    const origem = await vender([{ sku: "CAM-P", qty: 2, unit: 10 }], { dinheiro: 20 })
+    const body = { localId: "DEV-PER-1", vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] }
+    const a = await devolver(body)
+    expect(a.status, JSON.stringify(a.body)).toBe(200)
+    const hoje = new Date().toISOString().slice(0, 10)
+    const [ano, mes] = hoje.split("-").map(Number)
+    await db.fechamentoFinanceiro.create({ data: { storeId, tipo: "diario", dataReferencia: hoje, mes, ano, status: "fechado" } })
+    const antes = await efeitos()
+    // Resposta perdida + período fechado: o reenvio idêntico confirma o que já foi gravado.
+    const replay = await devolver(body)
+    expect(replay.status, JSON.stringify(replay.body)).toBe(200)
+    expect(replay.body).toMatchObject({ idempotente: true, devolucaoId: a.body.devolucaoId, creditoEmitido: a.body.creditoEmitido })
+    // Intenção NOVA continua bloqueada pelo período; conteúdo diferente no mesmo id é conflito.
+    const nova = await devolver({ ...body, localId: "DEV-PER-2" })
+    expect([nova.status, nova.body.code]).toEqual([409, "periodo_fechado"])
+    const conflito = await devolver({ ...body, itens: [{ inventoryId: "CAM-P", quantidade: 2 }] })
+    expect(conflito.body.code).toBe("LOCAL_ID_CONFLITO")
+    expect(await efeitos()).toEqual(antes)
+  })
+
+  it("parciais de 1 unidade com desconto: a soma dos vales fecha o valor PAGO, sem perder centavos (R2 P2)", async () => {
+    // 10 × R$10 pagos R$99,44: por unidade R$9,944 — arredondar cada parcial dava 10 × 9,94 = 99,40.
+    const origem = await vender([{ sku: "CAM-P", qty: 10, unit: 10 }], { dinheiro: 99.44 }, CPF, 99.44)
+    expect(origem.status, JSON.stringify(origem.body)).toBe(200)
+    const valores: number[] = []
+    for (let i = 0; i < 10; i++) {
+      const r = await devolver({ localId: `DEV-CENT-${i}`, vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "CAM-P", quantidade: 1 }] })
+      expect(r.status, JSON.stringify(r.body)).toBe(200)
+      valores.push(r.body.creditoEmitido)
+    }
+    expect(Math.round(valores.reduce((s, v) => s + v, 0) * 100) / 100).toBe(99.44)
+    for (const v of valores) expect([9.94, 9.95]).toContain(v)
+    expect(await saldoVale()).toBe(99.44)
+    expect((await db.venda.findFirstOrThrow({ where: { pedidoId: origem.id } })).status).toBe("devolvida")
+  })
+
   it("produto REPETIDO no carrinho (uma linha por bipe): uma linha devolvível com o total, teto somado", async () => {
     const pid = await produtoId("CAM-P")
     const origem = await vender([{ sku: "CAM-P", qty: 1, unit: 10 }, { sku: "CAM-P", qty: 1, unit: 10 }, { sku: "MEIA", qty: 1, unit: 5 }], { dinheiro: 25 })

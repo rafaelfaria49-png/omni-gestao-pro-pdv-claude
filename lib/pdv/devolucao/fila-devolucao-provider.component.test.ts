@@ -278,4 +278,29 @@ describe("espelho de devolução confirmada pelo servidor", () => {
     })
     expect(rt().inventory.map((i) => [i.id, i.stock])).toEqual(antes)
   })
+
+  it("confirmação da fila reconcilia vale, linhas e saldo local com o valor gravado pelo servidor (R2 P2)", async () => {
+    // Offline calculou R$10; o servidor gravou R$5 (valor pago após desconto).
+    net.devResponse = {
+      status: 200,
+      body: { ok: true, localId: "DEV-2026-0001-AAAAAAAA", creditoEmitido: 5, itens: [{ inventoryId: "CAM-P", produtoId: "prod-A", quantidade: 1, valorTotal: 5 }] },
+    }
+    seed([devPendente()])
+    await mount()
+    await waitFor(() => expect(dev().syncPending).toBe(false))
+    expect(dev().creditIssued).toBe(5)
+    expect(dev().lines[0]).toMatchObject({ inventoryId: "CAM-P", produtoId: "prod-A", valor: 5 })
+    expect(rt().customerCredits[CPF]!.saldo).toBe(5)
+  })
+
+  it("pendência legada pelo SKU de um produto KG não infla o saldo em kg, nem antes nem depois da recusa (R2 P2)", async () => {
+    seed([devPendente({ lines: [{ inventoryId: "PAO", name: "Pão francês KG", quantity: 1, valor: 10 }] })])
+    await mount()
+    expect(rt().inventory.find((i) => i.id === "PAO")!.stock).toBe(2.375)
+    net.devResponse = { status: 409, body: { code: "DEVOLUCAO_KG_BLOQUEADA", error: "venda KG" } }
+    await flush()
+    await waitFor(() => expect(dev().syncPending).toBe(false))
+    expect(dev().syncRejectedCode).toBe("DEVOLUCAO_KG_BLOQUEADA")
+    expect(rt().inventory.find((i) => i.id === "PAO")!.stock).toBe(2.375)
+  })
 })
