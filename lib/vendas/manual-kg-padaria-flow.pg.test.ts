@@ -148,13 +148,36 @@ suite("padaria — estoque KG + venda manual por peso (PostgreSQL real)", () => 
     expect(await prisma.venda.count({ where: { pedidoId: { in: [pagamento.id!, preco.id!, cruzada.id!] } } })).toBe(0)
   })
 
-  it.each([0, -0.35, 0.0005, 0.3505])("peso inválido %s é recusado sem escrita", async (q) => {
+  it("produto excluído durante a venda (SKU antigo + Produto.id) aborta sem venda, item nem financeiro", async () => {
+    const p = await prisma.produto.create({ data: { id: "kg-pad-del-" + randomUUID(), storeId: A, name: "Queijo excluído", stock: 5, price: 20, metadata: KG, sku: "QJ-DEL-ANTIGO" } })
+    await prisma.produto.update({ where: { id: p.id }, data: { sku: "QJ-DEL-NOVO" } })
+    const sale = venda([{ id: "QJ-DEL-ANTIGO", produtoId: p.id, name: p.name, quantity: 0.35, price: 20 }])
+    let release!: () => void, locked!: () => void
+    const gate = new Promise<void>((r) => { release = r }), isLocked = new Promise<void>((r) => { locked = r })
+    const remover = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM estoque_produtos WHERE id = ${p.id} FOR UPDATE`
+      locked(); await gate
+      await tx.produto.delete({ where: { id: p.id } })
+    }, { timeout: 20000, maxWait: 20000 })
+    await isLocked
+    const vendaEmCurso = persist(sale)
+    const outcome = vendaEmCurso.then(() => "ok", (e: unknown) => e)
+    await new Promise((r) => setTimeout(r, 500))
+    release(); await remover
+    expect(await outcome).toBeInstanceOf(Error)
+    expect(await prisma.venda.count({ where: { pedidoId: sale.id! } })).toBe(0)
+    expect(await prisma.movimentacaoFinanceira.count({ where: { referenciaId: sale.id! } })).toBe(0)
+  })
+
+  // Valores monetários coerentes com cada peso: a recusa precisa ser a de PESO, não de divergência de total.
+  it.each([[0, 0], [-0.35, 0], [0.0005, 0.01], [0.3505, 7.01]])("peso inválido %s é recusado sem escrita (total coerente R$ %s)", async (q, money) => {
     const queijo = await produto({ name: "Queijo sintético", price: 20 })
     await entrada(queijo.id, 5)
     const sale = venda([{ id: queijo.id, name: queijo.name, quantity: 0.35, price: 20 }])
-    sale.lines![0].quantity = q
-    await expect(persist(sale)).rejects.toBeInstanceOf(Error)
+    sale.lines![0].quantity = q; sale.lines![0].lineTotal = money; sale.total = money; sale.paymentBreakdown = { dinheiro: money }
+    await expect(persist(sale)).rejects.toThrow(/Peso inválido/)
     expect((await saldoTexto(queijo.id)).stock).toBe("5")
+    expect(await prisma.venda.count({ where: { pedidoId: sale.id! } })).toBe(0)
   })
 
   it("produto sem preço válido é recusado", async () => {

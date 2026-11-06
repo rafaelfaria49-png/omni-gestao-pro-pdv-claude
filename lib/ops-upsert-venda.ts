@@ -752,7 +752,8 @@ export async function upsertVendaInTransaction(
   if (manualKg) {
     await assertManualKgAvailable(tx, lojaId)
     await enterManualKgTransaction(tx)
-    const physicalIds = [...new Set((sale.lines ?? []).map((line) => line.inventoryId).filter((id): id is string => typeof id === "string" && !isVirtualSaleLine(id)))].sort()
+    // Inclui a identidade estável `produtoId` (#325): com SKU antigo no inventoryId, só ela alcança o produto resolvido.
+    const physicalIds = [...new Set((sale.lines ?? []).flatMap((line) => [line.inventoryId, line.produtoId]).filter((id): id is string => typeof id === "string" && id.trim() !== "" && !isVirtualSaleLine(id)).map((id) => id.trim()))].sort()
     // Lock all products in a stable order before reading unit/price; alias resolution is store-scoped.
     await tx.$queryRaw`SELECT id FROM estoque_produtos WHERE "storeId" = ${lojaId} AND
       (id = ANY(${physicalIds}::text[]) OR sku = ANY(${physicalIds}::text[]) OR barcode = ANY(${physicalIds}::text[])) ORDER BY id FOR UPDATE`
@@ -1078,6 +1079,7 @@ export async function upsertVendaInTransaction(
         throw new ManualKgSaleError("Produto KG exige preço cadastrado e vínculo de estoque em todas as linhas.")
       }
       if (!resolvedProduct || resolvedProduct.unit !== "KG") normalizeSaleQuantity(quantidade)
+      else if (saleQuantityGrams(quantidade) === null) throw new ManualKgSaleError("Peso inválido: informe um peso maior que zero, com até 3 casas decimais.")
       const cents = saleLineTotalCents(quantidade, precoUnitario)
       if (cents === null || moneyCents(lineTotal) !== cents) throw new ManualKgSaleError("Total do item divergente do peso e preço. Revise o carrinho.")
       manualKgSubtotalCents += cents
@@ -1228,8 +1230,12 @@ export async function upsertVendaInTransaction(
       },
     )
     if (!baixa009.ok) {
-      // Produto removido entre a resolução e a baixa: legado pulava (continue).
-      if (baixa009.code === "NOT_FOUND") continue
+      // Produto removido entre a resolução e a baixa: o replay legado pula (preserva o fato
+      // histórico); o PDV ao vivo aborta — venda/financeiro sem baixa nunca é gravada.
+      if (baixa009.code === "NOT_FOUND") {
+        if (enforceStock) throw new UnresolvedProductError([produtoId])
+        continue
+      }
       if (baixa009.code === "INSUFFICIENT_STOCK") {
         // Rollback de toda a transação da venda (atomicidade do $transaction).
         throw new InsufficientStockError(produtoId, resolved.name, baixa009.estoqueAntes ?? 0, qty)

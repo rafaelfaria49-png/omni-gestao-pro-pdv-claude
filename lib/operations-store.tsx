@@ -1869,8 +1869,15 @@ export function OperationsProvider({
       const local = stateRef.current.sales.find((item) => saleMatches(item, token))
       let kg: ManualKgConfirmation | undefined
       if (local?.manualKgSale === MANUAL_KG_SALE) {
-        const response = await fetch(`/api/vendas/${encodeURIComponent(confirmed?.pedidoId ?? token.id)}?confirmation=manual-kg`, { credentials: "include", cache: "no-store", headers: persistHeaders(opsLojaIdFromStorageKey(storageKey)) })
-        const body = await response.json() as { confirmation?: ManualKgConfirmation }
+        // Mesmo prazo da verificação (fetch + corpo): um snapshot pendurado não pode prender a
+        // tentativa nem o lock entre abas; o timeout preserva a identidade para o reenvio.
+        const response = await fetchTextWithTimeout(
+          `/api/vendas/${encodeURIComponent(confirmed?.pedidoId ?? token.id)}?confirmation=manual-kg`,
+          { credentials: "include", cache: "no-store", headers: persistHeaders(opsLojaIdFromStorageKey(storageKey)) },
+          SALE_VERIFY_TIMEOUT_MS,
+        )
+        let body: { confirmation?: ManualKgConfirmation } = {}
+        try { body = JSON.parse(response.text) as { confirmation?: ManualKgConfirmation } } catch { body = {} }
         kg = body.confirmation
         if (storageKeyRef.current !== storageKey) throw new Error("STORE_CHANGED")
         if (!response.ok || kg?.storeId !== opsLojaIdFromStorageKey(storageKey) || kg?.sale.manualKgSale !== MANUAL_KG_SALE || !Array.isArray(kg.stocks) || kg.sale.id !== (confirmed?.pedidoId ?? token.id)) throw new Error("Snapshot confirmado KG indisponível; a tentativa foi preservada para reenvio.")
@@ -1908,6 +1915,9 @@ export function OperationsProvider({
         }
       })
       const latest = stateRef.current.sales.find((item) => saleMatches(item, token))
+      // Os saldos do snapshot KG podem chegar depois de um catálogo mais novo: recarrega o
+      // catálogo autoritativo para que o saldo mais recente sempre prevaleça na tela.
+      if (kg) void catalogSyncRef.current?.check({ force: true })
       return kg ? selectManualKgSnapshot(latest ?? kg.sale, kg.sale) : undefined
     },
     [storageKey],
@@ -2360,7 +2370,15 @@ export function OperationsProvider({
           if (latest.clientSaleId) {
             const verified = await verifySaleOnServer(lj, latest.clientSaleId)
             if (verified.kind === "found") {
-              const snapshot = await markSaleConfirmed(token, verified.venda, { source: "manual", outcome: "JA_EXISTIA_NO_SERVIDOR" })
+              let snapshot: SaleRecord | undefined
+              try {
+                snapshot = await markSaleConfirmed(token, verified.venda, { source: "manual", outcome: "JA_EXISTIA_NO_SERVIDOR" })
+              } catch (err) {
+                // KG: a venda existe no servidor, mas o snapshot autenticado não veio. Nada local
+                // foi aplicado e a identidade segue pendente para nova verificação.
+                const msg = err instanceof Error ? err.message : String(err)
+                return { ok: false, code: "KG_SNAPSHOT_INDISPONIVEL", reason: `A venda já está no servidor, mas a confirmação em KG não pôde ser lida (${msg}). Nada foi duplicado; tente de novo em instantes.` }
+              }
               if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(
                 lj,
                 { id: verified.venda.pedidoId, clientSaleId: latest.clientSaleId },
