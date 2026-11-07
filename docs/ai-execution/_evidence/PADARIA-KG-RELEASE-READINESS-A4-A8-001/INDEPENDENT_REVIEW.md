@@ -31,6 +31,18 @@ Confirmados pelo revisor: 07 bloqueia o cliente Int (`23514`); corte do papel an
 ou binário da #335 sem `quantidadeKg`. Sem segredos nem dados de cliente nas evidências (IDs de projeto/branch/
 endpoint Neon são identificadores de infraestrutura, não segredos).
 
-## Rodada 2
+## Rodada 2 — commits `053d77a` + `ffe8787` · veredito **APPROVE**
 
-Ver seção abaixo (acrescentada após a revalidação).
+Todos os P2 da rodada 1 confirmados como corrigidos e sustentados por evidência (cadeia executada, contagens =
+somas esperadas, clientSaleIds válidos e únicos, `migrate deploy` com papel, ordem J10 → 10b, proibições de
+schema/flag/merge, sem segredos). Nenhum P0–P2. P3 e tratamento:
+
+| P3 | Tratamento |
+| --- | --- |
+| Run conclusivo com topo `dirty=true` | **Corrigido**: run-06 no HEAD limpo `4385d3f` |
+| Fila só v1 nas transições; v2 nunca era 1º envio após troca | **Corrigido**: cada versão deixa v1 **e** v2 na fila |
+| Paralelos só depois do replay sequencial | **Corrigido**: 1º envio da fila é concorrente (3×); wrapper v1 reproduz a releitura do vencedor da rota |
+| Recusa de fatos diferentes aceitava qualquer erro | **Corrigido**: classe exata (`PedidoIdConflitoMesmaLojaError` / `ClientSaleIdReusedError`) |
+| Doc citava `2e-322` | **Corrigido**: valor do run-06 |
+| F2b sem caso parcial (20261029 ok, 20261106 falha) | **Corrigido**: gate explícito em F2b |
+| Campos do passo aditivo fixos em `true` | parcialmente: `titleGuardDeployed` agora lança se ausente; os outros dois já eram garantidos por `throw` anterior |

@@ -73,7 +73,7 @@ presença nas lojas e um push autorizado.
 | --- | --- | --- | --- | --- |
 | T1 | Runbook/checklist A5, script 07 corrigido (A6) e evidências A1–A6 só em disco | técnico + autorização (push na #315) | a janela precisa executar **o SHA revisado**; disco local não é fonte auditável | o dono autoriza um commit **só de docs/evidências** na branch da #315 (sem código); conferir `07-guard-check-opcional.sql` sha256 = `dea40868…` |
 | T2 | #315 atrás da main; árvore do J4 sem CI | técnico + autorização | J4 publica em Production uma árvore nunca testada | autorizar `git merge origin/main` na branch da #315 (fast-forward de `104d768`), push, CI verde do head exato; depois disso atualizar #335/#336 por merge (CI de cada) |
-| T3 | Revisão desta PR (migration `20261106`) | técnico | altera função SECURITY DEFINER da #335 | revisão independente (feita, §8) + revisão humana; R cruzada Codex opcional a partir de 2026-11-10 |
+| T3 | Revisão desta PR (migration `20261106`) | técnico | altera função SECURITY DEFINER da #335 | revisão independente (2 rodadas, APPROVE na 2ª, §8) + revisão humana; R cruzada Codex opcional a partir de 2026-11-10 |
 | T4 | R3 cruzada Codex da #336 | técnico | política de revisão cruzada | repetir a partir de 2026-11-10 com `R3_PACOTE.md` |
 | A6 | aplicar ou não o `07` | autorização | barreira extra contra cliente Int | **recomendado aplicar** no J9 (ensaio novo: com o 07 o banco recusa a escrita Int; sem ele, o banco aceitou NaN e só a releitura do Prisma reverteu) |
 | A7 | conectores e sessões de IA | autorização + presencial | outra sessão com credencial age como o operador; o corte não distingue | dono desliga conector Neon do ChatGPT e MCPs com alcance a produção; lista de sessões encerradas |
@@ -189,27 +189,27 @@ node node_modules/prisma/build/index.js migrate status    # "Database schema is 
 
 Se `migrate status` listar qualquer outra pendente além dessas duas: **parar** (main mudou; reabrir o plano).
 
-No ensaio (run-05) as duas foram aplicadas em dois `migrate deploy` com o mesmo `options` (a `20261029` do checkout
+No ensaio (run-05/06) as duas foram aplicadas em dois `migrate deploy` com o mesmo `options` (a `20261029` do checkout
 da #335, a `20261106` do topo). Um único `migrate deploy` do topo usa o mesmo mecanismo; se preferir reproduzir
 exatamente o ensaio, fazer em dois passos.
 
 ## 6. Riscos de venda — compatibilidade real (provas)
 
-### 6.1 Ensaio sintético integrado (novo) — `cross-version-run-05/`, PASS
+### 6.1 Ensaio sintético integrado (novo) — `cross-version-run-06/`, PASS
 
-Conclusivo: **run-05**. Cadeia exata de versões que a produção vai atravessar, cada uma com o seu código real
+Conclusivo: **run-06**, executado num HEAD **commitado e limpo** (`4385d3f`, `dirty=false`). Cadeia exata de versões que a produção vai atravessar, cada uma com o seu código real
 e o seu cliente Prisma gerado, contra o mesmo banco descartável (commits e árvores registrados em
-`cross-version-run-05/cross-version-summary.json` → `versions`):
+`cross-version-run-06/cross-version-summary.json` → `versions`):
 
 | Versão | Commit / árvore | Papel |
 | --- | --- | --- |
 | main (hoje em produção, Int) | `37acc3b` | `neondb_owner`, antes do corte |
 | J4 → J11 (#315 sobre a main) | probe local `e058d9c`, árvore `ff3870d4…` = `merge-tree 37acc3b 104d768` | `omni_runtime_v2` |
 | W2 (#335) | `406ea48` | `omni_runtime_v2` |
-| W3 (#336 + esta PR) | `6671401` (código de app idêntico ao head desta PR; só harness/runner ainda não commitados na hora) | `omni_runtime_v2` |
+| W3 (#336 + esta PR) | `4385d3f` (limpo) | `omni_runtime_v2` |
 
 Scripts oficiais do HEAD da #315 + `07` revisado do A6 (sha256 LF `dea40868…`); hashes LF de todos os scripts e
-migrations no mesmo JSON. Run-03/04 (só main → topo) ficam como histórico.
+migrations no mesmo JSON. Run-05 (mesma cadeia, topo ainda com harness não commitado, fila só v1) e run-03/04 (só main → topo) ficam como histórico.
 
 PostgreSQL 17.10 descartável, papel antigo `neondb_owner` herdando `pg_write_all_data` (topologia Neon),
 schema da main criado por ele e 23 migrations resolvidas. Sequência: 01/02 (A3) → fase antiga → corte
@@ -217,21 +217,23 @@ schema da main criado por ele e 23 migrations resolvidas. Sequência: 01/02 (A3)
 estoque pelo checkout da #315** (diff vazio) → 9b: `20261029` por `migrate deploy` **do checkout da #335** e
 `20261106` por `migrate deploy` do topo, **ambas com `options=-c role=omni_owner`** → J10 pelo topo →
 fases #315 → #335 → topo. Em cada fase: todas as vendas anteriores reenviadas (sequencial + 3 paralelos),
-1º envio da venda deixada na fila pela versão anterior, uma v1 e uma v2 novas com resposta perdida.
+1º envio **concorrente** (3 ao mesmo tempo) das vendas v1 **e** v2 deixadas na fila pela versão anterior, uma v1 e
+uma v2 novas com resposta perdida; reenvio com fatos diferentes recusado com `PedidoIdConflitoMesmaLojaError` (v1) e
+`ClientSaleIdReusedError` (v2).
 
 | Prova | Resultado |
 | --- | --- |
-| Vendas v1 (`pedidoId`) e v2 (`clientSaleId`) gravadas por uma versão, resposta perdida, reenviadas a **cada** versão seguinte (main→#315, →#335, →topo) | 2 + 5 + 8 reenvios, todos `replayed=true`, mesmo `pedidoId`, **fingerprint idêntico** entre todas as versões |
+| Vendas v1 (`pedidoId`) e v2 (`clientSaleId`) gravadas por uma versão, resposta perdida, reenviadas a **cada** versão seguinte (main→#315, →#335, →topo) | 2 + 6 + 10 reenvios, todos `replayed=true`, mesmo `pedidoId`, **fingerprint idêntico** entre todas as versões |
 | 3 reenvios paralelos de cada venda em cada versão | todos `replayed=true`, mesmo `pedidoId` |
-| Venda que ficou só na fila de uma versão, 1º envio na seguinte e reenvio | `[false, true]` nas três transições — gravada uma vez |
-| Reenvio com fatos diferentes | recusado em cada versão (não vira venda nova) |
-| Totais ao fim | 11 vendas, 11 itens, 11 movimentos de estoque, 1 movimento financeiro por venda, saldo 36 = 50 − Σ quantidades, `double precision` |
+| Vendas v1 e v2 que ficaram só na fila de uma versão, 1º envio concorrente (3×) na seguinte e reenvio | exatamente 1 gravação por venda, mesmo `pedidoId` nos 3, reenvio `replayed=true` — nas três transições |
+| Reenvio com fatos diferentes | recusado em cada versão pela classe de erro específica (não vira venda nova) |
+| Totais ao fim | 14 vendas, 14 itens, 14 movimentos de estoque, 1 movimento financeiro por venda, saldo 33 = 50 − Σ quantidades, `double precision` |
 | Corte | `KG_CORTE_POSSE_OK`, `KG_CORTE_CONEXAO_OK`, `KG_SESSOES_ANTIGAS_ZERO`, papel antigo `connect=false` e login recusado (`permission denied for database`) |
 | `99` depois do J8 | recusa `KG_DESFAZER_PROIBIDO_MIGRATION_JA_APLICADA` |
 | Migration aditiva sem papel de dono (psql e `migrate deploy`) | recusada `KG_MIGRATION_OWNER_PUBLIC_SCHEMA_REQUIRED`, sem efeito |
 | Migrations aditivas por `prisma migrate deploy` com `options=-c role=omni_owner` (20261029 do checkout da #335; 20261106 do topo) | aplicadas; funções donas `omni_owner`; `migrate status` em dia; `migrate diff` vazio (#315 antes do 9b e topo depois); J10 frações=0, NaN/denormais=0 |
 | Venda KG sob a topologia real (runtime só DML, funções SECURITY DEFINER de `omni_owner`) | 0,35 kg + 1,25 kg, replay v1 e 3× v2 paralelos sem duplicar; saldo 3,4; `quantidade` NULL/`quantidadeKg` exato; adulteração direta recusada `MANUAL_KG_COMPATIBLE_WRITER_REQUIRED` |
-| "Redeploy" proibido simulado: cliente Int da main com a credencial nova | **com o 07**: recusado pelo banco (`23514`, CHECK `estoque_produtos_stock_kg_milesimos`, valor enviado `2e-322`), nada mudou. **Sem o 07**: o banco **aceitou** os valores corrompidos dentro da transação; o Prisma Int só abortou ao ler o retorno (`Could not convert from NaN to Int`) e a transação reverteu. Ou seja, sem o 07 a proteção deste caminho é acidental; caminhos que não releem o valor corrompem (`old-client-WRITE-after-migration.txt`, A6). Reforça: aplicar o 07 e manter o corte |
+| "Redeploy" proibido simulado: cliente Int da main com a credencial nova | **com o 07**: recusado pelo banco (`23514`, CHECK `estoque_produtos_stock_kg_milesimos`, valor enviado subnormal — `1.6e-322` no run-06), nada mudou. **Sem o 07**: o banco **aceitou** os valores corrompidos dentro da transação; o Prisma Int só abortou ao ler o retorno (`Could not convert from NaN to Int`) e a transação reverteu. Ou seja, sem o 07 a proteção deste caminho é acidental; caminhos que não releem o valor corrompem (`old-client-WRITE-after-migration.txt`, A6). Reforça: aplicar o 07 e manter o corte |
 
 ### 6.2 Itens pedidos × evidência
 
@@ -259,12 +261,12 @@ a cada escrita em `contas_receber_titulos` e a cada movimento financeiro que ref
 
 | Escrita | antes | depois (`20261106`) | sem gatilho |
 | --- | ---: | ---: | ---: |
-| INSERT de título | 320,4 ms | 2,0 ms | 0,10–0,13 ms |
-| UPDATE de título | 1.220,6 ms | 2,5 ms | — |
-| movimento financeiro → título | 593,6 ms | 3,2 ms | 0,07–0,10 ms |
-| movimento financeiro → venda | 0,93 ms | 0,79 ms | — |
+| INSERT de título | 517,0 ms | 1,7 ms | 0,05–0,12 ms |
+| UPDATE de título | 1.189,2 ms | 1,6 ms | — |
+| movimento financeiro → título | 576,9 ms | 1,8 ms | 0,04–0,07 ms |
+| movimento financeiro → venda | 0,85 ms | 0,37 ms | — |
 
-(run-04, média de 20 escritas; run-03 e run-05 dão a mesma ordem de grandeza — ver `trigger-overhead-and-equivalence` em cada `cross-version-summary.json`.)
+(run-06, média de 20 escritas; run-03/04/05 dão a mesma ordem de grandeza — ver `trigger-overhead-and-equivalence` em cada `cross-version-summary.json`.)
 
 O custo crescia linearmente com o histórico; uma venda a prazo com parcelas faz várias escritas de título
 na mesma transação (timeout 20 s). A correção é **só o corpo da função**: candidatos resolvidos por índice
@@ -280,7 +282,7 @@ Fases F0–F4 do runbook valem para o estoque. Acréscimos:
 
 | Fase | Estado | Recuperação |
 | --- | --- | --- |
-| F2b — falha no 9b (preflight ou migrate) | estoque já Float (pós-J8), venda sem aditiva | trava continua; `20261029` e `20261106` têm `BEGIN/COMMIT` + timeouts: falha não deixa efeito parcial; `migrate resolve --rolled-back` da que falhou; diagnosticar; **reabrir com o binário da #315 é permitido** (não depende da aditiva). Não forçar `GRANT CREATE` nem mudar dono ad hoc |
+| F2b — falha no 9b (preflight ou migrate) | estoque já Float (pós-J8), venda sem aditiva | trava continua; `20261029` e `20261106` têm `BEGIN/COMMIT` + timeouts: falha não deixa efeito parcial; `migrate resolve --rolled-back` da que falhou; diagnosticar; **reabrir com o binário da #315 é permitido** (não depende da aditiva). Não forçar `GRANT CREATE` nem mudar dono ad hoc. **Caso parcial:** `20261029` aplicada e `20261106` falhou → os gatilhos lentos estão ativos (§6.3); manter a trava até aplicar a `20261106`, ou reabrir só com venda a prazo/recebimento de títulos como NO-GO operacional até lá |
 | F5 — falha no W2 (#335 no ar) antes de qualquer venda KG | aditiva aplicada, flag KG ausente | rollback preferido: corrigir para frente. Voltar o código para a #315 (revert do merge da #335) é **tecnicamente compatível** com o int4 preservado; nunca voltar para antes da #315 |
 | F6 — falha no W3 (#336) | idem | revert do merge da #336 → binário #335; F8 KG continua bloqueada nos dois |
 | F7 — depois da 1ª venda KG (flag ligada) | linhas com `quantidade NULL` | não voltar a clientes com `quantidade Int` obrigatório (falham `P2032` na leitura); desligar flag/allowlist; manter binário atual; não remover `quantidadeKg`, gatilhos ou restaurar NOT NULL |
@@ -292,7 +294,8 @@ Revisor de contexto limpo, somente leitura, sobre esta PR (migration `20261106`,
 plano): `docs/ai-execution/_evidence/PADARIA-KG-RELEASE-READINESS-A4-A8-001/INDEPENDENT_REVIEW.md` —
 **APPROVE_WITH_LIMITATIONS** na 1ª rodada, sem nenhuma entrada em que os dois corpos da função divirjam; os três
 P2 (cadeia intermediária não ensaiada, ordem 9b/J10 com o gate de drift, lacuna de schema W1→W2) e os P3 foram
-tratados neste documento e no run-05 (tabela de tratamento no arquivo).
+tratados neste documento e no run-05/06. **Rodada 2 (após as correções): APPROVE**, só P3, também tratados
+(run-06 no HEAD limpo). Tabelas de tratamento no arquivo.
 A revisão cruzada por outra família de modelo (Codex) **não ocorreu** neste GOAL.
 
 ## 9. Ordem final de PRs

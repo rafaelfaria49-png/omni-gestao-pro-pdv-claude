@@ -1,0 +1,546 @@
+{
+  "phase": "replay-top",
+  "identity": {
+    "db": "omnigestao_prod_sim",
+    "usr": "omni_runtime_v2",
+    "port": 55493,
+    "host": "127.0.0.1"
+  },
+  "replays": [
+    {
+      "pedidoId": "VDA-SIM-A",
+      "origin": "old",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-2026-000001",
+      "origin": "old",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-Q-old",
+      "origin": "queued-from-old-sent-by-m315",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-2026-000002",
+      "origin": "queued-from-old-sent-by-m315",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-m315",
+      "origin": "m315",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-2026-000003",
+      "origin": "m315",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-Q-m315",
+      "origin": "queued-from-replay-m315-sent-by-m335",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-2026-000004",
+      "origin": "queued-from-replay-m315-sent-by-m335",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-m335",
+      "origin": "m335",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "pedidoId": "VDA-SIM-2026-000005",
+      "origin": "m335",
+      "replayed": true,
+      "samePedido": true,
+      "sameFingerprint": true,
+      "parallel": [
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "sales": [
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-A",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 20,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 2,
+            "unitPrice": 10,
+            "lineTotal": 20
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 20
+        }
+      },
+      "qty": 2,
+      "pedidoId": "VDA-SIM-A",
+      "fingerprint": "legacy-sale-facts-v1:sha256:feb1b0a82eeb63f59588ff4ed881f4a4e3920bbd9fc40a732abbe8bf34f04426",
+      "origin": "old"
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-B",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 30,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 3,
+            "unitPrice": 10,
+            "lineTotal": 30
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 30
+        }
+      },
+      "clientSaleId": "7d0f0c55-0b7e-4a52-9f2a-0d4c5e0b1b01",
+      "qty": 3,
+      "pedidoId": "VDA-SIM-2026-000001",
+      "fingerprint": "legacy-sale-facts-v1:sha256:057450d4e5f9873d381e06feb4e5d05b0ee1e1d6d33dd5c9e60645fb1b8c654d",
+      "origin": "old"
+    },
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-Q-old",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "pedidoId": "VDA-SIM-Q-old",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "queued-from-old-sent-by-m315"
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-Q-old",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "clientSaleId": "22222222-2222-4222-8222-000000000dd0",
+      "pedidoId": "VDA-SIM-2026-000002",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "queued-from-old-sent-by-m315"
+    },
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-m315",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "pedidoId": "VDA-SIM-m315",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "m315"
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-m315",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "clientSaleId": "11111111-1111-4111-8111-a31500000000",
+      "qty": 1,
+      "pedidoId": "VDA-SIM-2026-000003",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "m315"
+    },
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-Q-m315",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "pedidoId": "VDA-SIM-Q-m315",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "queued-from-replay-m315-sent-by-m335"
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-Q-m315",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "clientSaleId": "22222222-2222-4222-8222-00000000b315",
+      "pedidoId": "VDA-SIM-2026-000004",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "queued-from-replay-m315-sent-by-m335"
+    },
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-m335",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "pedidoId": "VDA-SIM-m335",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "m335"
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-m335",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "clientSaleId": "11111111-1111-4111-8111-a33500000000",
+      "qty": 1,
+      "pedidoId": "VDA-SIM-2026-000005",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "m335"
+    },
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-Q-m335",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "pedidoId": "VDA-SIM-Q-m335",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "queued-from-replay-m335-sent-by-top"
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-Q-m335",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "clientSaleId": "22222222-2222-4222-8222-00000000b335",
+      "pedidoId": "VDA-SIM-2026-000006",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "queued-from-replay-m335-sent-by-top"
+    },
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-top",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "pedidoId": "VDA-SIM-top",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "top"
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-top",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "clientSaleId": "11111111-1111-4111-8111-aaa000000000",
+      "qty": 1,
+      "pedidoId": "VDA-SIM-2026-000007",
+      "fingerprint": "legacy-sale-facts-v1:sha256:69eba8da66ba55926f416321b1347b1ffa38fa4f773a9961544683073343ae5e",
+      "origin": "top"
+    }
+  ],
+  "queued": [
+    {
+      "mode": "v1",
+      "payload": {
+        "id": "VDA-SIM-Q-top",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1
+    },
+    {
+      "mode": "v2",
+      "payload": {
+        "id": "LOCAL-SIM-Q-top",
+        "at": "2026-11-06T12:00:00.000Z",
+        "total": 10,
+        "sessaoId": "cash-sim-1",
+        "lines": [
+          {
+            "inventoryId": "prod-un-1",
+            "name": "Produto UN sintético",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10
+          }
+        ],
+        "paymentBreakdown": {
+          "dinheiro": 10
+        }
+      },
+      "qty": 1,
+      "clientSaleId": "22222222-2222-4222-8222-000000000bbb"
+    }
+  ],
+  "counts": {
+    "vendas": "14",
+    "itens": "14",
+    "livro": "14",
+    "financeiro": "14",
+    "stock": "33",
+    "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+    "stock_type": "double precision"
+  }
+}

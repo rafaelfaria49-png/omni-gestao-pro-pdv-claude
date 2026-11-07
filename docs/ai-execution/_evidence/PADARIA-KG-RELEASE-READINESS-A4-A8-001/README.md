@@ -15,7 +15,8 @@ MERGE=NO · NEON_BRANCHES_CREATED=0 · REAL_CUSTOMER_DATA=0 · SALE_SERVER_NUMBE
 | `harness/kg-topology.phase.ts` | venda KG como `omni_runtime_v2` com funções SECURITY DEFINER de `omni_owner` |
 | `harness/title-guard-equivalence.sql` | equivalência exata do corpo novo × original (2.304 combinações) |
 | `harness/trigger-overhead.sql` | custo dos gatilhos com 30.000 vendas sintéticas, antes/depois/sem gatilho |
-| `cross-version-run-05/` | **execução conclusiva**: cadeia main `37acc3b` → J4 (`ff3870d4…`) → #335 `406ea48` → topo; 07 revisado do A6 (`dea40868…`); `cross-version-summary.json` traz commits/árvores das versões e SHA-256 LF de scripts e migrations |
+| `cross-version-run-06/` | **execução conclusiva** no HEAD limpo `4385d3f`: mesma cadeia, fila v1+v2 com 1º envio concorrente, recusa por classe de erro |
+| `cross-version-run-05/` | execução anterior: cadeia main `37acc3b` → J4 (`ff3870d4…`) → #335 `406ea48` → topo; 07 revisado do A6 (`dea40868…`); `cross-version-summary.json` traz commits/árvores das versões e SHA-256 LF de scripts e migrations |
 | `cross-version-run-04/`, `cross-version-run-03/` | execuções anteriores só main → topo (04 com o 07 revisado, 03 com o original `a407ff7f…`); mesmo resultado |
 | `kg-suite-79/` | suíte oficial `scripts/pdv/run-manual-kg-tests.mjs` com a `20261106`: 79/79 + 35 verificações de compatibilidade (o `migration.json` é anterior à correção do rótulo `newMigrations` no runner; a lista de migrations aplicadas já incluía a `20261106`) |
 | `reused-evidence-manifest.txt` | SHA-256 das evidências reaproveitadas (106 arquivos só em disco na worktree da #315) |
