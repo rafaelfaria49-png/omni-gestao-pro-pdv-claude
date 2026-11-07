@@ -626,6 +626,9 @@ function ProductAIEditor({
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
   const [catalogoTouched, setCatalogoTouched] = useState(false);
+  // CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — só permite LIMPAR o vínculo (remover o
+  // último modelo) quando o estado salvo foi de fato lido; rede instável nunca apaga.
+  const catalogoLoadedRef = useRef(false);
   const [accessoriesTouched, setAccessoriesTouched] = useState(false);
   const [acessoriosValue, setAcessoriosValue] = useState<ProdutoAcessoriosFormValue>(() =>
     produtoAcessoriosFormFromMetadata(initial?.metadata),
@@ -732,6 +735,7 @@ function ProductAIEditor({
   useEffect(() => {
     if (!open || !showCompatibility) return;
     setCatalogoValue(emptyCompatibilidade());
+    catalogoLoadedRef.current = false;
     if (!productId) return; // criação: nada a reidratar
     let cancelled = false;
     (async () => {
@@ -745,7 +749,8 @@ function ProductAIEditor({
         const data = (await res.json().catch(() => null)) as {
           catalogoAparelhos?: CatalogoAparelhosMetadata | null;
         } | null;
-        if (cancelled) return;
+        if (cancelled || !data) return;
+        catalogoLoadedRef.current = true;
         const c = data?.catalogoAparelhos;
         if (c && Array.isArray(c.deviceModelKeys) && c.deviceModelKeys.length > 0) {
           setCatalogoValue({
@@ -1260,6 +1265,8 @@ function ProductAIEditor({
           ...textPatch, ...numericPatch,
           nome: name, // O adapter publicado exige nome também nos patches.
           ...(showAccessories && (accessoriesTouched || (applicabilityTouched.acessorios && applies.acessorios)) ? { accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue) } : {}),
+          // Removeu o último modelo vinculado: `null` top-level limpa pelo contrato canônico.
+          ...(showCompatibility && catalogoTouched && productId && !catalogoAparelhos && catalogoLoadedRef.current ? { catalogoAparelhos: null } : {}),
           metadata: {
             ...(allowAI ? { cadastroIa: { phase: "fase1-stub", savedAt: new Date().toISOString(), source } } : {}),
             ...(showCompatibility && catalogoTouched && catalogoAparelhos ? { catalogoAparelhos } : {}),
