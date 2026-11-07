@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "node scripts/vercel-build.mjs",
-  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false, "codex/fix-a01-login-proxy": false } },
+  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false, "codex/fix-a01-login-proxy": false, "claude/cadastros-acessorios-compat-manual-001": false } },
 
   "headers": [
     {
