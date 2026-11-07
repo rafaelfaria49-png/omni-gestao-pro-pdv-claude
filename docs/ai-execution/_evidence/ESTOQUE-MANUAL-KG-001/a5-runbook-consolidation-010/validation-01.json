@@ -1,0 +1,286 @@
+{
+  "goal": "ESTOQUE-KG-PRODUCTION-A5-RUNBOOK-001",
+  "validated_at": "2026-10-29T13:11:13.059Z",
+  "pass": true,
+  "local_only": true,
+  "network_operations": 0,
+  "production_operations": 0,
+  "vercel_operations": 0,
+  "sql_executed": 0,
+  "checks": [
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md: fences",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md: encoding",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md: single H1",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md: table columns",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md: local links/anchors",
+      "pass": true,
+      "broken": []
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md: explicit repository paths",
+      "pass": true,
+      "absent": []
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md: fences",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md: encoding",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md: single H1",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md: table columns",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md: local links/anchors",
+      "pass": true,
+      "broken": []
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md: explicit repository paths",
+      "pass": true,
+      "absent": []
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md: fences",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md: encoding",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md: single H1",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md: table columns",
+      "pass": true
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md: local links/anchors",
+      "pass": true,
+      "broken": []
+    },
+    {
+      "name": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md: explicit repository paths",
+      "pass": true,
+      "absent": []
+    },
+    {
+      "name": "Git HEAD preserved",
+      "pass": true
+    },
+    {
+      "name": "origin/main locally at aaab275",
+      "pass": true
+    },
+    {
+      "name": "Index preserved",
+      "pass": true
+    },
+    {
+      "name": "AEP remains opt-out",
+      "pass": true
+    },
+    {
+      "name": "All tracked files outside three docs preserved",
+      "pass": true,
+      "checked": 6038,
+      "changed": []
+    },
+    {
+      "name": "All previous evidence preserved",
+      "pass": true,
+      "checked": 152,
+      "changed": []
+    },
+    {
+      "name": "Root worktree WIPs preserved",
+      "pass": true
+    },
+    {
+      "name": "git diff --check",
+      "pass": true,
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "name": "Migration LF bytes/hash/blob",
+      "pass": true,
+      "lf_bytes": 1041,
+      "sha256": "f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e"
+    },
+    {
+      "name": "Runbook migration hash documented",
+      "pass": true
+    },
+    {
+      "name": "Migration has expected five type changes",
+      "pass": true,
+      "columns": [
+        "estoque_produtos.stock",
+        "movimentacoes_estoque.estoqueAntes",
+        "movimentacoes_estoque.estoqueDepois",
+        "movimentacoes_estoque.quantidade",
+        "produto_depositos.quantidade"
+      ]
+    },
+    {
+      "name": "Apply wrapper matches five type changes",
+      "pass": true
+    },
+    {
+      "name": "All rollout script references exist and remain unchanged",
+      "pass": true
+    },
+    {
+      "name": "Runbook markers match script sources",
+      "pass": true
+    },
+    {
+      "name": "Pre-01 equivalent: statement allowlist",
+      "pass": true
+    },
+    {
+      "name": "Pre-01 equivalent: read-only/rollback",
+      "pass": true
+    },
+    {
+      "name": "Pre-01 equivalent: identity guard",
+      "pass": true
+    },
+    {
+      "name": "Pre-01 equivalent: no effectful function",
+      "pass": true
+    },
+    {
+      "name": "Pre-01 handles absent owner without role-name resolution",
+      "pass": true
+    },
+    {
+      "name": "J0 cash reference: statement allowlist",
+      "pass": true
+    },
+    {
+      "name": "J0 cash reference: read-only/rollback",
+      "pass": true
+    },
+    {
+      "name": "J0 cash reference: identity guard",
+      "pass": true
+    },
+    {
+      "name": "J0 cash reference: no effectful function",
+      "pass": true
+    },
+    {
+      "name": "J0 cash query enumerates all storeIds",
+      "pass": true
+    },
+    {
+      "name": "A1-A4 evidence reconciliation",
+      "pass": true
+    },
+    {
+      "name": "Production changes correctly qualified",
+      "pass": true
+    },
+    {
+      "name": "Vercel direct vs inference limits documented",
+      "pass": true
+    },
+    {
+      "name": "Main reconciliation and 07 remain pending",
+      "pass": true
+    },
+    {
+      "name": "Later gates unauthorized",
+      "pass": true
+    },
+    {
+      "name": "Historical deployments and effective cutoff",
+      "pass": true
+    },
+    {
+      "name": "Migrator ownership capability not claimed",
+      "pass": true
+    },
+    {
+      "name": "Latest cash store and J0 requirements",
+      "pass": true
+    },
+    {
+      "name": "No operational approvals prefilled",
+      "pass": true
+    },
+    {
+      "name": "Auxiliary cron pending authorization",
+      "pass": true
+    },
+    {
+      "name": "F0-F4 recovery preserved verbatim",
+      "pass": true
+    },
+    {
+      "name": "Migration nonreturn and Int prohibition preserved",
+      "pass": true
+    },
+    {
+      "name": "Commit separation audited; no unrelated WIP staged",
+      "pass": true,
+      "decision": "DOCS_COMMIT=NONE",
+      "reason": "A5 hunks overlap preexisting hardening WIPs in the runbook/remediation; no staging or commit attempted",
+      "documents": [
+        {
+          "file": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md",
+          "preexisting_wip": true,
+          "a5_hunks": 19,
+          "overlapping_hunks": 18
+        },
+        {
+          "file": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md",
+          "preexisting_wip": true,
+          "a5_hunks": 17,
+          "overlapping_hunks": 8
+        },
+        {
+          "file": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md",
+          "preexisting_wip": false,
+          "a5_hunks": 12,
+          "overlapping_hunks": 0
+        }
+      ]
+    }
+  ],
+  "document_hashes": {
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md": "76cb23914f106faeff8409e4fdadcafef2828ca5144cdd8140c729cdc762272c",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md": "d941274a11cd5fa953ed3286bba7e3949b9f3d5666d7d842b3361cc9c14dfeb6",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md": "5e23ea0c567b99b39e20a2cf980914ad631aa7e63f76f1d90cbae129c35d48cb"
+  },
+  "docs_commit": "NONE",
+  "pending_document_paths": [
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md"
+  ]
+}

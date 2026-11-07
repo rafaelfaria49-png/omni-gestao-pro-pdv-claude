@@ -1,0 +1,16 @@
+{
+  "verified_before_database_authentication": true,
+  "methods": [
+    "GET branch",
+    "GET endpoint",
+    "GET database"
+  ],
+  "project_id": "dry-mouse-36002471",
+  "branch_id": "br-muddy-meadow-ac7ah2wl",
+  "branch_name": "production",
+  "endpoint_id": "ep-summer-tooth-acltc6wi",
+  "database": "omnigestao_prod",
+  "database_owner": "neondb_owner",
+  "direct_host": "ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech",
+  "pooled_host": "ep-summer-tooth-acltc6wi-pooler.sa-east-1.aws.neon.tech"
+}

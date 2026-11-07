@@ -1,0 +1,72 @@
+{
+  "goal": "ESTOQUE-KG-PRODUCTION-A4-001",
+  "started_at": "2026-10-29T11:59:47.265Z",
+  "phases": {
+    "00-url-preflight": {
+      "pass": true,
+      "identity": {
+        "project": "dry-mouse-36002471",
+        "branch": "br-muddy-meadow-ac7ah2wl",
+        "endpoint": "ep-summer-tooth-acltc6wi",
+        "database": "omnigestao_prod",
+        "direct": "ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech",
+        "pooled": "ep-summer-tooth-acltc6wi-pooler.sa-east-1.aws.neon.tech"
+      },
+      "credentials_from_a2": true,
+      "a2_validation": "30/30; identical to A2 evidence",
+      "connections": [
+        {
+          "role": "omni_runtime_v2",
+          "host": "ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech",
+          "database": "omnigestao_prod",
+          "pooled": false,
+          "sslmode": "require"
+        },
+        {
+          "role": "omni_runtime_v2",
+          "host": "ep-summer-tooth-acltc6wi-pooler.sa-east-1.aws.neon.tech",
+          "database": "omnigestao_prod",
+          "pooled": true,
+          "sslmode": "require"
+        },
+        {
+          "role": "omni_migrator",
+          "host": "ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech",
+          "database": "omnigestao_prod",
+          "pooled": false,
+          "sslmode": "require"
+        },
+        {
+          "role": "neondb_owner",
+          "host": "ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech",
+          "database": "omnigestao_prod",
+          "pooled": false,
+          "sslmode": "require"
+        },
+        {
+          "role": "neondb_owner",
+          "host": "ep-summer-tooth-acltc6wi-pooler.sa-east-1.aws.neon.tech",
+          "database": "omnigestao_prod",
+          "pooled": true,
+          "sslmode": "require"
+        }
+      ],
+      "no_authentication_yet": true,
+      "aep_active": false
+    }
+  },
+  "failures": [
+    "fetch failed"
+  ],
+  "finished_at": "2026-10-29T11:59:51.258Z",
+  "result": {
+    "A4": "FAIL",
+    "failure": "fetch failed",
+    "identity_divergence": false,
+    "COMMERCIAL_DATA_WRITES": 0,
+    "PRODUCTION_SCHEMA_CHANGES": 0,
+    "VERCEL_CHANGES": 0,
+    "MERGE": "NO",
+    "DEPLOY": "NO"
+  }
+}

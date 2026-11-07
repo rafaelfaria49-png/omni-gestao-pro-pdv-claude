@@ -1,0 +1,25 @@
+executar s0: SELECT version()
+executar s1: SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = $1), version(), current_setting('server_version_nu
+executar s2: SELECT namespace.nspname as namespace_name
+executar s3: SELECT
+executar s4: SELECT
+executar s5: SELECT
+executar s6: 
+executar s7: 
+executar s8: 
+executar s9: 
+executar s10: WITH rawindex AS (
+executar s11: 
+executar s12: SELECT
+executar s13: 
+executar s0: SELECT version()
+executar s1: SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = $1), version(), current_setting('server_version_nu
+comando: CREATE TABLE a1_probe(x int);
+a1probe|ERRO:  não é possível executar CREATE TABLE em uma transação de leitura-apenas
+# primeira linha das consultas multilinha (s6-s9, s11, s13):
+SELECT
+SELECT
+SELECT
+SELECT
+SELECT p.proname AS name, n.nspname as namespace,
+SELECT

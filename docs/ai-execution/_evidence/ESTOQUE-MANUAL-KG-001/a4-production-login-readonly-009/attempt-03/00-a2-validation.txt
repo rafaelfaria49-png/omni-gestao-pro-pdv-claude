@@ -1,0 +1,31 @@
+OK   mig: 43 chars base64url (256 bits)
+OK   mig: difere das senhas legadas
+OK   rt: 43 chars base64url (256 bits)
+OK   rt: difere das senhas legadas
+OK   senhas distintas
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: protocolo postgresql
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: usuário omni_runtime_v2
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: senha do papel
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: endpoint ep-summer-tooth-acltc6wi-pooler
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: host neon.tech sa-east-1
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: database omnigestao_prod
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: sslmode=require
+OK   KG_PROD_RUNTIME_V2_DATABASE_URL: pgbouncer=true
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: protocolo postgresql
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: usuário omni_runtime_v2
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: senha do papel
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: endpoint ep-summer-tooth-acltc6wi
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: host neon.tech sa-east-1
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: database omnigestao_prod
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: sslmode=require
+OK   KG_PROD_RUNTIME_V2_DIRECT_URL: sem pgbouncer
+OK   KG_MIGRATOR_DIRECT_URL: protocolo postgresql
+OK   KG_MIGRATOR_DIRECT_URL: usuário omni_migrator
+OK   KG_MIGRATOR_DIRECT_URL: senha do papel
+OK   KG_MIGRATOR_DIRECT_URL: endpoint ep-summer-tooth-acltc6wi
+OK   KG_MIGRATOR_DIRECT_URL: host neon.tech sa-east-1
+OK   KG_MIGRATOR_DIRECT_URL: database omnigestao_prod
+OK   KG_MIGRATOR_DIRECT_URL: sslmode=require
+OK   KG_MIGRATOR_DIRECT_URL: sem pgbouncer
+OK   arquivo fora do repositório
+A2_VALIDACAO PASS (30/30)

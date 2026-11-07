@@ -1,0 +1,133 @@
+url: OK sem conectar · endpoint=ep-summer-tooth-acltc6wi pooler=off usuário=neondb_owner dbs=neondb,omnigestao_prod senhas_a2=2 (formato ok, distintas)
+fase=pre início=2026-10-29T09:38:57.886Z
+
+===== pre · neondb =====
+## 0. identidade (antes de qualquer consulta)
+     project_id     |        branch_id         |       endpoint_id        |           timeline_id            |  system_identifier  |   db   |   usuario    | recovery | tx_ro |       pg        |         agora          
+--------------------+--------------------------+--------------------------+----------------------------------+---------------------+--------+--------------+----------+-------+-----------------+------------------------
+ dry-mouse-36002471 | br-muddy-meadow-ac7ah2wl | ep-summer-tooth-acltc6wi | 917bebec2f4d28fdac429bd6029b87b6 | 7667235400144430878 | neondb | neondb_owner | f        | on    | 17.11 (0bfbbeb) | 2026-10-29 09:38:59+00
+
+IDENTIDADE_OK
+## 1. databases do cluster
+          datname          |     dono     |                                              acl                                              
+---------------------------+--------------+-----------------------------------------------------------------------------------------------
+ neondb                    | neondb_owner | {=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,neon_superuser=CTc/neondb_owner}
+ omnigestao_prod           | neondb_owner | NULL
+ omnigestao_prod_candidate | neondb_owner | {=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omnigestao_candidate_audit_ro=c/neondb_owner}
+ postgres                  | cloud_admin  | NULL
+ template0                 | cloud_admin  | {=c/cloud_admin,cloud_admin=CTc/cloud_admin}
+ template1                 | cloud_admin  | {=c/cloud_admin,cloud_admin=CTc/cloud_admin}
+
+## 2. papéis a criar (esperado: nenhum)
+ omni_existentes | nomes 
+-----------------+-------
+               0 | -
+
+PRE_PAPEIS_AUSENTES_OK
+          outros_omni          
+-------------------------------
+ omnigestao_candidate_audit_ro
+
+## 3. papel antigo (executor do 01/02)
+   rolname    | rolsuper | rolcreaterole | rolcreatedb | rolbypassrls | rolinherit | rolcanlogin | em_neon_superuser | pg_write_all_data | createrole_self_grant 
+--------------+----------+---------------+-------------+--------------+------------+-------------+-------------------+-------------------+-----------------------
+ neondb_owner | f        | t             | t           | t            | t          | t           | t                 | t                 | 
+
+                                    ?column?                                    
+--------------------------------------------------------------------------------
+ papeis_login_nao_super=neon_service,neondb_owner,omnigestao_candidate_audit_ro
+
+## 8. sessões no database
+    papel     |    app    | estado | count 
+--------------+-----------+--------+-------
+ neondb_owner | kg-a3-pre | active |     1
+
+exit=0
+
+===== pre · omnigestao_prod =====
+## 0. identidade (antes de qualquer consulta)
+     project_id     |        branch_id         |       endpoint_id        |           timeline_id            |  system_identifier  |       db        |   usuario    | recovery | tx_ro |       pg        |         agora          
+--------------------+--------------------------+--------------------------+----------------------------------+---------------------+-----------------+--------------+----------+-------+-----------------+------------------------
+ dry-mouse-36002471 | br-muddy-meadow-ac7ah2wl | ep-summer-tooth-acltc6wi | 917bebec2f4d28fdac429bd6029b87b6 | 7667235400144430878 | omnigestao_prod | neondb_owner | f        | on    | 17.11 (0bfbbeb) | 2026-10-29 09:39:00+00
+
+IDENTIDADE_OK
+## 1. databases do cluster
+          datname          |     dono     |                                              acl                                              
+---------------------------+--------------+-----------------------------------------------------------------------------------------------
+ neondb                    | neondb_owner | {=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,neon_superuser=CTc/neondb_owner}
+ omnigestao_prod           | neondb_owner | NULL
+ omnigestao_prod_candidate | neondb_owner | {=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omnigestao_candidate_audit_ro=c/neondb_owner}
+ postgres                  | cloud_admin  | NULL
+ template0                 | cloud_admin  | {=c/cloud_admin,cloud_admin=CTc/cloud_admin}
+ template1                 | cloud_admin  | {=c/cloud_admin,cloud_admin=CTc/cloud_admin}
+
+## 2. papéis a criar (esperado: nenhum)
+ omni_existentes | nomes 
+-----------------+-------
+               0 | -
+
+PRE_PAPEIS_AUSENTES_OK
+          outros_omni          
+-------------------------------
+ omnigestao_candidate_audit_ro
+
+## 3. papel antigo (executor do 01/02)
+   rolname    | rolsuper | rolcreaterole | rolcreatedb | rolbypassrls | rolinherit | rolcanlogin | em_neon_superuser | pg_write_all_data | createrole_self_grant 
+--------------+----------+---------------+-------------+--------------+------------+-------------+-------------------+-------------------+-----------------------
+ neondb_owner | f        | t             | t           | t            | t          | t           | t                 | t                 | 
+
+                                    ?column?                                    
+--------------------------------------------------------------------------------
+ papeis_login_nao_super=neon_service,neondb_owner,omnigestao_candidate_audit_ro
+
+## 4. database de produção: ACL, schema, RLS, objetos que o 02 cobre
+           ?column?            
+-------------------------------
+ datacl=NULL dono=neondb_owner
+
+                                                ?column?                                                
+--------------------------------------------------------------------------------------------------------
+ schema_public dono=pg_database_owner acl={pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}
+
+                     ?column?                      
+---------------------------------------------------
+ tabelas(r,p)=110 rls_ativo=0 sequencias=0 views=0
+
+## 5. cinco colunas de estoque
+               coluna                | data_type 
+-------------------------------------+-----------
+ estoque_produtos.stock              | integer
+ movimentacoes_estoque.estoqueAntes  | integer
+ movimentacoes_estoque.estoqueDepois | integer
+ movimentacoes_estoque.quantidade    | integer
+ produto_depositos.quantidade        | integer
+
+## 6. histórico Prisma
+ total | finalizadas | kg |                ultima                
+-------+-------------+----+--------------------------------------
+    23 |          23 |  0 | 20261022120000_platform_pilot_access
+
+## 7. linha de base (agregados; loja-2 em operação pode mover estes números)
+              ?column?               
+-------------------------------------
+ estoque_produtos n=14127 soma=69318
+
+               ?column?               
+--------------------------------------
+ produto_depositos n=13744 soma=70070
+
+                            ?column?                             
+-----------------------------------------------------------------
+ movimentacoes_estoque n=2580 max_created=2026-10-28 21:55:23+00
+
+        ?column?         
+-------------------------
+ caixas_abertas loja-1=1
+
+## 8. sessões no database
+    papel     |    app    | estado | count 
+--------------+-----------+--------+-------
+ neondb_owner | kg-a3-pre | active |     1
+
+exit=0
+fim=2026-10-29T09:39:00.152Z
