@@ -1,0 +1,164 @@
+url: OK sem conectar · endpoint=ep-summer-tooth-acltc6wi pooler=off usuário=neondb_owner dbs=neondb,omnigestao_prod senhas_a2=2 (formato ok, distintas)
+fase=pos início=2026-10-29T09:39:35.578Z
+
+===== pos · neondb =====
+## 0. identidade (antes de qualquer consulta)
+     project_id     |        branch_id         |       endpoint_id        |  system_identifier  |   db   |   usuario    | tx_ro |         agora          
+--------------------+--------------------------+--------------------------+---------------------+--------+--------------+-------+------------------------
+ dry-mouse-36002471 | br-muddy-meadow-ac7ah2wl | ep-summer-tooth-acltc6wi | 7667235400144430878 | neondb | neondb_owner | on    | 2026-10-29 09:39:36+00
+
+IDENTIDADE_OK
+## 1. atributos dos papéis novos
+     rolname     | login | super | bypassrls | createrole | createdb | replication | inherit | connlimit | valid_until 
+-----------------+-------+-------+-----------+------------+----------+-------------+---------+-----------+-------------
+ omni_migrator   | t     | f     | f         | f          | f        | f           | t       |        -1 | -
+ omni_owner      | f     | f     | f         | f          | f        | f           | t       |        -1 | -
+ omni_runtime_v2 | t     | f     | f         | f          | f        | f           | t       |        -1 | -
+
+## 2. memberships que envolvem os papéis novos
+    membro     |             papel             | admin_option | inherit_option | set_option |   grantor    
+---------------+-------------------------------+--------------+----------------+------------+--------------
+ neondb_owner  | omni_migrator                 | t            | f              | f          | cloud_admin
+ neondb_owner  | omni_owner                    | t            | f              | f          | cloud_admin
+ neondb_owner  | omni_runtime_v2               | t            | f              | f          | cloud_admin
+ neondb_owner  | omnigestao_candidate_audit_ro | t            | f              | f          | cloud_admin
+ omni_migrator | omni_owner                    | f            | t              | t          | neondb_owner
+
+## 3. isolamento: alcance (USAGE ou SET) de cada papel novo a papéis privilegiados
+   papel_novo    | alcanca_privilegiado 
+-----------------+----------------------
+ omni_migrator   | -
+ omni_owner      | -
+ omni_runtime_v2 | -
+
+ runtime_herda_owner | runtime_set_owner | runtime_herda_migrator | migrator_herda_owner | runtime_neon_superuser | runtime_pg_write_all_data | migrator_neon_superuser | migrator_pg_write_all_data 
+---------------------+-------------------+------------------------+----------------------+------------------------+---------------------------+-------------------------+----------------------------
+ f                   | f                 | f                      | t                    | f                      | f                         | f                       | f
+
+## 10. sessões no database
+    papel     |    app    | estado | count 
+--------------+-----------+--------+-------
+ neondb_owner | kg-a3-pos | active |     1
+
+exit=0
+
+===== pos · omnigestao_prod =====
+## 0. identidade (antes de qualquer consulta)
+     project_id     |        branch_id         |       endpoint_id        |  system_identifier  |       db        |   usuario    | tx_ro |         agora          
+--------------------+--------------------------+--------------------------+---------------------+-----------------+--------------+-------+------------------------
+ dry-mouse-36002471 | br-muddy-meadow-ac7ah2wl | ep-summer-tooth-acltc6wi | 7667235400144430878 | omnigestao_prod | neondb_owner | on    | 2026-10-29 09:39:36+00
+
+IDENTIDADE_OK
+## 1. atributos dos papéis novos
+     rolname     | login | super | bypassrls | createrole | createdb | replication | inherit | connlimit | valid_until 
+-----------------+-------+-------+-----------+------------+----------+-------------+---------+-----------+-------------
+ omni_migrator   | t     | f     | f         | f          | f        | f           | t       |        -1 | -
+ omni_owner      | f     | f     | f         | f          | f        | f           | t       |        -1 | -
+ omni_runtime_v2 | t     | f     | f         | f          | f        | f           | t       |        -1 | -
+
+## 2. memberships que envolvem os papéis novos
+    membro     |             papel             | admin_option | inherit_option | set_option |   grantor    
+---------------+-------------------------------+--------------+----------------+------------+--------------
+ neondb_owner  | omni_migrator                 | t            | f              | f          | cloud_admin
+ neondb_owner  | omni_owner                    | t            | f              | f          | cloud_admin
+ neondb_owner  | omni_runtime_v2               | t            | f              | f          | cloud_admin
+ neondb_owner  | omnigestao_candidate_audit_ro | t            | f              | f          | cloud_admin
+ omni_migrator | omni_owner                    | f            | t              | t          | neondb_owner
+
+## 3. isolamento: alcance (USAGE ou SET) de cada papel novo a papéis privilegiados
+   papel_novo    | alcanca_privilegiado 
+-----------------+----------------------
+ omni_migrator   | -
+ omni_owner      | -
+ omni_runtime_v2 | -
+
+ runtime_herda_owner | runtime_set_owner | runtime_herda_migrator | migrator_herda_owner | runtime_neon_superuser | runtime_pg_write_all_data | migrator_neon_superuser | migrator_pg_write_all_data 
+---------------------+-------------------+------------------------+----------------------+------------------------+---------------------------+-------------------------+----------------------------
+ f                   | f                 | f                      | t                    | f                      | f                         | f                       | f
+
+## 4. CONNECT no database de produção
+                                                               ?column?                                                                
+---------------------------------------------------------------------------------------------------------------------------------------
+ datacl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omni_runtime_v2=c/neondb_owner,omni_migrator=c/neondb_owner} dono=neondb_owner
+
+     rolname     | connect | create_db | temp 
+-----------------+---------+-----------+------
+ neondb_owner    | t       | t         | t
+ omni_migrator   | t       | f         | t
+ omni_owner      | t       | f         | t
+ omni_runtime_v2 | t       | f         | t
+
+## 5. cobertura dos GRANTs do runtime
+               ?column?                
+---------------------------------------
+ schema_public usage=true create=false
+
+                                         ?column?                                         
+------------------------------------------------------------------------------------------
+ tabelas=110 sem_dml_completo=0 com_truncate=0 com_references=0 com_trigger=0 rls_ativo=0
+
+                ?column?                
+----------------------------------------
+ sequencias=0 sem_usage_select_update=0
+
+                                                       ?column?                                                        
+-----------------------------------------------------------------------------------------------------------------------
+ migrator escreve_estoque=false owner escreve_estoque=false objetos_de_omni_owner=0 objetos_de_neondb_owner_public=504
+
+## 6. papel antigo segue operacional
+                         ?column?                          
+-----------------------------------------------------------
+ neondb_owner connect=true escreve_estoque=true login=true
+
+## 7. cinco colunas de estoque
+               coluna                | data_type 
+-------------------------------------+-----------
+ estoque_produtos.stock              | integer
+ movimentacoes_estoque.estoqueAntes  | integer
+ movimentacoes_estoque.estoqueDepois | integer
+ movimentacoes_estoque.quantidade    | integer
+ produto_depositos.quantidade        | integer
+
+## 8. histórico Prisma
+ total | finalizadas | kg |                ultima                
+-------+-------------+----+--------------------------------------
+    23 |          23 |  0 | 20261022120000_platform_pilot_access
+
+## 9. agregados (loja-2 em operação pode mover estes números)
+              ?column?               
+-------------------------------------
+ estoque_produtos n=14127 soma=69318
+
+               ?column?               
+--------------------------------------
+ produto_depositos n=13744 soma=70070
+
+                            ?column?                             
+-----------------------------------------------------------------
+ movimentacoes_estoque n=2580 max_created=2026-10-28 21:55:23+00
+
+        ?column?         
+-------------------------
+ caixas_abertas loja-1=1
+
+## 10. sessões no database
+    papel     |    app    | estado | count 
+--------------+-----------+--------+-------
+ neondb_owner | kg-a3-pos | active |     1
+
+exit=0
+
+===== 06-verificacao.sql (oficial) · omnigestao_prod =====
+BEGIN
+database=omnigestao_prod dono=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omni_runtime_v2=c/neondb_owner,omni_migrator=c/neondb_owner}
+papel neon_service connect=true escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+papel neondb_owner connect=true escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+papel omni_migrator connect=true escreve_estoque=false pg_write_all_data=false dono_por_heranca=true
+papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+papel omnigestao_candidate_audit_ro connect=true escreve_estoque=false pg_write_all_data=false dono_por_heranca=false
+sessoes papel=neondb_owner app=kg-a3-pos n=1
+objetos do papel antigo=540
+colunas estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+ROLLBACK
+exit=0
+fim=2026-10-29T09:39:36.598Z

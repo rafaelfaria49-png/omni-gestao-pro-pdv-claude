@@ -1,0 +1,9 @@
+{
+  "error": {
+    "name": "PrismaClientUnknownRequestError",
+    "code": null,
+    "sqlstate": "23514",
+    "excerpt": "\nInvalid `prisma.produto.update()` invocation:\n\n\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: \"23514\", message: \"new row for relation \\\"estoque_produtos\\\" violates check constraint \\\"estoque_produtos_stock_kg_milesimos\\\"\", severity: \"ERROR\", detail: Some(\"Failing row contains (a6-un, 6e-323, {\\\"comercial\\\": {\\\"unidade\\\": \\\"UN\\\", \\\"version\\\": 1, \\\"basePreco\\\": \\\"UN\\\",...).\"), column: None, hint: None }), transient: false }) {}"
+  },
+  "stock_after": "13"
+}
