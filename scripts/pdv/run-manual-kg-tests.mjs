@@ -42,7 +42,7 @@ try {
   await db.$executeRawUnsafe("INSERT INTO venda_itens (id, \"vendaId\", \"inventoryId\", nome, quantidade, \"precoUnitario\", \"lineTotal\") VALUES ('kg-historical-item', 'kg-historical-sale', 'kg-historical-un', 'UN histórica', 2147483647, 20, 20)")
   const snapshot = () => db.$queryRawUnsafe("SELECT (SELECT stock::text FROM estoque_produtos WHERE id = 'kg-historical-un') AS stock, (SELECT quantidade::text FROM venda_itens WHERE id = 'kg-historical-item') AS quantity")
   const before = await snapshot()
-  for (const migration of ["20261025120000_estoque_quantidade_fracionada", "20261029120000_manual_kg_sale_quantity"]) {
+  for (const migration of ["20261025120000_estoque_quantidade_fracionada", "20261029120000_manual_kg_sale_quantity", "20261106120000_manual_kg_title_guard_indexed"]) {
     run(["node_modules/prisma/build/index.js", "db", "execute", "--schema", "prisma/schema.prisma", "--file", "prisma/migrations/" + migration + "/migration.sql"])
   }
   const after = await snapshot()
