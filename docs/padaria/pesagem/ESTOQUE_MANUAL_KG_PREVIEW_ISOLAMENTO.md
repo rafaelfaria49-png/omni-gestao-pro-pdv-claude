@@ -163,7 +163,7 @@ O ensaio no clone **não** autoriza o 07 em produção.
 | P2 | Criar `preview_runtime`, aplicar schema/resolve, seed sintético, branch `pr315-kg` + migration KG nele — P2.0 PASS 2026-10-27 pelo conector Neon (`06-p2-0-check.md`); P2.1 PASS 2026-10-27 (`08-p2-1-main.md`); P2.2 feita pelo dono (`pr315-kg` = `br-wandering-band-b6ov7vmt`); P2.3 PASS 2026-10-27 (`09-p2-3-kg.md`) | sim |
 | P3 | Alterar envs do escopo Preview do `omni-gestao-pro` (genérico + override #315 + remover 4 overrides ops-v4) — P3.0 preflight PASS 2026-10-27 (`10-p3-0-preflight.md`); **APLICADA 2026-10-27T22:05Z** (12/12, `11-p3-apply.md`), Production/Development/aliases inalterados | sim (valores antigos seguem nos arquivos locais do operador) |
 | P4 | Merge da main + R5 + push na PR #315 — **FEITA 2026-10-28** (`12-p4-merge-r5-push.md`): R5 APPROVE, push `b00b230..2731097`, preview READY; deployment de teste da main via CLI não feito; prova de destino do runtime fica na P5 | push não se desfaz |
-| P5 | Escritas sintéticas nos previews e leitura RO da produção para a prova de destino | — |
+| P5 | Prova de destino do runtime — **PASS 2026-10-28** (`13-p5-runtime-db.md`): marcador só no `pr315-kg`, lido pelo deployment `2731097` com login sintético; limpo; produção não conectada | — |
 
 Separadas e opcionais:
 - trocar o `DIRECT_URL` de Development;

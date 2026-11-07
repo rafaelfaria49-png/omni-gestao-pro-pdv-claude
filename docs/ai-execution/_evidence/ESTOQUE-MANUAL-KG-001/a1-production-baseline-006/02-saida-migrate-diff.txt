@@ -1,0 +1,20 @@
+url: OK sem conectar · endpoint=ep-summer-tooth-acltc6wi pooler=off usuário=neondb_owner db=omnigestao_prod sslmode=require channel_binding=require senha_presente=true
+--- migrate diff produção × schema da #315 (exit=0)
+
+[*] Changed the `estoque_produtos` table
+  [*] Altered column `stock` (default changed from `Some(Value(Int(0)))` to `Some(Value(Float(BigDecimal("0"))))`, type changed)
+
+[*] Changed the `movimentacoes_estoque` table
+  [*] Altered column `quantidade` (type changed)
+  [*] Altered column `estoqueAntes` (type changed)
+  [*] Altered column `estoqueDepois` (type changed)
+  [*] Renamed index `storeId_idempotencyKey` to `movimentacoes_estoque_storeId_idempotencyKey_key`
+
+[*] Changed the `produto_depositos` table
+  [*] Altered column `quantidade` (default changed from `Some(Value(Int(0)))` to `Some(Value(Float(BigDecimal("0"))))`, type changed)
+
+--- migrate diff produção × schema da main (exit=0)
+
+[*] Changed the `movimentacoes_estoque` table
+  [*] Renamed index `storeId_idempotencyKey` to `movimentacoes_estoque_storeId_idempotencyKey_key`
+

@@ -1,0 +1,22 @@
+{
+  "pass": true,
+  "stock_balances_and_rows_unchanged": true,
+  "sales_rows_unchanged": true,
+  "cash_session_rows_unchanged": true,
+  "migration_history_unchanged": true,
+  "production_schema_roles_acl_unchanged": true,
+  "vercel_all_environment_metadata_unchanged": "UNVERIFIED_API",
+  "vercel_production_deployment_unchanged": "UNVERIFIED_API",
+  "a2_and_legacy_secret_files_unchanged": true,
+  "vercel_token_file_unchanged": true,
+  "existing_wips_and_evidence_unchanged": true,
+  "compared_data_tables": [
+    "vendas",
+    "sessoes_caixa",
+    "estoque_produtos",
+    "produto_depositos",
+    "_prisma_migrations",
+    "movimentacoes_estoque"
+  ],
+  "private_digests_persisted": false
+}

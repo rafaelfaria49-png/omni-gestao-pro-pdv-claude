@@ -1,0 +1,67 @@
+{
+  "goal": "ESTOQUE-KG-PRODUCTION-A5-RUNBOOK-001",
+  "completed_at": "2026-10-29T13:16:12.669Z",
+  "timezone": "America/Sao_Paulo",
+  "result": {
+    "A5": "PASS",
+    "RUNBOOK_UPDATED": "YES",
+    "A1_A4_EVIDENCE_RECONCILED": "YES",
+    "PRODUCTION_STATE_DOCUMENTED": "YES",
+    "DEPLOYMENT_RISK_DOCUMENTED": "YES",
+    "J0_CHECKLIST_UPDATED": "YES",
+    "SCRIPT_07_DECISION": "PENDING",
+    "MAIN_RECONCILIATION": "PENDING",
+    "DOCS_COMMIT": "NONE",
+    "PRODUCTION_CHANGES": "0",
+    "VERCEL_CHANGES": "0",
+    "MERGE": "NO",
+    "PUSH": "NO",
+    "NEXT_GATE": "A6, mediante autorização separada."
+  },
+  "validation": "validation-02.json",
+  "checks_passed": 55,
+  "checks_total": 55,
+  "tracked_files_outside_scope_preserved": 6038,
+  "previous_evidence_files_preserved": 152,
+  "pending_document_paths": [
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md"
+  ],
+  "document_hashes": {
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md": "4837f9259577e32c431cdfd22d72a7a83c7756e523e494b6ba18ad649ad79944",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md": "c413d9d7d97c63987d4f622f84f53becbf8d391b3b1415079b0473a95a5670c3",
+    "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md": "8c86a74be18af90f39432884930c22814acb404ed8d08a4f0b791d13ccb93f5a"
+  },
+  "commit_safety": {
+    "name": "Commit separation audited; no unrelated WIP staged",
+    "pass": true,
+    "decision": "DOCS_COMMIT=NONE",
+    "reason": "A5 hunks overlap preexisting hardening WIPs in the runbook/remediation; no staging or commit attempted",
+    "documents": [
+      {
+        "file": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md",
+        "preexisting_wip": true,
+        "a5_hunks": 19,
+        "overlapping_hunks": 18
+      },
+      {
+        "file": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md",
+        "preexisting_wip": true,
+        "a5_hunks": 17,
+        "overlapping_hunks": 8
+      },
+      {
+        "file": "docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md",
+        "preexisting_wip": false,
+        "a5_hunks": 12,
+        "overlapping_hunks": 0
+      }
+    ]
+  },
+  "network_operations": 0,
+  "neon_connections": 0,
+  "vercel_operations": 0,
+  "sql_executed": 0,
+  "stopped_at": "A5"
+}
