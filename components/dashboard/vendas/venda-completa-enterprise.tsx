@@ -213,7 +213,7 @@ function pagamentoLabelMethod(p: PaymentMethod): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
-  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
+  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales, releaseSaleAttempt } = useOperationsStore()
   // Mesma porta de pré-pagamento dos demais PDVs: caixa aberto E sessão do
   // terminal atual. Sem isso a venda saía daqui e voltava recusada por
   // `CAIXA_FECHADO`, virando pendência local (F-02 da readiness 002A).
@@ -942,6 +942,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setEnderecoEntrega(EMPTY_ENDERECO)
     setShowEnderecoForm(false)
     setAccessoryProduct(null)
+    releaseSaleAttempt?.(pendingSaleIdentityRef.current?.getIdentity())
     pendingSaleIdentityRef.current?.clear()
     try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch { /* ignore */ }
     if (hadItems) {

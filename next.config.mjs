@@ -50,6 +50,10 @@ const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
   register: true,
+  // O padrão (true) instala `online → location.reload()` no app inteiro: cada oscilação
+  // de rede recarregava o PDV e apagava o carrinho em memória. A reconexão já é tratada
+  // pelos handlers de `online` (catálogo, pendências, caixa, versão) sem recarregar.
+  reloadOnOnline: false,
   skipWaiting: true,
   cacheOnFrontEndNav: true,
   extendDefaultRuntimeCaching: true,
@@ -64,7 +68,14 @@ const withPWA = withPWAInit({
         url.pathname === "/api/ops/import/clientes" ||
         url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
-        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
+        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/") ||
+        // Sync do catálogo do PDV (PDV-CADASTROS-SYNC-AUTOMATICO-001): versão e snapshot nunca do
+        // cache — rede lenta devolveria catálogo velho. A carga inicial do PDV segue cacheável.
+        (url.pathname === "/api/ops/inventory" && url.searchParams.get("catalogSync") === "1") ||
+        // Prova de venda no servidor (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001): consulta por
+        // clientSaleId e capability do writer nunca do cache — offline vira erro de rede honesto.
+        url.pathname === "/api/ops/vendas/by-client-sale-id" ||
+        url.pathname === "/api/ops/venda-persist/v2"
       ),
       handler: "NetworkOnly",
       method: "GET",

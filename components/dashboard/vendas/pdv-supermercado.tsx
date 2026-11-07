@@ -213,7 +213,7 @@ export function PdvSupermercado({
   const customerSearchEnabled = pdvCapabilities.isEnabled("pdv.customerSearch")
   const accessoryModelColorEnabled = pdvCapabilities.isEnabled("pdv.accessoryModelColor")
   const payMethodsEnabled = pdvCapabilities.isEnabled("sales.paymentMethods")
-  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, sincronizarCreditoLocal, sales, releaseSaleAttempt } = useOperationsStore()
   const { caixa, sessaoId } = useCaixa()
   const { garantirSessao } = useGarantirSessaoCaixa()
   // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
@@ -1477,6 +1477,7 @@ export function PdvSupermercado({
                     setDiscountPercent(0)
                     setDiscountReais(0)
                     setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                    releaseSaleAttempt?.(pendingSaleIdentityRef.current?.getIdentity())
                     pendingSaleIdentityRef.current?.clear()
                     toast({ title: "Carrinho limpo" })
                     queueMicrotask(hardFocusSearch)
@@ -1492,6 +1493,7 @@ export function PdvSupermercado({
                     setDiscountPercent(0)
                     setDiscountReais(0)
                     setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                    releaseSaleAttempt?.(pendingSaleIdentityRef.current?.getIdentity())
                     pendingSaleIdentityRef.current?.clear()
                     toast({ title: "Carrinho limpo" })
                     productInputRef.current?.focus()
@@ -2176,6 +2178,7 @@ export function PdvSupermercado({
                       setDiscountPercent(0)
                       setDiscountReais(0)
                       setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
+                      releaseSaleAttempt?.(pendingSaleIdentityRef.current?.getIdentity())
                       pendingSaleIdentityRef.current?.clear()
                       toast({ title: "Carrinho limpo", description: "Autorizado pelo supervisor." })
                     }

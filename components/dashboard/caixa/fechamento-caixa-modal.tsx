@@ -130,6 +130,20 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     return houveVenda && operadorDisplay ? [operadorDisplay] : []
   }, [sales, sessaoId, caixa.dataAbertura, operadorDisplay])
 
+  // Vendas desta sessão ainda NÃO confirmadas pelo servidor (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001).
+  // O fechamento grava só o que o servidor confirmou: a pendente fica de fora e, se for
+  // sincronizada depois, entra pela sessão original (Sincronizar retroativo, com confirmação).
+  // Fechar sem saber disso mascara diferença de gaveta — exige ciência explícita.
+  const pendentesSessao = useMemo(
+    () =>
+      filterSalesDaSessao(sales, { sessaoId, dataAbertura: caixa.dataAbertura }).filter(
+        (s) => s.syncPending === true,
+      ),
+    [sales, sessaoId, caixa.dataAbertura],
+  )
+  const totalPendentesSessao = pendentesSessao.reduce((t, s) => t + (Number(s.total) || 0), 0)
+  const [cienteDasPendentes, setCienteDasPendentes] = useState(false)
+
   // Vendas da sessão × Recebido (origem e forma) × Gaveta — fonte única da tela, da
   // impressão/cópia, do comprovante e do histórico (GOAL CAIXA-FECHAMENTO-ORIGENS-PAGAMENTO-003A).
   const blocos = useMemo(() => montarBlocosFechamento(resumo), [resumo])
@@ -198,6 +212,15 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
         variant: "destructive",
         title: "Unidade não selecionada",
         description: "Selecione a unidade ativa antes de fechar o caixa.",
+      })
+      return
+    }
+
+    if (pendentesSessao.length > 0 && !cienteDasPendentes) {
+      toast({
+        variant: "destructive",
+        title: "Há vendas desta sessão sem confirmação do servidor",
+        description: `${pendentesSessao.length} venda(s) (${fmt(totalPendentesSessao)}) não entram neste fechamento. Sincronize-as ou marque a ciência antes de fechar.`,
       })
       return
     }
@@ -670,6 +693,29 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
           </div>
 
           <div className="shrink-0 border-t border-border bg-card px-3 py-2.5 sm:px-4">
+            {pendentesSessao.length > 0 && (
+              <div
+                className="mb-2 flex min-w-0 flex-col gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                data-testid="fechamento-pendentes-sync"
+              >
+                <p className="min-w-0 font-semibold">
+                  {pendentesSessao.length} venda(s) desta sessão ({fmt(totalPendentesSessao)}) ainda NÃO foram confirmadas pelo servidor.
+                </p>
+                <p className="min-w-0 text-foreground">
+                  Elas não entram neste fechamento (estoque e caixa do servidor não foram lançados). Prefira reenviar antes de fechar. Se
+                  fechar assim, a venda sincronizada depois vai para esta sessão pelo &quot;Sincronizar retroativo&quot;, com confirmação.
+                </p>
+                <label className="flex min-w-0 items-center gap-2 text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={cienteDasPendentes}
+                    onChange={(e) => setCienteDasPendentes(e.target.checked)}
+                    className="h-4 w-4 shrink-0 accent-destructive"
+                  />
+                  <span className="min-w-0">Estou ciente e quero fechar sem essas vendas.</span>
+                </label>
+              </div>
+            )}
             <div className="flex flex-col-reverse gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center justify-center gap-1 lg:justify-start">
                 <Button

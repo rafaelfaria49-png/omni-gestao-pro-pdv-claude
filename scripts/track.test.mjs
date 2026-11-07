@@ -2453,3 +2453,432 @@ test('REFRESH: auditoria divergente é recusada; nova tentativa oficial continua
   assert.deepEqual(refreshSnapshot(f.repo), before);
   assert.equal(JSON.parse(fs.readFileSync(file)).attempt, 3);
 });
+
+// ---------------------------------------------------------------------------
+// RESUME — histórico produzido por open/attempt/block/reconcile em Git isolado.
+// A main de fixture ratifica o plano; a branch original integra essa main.
+// ---------------------------------------------------------------------------
+
+function blockedResumeFixture(t, options = {}) {
+  const f = makeRepo(t);
+  const { repo, name } = f;
+  initTrack(repo);
+  g(repo, 'config', 'core.autocrlf', options.crlf ? 'true' : 'false');
+  const goal = 'demo-resume-002';
+  const branch = 'goal/demo-resume-002';
+  const rel = 'docs/execution-tracks/demo';
+  const hot = `${rel}/goals/${goal}.md`;
+  const closed = `${rel}/_closed/goals/${goal}.md`;
+  const ledger = `${rel}/LEDGER.jsonl`;
+  const oldMeta = META_DEFAULTS(name, { id: goal, branch, plan_ref: 'PLANO-RESUME', plan_rev: 8 });
+  assert.equal(addGoal(repo, oldMeta).commit.code, 0);
+  assert.equal(openGoal(repo, branch).code, 0);
+  const worked = trabalhaECommita(repo);
+  assert.equal(worked.code, 0, worked.all);
+  if (options.exhausted) {
+    for (const n of [1, 2]) assert.equal(aep(repo, ['attempt', 'demo', '--fail', `--reason=Falha real ${n}`]).code, 0);
+  }
+  assert.equal(aep(repo, ['block', 'demo', '--by=gate', '--reason=Consumidor fora da allowlist; aguardar plano humano']).code, 3);
+  const blocked = g(repo, 'rev-parse', 'HEAD').out.trim();
+  w(repo, 'app/evidence.txt', 'Evidência posterior ao BLOCKED; nenhuma tentativa nova.\n');
+  assert.equal(g(repo, 'add', '--', 'app/evidence.txt').code, 0);
+  assert.equal(g(repo, 'commit', '-m', 'docs: preservar origem bloqueada').code, 0);
+  const source = g(repo, 'rev-parse', 'HEAD').out.trim();
+  assert.equal(g(repo, 'push', 'origin', branch).code, 0);
+  assert.equal(g(repo, 'fetch', 'origin').code, 0);
+  const event = ledgerDe(repo).at(-1);
+  const archiveBlob = spawnSync('git', ['cat-file', 'blob', `${source}:${closed}`], { cwd: repo }).stdout;
+  assert.equal(g(repo, 'checkout', '-q', '-b', 'plan/demo-resume', 'main').code, 0);
+  const reconciled = aep(repo, ['reconcile-blocked', 'demo', `--goal=${goal}`,
+    `--source-ref=refs/remotes/origin/${branch}`, `--source-commit=${source}`]);
+  assert.equal(reconciled.code, 0, reconciled.all);
+  const reconciliation = g(repo, 'rev-parse', 'HEAD').out.trim();
+  const authorization = 'HUMAN-RESUME-2026-10-28';
+  const meta = { ...oldMeta, status: 'BLOCKED', plan_rev: 9,
+    autorizacao_humana_execucao: { aprovado: true, authorization_id: authorization,
+      condicao_previa: 'Plano e mecanismo integrados legitimamente na main; retomada cumulativa oficial.' },
+    gate_humano: { requerido: true, pendente: true, motivo: 'Plano e rito oficial pendentes de merge humano.' },
+    retomada_aep: { status: 'BLOCKED_PENDING_OFFICIAL_RITE', source_commit: source, blocked_commit: blocked,
+      reconciliation_commit: reconciliation, historical_attempt: event.attempt, historical_previous_attempts: event.previous_attempts,
+      max_attempts: 3, next_corrective_attempt_required: event.attempt + 1,
+      current_cli_supported: false, G_AEP_CORE: 'REQUESTED_NOT_AUTHORIZED' } };
+  if (options.mutatePlan) options.mutatePlan(meta);
+  assert.equal(addGoal(repo, meta).commit.code, 0);
+  assert.equal(g(repo, 'checkout', '-q', 'main').code, 0);
+  assert.equal(g(repo, 'merge', '--ff-only', 'plan/demo-resume').code, 0);
+  assert.equal(g(repo, 'push', 'origin', 'main').code, 0);
+  const base = g(repo, 'rev-parse', 'HEAD').out.trim();
+  assert.equal(g(repo, 'checkout', '-q', branch).code, 0);
+  const merge = g(repo, 'merge', '--no-commit', '--no-ff', 'main');
+  if (merge.code !== 0) assert.match(merge.all, /CONFLICT/, merge.all);
+  // O rename detector do Git pode aplicar a revisão 9 no arquivo fechado 8.
+  // A integração humana preserva explicitamente os blobs ratificados da main.
+  const integrated = g(repo, 'restore', '--source=main', '--staged', '--worktree', '--', hot, closed,
+    ledger, `${rel}/state.json`, 'docs/execution-tracks/REGISTRY.md', 'docs/ai-execution/GATES.md');
+  assert.equal(integrated.code, 0, integrated.all);
+  const resolved = sh('git', ['commit', '-m', 'merge: integrar plano humano preservando BLOCKED'], { cwd: repo, env: { AEP_WRITE: '1' } });
+  assert.equal(resolved.code, 0, resolved.all);
+  assert.equal(g(repo, 'status', '--porcelain').out, '');
+  assert.ok(fs.existsSync(path.join(repo, hot)), `plano quente ausente após merge: ${merge.all}\n${g(repo, 'ls-tree', '-r', '--name-only', 'HEAD', '--', rel).out}\n${g(repo, 'log', '--oneline', '--all', '-8').out}`);
+  assert.ok(spawnSync('git', ['cat-file', 'blob', `HEAD:${closed}`], { cwd: repo }).stdout.equals(archiveBlob),
+    'integração preserva literalmente o blob histórico, inclusive sob autocrlf');
+  const sourceBytes = fs.readFileSync(path.join(repo, ledger));
+  const archiveBytes = fs.readFileSync(path.join(repo, closed));
+  return { ...f, goal, branch, rel, hot, closed, ledger, meta, source, blocked, reconciliation, base,
+    sourceBytes, archiveBytes, event, args: ['resume-blocked', 'demo', `--goal=${goal}`, `--authorization=${authorization}`] };
+}
+
+const resumedMarker = (f) => JSON.parse(fs.readFileSync(path.join(f.repo, '.aep-active'), 'utf8'));
+
+test('RESUME: dry-run integralmente read-only, incluindo mtimes, índice, refs e objetos Git', (t) => {
+  const f = blockedResumeFixture(t);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, [...f.args, '--dry-run']);
+  assert.equal(r.code, 0, r.all);
+  assert.match(r.all, /BLOCKED 1\/3 preservado/);
+  assert.match(r.all, /próxima corretiva: 2\/3/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+  assert.equal(fs.existsSync(path.join(f.repo, '.aep-active')), false);
+});
+
+for (const crlf of [false, true]) test(`RESUME: BLOCKED 1/3 → 2/3 sem falha/evento artificial; CRLF=${crlf}`, (t) => {
+  const f = blockedResumeFixture(t, { crlf });
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 0, r.all);
+  const a = resumedMarker(f);
+  assert.equal(a.goal, f.goal);
+  assert.equal(a.attempt, 2);
+  assert.equal(a.max_attempts, 3);
+  assert.equal(a.base_commit, f.base);
+  assert.deepEqual(a.attempts_log, [], 'bloqueio não se transforma em falha inventada');
+  assert.deepEqual(a.resumption.historical_previous_attempts, []);
+  assert.equal(a.resumption.historical_attempt, 1);
+  assert.equal(a.resumption.blocked_commit, f.blocked);
+  assert.deepEqual(a.allowlist, f.meta.allowlist);
+  const after = refreshSnapshot(f.repo);
+  delete after['.aep-active'];
+  assert.deepEqual(after, before, 'somente marcador; nenhum temporário nem metadado Git alterado');
+  assert.equal(stateDe(f.repo).status, 'BLOCKED', 'estado ratificado continua BLOCKED');
+  assert.equal(ledgerDe(f.repo).length, 1);
+  assert.ok(fs.readFileSync(path.join(f.repo, f.closed)).equals(f.archiveBytes));
+  const stable = refreshSnapshot(f.repo);
+  for (const args of [f.args, [...f.args, '--dry-run']]) {
+    const again = aep(f.repo, args);
+    assert.equal(again.code, 0, again.all);
+    assert.match(again.all, /NO-OP/);
+    assert.deepEqual(refreshSnapshot(f.repo), stable);
+  }
+});
+
+test('RESUME: falha corretiva 2/3 → 3/3; repetição não reseta; esgotamento mantém ambos BLOCKED', (t) => {
+  const f = blockedResumeFixture(t);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  const fail2 = aep(f.repo, ['attempt', 'demo', '--fail', '--reason=Falha corretiva real da tentativa 2']);
+  assert.equal(fail2.code, 0, fail2.all);
+  assert.equal(resumedMarker(f).attempt, 3);
+  assert.deepEqual(resumedMarker(f).attempts_log.map((a) => a.n), [2]);
+  const before = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+  const fail3 = aep(f.repo, ['attempt', 'demo', '--fail', '--reason=Falha corretiva real da tentativa 3']);
+  assert.equal(fail3.code, 3, fail3.all);
+  const events = ledgerDe(f.repo);
+  assert.equal(events.length, 2);
+  assert.deepEqual(events[0], f.event);
+  assert.equal(events[1].attempt, 3);
+  assert.deepEqual(events[1].previous_attempts.map((a) => a.n), [2, 3]);
+  assert.equal(events[1].resumed_from.historical_attempt, 1);
+  assert.equal(events[1].result, 'BLOCKED');
+  assert.ok(fs.readFileSync(path.join(f.repo, f.ledger)).subarray(0, f.sourceBytes.length).equals(f.sourceBytes));
+  assert.ok(fs.readFileSync(path.join(f.repo, f.closed)).equals(f.archiveBytes));
+  assert.equal(metaDe(f.repo, `${f.rel}/_closed/goals/${f.goal}-r9-a3.md`).status, 'BLOCKED');
+  assert.equal(stateDe(f.repo).counters.goals_blocked, 1, 'projeção conta um GOAL, dois eventos');
+  assert.equal(aep(f.repo, ['verify', '--all']).code, 0);
+  const exhausted = refreshSnapshot(f.repo);
+  assert.notEqual(aep(f.repo, f.args).code, 0);
+  assert.notEqual(aep(f.repo, ['attempt', 'demo', '--fail', '--reason=quarta proibida']).code, 0);
+  assert.deepEqual(refreshSnapshot(f.repo), exhausted);
+});
+
+test('RESUME: close legítimo em 2/3 preserva histórico e evidencia revisão/arquivo final distintos', (t) => {
+  const f = blockedResumeFixture(t);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  w(f.repo, 'app/produtivo.ts', 'export const produtivo = 3;\n');
+  assert.equal(g(f.repo, 'add', '--', 'app/produtivo.ts').code, 0);
+  assert.equal(g(f.repo, 'commit', '-m', 'goal(demo-resume-002): corretivo autorizado').code, 0);
+  assert.equal(aep(f.repo, ['check', 'demo']).code, 0);
+  const r = aep(f.repo, ['close', 'demo']);
+  assert.equal(r.code, 0, r.all);
+  const events = ledgerDe(f.repo);
+  assert.equal(events.length, 2, 'somente BLOCKED original e DONE real');
+  assert.deepEqual(events[0], f.event);
+  assert.equal(events[1].result, 'DONE');
+  assert.equal(events[1].attempt, 2);
+  assert.deepEqual(events[1].previous_attempts, []);
+  assert.equal(events[1].plan_rev, 9);
+  assert.equal(events[1].goal_archive, `${f.rel}/_closed/goals/${f.goal}-r9-a2.md`);
+  assert.equal(events[1].resumed_from.blocked_commit, f.blocked);
+  assert.ok(fs.readFileSync(path.join(f.repo, f.closed)).equals(f.archiveBytes));
+  assert.ok(fs.readFileSync(path.join(f.repo, f.ledger)).subarray(0, f.sourceBytes.length).equals(f.sourceBytes));
+  assert.equal(metaDe(f.repo, events[1].goal_archive).status, 'DONE');
+  assert.equal(metaDe(f.repo, events[1].goal_archive).plan_rev, 9);
+  assert.equal(fs.existsSync(path.join(f.repo, f.hot)), false);
+  assert.equal(fs.existsSync(path.join(f.repo, '.aep-active')), false);
+  assert.match(fs.readFileSync(path.join(f.repo, events[1].report), 'utf8'), /sem falha artificial/);
+  assert.deepEqual(stateDe(f.repo).counters, { goals_done: 1, goals_blocked: 0, goals_imported: 0, ledger_lines: 2 });
+  assert.equal(aep(f.repo, ['verify', '--all']).code, 0);
+});
+
+for (const [label, mutatePlan, expected] of [
+  ['autorização não aprovada', (m) => { m.autorizacao_humana_execucao.aprovado = false; }, /autorização/],
+  ['autorização divergente', (m) => { m.autorizacao_humana_execucao.authorization_id = 'OUTRA'; }, /autorização/],
+  ['origem divergente', (m) => { m.retomada_aep.source_commit = 'f'.repeat(40); }, /FALHA/],
+  ['contagem histórica divergente', (m) => { m.retomada_aep.historical_attempt = 0; }, /contagem histórica/],
+  ['falha retroativa inventada', (m) => { m.retomada_aep.historical_previous_attempts = [{ n: 1, reason: 'inventada' }]; }, /contagem histórica/],
+  ['revisão não avançada', (m) => { m.plan_rev = 8; }, /plano revisado/],
+  ['worktree divergente', (m) => { m.worktree = 'outra-worktree'; }, /worktree/],
+]) test(`RESUME: recusa ${label}, sem escrita inclusive no dry-run`, (t) => {
+  const f = blockedResumeFixture(t, { mutatePlan });
+  const before = refreshSnapshot(f.repo);
+  for (const args of [f.args, [...f.args, '--dry-run']]) {
+    const r = aep(f.repo, args);
+    assert.notEqual(r.code, 0, r.all);
+    assert.match(r.all, expected);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+});
+
+test('RESUME: teto 3/3 não pode ser retomado nem por nova autorização', (t) => {
+  const f = blockedResumeFixture(t, { exhausted: true });
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, [...f.args, '--dry-run']);
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, /3\/3 esgotado/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+});
+
+test('RESUME: recusa plano copiado fora da main, branch/HEAD errados, sessão aberta e argumentos ambíguos', (t) => {
+  const f = blockedResumeFixture(t);
+  for (const args of [f.args.filter((a) => !a.startsWith('--authorization=')), [...f.args, '--dry-run=true'],
+    [...f.args, '--surpresa'], [...f.args, 'extra'], f.args.map((a) => a === `--goal=${f.goal}` ? '--goal=../../fora' : a)]) {
+    const before = refreshSnapshot(f.repo);
+    assert.notEqual(aep(f.repo, args).code, 0);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+  w(f.repo, '.aep-active', JSON.stringify({ goal: f.goal, track: 'demo', attempt: 1 }));
+  const opened = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 4);
+  assert.deepEqual(refreshSnapshot(f.repo), opened);
+  fs.unlinkSync(path.join(f.repo, '.aep-active'));
+  for (const args of [['checkout', '-q', '-b', 'wrong-branch'], ['checkout', '-q', '--detach']]) {
+    assert.equal(g(f.repo, ...args).code, 0);
+    const wrong = refreshSnapshot(f.repo);
+    assert.equal(aep(f.repo, f.args).code, 4);
+    assert.deepEqual(refreshSnapshot(f.repo), wrong);
+  }
+  assert.equal(g(f.repo, 'checkout', '-q', f.branch).code, 0);
+  assert.equal(addGoal(f.repo, { ...f.meta, read_budget: 99 }).commit.code, 0);
+  const copied = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 4);
+  assert.deepEqual(refreshSnapshot(f.repo), copied);
+});
+
+test('RESUME: árvore/índice sujos, origem remota divergente e plano ausente são recusados', (t) => {
+  const f = blockedResumeFixture(t);
+  w(f.repo, 'app/dirty.txt', 'não autorizado\n');
+  for (const staged of [false, true]) {
+    if (staged) assert.equal(g(f.repo, 'add', '--', 'app/dirty.txt').code, 0);
+    const before = refreshSnapshot(f.repo);
+    assert.equal(aep(f.repo, f.args).code, 4);
+    assert.deepEqual(refreshSnapshot(f.repo), before);
+  }
+  assert.equal(g(f.repo, 'restore', '--staged', '--', 'app/dirty.txt').code, 0);
+  fs.unlinkSync(path.join(f.repo, 'app/dirty.txt'));
+  assert.equal(g(f.repo, 'update-ref', `refs/remotes/origin/${f.branch}`, f.base).code, 0);
+  const divergent = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 4);
+  assert.deepEqual(refreshSnapshot(f.repo), divergent);
+  assert.equal(g(f.repo, 'update-ref', `refs/remotes/origin/${f.branch}`, f.source).code, 0);
+  assert.equal(g(f.repo, 'rm', '--', f.hot).code, 0);
+  assert.equal(aep(f.repo, ['registry']).code, 0);
+  assert.equal(g(f.repo, 'add', '--', `${f.rel}/state.json`, 'docs/execution-tracks/REGISTRY.md').code, 0);
+  assert.equal(sh('git', ['commit', '-m', 'aep(demo): fixture plano ausente'], { cwd: f.repo, env: { AEP_WRITE: '1' } }).code, 0);
+  const missing = refreshSnapshot(f.repo);
+  assert.notEqual(aep(f.repo, f.args).code, 0);
+  assert.deepEqual(refreshSnapshot(f.repo), missing);
+});
+
+test('RESUME: sessão concorrente da mesma trilha em outra worktree é preservada e impede abertura', (t) => {
+  const f = blockedResumeFixture(t);
+  const other = path.join(f.tmp, 'other-worktree');
+  assert.equal(g(f.repo, 'worktree', 'add', '-b', 'other-session', other, 'main').code, 0);
+  const marker = w(other, '.aep-active', JSON.stringify({ track: 'demo', goal: 'other-goal', attempt: 2 }));
+  const bytes = fs.readFileSync(marker);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, f.args);
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, /sessão ativa concorrente/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+  assert.ok(fs.readFileSync(marker).equals(bytes));
+});
+
+test('RESUME: falha na publicação atômica reverte temporário; retry cria somente uma sessão', (t) => {
+  const f = blockedResumeFixture(t);
+  const preload = w(f.tmp, 'fail-resume-link.mjs', "import fs from 'node:fs';\nfs.linkSync = () => { throw new Error('publicação recusada'); };\n");
+  const before = refreshSnapshot(f.repo);
+  const r = sh(process.execPath, ['--import', pathToFileURL(preload).href, TRACK, ...f.args], { cwd: f.repo });
+  assert.equal(r.code, 5, r.all);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  assert.equal(resumedMarker(f).attempt, 2);
+});
+
+test('RESUME: corrida de sessão entre validação e link nunca sobrescreve marcador concorrente', (t) => {
+  const f = blockedResumeFixture(t);
+  const preload = w(f.tmp, 'race-resume-link.mjs', "import fs from 'node:fs';\nconst link = fs.linkSync;\nfs.linkSync = (from, to) => { fs.writeFileSync(to, 'sessão concorrente preservada'); return link(from, to); };\n");
+  const before = refreshSnapshot(f.repo);
+  const r = sh(process.execPath, ['--import', pathToFileURL(preload).href, TRACK, ...f.args], { cwd: f.repo });
+  assert.equal(r.code, 5, r.all);
+  assert.equal(fs.readFileSync(path.join(f.repo, '.aep-active'), 'utf8'), 'sessão concorrente preservada');
+  const after = refreshSnapshot(f.repo);
+  delete after['.aep-active'];
+  assert.deepEqual(after, before);
+});
+
+test('RESUME: mudança concorrente de Git após fsync impede publicação e preserva a mudança externa', (t) => {
+  const f = blockedResumeFixture(t);
+  const preload = w(f.tmp, 'race-resume-ref.mjs', `import fs from 'node:fs';\nimport {execFileSync} from 'node:child_process';\nconst sync = fs.fsyncSync;\nfs.fsyncSync = (fd) => { sync(fd); execFileSync('git', ['update-ref', 'refs/remotes/origin/${f.branch}', '${f.base}']); };\n`);
+  const ledger = fs.readFileSync(path.join(f.repo, f.ledger));
+  const r = sh(process.execPath, ['--import', pathToFileURL(preload).href, TRACK, ...f.args], { cwd: f.repo });
+  assert.equal(r.code, 4, r.all);
+  assert.equal(g(f.repo, 'rev-parse', `refs/remotes/origin/${f.branch}`).out.trim(), f.base);
+  assert.equal(fs.existsSync(path.join(f.repo, '.aep-active')), false);
+  assert.equal(fs.readdirSync(f.repo).filter((p) => p.includes('.resume-')).length, 0);
+  assert.ok(fs.readFileSync(path.join(f.repo, f.ledger)).equals(ledger));
+  assert.ok(fs.readFileSync(path.join(f.repo, f.closed)).equals(f.archiveBytes));
+});
+
+test('RESUME: arquivo final e histórico conflitantes são recusados sem sobrescrita', (t) => {
+  const f = blockedResumeFixture(t);
+  const dest = `${f.rel}/_closed/goals/${f.goal}-r9-a2.md`;
+  w(f.repo, dest, 'Fechamento anterior não pode ser sobrescrito.\n');
+  assert.equal(g(f.repo, 'add', '--', dest).code, 0);
+  assert.equal(g(f.repo, 'commit', '-m', 'aep(demo): fixture colisão').code, 0);
+  const before = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, f.args).code, 4);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+  assert.equal(g(f.repo, 'rm', '--', dest).code, 0);
+  assert.equal(g(f.repo, 'commit', '-m', 'aep(demo): fixture remover colisão').code, 0);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  w(f.repo, dest, 'Colisão posterior à abertura.\n');
+  assert.equal(g(f.repo, 'add', '--', dest).code, 0);
+  assert.equal(sh('git', ['commit', '-m', 'aep(demo): fixture colisão posterior'], { cwd: f.repo, env: { AEP_WRITE: '1' } }).code, 0);
+  const blocked = reconciliationSnapshot(f.repo);
+  const marker = fs.readFileSync(path.join(f.repo, '.aep-active'));
+  assert.equal(aep(f.repo, ['block', 'demo', '--by=gate', '--reason=Gate real']).code, 4);
+  assert.deepEqual(reconciliationSnapshot(f.repo), blocked);
+  assert.ok(fs.readFileSync(path.join(f.repo, '.aep-active')).equals(marker));
+  assert.ok(fs.readFileSync(path.join(f.repo, f.closed)).equals(f.archiveBytes));
+});
+
+test('RESUME: open não reinicia BLOCKED executado marcado READY por replanejamento', (t) => {
+  const f = blockedResumeFixture(t);
+  assert.equal(addGoal(f.repo, { ...f.meta, status: 'READY' }).commit.code, 0);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, ['open', 'demo']);
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, /resume-blocked/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+});
+
+test('RESUME: classificação importada posterior não apaga teto executado 3/3 para open', (t) => {
+  const f = blockedResumeFixture(t, { exhausted: true });
+  const imported = importarManifesto(f.repo, manifestoBase(f.base, { plan_ref: f.meta.plan_ref, plan_rev: 10,
+    goals_declarados: [{ id: f.goal, title: 'Reclassificação humana sem prova de DONE', situacao: 'DONE',
+      commit: 'f'.repeat(40), branch: f.branch, worktree: f.name }] }));
+  assert.equal(imported.code, 0, imported.all);
+  assert.equal(ledgerDe(f.repo).at(-1).source, 'importado');
+  assert.equal(ledgerDe(f.repo).at(-1).result, 'BLOCKED');
+  assert.equal(ledgerDe(f.repo)[0].attempt, 3);
+  assert.equal(addGoal(f.repo, { ...f.meta, status: 'READY', plan_rev: 10 }).commit.code, 0);
+  const before = refreshSnapshot(f.repo);
+  const r = aep(f.repo, ['open', 'demo']);
+  assert.equal(r.code, 4, r.all);
+  assert.match(r.all, /resume-blocked/);
+  assert.deepEqual(refreshSnapshot(f.repo), before);
+});
+
+test('RESUME: falha no arquivo final restaura close/block sem linha, relatório, mudança de índice ou perda da sessão', (t) => {
+  const f = blockedResumeFixture(t);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  const preload = w(f.tmp, 'fail-closure-archive.mjs', "import fs from 'node:fs';\nconst open = fs.openSync;\nfs.openSync = (file, ...args) => { if (String(file).endsWith('-r9-a2.md')) throw new Error('arquivo final recusado'); return open(file, ...args); };\n");
+  for (const args of [['close', 'demo'], ['block', 'demo', '--by=gate', '--reason=Gate real']]) {
+    const before = reconciliationSnapshot(f.repo);
+    const marker = fs.readFileSync(path.join(f.repo, '.aep-active'));
+    const index = fs.readFileSync(path.join(f.repo, '.git/index'));
+    const r = sh(process.execPath, ['--import', pathToFileURL(preload).href, TRACK, ...args], { cwd: f.repo });
+    assert.notEqual(r.code, 0, r.all);
+    assert.match(r.all, /arquivo final recusado/);
+    assert.ok(fs.readFileSync(path.join(f.repo, '.git/index')).equals(index));
+    assert.deepEqual(reconciliationSnapshot(f.repo), before);
+    assert.ok(fs.readFileSync(path.join(f.repo, '.aep-active')).equals(marker));
+    assert.equal(fs.existsSync(path.join(f.repo, `${f.rel}/_closed/reports/${f.goal}-a2.md`)), false);
+  }
+  assert.equal(aep(f.repo, ['close', 'demo']).code, 0);
+});
+
+test('RESUME: commit recusado em close/block faz rollback; retry ratifica somente um novo evento', (t) => {
+  const f = blockedResumeFixture(t);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  const hookDir = path.join(f.tmp, 'reject-state-hooks');
+  w(hookDir, 'commit-msg', '#!/bin/sh\nexit 1\n');
+  fs.copyFileSync(path.join(f.repo, '.githooks/pre-commit'), path.join(hookDir, 'pre-commit'));
+  assert.equal(g(f.repo, 'config', 'core.hooksPath', hookDir).code, 0);
+  for (const args of [['close', 'demo'], ['block', 'demo', '--by=gate', '--reason=Gate real']]) {
+    const before = reconciliationSnapshot(f.repo);
+    const marker = fs.readFileSync(path.join(f.repo, '.aep-active'));
+    const index = fs.readFileSync(path.join(f.repo, '.git/index'));
+    const r = aep(f.repo, args);
+    assert.equal(r.code, 3, r.all);
+    assert.ok(fs.readFileSync(path.join(f.repo, '.git/index')).equals(index));
+    assert.deepEqual(reconciliationSnapshot(f.repo), before);
+    assert.ok(fs.readFileSync(path.join(f.repo, '.aep-active')).equals(marker));
+    assert.equal(ledgerDe(f.repo).length, 1);
+  }
+  assert.equal(g(f.repo, 'config', 'core.hooksPath', '.githooks').code, 0);
+  assert.equal(aep(f.repo, ['close', 'demo']).code, 0);
+  assert.equal(ledgerDe(f.repo).length, 2);
+});
+
+test('RESUME: check/close mantêm falha de teste; hooks/allowlist/gates e item 8 continuam obrigatórios', (t) => {
+  const f = blockedResumeFixture(t);
+  assert.equal(aep(f.repo, f.args).code, 0);
+  w(f.repo, 'TEST_MUST_FAIL', '1');
+  const before = refreshSnapshot(f.repo);
+  assert.equal(aep(f.repo, ['close', 'demo']).code, 3);
+  // check busca origin conforme contrato preexistente; compare os fatos ratificados.
+  assert.ok(fs.readFileSync(path.join(f.repo, f.closed)).equals(f.archiveBytes));
+  assert.equal(fs.readFileSync(path.join(f.repo, '.aep-active')).toString('base64'), before['.aep-active'].bytes);
+  assert.equal(ledgerDe(f.repo).length, 1);
+  fs.unlinkSync(path.join(f.repo, 'TEST_MUST_FAIL'));
+  w(f.repo, 'outside.txt', 'fora da allowlist\n');
+  assert.equal(g(f.repo, 'add', '--', 'outside.txt').code, 0);
+  const outside = g(f.repo, 'commit', '-m', 'goal(demo-001): fora do escopo');
+  assert.notEqual(outside.code, 0, outside.all);
+  assert.match(outside.all, /fora da allowlist/);
+  assert.equal(g(f.repo, 'restore', '--staged', '--', 'outside.txt').code, 0);
+  fs.unlinkSync(path.join(f.repo, 'outside.txt'));
+  w(f.repo, f.hot, fs.readFileSync(path.join(f.repo, f.hot), 'utf8') + '\nEdição indevida.\n');
+  assert.equal(g(f.repo, 'add', '--', f.hot).code, 0);
+  const plan = g(f.repo, 'commit', '-m', 'goal(demo-001): mudar plano');
+  assert.notEqual(plan.code, 0, plan.all);
+  assert.match(plan.all, /fora da allowlist|caminho quente/);
+  const setup = sh('git', ['commit', '-m', 'aep(demo): fixture violação item 8'], { cwd: f.repo, env: { AEP_WRITE: '1' } });
+  assert.equal(setup.code, 0, setup.all);
+  const check = aep(f.repo, ['check', 'demo']);
+  assert.equal(check.code, 3, check.all);
+  assert.match(check.all, /8 \[FAIL/);
+  assert.equal(aep(f.repo, ['close', 'demo']).code, 3);
+  assert.equal(ledgerDe(f.repo).length, 1);
+});

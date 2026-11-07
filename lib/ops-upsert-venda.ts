@@ -425,6 +425,14 @@ export type SalePayload = {
   }
   lines?: Array<{
     inventoryId?: string
+    /**
+     * Identidade estável do `Produto` (cuid, `InventoryItem.dbId`) capturada do catálogo
+     * da loja no momento da venda (PDV-SYNC-PRODUTO-NAO-RESOLVIDO-RECOVERY-001).
+     * `inventoryId` do PDV é o SKU quando existe — mutável no Cadastro; sem esta chave,
+     * editar o SKU entre o carregamento do catálogo e a sincronização deixava a venda
+     * presa em `PRODUTO_NAO_RESOLVIDO`. Presente ⇒ resolução SOMENTE por id + loja.
+     */
+    produtoId?: string
     name?: string
     quantity?: number
     unitPrice?: number
@@ -450,6 +458,19 @@ export type SalePayload = {
 }
 
 type SalePayloadLine = NonNullable<SalePayload["lines"]>[number]
+
+/**
+ * Chave de resolução de produto da linha. Com `produtoId` a identidade é o cuid —
+ * nunca o SKU/código (que pode ter sido reatribuído a OUTRO produto depois da venda).
+ * Sem `produtoId` (payload legado / vendas pendentes antigas) mantém o OR id|sku|barcode.
+ */
+export function productResolutionKey(
+  line: Pick<SalePayloadLine, "inventoryId" | "produtoId">,
+): { key: string; produtoId: string | null } {
+  const produtoId = typeof line.produtoId === "string" && line.produtoId.trim() ? line.produtoId.trim() : null
+  const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
+  return produtoId ? { key: `id:${produtoId}`, produtoId } : { key: `ref:${rawInvId}`, produtoId: null }
+}
 
 export const VENDA_REPLAY_SELECT = {
   id: true,
@@ -972,20 +993,24 @@ export async function upsertVendaInTransaction(
         ? line.lineTotal
         : Math.round(precoUnitario * quantidade * 100) / 100
 
-    // Resolve produto real via OR (id | sku | barcode); evita busca duplicada por linha
-    if (rawInvId && !isVirtualSaleLine(rawInvId) && !resolvedProductMap.has(rawInvId)) {
+    // Resolve produto real: por `produtoId` (cuid da loja) quando a linha traz a identidade
+    // estável; senão via OR (id | sku | barcode). Evita busca duplicada por linha.
+    const resolution = productResolutionKey(line)
+    if (rawInvId && !isVirtualSaleLine(rawInvId) && !resolvedProductMap.has(resolution.key)) {
       const produto = await tx.produto.findFirst({
-        where: {
-          storeId: lojaId,
-          OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
-        },
+        where: resolution.produtoId
+          ? { storeId: lojaId, id: resolution.produtoId }
+          : {
+              storeId: lojaId,
+              OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
+            },
         select: { id: true, stock: true, precoCusto: true, sku: true, name: true, metadata: true },
       })
       if (produto) {
         // Metadado do servidor, independente do ramo atual ou do carrinho stale.
         // Lançar aborta a transação; não muda o contrato inteiro de quantidade/estoque.
         assertProductCommercialSaleSupported(produto.metadata)
-        resolvedProductMap.set(rawInvId, {
+        resolvedProductMap.set(resolution.key, {
           dbId: produto.id,
           stock: produto.stock,
           precoCusto: produto.precoCusto,
@@ -996,7 +1021,7 @@ export async function upsertVendaInTransaction(
     }
 
     // Usa o cuid real do banco; preserva rawInvId para linhas virtuais/serviço
-    const resolvedProduct = rawInvId ? resolvedProductMap.get(rawInvId) : undefined
+    const resolvedProduct = rawInvId ? resolvedProductMap.get(resolution.key) : undefined
     const inventoryId = resolvedProduct ? resolvedProduct.dbId : rawInvId
 
     await tx.itemVenda.create({
@@ -1020,7 +1045,7 @@ export async function upsertVendaInTransaction(
   for (const line of lines) {
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
     if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
-    const resolved = resolvedProductMap.get(rawInvId)
+    const resolved = resolvedProductMap.get(productResolutionKey(line).key)
     if (!resolved) {
       // Item vendido referencia inventoryId sem casamento por id/sku/barcode.
       // Causa típica: produto removido após cache do PDV ou SKU divergente. Sem ledger.

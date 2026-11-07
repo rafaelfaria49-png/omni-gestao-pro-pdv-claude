@@ -33,6 +33,25 @@ on:
       - "e2e/cadastros-ramos/**"
       - "e2e/cadastros-ramos.playwright.config.ts"
       - ".github/workflows/ramos-cadastros.yml"
+      # Catálogo sem F5 no PDV (PDV-CADASTROS-SYNC-AUTOMATICO-001) — prova 09.
+      - "lib/estoque/catalog-*"
+      - "lib/operations-store*"
+      - "lib/pdv/cart-catalog-reconcile*"
+      - "app/api/ops/inventory/**"
+      - "components/dashboard/vendas/pdv-classic*"
+      - "components/dashboard/vendas/pdv-catalog-divergence-panel*"
+      # Sincronização offline de vendas (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001) — prova 10.
+      - "lib/vendas/sale-sync-engine*"
+      - "lib/vendas/pending-sync-classification*"
+      - "lib/vendas/offline-sync*"
+      - "lib/operations-sale-types*"
+      - "app/api/ops/vendas/by-client-sale-id/**"
+      - "components/dashboard/vendas/pdv-pending-sync-badge*"
+      - "components/dashboard/vendas/vendas-arquivo-geral*"
+      - "components/dashboard/caixa/fechamento-caixa-modal*"
+      - "next.config.mjs"
+      - "components/auth/SessionProvider*"
+      - "lib/pdv-keymap*"
   workflow_dispatch:
 
 permissions:
@@ -74,6 +93,10 @@ jobs:
           components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal.static.test.ts
           lib/ops-upsert-venda.test.ts lib/ops-upsert-venda-fractional.test.ts
           lib/vendas/sale-quantity-contract.test.ts
+          lib/vendas/sale-sync-engine.test.ts lib/vendas/offline-sync.component.test.ts
+          lib/vendas/pending-sync-classification.test.ts lib/vendas/produto-nao-resolvido-recovery.test.ts components/dashboard/vendas/pdv-pending-sync-badge-offline.test.ts components/dashboard/vendas/pdv-pending-sync-badge.test.ts
+          components/auth/SessionProvider.offline.component.test.ts components/auth/SessionProvider.first-access.component.test.ts components/dashboard/caixa/fechamento-pendentes-sync.component.test.ts
+          lib/pdv-keymap.overlay.test.ts lib/pdv/classic-offline-sequence.component.test.ts components/dashboard/vendas/pdv-unknown-twin-decision.component.test.ts
           app/api/stores/[id]/settings/route.test.ts
           app/api/settings/perfil-loja/route.test.ts
           app/api/ops/venda-persist/route.test.ts app/api/ops/venda-persist/v2/route.test.ts
@@ -108,6 +131,8 @@ jobs:
           app/api/stores/[id]/settings/route.ts app/api/settings/perfil-loja/route.ts
           lib/pdv/resolve-capability.ts lib/perfil-loja-provider.tsx
           scripts/cadastros/run-ramos-e2e-isolated.mjs scripts/cadastros/disposable-db-preflight.mjs e2e/cadastros-ramos e2e/cadastros-ramos.playwright.config.ts
+          lib/vendas/sale-sync-engine.ts lib/vendas/sale-sync-engine.test.ts lib/vendas/offline-sync.component.test.ts
+          lib/vendas/offline-sync.integration.test.ts components/dashboard/vendas/pdv-pending-sync-badge.tsx
       - name: TypeScript completo
         run: npm run typecheck
       - name: Build isolado sem migrations
@@ -203,7 +228,7 @@ jobs:
           AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://127.0.0.1:3000
       - run: npx playwright install --with-deps chromium
-      - name: Jornadas autenticadas reais (Padaria, lojas mistas, permissões, multiloja, Clientes vCard e QR)
+      - name: Jornadas autenticadas reais (Padaria, lojas mistas, permissões, multiloja, Clientes vCard e QR, PDV offline)
         run: node scripts/cadastros/run-ramos-e2e-isolated.mjs
       - uses: actions/upload-artifact@v4
         if: always()

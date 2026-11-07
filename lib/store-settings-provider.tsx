@@ -36,6 +36,7 @@ import {
   createStoreSettingsEpochGate,
 } from "@/lib/store-settings-request-epoch"
 import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
+import { resolvePdvScaleVisorVisible } from "@/lib/pdv-scale-visor-settings"
 import {
   sanitizeAtalhosRapidos,
   sanitizeGarantiaCategorias,
@@ -59,6 +60,7 @@ export type StoreSettingsContextType = {
   pdvClassicLayout: PdvClassicLayoutKind
   /** Ação ao bipar produto não cadastrado (GOAL 007) — resolvida server-first, default aplicado. */
   pdvScanUnregisteredAction: PdvScanUnregisteredAction
+  pdvScaleVisorVisible: boolean
   getGarantiaById: (id: string) => CategoriaGarantia | undefined
   refresh: () => Promise<void>
   save: (patch: StoreSettingsPutPayload) => Promise<void>
@@ -78,6 +80,7 @@ function parseBlob(printerConfig: unknown): StoreSettingsBlob {
     certificadoA1: safeObj(o.certificadoA1),
     aiMestreModel: typeof (o as any).aiMestreModel === "string" ? String((o as any).aiMestreModel).trim() : undefined,
     appearance: parseAppearanceFromPrinterConfig(printerConfig),
+    pdvScaleVisorVisible: typeof o.pdvScaleVisorVisible === "boolean" ? o.pdvScaleVisorVisible : undefined,
     capabilities: safeObj(o.capabilities).version === 1 ? (o.capabilities as StoreCapabilitiesV1) : undefined,
     pdvMainLayout:
       o.pdvMainLayout === "classic" || o.pdvMainLayout === "supermercado" || o.pdvMainLayout === "next"
@@ -374,6 +377,11 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       pdvMainLayout: resolvedMainLayout.value,
       pdvClassicLayout: resolvedClassicLayout.value,
       pdvScanUnregisteredAction: resolvedScanUnregisteredAction.value,
+      pdvScaleVisorVisible: resolvePdvScaleVisorVisible(
+        blob.pdvScaleVisorVisible,
+        blob.capabilities?.business?.primaryBranch,
+        !!storeId && hydrated && loadedStoreId === storeId,
+      ),
       getGarantiaById,
       refresh,
       save,
@@ -419,6 +427,7 @@ export function useStoreSettings(): StoreSettingsContextType {
       pdvMainLayout: "classic",
       pdvClassicLayout: "lovable",
       pdvScanUnregisteredAction: DEFAULT_PDV_SCAN_UNREGISTERED_ACTION,
+      pdvScaleVisorVisible: false,
       getGarantiaById: () => undefined,
       refresh: async () => {},
       save: async () => {
