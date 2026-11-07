@@ -1,0 +1,802 @@
+{
+  "goal": "PADARIA-KG-RELEASE-READINESS-A4-A8-001",
+  "startedAt": "2026-11-07T02:10:48.075Z",
+  "cluster": {
+    "port": 55493,
+    "db": "omnigestao_prod_sim"
+  },
+  "versions": {
+    "old": {
+      "commit": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+      "tree": "a89ad5e2adadbf095d9fed0cd5ae8faaae0a0432",
+      "dirty": false
+    },
+    "mid315": {
+      "commit": "e058d9c40559e113216d88d68f373e0e68883707",
+      "tree": "ff3870d429f4859740e1d9704dbe8b2c8bbbd599",
+      "dirty": false
+    },
+    "mid335": {
+      "commit": "406ea48907d01d85667b3db03384fb405d674ac4",
+      "tree": "e379977142eb60952999de78260807cd91878884",
+      "dirty": false
+    },
+    "top": {
+      "commit": "4385d3f05e5a49cb4ea20d8382d000f25a52eb48",
+      "tree": "541bd46e292c3128c6c32c236a3cf26826ae934a",
+      "dirty": false
+    }
+  },
+  "scripts": {
+    "01-papeis": "ab9d18a2c6a3bb5e293e9efc3949790ce82dd457907fe2d67afcdcaae59e1c0d",
+    "02-grants-runtime": "562624d01d3e6a210861cbd13a4e39d4f1addc56b451f690abebe6af397b81d9",
+    "03-corte-posse": "9ab1a2a8a7f685897cf7d3167fbd66e0b01c051c4570f32760a084be4b31d2c5",
+    "04-corte-conexao": "39d70efdc2a6386f9c2794a31d9ee8cf48ef93857bc6a0682a215b5dfc8ec808",
+    "05-encerrar-sessoes": "38eb351a1d8eb58201620a20923b1e07d4e5c14a956d0c3605fc99b0176fcfae",
+    "06-verificacao": "8be16c2a81f73bad61791614eec0885cad64cec56accbb10a95926935adda164",
+    "99-desfazer-corte": "9e3f3967bef995e0fe1c186aef3532a3b352ee0fb6becbfdbb08757cd6dca0a0",
+    "07-guard-check-opcional": "dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935",
+    "estoque-kg-migration-apply": "35aa9a92f7b8b2f3e0d51842f949b824b0452eb5b93333bc3b95ed003ee259f0",
+    "20261025120000_estoque_quantidade_fracionada": "f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e",
+    "20261029120000_manual_kg_sale_quantity": "8757ee993cf0fd233d8d0ace7027717009e064b68f39a4a4f07123861d83ddb3",
+    "20261106120000_manual_kg_title_guard_indexed": "56ac126af6164b2262024ea736b7cf95db5d76b4c7382bc8592d37f20273547e"
+  },
+  "old": {
+    "phase": "old",
+    "identity": {
+      "db": "omnigestao_prod_sim",
+      "usr": "neondb_owner",
+      "port": 55493,
+      "host": "127.0.0.1"
+    },
+    "sales": [
+      {
+        "mode": "v1",
+        "payload": {
+          "id": "VDA-SIM-A",
+          "at": "2026-11-06T12:00:00.000Z",
+          "total": 20,
+          "sessaoId": "cash-sim-1",
+          "lines": [
+            {
+              "inventoryId": "prod-un-1",
+              "name": "Produto UN sintético",
+              "quantity": 2,
+              "unitPrice": 10,
+              "lineTotal": 20
+            }
+          ],
+          "paymentBreakdown": {
+            "dinheiro": 20
+          }
+        },
+        "qty": 2,
+        "pedidoId": "VDA-SIM-A",
+        "fingerprint": "legacy-sale-facts-v1:sha256:feb1b0a82eeb63f59588ff4ed881f4a4e3920bbd9fc40a732abbe8bf34f04426",
+        "origin": "old"
+      },
+      {
+        "mode": "v2",
+        "payload": {
+          "id": "LOCAL-SIM-B",
+          "at": "2026-11-06T12:00:00.000Z",
+          "total": 30,
+          "sessaoId": "cash-sim-1",
+          "lines": [
+            {
+              "inventoryId": "prod-un-1",
+              "name": "Produto UN sintético",
+              "quantity": 3,
+              "unitPrice": 10,
+              "lineTotal": 30
+            }
+          ],
+          "paymentBreakdown": {
+            "dinheiro": 30
+          }
+        },
+        "clientSaleId": "7d0f0c55-0b7e-4a52-9f2a-0d4c5e0b1b01",
+        "qty": 3,
+        "pedidoId": "VDA-SIM-2026-000001",
+        "fingerprint": "legacy-sale-facts-v1:sha256:057450d4e5f9873d381e06feb4e5d05b0ee1e1d6d33dd5c9e60645fb1b8c654d",
+        "origin": "old"
+      }
+    ],
+    "queued": [
+      {
+        "mode": "v1",
+        "payload": {
+          "id": "VDA-SIM-Q-old",
+          "at": "2026-11-06T12:00:00.000Z",
+          "total": 10,
+          "sessaoId": "cash-sim-1",
+          "lines": [
+            {
+              "inventoryId": "prod-un-1",
+              "name": "Produto UN sintético",
+              "quantity": 1,
+              "unitPrice": 10,
+              "lineTotal": 10
+            }
+          ],
+          "paymentBreakdown": {
+            "dinheiro": 10
+          }
+        },
+        "qty": 1
+      },
+      {
+        "mode": "v2",
+        "payload": {
+          "id": "LOCAL-SIM-Q-old",
+          "at": "2026-11-06T12:00:00.000Z",
+          "total": 10,
+          "sessaoId": "cash-sim-1",
+          "lines": [
+            {
+              "inventoryId": "prod-un-1",
+              "name": "Produto UN sintético",
+              "quantity": 1,
+              "unitPrice": 10,
+              "lineTotal": 10
+            }
+          ],
+          "paymentBreakdown": {
+            "dinheiro": 10
+          }
+        },
+        "qty": 1,
+        "clientSaleId": "22222222-2222-4222-8222-000000000dd0"
+      }
+    ],
+    "counts": {
+      "vendas": "2",
+      "itens": "2",
+      "livro": "2",
+      "financeiro": "2",
+      "stock": "45",
+      "deltas": "-2,-3",
+      "stock_type": "integer"
+    }
+  },
+  "replay_m315": {
+    "replays": [
+      {
+        "pedidoId": "VDA-SIM-A",
+        "origin": "old",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000001",
+        "origin": "old",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      }
+    ],
+    "counts": {
+      "vendas": "6",
+      "itens": "6",
+      "livro": "6",
+      "financeiro": "6",
+      "stock": "41",
+      "deltas": "-2,-3,-1,-1,-1,-1",
+      "stock_type": "double precision"
+    }
+  },
+  "replay_m335": {
+    "replays": [
+      {
+        "pedidoId": "VDA-SIM-A",
+        "origin": "old",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000001",
+        "origin": "old",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-Q-old",
+        "origin": "queued-from-old-sent-by-m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000002",
+        "origin": "queued-from-old-sent-by-m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-m315",
+        "origin": "m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000003",
+        "origin": "m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      }
+    ],
+    "counts": {
+      "vendas": "10",
+      "itens": "10",
+      "livro": "10",
+      "financeiro": "10",
+      "stock": "37",
+      "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1",
+      "stock_type": "double precision"
+    }
+  },
+  "replay_top": {
+    "replays": [
+      {
+        "pedidoId": "VDA-SIM-A",
+        "origin": "old",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000001",
+        "origin": "old",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-Q-old",
+        "origin": "queued-from-old-sent-by-m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000002",
+        "origin": "queued-from-old-sent-by-m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-m315",
+        "origin": "m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000003",
+        "origin": "m315",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-Q-m315",
+        "origin": "queued-from-replay-m315-sent-by-m335",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000004",
+        "origin": "queued-from-replay-m315-sent-by-m335",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-m335",
+        "origin": "m335",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "pedidoId": "VDA-SIM-2026-000005",
+        "origin": "m335",
+        "replayed": true,
+        "samePedido": true,
+        "sameFingerprint": true,
+        "parallel": [
+          true,
+          true,
+          true
+        ]
+      }
+    ],
+    "counts": {
+      "vendas": "14",
+      "itens": "14",
+      "livro": "14",
+      "financeiro": "14",
+      "stock": "33",
+      "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+      "stock_type": "double precision"
+    }
+  },
+  "kg": {
+    "phase": "kg",
+    "summary": {
+      "first": false,
+      "replay": true,
+      "v2": [
+        true,
+        false,
+        true
+      ],
+      "v2Pedidos": 1,
+      "stock": 3.4,
+      "items": [
+        [
+          null,
+          0.35
+        ],
+        [
+          null,
+          1.25
+        ]
+      ],
+      "ledger": [
+        -0.35,
+        -1.25
+      ],
+      "tamperRefused": true
+    }
+  },
+  "oldAfterNoGuard": {
+    "phase": "old-after",
+    "identity": {
+      "db": "sim_noguard",
+      "usr": "omni_runtime_v2",
+      "port": 55493,
+      "host": "127.0.0.1"
+    },
+    "oldAfter": {
+      "rejected": true,
+      "error": "\nInvalid `tx.movimentacaoEstoque.create()` invocation in\nC:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main/lib/estoque/stock-ledger-service.ts:547:46\n\n  544   create: { storeId: sid, produtoId: pid, depositoId, quantidade: depositoDepois },\n  545   update: { quantidade: depositoDepois },\n  546 } as never)\n→ 547 const mov = await tx.movimentacaoEstoque.create(\nInconsistent column data: Could not convert from `NaN` to `Int`",
+      "before": {
+        "vendas": "16",
+        "itens": "16",
+        "livro": "16",
+        "financeiro": "16",
+        "stock": "33",
+        "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+        "stock_type": "double precision"
+      },
+      "after": {
+        "vendas": "16",
+        "itens": "16",
+        "livro": "16",
+        "financeiro": "16",
+        "stock": "33",
+        "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+        "stock_type": "double precision"
+      },
+      "corruptedValues": "0"
+    }
+  },
+  "oldAfterGuard": {
+    "phase": "old-after",
+    "identity": {
+      "db": "sim_guard",
+      "usr": "omni_runtime_v2",
+      "port": 55493,
+      "host": "127.0.0.1"
+    },
+    "oldAfter": {
+      "rejected": true,
+      "error": "\nInvalid `tx.produto.update()` invocation in\nC:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main/lib/estoque/stock-ledger-service.ts:535:22\n\n  532       },\n  533     } as never)\n  534 }\n→ 535 await tx.produto.update(\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: \"23514\", message: \"new row for relation \\\"estoque_produtos\\\" violates check constraint \\\"estoque_produtos_stock_kg_milesimos\\\"\", severity: \"ERROR\", detail: Some(\"Failing row contains (prod-un-1, loja-sim-1, null, null, Produto UN sintético, , , 1.6e-322, 0, 10, null, 0, Ativo, t, null, 2026-11-07 02:12:53.226, 2026-11-07 02:13:49.581).\"), column: None, hint: None }), transient: false })",
+      "before": {
+        "vendas": "16",
+        "itens": "16",
+        "livro": "16",
+        "financeiro": "16",
+        "stock": "33",
+        "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+        "stock_type": "double precision"
+      },
+      "after": {
+        "vendas": "16",
+        "itens": "16",
+        "livro": "16",
+        "financeiro": "16",
+        "stock": "33",
+        "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+        "stock_type": "double precision"
+      },
+      "corruptedValues": "0"
+    }
+  },
+  "triggerOverhead": [
+    "KG_PERF vendas_na_loja=30002",
+    "KG_PERF antes_fin_ref_titulo ms_por_escrita=576.865",
+    "KG_PERF antes_fin_ref_titulo_SEM_GATILHO ms_por_escrita=0.065",
+    "KG_PERF antes_fin_ref_venda ms_por_escrita=0.848",
+    "KG_PERF antes_titulo_insert ms_por_escrita=517.021",
+    "KG_PERF antes_titulo_insert_SEM_GATILHO ms_por_escrita=0.120",
+    "KG_PERF antes_titulo_update ms_por_escrita=1189.243",
+    "KG_EQ casos=2304 divergentes=0 verdadeiros=771 falsos=1533",
+    "psql:C:/Projetos/omni-gestao/.worktrees/kg-release-readiness-001/docs/ai-execution/_evidence/PADARIA-KG-RELEASE-READINESS-A4-A8-001/harness/title-guard-equivalence.sql:54: NOTICE:  00000: KG_EQ_OK",
+    "KG_PERF depois_fin_ref_titulo ms_por_escrita=1.845",
+    "KG_PERF depois_fin_ref_titulo_SEM_GATILHO ms_por_escrita=0.037",
+    "KG_PERF depois_fin_ref_venda ms_por_escrita=0.369",
+    "KG_PERF depois_titulo_insert ms_por_escrita=1.723",
+    "KG_PERF depois_titulo_insert_SEM_GATILHO ms_por_escrita=0.050",
+    "KG_PERF depois_titulo_update ms_por_escrita=1.630"
+  ],
+  "result": "PASS",
+  "finishedAt": "2026-11-07T02:15:18.851Z",
+  "steps": [
+    {
+      "at": "2026-11-07T02:11:07.368Z",
+      "step": "cluster",
+      "version": "PostgreSQL 17.10 on x86_64-windows, compiled by msvc-19.44.35227, 64-bit"
+    },
+    {
+      "at": "2026-11-07T02:12:49.532Z",
+      "step": "schema-main",
+      "migrationsResolved": 23,
+      "status": true
+    },
+    {
+      "at": "2026-11-07T02:12:49.557Z",
+      "step": "scripts",
+      "01-papeis": "ab9d18a2c6a3bb5e293e9efc3949790ce82dd457907fe2d67afcdcaae59e1c0d",
+      "02-grants-runtime": "562624d01d3e6a210861cbd13a4e39d4f1addc56b451f690abebe6af397b81d9",
+      "03-corte-posse": "9ab1a2a8a7f685897cf7d3167fbd66e0b01c051c4570f32760a084be4b31d2c5",
+      "04-corte-conexao": "39d70efdc2a6386f9c2794a31d9ee8cf48ef93857bc6a0682a215b5dfc8ec808",
+      "05-encerrar-sessoes": "38eb351a1d8eb58201620a20923b1e07d4e5c14a956d0c3605fc99b0176fcfae",
+      "06-verificacao": "8be16c2a81f73bad61791614eec0885cad64cec56accbb10a95926935adda164",
+      "99-desfazer-corte": "9e3f3967bef995e0fe1c186aef3532a3b352ee0fb6becbfdbb08757cd6dca0a0",
+      "07-guard-check-opcional": "dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935",
+      "estoque-kg-migration-apply": "35aa9a92f7b8b2f3e0d51842f949b824b0452eb5b93333bc3b95ed003ee259f0",
+      "20261025120000_estoque_quantidade_fracionada": "f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e",
+      "20261029120000_manual_kg_sale_quantity": "8757ee993cf0fd233d8d0ace7027717009e064b68f39a4a4f07123861d83ddb3",
+      "20261106120000_manual_kg_title_guard_indexed": "56ac126af6164b2262024ea736b7cf95db5d76b4c7382bc8592d37f20273547e"
+    },
+    {
+      "at": "2026-11-07T02:12:49.914Z",
+      "step": "A3-sim",
+      "m01": "KG_PAPEIS_OK",
+      "m02": "KG_RUNTIME_GRANTS_OK"
+    },
+    {
+      "at": "2026-11-07T02:12:53.637Z",
+      "step": "phase-old",
+      "sales": [
+        "VDA-SIM-A",
+        "VDA-SIM-2026-000001"
+      ],
+      "counts": {
+        "vendas": "2",
+        "itens": "2",
+        "livro": "2",
+        "financeiro": "2",
+        "stock": "45",
+        "deltas": "-2,-3",
+        "stock_type": "integer"
+      }
+    },
+    {
+      "at": "2026-11-07T02:13:02.001Z",
+      "step": "J6-sim",
+      "m03": "KG_CORTE_POSSE_OK",
+      "m04": "KG_CORTE_CONEXAO_OK",
+      "m05": "KG_SESSOES_ANTIGAS_ZERO",
+      "m06OldRoleNoConnect": true,
+      "oldRoleDenied": true,
+      "o6": [
+        "?column?                                                               \r",
+        "--------------------------------------------------------------------------------------------------------------------------------------\r",
+        " database=omnigestao_prod_sim dono=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}\r",
+        "(1 row)\r",
+        "\r",
+        "                                                ?column?                                                \r",
+        "--------------------------------------------------------------------------------------------------------\r",
+        " papel neondb_owner connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false\r",
+        " papel omni_migrator connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=true\r",
+        " papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false\r",
+        "(3 rows)\r",
+        "\r",
+        "                 ?column?                 \r",
+        "------------------------------------------\r",
+        " sessoes papel=omni_migrator app=psql n=1\r",
+        "(1 row)\r",
+        "\r",
+        "         ?column?          \r",
+        "---------------------------\r",
+        " objetos do papel antigo=0\r",
+        "(1 row)\r",
+        "\r",
+        "                                                                                                  ?column?                                                                                                   \r",
+        "-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\r",
+        " colunas estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer\r",
+        "(1 row)"
+      ]
+    },
+    {
+      "at": "2026-11-07T02:13:04.389Z",
+      "step": "J8-sim",
+      "marker": "KG_MIGRATION_OK",
+      "line": "psql:C:/Projetos/omni-gestao/.worktrees/kg-release-readiness-001/docs/padaria/pesagem/estoque-kg-migration-apply.sql:58: NOTICE:  00000: KG_MIGRATION_OK produtos=1 depositos=1 livro=2 produtos_md5=d5f7c2bf851ba39aac906fadb09decc2"
+    },
+    {
+      "at": "2026-11-07T02:13:04.549Z",
+      "step": "99-refuses-after-J8",
+      "ok": true
+    },
+    {
+      "at": "2026-11-07T02:13:11.187Z",
+      "step": "J10-315-before-9b",
+      "diffEmpty": true
+    },
+    {
+      "at": "2026-11-07T02:13:18.202Z",
+      "step": "additive-sim",
+      "refusedWithoutRole": true,
+      "prismaDeployWithoutRoleFails": true,
+      "deployed20261029ViaPrismaWithRole": true,
+      "titleGuardDeployed": true,
+      "functionOwners": "owners=omni_owner"
+    },
+    {
+      "at": "2026-11-07T02:13:22.601Z",
+      "step": "J10-sim",
+      "upToDate": true,
+      "diffEmpty": true,
+      "j10": "?column?            \r\n-------------------------------\r\n J10 fracoes=0 nan_denormais=0\r\n(1 row)"
+    },
+    {
+      "at": "2026-11-07T02:13:26.268Z",
+      "step": "phase-replay-m315",
+      "replays": 2,
+      "allReplayed": true,
+      "counts": {
+        "vendas": "6",
+        "itens": "6",
+        "livro": "6",
+        "financeiro": "6",
+        "stock": "41",
+        "deltas": "-2,-3,-1,-1,-1,-1",
+        "stock_type": "double precision"
+      }
+    },
+    {
+      "at": "2026-11-07T02:13:30.397Z",
+      "step": "phase-replay-m335",
+      "replays": 6,
+      "allReplayed": true,
+      "counts": {
+        "vendas": "10",
+        "itens": "10",
+        "livro": "10",
+        "financeiro": "10",
+        "stock": "37",
+        "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1",
+        "stock_type": "double precision"
+      }
+    },
+    {
+      "at": "2026-11-07T02:13:34.992Z",
+      "step": "phase-replay-top",
+      "replays": 10,
+      "allReplayed": true,
+      "counts": {
+        "vendas": "14",
+        "itens": "14",
+        "livro": "14",
+        "financeiro": "14",
+        "stock": "33",
+        "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+        "stock_type": "double precision"
+      }
+    },
+    {
+      "at": "2026-11-07T02:13:38.855Z",
+      "step": "phase-kg",
+      "first": false,
+      "replay": true,
+      "v2": [
+        true,
+        false,
+        true
+      ],
+      "v2Pedidos": 1,
+      "stock": 3.4,
+      "items": [
+        [
+          null,
+          0.35
+        ],
+        [
+          null,
+          1.25
+        ]
+      ],
+      "ledger": [
+        -0.35,
+        -1.25
+      ],
+      "tamperRefused": true
+    },
+    {
+      "at": "2026-11-07T02:13:43.108Z",
+      "step": "07-sim",
+      "applied": true,
+      "tail": [
+        ""
+      ]
+    },
+    {
+      "at": "2026-11-07T02:13:49.707Z",
+      "step": "redeploy-int-sim",
+      "noGuard": {
+        "rejected": true,
+        "error": "\nInvalid `tx.movimentacaoEstoque.create()` invocation in\nC:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main/lib/estoque/stock-ledger-service.ts:547:46\n\n  544   create: { storeId: sid, produtoId: pid, depositoId, quantidade: depositoDepois },\n  545   update: { quantidade: depositoDepois },\n  546 } as never)\n→ 547 const mov = await tx.movimentacaoEstoque.create(\nInconsistent column data: Could not convert from `NaN` to `Int`",
+        "before": {
+          "vendas": "16",
+          "itens": "16",
+          "livro": "16",
+          "financeiro": "16",
+          "stock": "33",
+          "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+          "stock_type": "double precision"
+        },
+        "after": {
+          "vendas": "16",
+          "itens": "16",
+          "livro": "16",
+          "financeiro": "16",
+          "stock": "33",
+          "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+          "stock_type": "double precision"
+        },
+        "corruptedValues": "0"
+      },
+      "guard": {
+        "rejected": true,
+        "error": "\nInvalid `tx.produto.update()` invocation in\nC:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main/lib/estoque/stock-ledger-service.ts:535:22\n\n  532       },\n  533     } as never)\n  534 }\n→ 535 await tx.produto.update(\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: \"23514\", message: \"new row for relation \\\"estoque_produtos\\\" violates check constraint \\\"estoque_produtos_stock_kg_milesimos\\\"\", severity: \"ERROR\", detail: Some(\"Failing row contains (prod-un-1, loja-sim-1, null, null, Produto UN sintético, , , 1.6e-322, 0, 10, null, 0, Ativo, t, null, 2026-11-07 02:12:53.226, 2026-11-07 02:13:49.581).\"), column: None, hint: None }), transient: false })",
+        "before": {
+          "vendas": "16",
+          "itens": "16",
+          "livro": "16",
+          "financeiro": "16",
+          "stock": "33",
+          "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+          "stock_type": "double precision"
+        },
+        "after": {
+          "vendas": "16",
+          "itens": "16",
+          "livro": "16",
+          "financeiro": "16",
+          "stock": "33",
+          "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+          "stock_type": "double precision"
+        },
+        "corruptedValues": "0"
+      }
+    },
+    {
+      "at": "2026-11-07T02:15:08.971Z",
+      "step": "trigger-overhead-and-equivalence",
+      "lines": [
+        "KG_PERF vendas_na_loja=30002",
+        "KG_PERF antes_fin_ref_titulo ms_por_escrita=576.865",
+        "KG_PERF antes_fin_ref_titulo_SEM_GATILHO ms_por_escrita=0.065",
+        "KG_PERF antes_fin_ref_venda ms_por_escrita=0.848",
+        "KG_PERF antes_titulo_insert ms_por_escrita=517.021",
+        "KG_PERF antes_titulo_insert_SEM_GATILHO ms_por_escrita=0.120",
+        "KG_PERF antes_titulo_update ms_por_escrita=1189.243",
+        "KG_EQ casos=2304 divergentes=0 verdadeiros=771 falsos=1533",
+        "psql:C:/Projetos/omni-gestao/.worktrees/kg-release-readiness-001/docs/ai-execution/_evidence/PADARIA-KG-RELEASE-READINESS-A4-A8-001/harness/title-guard-equivalence.sql:54: NOTICE:  00000: KG_EQ_OK",
+        "KG_PERF depois_fin_ref_titulo ms_por_escrita=1.845",
+        "KG_PERF depois_fin_ref_titulo_SEM_GATILHO ms_por_escrita=0.037",
+        "KG_PERF depois_fin_ref_venda ms_por_escrita=0.369",
+        "KG_PERF depois_titulo_insert ms_por_escrita=1.723",
+        "KG_PERF depois_titulo_insert_SEM_GATILHO ms_por_escrita=0.050",
+        "KG_PERF depois_titulo_update ms_por_escrita=1.630"
+      ]
+    }
+  ]
+}

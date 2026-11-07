@@ -1,0 +1,58 @@
+{
+  "phase": "new",
+  "identity": {
+    "db": "omnigestao_prod_sim",
+    "usr": "omni_runtime_v2",
+    "port": 55493,
+    "host": "127.0.0.1"
+  },
+  "replays": {
+    "a": {
+      "replayed": true,
+      "pedidoId": "VDA-SIM-A",
+      "fingerprintEqualsOld": true
+    },
+    "b": {
+      "replayed": true,
+      "pedidoId": "VDA-SIM-2026-000001",
+      "fingerprintEqualsOld": true
+    },
+    "parallelV1": [
+      true,
+      true,
+      true
+    ],
+    "parallelV2": [
+      true,
+      true,
+      true
+    ],
+    "c": [
+      false,
+      true
+    ]
+  },
+  "countsAfterNew": {
+    "vendas": "3",
+    "itens": "3",
+    "livro": "3",
+    "financeiro": "3",
+    "stock": "41",
+    "deltas": "-2,-3,-4",
+    "stock_type": "double precision"
+  },
+  "financeiroPorVenda": [
+    {
+      "ref": "VDA-SIM-2026-000001",
+      "n": 1
+    },
+    {
+      "ref": "VDA-SIM-A",
+      "n": 1
+    },
+    {
+      "ref": "VDA-SIM-C",
+      "n": 1
+    }
+  ]
+}

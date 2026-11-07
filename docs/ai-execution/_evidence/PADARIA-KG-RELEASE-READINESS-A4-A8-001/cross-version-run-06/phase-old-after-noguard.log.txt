@@ -1,0 +1,12 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main
+
+ ↓ test-results/kg-readiness/old-after-noguard.cross-version.test.ts:64:28 > cross-version old-after > old: seed + v1 + v2 with lost responses
+ ↓ test-results/kg-readiness/old-after-noguard.cross-version.test.ts:88:31 > cross-version old-after > replay: no confirmed sale is written twice across versions
+ ✓ test-results/kg-readiness/old-after-noguard.cross-version.test.ts:147:34 > cross-version old-after > old-after: Int client with the new credential (forbidden Redeploy) 253ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 2 skipped (3)
+   Start at  23:13:43
+   Duration  2.46s (transform 710ms, setup 0ms, import 1.72s, tests 261ms, environment 0ms)
+
