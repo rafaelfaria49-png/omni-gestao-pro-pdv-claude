@@ -50,7 +50,6 @@ jobs:
         run: node node_modules/eslint/bin/eslint.js lib/store-basics.ts lib/store-basics.test.ts lib/use-store-basics.ts lib/use-store-basics.component.test.ts components/onboarding/first-access-wizard.tsx components/configuracoes-v3/features/settings/sections/GeralSection.tsx lib/loja-ativa.tsx app/api/stores/\[id\]/route.ts e2e/platform-pilot/first-access.spec.ts scripts/platform/run-pilot-e2e.mjs lib/navigation/client-experience.ts components/configuracoes-v3/features/settings/sections/VendasSection.tsx components/configuracoes-v3/features/settings/sections/ImpressaoPdvSettingsCard.tsx components/configuracoes-v3/features/settings/sections/settings-patch.ts components/dashboard/estoque/estoque-cliente.tsx app/dashboard/estoque/page.tsx e2e/platform-pilot/client-experience.spec.ts e2e/platform-pilot/cadastro-categoria-estoque.spec.ts components/cadastros/lovable/components/cadastros/NovaCategoriaDialog.tsx lib/cadastros/produto-categoria-estoque.component.test.ts
       - run: npm run typecheck
   authenticated:
-    # Playwright 1.52.0 não instala o Chromium no ubuntu-26.04 (imagem atual do ubuntu-latest); fixado até atualizar o Playwright.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
