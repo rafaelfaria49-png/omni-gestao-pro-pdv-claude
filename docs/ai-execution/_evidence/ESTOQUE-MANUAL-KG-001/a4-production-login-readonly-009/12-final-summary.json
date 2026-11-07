@@ -1,0 +1,40 @@
+{
+  "goal": "ESTOQUE-KG-PRODUCTION-A4-001",
+  "result": {
+    "A4": "PASS",
+    "PRODUCTION_IDENTITY": "PASS",
+    "RUNTIME_DIRECT_LOGIN": "PASS",
+    "RUNTIME_POOLER_LOGIN": "PASS",
+    "MIGRATOR_DIRECT_LOGIN": "PASS",
+    "RUNTIME_DML_GRANTS": "PASS",
+    "RUNTIME_PRIVILEGE_ISOLATION": "PASS",
+    "MIGRATOR_MEMBERSHIP": "PASS",
+    "OLD_RUNTIME_PRESERVED": "YES",
+    "READ_ONLY_TRANSACTIONS": "PASS",
+    "STOCK_COLUMNS": "INTEGER",
+    "COMMERCIAL_DATA_WRITES": 0,
+    "PRODUCTION_SCHEMA_CHANGES": 0,
+    "VERCEL_CHANGES": 0,
+    "MERGE": "NO",
+    "DEPLOY": "NO",
+    "NEXT_GATE": "Próxima preparação do rollout, mediante autorização separada."
+  },
+  "completed_at": "2026-10-29T12:15:06.658Z",
+  "timezone": "America/Sao_Paulo",
+  "database_validation_start": "2026-10-29T12:08:11.288Z",
+  "database_validation_end": "2026-10-29T12:08:14.650Z",
+  "evidence": {
+    "database": "attempt-05/summary.json",
+    "vercel": "11-vercel-ui-verification.json",
+    "identity": "00-neon-api-identity.json"
+  },
+  "vercel_method": "Existing authenticated browser session; 18 previously observed metadata entries equal; sensitive values not read back",
+  "production_old_runtime_evidence": "Continuity inference from confirmed A3 baseline, unchanged July 27 database environment dates and same Production deployment, plus successful old-role direct/pooled login",
+  "vercel_full_inventory_compared": false,
+  "initial_attempts_preserved": true,
+  "secret_scan": {
+    "leaks": 0,
+    "private_row_fingerprints_persisted": 0
+  },
+  "stopped_after_a4": true
+}

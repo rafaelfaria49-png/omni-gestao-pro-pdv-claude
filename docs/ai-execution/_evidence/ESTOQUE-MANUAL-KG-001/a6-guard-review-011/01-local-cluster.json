@@ -1,0 +1,9 @@
+{
+  "server_version": "17.10",
+  "server_port": 54045,
+  "local": true,
+  "data_directory_matches": true,
+  "no_neon_project": true,
+  "synthetic_only": true,
+  "external_connections": 0
+}

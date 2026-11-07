@@ -1,0 +1,301 @@
+{
+  "goal": "ESTOQUE-KG-PRODUCTION-A4-001",
+  "pass": true,
+  "source": "Authenticated existing Edge session; Vercel UI; read-only navigation and filters",
+  "api_status": 403,
+  "api_reason": "invalidToken=true",
+  "credential_refresh_attempted": false,
+  "project": "omni-gestao-pro",
+  "production_database_values_read": false,
+  "production_database_env_last_change_visible": "27 July; year 2026 from A3/readiness baseline",
+  "before": [
+    {
+      "key": "MIGRATION_AUTHORITY_ENABLED",
+      "target": "Production",
+      "action": "updated",
+      "displayed_date": "2026-10-16",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_PORTAL_V2",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_SECRET_ACCESS_KEY",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_ACCESS_KEY_ID",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_BUCKET",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-20",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_ACCOUNT_ID",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-20",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_STORAGE_PROVIDER",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-20",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "SALE_SERVER_NUMBERING_ENABLED",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-17",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "FISCAL_A1_SENHA_LOJA_1",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-11",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "FISCAL_A1_PFX_B64_LOJA_1",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-11",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "ASSISTEC_SUBSCRIPTION_SECRET",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-04",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_EXTERNO_SESSION_SECRET",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-01",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "DIRECT_URL",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-07-27",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "DATABASE_URL",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-07-27",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "target": "Production and Preview",
+      "action": "added",
+      "displayed_date": "2026-07-14",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "target": "Production and Preview",
+      "action": "added",
+      "displayed_date": "2026-07-14",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "COSMOS_API_KEY",
+      "target": "Production",
+      "action": "updated",
+      "displayed_date": "2026-07-10",
+      "year_from_existing_baseline": true
+    }
+  ],
+  "after_common": [
+    {
+      "key": "MIGRATION_AUTHORITY_ENABLED",
+      "target": "Production",
+      "action": "updated",
+      "displayed_date": "2026-10-16",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_PORTAL_V2",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_SECRET_ACCESS_KEY",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_ACCESS_KEY_ID",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-21",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_BUCKET",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-20",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "R2_ACCOUNT_ID",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-20",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_STORAGE_PROVIDER",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-20",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "SALE_SERVER_NUMBERING_ENABLED",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-17",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "FISCAL_A1_SENHA_LOJA_1",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-11",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "FISCAL_A1_PFX_B64_LOJA_1",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-11",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "ASSISTEC_SUBSCRIPTION_SECRET",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-04",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_EXTERNO_SESSION_SECRET",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-08-01",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "DIRECT_URL",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-07-27",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "DATABASE_URL",
+      "target": "Production",
+      "action": "added",
+      "displayed_date": "2026-07-27",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "target": "Production and Preview",
+      "action": "added",
+      "displayed_date": "2026-07-14",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "target": "Production and Preview",
+      "action": "added",
+      "displayed_date": "2026-07-14",
+      "year_from_existing_baseline": true
+    },
+    {
+      "key": "COSMOS_API_KEY",
+      "target": "Production",
+      "action": "updated",
+      "displayed_date": "2026-07-10",
+      "year_from_existing_baseline": true
+    }
+  ],
+  "common_metadata_equal": true,
+  "common_entries_compared": 18,
+  "additional_lazy_loaded_after": [
+    {
+      "key": "BARCODE_LOOKUP_PROVIDERS",
+      "target": "Production",
+      "action": "updated",
+      "displayed_date": "2026-07-10",
+      "year_from_existing_baseline": true
+    }
+  ],
+  "complete_environment_inventory_compared": false,
+  "production_deployment": {
+    "id": "7UqN8Rrkz9Vi7ezB3ArkL6TDcvvW",
+    "git_sha": "ba010ace89e2513aac2eb4ca274d52cbaac6abb4",
+    "branch": "main",
+    "state": "READY",
+    "alias": "omni-gestao-pro.vercel.app",
+    "same_id_on_initial_project_card_and_final_production_overview": true
+  },
+  "production_old_runtime_continuity": {
+    "result": "PASS",
+    "kind": "continuity inference",
+    "basis": [
+      "Owner-supplied confirmed state and A3: Production uses neondb_owner",
+      "DATABASE_URL and DIRECT_URL Production still show July 27, predating the October 28 creation of A2 credentials",
+      "Same Production deployment observed before and after database validation",
+      "neondb_owner direct and pooled authentication/minimal read succeeded"
+    ],
+    "sensitive_values_not_read_back": true
+  },
+  "writes": 0,
+  "environment_edits": 0,
+  "deployments_created": 0
+}
