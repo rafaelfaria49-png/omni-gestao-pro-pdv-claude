@@ -13,7 +13,7 @@ import {
 const missingTable = Object.assign(new Error("The table does not exist"), { code: "P2021" })
 const reject = () => vi.fn(async () => { throw missingTable })
 const db = {
-  catalogoAparelhoLojaModelo: { findMany: reject(), findFirst: reject(), create: reject(), updateMany: reject() },
+  catalogoAparelhoLojaModelo: { findMany: reject(), findFirst: reject(), count: reject(), create: reject(), updateMany: reject() },
   catalogoAparelhoLojaCompat: { findMany: reject(), upsert: reject(), deleteMany: reject() },
 } as never
 const global = buildCatalogoIndex({ models: [], aliases: [] })
@@ -61,5 +61,12 @@ describe("revisão independente", () => {
     const row = { id: "m1", storeId: "loja", modelKey: "manual_1", brand: "Marca X", name: "G47", brandKey: "MARCA X", nameKey: "G47", aliases: [], notes: "", active: false, version: 4, createdAt: new Date(), updatedAt: new Date() }
     const fake = { catalogoAparelhoLojaModelo: { findFirst: vi.fn(async () => row), updateMany: vi.fn() } } as never
     expect(await updateLojaModelo(fake, g, "loja", "u", "m1", { version: 4, active: true })).toMatchObject({ ok: false, code: "DUPLICATE", existing: { source: "global", modelKey: "marca_g47" } })
+  })
+
+  it("P3-1: recusa o modelo além do limite que a busca consegue ler (sem gravar)", async () => {
+    const create = vi.fn()
+    const full = { catalogoAparelhoLojaModelo: { findFirst: vi.fn(async () => null), count: vi.fn(async () => 2000), create } } as never
+    expect(await createLojaModelo(full, global, "loja", "u", { brand: "M", name: "G47" })).toMatchObject({ ok: false, code: "LIMIT", status: 409 })
+    expect(create).not.toHaveBeenCalled()
   })
 })

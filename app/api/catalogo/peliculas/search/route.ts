@@ -7,6 +7,7 @@ import {
   buildLojaCatalogoIndex,
   isManualModelKey,
   lojaModeloCanonicalName,
+  overridesUtilizaveis,
   searchDeviceModelsComLoja,
   type LojaModelo,
 } from "@/lib/catalogo-aparelhos/loja-catalogo"
@@ -104,9 +105,11 @@ async function withPeliculaGroups(
     for (const m of await getLojaModelosByKeys(prisma, storeId, faltantes)) manualByKey.set(m.modelKey, m)
   }
 
-  // Modelo manual desativado (ou de outra loja) não aparece como equivalente.
-  const overrides = allOverrides.filter((o) =>
-    [o.modelKeyA, o.modelKeyB].every((k) => !isManualModelKey(k) || manualByKey.get(k)?.active === true),
+  // Modelo manual desativado (ou de outra loja) e chave global que saiu do CSV não aparecem como equivalente.
+  const overrides = overridesUtilizaveis(
+    allOverrides,
+    (k) => index.modelByKey.has(k),
+    (k) => manualByKey.get(k)?.active === true,
   )
 
   const resolveMember = (modelKey: string): PeliculaGrupoMember => {

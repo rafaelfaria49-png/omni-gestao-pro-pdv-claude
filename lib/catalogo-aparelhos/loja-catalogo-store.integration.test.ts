@@ -213,4 +213,20 @@ describe.skipIf(!TEST_URL)("catálogo por loja — PostgreSQL descartável", () 
       ),
     ).rejects.toThrow()
   })
+
+  it("P2-1: par ordenado usa COLLATE \"C\" (independe da collation do banco)", async () => {
+    const def = await db.$queryRawUnsafe<Array<{ d: string }>>(
+      `SELECT pg_get_constraintdef(oid) AS d FROM pg_constraint WHERE conname = 'catalogo_aparelhos_loja_compat_par_ordenado_check'`,
+    )
+    expect(def[0]?.d).toMatch(/COLLATE "C"/)
+    // Ordem do código: "0" (0x30) < "_" (0x5F). Em ICU/pt_BR (inclusive este PG local) a ordem inverte.
+    const [a, b] = ["motorola_moto_g_power", "motorola_moto_g04"].sort()
+    expect(a).toBe("motorola_moto_g04")
+    const ins = (cmp: string) => db.$executeRawUnsafe(
+      `INSERT INTO "catalogo_aparelhos_loja_compat" ("id","storeId","categoria","modelKeyA","modelKeyB","acao","updatedAt") VALUES ($1,$2,'pelicula_tela',$3,$4,'adicionar',now())`,
+      `${run}-coll-${cmp}`, storeA, ...(cmp === "ok" ? [a, b] : [b, a]),
+    )
+    await expect(ins("ok")).resolves.toBe(1)
+    await expect(ins("invertido")).rejects.toThrow()
+  })
 })

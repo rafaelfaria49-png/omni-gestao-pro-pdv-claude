@@ -9,6 +9,7 @@ import {
   findGlobalDuplicate,
   lojaModeloCanonicalName,
   orderedPair,
+  overridesUtilizaveis,
   sanitizeLojaModeloInput,
   searchDeviceModelsComLoja,
   type LojaCompatOverride,
@@ -168,5 +169,18 @@ describe("overrides de película por loja", () => {
       ov({ a: "samsung_a05", b: "samsung_a05s", acao: "suprimir" }),
     ]
     expect(applyPeliculaOverrides("samsung_a05", grupos, supr, resolve).grupos).toEqual([])
+  })
+})
+
+describe("revisão independente P3-4 — decisões utilizáveis", () => {
+  it("descarta chave global fora do CSV atual e modelo manual inativo; mantém o resto", () => {
+    const all = [
+      { modelKeyA: "manual_ativo", modelKeyB: "samsung_a05" },
+      { modelKeyA: "manual_inativo", modelKeyB: "samsung_a05" },
+      { modelKeyA: "removido_do_csv", modelKeyB: "samsung_a05" },
+      { modelKeyA: "samsung_a05", modelKeyB: "samsung_a05s" },
+    ]
+    const globais = new Set(["samsung_a05", "samsung_a05s"])
+    expect(overridesUtilizaveis(all, (k) => globais.has(k), (k) => k === "manual_ativo")).toEqual([all[0], all[3]])
   })
 })

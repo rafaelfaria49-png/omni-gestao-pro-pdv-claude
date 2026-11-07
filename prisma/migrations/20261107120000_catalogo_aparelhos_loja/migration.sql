@@ -74,6 +74,8 @@ ALTER TABLE "catalogo_aparelhos_loja_compat" ADD CONSTRAINT "catalogo_aparelhos_
 ALTER TABLE "catalogo_aparelhos_loja_compat" ADD CONSTRAINT "catalogo_aparelhos_loja_compat_categoria_check"
   CHECK ("categoria" IN ('pelicula_tela', 'capinha'));
 ALTER TABLE "catalogo_aparelhos_loja_compat" ADD CONSTRAINT "catalogo_aparelhos_loja_compat_par_ordenado_check"
-  CHECK ("modelKeyA" < "modelKeyB");
+  CHECK (("modelKeyA" COLLATE "C") < ("modelKeyB" COLLATE "C"));
+-- COLLATE "C": a ordem do par é a do código (orderedPair compara unidades UTF-16; chaves são ASCII).
+-- Sem isso, um banco pt_BR/en_US/ICU ignora "_" e recusa pares válidos (ex.: _16_plus × _16e).
 ALTER TABLE "catalogo_aparelhos_loja_modelos" ADD CONSTRAINT "catalogo_aparelhos_loja_modelos_modelKey_check"
   CHECK ("modelKey" LIKE 'manual\_%');

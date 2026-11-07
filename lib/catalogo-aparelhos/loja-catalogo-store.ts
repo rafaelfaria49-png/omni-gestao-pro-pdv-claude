@@ -46,6 +46,7 @@ export type LojaCatalogoFailure =
       existing: { modelKey: string; brand: string; canonicalName: string; source: "global" | "loja"; active: boolean }
     }
   | { ok: false; code: "CONFLICT"; status: 409; message: string }
+  | { ok: false; code: "LIMIT"; status: 409; message: string }
   | { ok: false; code: "UNAVAILABLE"; status: 503; message: string }
 
 export type LojaCatalogoResult<T> = { ok: true; value: T } | LojaCatalogoFailure
@@ -238,6 +239,10 @@ export async function createLojaModelo(
   try {
     const dup = await findLojaDuplicate(db, storeId, brandKey, nameKey)
     if (dup) return duplicateFromLoja(dup)
+    // A busca lê no máximo MAX_MODELOS_POR_LOJA modelos: acima disso o novo sumiria em silêncio.
+    if ((await db.catalogoAparelhoLojaModelo.count({ where: { storeId } })) >= MAX_MODELOS_POR_LOJA) {
+      return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${MAX_MODELOS_POR_LOJA} modelos cadastrados por loja atingido.` }
+    }
     const created = await db.catalogoAparelhoLojaModelo.create({
       data: {
         storeId,

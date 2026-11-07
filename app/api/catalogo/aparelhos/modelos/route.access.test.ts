@@ -187,4 +187,15 @@ describe("GET (leituras)", () => {
     expect(ok.status).toBe(200)
     expect(h.list.mock.calls[0]).toEqual([{}, LOJA_A, { includeInactive: true }])
   })
+
+  it("P3-2: corpo declarado acima de 16 KB é recusado antes de ler (400, nada gravado)", async () => {
+    h.session = storeUser("GERENTE")
+    const res = await createPOST(new Request("http://local/api/catalogo/aparelhos/modelos", {
+      method: "POST",
+      headers: { "x-assistec-loja-id": LOJA_A, "content-type": "application/json", "content-length": "20000" },
+      body: JSON.stringify({ brand: "M", name: "G47" }),
+    }))
+    expect(res.status).toBe(400)
+    expect(h.create).not.toHaveBeenCalled()
+  })
 })

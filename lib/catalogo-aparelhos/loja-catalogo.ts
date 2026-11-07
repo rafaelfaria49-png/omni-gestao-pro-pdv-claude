@@ -305,6 +305,21 @@ export interface PeliculaGruposComLoja {
 }
 
 /**
+ * Só decisões cujos dois lados ainda existem: chave global presente no catálogo atual e modelo
+ * manual ATIVO desta loja. Evita equivalente "fantasma" (chave crua, sem marca) depois que o CSV
+ * deixa de ter o modelo ou que a loja desativa o seu.
+ */
+export function overridesUtilizaveis<T extends Pick<LojaCompatOverride, "modelKeyA" | "modelKeyB">>(
+  overrides: readonly T[],
+  isGlobalKey: (modelKey: string) => boolean,
+  isManualAtivo: (modelKey: string) => boolean,
+): T[] {
+  return overrides.filter((o) =>
+    [o.modelKeyA, o.modelKeyB].every((k) => (isManualModelKey(k) ? isManualAtivo(k) : isGlobalKey(k))),
+  )
+}
+
+/**
  * Aplica as decisões da loja aos grupos globais de película de UM modelo.
  *  - suprimir(A,B): B some de todos os grupos de A (sem reaparecer por outro grupo).
  *  - adicionar(A,B): B aparece num grupo sintético "manual da loja", não transitivo.

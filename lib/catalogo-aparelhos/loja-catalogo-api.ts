@@ -58,6 +58,9 @@ export function catalogoLojaFailureResponse(f: LojaCatalogoFailure): NextRespons
 }
 
 export async function readJsonBody(req: Request): Promise<unknown> {
+  // Recusa pelo cabeçalho antes de bufferizar; sem Content-Length (chunked) cai no limite abaixo.
+  const declared = Number(req.headers.get("content-length") ?? "")
+  if (Number.isFinite(declared) && declared > 16_000) return null
   const text = await req.text().catch(() => "")
   if (text.length > 16_000) return null
   try {
