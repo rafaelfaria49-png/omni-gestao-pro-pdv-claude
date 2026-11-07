@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { afterAll, describe, expect, it } from "vitest"
 import { prisma } from "@/lib/prisma"
-import { upsertVendaInTransaction, type SalePayload } from "@/lib/ops-upsert-venda"
+import { upsertVendaInTransaction, classifyExistingVendaReplay, VendaCreateUniqueConflictError, VENDA_REPLAY_SELECT, type SalePayload } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "@/lib/vendas/sale-writer-v2"
 
 const PHASE = process.env.KG_PHASE ?? ""
@@ -27,7 +27,17 @@ const un = (id: string, qty: number, price = 10): SalePayload => ({
   lines: [{ inventoryId: "prod-un-1", name: "Produto UN sintético", quantity: qty, unitPrice: price, lineTotal: qty * price }],
   paymentBreakdown: { dinheiro: qty * price },
 })
-const v1 = (sale: SalePayload) => prisma.$transaction((tx) => upsertVendaInTransaction(tx, STORE, sale, "Operador sintético", LIVE), { timeout: 20000, maxWait: 20000 })
+// Igual à rota /api/ops/venda-persist: perdedor da corrida de create relê o vencedor e classifica como replay.
+const v1 = async (sale: SalePayload) => {
+  try {
+    return await prisma.$transaction((tx) => upsertVendaInTransaction(tx, STORE, clone(sale), "Operador sintético", LIVE), { timeout: 20000, maxWait: 20000 })
+  } catch (e) {
+    if (!(e instanceof VendaCreateUniqueConflictError)) throw e
+    const winner = await prisma.venda.findUnique({ where: { pedidoId: String(sale.id) }, select: VENDA_REPLAY_SELECT })
+    if (!winner) throw e
+    return classifyExistingVendaReplay(STORE, clone(sale), winner)
+  }
+}
 const v2 = (sale: SalePayload, clientSaleId: string) => persistSaleV2({ storeId: STORE, sale, clientSaleId, operadorLabel: "Operador sintético", options: LIVE })
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
@@ -66,7 +76,8 @@ describe("cross-version " + PHASE, () => {
       { mode: "v1", payload: un("VDA-SIM-A", 2), qty: 2, pedidoId: a.venda.pedidoId, fingerprint: a.fingerprint, origin: "old" },
       { mode: "v2", payload: un("LOCAL-SIM-B", 3), clientSaleId: csidB, qty: 3, pedidoId: b.venda.pedidoId, fingerprint: b.fingerprint, origin: "old" },
     ]
-    result.queued = [{ mode: "v1", payload: un("VDA-SIM-Q-old", 1), qty: 1 }]
+    result.queued = [{ mode: "v1", payload: un("VDA-SIM-Q-old", 1), qty: 1 },
+      { mode: "v2", payload: un("LOCAL-SIM-Q-old", 1), qty: 1, clientSaleId: "22222222-2222-4222-8222-000000000dd0" }]
     result.counts = await counts()
     expect(result.counts).toMatchObject({ vendas: "2", itens: "2", livro: "2", stock: "45", stock_type: "integer" })
   })
@@ -90,8 +101,13 @@ describe("cross-version " + PHASE, () => {
     }
     const fresh: Array<Record<string, any>> = []
     for (const q of prev.queued) {
-      const first = await send(q), again = await send(q)
-      expect([first.replayed, again.replayed]).toEqual([false, true])
+      // 1º envio CONCORRENTE (duas abas / reenvio automático ao mesmo tempo) + reenvio depois.
+      const firsts = await Promise.all([send(q), send(q), send(q)])
+      const first = firsts.find((x) => !x.replayed)!
+      expect(firsts.filter((x) => !x.replayed)).toHaveLength(1)
+      expect(new Set(firsts.map((x) => x.venda.pedidoId)).size).toBe(1)
+      const again = await send(q)
+      expect(again.replayed).toBe(true); expect(again.venda.pedidoId).toBe(first.venda.pedidoId)
       fresh.push({ ...q, pedidoId: first.venda.pedidoId, fingerprint: first.fingerprint, origin: "queued-from-" + prev.phase + "-sent-by-" + tag })
     }
     const own1 = await v1(clone(un("VDA-SIM-" + tag, 1)))
@@ -102,13 +118,26 @@ describe("cross-version " + PHASE, () => {
       { mode: "v2", payload: un("LOCAL-SIM-" + tag, 1), clientSaleId: csid, qty: 1, pedidoId: own2.venda.pedidoId, fingerprint: own2.fingerprint, origin: tag })
     // Reenvio com fatos diferentes continua recusado (não vira venda nova).
     const changed = clone(sales[0].payload); changed.lines[0].quantity = 1; changed.total = 10; changed.paymentBreakdown = { dinheiro: 10 }
-    await expect(sales[0].mode === "v1" ? v1(changed) : v2(changed, sales[0].clientSaleId)).rejects.toBeInstanceOf(Error)
+    // v1: mesmo pedidoId com fatos diferentes; v2: mesmo clientSaleId com fatos diferentes.
+    let refusal: unknown = null
+    try { await (sales[0].mode === "v1" ? v1(changed) : v2(changed, sales[0].clientSaleId)) } catch (e) { refusal = e }
+    expect((refusal as Error | null)?.constructor?.name).toBe(sales[0].mode === "v1" ? "PedidoIdConflitoMesmaLojaError" : "ClientSaleIdReusedError")
+    const changedV2 = sales.find((s) => s.mode === "v2")!
+    const c2 = clone(changedV2.payload); c2.lines[0].quantity = 5; c2.total = 50; c2.paymentBreakdown = { dinheiro: 50 }
+    let refusal2: unknown = null
+    try { await v2(c2, changedV2.clientSaleId) } catch (e) { refusal2 = e }
+    expect((refusal2 as Error | null)?.constructor?.name).toBe("ClientSaleIdReusedError")
     result.phase = "replay-" + tag
     result.replays = replays
-    result.sales = [...sales, ...fresh]
-    result.queued = [{ mode: tag.length % 2 ? "v2" : "v1", payload: un("LOCAL-SIM-Q-" + tag, 1), qty: 1, clientSaleId: "22222222-2222-4222-8222-" + "0".repeat(12 - tag.length) + tag.replace(/[^0-9a-f]/g, "b") }]
+    const allSales = [...sales, ...fresh]
+    result.sales = allSales
+    // A fila deixada para a próxima versão tem UMA venda v1 e UMA v2 (nunca enviadas).
+    result.queued = [
+      { mode: "v1", payload: un("VDA-SIM-Q-" + tag, 1), qty: 1 },
+      { mode: "v2", payload: un("LOCAL-SIM-Q-" + tag, 1), qty: 1, clientSaleId: "22222222-2222-4222-8222-" + "0".repeat(12 - tag.length) + tag.replace(/[^0-9a-f]/g, "b") },
+    ]
     result.counts = await counts()
-    const n = String(result.sales.length), stock = String(50 - result.sales.reduce((t: number, s: any) => t + s.qty, 0))
+    const n = String(allSales.length), stock = String(50 - allSales.reduce((t: number, s) => t + Number(s.qty), 0))
     expect(result.counts).toMatchObject({ vendas: n, itens: n, livro: n, financeiro: n, stock, stock_type: "double precision" })
     const fin = await prisma.$queryRawUnsafe<Array<{ ref: string; n: number }>>(
       `SELECT "referenciaId" AS ref, count(*)::int AS n FROM movimentacoes_financeiras GROUP BY 1 ORDER BY 1`)

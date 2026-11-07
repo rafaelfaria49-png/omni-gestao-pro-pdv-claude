@@ -163,6 +163,7 @@ try {
   psql({ user: "sim_admin", db: "postgres", sql: "ALTER DATABASE sim_eq OWNER TO omni_owner" })
   // 9b passo 2: 20261106 (esta branch) pelo mesmo caminho.
   const deployed = prisma(newRoot, ["migrate", "deploy"], migratorUrl(DB, "?options=-c%20role%3Domni_owner"))
+  if (!/20261106120000_manual_kg_title_guard_indexed/.test(deployed)) throw Error("KG_20261106_NOT_DEPLOYED")
   const fnOwners = psql({ user: "omni_migrator", env: { PGPASSWORD: pw.migrator }, sql:
     "SELECT 'owners=' || string_agg(DISTINCT pg_get_userbyid(proowner), ',') FROM pg_proc WHERE proname LIKE 'manual_kg_%'" })
   step("additive-sim", { refusedWithoutRole: noRole.includes("KG_MIGRATION_OWNER_PUBLIC_SCHEMA_REQUIRED"), prismaDeployWithoutRoleFails: true,
