@@ -4,7 +4,7 @@
  * O MESMO arquivo é copiado pelo orquestrador (`run-cross-version.mjs`) para
  * `<worktree>/test-results/kg-readiness/` e executado pelo Vitest de cada versão:
  *  - `KG_PHASE=old`       → código da main (cliente Prisma Int), papel antigo, ANTES do corte;
- *  - `KG_PHASE=new`       → código da #336 (cliente Float), `omni_runtime_v2`, DEPOIS das migrations;
+ *  - `KG_PHASE=replay`    → cada versão seguinte (#315, #335, topo), `omni_runtime_v2`, DEPOIS das migrations;
  *  - `KG_PHASE=old-after` → código da main com a credencial nova, simulando "Redeploy" proibido.
  * Só conecta no cluster descartável conferido por identidade (porta/banco/usuário).
  */
@@ -18,7 +18,7 @@ const PHASE = process.env.KG_PHASE ?? ""
 const OUT = process.env.KG_OUT ?? ""
 const PORT = Number(process.env.KG_PORT ?? "0")
 const EXPECTED_USER = process.env.KG_EXPECTED_USER ?? ""
-if (!["old", "new", "old-after"].includes(PHASE) || !OUT || !PORT || !EXPECTED_USER) throw Error("KG_HARNESS_ENV_REQUIRED")
+if (!["old", "replay", "old-after"].includes(PHASE) || !OUT || !PORT || !EXPECTED_USER) throw Error("KG_HARNESS_ENV_REQUIRED")
 const STORE = "loja-sim-1"
 const LIVE = { enforceStock: true, requireCaixaSession: true }
 const at = "2026-11-06T12:00:00.000Z"
@@ -56,51 +56,62 @@ describe("cross-version " + PHASE, () => {
     await prisma.store.create({ data: { id: STORE, name: "Loja sintética 1", codigoNumeracaoVenda: "SIM" } })
     await prisma.sessaoCaixa.create({ data: { id: "cash-sim-1", storeId: STORE, operador: "Operador", status: "ABERTA" } })
     await prisma.produto.create({ data: { id: "prod-un-1", storeId: STORE, name: "Produto UN sintético", stock: 50, price: 10 } })
-    const saleA = un("VDA-SIM-A", 2), saleB = un("LOCAL-SIM-B", 3), saleC = un("VDA-SIM-C", 4)
-    const clientSaleIdB = "7d0f0c55-0b7e-4a52-9f2a-0d4c5e0b1b01"
-    const a = await v1(clone(saleA))
-    const b = await v2(clone(saleB), clientSaleIdB)
-    const aReplayOld = await v1(clone(saleA))
-    expect(a.replayed).toBe(false); expect(b.replayed).toBe(false); expect(aReplayOld.replayed).toBe(true)
-    result.payloads = { saleA, saleB, clientSaleIdB, saleC }
-    result.created = { a: { pedidoId: a.venda.pedidoId, fingerprint: a.fingerprint }, b: { pedidoId: b.venda.pedidoId, fingerprint: b.fingerprint } }
-    result.countsAfterOld = await counts()
-    expect(result.countsAfterOld).toMatchObject({ vendas: "2", itens: "2", livro: "2", stock: "45", stock_type: "integer" })
+    // Duas vendas confirmadas com resposta perdida (v1 e v2) + uma que fica só na fila (nunca enviada).
+    const a = await v1(clone(un("VDA-SIM-A", 2)))
+    const csidB = "7d0f0c55-0b7e-4a52-9f2a-0d4c5e0b1b01"
+    const b = await v2(clone(un("LOCAL-SIM-B", 3)), csidB)
+    expect(a.replayed).toBe(false); expect(b.replayed).toBe(false)
+    expect((await v1(clone(un("VDA-SIM-A", 2)))).replayed).toBe(true)
+    result.sales = [
+      { mode: "v1", payload: un("VDA-SIM-A", 2), qty: 2, pedidoId: a.venda.pedidoId, fingerprint: a.fingerprint, origin: "old" },
+      { mode: "v2", payload: un("LOCAL-SIM-B", 3), clientSaleId: csidB, qty: 3, pedidoId: b.venda.pedidoId, fingerprint: b.fingerprint, origin: "old" },
+    ]
+    result.queued = [{ mode: "v1", payload: un("VDA-SIM-Q-old", 1), qty: 1 }]
+    result.counts = await counts()
+    expect(result.counts).toMatchObject({ vendas: "2", itens: "2", livro: "2", stock: "45", stock_type: "integer" })
   })
 
-  it.runIf(PHASE === "new")("new: replays of old sales never duplicate; first send of queued sale once", async () => {
+  // Cada versão seguinte (#315 → #335 → topo): reenvia TODAS as vendas anteriores (sequencial e 3× em
+  // paralelo), faz o 1º envio da venda que ficou na fila da versão anterior, grava uma v1 e uma v2 próprias
+  // com resposta perdida e deixa uma nova venda na fila para a próxima versão.
+  it.runIf(PHASE === "replay")("replay: no confirmed sale is written twice across versions", async () => {
     result.identity = await identity()
-    const old = JSON.parse(readFileSync(process.env.KG_OLD_OUT!, "utf8"))
-    const { saleA, saleB, clientSaleIdB, saleC } = old.payloads
-    const before = await counts()
-    expect(before).toMatchObject({ vendas: "2", livro: "2", stock: "45", stock_type: "double precision" })
-    const aReplay = await v1(clone(saleA))
-    const bReplay = await v2(clone(saleB), clientSaleIdB)
-    const parallel = await Promise.all([1, 2, 3].map(() => v1(clone(saleA))))
-    const parallelV2 = await Promise.all([1, 2, 3].map(() => v2(clone(saleB), clientSaleIdB)))
-    const c1 = await v1(clone(saleC))
-    const c2 = await v1(clone(saleC))
-    result.replays = {
-      a: { replayed: aReplay.replayed, pedidoId: aReplay.venda.pedidoId, fingerprintEqualsOld: aReplay.fingerprint === old.created.a.fingerprint },
-      b: { replayed: bReplay.replayed, pedidoId: bReplay.venda.pedidoId, fingerprintEqualsOld: bReplay.fingerprint === old.created.b.fingerprint },
-      parallelV1: parallel.map((r) => r.replayed), parallelV2: parallelV2.map((r) => r.replayed),
-      c: [c1.replayed, c2.replayed],
+    const tag = process.env.KG_TAG ?? "x"
+    const prev = JSON.parse(readFileSync(process.env.KG_PREV_OUT!, "utf8"))
+    const sales: Array<Record<string, any>> = prev.sales
+    const send = (s: Record<string, any>) => s.mode === "v1" ? v1(clone(s.payload)) : v2(clone(s.payload), s.clientSaleId)
+    const replays: unknown[] = []
+    for (const s of sales) {
+      const r = await send(s)
+      const par = await Promise.all([1, 2, 3].map(() => send(s)))
+      replays.push({ pedidoId: s.pedidoId, origin: s.origin, replayed: r.replayed, samePedido: r.venda.pedidoId === s.pedidoId, sameFingerprint: r.fingerprint === s.fingerprint, parallel: par.map((x) => x.replayed) })
+      expect(r.replayed).toBe(true); expect(r.venda.pedidoId).toBe(s.pedidoId); expect(r.fingerprint).toBe(s.fingerprint)
+      expect(par.every((x) => x.replayed && x.venda.pedidoId === s.pedidoId)).toBe(true)
     }
-    expect(aReplay.replayed).toBe(true); expect(aReplay.venda.pedidoId).toBe(old.created.a.pedidoId)
-    expect(bReplay.replayed).toBe(true); expect(bReplay.venda.pedidoId).toBe(old.created.b.pedidoId)
-    expect(parallel.every((r) => r.replayed)).toBe(true); expect(parallelV2.every((r) => r.replayed)).toBe(true)
-    expect([c1.replayed, c2.replayed]).toEqual([false, true])
-    // Fingerprint UN calculada pela versão nova = a gravada pela antiga (sem 409 por mudança de versão).
-    expect(aReplay.fingerprint).toBe(old.created.a.fingerprint)
-    expect(bReplay.fingerprint).toBe(old.created.b.fingerprint)
+    const fresh: Array<Record<string, any>> = []
+    for (const q of prev.queued) {
+      const first = await send(q), again = await send(q)
+      expect([first.replayed, again.replayed]).toEqual([false, true])
+      fresh.push({ ...q, pedidoId: first.venda.pedidoId, fingerprint: first.fingerprint, origin: "queued-from-" + prev.phase + "-sent-by-" + tag })
+    }
+    const own1 = await v1(clone(un("VDA-SIM-" + tag, 1)))
+    const csid = ["11111111-1111-4111-8111-", tag.padEnd(12, "0").slice(0, 12).replace(/[^0-9a-f]/g, "a")].join("")
+    const own2 = await v2(clone(un("LOCAL-SIM-" + tag, 1)), csid)
+    expect(own1.replayed).toBe(false); expect(own2.replayed).toBe(false)
+    fresh.push({ mode: "v1", payload: un("VDA-SIM-" + tag, 1), qty: 1, pedidoId: own1.venda.pedidoId, fingerprint: own1.fingerprint, origin: tag },
+      { mode: "v2", payload: un("LOCAL-SIM-" + tag, 1), clientSaleId: csid, qty: 1, pedidoId: own2.venda.pedidoId, fingerprint: own2.fingerprint, origin: tag })
     // Reenvio com fatos diferentes continua recusado (não vira venda nova).
-    const changed = clone(saleA); changed.lines![0].quantity = 1; changed.total = 10; changed.paymentBreakdown = { dinheiro: 10 }
-    await expect(v1(changed)).rejects.toBeInstanceOf(Error)
-    result.countsAfterNew = await counts()
-    expect(result.countsAfterNew).toMatchObject({ vendas: "3", itens: "3", livro: "3", stock: "41", deltas: "-2,-3,-4" })
+    const changed = clone(sales[0].payload); changed.lines[0].quantity = 1; changed.total = 10; changed.paymentBreakdown = { dinheiro: 10 }
+    await expect(sales[0].mode === "v1" ? v1(changed) : v2(changed, sales[0].clientSaleId)).rejects.toBeInstanceOf(Error)
+    result.phase = "replay-" + tag
+    result.replays = replays
+    result.sales = [...sales, ...fresh]
+    result.queued = [{ mode: tag.length % 2 ? "v2" : "v1", payload: un("LOCAL-SIM-Q-" + tag, 1), qty: 1, clientSaleId: "22222222-2222-4222-8222-" + "0".repeat(12 - tag.length) + tag.replace(/[^0-9a-f]/g, "b") }]
+    result.counts = await counts()
+    const n = String(result.sales.length), stock = String(50 - result.sales.reduce((t: number, s: any) => t + s.qty, 0))
+    expect(result.counts).toMatchObject({ vendas: n, itens: n, livro: n, financeiro: n, stock, stock_type: "double precision" })
     const fin = await prisma.$queryRawUnsafe<Array<{ ref: string; n: number }>>(
       `SELECT "referenciaId" AS ref, count(*)::int AS n FROM movimentacoes_financeiras GROUP BY 1 ORDER BY 1`)
-    result.financeiroPorVenda = fin
     expect(fin.every((r) => r.n === 1)).toBe(true)
   })
 

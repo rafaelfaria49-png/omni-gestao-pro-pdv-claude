@@ -98,6 +98,9 @@ presença nas lojas e um push autorizado.
 | **Cliente Prisma Int × colunas Float** | qualquer build/script sem a #315 após o J8 | corte CONNECT + sessões (runbook J6/J7), `07`, congelamento; **Redeploy/Promote/Instant Rollback de deployment antigo proibidos para sempre** |
 | **Rollback impossível** | depois do COMMIT do J8 (estoque) e depois da 1ª venda KG (venda) | §7 |
 | Trocar o writer | `SALE_SERVER_NUMBERING_ENABLED` | **não alterar** em nenhuma etapa; o ensaio provou replay entre versões com o writer fixo, não com troca |
+| **Lacuna de schema entre W1 e W2/W3** | depois do 9b, produção tem `quantidadeKg` + gatilhos, mas o `schema.prisma`/migrations da `main` (só #315) não | até o merge desta PR: **proibido** `prisma db push`, `migrate dev`, `migrate diff --script` aplicado ou qualquer script de schema a partir de checkout da `main`/#315 contra produção (derrubaria `quantidadeKg`; `manual_kg_guard_item` passaria a falhar em toda venda). Manter W1→W2→W3 curtos; o congelamento §3 do runbook vale até o merge desta PR |
+| `MIGRATION_AUTHORITY_ENABLED` | se ligado antes do 9b, o build rodaria `migrate deploy` sem o papel de dono: a `20261029` falha e deixa linha `failed` (P3009) que trava as próximas | manter `false` (build com `MIGRATION_SKIPPED`) pelo menos até o merge desta PR |
+| Método de merge | retarget de PR empilhada | usar **merge commit** (não squash) em #315/#335/#336; com squash o diff retargetado repete os commits anteriores |
 
 ### 4.2 Sequência (os 17 passos pedidos, revisados e ligados ao runbook)
 
@@ -116,8 +119,8 @@ janelas curtas separadas; não há obrigação de fazer tudo no mesmo dia, e sep
 | 8. Conferência das sessões | W1 / J7 | 06 de novo ≥ 5 min; transações abertas; sonda de URL antiga; lista de deployments | quatro conferências |
 | 9. Migration com retrato | W1 / J8 | `estoque-kg-migration-apply.sql` (migrator, `-1`) + `migrate resolve --applied 20261025…` — **PONTO DE NÃO-RETORNO** | `KG_MIGRATION_OK`, checksum |
 | 9a. Barreira opcional | W1 / J9 | `07` se A6 autorizado | sem erro, 5 CHECKs validados |
-| **9b. Migrations aditivas da venda (novo)** | W1-M, logo após J9/J10 com a trava ligada | preflight §5.2; depois, **do checkout do head aprovado desta PR**: `prisma migrate deploy` com `DIRECT_URL`/`DATABASE_URL` do migrator **+ `options=-c role=omni_owner`** → aplica só `20261029` e `20261106` | `migrate status` em dia; funções `manual_kg_*` donas `omni_owner`; 8 gatilhos; `venda_itens.quantidade` ainda `integer` |
-| 10. Verificações pós-migration | W1 / J10 | frações/NaN/denormais = 0; 06; `migrate status`; `migrate diff` = só drift 0019 | os cinco itens |
+| 10. Verificações pós-migration | W1 / J10 (**antes** do 9b) | frações/NaN/denormais = 0; 06; `migrate status` e `migrate diff` **do checkout do merge da #315** = só drift 0019 | os cinco itens |
+| **10b. Migrations aditivas da venda (novo, "9b")** | W1, logo **depois** do J10, trava ligada | preflight §5.2; depois, **do checkout do head aprovado desta PR**: `prisma migrate deploy` com `DIRECT_URL`/`DATABASE_URL` do migrator **+ `options=-c role=omni_owner`** → aplica só `20261029` e `20261106` | `migrate status` **deste checkout** em dia; `migrate diff` **deste checkout** = só drift 0019 (o diff do checkout da #315 aqui acusaria `quantidadeKg` — esperado, **não "corrigir"**); funções `manual_kg_*` donas `omni_owner`; 8 gatilhos; `venda_itens.quantidade` ainda `integer` |
 | 11. Remoção da trava | W1 / J11 | remover `STOCK_WRITES_FROZEN`; Redeploy **do deployment do merge da #315** (conferir SHA) | READY, pendências zerando |
 | 12. Sincronização de filas | W1 / J11–J13 | terminais reabrem no endereço canônico; filas reenviam sozinhas (replay provado §6) | pendências = 0 em cada terminal |
 | 13. Smoke estoque KG | W1 / J12 | loja de homologação, produto KG sintético: entrada 0,001 kg, histórico, ficha; venda por peso recusada | quatro itens |
@@ -132,7 +135,7 @@ janelas curtas separadas; não há obrigação de fazer tudo no mesmo dia, e sep
 - 4 antes de 5: a env é retrato do build; trava depois do build não vale.
 - 5 antes de 9: com a migration antes do código, o cliente Int corromperia; com o código antes, a escrita Float
   em `integer` falha fechada (`22P03`) e a trava já está ligada.
-- 9b depois de 9 e antes de 14: a `20261029` exige `venda_itens.quantidade integer` (continua) e dono = papel
+- 9b (10b) depois do J10 e antes de 14: a `20261029` exige `venda_itens.quantidade integer` (continua) e dono = papel
   de sessão (só existe depois do 03); a #335 não pode subir sem a coluna. O binário da #315 é compatível com o
   schema aditivo (35 verificações `Prisma315` da `verify-manual-kg-migration.mjs`, PASS nesta PR).
 - 9b ainda dentro de W1: as funções de guarda devem existir antes de qualquer binário que grave venda KG, e
@@ -186,32 +189,47 @@ node node_modules/prisma/build/index.js migrate status    # "Database schema is 
 
 Se `migrate status` listar qualquer outra pendente além dessas duas: **parar** (main mudou; reabrir o plano).
 
+No ensaio (run-05) as duas foram aplicadas em dois `migrate deploy` com o mesmo `options` (a `20261029` do checkout
+da #335, a `20261106` do topo). Um único `migrate deploy` do topo usa o mesmo mecanismo; se preferir reproduzir
+exatamente o ensaio, fazer em dois passos.
+
 ## 6. Riscos de venda — compatibilidade real (provas)
 
-### 6.1 Ensaio sintético integrado (novo) — `cross-version-run-04/`, PASS
+### 6.1 Ensaio sintético integrado (novo) — `cross-version-run-05/`, PASS
 
-Conclusivo: run-04 (scripts oficiais do HEAD da #315 + `07` revisado do A6, sha256 LF `dea40868…`; hashes de
-todos os scripts e migrations em `cross-version-run-04/cross-version-summary.json`). O run-03 (mesmo resultado,
-com o `07` original `a407ff7f…`) fica como histórico.
+Conclusivo: **run-05**. Cadeia exata de versões que a produção vai atravessar, cada uma com o seu código real
+e o seu cliente Prisma gerado, contra o mesmo banco descartável (commits e árvores registrados em
+`cross-version-run-05/cross-version-summary.json` → `versions`):
+
+| Versão | Commit / árvore | Papel |
+| --- | --- | --- |
+| main (hoje em produção, Int) | `37acc3b` | `neondb_owner`, antes do corte |
+| J4 → J11 (#315 sobre a main) | probe local `e058d9c`, árvore `ff3870d4…` = `merge-tree 37acc3b 104d768` | `omni_runtime_v2` |
+| W2 (#335) | `406ea48` | `omni_runtime_v2` |
+| W3 (#336 + esta PR) | `6671401` (código de app idêntico ao head desta PR; só harness/runner ainda não commitados na hora) | `omni_runtime_v2` |
+
+Scripts oficiais do HEAD da #315 + `07` revisado do A6 (sha256 LF `dea40868…`); hashes LF de todos os scripts e
+migrations no mesmo JSON. Run-03/04 (só main → topo) ficam como histórico.
 
 PostgreSQL 17.10 descartável, papel antigo `neondb_owner` herdando `pg_write_all_data` (topologia Neon),
-schema da main criado por ele e 23 migrations resolvidas. Depois: 01/02 (A3), **fase antiga com o código
-real da main `37acc3b`** (cliente Int), corte 03→04→05→06 com uma sessão antiga pendurada, migration de estoque
-pelo script verificado, 99, migrations aditivas, J10, **fase nova com o código real do topo da pilha**
-(`adbc66e` + esta PR) conectado como `omni_runtime_v2`.
+schema da main criado por ele e 23 migrations resolvidas. Sequência: 01/02 (A3) → fase antiga → corte
+03→04→05→06 com uma sessão antiga pendurada → migration de estoque pelo script verificado → 99 → **J10 do
+estoque pelo checkout da #315** (diff vazio) → 9b: `20261029` por `migrate deploy` **do checkout da #335** e
+`20261106` por `migrate deploy` do topo, **ambas com `options=-c role=omni_owner`** → J10 pelo topo →
+fases #315 → #335 → topo. Em cada fase: todas as vendas anteriores reenviadas (sequencial + 3 paralelos),
+1º envio da venda deixada na fila pela versão anterior, uma v1 e uma v2 novas com resposta perdida.
 
 | Prova | Resultado |
 | --- | --- |
-| Venda v1 (`pedidoId`) gravada pela versão antiga, resposta perdida, reenviada à versão nova | `replayed=true`, mesmo `pedidoId`, **fingerprint idêntico** entre versões, sem 2ª linha |
-| Venda v2 (`clientSaleId`) idem | `replayed=true`, mesmo número do servidor, fingerprint idêntico |
-| 3 reenvios paralelos v1 e 3 v2 após a troca | todos `replayed=true` |
-| Venda que estava só na fila offline, 1º envio na versão nova e reenvio | `[false, true]` — gravada uma vez |
-| Reenvio com fatos diferentes | recusado (não vira venda nova) |
-| Totais | 3 vendas, 3 itens, 3 movimentos de estoque (`-2,-3,-4`), 1 movimento financeiro por venda, saldo 41 em `double precision` |
+| Vendas v1 (`pedidoId`) e v2 (`clientSaleId`) gravadas por uma versão, resposta perdida, reenviadas a **cada** versão seguinte (main→#315, →#335, →topo) | 2 + 5 + 8 reenvios, todos `replayed=true`, mesmo `pedidoId`, **fingerprint idêntico** entre todas as versões |
+| 3 reenvios paralelos de cada venda em cada versão | todos `replayed=true`, mesmo `pedidoId` |
+| Venda que ficou só na fila de uma versão, 1º envio na seguinte e reenvio | `[false, true]` nas três transições — gravada uma vez |
+| Reenvio com fatos diferentes | recusado em cada versão (não vira venda nova) |
+| Totais ao fim | 11 vendas, 11 itens, 11 movimentos de estoque, 1 movimento financeiro por venda, saldo 36 = 50 − Σ quantidades, `double precision` |
 | Corte | `KG_CORTE_POSSE_OK`, `KG_CORTE_CONEXAO_OK`, `KG_SESSOES_ANTIGAS_ZERO`, papel antigo `connect=false` e login recusado (`permission denied for database`) |
 | `99` depois do J8 | recusa `KG_DESFAZER_PROIBIDO_MIGRATION_JA_APLICADA` |
 | Migration aditiva sem papel de dono (psql e `migrate deploy`) | recusada `KG_MIGRATION_OWNER_PUBLIC_SCHEMA_REQUIRED`, sem efeito |
-| Migration aditiva com `options=-c role=omni_owner` | aplicada; funções donas `omni_owner`; `migrate status` em dia; `migrate diff` vazio; J10 frações=0, NaN/denormais=0 |
+| Migrations aditivas por `prisma migrate deploy` com `options=-c role=omni_owner` (20261029 do checkout da #335; 20261106 do topo) | aplicadas; funções donas `omni_owner`; `migrate status` em dia; `migrate diff` vazio (#315 antes do 9b e topo depois); J10 frações=0, NaN/denormais=0 |
 | Venda KG sob a topologia real (runtime só DML, funções SECURITY DEFINER de `omni_owner`) | 0,35 kg + 1,25 kg, replay v1 e 3× v2 paralelos sem duplicar; saldo 3,4; `quantidade` NULL/`quantidadeKg` exato; adulteração direta recusada `MANUAL_KG_COMPATIBLE_WRITER_REQUIRED` |
 | "Redeploy" proibido simulado: cliente Int da main com a credencial nova | **com o 07**: recusado pelo banco (`23514`, CHECK `estoque_produtos_stock_kg_milesimos`, valor enviado `2e-322`), nada mudou. **Sem o 07**: o banco **aceitou** os valores corrompidos dentro da transação; o Prisma Int só abortou ao ler o retorno (`Could not convert from NaN to Int`) e a transação reverteu. Ou seja, sem o 07 a proteção deste caminho é acidental; caminhos que não releem o valor corrompem (`old-client-WRITE-after-migration.txt`, A6). Reforça: aplicar o 07 e manter o corte |
 
@@ -229,7 +247,7 @@ pelo script verificado, 99, migrations aditivas, J10, **fase nova com o código 
 | SKU alterado e `Produto.id` | `f8-venda-kg` caso 5; R1-P1 da #336; `PRODUTO_NAO_RESOLVIDO` (#335) | PASS |
 | `SALE_SERVER_NUMBERING_ENABLED` | **não alterado**; o writer v1 não deduplica por `clientSaleId` quando a flag muda (achado da #315) | risco conhecido, mitigado por não trocar |
 
-**Limite honesto:** o ensaio usa o servidor das duas versões contra o mesmo banco; o JavaScript do navegador
+**Limite honesto:** o ensaio usa o servidor de cada versão contra o mesmo banco; o JavaScript do navegador
 (PWA com bundle antigo enviando para o servidor novo) foi coberto pelo formato do payload (o mesmo JSON da
 fila foi reenviado) e pelo E2E da #335/#336, não por um navegador com bundle `37acc3b`.
 
@@ -246,7 +264,7 @@ a cada escrita em `contas_receber_titulos` e a cada movimento financeiro que ref
 | movimento financeiro → título | 593,6 ms | 3,2 ms | 0,07–0,10 ms |
 | movimento financeiro → venda | 0,93 ms | 0,79 ms | — |
 
-(run-04, média de 20 escritas; o run-03 deu 646 / 1.184 / 650 ms antes e 1,9 / 2,4 / 3,5 ms depois.)
+(run-04, média de 20 escritas; run-03 e run-05 dão a mesma ordem de grandeza — ver `trigger-overhead-and-equivalence` em cada `cross-version-summary.json`.)
 
 O custo crescia linearmente com o histórico; uma venda a prazo com parcelas faz várias escritas de título
 na mesma transação (timeout 20 s). A correção é **só o corpo da função**: candidatos resolvidos por índice
@@ -271,7 +289,10 @@ Fases F0–F4 do runbook valem para o estoque. Acréscimos:
 ## 8. Avaliação independente
 
 Revisor de contexto limpo, somente leitura, sobre esta PR (migration `20261106`, runner, harness e este
-plano): ver `docs/ai-execution/_evidence/PADARIA-KG-RELEASE-READINESS-A4-A8-001/INDEPENDENT_REVIEW.md`.
+plano): `docs/ai-execution/_evidence/PADARIA-KG-RELEASE-READINESS-A4-A8-001/INDEPENDENT_REVIEW.md` —
+**APPROVE_WITH_LIMITATIONS** na 1ª rodada, sem nenhuma entrada em que os dois corpos da função divirjam; os três
+P2 (cadeia intermediária não ensaiada, ordem 9b/J10 com o gate de drift, lacuna de schema W1→W2) e os P3 foram
+tratados neste documento e no run-05 (tabela de tratamento no arquivo).
 A revisão cruzada por outra família de modelo (Codex) **não ocorreu** neste GOAL.
 
 ## 9. Ordem final de PRs

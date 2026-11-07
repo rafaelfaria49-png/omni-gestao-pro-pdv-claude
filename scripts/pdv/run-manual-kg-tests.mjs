@@ -47,7 +47,7 @@ try {
   }
   const after = await snapshot()
   if (JSON.stringify(before) !== JSON.stringify(after)) throw Error("HISTORICAL_INTEGER_VALUES_CHANGED")
-  await writeFile(out + "/migration.json", JSON.stringify({ identity, before, after, historicalUnPreserved: true, newMigration: "20261029120000_manual_kg_sale_quantity", productionWrites: 0 }, null, 2))
+  await writeFile(out + "/migration.json", JSON.stringify({ identity, before, after, historicalUnPreserved: true, newMigrations: ["20261029120000_manual_kg_sale_quantity", "20261106120000_manual_kg_title_guard_indexed"], productionWrites: 0 }, null, 2))
 } finally { await db.$disconnect() }
 run(["scripts/pdv/verify-manual-kg-migration.mjs"])
 run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-hardening.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "lib/vendas/manual-kg-padaria-flow.pg.test.ts", "lib/pdv/devolucao/f8-venda-kg.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/manual-kg/integration.json"], {

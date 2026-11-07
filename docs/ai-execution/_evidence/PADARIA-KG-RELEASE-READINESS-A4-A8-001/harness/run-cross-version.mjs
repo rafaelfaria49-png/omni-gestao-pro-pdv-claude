@@ -6,9 +6,11 @@
  * Nenhuma URL do ambiente, `.env` ou segredo é lida; as variáveis PG/Prisma herdadas são removidas.
  *
  * Uso (Node 22+):
- *   node run-cross-version.mjs <oldRoot> <newRoot> <workDir> <outDir>
- *     oldRoot = worktree da main (cliente Int, ex.: 37acc3b)
- *     newRoot = worktree do topo da pilha (#336 ou esta branch)
+ *   node run-cross-version.mjs <oldRoot> <mid315Root> <mid335Root> <newRoot> <workDir> <outDir>
+ *     oldRoot    = worktree da main (cliente Int, ex.: 37acc3b)
+ *     mid315Root = árvore que o J4 publica (main + #315)
+ *     mid335Root = head da #335 (406ea48)
+ *     newRoot    = topo da pilha (#336 + esta branch)
  *     workDir = diretório descartável (scratchpad) para o cluster
  *     outDir  = onde gravar os JSON de evidência
  */
@@ -19,8 +21,8 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const [oldRoot, newRoot, workDir, outDir] = process.argv.slice(2).map((p) => p && resolve(p))
-if (!oldRoot || !newRoot || !workDir || !outDir) throw Error("uso: run-cross-version.mjs <oldRoot> <newRoot> <workDir> <outDir>")
+const [oldRoot, mid315Root, mid335Root, newRoot, workDir, outDir] = process.argv.slice(2).map((p) => p && resolve(p))
+if (!oldRoot || !mid315Root || !mid335Root || !newRoot || !workDir || !outDir) throw Error("uso: run-cross-version.mjs <oldRoot> <mid315Root> <mid335Root> <newRoot> <workDir> <outDir>")
 const PGBIN = process.env.KG_PGBIN ?? "C:/Program Files/PostgreSQL/17/bin"
 const PORT = Number(process.env.KG_PORT ?? "55493")
 const DB = "omnigestao_prod_sim"
@@ -67,7 +69,7 @@ function phase(root, name, user, extraEnv = {}, file = "cross-version.phase.ts")
   const userPw = user === "omni_runtime_v2" ? pw.runtime : ""
   const dbUrl = `postgresql://${user}${userPw ? ":" + userPw : ""}@127.0.0.1:${PORT}/${extraEnv.KG_DB ?? DB}?connection_limit=5`
   const r = spawnSync(NODE, [join(root, "node_modules/vitest/vitest.mjs"), "run", target.replace(/\\/g, "/"), "--root", root, "--reporter=verbose", "--maxWorkers=1"], {
-    cwd: root, env: { ...cleanEnv, DATABASE_URL: dbUrl, DIRECT_URL: dbUrl, KG_PHASE: name.replace(/-guard|-noguard$/, ""), KG_OUT: out, KG_PORT: String(PORT), KG_EXPECTED_USER: user, ...extraEnv },
+    cwd: root, env: { ...cleanEnv, DATABASE_URL: dbUrl, DIRECT_URL: dbUrl, KG_PHASE: name.startsWith("replay-") ? "replay" : name.replace(/-guard|-noguard$/, ""), KG_OUT: out, KG_PORT: String(PORT), KG_EXPECTED_USER: user, ...extraEnv },
     encoding: "utf8", windowsHide: true, timeout: 300000 })
   const text = (r.stdout ?? "") + (r.stderr ?? "")
   writeFileSync(join(outDir, `phase-${name}.log.txt`), text.replace(/postgresql:\/\/[^@\s]+@/g, "postgresql://***@"))
@@ -75,7 +77,11 @@ function phase(root, name, user, extraEnv = {}, file = "cross-version.phase.ts")
   return JSON.parse(readFileSync(out, "utf8"))
 }
 
-const evidence = { goal: "PADARIA-KG-RELEASE-READINESS-A4-A8-001", startedAt: new Date().toISOString(), cluster: { port: PORT, db: DB }, oldRoot, newRoot }
+const gitHead = (root) => spawnSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true }).stdout.trim()
+const gitTree = (root) => spawnSync("git", ["-C", root, "rev-parse", "HEAD^{tree}"], { encoding: "utf8", windowsHide: true }).stdout.trim()
+const roots = { old: oldRoot, mid315: mid315Root, mid335: mid335Root, top: newRoot }
+const evidence = { goal: "PADARIA-KG-RELEASE-READINESS-A4-A8-001", startedAt: new Date().toISOString(), cluster: { port: PORT, db: DB },
+  versions: Object.fromEntries(Object.entries(roots).map(([k, r]) => [k, { commit: gitHead(r), tree: gitTree(r), dirty: spawnSync("git", ["-C", r, "status", "--porcelain", "--untracked-files=no"], { encoding: "utf8", windowsHide: true }).stdout.trim().length > 0 }])) }
 let postmaster = false
 try {
   // ── Cluster descartável ──────────────────────────────────────────────────────────────
@@ -116,7 +122,7 @@ try {
 
   // ── Fase ANTIGA: main, papel antigo, vendas v1 + v2 com respostas perdidas ───────────────
   evidence.old = phase(oldRoot, "old", "neondb_owner")
-  step("phase-old", { created: evidence.old.created, counts: evidence.old.countsAfterOld })
+  step("phase-old", { sales: evidence.old.sales.map((x) => x.pedidoId), counts: evidence.old.counts })
 
   // Sessão antiga "esquecida" (aba/pooler) que precisa ser encerrada pelo 05.
   const lingering = spawn(join(PGBIN, "psql.exe"), ["-X", "-h", "127.0.0.1", "-p", String(PORT), "-U", "neondb_owner", "-d", DB, "-c", "SELECT pg_sleep(900)"], { stdio: "ignore", windowsHide: true, env: cleanEnv })
@@ -147,17 +153,20 @@ try {
   const noRole = psql({ user: "omni_migrator", file: additive, env: { PGPASSWORD: pw.migrator }, expectFail: "KG_MIGRATION_OWNER_PUBLIC_SCHEMA_REQUIRED" })
   prisma(newRoot, ["migrate", "deploy"], migratorUrl(), { expectFail: true })
   prisma(newRoot, ["migrate", "resolve", "--rolled-back", "20261029120000_manual_kg_sale_quantity"], migratorUrl())
-  // 20261029 com o papel de sessão = dono (PGOPTIONS), depois resolve; retrato para a prova de equivalência.
-  psql({ user: "omni_migrator", file: additive, env: { PGPASSWORD: pw.migrator, PGOPTIONS: "-c role=omni_owner" } })
-  prisma(newRoot, ["migrate", "resolve", "--applied", "20261029120000_manual_kg_sale_quantity"], migratorUrl())
+  // J10 do estoque ANTES do 9b, do checkout que o J4 publica (#315): diff vazio (aqui não há o drift 0019).
+  const diff315 = prisma(mid315Root, ["migrate", "diff", "--from-url", migratorUrl(), "--to-schema-datamodel", "prisma/schema.prisma", "--exit-code"], migratorUrl(), { expectFail: false })
+  step("J10-315-before-9b", { diffEmpty: /No difference detected|empty migration/i.test(diff315) })
+  // 9b passo 1: 20261029 pelo caminho do Prisma (checkout da #335, só ela pendente) com role=omni_owner.
+  const deployed335 = prisma(mid335Root, ["migrate", "deploy"], migratorUrl(DB, "?options=-c%20role%3Domni_owner"))
+  if (!/20261029120000_manual_kg_sale_quantity/.test(deployed335)) throw Error("KG_20261029_NOT_DEPLOYED")
   psql({ user: "sim_admin", db: "postgres", sql: `CREATE DATABASE sim_eq TEMPLATE ${DB}` })
   psql({ user: "sim_admin", db: "postgres", sql: "ALTER DATABASE sim_eq OWNER TO omni_owner" })
-  // 20261106 (esta branch) pelo caminho normal do Prisma, com role=omni_owner na conexão.
+  // 9b passo 2: 20261106 (esta branch) pelo mesmo caminho.
   const deployed = prisma(newRoot, ["migrate", "deploy"], migratorUrl(DB, "?options=-c%20role%3Domni_owner"))
   const fnOwners = psql({ user: "omni_migrator", env: { PGPASSWORD: pw.migrator }, sql:
     "SELECT 'owners=' || string_agg(DISTINCT pg_get_userbyid(proowner), ',') FROM pg_proc WHERE proname LIKE 'manual_kg_%'" })
   step("additive-sim", { refusedWithoutRole: noRole.includes("KG_MIGRATION_OWNER_PUBLIC_SCHEMA_REQUIRED"), prismaDeployWithoutRoleFails: true,
-    appliedWithRoleOption: true, titleGuardDeployed: /20261106120000_manual_kg_title_guard_indexed/.test(deployed),
+    deployed20261029ViaPrismaWithRole: true, titleGuardDeployed: /20261106120000_manual_kg_title_guard_indexed/.test(deployed),
     functionOwners: fnOwners.split("\n").find((l) => l.includes("owners="))?.trim() })
 
   // ── J10: conferências ────────────────────────────────────────────────────────────────────
@@ -171,8 +180,14 @@ try {
   step("J10-sim", { upToDate: status.includes("Database schema is up to date"), diffEmpty: /No difference detected|empty migration/i.test(diff), j10: j10.trim() })
 
   // ── Fase NOVA: #336, omni_runtime_v2, replays + 1º envio de venda da fila ────────────────
-  evidence.new = phase(newRoot, "new", "omni_runtime_v2", { KG_OLD_OUT: join(outDir, "phase-old.json") })
-  step("phase-new", { replays: evidence.new.replays, counts: evidence.new.countsAfterNew })
+  // Cadeia real de versões em produção: main → #315 (J11, pode durar dias) → #335 (W2) → topo (W3).
+  let prevOut = join(outDir, "phase-old.json")
+  for (const [tag, root] of [["m315", mid315Root], ["m335", mid335Root], ["top", newRoot]]) {
+    const r = phase(root, "replay-" + tag, "omni_runtime_v2", { KG_PREV_OUT: prevOut, KG_TAG: tag })
+    evidence["replay_" + tag] = { replays: r.replays, counts: r.counts }
+    step("phase-replay-" + tag, { replays: r.replays.length, allReplayed: r.replays.every((x) => x.replayed && x.samePedido && x.sameFingerprint && x.parallel.every(Boolean)), counts: r.counts })
+    prevOut = join(outDir, "phase-replay-" + tag + ".json")
+  }
   evidence.kg = phase(newRoot, "kg", "omni_runtime_v2", { PDV_MANUAL_KG_RELEASE: "PDV-PADARIA-KG-RELEASE-HARDENING-002", PDV_MANUAL_KG_STORES: "loja-sim-1" }, "kg-topology.phase.ts")
   step("phase-kg", evidence.kg.summary ?? {})
 
