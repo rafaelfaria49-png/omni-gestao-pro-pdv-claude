@@ -11,7 +11,7 @@ MERGE=NO · NEON_BRANCHES_CREATED=0 · REAL_CUSTOMER_DATA=0 · SALE_SERVER_NUMBE
 | Pasta / arquivo | Conteúdo |
 | --- | --- |
 | `harness/run-cross-version.mjs` | orquestrador: cluster PG 17 descartável (loopback, `--auth=trust`, porta 55493), topologia `neondb_owner`→`neon_superuser`→`pg_write_all_data`, schema da main, 01/02, fase antiga, corte 03–06 com sessão pendurada, J8, 99, aditivas, J10, fase nova, KG sob papéis reais, Redeploy Int com/sem 07, custo dos gatilhos e equivalência |
-| `harness/cross-version.phase.ts` | fases `old` (código da main), `new` (topo da pilha), `old-after` (Int com credencial nova) — o mesmo arquivo roda no Vitest de cada worktree |
+| `harness/cross-version.phase.ts` | fases `old` (código da main), `replay` (cada versão seguinte: #315, #335, topo), `old-after` (Int com credencial nova) — o mesmo arquivo roda no Vitest de cada worktree |
 | `harness/kg-topology.phase.ts` | venda KG como `omni_runtime_v2` com funções SECURITY DEFINER de `omni_owner` |
 | `harness/title-guard-equivalence.sql` | equivalência exata do corpo novo × original (2.304 combinações) |
 | `harness/trigger-overhead.sql` | custo dos gatilhos com 30.000 vendas sintéticas, antes/depois/sem gatilho |
@@ -22,7 +22,7 @@ MERGE=NO · NEON_BRANCHES_CREATED=0 · REAL_CUSTOMER_DATA=0 · SALE_SERVER_NUMBE
 | `INDEPENDENT_REVIEW.md` | revisão independente de contexto limpo |
 | `J4_TREE_PROBE.md` | verificação local da árvore main + #315 que o J4 publicaria |
 
-Reprodução (Node 22, PostgreSQL 17 em `C:/Program Files/PostgreSQL/17/bin`, duas worktrees com `node_modules`
+Reprodução (Node 22, PostgreSQL 17 em `C:/Program Files/PostgreSQL/17/bin`, quatro worktrees com `node_modules`
 e `prisma generate`):
 
 ```bash
