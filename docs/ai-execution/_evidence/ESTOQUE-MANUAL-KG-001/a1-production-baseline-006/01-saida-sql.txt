@@ -1,0 +1,169 @@
+url: OK sem conectar · endpoint=ep-summer-tooth-acltc6wi pooler=off usuário=neondb_owner db=omnigestao_prod sslmode=require channel_binding=require senha_presente=true
+## 0. identidade (antes de qualquer diagnóstico)
+     project_id     |        branch_id         |       endpoint_id        |       db        |   usuario    | tx_read_only | default_ro |   isolamento    | stmt_timeout | lock_timeout |       pg        |         agora          
+--------------------+--------------------------+--------------------------+-----------------+--------------+--------------+------------+-----------------+--------------+--------------+-----------------+------------------------
+ dry-mouse-36002471 | br-muddy-meadow-ac7ah2wl | ep-summer-tooth-acltc6wi | omnigestao_prod | neondb_owner | on           | on         | repeatable read | 5s           | 1s           | 17.11 (0bfbbeb) | 2026-10-28 12:16:52+00
+
+IDENTIDADE_OK
+## 1. cinco colunas de estoque
+               coluna                | data_type 
+-------------------------------------+-----------
+ estoque_produtos.stock              | integer
+ movimentacoes_estoque.estoqueAntes  | integer
+ movimentacoes_estoque.estoqueDepois | integer
+ movimentacoes_estoque.quantidade    | integer
+ produto_depositos.quantidade        | integer
+
+## 2. histórico Prisma
+ total | finalizadas | revertidas | incompletas | kg | m0019 
+-------+-------------+------------+-------------+----+-------
+    23 |          23 |          0 |           0 |  0 |     1
+
+                                                                                                                                                                                                                                                                                                                                                                    nomes                                                                                                                                                                                                                                                                                                                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0001_init_clientes_produtos,0002_product_price_cost,0003_aux_ledger_audit_whatsapp_app_settings,0004_multistore_stores_units,0005_multitenant_product_sku_composite,0006_store_settings_contact_per_store,0007_ledger_per_store_conta_receber_composite_localkey,0008_fornecedores_contas_pagar,0009_produto_barcode,0010_whatsapp_phone_number,0011_deposito_produto_deposito,0012_inventario_assistido,0013_fiscal_foundation,0014_contador_hub_nucleo,0015_contador_identidade_externa,0016_add_sale_numbering_infrastructure,0017_contador_agenda,0018_user_pin_hash,0019_movimentacao_estoque_idempotency,0020_cliente_document_key,0021_cliente_document_key_unique,0022_pessoas_cadastro_backend,20261022120000_platform_pilot_access
+
+            migration_name            |       finalizada       |   checksum   
+--------------------------------------+------------------------+--------------
+ 20261022120000_platform_pilot_access | 2026-10-22 23:26:26+00 | 6583bb30dc00
+ 0022_pessoas_cadastro_backend        | 2026-10-01 23:02:42+00 | f4d1f09f47e7
+ 0021_cliente_document_key_unique     | 2026-09-18 01:50:48+00 | 409d7aeaf6d1
+
+## 3. índice/constraint da 0019
+          conname           | contype |                 def                  
+----------------------------+---------+--------------------------------------
+ movimentacoes_estoque_pkey | p       | PRIMARY KEY (id)
+ storeId_idempotencyKey     | u       | UNIQUE ("storeId", "idempotencyKey")
+
+       tablename       |                  indexname                  |                    def                    
+-----------------------+---------------------------------------------+-------------------------------------------
+ estoque_produtos      | estoque_produtos_pkey                       | USING btree (id)
+ estoque_produtos      | estoque_produtos_storeId_barcode_key        | USING btree ("storeId", barcode)
+ estoque_produtos      | estoque_produtos_storeId_idx                | USING btree ("storeId")
+ estoque_produtos      | estoque_produtos_storeId_sku_key            | USING btree ("storeId", sku)
+ movimentacoes_estoque | movimentacoes_estoque_pkey                  | USING btree (id)
+ movimentacoes_estoque | movimentacoes_estoque_storeId_createdAt_idx | USING btree ("storeId", "createdAt")
+ movimentacoes_estoque | movimentacoes_estoque_storeId_idx           | USING btree ("storeId")
+ movimentacoes_estoque | movimentacoes_estoque_storeId_produtoId_idx | USING btree ("storeId", "produtoId")
+ movimentacoes_estoque | storeId_idempotencyKey                      | USING btree ("storeId", "idempotencyKey")
+ produto_depositos     | produto_depositos_depositoId_idx            | USING btree ("depositoId")
+ produto_depositos     | produto_depositos_pkey                      | USING btree (id)
+ produto_depositos     | produto_depositos_produtoId_depositoId_key  | USING btree ("produtoId", "depositoId")
+ produto_depositos     | produto_depositos_storeId_idx               | USING btree ("storeId")
+ produto_depositos     | produto_depositos_storeId_produtoId_idx     | USING btree ("storeId", "produtoId")
+
+## 4. dependências que o ALTER TYPE teria de tratar (views/regras, gatilhos)
+ dependente 
+------------
+
+ tabela | tgname 
+--------+--------
+
+## 5. tamanho e linha de base do lock
+        relname        | linhas_estimadas |  heap   | indices |  total  |  bytes  |     dono     
+-----------------------+------------------+---------+---------+---------+---------+--------------
+ estoque_produtos      |            14026 | 2864 kB | 1904 kB | 4808 kB | 4923392 | neondb_owner
+ produto_depositos     |            13631 | 1944 kB | 2808 kB | 4792 kB | 4907008 | neondb_owner
+ vendas                |             2183 | 3208 kB | 992 kB  | 4352 kB | 4456448 | neondb_owner
+ movimentacoes_estoque |             2402 | 768 kB  | 528 kB  | 1336 kB | 1368064 | neondb_owner
+ sessoes_caixa         |              214 | 424 kB  | 80 kB   | 544 kB  |  557056 | neondb_owner
+
+        relname        | n_live_tup | n_tup_ins | n_tup_upd | n_tup_del |    last_autovacuum     |    last_autoanalyze    
+-----------------------+------------+-----------+-----------+-----------+------------------------+------------------------
+ estoque_produtos      |      14109 |     14129 |      1837 |        20 | 2026-07-27 21:27:50+00 | 2026-09-05 12:36:48+00
+ movimentacoes_estoque |       2548 |      2618 |         2 |         0 | 2026-08-18 03:11:25+00 | 2026-10-12 14:34:49+00
+ produto_depositos     |      13725 |     13798 |       561 |         3 | 2026-07-27 21:27:50+00 | 2026-07-27 21:27:50+00
+
+ banco 
+-------
+ 41 MB
+
+ produtos | soma_stock | min | max 
+----------+------------+-----+-----
+    14109 | 69229      | -22 | 999
+
+ depositos | soma_quantidade 
+-----------+-----------------
+     13725 | 69989
+
+ movimentacoes | soma_quantidade | soma_depois 
+---------------+-----------------+-------------
+          2548 | -1891           | 431573
+
+## 6. CONNECT, donos e papéis
+     datname     |     dono     |            acl            
+-----------------+--------------+---------------------------
+ omnigestao_prod | neondb_owner | NULL (PUBLIC com CONNECT)
+
+ nspname |    dono_schema    
+---------+-------------------
+ public  | pg_database_owner
+
+            rolname            | login | super | createrole | bypassrls | connect_prod | write_all | neon_superuser 
+-------------------------------+-------+-------+------------+-----------+--------------+-----------+----------------
+ cloud_admin                   | t     | t     | t          | t         | t            | t         | t
+ neon_service                  | t     | f     | t          | t         | t            | t         | t
+ neon_superuser                | f     | f     | t          | t         | t            | t         | t
+ neondb_owner                  | t     | f     | t          | t         | t            | t         | t
+ omnigestao_candidate_audit_ro | t     | f     | f          | f         | t            | f         | f
+ token_roles                   | f     | f     | f          | f         | t            | f         | f
+
+ papeis_kg_existentes 
+----------------------
+                    0
+
+## 7. sessões e conexões (todas as databases do endpoint; sem texto de consulta)
+       db        |    papel     |                  app                   |              backend_type              | estado | n | conexao_mais_velha | maior_xact 
+-----------------+--------------+----------------------------------------+----------------------------------------+--------+---+--------------------+------------
+ -               | -            | -                                      | autovacuum launcher                    | -      | 1 | 00:17:33           | -
+ -               | -            | -                                      | background writer                      | -      | 1 | 00:17:33           | -
+ -               | -            | -                                      | checkpointer                           | -      | 1 | 00:17:33           | -
+ -               | -            | -                                      | walwriter                              | -      | 1 | 00:17:33           | -
+ -               | cloud_admin  | -                                      | logical replication launcher           | -      | 1 | 00:17:33           | -
+ -               | cloud_admin  | TimescaleDB Background Worker Launcher | TimescaleDB Background Worker Launcher | -      | 1 | 00:17:33           | -
+ omnigestao_prod | neondb_owner | pgbouncer                              | client backend                         | idle   | 2 | 00:17:29           | -
+ postgres        | cloud_admin  | compute_ctl:compute_monitor            | client backend                         | idle   | 1 | 00:17:33           | -
+ postgres        | cloud_admin  | neon_compute_sql_exporter              | client backend                         | idle   | 1 | 00:02:17           | -
+ postgres        | cloud_admin  | pg_cron scheduler                      | pg_cron launcher                       | -      | 1 | 00:17:33           | -
+ postgres        | cloud_admin  | vm-monitor                             | client backend                         | idle   | 1 | 00:17:28           | -
+
+ tabela | mode | granted | n 
+--------+------+---------+---
+
+## 8. caixas ABERTA por loja
+ storeId |             loja             | abertas | terminais |      mais_antiga       |      mais_recente      
+---------+------------------------------+---------+-----------+------------------------+------------------------
+ loja-2  | RAFA BRINQUEDOS E VARIEDADES |       1 |         1 | 2026-10-27 12:05:46+00 | 2026-10-27 12:05:46+00
+ loja-5  | TESTE 123                    |       1 |         1 | 2026-05-28 15:46:59+00 | 2026-05-28 15:46:59+00
+
+ sessoes_total | abertas_total 
+---------------+---------------
+           229 |             2
+
+## 9. indicadores persistidos de atividade (sem conteúdo de venda)
+                   storeId                    | terminais | ativos | com_lock | heartbeat_15min |    ultimo_heartbeat    
+----------------------------------------------+-----------+--------+----------+-----------------+------------------------
+ cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e |         3 |      3 |        0 |               0 | -
+ loja-1                                       |         3 |      3 |        0 |               0 | -
+ loja-10                                      |         3 |      3 |        0 |               0 | -
+ loja-11                                      |         3 |      3 |        1 |               0 | 2026-05-30 21:16:25+00
+ loja-2                                       |         3 |      3 |        1 |               1 | 2026-10-28 12:16:27+00
+ loja-5                                       |         3 |      3 |        0 |               0 | -
+ loja-7                                       |         3 |      3 |        0 |               0 | -
+ loja-teste-caixa                             |         3 |      3 |        1 |               0 | 2026-08-04 16:16:11+00
+
+     storeId      | movs_24h |       ultima_mov       
+------------------+----------+------------------------
+ loja-1           |        0 | 2026-10-24 22:18:44+00
+ loja-10          |        0 | 2026-05-29 21:36:27+00
+ loja-2           |        2 | 2026-10-28 12:11:56+00
+ loja-5           |        0 | 2026-05-28 21:23:06+00
+ loja-teste-caixa |        0 | 2026-05-28 13:20:00+00
+
+ storeId | vendas_24h | ultima_venda_relogio_pdv 
+---------+------------+--------------------------
+ loja-1  |          0 | 2026-10-24 22:18:43+00
+ loja-2  |          2 | 2026-10-28 12:04:33+00
+
+A1_ROLLBACK_OK
+exit=0

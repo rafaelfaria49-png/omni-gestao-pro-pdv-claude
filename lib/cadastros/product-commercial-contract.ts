@@ -54,14 +54,16 @@ export function productCommercialCatalogProjection(metadata: unknown, price: num
     vendaPorPeso: commercial.modoVenda === "peso",
     declaracaoComercialInvalida: hasInvalidProductCommercial(metadata),
     vendaOperacional: commercial.modoVenda === "unidade" && !hasInvalidProductCommercial(metadata),
-    estoqueFracionadoOperacional: false as const,
+    /** Entrada manual em KG (3 casas) é operacional; venda por peso continua bloqueada. */
+    estoqueFracionadoOperacional: commercial.unidade === "KG" && !hasInvalidProductCommercial(metadata),
     gradeOperacional: false as const,
   }
 }
 
 export type ProductStockMovementAvailability =
-  | { disponivel: true; unidade: "UN" }
-  | { disponivel: false; motivo: "peso_em_preparacao"; unidade: "KG" | "G"; titulo: string; orientacao: string }
+  | { disponivel: true; unidade: "UN"; ajusteDisponivel: true }
+  | { disponivel: true; unidade: "KG"; ajusteDisponivel: false; ajusteOrientacao: string }
+  | { disponivel: false; motivo: "peso_em_preparacao"; unidade: "G"; titulo: string; orientacao: string }
   | { disponivel: false; motivo: "declaracao_invalida"; unidade: null; titulo: string; orientacao: string }
 
 /**
@@ -78,14 +80,21 @@ export function productStockMovementAvailability(metadata: unknown): ProductStoc
       orientacao: "A unidade deste produto precisa de revisão antes de qualquer entrada ou ajuste. O saldo atual não foi convertido; cadastre outro produto para definir unidade e preço.",
     }
   }
-  if (projection.vendaPorPeso && !projection.estoqueFracionadoOperacional) {
+  if (projection.estoqueFracionadoOperacional) {
     return {
-      disponivel: false, motivo: "peso_em_preparacao", unidade: projection.unidade === "G" ? "G" : "KG",
+      disponivel: true, unidade: "KG", ajusteDisponivel: false,
+      // O inventário ainda conta em inteiros: liberar Ajuste em KG truncaria o saldo.
+      ajusteOrientacao: "Ajuste de saldo em KG ainda não está disponível. Confira a quantidade antes de registrar a entrada; cada movimentação fica no histórico.",
+    }
+  }
+  if (projection.vendaPorPeso) {
+    return {
+      disponivel: false, motivo: "peso_em_preparacao", unidade: "G",
       titulo: "Movimentação indisponível: venda por peso em preparação.",
       orientacao: `Estoque em ${projection.unidade} ainda não é controlado pelo sistema. O saldo fica como está até a integração de pesagem; nenhuma entrada ou ajuste é registrado agora.`,
     }
   }
-  return { disponivel: true, unidade: "UN" }
+  return { disponivel: true, unidade: "UN", ajusteDisponivel: true }
 }
 
 export function productSpecificApplicability(metadata: unknown) {
@@ -114,6 +123,22 @@ export class ProductCommercialInvalidError extends Error {
   constructor() {
     super("Declaração comercial inválida: revise modo de venda, unidade e base do preço. Venda bloqueada; nenhum saldo ou preço foi convertido.")
     this.name = "ProductCommercialInvalidError"
+  }
+}
+
+/** Entrada de estoque não é venda: KG entra com até 3 casas; G e declaração inválida seguem bloqueados. */
+export class ProductStockEntryNotOperationalError extends Error {
+  readonly code = "ESTOQUE_UNIDADE_NAO_OPERACIONAL"
+  constructor() {
+    super("Entrada de estoque em G ainda não está disponível. O saldo atual não foi alterado.")
+    this.name = "ProductStockEntryNotOperationalError"
+  }
+}
+
+export function assertProductStockEntrySupported(metadata: unknown): void {
+  if (hasInvalidProductCommercial(metadata)) throw new ProductCommercialInvalidError()
+  if (isProductWeightDeclared(metadata) && productCommercialFromMetadata(metadata).unidade !== "KG") {
+    throw new ProductStockEntryNotOperationalError()
   }
 }
 

@@ -1,0 +1,18 @@
+# aplicação verificada (retrato por linha dentro da transação)
+SET
+SET
+LOCK TABLE
+SELECT 1
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:docs/padaria/pesagem/estoque-kg-migration-apply.sql:56: NOTICE:  KG_MIGRATION_OK produtos=6 depositos=4 livro=3 produtos_md5=39db37bdcc808689fecf4fd03e6b5874
+DO
+exit=0
+estoque_produtos.stock=double precision
+movimentacoes_estoque.estoqueAntes=double precision
+movimentacoes_estoque.estoqueDepois=double precision
+movimentacoes_estoque.quantidade=double precision
+produto_depositos.quantidade=double precision
+# reaplicar (já double): deve passar sem mudar nada
+psql:docs/padaria/pesagem/estoque-kg-migration-apply.sql:56: NOTICE:  KG_MIGRATION_OK produtos=6 depositos=4 livro=3 produtos_md5=39db37bdcc808689fecf4fd03e6b5874

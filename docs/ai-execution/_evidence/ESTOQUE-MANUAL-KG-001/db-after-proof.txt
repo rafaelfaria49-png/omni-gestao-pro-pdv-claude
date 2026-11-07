@@ -1,0 +1,14 @@
+kgiso-b-un|5
+kgiso-kg-legado|4.25
+kgiso-pao-kg|3.96
+kgiso-un-0|0
+kgiso-un-10|12
+kgiso-un-max|2147483647
+kgiso-b-un|5
+kgiso-kg-legado|4.25
+kgiso-pao-kg|3.96
+kgiso-un-10|12
+kgiso-un-max|2147483647
+kgiso-pao-kg|entrada|2.5|0|2.5
+kgiso-pao-kg|entrada|0.75|2.5|3.25
+kgiso-pao-kg|entrada|0.006|3.25|3.256

@@ -99,17 +99,50 @@ beforeEach(() => {
   h.produtoFindFirst.mockResolvedValue(null)
   h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1 }])
   h.movimentacaoFindFirst.mockResolvedValue(null)
+  h.produtoDepositoUpsert.mockClear()
 })
 
-it.each(["entrada", "ajuste"])("%s manual de produto por peso é rejeitado sem mudar saldo, custo ou ledger", async (kind) => {
-  sessionAtiva("VENDEDOR", ["loja-a"])
-  h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Pesável", sku: "PESO", stock: 1, precoCusto: 5, metadata: { vendaPorPeso: true } })
-  const result = await (kind === "entrada" ? registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 2 })
-    : registrarAjusteEstoque("loja-a", { produtoId: "p1", novoSaldo: 3, motivo: "Contagem" }))
-  expect(result).toMatchObject({ ok: false, code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+const KG = { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } }
+
+function expectNoWrite() {
   expect(h.produtoUpdate).not.toHaveBeenCalled()
   expect(h.movimentacaoCreate).not.toHaveBeenCalled()
   expect(h.produtoDepositoUpsert).not.toHaveBeenCalled()
+}
+
+it.each([
+  ["declaração KG", KG],
+  ["legado vendaPorPeso", { vendaPorPeso: true }],
+])("entrada manual em KG (%s) grava 3 casas sem truncar", async (_label, metadata) => {
+  sessionAtiva("VENDEDOR", ["loja-a"])
+  h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Pão francês", sku: "PAO", stock: 1, precoCusto: 0, metadata })
+  h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1 }])
+  const result = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 2.5 })
+  expect(result).toMatchObject({ ok: true, estoqueDepois: 3.5 })
+  expect(h.produtoUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ stock: 3.5 }) }))
+  expect(h.movimentacaoCreate).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({ quantidade: 2.5, estoqueAntes: 1, estoqueDepois: 3.5 }),
+  }))
+})
+
+it.each([
+  ["mais de 3 casas em KG", KG, 0.0005, "VALIDATION"],
+  ["fração em produto UN (não trunca para 2)", null, 2.5, "VALIDATION"],
+  ["produto em G", { comercial: { version: 1, modoVenda: "peso", unidade: "G", basePreco: "G" } }, 2, "ESTOQUE_UNIDADE_NAO_OPERACIONAL"],
+])("entrada recusada sem gravar: %s", async (_label, metadata, quantidade, code) => {
+  sessionAtiva("VENDEDOR", ["loja-a"])
+  h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "P", sku: "P", stock: 1, precoCusto: 5, metadata })
+  const result = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade })
+  expect(result).toMatchObject({ ok: false, code })
+  expectNoWrite()
+})
+
+it("ajuste manual de produto por peso continua rejeitado (inventário ainda conta inteiros)", async () => {
+  sessionAtiva("VENDEDOR", ["loja-a"])
+  h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Pesável", sku: "PESO", stock: 1, precoCusto: 5, metadata: { vendaPorPeso: true } })
+  const result = await registrarAjusteEstoque("loja-a", { produtoId: "p1", novoSaldo: 3, motivo: "Contagem" })
+  expect(result).toMatchObject({ ok: false, code: "PRODUTO_POR_PESO_NAO_OPERACIONAL" })
+  expectNoWrite()
 })
 
 describe("estoque actions — só boundary", () => {
@@ -223,5 +256,45 @@ describe("estoque actions — só boundary", () => {
     expect(r.somaDepositos).toBe(4)
     expect(h.produtoUpdate).not.toHaveBeenCalled()
     expect(h.movimentacaoCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("KG com saldo divergente: orientação não aponta para o Ajuste inexistente", () => {
+  // stock 3,250; depósitos 1,500 + 2,000 (dois positivos) e livro 3,250 ⇒ multi_deposit_ambiguous.
+  const divergente = () => {
+    sessionAtiva("VENDEDOR", ["loja-a"])
+    h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Pão francês", sku: "PAO", stock: 3.25, precoCusto: 0, metadata: KG })
+    h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1.5 }, { depositoId: "d2", quantidade: 2 }])
+    h.movimentacaoFindFirst.mockResolvedValue({ estoqueDepois: 3.25 })
+  }
+
+  it("diagnóstico em kg, sem 'aba Ajuste'", async () => {
+    divergente()
+    const r = await diagnosticarSaldoEstoque("loja-a", "p1")
+    expect(r).toMatchObject({ ok: true, aligned: false, stock: 3.25, somaDepositos: 3.5, driftReason: "multi_deposit_ambiguous" })
+    if (!r.ok) return
+    expect(r.operatorMessage).toMatch(/Saldo do cadastro: 3,250 kg\. Saldo nos depósitos: 3,500 kg\. O ajuste de saldo em KG ainda não está disponível/)
+    expect(r.operatorMessage).not.toMatch(/aba Ajuste/)
+  })
+
+  it("entrada recusada pelo drift em kg não sugere ajuste", async () => {
+    divergente()
+    const r = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 0.5 })
+    expect(r).toMatchObject({ ok: false, code: "STOCK_INVARIANT_DRIFT" })
+    if (r.ok) return
+    expect(r.reason).toMatch(/ajuste de saldo em KG ainda não está disponível/)
+    expect(r.reason).not.toMatch(/aba Ajuste/)
+    expect(r).not.toHaveProperty("acaoSugerida")
+    expectNoWrite()
+  })
+
+  it("produto UN mantém a orientação existente para a aba Ajuste", async () => {
+    divergente()
+    h.produtoFindFirst.mockResolvedValue({ id: "p1", name: "Bolo", sku: "B", stock: 3, precoCusto: 0, metadata: {} })
+    h.produtoDepositoFindMany.mockResolvedValue([{ depositoId: "d1", quantidade: 1 }, { depositoId: "d2", quantidade: 3 }])
+    h.movimentacaoFindFirst.mockResolvedValue({ estoqueDepois: 3 })
+    const r = await registrarEntradaEstoque("loja-a", { produtoId: "p1", quantidade: 1 })
+    expect(r).toMatchObject({ ok: false, code: "STOCK_INVARIANT_DRIFT", acaoSugerida: "ajuste" })
+    if (!r.ok) expect(r.reason).toMatch(/aba Ajuste/)
   })
 })

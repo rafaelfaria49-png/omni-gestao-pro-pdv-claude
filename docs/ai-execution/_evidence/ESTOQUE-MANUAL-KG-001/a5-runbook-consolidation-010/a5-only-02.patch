@@ -1,0 +1,603 @@
+diff --git "a/docs\\ai-execution\\_evidence\\ESTOQUE-MANUAL-KG-001\\a5-runbook-consolidation-010\\baseline\\ESTOQUE_MANUAL_KG_RUNBOOK.md" b/docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md
+index 2072a81..5c66020 100644
+--- "a/docs\\ai-execution\\_evidence\\ESTOQUE-MANUAL-KG-001\\a5-runbook-consolidation-010\\baseline\\ESTOQUE_MANUAL_KG_RUNBOOK.md"
++++ b/docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md
+@@ -3,4 +3,15 @@
+-**Status: NO-GO.** Nada deste runbook foi executado em produção. Cada passo (A, J, P) exige autorização
+-humana específica. `MIGRATION_AUTHORITY_ENABLED=false` permanece: a Vercel não aplica migrations.
+-Esta é a sequência canônica; `ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md` explica o mecanismo da estratégia B e
+-`docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-readiness-004/` traz a auditoria de prontidão.
++**Rollout: NO-GO operacional. A1, A1.1, A2, A3 e A4: PASS.** Os papéis e GRANTs do A3 já foram
++alterados em produção; a migration KG e a transferência de posse não foram executadas.
++As cinco colunas continuam `integer`, segundo a última evidência direta do A4.
++
++**A5 é a preparação documental desta revisão** (`ESTOQUE-KG-PRODUCTION-A5-RUNBOOK-001`): consolidar e
++validar localmente o texto. A conclusão documental consta do relatório A5; não libera a janela.
++**A6–A8, J0–J13 e os passos pós-janela não estão autorizados por este GOAL.** Os comandos abaixo são
++procedimentos futuros, condicionados a autorização específica e aos respectivos gates.
++Nenhuma conexão ao Neon ou à Vercel, inclusive só leitura, integra este A5.
++
++Esta é a sequência canônica; a [remediação](ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md) explica a estratégia B,
++e o [checklist das lojas](ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md) registra o gate operacional do J0.
++`MIGRATION_AUTHORITY_ENABLED=false` é requisito do rollout: os builds Vercel não devem aplicar migrations.
++As evidências históricas de build registram `MIGRATION_SKIPPED`; o valor Production é `sensitive` e não foi
++relido no A4 nem neste A5. Não presumir leitura direta desse valor a partir dos logs.
+@@ -17,0 +29,61 @@ Esta é a sequência canônica; `ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md` explic
++## 0. Estado reconciliado e limites das evidências
++
++Retrato documental de **2026-10-29**, baseado nos registros locais abaixo, sem nova leitura dos serviços.
++Os diretórios de evidência, inclusive os não commitados, são históricos e devem ser preservados.
++
++| Etapa | Resultado registrado | Evidência local |
++| --- | --- | --- |
++| A1 | PASS: identidade Production, cinco colunas `integer`, KG ausente, 23 migrations finalizadas; drift conhecido da 0019, sem drift novo naquele retrato | [baseline A1](../../ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a1-production-baseline-006/README.md) |
++| A1.1 | PASS: conferência do fechamento da sessão antiga da `loja-5`, realizado pelo proprietário; lojas comerciais identificadas por `storeId` | [A1.1](../../ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a1-1-loja5-fechamento-007/README.md) |
++| A2 | PASS: credenciais geradas offline fora do repositório, validação 30/30; não regenerar nem rotacionar | [A2, fase 1](../../ai-execution/_evidence/PADARIA-GO-LIVE-FASTTRACK-002/README.md#fase-1--a2-credenciais-offline) |
++| A3 | PASS: `01-papeis.sql` e `02-grants-runtime.sql` executados; `KG_PAPEIS_OK`, `KG_RUNTIME_GRANTS_OK`, DML em 110/110 tabelas | [A3](../../ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a3-production-roles-grants-008/README.md) |
++| A4 | PASS: runtime direto e pooled; migrator direto; isolamento por catálogo; sete transações READ ONLY terminadas em ROLLBACK | [A4 consolidado](../../ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a4-production-login-readonly-009/12-final-summary.json), [método e limites](../../ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a4-production-login-readonly-009/README.md) |
++| A5 | Preparação documental desta revisão, com validação e encerramento exclusivamente locais | [registro A5](../../ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a5-runbook-consolidation-010/README.md) |
++
++**Identidade obrigatória nas futuras conexões autorizadas:**
++
++| Item | Valor |
++| --- | --- |
++| Projeto Neon | `dry-mouse-36002471` |
++| Branch Production | `br-muddy-meadow-ac7ah2wl` |
++| Database | `omnigestao_prod` |
++| Endpoint | `ep-summer-tooth-acltc6wi` |
++| Host direto | `ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech` |
++| Host pooled | `ep-summer-tooth-acltc6wi-pooler.sa-east-1.aws.neon.tech` |
++
++As consultas do A4 confirmaram os identificadores no servidor, os usuários autenticados e o modo READ ONLY.
++`omni_owner` existe e é NOLOGIN; `omni_runtime_v2` e `omni_migrator` existem e autenticam. Runtime tem somente
++os privilégios planejados nas tabelas e nenhum alcance a papéis privilegiados. O migrator herda e pode assumir
++`omni_owner`, sem ADMIN OPTION, mas **ainda não possui acesso de proprietário aos objetos**: `omni_owner`
++possui zero relações em `public`, e o migrator ainda não tem SELECT/UPDATE na tabela de estoque. Isso é esperado
++antes do `03` no J6. **Nenhuma capacidade de migration foi efetivamente exercitada em Production no A4.**
++
++O A3 alterou papéis e ACLs, não tabelas, colunas, saldos ou vendas. O A4 confirmou por leitura a preservação
++da estrutura e das linhas verificadas de estoque, vendas, caixa e histórico Prisma. As cinco colunas continuam
++`integer` e a migration KG continua ausente. Não confundir esses fatos com a afirmação incorreta de que
++"nada foi executado em produção": os scripts 01 e 02 já foram executados no A3.
++
++**Evidência direta versus continuidade da configuração Vercel:** o login do papel antigo, direto e pooled,
++e seus privilégios no banco foram comprovados diretamente no A4. Já a continuidade de Production com
++`neondb_owner` é **inferência de continuidade**, apoiada no estado confirmado/A3, nas datas de 27 de julho
++das duas variáveis Production e no deployment preservado no A4 (`7UqN8Rrkz9Vi7ezB3ArkL6TDcvvW`, `ba010ac`).
++A API CLI retornou 403 (`invalidToken=true`); a sessão autenticada do navegador permitiu comparar 18 metadados
++observados antes/depois. Os valores `sensitive` não foram relidos, e esse recorte não é um inventário integral.
++Este A5 não atualiza esse retrato nem autoriza renovar o token.
++
++**Caixas:** A1/A1.1 registraram a `loja-2` aberta naquele momento. O relato específico mais recente é o A3
++(2026-10-29 09:39Z): **`loja-1` RafaCell aberta; `loja-2` Rafa Brinquedos fechada**. Isso não é estado atual
++reconfirmado. Reconsultar todas as sessões por `storeId` somente no preflight da janela expressamente autorizada;
++nenhuma sessão ABERTA pode permanecer antes da abertura do J0.
++
++**Git e CI:** head de referência da #315 = `104d768`, CI verde informado, sem merge. A referência local
++`origin/main` já está em **`aaab275`**, merge da #321; não foi feito fetch neste A5. Antes de J3/J4 será necessária
++reconciliação da #315 com a main então atual, revisão do resultado e **nova CI verde do head final exato**,
++incluindo a documentação que vier a ser commitada. A aprovação/CI dos heads anteriores não substitui esse gate.
++`MAIN_RECONCILIATION=PENDING`; este A5 não faz merge, rebase, push ou alteração funcional.
++
++**Pendência de escritores auxiliares:** o A1 identificou o scheduler pg_cron no database auxiliar `postgres`.
++A leitura de `cron.job` continua pendente de **autorização específica para esse database**. Não foi feita no A4
++nem neste A5; autorização de outro passo não amplia automaticamente o alvo. Identificar papel, destino e alcance
++dos jobs antes de liberar a janela, pois podem representar escritores fora do inventário HTTP.
++
+@@ -29,2 +101,4 @@ fila de vendas, preview de outra branch ou script local continuariam gravando.
+-Hoje Production, Preview/candidate e o admin de migração usam o **mesmo papel `neondb_owner`, com a
+-mesma senha** (só o database muda), e esse papel herda `pg_write_all_data` via `neon_superuser`. Por isso
++Na topologia legada inventariada, Production, previews antigos/candidate e o admin de migração compartilhavam
++**`neondb_owner` e a mesma senha** (só o database mudava); esse papel herda `pg_write_all_data` via `neon_superuser`.
++Os previews novos foram isolados em outro projeto/papel; os retratos dos deployments legados mantêm o risco.
++Os papéis novos já existem, mas a troca da configuração Production só pertence ao futuro J3. Por isso
+@@ -37 +111,4 @@ topologia: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediatio
+-Inventário de 2026-10-28 (`rollout-readiness-004` §2; refazer no J0 pelo mesmo método, só GET na API da Vercel):
++**Inventário histórico de 2026-10-28 09:37Z**, não contagem atual (`rollout-readiness-004` §2).
++Refazer o inventário integral no início da janela autorizada, com horário, IDs, alvo, SHA, URLs e classificação
++de credencial/destino, indicando se a evidência é direta ou inferida. A API/token deve estar disponível por meio
++previamente autorizado; o recorte UI do A4 não substitui esse inventário.
+@@ -47 +124 @@ Inventário de 2026-10-28 (`rollout-readiness-004` §2; refazer no J0 pelo mesmo
+-**A retenção da Vercel não remove esses deployments e não entra em nenhum gate.** A política declarada é
++**Não contar com expiração automática como proteção ou gate.** No retrato de 2026-10-28 a política declarada era
+@@ -50 +127 @@ Inventário de 2026-10-28 (`rollout-readiness-004` §2; refazer no J0 pelo mesmo
+-Os 15 de Production e os 56 previews legados **só deixam de alcançar `omnigestao_prod` pelo corte efetivo de
++Os escritores legados que o inventário da janela identificar **só deixam de alcançar `omnigestao_prod` pelo corte efetivo de
+@@ -53 +130 @@ sessões), conferido pelo `06` e pela sonda de URL antiga no J7. Exclusão de de
+-ou espera não substituem o corte. O acesso dos 56 previews ao candidate só termina com a troca de senha (P3).
++ou espera não substituem o corte. O acesso dos previews legados ao candidate só termina com a troca de senha (P3).
+@@ -65 +142 @@ parar no passo em que está e seguir a recuperação da fase (§7).
+-| Push em qualquer outra branch (cria preview; 4 branches têm override de banco com destino ilegível) | J0 | P2 PASS | preview novo cairia no banco Preview ainda `integer` com cliente `Float` (§6.2) ou num destino desconhecido |
++| Push em qualquer outra branch (cria preview; havia 4 branches com override de destino ilegível no inventário histórico) | J0 | P2 PASS | preview novo cairia no banco Preview ainda `integer` com cliente `Float` (§6.2) ou num destino desconhecido; atualizar os overrides no inventário autorizado |
+@@ -84,3 +161,58 @@ horário). "Se falhar" aponta a fase de recuperação do §7.
+-PR #315 revisada (R4 APPROVE `cdb1d19`, R5 APPROVE da resolução do merge), CI 11/11 em `2731097`; ensaio completo
+-num branch Neon de produção (002: 01→05, suspend/start e restart do compute, pooler, `99`, migration, `07`);
+-Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino do runtime (P5).
++Registros históricos: R4 APPROVE `cdb1d19`, R5 APPROVE da resolução do merge e CI 11/11 em `2731097`;
++ensaio completo num branch Neon de produção (002: 01→05, suspend/start e restart do compute, pooler, `99`,
++migration, `07`); Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino do runtime (P5).
++A1–A4 também estão cumpridos (§0). Revisões/CI históricas não aprovam o head que resultar da reconciliação
++com `aaab275` ou com a main então atual. O ensaio do `07` não aprova sua aplicação em Production.
++
++### Preflight equivalente ao 06 antes do 01 — referência histórica, não repetir em Production
++
++O `06-verificacao.sql` chama `pg_has_role(..., 'omni_owner', ...)` e falha se o papel ainda não existe.
++**Antes do 01, usar a consulta equivalente abaixo, no database `omnigestao_prod`, com o papel antigo**, em
++uma execução separada do 01 e somente se houver autorização para esse preflight. Ela procura `omni_owner`
++como texto no catálogo; só chama `pg_has_role` por OID quando o papel existe. Não usa cast nem resolução
++do nome de um papel ausente. Conferir o marcador de identidade e as demais saídas, não apenas o exit code.
++
++```sql
++\set ON_ERROR_STOP on
++BEGIN READ ONLY;
++SELECT 'KG_PREFLIGHT_IDENTIDADE_OK'
++WHERE 1 / CASE WHEN current_setting('neon.project_id', true) = 'dry-mouse-36002471'
++  AND current_setting('neon.branch_id', true) = 'br-muddy-meadow-ac7ah2wl'
++  AND current_setting('neon.endpoint_id', true) = 'ep-summer-tooth-acltc6wi'
++  AND current_database() = 'omnigestao_prod' AND current_user = 'neondb_owner'
++  AND current_setting('transaction_read_only') = 'on' AND NOT pg_is_in_recovery()
++  THEN 1 ELSE 0 END = 1;
++SELECT 'database=' || current_database() || ' dono=' || pg_get_userbyid(datdba)
++  || ' acl=' || coalesce(datacl::text, 'NULL')
++FROM pg_database WHERE datname = current_database();
++SELECT 'papel ' || r.rolname
++  || ' connect=' || has_database_privilege(r.oid, current_database(), 'CONNECT')
++  || ' escreve_estoque=' || has_table_privilege(r.oid, 'public.estoque_produtos', 'UPDATE')
++  || ' pg_write_all_data=' || pg_has_role(r.oid, 'pg_write_all_data', 'USAGE')
++  || ' dono_por_heranca=' || CASE WHEN owner_role.oid IS NULL THEN 'PAPEL_AUSENTE'
++       ELSE pg_has_role(r.oid, owner_role.oid, 'USAGE')::text END
++FROM pg_roles r LEFT JOIN pg_roles owner_role ON owner_role.rolname = 'omni_owner'
++WHERE r.rolcanlogin AND NOT r.rolsuper ORDER BY r.rolname;
++SELECT 'sessoes papel=' || coalesce(usename, '-') || ' n=' || count(*)
++FROM pg_stat_activity WHERE datname = current_database() GROUP BY usename ORDER BY 1;
++SELECT 'objetos do papel antigo=' || (
++  (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
++   WHERE n.nspname = 'public' AND pg_get_userbyid(c.relowner) = 'neondb_owner')
++  + (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
++     WHERE n.nspname = 'public' AND t.typtype IN ('e', 'd', 'c') AND t.typrelid = 0
++       AND pg_get_userbyid(t.typowner) = 'neondb_owner'));
++SELECT 'colunas ' || string_agg(table_name || '.' || column_name || ':' || data_type,
++  ' ' ORDER BY table_name, column_name)
++FROM information_schema.columns WHERE table_schema = 'public'
++  AND (table_name, column_name) IN (('estoque_produtos', 'stock'),
++    ('produto_depositos', 'quantidade'), ('movimentacoes_estoque', 'quantidade'),
++    ('movimentacoes_estoque', 'estoqueAntes'), ('movimentacoes_estoque', 'estoqueDepois'));
++ROLLBACK;
++```
++
++Esse caso foi tratado no preflight do A3 por `a3-pre.sql`, sem alterar o 06 oficial. **Na produção atual os
++três papéis já existem**: não executar o 01 novamente; sua reexecução não é idempotente. Depois da criação,
++o 06 normal volta a ser aplicável. Antes da posse, usar o papel antigo para conferir também as colunas;
++o migrator ainda não é proprietário e `information_schema` pode ocultar objetos aos quais ele não tem acesso.
++O 06 não contém a trava completa de identidade: o operador deve estabelecê-la na sessão antes das consultas,
++como feito no A4. Nenhum SQL deste trecho foi executado no A5.
+@@ -90 +222 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
+-- **A1. Leituras de produção, só leitura.** Sessão forçada read-only (`BEGIN READ ONLY` /
++- **A1 — PASS registrado; procedimento de referência para nova leitura autorizada.** Sessão forçada read-only (`BEGIN READ ONLY` /
+@@ -94 +226,2 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
+-  SELECT current_setting('neon.project_id'), current_setting('neon.endpoint_id'), current_database();
++  SELECT current_setting('neon.project_id'), current_setting('neon.branch_id'),
++         current_setting('neon.endpoint_id'), current_database();
+@@ -108,28 +241,42 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
+-  novo → NO-GO até explicar.
+-- **A2. Credenciais, sem conexão.** Gerar offline as senhas de `omni_migrator` e `omni_runtime_v2` em arquivo
+-  fora do repositório; montar `DATABASE_URL` (pooler, `pgbouncer=true`) e `DIRECT_URL` (direto) de Production
+-  com **`omni_runtime_v2`**, e `MIGRATOR_DIRECT_URL` só local. **Gate:** validação das URLs sem conectar
+-  (endpoint de produção, usuário, database, `sslmode=require`); nada gravado na Vercel (um build `Int` com a
+-  credencial nova sobreviveria ao corte — revisão R1, P1).
+-- **A3. Papéis e grants em produção.** `rollout/01-papeis.sql` (papel antigo, `neondb`) e
+-  `rollout/02-grants-runtime.sql` (papel antigo, `omnigestao_prod`); `06` antes e depois. **Gate:** `KG_PAPEIS_OK`,
+-  `KG_RUNTIME_GRANTS_OK`, nenhum papel novo herdando `pg_write_all_data`/`neon_superuser`. Papéis só por SQL,
+-  nunca pelo Console. Sem efeito nos escritores atuais.
+-- **A4. Login do runtime**, direto e pelo pooler, em `BEGIN READ ONLY` (sem escrita). **Gate:** login aceito nos
+-  dois caminhos; `has_table_privilege` de DML em todas as tabelas.
+-- **A5. Documentação endurecida revisada** (este runbook, GOAL 005) e a decisão de que a janela usa esta versão.
+-- **A6. Decidir o `07`** (CHECK "finito em milésimos") com revisão independente, ou registrar que fica fora.
+-  É a única barreira **de banco** contra o caminho humano do §5 (build `Int` com credencial nova).
+-- **A7. Conectores.** Confirmar que o conector Neon do ChatGPT não alcança a org de produção, ou desligá-lo para a
+-  janela. Mesmo para qualquer MCP com Neon/Vercel/GitHub.
+-- **A8. Marcar a janela e declarar o congelamento do §3** (aviso às pessoas e às sessões de IA). **Gate do A:**
+-  A1–A4 com saída registrada, A6 decidido, A7 confirmado.
+-
+-### Janela (loja fechada)
+-
+-- **J0. Abertura.** Checklist das duas lojas devolvido completo (`ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md`); caixas
+-  `ABERTA` = 0 (consulta do A1, read-only); Pendências = 0 em todo terminal ou registradas (pedido, itens,
+-  pagamentos, `clientSaleId`) para lançamento posterior com a mesma identidade; congelamento do §3 em vigor;
+-  inventário de deployments refeito (§2). **Gate:** todos os itens marcados; nenhum terminal em URL de
+-  deployment com fila; gate falho = a janela não começa. A fila vive no navegador, por origem: aba numa URL de deployment só reenvia para ela, e
+-  depois do corte a venda fica presa lá.
++  novo → NO-GO até explicar. No A1, as mudanças de default Int(0) → Float(0) de `stock` e de
++  `produto_depositos.quantidade` são parte dos mesmos ALTERs de tipo. A1.1 confirmou o fechamento pelo
++  proprietário da sessão antiga da `loja-5`; isso não dispensa conferir todas as sessões no J0.
++- **A2 — PASS, não regenerar.** Reutilizar as credenciais existentes em
++  `C:\Projetos\secrets\neon-production-kg\.env`, fora do repositório. A validação offline foi 30/30:
++  `DATABASE_URL` futura = runtime pooled com `pgbouncer=true`; `DIRECT_URL` futura = runtime direto;
++  `MIGRATOR_DIRECT_URL` = migrator direto, só local. Endpoint/database/usuário e `sslmode=require`
++  conferidos. A aplicação das URLs na Vercel continua pertencendo somente ao J3 autorizado.
++- **A3 — PASS, já executado em produção.** `rollout/01-papeis.sql` no `neondb` e
++  `rollout/02-grants-runtime.sql` no `omnigestao_prod`; marcadores `KG_PAPEIS_OK` e
++  `KG_RUNTIME_GRANTS_OK`; DML em 110/110 tabelas. O preflight anterior ao 01 usou a consulta equivalente
++  segura para papel ausente, não o 06 que o resolveria por nome. Após a criação, o 06 foi executado.
++  **Não repetir o 01.** Uma eventual reaplicação do 02 por drift de tabelas exige nova autorização.
++- **A4 — PASS, sem escrita.** Runtime direto e pooled e migrator direto autenticaram com as credenciais A2;
++  sete transações READ ONLY encerradas em ROLLBACK. DML e isolamento comprovados por catálogo, sem tentativas
++  de INSERT/UPDATE/DELETE/TRUNCATE. Migrator ainda sem acesso de proprietário aos objetos (§0).
++- **A5 — preparação documental deste GOAL.** Consolidar A1–A4 e o hardening 005, revisar comandos,
++  dependências, checksum e checklist; validar localmente. A conclusão documental não decide o 07 nem aprova
++  J0. A versão adotada na janela e seu SHA devem constar da autorização operacional futura.
++- **A6 — PENDENTE, NÃO AUTORIZADO.** Decidir o `07` (CHECK "finito em milésimos") mediante revisão independente
++  própria e decisão expressa de aplicar ou de deixar fora. É candidato a barreira adicional contra os casos
++  de cliente Int ensaiados; sua existência no repositório e o A5 não aprovam execução nem tornam Int seguro.
++- **A7 — PENDENTE, NÃO AUTORIZADO.** Confirmar o alcance de conectores Neon/Vercel/GitHub e sua indisponibilidade
++  para outras sessões durante a janela. A leitura pendente de `cron.job` em `postgres` requer autorização
++  específica, para mapear também os escritores agendados; não a executar sob autorização implícita do A7.
++- **A8 — PENDENTE, NÃO AUTORIZADO.** Marcar a janela e declarar o congelamento do §3, com aviso às pessoas
++  e sessões de IA. **Gate do A:** evidências A1–A5 registradas, A6 decidido, A7 confirmado, pendência de cron
++  resolvida por autorização própria e reconciliação/CI do head final concluídas antes de J3/J4.
++
++### Janela (lojas fechadas) — J0–J13 NÃO AUTORIZADOS neste A5
++
++- **J0. Abertura.** Antes de declarar o J0, devolver completo o checklist de **`loja-1` RafaCell** e
++  **`loja-2` Rafa Brinquedos**, com todos os terminais reais, navegadores/perfis/PWAs, URLs atuais e antigas,
++  filas offline, pagamentos em andamento e responsável/hora. A consulta autorizada deve identificar **todas**
++  as sessões `ABERTA` por `storeId`/sessão, inclusive lojas de teste; **ABERTA = 0 antes do J0** é obrigatório.
++  Pendências devem estar zeradas; exceções preservadas com pedido, itens, pagamentos e `clientSaleId` exigem
++  decisão expressa e plano de tratamento antes do J0, sem aprovação automática por este texto.
++  Nenhum terminal offline ou de paradeiro desconhecido pode ficar sem conferência. Nenhum pagamento pode
++  permanecer em andamento ou sem decisão documentada sobre confirmação. Congelamento do §3 em vigor;
++  inventário integral de deployments atualizado **no início da janela** (§2); reconciliação com a main atual
++  e nova CI/revisão do head final aprovadas. **Gate falho = a janela não começa.** A fila vive no navegador,
++  por origem: uma aba numa URL antiga só reenvia para ela e, após o corte, a venda fica presa ali.
+@@ -145,0 +293,2 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
++  A reconciliação com `aaab275`/main então atual e a CI do head final são pré-condições, não trabalho a
++  improvisar depois da troca de credenciais no J3.
+@@ -170 +319 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
+-  `psql -v ON_ERROR_STOP=1 -1 -f docs/padaria/pesagem/estoque-kg-migration-apply.sql`.
++  `psql -X -v ON_ERROR_STOP=1 -1 -f docs/padaria/pesagem/estoque-kg-migration-apply.sql`.
+@@ -180 +329,2 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
+-- **J9. (Opcional, só se aprovado no A6)** `rollout/07-guard-check-opcional.sql`.
++- **J9. (Opcional, somente com decisão/revisão própria no A6 e autorização de aplicação na janela)**
++  `rollout/07-guard-check-opcional.sql`. `SCRIPT_07_DECISION=PENDING` nesta revisão.
+@@ -196 +346 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
+-### Pós-janela
++### Pós-janela — referência futura, sem autorização neste A5
+@@ -200,2 +350,3 @@ Preview fora do cluster de produção (P1–P3 do isolamento) e prova de destino
+-- **P3.** Trocar a senha do `neondb_owner` quando Preview e máquinas locais não dependerem mais dele (fecha os 56
+-  previews legados no candidate e o caminho humano do `ADMIN OPTION`); atualizar `.env` local e `neon-*.env`.
++- **P3.** Trocar a senha do `neondb_owner` quando Preview e máquinas locais não dependerem mais dele (fecha os
++  previews legados que conservam essa credencial no candidate e o caminho humano do `ADMIN OPTION`);
++  atualizar `.env` local e `neon-*.env`. Os 56 previews são a contagem histórica de 2026-10-28, não um gate atual.
+@@ -218 +369,2 @@ runbook devolve o estado anterior sem perda. Ficam **proibidos**, sem prazo, at
+-   denied`) — também proibido. O `07`, se aplicado, transforma essa corrupção em erro, mas não a autoriza.
++   denied`) — também proibido. O `07`, se vier a ser aprovado e aplicado, é barreira adicional para os casos
++   ensaiados; jamais autoriza cliente Prisma Int a gravar nas colunas Float.
+@@ -259,2 +411,3 @@ Projeto `nameless-frost-19035275`, branch `main` = `br-lively-feather-b6esh64a`,
+-hoje `integer`, servindo o `DATABASE_URL`/`DIRECT_URL` genérico de Preview. O `pr315-kg`
+-(`br-wandering-band-b6ov7vmt`) já é `double` e só atende a branch da #315 por override. Depois do merge, todo
++no último retrato do isolamento, `integer`, servindo o `DATABASE_URL`/`DIRECT_URL` genérico de Preview. O `pr315-kg`
++(`br-wandering-band-b6ov7vmt`) era `double` e atendia a branch da #315 por override. Não houve nova consulta neste A5;
++reconfirmar o destino na futura preparação P2 autorizada. Depois do merge, todo
+
+diff --git "a/docs\\ai-execution\\_evidence\\ESTOQUE-MANUAL-KG-001\\a5-runbook-consolidation-010\\baseline\\ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md" b/docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md
+index bfc4e52..4021890 100644
+--- "a/docs\\ai-execution\\_evidence\\ESTOQUE-MANUAL-KG-001\\a5-runbook-consolidation-010\\baseline\\ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md"
++++ b/docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md
+@@ -3,5 +3,20 @@
+-**Status: NO-GO operacional (aguarda autorizações do §7).** Executado só em PostgreSQL descartável e num
+-branch Neon temporário (ensaio 002, §5); produção conferida só por leitura, idêntica antes e depois. Nenhum merge,
+-deploy, migration, segredo, papel, sessão ou deployment real foi tocado. `MIGRATION_AUTHORITY_ENABLED=false`
+-permanece. O head funcional da PR (`cdb1d19`, R4 APPROVE) não mudou: esta entrega só acrescenta
+-documentos, scripts SQL de operação (`rollout/`) e evidências.
++**Status: NO-GO operacional. A1, A1.1, A2, A3 e A4: PASS registrados.** O A3 já criou os papéis
++`omni_owner`, `omni_migrator`, `omni_runtime_v2` e concedeu os GRANTs em produção (110/110 tabelas).
++Isso alterou papéis/ACLs; não alterou estoque, vendas ou schema de tabelas. O A4 autenticou runtime direto e
++pooled e migrator direto, em sete transações READ ONLY terminadas em ROLLBACK. As cinco colunas seguem
++`integer`, a migration KG segue ausente e a posse dos objetos ainda não foi transferida.
++
++**Este A5 é preparação documental e validação local exclusivamente.** Nenhuma conexão ou operação no Neon
++ou na Vercel é autorizada. A6–A8, J0–J13 e pós-janela continuam sem autorização neste GOAL.
++O [runbook canônico](ESTOQUE_MANUAL_KG_RUNBOOK.md#0-estado-reconciliado-e-limites-das-evidências) reúne as
++fontes A1–A4 e distingue estado histórico, evidência direta e inferência. Os registros anteriores permanecem intactos.
++
++Head de referência da #315: `104d768`, CI verde informado, sem merge. A main avançou para **`aaab275` pela #321**
++(também presente no `origin/main` local, sem fetch neste A5). Reconciliação com a main então atual, nova revisão
++e CI verde do **head final** são pendências antes de J3/J4. O inventário de código em `cdb1d19` e as revisões
++antigas são históricos; não aprovam automaticamente esse head final. `MAIN_RECONCILIATION=PENDING`.
++
++`MIGRATION_AUTHORITY_ENABLED=false` é requisito operacional para impedir migrations pela Vercel; as evidências
++históricas de build mostram `MIGRATION_SKIPPED`. O valor `sensitive` Production não foi relido. A continuidade
++de Production com `neondb_owner` no A4 é **inferência** a partir do baseline, datas das envs e deployment
++preservados; os logins e privilégios do papel antigo foram comprovados diretamente. O A5 não atualiza esse retrato.
+@@ -15 +30 @@ Evidências: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediat
+-| 1 | **Production, Preview/candidate e o admin de migração usam o mesmo papel `neondb_owner` com a mesma senha**; só o nome do database muda. | `42-credenciais-locais-topologia.txt` (arquivos locais, só booleanos) + datas das envs na Vercel | Todo preview e toda máquina com `.env` de candidate tem credencial de escrita em produção. Trocar a senha derruba os três juntos. |
++| 1 | **Na topologia legada inventariada, Production, previews antigos/candidate e o admin compartilhavam `neondb_owner` e a mesma senha**; só o database mudava. Previews novos já foram isolados em outro projeto/papel. | `42-credenciais-locais-topologia.txt` + isolamento P1–P3 + A3/A4 | Os retratos legados e as máquinas com credencial antiga mantêm o risco. A criação dos papéis novos não remove esse acesso; a troca de senha segue etapa posterior autorizada. |
+@@ -17 +32 @@ Evidências: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediat
+-| 3 | `omnigestao_prod` tem `datacl = NULL` (PUBLIC com CONNECT); schema `public` pertence a `pg_database_owner`; candidate: 96 tabelas, **0 com RLS**, 0 policies, 0 sequences/views/funções, 36 enums. | `40-…`, `41-…` | Papel de runtime sem BYPASSRLS funciona (não há RLS). A troca de posse precisa começar pelo `ALTER DATABASE … OWNER`. |
++| 3 | Antes do A3, `omnigestao_prod` tinha `datacl = NULL`. O GRANT do A3 materializou a ACL padrão e acrescentou CONNECT para runtime/migrator; PUBLIC e papel antigo ainda mantêm acesso. A4: 110 tabelas com DML, 0 RLS e 0 sequências em `public`. As 96 tabelas do candidate pertencem a inventário histórico. | `40-…`, `41-…`, A3/A4 | A concessão não é corte. A futura troca de posse começa pelo `ALTER DATABASE … OWNER`; os scripts 03–05 continuam pendentes. |
+@@ -21 +36 @@ Evidências: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediat
+-| 7 | Só **14** deployments alcançam `omnigestao_prod` pelo código (Production do `omni-gestao-pro`, 2026-10-23 → leitura de 2026-10-25, URLs públicas). Os outros 119 não têm caminho de código até lá. Em 2026-10-28: **15** de Production e **56** previews com a credencial que abre produção (`rollout-readiness-004` §2). | `50-vercel-inventario.md`, `rollout-readiness-004` | O "109" do pré-flight não é reproduzível (lista muda a cada push); o que importa é a credencial, não a contagem. A retenção **não** os remove (READY de 73 dias com `expirationDays=30`): só o corte 04+05 fecha. |
++| 7 | Retratos datados: **14** Production em 2026-10-25; **15** Production e **56** previews legados com credencial que abre produção em 2026-10-28 09:37Z. Não são contagens atuais. | `50-vercel-inventario.md`, `rollout-readiness-004` §2 | Refazer o inventário integral no início da janela. Contagem, espera e suposta expiração não são proteção: havia READY de 73 dias apesar de `expirationDays=30`. O corte efetivo é CONNECT (04) seguido imediatamente do encerramento de sessões (05). |
+@@ -23 +38 @@ Evidências: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediat
+-| 9 | Um cliente Int que ainda alcance o banco depois da migration corrompe com valor absoluto e com o livro; `increment/decrement` vira no-op silencioso. Um CHECK "finito em milésimos" faz o absoluto, o negativo, o depósito, o livro e a transação de venda **falharem** (23514) e deixa o cliente novo passar. | `20-barreira-check.txt` | Barreira de banco opcional (`rollout/07`), sem drift no `prisma migrate diff`; exige revisão própria. |
++| 9 | Cliente Int sobre Float corrompe ou falha silenciosamente nos caminhos ensaiados. O CHECK "finito em milésimos" rejeitou os casos de absoluto, negativo, depósito, livro e venda testados no ambiente isolado (23514). | `20-barreira-check.txt` | `rollout/07` é candidato a barreira adicional. `SCRIPT_07_DECISION=PENDING`: decisão e revisão própria no A6 e autorização para aplicar na janela; o A5 não o aprova e jamais libera escrita de cliente Int sobre Float. |
+@@ -27 +42 @@ Evidências: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-remediat
+-**Código da PR (`cdb1d19`)** — passam pela trava `STOCK_WRITES_FROZEN`:
++**Inventário histórico do código em `cdb1d19`** — passam pela trava `STOCK_WRITES_FROZEN`:
+@@ -35,2 +50,2 @@ com estoque inicial).
+-| criação de produto (`product-write-service`) | `stock: 0` no INSERT | nulo: 0 é 0 em qualquer tipo; a migration trava a tabela |
+-| exclusão de produto (`DELETE /api/produtos/[id]`, `bulk-delete`, `bulk-action`, `cadastros.ts`) | cascata em `produto_depositos`; `SET NULL` no livro | nulo para valores (não grava número) |
++| criação de produto (`product-write-service`) | `stock: 0` no INSERT | cliente Float sobre `integer` falha fechado (`22P03`) também com zero; cadastros ficam congelados durante a janela |
++| exclusão de produto (`DELETE /api/produtos/[id]`, `bulk-delete`, `bulk-action`, `cadastros.ts`) | cascata em `produto_depositos`; `SET NULL` no livro | altera linhas mesmo sem gravar novo número; não executar na janela; os locks protegem o retrato da migration |
+@@ -41 +56 @@ com estoque inicial).
+-**Código antigo (deployments de Production anteriores à #315 — 15 em 2026-10-28 —, scripts da `main`, qualquer clone com `.env` antigo)**: **nenhum
++**Código antigo (deployments anteriores à #315, scripts e clones com Prisma Int; 15 Production no retrato de 2026-10-28)**: **nenhum
+@@ -49 +64 @@ A barreira para ele tem de estar no banco: corte de CONNECT (B) e, opcionalmente
+-| Mecanismo | `vercel remove` dos 14 Production (e previews), encerrar scripts locais | papel `omni_runtime_v2` só para Production; papel antigo perde `CONNECT` em `omnigestao_prod` e tem as sessões encerradas |
++| Mecanismo | remover os deployments antigos encontrados no inventário, encerrar scripts locais | papel `omni_runtime_v2` só para Production; papel antigo perde `CONNECT` em `omnigestao_prod` e tem as sessões encerradas |
+@@ -54 +69 @@ A barreira para ele tem de estar no banco: corte de CONNECT (B) e, opcionalmente
+-| Custo | ~66 remoções manuais + conferência 404 de cada URL; repetir para cada push durante a janela | 3 papéis + grants **antes** da janela (sem efeito); **na janela**, troca das 2 envs junto com o deploy Float da PR, conferência dos deployments criados depois da troca, 3 scripts (~10 s) + conferência |
++| Custo | depende do inventário atualizado; remoções + conferência de cada URL, repetidas se houver novo deployment | papéis e grants já preparados no A3; na janela, 2 envs junto com o deploy Float, controle dos novos deployments, 3 scripts e conferência; duração do ensaio não é previsão de lock em produção |
+@@ -63,2 +78,2 @@ reversível até a migration. Os deployments antigos não são excluídos na jan
+-retenção da Vercel**: a política diz `expirationDays=30`, mas o READY mais antigo do `omni-gestao-pro` tem 73
+-dias (`rollout-readiness-004` §2; a leitura contrária em `50-vercel-inventario.md` está refutada). Eles saem do
++retenção da Vercel**: no inventário de 2026-10-28 havia READY de 73 dias apesar de `expirationDays=30`
++(`rollout-readiness-004` §2; a promessa de expiração em `50-vercel-inventario.md` não serve como gate). Eles saem do
+@@ -71,2 +86,4 @@ banco só pelo corte 04+05. Ligar Deployment Protection no `omni-gestao-pro` é
+-Todos os scripts foram executados, nessa ordem, contra PG 17 com a topologia do Neon e escritores Prisma
+-Int ativos (`11-arquivos-do-runbook.txt`). Senhas só por variável de ambiente; nada de segredo em arquivo.
++O ensaio isolado executou os scripts nessa ordem contra PG 17 com a topologia do Neon e escritores Prisma
++Int ativos (`11-arquivos-do-runbook.txt`). Na produção real, somente **01 e 02** foram aplicados no A3;
++o 06 foi usado para leitura no A3/A4. Isso não significa execução produtiva do corte, da migration ou do 07.
++Senhas existentes ficam fora do repositório e são passadas ao processo por ambiente, nunca argv ou log.
+@@ -77,11 +94,10 @@ congelamento, ponto de não-retorno e recuperação por fase — é a do `ESTOQU
+-**Pré-janela (sem efeito nos escritores atuais)**
+-
+-1. Preview fora do cluster de produção: branch Neon (ou projeto) próprio com papel próprio; trocar
+-   `DATABASE_URL`/`DIRECT_URL` do escopo Preview na Vercel colando o valor novo via stdin
+-   (`vercel env add … preview < arquivo` — nunca exibir o valor). Previews existentes mantêm o retrato
+-   antigo; o corte do passo 7 tira deles o acesso a produção.
+-2. `01-papeis.sql` (papel antigo, database `neondb`): cria `omni_owner` (NOLOGIN), `omni_migrator`,
+-   `omni_runtime_v2` por SQL — **nunca pelo Console/API do Neon**, que os tornaria membros de
+-   `neon_superuser`. O script recusa se algum herdar `pg_write_all_data`.
+-3. `02-grants-runtime.sql` (papel antigo, `omnigestao_prod`): DML em todas as tabelas; recusa se faltar
+-   alguma ou se houver RLS.
++**Pré-janela — estado histórico A1–A4 cumprido, sem repetição autorizada neste A5**
++
++1. Preview já isolado por P1–P3, com projeto/papel próprios. Os deployments antigos conservam o retrato
++   de credenciais anterior; é o corte do futuro passo 7 que tira deles o alcance a Production.
++2. `01-papeis.sql` já executado no A3 (papel antigo, database `neondb`): criou `omni_owner` (NOLOGIN),
++   `omni_migrator` e `omni_runtime_v2` por SQL, sem `neon_superuser`. **Não repetir o 01.** Antes da criação,
++   o preflight equivalente ao 06 deve tolerar `omni_owner` ausente: usar a consulta por OID com LEFT JOIN/CASE
++   do runbook §4, não resolver o papel inexistente por nome. O 06 oficial não foi alterado no A5.
++3. `02-grants-runtime.sql` já executado no A3: DML em **110/110 tabelas**, recusa de RLS. Se surgir drift
++   antes da janela, diagnosticar e pedir autorização específica para qualquer alteração de GRANT.
+@@ -91,5 +107,16 @@ congelamento, ponto de não-retorno e recuperação por fase — é a do `ESTOQU
+-   atual com o papel novo. Os privilégios do runtime são provados no ensaio do branch Neon (§5), não em
+-   Production.
+-5. Ensaio completo num **branch Neon** de produção (§5), incluindo reiniciar o compute.
+-
+-**Janela (loja fechada, checklist de lojas cumprido — `ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md`)**
++   atual com o papel novo. **A4 comprovou em Production** o login e os privilégios declarados do runtime
++   (direto e pooled) e o login/membership do migrator, somente por consultas READ ONLY e ROLLBACK.
++   Não houve tentativa de DML/DDL nem prova de migration efetivamente executada. `omni_owner` ainda possui
++   zero relações em `public`; migrator ainda não tem acesso de proprietário aos objetos, como esperado antes do 03.
++5. Ensaio completo num **branch Neon** de produção (§5) já registrado, incluindo reiniciar o compute.
++   A5 consolida documentação; A6–A8 seguem pendentes. Resolver antes da liberação da janela a leitura de
++   `cron.job` no auxiliar `postgres` com autorização própria. O último relato de caixa aberto é **loja-1**
++   no A3; os registros de loja-2 aberta no A1/A1.1 são anteriores. Reconfirmar todas as sessões somente em
++   preflight da janela autorizada, sem consulta ou fechamento neste A5.
++
++**Janela futura — NÃO AUTORIZADA: lojas fechadas e checklist cumprido**
++
++Pré-condições: reconciliação da #315 com `aaab275`/main então atual, nova CI e revisão do head final;
++checklist por `storeId` de **loja-1 RafaCell** e **loja-2 Rafa Brinquedos**, todos os terminais reais e URLs
++antigas, pendências offline e pagamentos tratados, **todas as sessões ABERTA = 0 antes do J0** e inventário
++atualizado dos deployments no início da janela. Nomes repetidos de lojas de teste não substituem `storeId`.
+@@ -113 +140,2 @@ congelamento, ponto de não-retorno e recuperação por fase — é a do `ESTOQU
+-   Opcional, se aprovado em revisão: `07-guard-check-opcional.sql`.
++   O `07-guard-check-opcional.sql` é apenas candidato adicional: requer decisão/revisão própria no A6 e
++   autorização de aplicação na janela. Decisão ainda PENDING; não há aprovação implícita neste A5.
+@@ -119 +147,6 @@ congelamento, ponto de não-retorno e recuperação por fase — é a do `ESTOQU
+-## 5. O que o ambiente isolado não prova (gate antes de produção)
++## 5. Provas do ensaio e limite da comprovação em produção
++
++As conclusões abaixo pertencem ao branch de ensaio 002. A3/A4 provaram preparação dos papéis/GRANTs,
++login e catálogo na produção real; **não** executaram transferência de posse, corte de CONNECT, encerramento
++de sessões ou migration KG em Production. A capacidade do migrator após receber a posse permanece uma
++verificação da futura janela autorizada, e não resultado do A4.
+@@ -141,22 +174,26 @@ Evidências do ensaio: `docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/neon-r
+-**NO-GO até as autorizações abaixo.** Prova isolada e ensaio no Neon (002) concluídos; cada item segue
+-exigindo autorização específica:
+-
+-1. ~~Criar um branch Neon de produção para o ensaio do §5~~ — feito no ensaio 002; o branch
+-   `br-wispy-mountain-accw2a7p` ficou com o compute suspenso e **excluí-lo exige autorização separada**.
+-2. Criar `omni_owner`, `omni_migrator`, `omni_runtime_v2` no cluster de produção (`01`) e conceder DML (`02`).
+-3. Banco isolado para Preview e troca das envs de Preview na Vercel.
+-4. Trocar `DATABASE_URL`/`DIRECT_URL` de Production para `omni_runtime_v2` **dentro da janela, junto com o deploy
+-   da PR** (nunca com um build `Int`).
+-5. Execução do checklist nas duas lojas (terminais reais).
+-6. Janela: trava, merge/deploy da #315, scripts 03–05, migration; e, à parte, decidir sobre o `07`
+-   (exige revisão independente por ser DDL fora da migration aprovada).
+-7. Pós-janela: `omni_migrator` NOLOGIN, troca de senha do `neondb_owner`, limpeza de arquivos locais.
+-8. Congelamento de merges, pushes, deploys pelo painel/CLI, envs, outras sessões de IA, conectores, scripts locais e
+-   Console Neon (runbook §3), declarado antes da janela.
+-9. Migration KG no branch `main` do Neon Preview depois do merge (runbook §6.2, P2).
+-
+-Mapeamento para o runbook: item 2 = A3; 4 = J3; 5 = J0; 6 = J1–J13 (+ A6 para o `07`); 7 = P1, P3, P5; 8 = A8/J0;
+-9 = P2.
+-
+-Opcional e independente: Deployment Protection (Standard) no `omni-gestao-pro`; decidir o destino dos 4
+-overrides de Preview por branch (`codex/release-ops-v4-vercel` e outros), cujo valor não é legível.
++**Já registrados, sem repetir:** ensaio 002; isolamento Preview P1–P3/P5; A1/A1.1, A2, A3 e A4 (§0 do runbook).
++As senhas A2 existem; 01/02 já foram executados em produção e seus marcadores confirmados. A5 é a preparação
++documental desta revisão, com encerramento por validação local; não equivale a liberar execução.
++
++**NO-GO operacional. Pendentes, sem autorização por este GOAL:**
++
++1. **A6:** decisão e revisão independente sobre o 07; `SCRIPT_07_DECISION=PENDING`.
++2. **A7:** alcance/congelamento dos conectores e outros caminhos humanos/agentes. A leitura pendente de
++   `cron.job` em `postgres` exige autorização específica para esse database; não fazê-la neste A5.
++3. **A8/J0:** autorização da janela e congelamento de merges, pushes, deploys, envs, sessões de IA,
++   conectores, scripts locais e Console Neon (runbook §3); checklist real das duas lojas, caixas fechados e
++   inventário atualizado dos deployments.
++4. **Antes de J3/J4:** reconciliação com a main então atual e CI/revisão do head final, sem reutilizar como
++   aprovação a CI de `104d768` ou de heads anteriores; `MAIN_RECONCILIATION=PENDING`.
++5. **J0–J13:** toda a janela, inclusive troca de URLs Production junto ao deploy Float, corte 03–05,
++   migration, eventual aplicação do 07 expressamente aprovada, smoke e reabertura.
++6. **P1–P5:** NOLOGIN do migrator fora das janelas, troca posterior da senha antiga, migration do Preview main,
++   trabalho futuro de integração e limpezas, cada qual com autorização. Excluir o branch de ensaio
++   `br-wispy-mountain-accw2a7p` também depende de autorização separada.
++
++Depois do COMMIT do J8, jamais liberar cliente Prisma Int para gravar nas colunas Float. A recuperação
++continua seguindo F0–F4 do runbook; não restaurar CONNECT ao papel antigo nem executar o 99 após a migration.
++
++Opcional e independente, sob autorização própria: Deployment Protection no `omni-gestao-pro`; atualizar o
++inventário e decidir o destino dos overrides de Preview por branch (4 no retrato histórico, incluindo
++`codex/release-ops-v4-vercel`), cujo valor sensível não foi relido. Nada disso é aprovado neste A5.
+
+diff --git "a/docs\\ai-execution\\_evidence\\ESTOQUE-MANUAL-KG-001\\a5-runbook-consolidation-010\\baseline\\ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md" b/docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md
+index 684b0bf..46451c7 100644
+--- "a/docs\\ai-execution\\_evidence\\ESTOQUE-MANUAL-KG-001\\a5-runbook-consolidation-010\\baseline\\ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md"
++++ b/docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md
+@@ -3 +3,15 @@
+-Para **RafaCell** e **Rafa Brinquedos**. Feito pelo operador de cada terminal, com o responsável no
++**Modelo de preparação do J0, sem preenchimento ou execução neste A5.** A6–A8 e J0–J13 não estão
++autorizados por `ESTOQUE-KG-PRODUCTION-A5-RUNBOOK-001`. Este documento não autoriza consulta produtiva,
++fechamento de caixa, reenvio de venda, alteração de pagamento ou operação na Vercel.
++
++| storeId comercial | Loja | Nome no cadastro histórico A1.1 |
++| --- | --- | --- |
++| `loja-1` | **RafaCell** | RAFACELL ASSISTEC |
++| `loja-2` | **Rafa Brinquedos** | RAFA BRINQUEDOS E VARIEDADES |
++
++Identificar lojas por **storeId**, não só por nome: o A1.1 registrou uma `loja-11` de teste com nome igual
++ao da loja-2. A consulta de caixas deve abranger também lojas de teste e demais storeIds.
++O último relato específico é o **A3, 2026-10-29 09:39Z: loja-1 aberta e loja-2 fechada**. A loja-2 aberta
++no A1/A1.1 é retrato anterior. Nenhum desses registros substitui a conferência na janela autorizada.
++
++Feito pelo operador de **cada terminal real**, com o responsável no
+@@ -12 +26,12 @@ conferência abaixo.
+-## Por terminal (preencher uma linha cada)
++## Inventário físico e de origens (uma linha por terminal real e perfil/PWA)
++
++As linhas vazias são modelo, não uma lista de terminais já conhecidos. Acrescentar todos os computadores,
++celulares, perfis de navegador e PWAs usados pelas lojas, incluindo os offline, guardados e com URLs antigas.
++Não limpar cache, dados do site ou fila para zerar pendências; isso pode apagar a única cópia da venda.
++
++| storeId | Loja | Identificação física / terminalId | Navegador e perfil ou PWA | URLs/atalhos atuais e antigos | Operador / hora |
++| --- | --- | --- | --- | --- | --- |
++| loja-1 | RafaCell | | | | |
++| loja-1 | RafaCell | | | | |
++| loja-2 | Rafa Brinquedos | | | | |
++| loja-2 | Rafa Brinquedos | | | | |
+@@ -14,6 +39,8 @@ conferência abaixo.
+-| Loja | Terminal | Endereço na barra / atalho do app | Caixa encerrado? | Pendências = 0? | Pagamento em andamento? | Devolução/vale pendente? | Abas fechadas? | Quem / hora |
+-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+-| RafaCell | | | | | | | | |
+-| RafaCell | | | | | | | | |
+-| Rafa Brinquedos | | | | | | | | |
+-| Rafa Brinquedos | | | | | | | | |
++## Por terminal (preencher uma linha para cada origem inventariada)
++
++| storeId | Terminal / perfil / origem | Caixa encerrado? | Pendências online/offline | Pagamento em andamento ou sem confirmação? | Devolução/vale pendente? | Abas/PWA fechados? | Responsável / hora |
++| --- | --- | --- | --- | --- | --- | --- | --- |
++| loja-1 | | | | | | | |
++| loja-1 | | | | | | | |
++| loja-2 | | | | | | | |
++| loja-2 | | | | | | | |
+@@ -24 +51,3 @@ conferência abaixo.
+-2. **Caixa**: fechamento feito e conferido; nenhuma sessão de caixa aberta. Não abrir caixa até o aviso de reabertura.
++2. **Caixa**: fechamento normal pelo responsável e sob autorização operacional própria, feito e conferido;
++   **nenhuma sessão ABERTA antes da abertura do J0**, em qualquer storeId. Não abrir caixa até a reabertura
++   autorizada no J13. Este A5 não confere nem fecha caixa.
+@@ -28,3 +57,4 @@ conferência abaixo.
+-     identificador da venda e mandar ao responsável;
+-   - endereço errado → deixar sincronizar ali mesmo (antes da janela o código antigo ainda grava certo)
+-     até zerar; se não zerar, anotar como acima.
++     identificador da venda/`clientSaleId` e encaminhar ao responsável pelo canal operacional aprovado;
++   - endereço errado → tratar com o responsável **antes da janela**, sem mover a fila para outra origem;
++     quando a sincronização for autorizada, fazê-la na própria origem ainda compatível com o banco `integer`;
++     se não zerar, preservar como acima e bloquear o J0 até decisão expressa sobre o tratamento.
+@@ -32 +62,3 @@ conferência abaixo.
+-   tela de pagamento aberta. Venda paga sem confirmação → anotar valor, forma e horário.
++   tela de pagamento aberta. Venda paga sem confirmação → preservar comprovante, forma, horário e identidade
++   da venda em registro operacional protegido; não cobrar novamente, cancelar ou reenviar por suposição.
++   Resolver a confirmação ou registrar decisão expressa do responsável antes de liberar o J0.
+@@ -34 +66,2 @@ conferência abaixo.
+-6. **Terminal offline**: se não tiver internet, não ligar a trava até ele voltar e zerar a fila.
++6. **Terminal offline ou não localizado**: bloquear o J0 e a trava até voltar e ser conferido. Uma fila que
++   não pôde ser inspecionada não vale como zero. Anotar responsáveis e preservar os dados locais.
+@@ -37 +70,25 @@ conferência abaixo.
+-## Para o responsável
++## Todas as sessões de caixa — conferência autorizada antes do J0
++
++Somente no preflight da janela expressamente autorizada, usar o alvo do runbook: projeto `dry-mouse-36002471`,
++branch `br-muddy-meadow-ac7ah2wl`, endpoint `ep-summer-tooth-acltc6wi`, database `omnigestao_prod`.
++Conferir identidade e READ ONLY na mesma sessão, abortando se qualquer identificador divergir.
++Não filtrar apenas loja-1/loja-2: sessões antigas ou de teste também impedem o J0.
++
++```sql
++BEGIN READ ONLY;
++SELECT 'KG_J0_IDENTIDADE_OK'
++WHERE 1 / CASE WHEN current_setting('neon.project_id', true) = 'dry-mouse-36002471'
++  AND current_setting('neon.branch_id', true) = 'br-muddy-meadow-ac7ah2wl'
++  AND current_setting('neon.endpoint_id', true) = 'ep-summer-tooth-acltc6wi'
++  AND current_database() = 'omnigestao_prod'
++  AND current_setting('transaction_read_only') = 'on' AND NOT pg_is_in_recovery()
++  THEN 1 ELSE 0 END = 1;
++SELECT "storeId", id AS "sessaoId", "abertaEm", status
++FROM public.sessoes_caixa WHERE status = 'ABERTA' ORDER BY "storeId", "abertaEm", id;
++SELECT count(*) AS total_abertas FROM public.sessoes_caixa WHERE status = 'ABERTA';
++ROLLBACK;
++```
++
++Executar o trecho somente com `ON_ERROR_STOP=1` (psql `-X -v ON_ERROR_STOP=1`), sob a autorização futura.
++Registrar cada sessão encontrada e repetir a leitura depois do tratamento autorizado; a leitura não fecha sessão.
++O conjunto final de sessões ABERTA deve estar vazio e `total_abertas=0` **antes de declarar o J0**.
+@@ -39 +96,24 @@ conferência abaixo.
+-- [ ] As duas lojas devolveram a tabela completa, sem pendência sem dono.
++| storeId | sessaoId | Aberta desde | Tratamento pelo responsável / autorização | Última conferência / hora |
++| --- | --- | --- | --- | --- |
++| | | | | |
++
++## Inventário de deployments no início da janela
++
++Registrar horário, projeto e responsável pelo inventário integral autorizado da Vercel. Os números
++14/15 Production e 56 previews dos documentos anteriores são **retratos históricos**, não o universo atual.
++O recorte UI do A4 (18 metadados) também não é inventário integral de deployments.
++
++| Projeto / alvo | Deployment ID | SHA / código Int ou Float | URL / origem usada por terminal | Papel / destino e fonte direta ou inferida | Criado / inventariado em |
++| --- | --- | --- | --- | --- | --- |
++| | | | | | |
++
++Incluir Production, previews legados com credencial antiga e qualquer nova criação desde o inventário anterior.
++Não registrar URLs com senhas, tokens ou parâmetros de autenticação. Comparar IDs/SHA com as origens dos
++terminais. **Expiração, exclusão ou proteção HTTP não substituem o corte de CONNECT + encerramento de sessões.**
++Repetir as verificações de novos deployments nos gates J4/J7; não acessar o app real apenas para inventariar URLs.
++
++## Para o responsável — gate de abertura do J0
++
++- [ ] loja-1 RafaCell e loja-2 Rafa Brinquedos devolveram as tabelas completas, com storeId e responsável/hora.
++- [ ] Todos os terminais reais, navegadores/perfis, PWAs, URLs antigas e origens da fila foram localizados e conferidos.
++- [ ] Nenhum terminal offline ou não localizado permanece sem conferência.
+@@ -41 +121,9 @@ conferência abaixo.
+-- [ ] Anotações de vendas com ação necessária guardadas (serão lançadas depois com a **mesma** identidade).
++- [ ] Pendências zeradas em cada origem; eventuais exceções preservadas e aceitas por decisão expressa com plano
++      e **mesma identidade** (`clientSaleId`), sem aprovação implícita por este checklist.
++- [ ] Nenhum pagamento em andamento ou sem decisão documentada sobre confirmação; devoluções/vales tratados.
++- [ ] Todas as sessões ABERTA identificadas por storeId/sessaoId, inclusive teste; leitura final = **0 antes do J0**.
++- [ ] Inventário integral de deployments atualizado no início da janela, confrontado com as URLs dos terminais.
++- [ ] Reconciliação da #315 com `aaab275`/main então atual concluída e CI/revisão verde do head final exato.
++- [ ] Pendência `cron.job` no auxiliar `postgres` resolvida por leitura com autorização específica; escritores mapeados.
++- [ ] A6 decidido, A7 confirmado e A8/congelamento do runbook autorizados; versão/SHA documental da janela registrados.
++- [ ] Todas as abas/PWAs fechados; nenhuma venda ou abertura de caixa até a reabertura autorizada.
+@@ -44,0 +133,4 @@ conferência abaixo.
++**GO/NO-GO do J0:** __________ · responsável: __________ · data/hora: __________ · autorização: __________
++
++Nenhum campo está preenchido ou aprovado no A5. Qualquer item desconhecido ou gate falho impede a abertura.
++
+@@ -51 +143,2 @@ reenvio em paralelo e reenvio sob nova trava → replay, sem duplicar; venda gra
+-reenviada depois → replay. O formato da fila no navegador é o mesmo entre a `main` e a PR.
++reenviada depois → replay. Na base daquele ensaio, o formato da fila era igual entre a main e a PR;
++revalidar a compatibilidade no head final reconciliado, sem extrapolar a prova histórica para `aaab275`.

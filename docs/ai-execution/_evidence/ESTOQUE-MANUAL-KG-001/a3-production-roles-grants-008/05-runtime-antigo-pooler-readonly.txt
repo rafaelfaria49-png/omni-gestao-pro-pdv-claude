@@ -1,0 +1,6 @@
+url: OK sem conectar · endpoint=ep-summer-tooth-acltc6wi pooler=off usuário=neondb_owner dbs=neondb,omnigestao_prod senhas_a2=2 (formato ok, distintas)
+fase=pooler início=2026-10-29T09:39:56.729Z
+BEGIN
+pooler user=neondb_owner db=omnigestao_prod endpoint=ep-summer-tooth-acltc6wi tx_ro=on produtos=14127
+ROLLBACK
+exit=0 fim=2026-10-29T09:39:56.985Z

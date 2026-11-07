@@ -1,0 +1,19 @@
+# ESTOQUE-MANUAL-KG-001 - contraprovas dos cortes parciais - 2026-10-25T19:08:53.388Z
+  old-deploy-A grava (pool aberto): SUCESSO -> 8
+
+## 1. REVOKE CONNECT executado por quem NAO e dono (omni_migrator antes da troca de posse)
+  psql ok=true stderr="WARNING: no privileges could be revoked for "omnigestao_prod""
+  papel antigo ainda tem CONNECT: t  <- nada foi revogado, exit 0
+
+## 2. So pg_terminate_backend, sem tirar CONNECT
+  sessoes antigas antes: 1
+  encerradas: 1
+  old-deploy-A tentativa 1: FALHOU -> Server has closed the connection. [P1017]
+  old-deploy-A tentativa 2 (Prisma reconectou): SUCESSO -> 7
+  sessoes antigas depois: 1  <- voltou
+
+## 3. So REVOKE CONNECT pelo dono, sem encerrar sessoes
+  psql ok=true stderr=""  papel antigo tem CONNECT: f
+  old-deploy-A com a sessao aberta grava: SUCESSO -> 6
+  cold start antigo: FALHOU -> FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  sessoes antigas: 1  <- a aberta segue gravando ate ser encerrada

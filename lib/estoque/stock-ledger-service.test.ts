@@ -10,13 +10,15 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }))
 import {
   applyStockMutation,
   applyStockMutationTx,
+  StockWritesFrozenError,
   type StockLedgerTx,
 } from "@/lib/estoque/stock-ledger-service"
+import { classifyPendingSyncFailure, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
 import type { StockLedgerContext } from "@/lib/estoque/stock-ledger-contract"
 
 // ─── Fake ────────────────────────────────────────────────────────────────────
 
-type ProdRow = { id: string; storeId: string; name: string; sku: string | null; stock: number; precoCusto: number }
+type ProdRow = { id: string; storeId: string; name: string; sku: string | null; stock: number; precoCusto: number; metadata?: unknown }
 type DepRow = { id: string; storeId: string }
 type PDRow = { produtoId: string; depositoId: string; storeId: string; quantidade: number }
 type MovRow = {
@@ -80,7 +82,7 @@ function makeFake(opts?: {
       findFirst: (async (args: unknown) => {
         const w = (args as { where: Record<string, unknown> }).where
         const p = matchProdFirst(w)
-        return p ? { id: p.id, name: p.name, sku: p.sku, stock: p.stock, precoCusto: p.precoCusto } : null
+        return p ? { id: p.id, name: p.name, sku: p.sku, stock: p.stock, precoCusto: p.precoCusto, metadata: p.metadata } : null
       }) as StockLedgerTx["produto"]["findFirst"],
       findUnique: (async (args: unknown) => {
         const w = (args as { where: Record<string, unknown> }).where
@@ -1178,5 +1180,142 @@ describe("stock-ledger-service — core", () => {
     expect(e.realinharDepositoAoStock).toBe(true)
     const a = norm({ kind: "ajuste", produtoId: "p1", novoSaldo: 2, origem: "manual", motivo: "x", realinharDepositoAoStock: true } as unknown as Parameters<typeof norm>[0])
     expect(a.realinharDepositoAoStock).toBe(false)
+  })
+})
+
+// ─── ESTOQUE-MANUAL-KG-001: KG em milésimos inteiros ──────────────────────────
+
+describe("stock-ledger-service — KG fracionado", () => {
+  const KG = { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } }
+  const kgFake = (over?: Partial<ProdRow>, extra?: Parameters<typeof makeFake>[0]) =>
+    makeFake({
+      produtos: [prod({ name: "PAO FRANCES", stock: 0, precoCusto: 0, metadata: KG, ...over })],
+      depositos: [{ id: "d1", storeId: "loja-a" }],
+      ...extra,
+    })
+  const entrada = (quantidade: number, idempotencyKey?: string) =>
+    ({ kind: "entrada", produtoId: "p1", quantidade, origem: "manual", idempotencyKey }) as const
+
+  it("2,500 + 0,750 = 3,250 em Produto.stock, depósito e livro", async () => {
+    const f = kgFake()
+    const r1 = await applyStockMutationTx(f.tx, ctx(), entrada(2.5))
+    expect(r1).toMatchObject({ ok: true, quantidade: 2.5, estoqueAntes: 0, estoqueDepois: 2.5, depositoDepois: 2.5 })
+    const r2 = await applyStockMutationTx(f.tx, ctx(), entrada(0.75))
+    expect(r2).toMatchObject({ ok: true, quantidade: 0.75, estoqueAntes: 2.5, estoqueDepois: 3.25, depositoAntes: 2.5, depositoDepois: 3.25 })
+    expect(f.produtos.get("p1")!.stock).toBe(3.25)
+    expect([...f.pds.values()].map((r) => r.quantidade)).toEqual([3.25])
+    const livro = [...f.movs.values()].map((m) => [m.quantidade, m.estoqueAntes, m.estoqueDepois])
+    expect(livro).toEqual([[2.5, 0, 2.5], [0.75, 2.5, 3.25]])
+  })
+
+  it("sem deriva de ponto flutuante: 0,1 + 0,2 grava 0,3 exato", async () => {
+    const f = kgFake()
+    await applyStockMutationTx(f.tx, ctx(), entrada(0.1))
+    const r = await applyStockMutationTx(f.tx, ctx(), entrada(0.2))
+    expect(0.1 + 0.2).not.toBe(0.3)
+    expect(r).toMatchObject({ ok: true, estoqueDepois: 0.3 })
+    expect(f.produtos.get("p1")!.stock).toBe(0.3)
+  })
+
+  it.each([0.0005, 1.2345, -0.5, 0, Number.NaN])("recusa %s kg sem gravar nada", async (q) => {
+    const f = kgFake({ stock: 1 })
+    const r = await applyStockMutationTx(f.tx, ctx(), entrada(q))
+    expect(r).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(f.produtos.get("p1")!.stock).toBe(1)
+    expect(f.movs.size).toBe(0)
+  })
+
+  it("custo médio por kg e valor da entrada usam o peso real", async () => {
+    const f = kgFake({ stock: 2.5, precoCusto: 8 }, { pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 2.5 }] })
+    const r = await applyStockMutationTx(f.tx, ctx(), { ...entrada(0.75), custoUnitario: 12 })
+    // (2,5 × 8 + 0,75 × 12) / 3,25 = 8,92
+    expect(r).toMatchObject({ ok: true, custoMedioDepois: 8.92 })
+    expect([...f.movs.values()][0]).toMatchObject({ custoUnitario: 12 })
+  })
+
+  it("idempotência: mesmo comando não reaplica; quantidade diferente com a mesma chave conflita", async () => {
+    const f = kgFake()
+    await applyStockMutationTx(f.tx, ctx(), entrada(2.5, "k1"))
+    const retry = await applyStockMutationTx(f.tx, ctx(), entrada(2.5, "k1"))
+    expect(retry).toMatchObject({ ok: true, idempotente: true, quantidade: 2.5, estoqueDepois: 2.5 })
+    expect(f.produtos.get("p1")!.stock).toBe(2.5)
+    const conflito = await applyStockMutationTx(f.tx, ctx(), entrada(2.501, "k1"))
+    expect(conflito).toMatchObject({ ok: false, code: "IDEMPOTENCY_CONFLICT" })
+    expect(f.movs.size).toBe(1)
+  })
+
+  it("drift em KG compara milésimos e mostra a unidade real na mensagem", async () => {
+    const f = kgFake(
+      { stock: 3.25 },
+      {
+        pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 3.2 }],
+        movs: [{
+          id: "m0", storeId: "loja-a", produtoId: "p1", tipo: "entrada", quantidade: 1, documento: null, motivo: null,
+          custoUnitario: 0, estoqueAntes: 0, estoqueDepois: 1, custoMedioAntes: 0, custoMedioDepois: 0,
+          origem: "manual", idempotencyKey: null, createdAt: 1,
+        }],
+      },
+    )
+    const r = await applyStockMutationTx(f.tx, ctx(), entrada(1))
+    expect(r).toMatchObject({ ok: false, code: "STOCK_INVARIANT_DRIFT" })
+    if (r.ok) throw new Error("unreachable")
+    expect(r.message).toContain("SUM(depósitos)=3.2 != Produto.stock=3.25")
+    expect(r.drift).toMatchObject({ stock: 3.25, somaDepositos: 3.2, requestedQty: 1 })
+    expect(r.drift!.gap).toBe(-0.05)
+    expect(f.produtos.get("p1")!.stock).toBe(3.25)
+  })
+
+  it("UN preserva saldos antigos e o contrato inteiro; saldo UN fracionado falha fechado", async () => {
+    const un = makeFake({ produtos: [prod({ stock: 10 })], depositos: [{ id: "d1", storeId: "loja-a" }] })
+    expect(await applyStockMutationTx(un.tx, ctx(), entrada(3))).toMatchObject({ ok: true, estoqueAntes: 10, estoqueDepois: 13 })
+    expect(await applyStockMutationTx(un.tx, ctx(), entrada(0.5))).toMatchObject({ ok: false, code: "VALIDATION" })
+    const corrompido = makeFake({ produtos: [prod({ stock: 2.5 })], depositos: [{ id: "d1", storeId: "loja-a" }] })
+    expect(await applyStockMutationTx(corrompido.tx, ctx(), entrada(1))).toMatchObject({ ok: false, code: "STOCK_INVARIANT_DRIFT" })
+    expect(corrompido.produtos.get("p1")!.stock).toBe(2.5)
+  })
+
+  it("saldo resultante acima do limite é recusado antes de gravar (não trava o produto depois)", async () => {
+    const f = kgFake({ stock: 999999999999.999 }, { pds: [{ produtoId: "p1", depositoId: "d1", storeId: "loja-a", quantidade: 999999999999.999 }] })
+    const r = await applyStockMutationTx(f.tx, ctx(), entrada(0.001))
+    expect(r).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(f.produtos.get("p1")!.stock).toBe(999999999999.999)
+    expect(f.movs.size).toBe(0)
+    const un = makeFake({ produtos: [prod({ stock: 0 })], depositos: [{ id: "d1", storeId: "loja-a" }] })
+    expect(await applyStockMutationTx(un.tx, ctx(), entrada(1e16))).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect(un.movs.size).toBe(0)
+  })
+
+  it("concorrência serializada pelo lock: N entradas paralelas somam exatamente", async () => {
+    const f = kgFake()
+    // Simula o FOR UPDATE: cada transação espera a anterior terminar.
+    let fila = Promise.resolve() as Promise<unknown>
+    const comLock = (q: number) => {
+      const run = fila.then(() => applyStockMutationTx(f.tx, ctx(), entrada(q)))
+      fila = run.catch(() => undefined)
+      return run
+    }
+    const qs = [0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.001]
+    const rs = await Promise.all(qs.map(comLock))
+    expect(rs.every((r) => r.ok)).toBe(true)
+    expect(f.produtos.get("p1")!.stock).toBe(4.501)
+    expect([...f.pds.values()][0].quantidade).toBe(4.501)
+    expect(f.movs.size).toBe(qs.length)
+  })
+})
+
+describe("STOCK_WRITES_FROZEN — congelamento do rollout", () => {
+  it("lança antes do lock, sem gravar; a fila do PDV trata o 500 como reenvio automático", async () => {
+    const f = makeFake({ produtos: [prod({ stock: 10 })], depositos: [{ id: "d1", storeId: "loja-a" }] })
+    vi.stubEnv("STOCK_WRITES_FROZEN", "true")
+    try {
+      await expect(applyStockMutation(ctx(), { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", idempotencyKey: "pdv:v1:p1" }, { db: f.db }))
+        .rejects.toBeInstanceOf(StockWritesFrozenError)
+      expect(f.lockCalls).toHaveLength(0)
+      expect(f.produtos.get("p1")!.stock).toBe(10)
+      expect(f.movs.size).toBe(0)
+    } finally { vi.unstubAllEnvs() }
+    expect(classifyPendingSyncFailure({ httpStatus: 500, code: "STOCK_WRITES_FROZEN", message: "manutenção" })).toBe(PENDING_SYNC_CLASS.AUTO_RETRY)
+    // Sem a trava, a mesma baixa passa normalmente.
+    expect(await applyStockMutation(ctx(), { kind: "saida", produtoId: "p1", quantidade: 1, origem: "pdv", idempotencyKey: "pdv:v1:p1" }, { db: f.db })).toMatchObject({ ok: true, estoqueDepois: 9 })
   })
 })

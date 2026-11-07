@@ -1,0 +1,12 @@
+# ESTOQUE-MANUAL-KG-001 - P3 fila do PDV - PG descartavel 127.0.0.1:55447/kg_queue (schema da PR via db push) - 2026-10-25T19:05:24Z
+# comando: KG_PROOF_DATABASE_URL=<url> npx vitest run lib/vendas/kg-rollout-queue.proof.integration.test.ts --reporter=verbose
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001
+ ✓ lib/vendas/kg-rollout-queue.proof.integration.test.ts > rollout KG: fila do PDV durante trava, retomada e reenvio > v1: trava → 5xx AUTO_RETRY sem efeito; retomada grava 1×; reenvio e reenvio sob nova trava viram replay 1978ms
+ ✓ lib/vendas/kg-rollout-queue.proof.integration.test.ts > rollout KG: fila do PDV durante trava, retomada e reenvio > v2: trava → 5xx AUTO_RETRY sem efeito; retomada grava 1×; reenvio e reenvio sob nova trava viram replay 496ms
+ ✓ lib/vendas/kg-rollout-queue.proof.integration.test.ts > rollout KG: fila do PDV durante trava, retomada e reenvio > mesma venda reenviada em paralelo (duas abas / reenvio durante a requisição em voo) grava uma vez 134ms
+ ✓ lib/vendas/kg-rollout-queue.proof.integration.test.ts > rollout KG: fila do PDV durante trava, retomada e reenvio > PRÉ-CONDIÇÃO da janela (comportamento atual da main, fora do escopo da #315): trocar o writer duplica venda confirmada sem resposta 175ms
+ ✓ lib/vendas/kg-rollout-queue.proof.integration.test.ts > rollout KG: fila do PDV durante trava, retomada e reenvio > venda iniciada antes da trava e confirmada depois dela não duplica nem some 258ms
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  16:05:29
+   Duration  4.29s (transform 686ms, setup 0ms, import 979ms, tests 3.05s, environment 0ms)

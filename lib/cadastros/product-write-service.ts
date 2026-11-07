@@ -451,7 +451,7 @@ async function validateCommercialResource(
   if (!isRecord(input.metadata)) return null
   const commercial = productCommercialFromMetadata(input.metadata)
   if (commercial.modoVenda === "peso" && initialStock !== 0) {
-    return productWriteInvalid("Produto por peso em preparação deve iniciar sem saldo; não há estoque fracionado operacional.", "estoque")
+    return productWriteInvalid("Produto por peso começa sem saldo. Depois de salvar, registre a entrada em kg (até 3 casas) em Movimentar estoque.", "estoque")
   }
   const oldCommercial = productCommercialFromMetadata(existingMetadata)
   const newWeight = commercial.modoVenda === "peso" && oldCommercial.modoVenda !== "peso"
