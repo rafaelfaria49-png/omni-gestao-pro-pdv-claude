@@ -1,6 +1,10 @@
 # Rollout — migration `20261107120000_catalogo_aparelhos_loja`
 
-GOAL: CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001. **Não aplicada em nenhum banco real.**
+GOAL: CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001. **Não aplicada em Production.** Aplicada só no
+Neon Candidate sintético `pr-acc-compat` (projeto de Preview `nameless-frost-19035275`), para o Preview da PR.
+
+Checksum (sha256 do `migration.sql`, igual no blob do Git e no Candidate):
+`57b3914343f26652fd5269ae9cc4fa09f8faa922153575792850f830911a6e45`.
 
 ## O que a migration faz
 
@@ -12,7 +16,8 @@ Aditiva. Cria duas tabelas novas, sem tocar em tabelas existentes (só FK → `s
 | `catalogo_aparelhos_loja_compat` | decisões da loja sobre pares de película (`adicionar` / `suprimir`) | `(storeId, categoria, modelKeyA, modelKeyB)` |
 
 CHECKs: `acao ∈ {adicionar, suprimir}`, `categoria ∈ {pelicula_tela, capinha}`, par ordenado
-`modelKeyA < modelKeyB`, `modelKey LIKE 'manual\_%'`. Independente das migrations KG (#315/#335/#337):
+`modelKeyA < modelKeyB` **em `COLLATE "C"`** (mesma ordem do código; sem isso um banco ICU/pt_BR recusa
+pares válidos como `motorola_moto_g04 × motorola_moto_g_power`), `modelKey LIKE 'manual\_%'`. Independente das migrations KG (#315/#335/#337):
 timestamp posterior, nenhum objeto em comum.
 
 ## Comportamento antes da migration (código já publicado, tabela ausente)
@@ -32,9 +37,11 @@ proprietário e janela própria.
 
 1. Validar em banco descartável (feito neste GOAL): baseline da `main` + esta migration → `prisma
    migrate diff` vazio contra o schema.
-2. (Opcional) aplicar no candidate/staging e rodar o smoke: cadastrar modelo, vincular em
-   produto, selecionar no PDV.
-3. Merge autorizado → deploy aplica a migration → smoke em Production com conta da loja piloto.
+2. Aplicar no Candidate e rodar o smoke (feito em 2026-11-07 no Neon `pr-acc-compat`, via Preview da
+   PR #339: 25/25 — evidências em `docs/ai-execution/_evidence/CADASTROS-ACESSORIOS-COMPAT-MANUAL-FINALIZACAO-001/`).
+3. Antes do merge: `prisma migrate status` de Production só leitura deve listar esta migration como
+   a única pendente; conferir o checksum acima.
+4. Merge autorizado → deploy aplica a migration → smoke em Production com conta da loja piloto.
 
 ## Reversão
 
