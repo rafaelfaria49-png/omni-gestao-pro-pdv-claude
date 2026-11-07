@@ -34,7 +34,7 @@ export type CupomDataMapeado = {
   clienteCpf?: string | null
   operador?: string | null
   sessaoId?: string | null
-  itens: Array<{ nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
+  itens: Array<{ nome: string; quantidade: number; quantityUnit?: "KG" | "UN"; precoUnitario: number; lineTotal: number }>
   pagamentos: Array<{ label: string; valor: number }>
   total: number
   subtotal?: number
@@ -60,7 +60,7 @@ function round2(n: number): number {
 export function mapVendaDetalheToCupom(d: VendaDetalhe, loja: CupomLojaInfo): CupomDataMapeado {
   const desconto = Math.max(0, Number(d.desconto) || 0)
   const subtotalBase = d.itens.reduce((sum, item) => sum + item.lineTotal, 0)
-  const subtotal = subtotalBase + desconto
+  const subtotal = d.manualKgSale ? subtotalBase : subtotalBase + desconto
   const dinheiro = d.pagamentos
     .filter((payment) => /dinheiro/i.test(payment.label))
     .reduce((sum, payment) => sum + payment.valor, 0)
@@ -69,7 +69,7 @@ export function mapVendaDetalheToCupom(d: VendaDetalhe, loja: CupomLojaInfo): Cu
       ? Math.max(0, round2(d.cashTendered - dinheiro))
       : undefined
 
-  return {
+  const cupom: CupomDataMapeado = {
     numeroPedido: d.id,
     at: d.at,
     lojaNome: loja.nome,
@@ -89,4 +89,6 @@ export function mapVendaDetalheToCupom(d: VendaDetalhe, loja: CupomLojaInfo): Cu
     troco,
     status: d.status,
   }
+  // KG: a taxa congelada pelo servidor (manualKgTax) prevalece sobre a derivação legada.
+  return d.manualKgSale && d.manualKgTax ? { ...cupom, taxes: d.manualKgTax.taxCents / 100 } : cupom
 }

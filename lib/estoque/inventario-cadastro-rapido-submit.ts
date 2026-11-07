@@ -12,6 +12,7 @@
  */
 
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { notifyCatalogChanged } from "@/lib/estoque/catalog-sync"
 import {
   buildCadastroRapidoPayload,
   type CadastroRapidoForm,
@@ -75,6 +76,7 @@ export async function criarProdutoRapido(
     }
     const criado = data?.produto
     if (!criado?.id) return { ok: false, erro: "Produto criado sem id retornado." }
+    notifyCatalogChanged(storeId)
     return {
       ok: true,
       produtoId: criado.id,

@@ -1,3 +1,4 @@
+import { ManualKgSaleError } from "@/lib/vendas/manual-kg-contract"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
@@ -134,6 +135,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, replayed: result.replayed, venda: result.venda })
   } catch (e) {
+    if (e instanceof ManualKgSaleError) return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
     let error: unknown = e
 
     // A transação que perdeu a unique de `pedidoId` já foi revertida integralmente.
@@ -231,7 +233,10 @@ export async function POST(req: Request) {
         "[ops/venda-persist] produto-nao-resolvido",
         JSON.stringify({ lojaId, pedidoId, inventoryIds: error.inventoryIds }),
       )
-      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
+      return NextResponse.json(
+        { error: error.message, code: error.code, inventoryIds: error.inventoryIds },
+        { status: 409 },
+      )
     }
     // Crédito/Vale fail-closed (PDV-TROCAS-VALE-HARDENING-PRE-PUBLISH-002): venda
     // contabilizando creditoVale sem saldo efetivamente debitado NÃO conclui — a

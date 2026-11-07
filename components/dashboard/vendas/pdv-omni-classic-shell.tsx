@@ -34,7 +34,10 @@ import type { PdvScanInlineFeedbackState } from "@/lib/pdv-scan-input"
 import { cn } from "@/lib/utils"
 import type { PdvCatalogProduct } from "@/lib/pdv-catalog"
 
+import { saleLineTotalCents } from "@/lib/vendas/manual-kg-contract"
+import { formatStockQuantity } from "@/lib/estoque/stock-quantity"
 import { PdvScanInlineNotFound } from "./pdv-scan-inline-feedback"
+import { PdvStoreScaleVisor } from "./pdv-scale-visor"
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -184,7 +187,7 @@ function ItemsTable({
             </div>
           ) : (
             rows.map((item, idx) => {
-              const lineTotal = item.qty * item.unitPrice
+              const lineTotal = (saleLineTotalCents(item.qty, item.unitPrice) ?? Math.round(item.qty * item.unitPrice * 100)) / 100
               const isHighlight = item.lineId === highlightLineId
               const isFlash = flashLineId != null && item.lineId === flashLineId
               const isSelected = item.lineId === selectedLineId
@@ -214,7 +217,7 @@ function ItemsTable({
                   </div>
                   <div className="text-muted-foreground/50">{item.unit}</div>
                   <div className="text-right text-foreground/80">R$ {fmt(item.unitPrice)}</div>
-                  <div className="text-right font-medium">{fmt(item.qty)}</div>
+                  <div className="text-right font-medium">{item.unit === "KG" ? formatStockQuantity(item.qty, "KG") : String(item.qty)}</div>
                   <div className="text-right font-semibold text-[hsl(var(--pos-action))]">R$ {fmt(lineTotal)}</div>
                 </button>
               )
@@ -273,6 +276,7 @@ export type PdvOmniClassicShellProps = {
   qtyEditOpen: boolean
   onQtyEditOpenChange: (open: boolean) => void
   qtyEditDefault: string
+  qtyEditUnit?: "KG" | "UN"
   onQtyEditConfirm: (raw: string) => boolean | void
   cancelSaleOpen: boolean
   onCancelSaleOpenChange: (open: boolean) => void
@@ -623,10 +627,10 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
         ) : null}
       </section>
 
-      <main className="min-h-0 flex-1 overflow-hidden p-2 sm:p-3 bg-background">
+      <main className="min-h-0 flex-1 overflow-y-auto p-2 sm:p-3 bg-background">
         {isModoRapido ? (
-          <div className="flex min-h-0 min-w-0 flex-1 gap-2 overflow-hidden bg-background">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-background md:h-full md:flex-row md:overflow-hidden">
+            <div className="flex min-h-[180px] min-w-0 flex-1 flex-col overflow-hidden md:min-h-0">
               <ItemsTable
                 rows={props.cartRows}
                 highlightLineId={props.highlightLineId}
@@ -635,7 +639,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                 onSelect={props.onSelectLine}
               />
             </div>
-            <aside className="flex w-[min(280px,34vw)] min-w-[232px] max-w-[300px] shrink-0 flex-col justify-between gap-3 self-stretch border-l border-border bg-card px-3 py-3 sm:px-4">
+            <aside className="flex w-full min-w-0 shrink-0 flex-col gap-3 self-stretch border-t border-border bg-card px-3 py-3 sm:px-4 md:w-[min(280px,34vw)] md:min-w-[232px] md:max-w-[300px] md:overflow-y-auto md:border-l md:border-t-0">
               <div className="min-w-0 rounded-xl border border-border p-4 bg-muted/20 shadow-sm space-y-4">
                 <div>
                   <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
@@ -663,6 +667,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   )}
                 </div>
               </div>
+              <PdvStoreScaleVisor storeId={props.storeId} />
               <div className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2 text-xs">
                 <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 mb-1">Atalhos Operacionais</div>
                 <div className="flex justify-between items-center">
@@ -698,8 +703,8 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             </aside>
           </div>
         ) : (
-          <div className="grid grid-cols-12 gap-3 h-full min-h-0 overflow-hidden bg-background">
-            <div className="flex min-h-0 flex-col overflow-hidden col-span-12 md:col-span-8 lg:col-span-9">
+          <div className="grid min-h-0 grid-cols-12 gap-3 bg-background md:h-full md:overflow-hidden">
+            <div className="col-span-12 flex min-h-[180px] flex-col overflow-hidden md:col-span-8 md:min-h-0 lg:col-span-9">
               <ItemsTable
                 rows={props.cartRows}
                 highlightLineId={props.highlightLineId}
@@ -745,6 +750,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   <kbd className="ml-auto rounded border border-b-2 border-primary-foreground/30 bg-primary-foreground/10 px-1.5 py-0.5 text-[10px] font-bold font-mono">F1</kbd>
                 </Button>
               </div>
+              <PdvStoreScaleVisor storeId={props.storeId} />
               <div className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2 text-xs">
                 <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
                   Também disponíveis
@@ -939,10 +945,11 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       <Dialog open={props.qtyEditOpen} onOpenChange={props.onQtyEditOpenChange}>
         <DialogContent className="max-w-sm border-border bg-card text-foreground" onKeyDown={handleQtyEditKeyDown}>
           <DialogHeader>
-            <DialogTitle>Alterar Quantidade (F4)</DialogTitle>
+            <DialogTitle>{props.qtyEditUnit === "KG" ? "Alterar peso (kg)" : "Alterar Quantidade (F4)"}</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">Defina a nova quantidade para o item selecionado.</DialogDescription>
           </DialogHeader>
           <input
+            aria-label={props.qtyEditUnit === "KG" ? "Peso (kg)" : "Quantidade"}
             key={props.qtyEditDefault}
             ref={qtyEditRef}
             defaultValue={props.qtyEditDefault}

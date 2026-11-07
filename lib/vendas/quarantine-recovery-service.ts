@@ -29,6 +29,7 @@ import {
   InvalidClientSaleIdError,
   PedidoIdConflitoMesmaLojaError,
   PedidoIdDeOutraLojaError,
+  productResolutionKey,
   UnresolvedProductError,
   VENDA_REPLAY_SELECT,
   type SalePayload,
@@ -47,6 +48,7 @@ import {
   QUARANTINE_CLASSIFY_MODE,
   QUARANTINE_RECOVERY_CLASS,
   classifyQuarantineCandidate,
+  isManualKgCandidate,
   historicalRecoveryCaixaPolicy,
   historicalRecoveryPersistOptions,
   isExecutableClass,
@@ -82,8 +84,8 @@ function quantityOf(value: unknown): number {
 }
 
 /**
- * Espelha a resolução de produto de `upsertVendaInTransaction` (OR por id | sku |
- * barcode) e a agregação por produto, para que o preview antecipe exatamente os
+ * Espelha a resolução de produto de `upsertVendaInTransaction` (`productResolutionKey`:
+ * `produtoId` + loja quando a linha traz; senão OR por id | sku | barcode) e a agregação por produto, para que o preview antecipe exatamente os
  * mesmos bloqueios que o motor aplicaria — sem escrever nada.
  */
 async function readProductFacts(
@@ -93,24 +95,31 @@ async function readProductFacts(
 ): Promise<{ unresolvedInventoryIds: string[]; stockShortfalls: QuarantineStockShortfall[] }> {
   const lines = Array.isArray(candidate.lines) ? candidate.lines : []
   const unresolvedInventoryIds: string[] = []
-  const qtyByRawId = new Map<string, number>()
+  const qtyByKey = new Map<string, { rawInvId: string; produtoId: string | null; qty: number }>()
 
   for (const rawLine of lines) {
-    const line = rawLine as { inventoryId?: unknown; quantity?: unknown }
+    const line = rawLine as { inventoryId?: unknown; produtoId?: unknown; quantity?: unknown }
     const rawInvId = text(line?.inventoryId)
     if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
     const qty = quantityOf(line?.quantity)
     if (qty === 0) continue
-    qtyByRawId.set(rawInvId, (qtyByRawId.get(rawInvId) ?? 0) + qty)
+    const { key, produtoId } = productResolutionKey({
+      inventoryId: rawInvId,
+      produtoId: typeof line?.produtoId === "string" ? line.produtoId : undefined,
+    })
+    const prev = qtyByKey.get(key)
+    qtyByKey.set(key, { rawInvId, produtoId, qty: (prev?.qty ?? 0) + qty })
   }
 
   const qtyByProdutoId = new Map<string, { nome: string; stock: number; necessario: number }>()
-  for (const [rawInvId, qty] of qtyByRawId) {
+  for (const { rawInvId, produtoId, qty } of qtyByKey.values()) {
     const produto = await db.produto.findFirst({
-      where: {
-        storeId,
-        OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
-      },
+      where: produtoId
+        ? { storeId, id: produtoId }
+        : {
+            storeId,
+            OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
+          },
       select: { id: true, name: true, stock: true },
     })
     if (!produto) {
@@ -277,6 +286,10 @@ export async function readQuarantineServerFacts(input: {
       unresolvedInventoryIds: [],
       stockShortfalls: [],
     }
+  }
+
+  if (isManualKgCandidate(candidate)) {
+    return { occupantExists: Boolean(occupant), occupantStoreId: occupant?.storeId ?? null, originalSessionStatus: "NO_SESSION_ID", sameInstantConflict: sameInstant?.conflict === true }
   }
 
   const [session, productFacts] = await Promise.all([

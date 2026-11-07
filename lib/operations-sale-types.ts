@@ -25,12 +25,21 @@ export interface PaymentBreakdownFull {
 }
 
 export interface SaleLineRecord {
+  itemId?: string
   inventoryId: string
+  /**
+   * Cuid do `Produto` (`InventoryItem.dbId`) no catálogo da loja no momento da venda.
+   * Só em linhas `produto`. O servidor resolve por ele em vez do SKU (mutável).
+   * Ausente em vendas antigas — elas seguem a resolução legada id|sku|barcode.
+   */
+  produtoId?: string
   name: string
   quantity: number
   unitPrice: number
   lineTotal: number
   qtyReturned?: number
+  quantityUnit?: "KG"
+  weightSource?: "manual"
   /** Produto, serviço real, item avulso ou linha originada de O.S. */
   itemType?: SaleLineItemType
   /**
@@ -60,6 +69,9 @@ export interface SaleLineRecord {
 }
 
 export interface SaleRecord {
+  manualKgRevision?: number
+  manualKgTax?: import("@/lib/vendas/manual-kg-tax").ManualKgTaxSnapshot
+  manualKgSale?: "classic-manual-kg-v1"
   /**
    * Número comercial exibido (`pedidoId` / VDA) depois da reconciliação.
    * No fluxo V2 offline, começa como referência provisória `PEND-…` — nunca um VDA inventado.
@@ -134,8 +146,28 @@ export interface SaleRecord {
   syncFailureMessage?: string
   /** Diagnóstico estruturado de drift de estoque (quando o 409 trouxer). */
   syncDrift?: StockDriftDetails
+  /**
+   * `PRODUTO_NAO_RESOLVIDO`: referências (`inventoryId`) das linhas DESTA venda que o
+   * servidor não casou com `Produto` da loja — aponta a linha exata ao operador.
+   */
+  syncUnresolvedInventoryIds?: string[]
   /** true = a última falha foi de rede/abort, não corpo HTTP. */
   syncNetworkError?: boolean
+  /**
+   * PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001: quem disparou a última tentativa e o desfecho
+   * dela, persistidos com a venda — o resultado do Reenviar não vive só num toast.
+   */
+  syncLastAttemptSource?: "manual" | "auto" | "finalize"
+  syncLastAttemptOutcome?: import("@/lib/vendas/sale-sync-engine").SaleSyncAttemptOutcome
+  /** Instantâneo ISO da confirmação server-side (só com evidência da venda no servidor). */
+  syncConfirmedAt?: string
+  /** A venda nasceu sem conexão útil com o servidor (registro local, ainda não confirmado). */
+  registeredOffline?: boolean
+  /**
+   * Alguma tentativa pode ter gravado sem a resposta chegar (rede com navegador online,
+   * prazo, 5xx, 2xx sem prova). Só uma recusa de negócio do writer zera.
+   */
+  syncResultUnknown?: boolean
 }
 
 export interface DevolucaoRecord {

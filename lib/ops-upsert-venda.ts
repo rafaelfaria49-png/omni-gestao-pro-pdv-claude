@@ -1,3 +1,8 @@
+import { manualKgTaxSnapshot, taxParamsFromPrinterConfig } from "@/lib/vendas/manual-kg-tax"
+import { itemQuantityWrite } from "@/lib/vendas/item-quantity"
+import { MANUAL_KG_SALE, ManualKgSaleError, moneyCents, saleQuantityGrams, saleLineTotalCents, manualKgDiscountCents } from "@/lib/vendas/manual-kg-contract"
+import { assertManualKgAvailable, isManualKgProduct, enterManualKgTransaction } from "@/lib/vendas/manual-kg-server"
+import { toStockUnits, fromStockUnits, type StockUnit } from "@/lib/estoque/stock-quantity"
 import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
@@ -364,6 +369,14 @@ export type UpsertVendaOptions = {
 }
 
 export type SalePayload = {
+  manualKgTax?: import("@/lib/vendas/manual-kg-tax").ManualKgTaxSnapshot
+  manualKgRevision?: number
+  manualKgCorrections?: unknown[]
+  manualKgOriginalFingerprint?: string
+  manualKgSale?: typeof MANUAL_KG_SALE
+  discountTotal?: number
+  discountReais?: number
+  discountPercent?: number
   id?: string
   /** Identidade técnica da tentativa. Obrigatória no fluxo V2; ignorada no V1. */
   clientSaleId?: string
@@ -424,12 +437,23 @@ export type SalePayload = {
     observacao?: string
   }
   lines?: Array<{
+    itemId?: string
     inventoryId?: string
+    /**
+     * Identidade estável do `Produto` (cuid, `InventoryItem.dbId`) capturada do catálogo
+     * da loja no momento da venda (PDV-SYNC-PRODUTO-NAO-RESOLVIDO-RECOVERY-001).
+     * `inventoryId` do PDV é o SKU quando existe — mutável no Cadastro; sem esta chave,
+     * editar o SKU entre o carregamento do catálogo e a sincronização deixava a venda
+     * presa em `PRODUTO_NAO_RESOLVIDO`. Presente ⇒ resolução SOMENTE por id + loja.
+     */
+    produtoId?: string
     name?: string
     quantity?: number
     unitPrice?: number
     lineTotal?: number
     qtyReturned?: number
+    quantityUnit?: "KG"
+    weightSource?: "manual"
     itemType?: SaleLineItemType
     /** Item avulso (Venda Avulsa via INSERT no PDV) — não baixa estoque. */
     isAvulso?: boolean
@@ -450,6 +474,19 @@ export type SalePayload = {
 }
 
 type SalePayloadLine = NonNullable<SalePayload["lines"]>[number]
+
+/**
+ * Chave de resolução de produto da linha. Com `produtoId` a identidade é o cuid —
+ * nunca o SKU/código (que pode ter sido reatribuído a OUTRO produto depois da venda).
+ * Sem `produtoId` (payload legado / vendas pendentes antigas) mantém o OR id|sku|barcode.
+ */
+export function productResolutionKey(
+  line: Pick<SalePayloadLine, "inventoryId" | "produtoId">,
+): { key: string; produtoId: string | null } {
+  const produtoId = typeof line.produtoId === "string" && line.produtoId.trim() ? line.produtoId.trim() : null
+  const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
+  return produtoId ? { key: `id:${produtoId}`, produtoId } : { key: `ref:${rawInvId}`, produtoId: null }
+}
 
 export const VENDA_REPLAY_SELECT = {
   id: true,
@@ -543,7 +580,8 @@ export function classifyExistingVendaReplayByClientSaleId(
 
   const incomingFingerprint = buildLegacySaleFingerprint(sale)
   const existingFacts = factsFromExistingVenda(existing)
-  const existingFingerprint = buildLegacySaleFingerprint(existingFacts)
+  const originalFingerprint = asRecord(existing.payload).manualKgOriginalFingerprint
+  const existingFingerprint = existingFacts.manualKgSale === MANUAL_KG_SALE && typeof originalFingerprint === "string" ? originalFingerprint : buildLegacySaleFingerprint(existingFacts)
   if (
     !isLegacySaleFactsComparable(sale) ||
     !isLegacySaleFactsComparable(existingFacts) ||
@@ -574,7 +612,8 @@ export function classifyExistingVendaReplay(
 
   const incomingFingerprint = buildLegacySaleFingerprint(sale)
   const existingFacts = factsFromExistingVenda(existing)
-  const existingFingerprint = buildLegacySaleFingerprint(existingFacts)
+  const originalFingerprint = asRecord(existing.payload).manualKgOriginalFingerprint
+  const existingFingerprint = existingFacts.manualKgSale === MANUAL_KG_SALE && typeof originalFingerprint === "string" ? originalFingerprint : buildLegacySaleFingerprint(existingFacts)
   if (
     !isLegacySaleFactsComparable(sale) ||
     !isLegacySaleFactsComparable(existingFacts) ||
@@ -632,10 +671,16 @@ export async function upsertVendaInTransaction(
   operadorLabel?: string,
   options?: UpsertVendaOptions
 ): Promise<UpsertVendaResult> {
+  const manualKg = sale.manualKgSale === MANUAL_KG_SALE
+  if (manualKg) {
+    const monetaryValues = [sale.total, ...Object.values(sale.paymentBreakdown ?? {}), sale.discountTotal ?? 0, sale.discountReais ?? 0, ...(sale.lines ?? []).flatMap((line) => [line.unitPrice, line.lineTotal])]
+    if (monetaryValues.some((value) => moneyCents(value) === null)) throw new ManualKgSaleError("Valores monetários inválidos: use centavos exatos antes de reenviar a venda.")
+  }
   // ── GUARD FAIL-CLOSED: quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005) ──
   // PRIMEIRA coisa na função, ANTES de qualquer lookup (replay incluso), gate de
   // caixa, `Venda.create`, itens, estoque, financeiro ou títulos. `ItemVenda.quantidade`
-  // e `Produto.stock` são inteiros: fração comercial (0.350, 1.5…) lança
+  // Float de armazenamento não autoriza fração. Sem o protocolo KG validado,
+  // uma fração comercial (0.350, 1.5…) lança
   // `FractionalQuantityError` — nunca `Math.round` silencioso (0.35 virava 0 no
   // estoque com o total refletindo o decimal). Inteiros passam; ruído
   // insignificante de floating point é normalizado in-place para que ItemVenda,
@@ -646,6 +691,10 @@ export async function upsertVendaInTransaction(
     sale.lines.forEach((line, index) => {
       const raw = line?.quantity
       if (typeof raw !== "number" || !Number.isFinite(raw)) return
+      if (manualKg) {
+        if (saleQuantityGrams(raw) === null) throw new ManualKgSaleError("Peso inválido: use um valor positivo com até 3 casas decimais.")
+        return
+      }
       const normalized = normalizeSaleQuantity(raw, index)
       if (normalized !== raw) line.quantity = normalized
     })
@@ -698,6 +747,17 @@ export async function upsertVendaInTransaction(
       // títulos. Fatos diferentes ou outra loja falham antes de qualquer escrita.
       return classifyExistingVendaReplay(lojaId, sale, vendaExistente)
     }
+  }
+
+  if (manualKg) {
+    await assertManualKgAvailable(tx, lojaId)
+    await enterManualKgTransaction(tx)
+    // Inclui a identidade estável `produtoId` (#325): com SKU antigo no inventoryId, só ela alcança o produto resolvido.
+    const physicalIds = [...new Set((sale.lines ?? []).flatMap((line) => [line.inventoryId, line.produtoId]).filter((id): id is string => typeof id === "string" && id.trim() !== "" && !isVirtualSaleLine(id)).map((id) => id.trim()))].sort()
+    // Lock all products in a stable order before reading unit/price; alias resolution is store-scoped.
+    await tx.$queryRaw`SELECT id FROM estoque_produtos WHERE "storeId" = ${lojaId} AND
+      (id = ANY(${physicalIds}::text[]) OR sku = ANY(${physicalIds}::text[]) OR barcode = ANY(${physicalIds}::text[])) ORDER BY id FOR UPDATE`
+    if (options?.historicalRecovery || !enforceStock) throw new ManualKgSaleError("Recuperação histórica em KG bloqueada; use o reenvio da mesma venda no PDV.")
   }
 
   const total = typeof sale.total === "number" && Number.isFinite(sale.total) ? sale.total : 0
@@ -763,7 +823,7 @@ export async function upsertVendaInTransaction(
       }
       // Fração significativa já lançaria `FractionalQuantityError` no topo; aqui
       // só reafirma o inteiro no fluxo ao vivo (ruído já normalizado in-place).
-      normalizeSaleQuantity(q, index)
+      if (!manualKg) normalizeSaleQuantity(q, index)
       const unit = line?.unitPrice
       if (typeof unit !== "number" || !Number.isFinite(unit) || unit < 0) {
         throw new InvalidSaleLinesError(`Preço inválido na linha ${index + 1}.`)
@@ -955,16 +1015,18 @@ export async function upsertVendaInTransaction(
     precoCusto: number
     sku: string | null
     name: string
+    unit: StockUnit
+    price: number
   }
   const resolvedProductMap = new Map<string, ResolvedProduct>()
 
+  let manualKgSubtotalCents = 0
   for (const line of lines) {
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : null
     const nome = typeof line.name === "string" ? line.name : ""
     const qRaw = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
-    // Já validado inteiro pelo guard FRACTIONAL-SALE-HARD-BLOCK-005 no topo —
-    // sem `Math.round` aqui (arredondar quantidade externa seria validação silenciosa).
-    const quantidade = Math.max(0, Math.min(2_000_000_000, qRaw))
+    // KG preserva milésimos; o contrato legado mantém o domínio inteiro.
+    const quantidade = manualKg ? qRaw : Math.max(0, Math.min(2_000_000_000, qRaw))
     const precoUnitario =
       typeof line.unitPrice === "number" && Number.isFinite(line.unitPrice) ? line.unitPrice : 0
     const lineTotal =
@@ -972,43 +1034,97 @@ export async function upsertVendaInTransaction(
         ? line.lineTotal
         : Math.round(precoUnitario * quantidade * 100) / 100
 
-    // Resolve produto real via OR (id | sku | barcode); evita busca duplicada por linha
-    if (rawInvId && !isVirtualSaleLine(rawInvId) && !resolvedProductMap.has(rawInvId)) {
+    // Resolve produto real: por `produtoId` (cuid da loja) quando a linha traz a identidade
+    // estável; senão via OR (id | sku | barcode). Evita busca duplicada por linha.
+    const resolution = productResolutionKey(line)
+    if (rawInvId && !isVirtualSaleLine(rawInvId) && !resolvedProductMap.has(resolution.key)) {
       const produto = await tx.produto.findFirst({
-        where: {
-          storeId: lojaId,
-          OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
-        },
-        select: { id: true, stock: true, precoCusto: true, sku: true, name: true, metadata: true },
+        where: resolution.produtoId
+          ? { storeId: lojaId, id: resolution.produtoId }
+          : {
+              storeId: lojaId,
+              OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
+            },
+        select: { id: true, stock: true, price: true, precoCusto: true, sku: true, name: true, metadata: true },
       })
       if (produto) {
         // Metadado do servidor, independente do ramo atual ou do carrinho stale.
         // Lançar aborta a transação; não muda o contrato inteiro de quantidade/estoque.
-        assertProductCommercialSaleSupported(produto.metadata)
-        resolvedProductMap.set(rawInvId, {
+        const kgProduct = isManualKgProduct(produto.metadata)
+        if (!manualKg || !kgProduct) assertProductCommercialSaleSupported(produto.metadata)
+        if (manualKg && kgProduct) {
+          if (line.isAvulso || (line.itemType && line.itemType !== "produto")) throw new ManualKgSaleError("Produto KG deve ser vendido pelo cadastro de estoque.")
+          if (moneyCents(produto.price) === null || produto.price <= 0 || moneyCents(line.unitPrice) !== moneyCents(produto.price)) {
+            throw new ManualKgSaleError("Preço por KG divergente do cadastro. Atualize o catálogo e revise o item.")
+          }
+        }
+        resolvedProductMap.set(resolution.key, {
           dbId: produto.id,
           stock: produto.stock,
           precoCusto: produto.precoCusto,
           sku: produto.sku ?? null,
           name: produto.name,
+          unit: isManualKgProduct(produto.metadata) ? "KG" : "UN",
+          price: produto.price,
         })
       }
     }
 
     // Usa o cuid real do banco; preserva rawInvId para linhas virtuais/serviço
-    const resolvedProduct = rawInvId ? resolvedProductMap.get(rawInvId) : undefined
+    const resolvedProduct = rawInvId ? resolvedProductMap.get(resolution.key) : undefined
     const inventoryId = resolvedProduct ? resolvedProduct.dbId : rawInvId
 
-    await tx.itemVenda.create({
+    if (manualKg) {
+      if (resolvedProduct?.unit === "KG" && (line.isAvulso || (line.itemType && line.itemType !== "produto") || moneyCents(precoUnitario) !== moneyCents(resolvedProduct.price) || precoUnitario <= 0)) {
+        throw new ManualKgSaleError("Produto KG exige preço cadastrado e vínculo de estoque em todas as linhas.")
+      }
+      if (!resolvedProduct || resolvedProduct.unit !== "KG") {
+        // Linha física fracionada cujo produto sumiu (ex.: excluído durante a venda): erro de
+        // identidade, não de quantidade — nada é gravado.
+        if (!resolvedProduct && enforceStock && rawInvId && !isVirtualSaleLine(rawInvId) && !Number.isInteger(quantidade)) throw new UnresolvedProductError([rawInvId])
+        normalizeSaleQuantity(quantidade)
+      } else if (saleQuantityGrams(quantidade) === null) throw new ManualKgSaleError("Peso inválido: informe um peso maior que zero, com até 3 casas decimais.")
+      const cents = saleLineTotalCents(quantidade, precoUnitario)
+      if (cents === null || moneyCents(lineTotal) !== cents) throw new ManualKgSaleError("Total do item divergente do peso e preço. Revise o carrinho.")
+      manualKgSubtotalCents += cents
+      if (!Number.isSafeInteger(manualKgSubtotalCents)) throw new ManualKgSaleError("Total fora do limite permitido.")
+      if (resolvedProduct?.unit === "KG") {
+        line.quantityUnit = "KG"
+        line.weightSource = "manual"
+      } else {
+        delete line.quantityUnit
+        delete line.weightSource
+      }
+    }
+
+    const itemRow = await tx.itemVenda.create({
       data: {
         vendaId: v.id,
         inventoryId,
         nome,
-        quantidade,
+        ...itemQuantityWrite(quantidade, resolvedProduct?.unit === "KG"),
         precoUnitario,
         lineTotal,
       },
     })
+    if (manualKg) line.itemId = itemRow.id
+  }
+
+  if (manualKg) {
+    const discount = manualKgDiscountCents(manualKgSubtotalCents, sale.discountPercent ?? 0, sale.discountReais ?? 0)
+    const settings = await tx.storeSettings.findUnique({ where: { storeId: lojaId }, select: { printerConfig: true } })
+    const tax = manualKgTaxSnapshot(manualKgSubtotalCents, taxParamsFromPrinterConfig(settings?.printerConfig))
+    // Configuration is authoritative; never trust a browser supplied surcharge.
+    if (discount === null || (sale.discountTotal !== undefined && moneyCents(sale.discountTotal) !== discount) || discount > manualKgSubtotalCents || moneyCents(total) !== manualKgSubtotalCents + tax.taxCents - discount) {
+      throw new ManualKgSaleError("Total da venda divergente dos itens e desconto. Revise o pagamento.")
+    }
+    const payments = [pb?.dinheiro, pb?.pix, pb?.cartaoDebito, pb?.cartaoCredito, pb?.carne, pb?.aPrazo, pb?.creditoVale]
+    const cents = payments.map((p) => moneyCents(p ?? 0))
+    if (cents.some((p) => p === null) || cents.reduce<number>((sum, p) => sum + (p ?? 0), 0) !== moneyCents(total)) {
+      throw new SalePaymentsMismatchError(total, somaPagamentosParaKg(pb))
+    }
+    // Store the server-derived unit snapshot, independent of browser line flags.
+    await tx.venda.update({ where: { id: v.id }, data: { payload: asJsonPayload({ ...salePayloadForStorage, lines, manualKgTax: tax, manualKgRevision: 0, manualKgCorrections: [], manualKgOriginalFingerprint: buildLegacySaleFingerprint(sale) }) } })
   }
 
   // ── 3. MovimentacaoEstoque (saída PDV) ──────────────────────────────────────
@@ -1020,17 +1136,21 @@ export async function upsertVendaInTransaction(
   for (const line of lines) {
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
     if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
-    const resolved = resolvedProductMap.get(rawInvId)
+    const resolved = resolvedProductMap.get(productResolutionKey(line).key)
     if (!resolved) {
       // Item vendido referencia inventoryId sem casamento por id/sku/barcode.
       // Causa típica: produto removido após cache do PDV ou SKU divergente. Sem ledger.
       unresolvedInventoryIds.push(rawInvId)
       continue
     }
-    // Quantidade já inteira pelo guard do topo — sem `Math.round` silencioso.
+    // Soma em unidades mínimas inteiras; nunca soma doubles de quantidades KG.
     const qty = Math.max(0, typeof line.quantity === "number" ? line.quantity : 0)
     if (qty === 0) continue
-    qtyByProdutoId.set(resolved.dbId, (qtyByProdutoId.get(resolved.dbId) ?? 0) + qty)
+    const units = toStockUnits(qty, resolved.unit)
+    if (units === null || units <= 0) throw new ManualKgSaleError("Quantidade incompatível com a unidade do produto.")
+    const previousUnits = toStockUnits(qtyByProdutoId.get(resolved.dbId) ?? 0, resolved.unit)
+    if (previousUnits === null || !Number.isSafeInteger(previousUnits + units)) throw new ManualKgSaleError("Quantidade fora do limite permitido.")
+    qtyByProdutoId.set(resolved.dbId, fromStockUnits(previousUnits + units, resolved.unit))
   }
   if (unresolvedInventoryIds.length > 0) {
     if (enforceStock) {
@@ -1114,8 +1234,12 @@ export async function upsertVendaInTransaction(
       },
     )
     if (!baixa009.ok) {
-      // Produto removido entre a resolução e a baixa: legado pulava (continue).
-      if (baixa009.code === "NOT_FOUND") continue
+      // Produto removido entre a resolução e a baixa: o replay legado pula (preserva o fato
+      // histórico); o PDV ao vivo aborta — venda/financeiro sem baixa nunca é gravada.
+      if (baixa009.code === "NOT_FOUND") {
+        if (enforceStock) throw new UnresolvedProductError([produtoId])
+        continue
+      }
       if (baixa009.code === "INSUFFICIENT_STOCK") {
         // Rollback de toda a transação da venda (atomicidade do $transaction).
         throw new InsufficientStockError(produtoId, resolved.name, baixa009.estoqueAntes ?? 0, qty)
@@ -1363,4 +1487,8 @@ export async function upsertVendaInTransaction(
     fingerprint,
     venda: vendaPersistView(v),
   }
+}
+
+function somaPagamentosParaKg(pb: SalePayload["paymentBreakdown"]): number {
+  return Object.values(pb ?? {}).reduce((sum, n) => sum + Number(n ?? 0), 0)
 }

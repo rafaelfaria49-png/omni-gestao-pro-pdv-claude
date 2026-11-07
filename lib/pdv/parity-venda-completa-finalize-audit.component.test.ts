@@ -124,7 +124,7 @@ describe("N5-C Venda Completa — handlers, confirmação, retry e auditoria rea
     expect(runtime.enrich).not.toHaveBeenCalled()
     expect(JSON.parse(localStorage.getItem(draftKey)!)).toMatchObject({ pendingIdentity: { clientSaleId: identity }, cliente: CUSTOMER })
     backend.failWrites = false
-    await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true }) })
+    await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true, pedidoId: "VDA-N5C-1" }) })
     expect(backend.posts.map((post) => post.clientSaleId)).toEqual([identity, identity])
     expect(backend.posts[1].sale.total).toBe(backend.posts[0].sale.total)
     expect(backend.posts[1].sale.paymentBreakdown).toEqual(backend.posts[0].sale.paymentBreakdown)
@@ -304,11 +304,11 @@ describe("N5-C Venda Completa — handlers, confirmação, retry e auditoria rea
     expect(finalized()).toHaveLength(0)
     backend.pauseWrites = false
     backend.failWrites = false
-    await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true }) })
+    await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true, reconciled: true, pedidoId: "VDA-N5C-1" }) })
     await waitFor(() => expect(finalized()).toHaveLength(1))
     expect(runtime.ops!.sales).toHaveLength(1)
     expect(runtime.ops!.sales[0]).toMatchObject({ clientSaleId: identity, syncPending: false })
-    expect(backend.posts.map((post) => post.clientSaleId)).toEqual([identity, identity])
+    expect(backend.posts.map((post) => post.clientSaleId)).toEqual([identity])
     expect(backend.confirmed.size).toBe(1)
     expect(backend.audits.filter((entry) => entry.action === "sale_finalized")).toHaveLength(1)
   })

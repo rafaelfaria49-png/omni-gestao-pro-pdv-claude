@@ -49,6 +49,10 @@ export type HeldCartItem = {
   accessorySelection?: AccessorySelectionV1
   /** Chave determinística produto+modelo+cor para agrupar linhas iguais. */
   cartLineKey?: string
+  /** `Produto.id` da linha (PDV-CADASTROS-SYNC-AUTOMATICO-001). Opcional/aditivo. */
+  produtoId?: string
+  /** Preço de catálogo quando o item entrou — detecta mudança de cadastro no resume. */
+  catalogUnitPrice?: number
 }
 
 export type HeldSaleCustomer = {

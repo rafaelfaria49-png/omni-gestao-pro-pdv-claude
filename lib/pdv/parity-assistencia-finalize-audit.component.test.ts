@@ -112,7 +112,7 @@ describe("N5-C Assistência — motor, handler e log reais", () => {
     expect(await confirm()).toBe(false)
     expect(backend.posts).toHaveLength(1)
     backend.failWrites = false
-    await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true }) })
+    await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true, pedidoId: "VDA-N5C-1" }) })
     expect(backend.posts).toHaveLength(2)
     expect(backend.posts.map((post) => post.clientSaleId)).toEqual([identity, identity])
     expect(runtime.ops!.sales).toHaveLength(1)
@@ -162,7 +162,7 @@ describe("N5-C Assistência — motor, handler e log reais", () => {
       expect(finalized()).toHaveLength(0)
       view.rerender(tree(false)) // OperationsProvider real permanece montado.
       backend.failWrites = false
-      await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true }) })
+      await act(async () => { expect(await runtime.ops!.retrySyncSale(identity)).toEqual({ ok: true, pedidoId: "VDA-N5C-1" }) })
       expect(runtime.ops!.sales).toHaveLength(1)
       expect(runtime.ops!.sales[0]).toMatchObject({ id: "VDA-N5C-1", clientSaleId: identity, syncPending: false, total: 190 })
       expect(backend.posts.map((post) => post.clientSaleId)).toEqual([identity, identity])

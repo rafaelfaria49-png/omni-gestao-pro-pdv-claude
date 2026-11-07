@@ -22,6 +22,7 @@ export type PdvCatalogProduct = {
   accessoryConfig?: ProdutoAcessoriosMetadataV1
   /** Produto declarado por peso: venda bloqueada no PDV (`lib/pdv-weight-sale-guard.ts`). */
   vendaPesoIndisponivel?: boolean
+  manualKgSaleAvailable?: boolean
 }
 
 /**
@@ -53,6 +54,7 @@ export function mergePdvCatalogWithInventory(
       barcode: inv.barcode || p.barcode,
       precoPorKg: inv.precoPorKg ?? inv.price,
       vendaPorPeso: inv.vendaPorPeso,
+      manualKgSaleAvailable: inv.manualKgSaleAvailable,
       atributos: inv.atributos?.length ? inv.atributos : p.atributos,
       dbId: inv.dbId ?? p.dbId,
       sku: inv.sku ?? p.sku,
@@ -61,6 +63,7 @@ export function mergePdvCatalogWithInventory(
     }
     if (inv.accessoryConfig) next.accessoryConfig = inv.accessoryConfig
     else delete next.accessoryConfig
+    next.manualKgSaleAvailable = inv.manualKgSaleAvailable
     if (inv.vendaPesoIndisponivel) next.vendaPesoIndisponivel = true
     else delete next.vendaPesoIndisponivel
     return next
@@ -82,6 +85,7 @@ export function mergePdvCatalogWithInventory(
       stock: inv.stock,
       category: inv.category ?? "Outros",
       vendaPorPeso: inv.vendaPorPeso,
+      manualKgSaleAvailable: inv.manualKgSaleAvailable,
       precoPorKg: inv.precoPorKg,
       atributos: inv.atributos,
       ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),

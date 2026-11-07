@@ -21,12 +21,15 @@ import {
   PDV_NON_FISCAL_EXPLANATION,
   buildPdvNonFiscalNoticeHtml,
 } from "@/lib/pdv-non-fiscal-notice"
+import { formatReceiptQuantity } from "@/lib/escpos"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface CupomItem {
   nome: string
+  /** KG: peso vendido (até 3 casas); `precoUnitario` é o preço por kg. */
   quantidade: number
+  quantityUnit?: "KG" | "UN"
   precoUnitario: number
   lineTotal: number
 }
@@ -114,7 +117,7 @@ function buildTexto(d: CupomData): string {
   lines.push("--------------------------------")
   for (const it of d.itens) {
     lines.push(`${it.nome}`)
-    lines.push(`  ${it.quantidade}x ${fmt(it.precoUnitario)} = ${fmt(it.lineTotal)}`)
+    lines.push(`  ${formatReceiptQuantity(it.quantidade, it.quantityUnit)} ${fmt(it.precoUnitario)}${it.quantityUnit === "KG" ? "/kg" : ""} = ${fmt(it.lineTotal)}`)
   }
   lines.push("--------------------------------")
   if ((d.desconto ?? 0) > 0) {
@@ -143,8 +146,8 @@ function buildHtml(d: CupomData): string {
       (it) =>
         `<tr>
           <td style="padding:2px 0">${esc(it.nome)}</td>
-          <td style="text-align:center;padding:2px 4px">${it.quantidade}x</td>
-          <td style="text-align:right;padding:2px 0">${esc(fmt(it.precoUnitario))}</td>
+          <td style="text-align:center;padding:2px 4px">${esc(formatReceiptQuantity(it.quantidade, it.quantityUnit))}</td>
+          <td style="text-align:right;padding:2px 0">${esc(fmt(it.precoUnitario))}${it.quantityUnit === "KG" ? "/kg" : ""}</td>
           <td style="text-align:right;padding:2px 0">${esc(fmt(it.lineTotal))}</td>
         </tr>`
     )
@@ -220,6 +223,7 @@ function toPdvReceiptInput(d: CupomData): PdvReceiptInput {
       quantity: item.quantidade,
       unitPrice: item.precoUnitario,
       lineTotal: item.lineTotal,
+      quantityUnit: item.quantityUnit === "KG" ? "KG" : undefined,
     })),
     pagamentos: d.pagamentos,
     subtotal,
@@ -390,7 +394,7 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
                   <div key={i} className="text-[11px]">
                     <div className="text-foreground truncate">{it.nome}</div>
                     <div className="flex justify-between text-muted-foreground pl-2">
-                      <span>{it.quantidade}x {fmt(it.precoUnitario)}</span>
+                      <span>{formatReceiptQuantity(it.quantidade, it.quantityUnit)} {fmt(it.precoUnitario)}{it.quantityUnit === "KG" ? "/kg" : ""}</span>
                       <span className="text-foreground font-medium">{fmt(it.lineTotal)}</span>
                     </div>
                   </div>

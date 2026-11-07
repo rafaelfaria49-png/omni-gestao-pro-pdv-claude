@@ -1,3 +1,4 @@
+import { manualKgAvailable, isManualKgProduct } from "@/lib/vendas/manual-kg-server"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -13,6 +14,7 @@ import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/li
 import { projectProdutoAccessoryConfig, type ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios"
 import { inventoryWeightSaleProjection } from "@/lib/pdv-weight-sale-guard"
 import { productCommercialCatalogProjection } from "@/lib/cadastros/product-commercial-contract"
+import { readCatalogVersion } from "@/lib/estoque/catalog-version"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
 export const runtime = "nodejs"
@@ -85,7 +87,7 @@ type InvPayload = {
   vendaPesoIndisponivel?: true
 }
 
-function rowToItem(row: Produto): InvPayload {
+function rowToItem(row: Produto, manualKgReleased = false): InvPayload {
   const sku = typeof (row as unknown as { sku?: unknown }).sku === "string" ? String((row as unknown as { sku: string }).sku) : ""
   const barcode =
     typeof (row as unknown as { barcode?: unknown }).barcode === "string"
@@ -114,6 +116,7 @@ function rowToItem(row: Produto): InvPayload {
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
     ...(accessoryConfig ? { accessoryConfig } : {}),
     ...inventoryWeightSaleProjection(row.metadata),
+    ...(manualKgReleased && isManualKgProduct(row.metadata) ? { manualKgSaleAvailable: true as const } : {}),
   }
 }
 
@@ -145,16 +148,35 @@ export async function GET(req: Request) {
       console.warn("[ops/inventory] bypass subscription check (dev mode)")
     }
 
+    // Versão do catálogo (PDV-CADASTROS-SYNC-AUTOMATICO-001): o PDV pergunta só a versão
+    // (`versionOnly=1`, resposta de dezenas de bytes) e baixa o snapshot quando ela muda.
+    // Lida ANTES do findMany: escrita entre as duas deixa a versão velha e o próximo check refaz.
+    await withDbRetry("$connect", () => prisma.$connect())
+    if (new URL(req.url).searchParams.get("versionOnly") === "1") {
+      const version = await withDbRetry("version", () => readCatalogVersion(prisma, lojaIdRecebido))
+      return NextResponse.json(
+        { storeId: lojaIdRecebido, version },
+        { headers: { "Cache-Control": "no-store" } },
+      )
+    }
+    // Auxiliar: falhar aqui nunca impede o PDV de carregar o estoque (versão nula = o
+    // próximo check baixa de novo).
+    const version = await readCatalogVersion(prisma, lojaIdRecebido).catch((e: unknown) => {
+      console.warn("[ops/inventory GET] versao-indisponivel", e instanceof Error ? e.message.slice(0, 200) : String(e))
+      return null
+    })
+
     console.log(`[ops/inventory GET] lojaId recebido=${lojaIdRecebido}`)
 
     // Leitura do estoque por loja.
-    await withDbRetry("$connect", () => prisma.$connect())
     const rows = await withDbRetry("findMany", () =>
       prisma.produto.findMany({ where: { storeId: lojaIdRecebido }, orderBy: { name: "asc" } })
     )
+    const manualKgReleased = await manualKgAvailable(prisma, lojaIdRecebido)
     console.log("Dados encontrados no banco (por loja):", rows.length)
     return NextResponse.json({
-      items: rows.map(rowToItem),
+      items: rows.map((row) => rowToItem(row, manualKgReleased)),
+      version,
       _lojaIdRecebido: lojaIdRecebido,
       _gateBypassedInDev: !gate.ok && bypassSubscriptionCheck(),
     })

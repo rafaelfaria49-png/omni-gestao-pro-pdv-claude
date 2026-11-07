@@ -16,6 +16,7 @@ export type VendaDetalheItem = {
   inventoryId?: string | null
   nome: string
   quantidade: number
+  quantityUnit?: "KG" | "UN"
   precoUnitario: number
   lineTotal: number
   metadata?: unknown
@@ -88,6 +89,8 @@ export type VendaDetalheSessao = {
 }
 
 export type VendaDetalhe = {
+  manualKgSale?: boolean
+  manualKgTax?: import("./manual-kg-tax").ManualKgTaxSnapshot
   /** Número comercial (`pedidoId`) — ex.: VDA-L01-2026-000407. */
   id: string
   /** Id técnico da linha (`Venda.id`, cuid). */

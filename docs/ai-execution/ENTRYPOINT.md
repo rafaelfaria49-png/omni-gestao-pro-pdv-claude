@@ -30,6 +30,39 @@ e pode perder a âncora histórica necessária. Divergência exige resolução h
 não apague, edite ou regenere a sessão para contornar a recusa. Outras ampliações
 não estão autorizadas por este comando. Detalhes: `EXECUTION_PROTOCOL.md` § 8.
 
+## Retomar um BLOCKED por gate humano, sem reiniciar tentativas
+
+Após autorização humana específica, fetch separado e integração legítima do plano
+revisado e deste mecanismo na branch/worktree já declaradas no mesmo GOAL:
+
+```bash
+node scripts/track.mjs resume-blocked <trilha> --goal=<ID> --authorization=<ID-humano> --dry-run
+node scripts/track.mjs resume-blocked <trilha> --goal=<ID> --authorization=<ID-humano>
+```
+
+Use o `authorization_id` de execução aprovado no META do plano integrado. A
+autorização de manutenção G-AEP-CORE e o merge humano deste mecanismo são separados
+da execução Pessoas. Esta manutenção não abre Pessoas. A invocação de aplicação
+deve ser humana ou expressamente autorizada.
+
+O comando exige árvore/índice limpos, HEAD/base/upstream compatíveis, origem
+BLOCKED e reconciliação comprovadas por commits, ledger literal, arquivo histórico
+e evidência preservados e ausência de sessão concorrente da mesma trilha/GOAL.
+O plano integrado deve conter `autorizacao_humana_execucao.aprovado=true`, o ID
+informado e `retomada_aep` com origem, contagem e próxima tentativa explícitas.
+Veja o contrato completo em `EXECUTION_PROTOCOL.md` § 8.
+
+BLOCKED 1/3 continua ratificado e a sessão começa em 2/3. O comando publica somente
+`.aep-active`, atomicamente e sem sobrescrever sessão existente. Repetição legítima
+é NO-OP, inclusive depois de avançar para 3/3. Dry-run valida tudo sem escrever
+arquivos, temporários ou metadados Git. Teto esgotado não pode ser retomado.
+Não use `open` nem edição manual do marcador para contornar essa contagem.
+
+`check`, `attempt`, `block` e `close` continuam oficiais. A revisão 8 fechada fica
+intacta; o novo fechamento usa `_closed/goals/<ID>-r9-a<tentativa>.md` e registra a
+origem BLOCKED no evento real de DONE/BLOCKED. Retomada não é falha inventada nem
+DONE automático, não libera gates de caminho e não aprova revisão/preview/merge.
+
 ## Regras não negociáveis
 - Escreva só dentro da allowlist impressa pelo `open`.
 - Nunca use `git add .`, `git add -A` ou `git commit -a` — adicione por caminho explícito. Regra OPERACIONAL HUMANA: o hook valida o conjunto staged e não tem como saber qual comando você digitou.

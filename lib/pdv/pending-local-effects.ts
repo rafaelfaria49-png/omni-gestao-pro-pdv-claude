@@ -1,3 +1,4 @@
+import { toStockUnits } from "@/lib/estoque/stock-quantity"
 /**
  * Efeitos locais de uma tentativa de venda.
  *
@@ -58,7 +59,9 @@ function physicalQtyByItem(lines: readonly SaleLineRecord[]): Map<string, number
     const id = String(line.inventoryId ?? "").trim()
     const q = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
     if (!id || q <= 0) continue
-    qty.set(id, (qty.get(id) ?? 0) + q)
+    const units = toStockUnits(q, "KG")
+    if (units === null) continue
+    qty.set(id, (qty.get(id) ?? 0) + units)
   }
   return qty
 }
@@ -73,7 +76,9 @@ function applyStockDelta<I extends LocalStockItem>(
   return inventory.map((item) => {
     const delta = qty.get(item.id)
     if (!delta) return item
-    return { ...item, stock: Math.max(0, item.stock + sign * delta) }
+    const stock = toStockUnits(item.stock, "KG")
+    if (stock === null) return item
+    return { ...item, stock: Math.max(0, stock + sign * delta) / 1000 }
   })
 }
 
