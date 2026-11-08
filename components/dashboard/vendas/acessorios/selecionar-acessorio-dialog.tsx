@@ -36,6 +36,9 @@ import { sanitizeProdutoAcessoriosMetadata } from "@/lib/acessorios/metadata"
 import type { AcessorioColorKey } from "@/lib/acessorios/cores"
 import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { CadastrarModeloAparelhoDialog } from "@/components/dashboard/catalogo/cadastrar-modelo-aparelho-dialog"
 
 const TIPO_LABELS: Record<ProdutoAcessoriosMetadataV1["tipo"], string> = {
   capinha: "Capinha",
@@ -127,6 +130,12 @@ export function SelecionarAcessorioDialog({
   const [confirmErrors, setConfirmErrors] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  // CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — busca na loja ativa (global + manuais)
+  // e cadastro de modelo novo sem sair da venda. Não mexe em carrinho, preço ou estoque.
+  const { lojaAtivaId } = useLojaAtiva()
+  const lojaHeader = (lojaAtivaId ?? "").trim() || null
+  const [cadastroOpen, setCadastroOpen] = useState(false)
+  const [cadastroNome, setCadastroNome] = useState("")
 
   const resetTemporaryState = useCallback(() => {
     const empty = createEmptyAccessoryDialogState()
@@ -139,6 +148,7 @@ export function SelecionarAcessorioDialog({
     setCustomColor(empty.customColor)
     setConfirmErrors(empty.confirmErrors)
     setBusy(empty.busy)
+    setCadastroOpen(false)
   }, [])
 
   const closeAndReset = useCallback(() => {
@@ -170,6 +180,7 @@ export function SelecionarAcessorioDialog({
           credentials: "include",
           cache: "no-store",
           signal: controller.signal,
+          ...(lojaHeader ? { headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader } } : {}),
         })
         if (!res.ok) {
           setResults([])
@@ -192,7 +203,7 @@ export function SelecionarAcessorioDialog({
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [query, open, exigeModelo])
+  }, [query, open, exigeModelo, lojaHeader])
 
   const selectionCandidate = useMemo(
     () => ({
@@ -328,8 +339,19 @@ export function SelecionarAcessorioDialog({
                         <div className="px-2 py-1.5 text-sm text-destructive">{searchError}</div>
                       )}
                       {!searching && !searchError && results.length === 0 && (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          Nenhum modelo encontrado.
+                        <div className="space-y-1.5 px-2 py-1.5">
+                          <p className="text-sm text-muted-foreground">Nenhum modelo encontrado.</p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setCadastroNome(query.trim())
+                              setCadastroOpen(true)
+                            }}
+                          >
+                            Cadastrar novo modelo “{query.trim()}”
+                          </Button>
                         </div>
                       )}
                       {!searching &&
@@ -344,6 +366,11 @@ export function SelecionarAcessorioDialog({
                               <span className="truncate text-sm font-medium">
                                 {r.canonicalName || r.modelKey}
                               </span>
+                              {r.source === "loja" && (
+                                <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+                                  cadastro da loja
+                                </Badge>
+                              )}
                               {r.ambiguous && (
                                 <Badge
                                   variant="outline"
@@ -440,6 +467,21 @@ export function SelecionarAcessorioDialog({
             Adicionar ao carrinho
           </Button>
         </DialogFooter>
+
+        {/* Cadastro de modelo novo: só registra o APARELHO (catálogo da loja). Não altera a linha,
+            o preço nem o estoque; o operador ainda confirma a inclusão no carrinho. */}
+        <CadastrarModeloAparelhoDialog
+          open={cadastroOpen}
+          onOpenChange={setCadastroOpen}
+          lojaHeader={lojaHeader}
+          initialName={cadastroNome}
+          onCreated={(m) => {
+            setModelo({ modelKey: m.modelKey, brand: m.brand, name: m.canonicalName })
+            setQuery("")
+            setResults([])
+            setConfirmErrors([])
+          }}
+        />
       </DialogContent>
     </Dialog>
   )
