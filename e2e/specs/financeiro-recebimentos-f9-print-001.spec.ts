@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 import { PrismaClient } from "../../generated/prisma"
 import { dismissFirstAccessWizardIfPresent } from "../helpers"
+import { bancoDescartavel, capturarImpressao, cupomEmMidiaPrint, definirLayout, impressos, lojaAtiva, type Hist } from "../fixtures/recebimentos-qa"
 
 /**
  * OMNI-GESTAO-FINANCEIRO-RECEBIMENTOS-F9-PRINT-001 — app real (build local, NextAuth real).
@@ -9,30 +10,6 @@ import { dismissFirstAccessWizardIfPresent } from "../helpers"
  * BANCO (ledger do título, movimentações) e pelo CUPOM montado para impressão
  * (`#recibo-print-mount`), com captura em mídia de impressão.
  */
-
-function bancoDescartavel(): string {
-  const urls = [process.env.DATABASE_URL, process.env.DIRECT_URL].map((v) => (v ?? "").trim())
-  if (urls.some((v) => !v)) throw new Error("E2E exige DATABASE_URL e DIRECT_URL do banco local descartável.")
-  const parsed = urls.map((v) => new URL(v))
-  if (parsed.some((u) => !["127.0.0.1", "localhost", "::1", "[::1]"].includes(u.hostname))) throw new Error("E2E só em loopback.")
-  if (parsed[0]!.href !== parsed[1]!.href) throw new Error("E2E exige DATABASE_URL e DIRECT_URL idênticas.")
-  if (!parsed[0]!.pathname.replace(/^\//, "").startsWith("fin_receb_f9_qa")) throw new Error("E2E só no banco fin_receb_f9_qa*.")
-  return urls[0]!
-}
-
-type Hist = Array<{ tipo: string; valor: number; loteId?: string; formaPagamento?: string }>
-
-/** Substitui `window.print` por um registrador: guarda o HTML do cupom no momento da impressão. */
-async function capturarImpressao(page: Page) {
-  await page.evaluate(() => {
-    const w = window as unknown as { __prints: string[] }
-    w.__prints = []
-    window.print = () => {
-      w.__prints.push(document.getElementById("recibo-print-mount")?.innerHTML ?? "")
-    }
-  })
-}
-const impressos = (page: Page) => page.evaluate(() => (window as unknown as { __prints: string[] }).__prints)
 
 /** Foto do cupom como a impressora o veria (só o recibo em mídia `print`). */
 async function fotoDoCupom(page: Page, html: string, nome: string) {
@@ -47,11 +24,6 @@ async function fotoDoCupom(page: Page, html: string, nome: string) {
   await page.evaluate(() => document.getElementById("e2e-cupom-preview")?.remove())
 }
 
-async function lojaAtiva(page: Page): Promise<string> {
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("assistec-pro-loja-ativa-v1"))).toBeTruthy()
-  return (await page.evaluate(() => localStorage.getItem("assistec-pro-loja-ativa-v1")))!
-}
-
 async function abrirAReceber(page: Page) {
   await page.goto("/dashboard/financeiro-v2")
   await dismissFirstAccessWizardIfPresent(page)
@@ -61,6 +33,15 @@ async function abrirAReceber(page: Page) {
 }
 
 test.describe.configure({ mode: "serial" })
+// O teste do HUB troca a bobina para 58 mm; o padrão da loja QA é 80 mm.
+test.afterAll(async () => {
+  const prisma = new PrismaClient({ datasourceUrl: bancoDescartavel() })
+  try {
+    await definirLayout(prisma, "000-qa-fin-f9", "classic", "80mm")
+  } finally {
+    await prisma.$disconnect()
+  }
+})
 // O service worker do PWA intercepta /api/* e as respostas deixam de ser observáveis pela página.
 test.use({ serviceWorkers: "block" })
 
@@ -237,6 +218,124 @@ test("PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e o
     expect(titulo.status).toBe("pago")
     expect(hist).toHaveLength(1)
     expect(await prisma.caixaOperacao.count({ where: { storeId, tipo: "recebimento_cr", payload: { path: ["itens", "0", "localKey"], equals: t.localKey! } } })).toBe(1)
+  } finally {
+    await prisma.$disconnect()
+  }
+})
+
+test("Financeiro HUB — integral, lote de 3 numa operação, tela de sucesso após a recarga, estorno e cupom 58 mm", async ({ page }) => {
+  test.setTimeout(180_000)
+  await page.addLocatorHandler(page.getByRole("dialog", { name: /Boas-vindas/i }), async (dlg) => {
+    await dlg.getByRole("button", { name: /^Voltar depois$/i }).click()
+  })
+  const prisma = new PrismaClient({ datasourceUrl: bancoDescartavel() })
+  const m = `hub${Date.now().toString(36)}`
+  const ledger = async (id: string) => ((await prisma.contaReceberTitulo.findUniqueOrThrow({ where: { id } })).payload as { historico: Hist }).historico
+  try {
+    await page.goto("/dashboard")
+    await dismissFirstAccessWizardIfPresent(page)
+    const storeId = await lojaAtiva(page)
+    // Bobina 58 mm na config da loja (o HUB imprime com a bobina real da unidade).
+    const atual = await prisma.storeSettings.findUnique({ where: { storeId } })
+    const base = (atual?.printerConfig && typeof atual.printerConfig === "object" ? atual.printerConfig : {}) as Record<string, unknown>
+    const impressao = (base.impressao && typeof base.impressao === "object" ? base.impressao : {}) as Record<string, unknown>
+    const printerConfig = { ...base, impressao: { ...impressao, bobinaTamanho: "58mm" } }
+    await prisma.storeSettings.upsert({ where: { storeId }, update: { printerConfig }, create: { storeId, printerConfig } })
+
+    const cli = await prisma.cliente.create({ data: { storeId, name: `Cliente Integral ${m}`, phone: "11933332222" } })
+    const mk = (n: number, valor: number) =>
+      prisma.contaReceberTitulo.create({
+        data: {
+          storeId, localKey: `receber:e2e-hub2:${m}:${n}`, descricao: `Parcela ${m} #${n}`, cliente: cli.name,
+          valor, vencimento: "2026-12-20", status: "pendente", payload: { clienteId: cli.id, historico: [] },
+        },
+      })
+    const [t1, t2, t3, t4, t5] = [await mk(1, 90), await mk(2, 10), await mk(3, 20), await mk(4, 30), await mk(5, 50)]
+    const linha = (n: number) => page.getByRole("row", { name: new RegExp(`Parcela ${m} #${n}\\b`) })
+
+    await abrirAReceber(page)
+    await capturarImpressao(page)
+
+    // ── 1. Integral (sem parcial), Cartão de débito ───────────────────────────────
+    await linha(1).getByRole("button", { name: "Receber" }).click()
+    const modal = page.getByRole("dialog", { name: /Receber conta/ })
+    await modal.getByRole("combobox", { name: /Forma de recebimento/ }).click()
+    await page.getByRole("option", { name: "Cartão de débito" }).click()
+    // A recarga silenciosa da lista vem DEPOIS da confirmação; a tela de sucesso precisa sobreviver a ela.
+    const recarga = page.waitForResponse(
+      (r) => r.request().method() === "GET" && new URL(r.url()).pathname === "/api/financeiro/receber",
+      { timeout: 30_000 },
+    )
+    await modal.getByRole("button", { name: "Confirmar recebimento" }).click()
+    await expect(modal.getByText("Recebimento confirmado")).toBeVisible()
+    expect((await recarga).status()).toBe(200)
+    await page.waitForLoadState("networkidle").catch(() => undefined)
+    await expect(modal.getByText("Recebimento confirmado")).toBeVisible()
+    const h1 = await ledger(t1.id)
+    expect(h1).toHaveLength(1)
+    expect(h1[0]).toMatchObject({ tipo: "liquidacao", valor: 90, formaPagamento: "debito" })
+    expect((await prisma.contaReceberTitulo.findUniqueOrThrow({ where: { id: t1.id } })).status).toBe("pago")
+    await modal.getByRole("button", { name: /^Imprimir comprovante/ }).click()
+    await expect.poll(async () => (await impressos(page)).length).toBe(1)
+    const cupom1 = (await impressos(page))[0]!
+    for (const tx of ["COMPROVANTE NÃO FISCAL", "Loja QA Recebimentos F9", cli.name, "Cartão de débito", "90,00", "quitado"]) expect(cupom1).toContain(tx)
+    expect(cupom1).toMatch(/size: 58mm \d+mm/)
+    const r58 = await cupomEmMidiaPrint(page, cupom1, "hub-integral-cupom-58mm.pdf")
+    test.info().annotations.push({ type: "cupom-pdf", description: `${r58.larguraMm.toFixed(1)}mm, ${r58.paginas} página(s), estouro ${r58.estouro}px` })
+    expect(Math.abs(r58.larguraMm - 58)).toBeLessThan(1)
+    expect(r58.estouro).toBeLessThanOrEqual(0)
+    expect(r58.paginas).toBe(1)
+    await modal.getByRole("button", { name: /^Concluir$/ }).click()
+
+    // ── 2. Lote de 3 títulos do cliente numa operação (clique duplo = uma operação) ─
+    await page.getByRole("button", { name: "Receber de cliente" }).click()
+    const rc = page.getByRole("dialog", { name: /Receber de cliente/ })
+    await rc.getByRole("button", { name: new RegExp(cli.name) }).click()
+    for (const n of [2, 3, 4]) await rc.getByLabel(`Selecionar Parcela ${m} #${n}`).click()
+    await rc.getByRole("combobox", { name: /Forma de pagamento/ }).click()
+    await page.getByRole("option", { name: "PIX" }).click()
+    await rc.getByRole("button", { name: /Receber selecionados/ }).dblclick()
+    await expect(rc.getByText("Recebimento confirmado")).toBeVisible()
+    await expect(rc.getByText(/3 títulos de/)).toBeVisible()
+    await page.waitForLoadState("networkidle").catch(() => undefined)
+    await expect(rc.getByText("Recebimento confirmado")).toBeVisible()
+    const lotes = await Promise.all([t2, t3, t4].map((t) => ledger(t.id)))
+    for (const h of lotes) expect(h).toHaveLength(1)
+    expect(new Set(lotes.map((h) => h[0]!.loteId)).size).toBe(1)
+    expect(lotes.map((h) => h[0]!.valor)).toEqual([10, 20, 30])
+    expect(lotes.every((h) => h[0]!.formaPagamento === "pix")).toBe(true)
+    await rc.getByRole("button", { name: /^Imprimir comprovante/ }).click()
+    await expect.poll(async () => (await impressos(page)).length).toBe(2)
+    const cupomLote = (await impressos(page))[1]!
+    for (const tx of ["3 títulos recebidos", "60,00", "PIX", `Parcela ${m} #2`, `Parcela ${m} #4`]) expect(cupomLote).toContain(tx)
+    await rc.getByRole("button", { name: /^Concluir$/ }).click()
+
+    // ── 3. Parcial e ESTORNO: a 2ª via do pagamento estornado fica bloqueada ──────
+    await linha(5).getByRole("button", { name: "Receber" }).click()
+    await modal.getByRole("switch", { name: "Baixa parcial" }).click()
+    await modal.getByLabel("Valor recebido agora").fill("20,00")
+    await modal.getByRole("combobox", { name: /Forma de recebimento/ }).click()
+    await page.getByRole("option", { name: "Dinheiro" }).click()
+    await modal.getByRole("button", { name: "Confirmar recebimento" }).click()
+    await expect(modal.getByText("Recebimento confirmado")).toBeVisible()
+    await modal.getByRole("button", { name: /^Concluir/ }).click()
+    await linha(5).getByRole("button", { name: "Estornar" }).click()
+    const est = page.getByRole("dialog", { name: /Estornar recebimento/ })
+    await est.getByRole("button", { name: "Confirmar estorno" }).click()
+    await expect(est).toBeHidden()
+    const h5 = await ledger(t5.id)
+    expect(h5.map((e) => e.tipo)).toEqual(["pagamento", "estorno_pagamento"])
+    expect(h5[1]!.refHistoricoIndex).toBe(0)
+    expect((await prisma.contaReceberTitulo.findUniqueOrThrow({ where: { id: t5.id } })).status).toBe("pendente")
+    const segundaVia = await page.request.get(`/api/financeiro/recibo-recebimento?localKey=${encodeURIComponent(t5.localKey!)}&index=0`, {
+      headers: { "x-assistec-loja-id": storeId },
+    })
+    expect(segundaVia.status()).toBe(409)
+    await linha(5).getByRole("button", { name: "Comprovantes de recebimento" }).click()
+    const sv = page.getByRole("dialog", { name: /Comprovantes de recebimento/ })
+    await expect(sv.getByText(/estornado/)).toBeVisible()
+    await expect(sv.getByRole("button", { name: /Reimprimir/ }).first()).toBeDisabled()
+    expect((await impressos(page)).length).toBe(2)
   } finally {
     await prisma.$disconnect()
   }

@@ -415,6 +415,60 @@ export function imprimirReciboLote(payload: ReciboLotePayload, opts?: ImprimirRe
   return printReciboInnerHtml(buildReciboLoteInnerHtml(payload), opts, RECIBO_LOTE_CSS)
 }
 
+/** Largura da página (bobina) e largura útil do cupom, em mm. */
+const BOBINA_MM = { "58mm": { pagina: 58, conteudo: 48 }, "80mm": { pagina: 80, conteudo: 72 } } as const
+/** Comprimento usado quando o cupom não pôde ser medido (ex.: aba sem layout). */
+const ALTURA_RECIBO_FALLBACK_MM = 297
+/** Respiro abaixo do conteúdo medido: arredondamento de fonte e avanço até o corte. */
+const FOLGA_ALTURA_MM = 6
+const PX_POR_MM = 96 / 25.4
+
+/**
+ * CSS de página da impressão do comprovante, por bobina.
+ *
+ * `@page { size: 80mm auto }` é inválido (o `size` não mistura comprimento com
+ * `auto`): o navegador descarta a regra e pagina no papel padrão do driver — no
+ * Chromium, Letter (215,9 mm). Por isso a altura é sempre um comprimento: a do cupom
+ * medido, ou um fallback fixo. O resto da app sai do fluxo (`display: none`) durante a
+ * impressão: só `visibility: hidden` manteria a altura da tela e, com a página na altura
+ * do cupom, viraria folhas em branco (papel térmico avançado e cortado à toa). A largura útil também acompanha a bobina (o CSS global
+ * fixa 72 mm, que corta o cupom numa bobina de 58 mm).
+ */
+export function cssImpressaoRecibo(bobina: "58mm" | "80mm", alturaConteudoMm: number | null | undefined): string {
+  const b = BOBINA_MM[bobina === "58mm" ? "58mm" : "80mm"]
+  const altura =
+    alturaConteudoMm != null && Number.isFinite(alturaConteudoMm) && alturaConteudoMm > 0
+      ? Math.ceil(alturaConteudoMm)
+      : ALTURA_RECIBO_FALLBACK_MM
+  return `
+@media print {
+  @page { size: ${b.pagina}mm ${altura}mm; margin: 0; }
+  html[data-printing-recibo="true"] body > *:not(#recibo-print-mount) { display: none !important; }
+  html[data-printing-recibo="true"] body .recibo-print-root { width: ${b.conteudo}mm !important; max-width: ${b.conteudo}mm !important; }
+}
+`
+}
+
+/**
+ * Altura do cupom já montado, em mm, medida na largura útil da bobina com o mesmo
+ * padding da impressão (`app/globals.css`). `null` quando não há layout (jsdom, aba
+ * oculta) — aí a página usa o comprimento de fallback.
+ */
+function medirAlturaReciboMm(root: HTMLElement, larguraMm: number): number | null {
+  const anterior = root.getAttribute("style")
+  try {
+    root.style.cssText = `position:absolute;left:-10000px;top:0;visibility:hidden;width:${larguraMm}mm;padding:2mm 3mm 4mm;box-sizing:border-box`
+    const px = root.getBoundingClientRect().height
+    if (!Number.isFinite(px) || px <= 0) return null
+    return px / PX_POR_MM + FOLGA_ALTURA_MM
+  } catch {
+    return null
+  } finally {
+    if (anterior == null) root.removeAttribute("style")
+    else root.setAttribute("style", anterior)
+  }
+}
+
 /**
  * Montagem, `@page` e ciclo de impressão — compartilhados pelos dois cupons.
  *
@@ -426,10 +480,7 @@ export function imprimirReciboLote(payload: ReciboLotePayload, opts?: ImprimirRe
 function printReciboInnerHtml(inner: string, opts?: ImprimirReciboOpts, extraCss = ""): Promise<boolean> {
   if (typeof document === "undefined" || typeof window === "undefined") return Promise.resolve(false)
   if (typeof window.print !== "function") return Promise.resolve(false)
-  const pageSize = opts?.bobina === "58mm" ? "58mm" : "80mm"
-  const pageCss = `
-@media print { @page { size: ${pageSize} auto; margin: 0; } }
-`
+  const bobina = opts?.bobina === "58mm" ? "58mm" : "80mm"
   return new Promise<boolean>((resolveRaw) => {
     let settled = false
     const resolve = (v: boolean) => {
@@ -438,13 +489,23 @@ function printReciboInnerHtml(inner: string, opts?: ImprimirReciboOpts, extraCss
       resolveRaw(v)
     }
     // Aba oculta/segundo plano pode nunca disparar o frame: sem impressão, desfecho = false.
-    window.setTimeout(() => resolve(false), 5_000)
+    // Depois que a UI já mostrou "não abriu", um frame atrasado NÃO pode abrir o diálogo:
+    // o operador reimprimiria e sairiam dois cupons.
+    let desistiu = false
+    window.setTimeout(() => {
+      desistiu = true
+      resolve(false)
+    }, 5_000)
     /** Montagem e `print()` fora do mesmo tick da baixa — evita travar a UI antes do loading sumir. */
     window.setTimeout(() => {
       let mount: HTMLDivElement
       try {
         mount = ensurePrintMount()
-        mount.innerHTML = `<div class="recibo-print-root"><style>${pageCss}${RECIBO_THERMAL_CSS}${extraCss}</style>${inner}</div>`
+        mount.innerHTML = `<div class="recibo-print-root"><style>${RECIBO_THERMAL_CSS}${extraCss}</style>${inner}</div>`
+        const root = mount.firstElementChild as HTMLElement
+        const pagina = document.createElement("style")
+        pagina.textContent = cssImpressaoRecibo(bobina, medirAlturaReciboMm(root, BOBINA_MM[bobina].conteudo))
+        root.prepend(pagina)
       } catch {
         resolve(false)
         return
@@ -458,17 +519,24 @@ function printReciboInnerHtml(inner: string, opts?: ImprimirReciboOpts, extraCss
       }
 
       requestAnimationFrame(() => {
+        if (desistiu || settled) {
+          cleanup()
+          return
+        }
         try {
           window.print()
           resolve(true)
         } catch {
           cleanup()
           resolve(false)
+          return
         }
+        // `print()` bloqueia até o diálogo fechar; a limpeza só corre depois dele — nunca
+        // esvazia o cupom antes da impressão (frame atrasado).
+        window.setTimeout(cleanup, 1_200)
       })
 
       window.addEventListener("afterprint", cleanup, { once: true })
-      window.setTimeout(cleanup, 1_200)
     }, 0)
   })
 }

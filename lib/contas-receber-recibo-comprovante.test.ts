@@ -3,6 +3,7 @@ import {
   RECIBO_NAO_FISCAL_LABEL,
   buildReciboLoteInnerHtml,
   buildReciboPagamentoInnerHtml,
+  cssImpressaoRecibo,
   imprimirReciboLote,
 } from "@/lib/contas-receber-recibo"
 
@@ -62,5 +63,23 @@ describe("comprovante NÃO FISCAL de recebimento", () => {
 
   it("sem DOM (servidor/teste node) a impressão devolve false — a UI avisa e mantém reimprimir", async () => {
     expect(await imprimirReciboLote({ ...base, itens: [], totalRecebido: 0, saldoDevedorAtual: 0 })).toBe(false)
+  })
+})
+
+describe("página de impressão por bobina (58/80 mm)", () => {
+  // `size: 80mm auto` é CSS inválido: o Chromium descarta a regra e pagina em Letter
+  // (215,9 mm) — o cupom sai no tamanho do papel padrão do driver, não da bobina.
+  it("declara largura E altura válidas (nunca \"auto\") e a largura útil da bobina", () => {
+    const c58 = cssImpressaoRecibo("58mm", 131.2)
+    expect(c58).toContain("size: 58mm 132mm")
+    expect(c58).toMatch(/recibo-print-root {[^}]*width: 48mm !important/)
+    const c80 = cssImpressaoRecibo("80mm", 90)
+    expect(c80).toContain("size: 80mm 90mm")
+    expect(c80).toMatch(/recibo-print-root {[^}]*width: 72mm !important/)
+    for (const c of [c58, c80]) expect(c).not.toMatch(/size:[^;]*auto/)
+  })
+
+  it("altura não medida (sem layout) cai num comprimento fixo válido, não em \"auto\"", () => {
+    for (const h of [null, 0, Number.NaN, -5]) expect(cssImpressaoRecibo("80mm", h)).toContain("size: 80mm 297mm")
   })
 })

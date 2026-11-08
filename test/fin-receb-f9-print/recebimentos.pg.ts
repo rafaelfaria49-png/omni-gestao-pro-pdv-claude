@@ -321,6 +321,41 @@ describe("Financeiro HUB · recebimento atômico e idempotente", () => {
     expect(await movs(s)).toHaveLength(0)
   })
 
+  it("falha no 3º título de um lote de 3 desfaz os 2 primeiros (ledger, status e movimentações) e o retry grava tudo uma vez", async () => {
+    const s = await novaLoja()
+    const a = await novoTitulo(s, { cliente: "Nina QA", valor: 11 })
+    const b = await novoTitulo(s, { cliente: "Nina QA", valor: 22 })
+    const c = await novoTitulo(s, { cliente: "Nina QA", valor: 33 })
+    const body = {
+      formaPagamento: "dinheiro", idempotencyKey: chave(),
+      itens: [{ localKey: a, saldoEsperado: 11, valorReceber: 11 }, { localKey: b, saldoEsperado: 22, valorReceber: 22 }, { localKey: c, saldoEsperado: 33, valorReceber: 33 }],
+    }
+    await prisma.$executeRawUnsafe(
+      `CREATE OR REPLACE FUNCTION qa_f9_falha_mov3() RETURNS trigger AS $$ BEGIN IF NEW."storeId" = '${s}' AND NEW."valor" = 33 THEN RAISE EXCEPTION 'FALHA_INJETADA_MOV_3'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql`,
+    )
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS qa_f9_falha_mov3 ON "movimentacoes_financeiras"`)
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER qa_f9_falha_mov3 BEFORE INSERT ON "movimentacoes_financeiras" FOR EACH ROW EXECUTE FUNCTION qa_f9_falha_mov3()`)
+    try {
+      const r = await json(await receberLoteFinanceiro(req("/api/financeiro/receber-lote", s, body)))
+      expect(r.status).toBeGreaterThanOrEqual(500)
+      expect(r.body.ok).toBe(false)
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS qa_f9_falha_mov3 ON "movimentacoes_financeiras"`)
+    }
+    for (const lk of [a, b, c]) {
+      expect((await titulo(s, lk)).hist).toHaveLength(0)
+      expect((await titulo(s, lk)).status).toBe("pendente")
+    }
+    expect(await movs(s)).toHaveLength(0)
+
+    // Falha transitória resolvida: o retry com a MESMA chave grava os 3 numa operação só.
+    const ok = await json(await receberLoteFinanceiro(req("/api/financeiro/receber-lote", s, body)))
+    expect(ok.status).toBe(200)
+    expect(ok.body.totalRecebido).toBe(66)
+    for (const lk of [a, b, c]) expect((await titulo(s, lk)).hist.map((e) => e.loteId)).toEqual([body.idempotencyKey])
+    expect(await movs(s)).toHaveLength(3)
+  })
+
   it("valor maior que o saldo e forma ausente são recusados antes de qualquer escrita (400)", async () => {
     const s = await novaLoja()
     const lk = await novoTitulo(s, { cliente: "Léo QA", valor: 10 })
