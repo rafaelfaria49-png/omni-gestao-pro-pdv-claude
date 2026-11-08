@@ -142,6 +142,9 @@ model Store {
   contadorGuias              ContadorGuia[]
   // ─── Numeração server-side de venda (GOAL 002B — aditivo/dormente) ──
   seriesVenda              SerieVenda[]
+  // ─── Catálogo de aparelhos por loja (CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — aditivo) ──
+  catalogoAparelhosModelos CatalogoAparelhoLojaModelo[]
+  catalogoAparelhosCompat  CatalogoAparelhoLojaCompat[]
 
   @@index([profile])
   @@map("stores")
@@ -3571,4 +3574,61 @@ model DpAuditoria {
   @@unique([storeId, atorId, comandoId])
   @@index([empregadorId, createdAt])
   @@map("dp_auditorias")
+}
+
+/// CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — modelo de aparelho cadastrado
+/// manualmente por UMA loja (lançamentos ausentes do catálogo global versionado em CSV).
+/// Nunca altera o catálogo global. `modelKey` é a identidade estável (prefixo "manual_")
+/// usada em Produto.metadata.catalogoAparelhos e no snapshot do item vendido.
+/// Desativar (`active=false`) só esconde da busca: histórico e vínculos são preservados.
+model CatalogoAparelhoLojaModelo {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  modelKey  String   @unique @map("modelKey")
+  brand     String   @map("brand")
+  name      String   @map("name")
+  /// Marca normalizada (sem acento, maiúscula) — chave de duplicidade.
+  brandKey  String   @map("brandKey")
+  /// Nome normalizado (sem acento, maiúscula) — chave de duplicidade.
+  nameKey   String   @map("nameKey")
+  /// Lista de apelidos (string[]).
+  aliases   Json     @default("[]") @map("aliases") @db.JsonB
+  notes     String   @default("") @map("notes")
+  active    Boolean  @default(true) @map("active")
+  /// Controle otimista de concorrência (edição).
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, brandKey, nameKey])
+  @@index([storeId, active])
+  @@map("catalogo_aparelhos_loja_modelos")
+}
+
+/// CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — decisão manual da loja sobre um PAR
+/// de modelos (película equivalente). `acao`: "adicionar" (relação manual) | "suprimir"
+/// (esconde uma relação global incorreta só nesta loja). Par ordenado (modelKeyA < modelKeyB).
+/// `categoria` separa película de capinha — nunca há inferência entre categorias.
+model CatalogoAparelhoLojaCompat {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  categoria String   @map("categoria")
+  modelKeyA String   @map("modelKeyA")
+  modelKeyB String   @map("modelKeyB")
+  acao      String   @map("acao")
+  status    String   @default("precisa_testar") @map("status")
+  notes     String   @default("") @map("notes")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, categoria, modelKeyA, modelKeyB])
+  @@index([storeId, categoria, modelKeyA])
+  @@index([storeId, categoria, modelKeyB])
+  @@map("catalogo_aparelhos_loja_compat")
 }
