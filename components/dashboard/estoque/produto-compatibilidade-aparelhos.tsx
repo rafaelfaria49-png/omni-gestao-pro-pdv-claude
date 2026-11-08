@@ -36,6 +36,12 @@ import {
   type CompatibilityType,
 } from "@/lib/catalogo-aparelhos/produto-metadata"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
+import { resolverModelos, type ModeloResolvido } from "@/lib/catalogo-aparelhos/loja-catalogo-client"
+import { catalogKey } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import {
+  CadastrarModeloAparelhoDialog,
+  type ModeloAparelhoEscolhido,
+} from "@/components/dashboard/catalogo/cadastrar-modelo-aparelho-dialog"
 
 export interface CompatibilidadeAparelhoModel {
   modelKey: string
@@ -87,6 +93,33 @@ export function ProdutoCompatibilidadeAparelhos({
   const [searching, setSearching] = useState(false)
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement | null>(null)
+  // CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — cadastro inline, filtro e nomes legíveis.
+  const [cadastroOpen, setCadastroOpen] = useState(false)
+  const [cadastroNome, setCadastroNome] = useState("")
+  const [filtroVinculados, setFiltroVinculados] = useState("")
+  const [resolvidos, setResolvidos] = useState<Record<string, ModeloResolvido>>({})
+
+  // Reidratação traz só a `modelKey`: resolve nome/marca (global ou manual da loja) para exibir.
+  // Estado local de exibição — não altera o valor do formulário (não "suja" o produto).
+  const pendentesKey = value.models
+    .filter((m) => !m.brand && !resolvidos[m.modelKey])
+    .map((m) => m.modelKey)
+    .join(",")
+  useEffect(() => {
+    if (!pendentesKey) return
+    let cancelled = false
+    void resolverModelos(lojaHeader, pendentesKey.split(",")).then((res) => {
+      if (cancelled || !res.ok) return
+      setResolvidos((prev) => {
+        const next = { ...prev }
+        for (const m of res.models) next[m.modelKey] = m
+        return next
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [pendentesKey, lojaHeader])
 
   // Busca com debounce contra a API read-only do catálogo.
   useEffect(() => {
@@ -143,6 +176,32 @@ export function ProdutoCompatibilidadeAparelhos({
     })
   }
 
+  const addEscolhido = (m: ModeloAparelhoEscolhido) => {
+    setQuery("")
+    setResults([])
+    setOpen(false)
+    if (value.models.some((x) => x.modelKey === m.modelKey)) return
+    onChange({
+      ...value,
+      models: [...value.models, { modelKey: m.modelKey, canonicalName: m.canonicalName, brand: m.brand }],
+      aliases: Array.from(new Set([...value.aliases, m.canonicalName].filter(Boolean))),
+    })
+  }
+
+  const displayOf = (m: CompatibilidadeAparelhoModel) => {
+    const r = resolvidos[m.modelKey]
+    return {
+      name: m.brand ? m.canonicalName : (r?.canonicalName ?? m.canonicalName),
+      manual: m.modelKey.startsWith("manual_") || r?.source === "loja",
+      inactive: r?.active === false,
+    }
+  }
+
+  const filtroKey = catalogKey(filtroVinculados)
+  const modelosVisiveis = filtroKey
+    ? value.models.filter((m) => catalogKey(`${m.brand} ${displayOf(m).name}`).includes(filtroKey))
+    : value.models
+
   const removeModel = (modelKey: string) => {
     onChange({ ...value, models: value.models.filter((m) => m.modelKey !== modelKey) })
   }
@@ -176,7 +235,21 @@ export function ProdutoCompatibilidadeAparelhos({
             <div className="absolute z-50 mt-1 max-h-72 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
               {searching && <div className="px-2 py-1.5 text-sm text-muted-foreground">Buscando…</div>}
               {!searching && results.length === 0 && (
-                <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum modelo encontrado.</div>
+                <div className="space-y-1.5 px-2 py-1.5">
+                  <p className="text-sm text-muted-foreground">Nenhum modelo encontrado.</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setCadastroNome(query.trim())
+                      setCadastroOpen(true)
+                      setOpen(false)
+                    }}
+                  >
+                    Cadastrar novo modelo “{query.trim()}”
+                  </Button>
+                </div>
               )}
               {results.map((r) => (
                 <button
@@ -187,6 +260,11 @@ export function ProdutoCompatibilidadeAparelhos({
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="truncate text-sm font-medium">{r.canonicalName || r.modelKey}</span>
+                    {r.source === "loja" && (
+                      <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+                        cadastro da loja
+                      </Badge>
+                    )}
                     {r.ambiguous && (
                       <Badge variant="outline" className="border-warning/40 text-warning shrink-0 text-[10px]">
                         {r.requiresBrandContext ? "ambíguo · confirme a marca" : "alias curto"}
@@ -205,27 +283,66 @@ export function ProdutoCompatibilidadeAparelhos({
 
       {/* Modelos selecionados */}
       <div className="space-y-2">
-        <Label>Modelos vinculados</Label>
+        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+          <Label>Modelos vinculados{value.models.length > 0 ? ` (${value.models.length})` : ""}</Label>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => {
+              setCadastroNome(query.trim())
+              setCadastroOpen(true)
+            }}
+          >
+            + Cadastrar novo modelo
+          </Button>
+        </div>
+        {value.models.length > 3 && (
+          <Input
+            value={filtroVinculados}
+            onChange={(e) => setFiltroVinculados(e.target.value)}
+            placeholder="Filtrar modelos vinculados"
+            aria-label="Filtrar modelos vinculados"
+            className="h-8"
+            autoComplete="off"
+          />
+        )}
         {value.models.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhum modelo vinculado. Opcional.</p>
+        ) : modelosVisiveis.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum modelo vinculado corresponde ao filtro.</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {value.models.map((m) => (
+          <div className="flex flex-wrap gap-2" aria-label="Modelos vinculados">
+            {modelosVisiveis.map((m) => {
+              const d = displayOf(m)
+              return (
               <Badge key={m.modelKey} variant="secondary" className="gap-1 py-1 pl-2.5 pr-1">
-                <span className="truncate max-w-[16rem]">{m.canonicalName}</span>
+                <span className="truncate max-w-[16rem]">{d.name}</span>
+                {d.manual && <span className="text-[10px] text-muted-foreground">· loja</span>}
+                {d.inactive && <span className="text-[10px] text-warning">· desativado</span>}
                 <button
                   type="button"
-                  aria-label={`Remover ${m.canonicalName}`}
+                  aria-label={`Remover ${d.name}`}
                   onClick={() => removeModel(m.modelKey)}
                   className="ml-0.5 rounded-sm px-1 text-muted-foreground hover:text-foreground"
                 >
                   ×
                 </button>
               </Badge>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
+
+      <CadastrarModeloAparelhoDialog
+        open={cadastroOpen}
+        onOpenChange={setCadastroOpen}
+        lojaHeader={lojaHeader}
+        initialName={cadastroNome}
+        onCreated={(m) => addEscolhido(m)}
+      />
 
       {/* Tipo de compatibilidade */}
       <div className="space-y-2">

@@ -1,0 +1,126 @@
+{
+ "deployment": "dpl_GKXB6BSPV7JobJ8LMSguoGNm7dww",
+ "host": "omni-gestao-ezqeyc0u6-rafaelfaria49-4373s-projects.vercel.app",
+ "alias": "omni-gestao-pro-git-claude-418343-rafaelfaria49-4373s-projects.vercel.app",
+ "sha": "a1b52ee57feebdb12d8e2e554f5407c59c3b6c53",
+ "createdAt": 1794094711306,
+ "nonce": "892ca8c227dc",
+ "marker": {
+  "id": "g6marker892ca8c227dc",
+  "sku": "G6ACC-892ca8c227dc",
+  "name": "G6 MARCADOR ACC 892ca8c227dc"
+ },
+ "m2": {
+  "id": "g6m2892ca8c227dc",
+  "modelKey": "manual_712e120e940535f30139a002e6b3abd7",
+  "brand": "MARCA SINTETICA LOJA2",
+  "name": "L2 892ca8c227dc"
+ },
+ "modelo": {
+  "id": "cmw71tt560001l608h3xdb637",
+  "modelKey": "manual_f04357da43574217ad341af86ba29e57"
+ },
+ "globalKey": "samsung_galaxy_a05",
+ "results": [
+  {
+   "name": "anon_search_401",
+   "ok": true
+  },
+  {
+   "name": "anon_post_401",
+   "ok": true
+  },
+  {
+   "name": "login_sintetico",
+   "ok": true
+  },
+  {
+   "name": "login_redirect_no_proprio_preview",
+   "ok": true
+  },
+  {
+   "name": "sessao_admin_sintetico",
+   "ok": true
+  },
+  {
+   "name": "marcador_candidate_visivel_no_app",
+   "ok": true
+  },
+  {
+   "name": "busca_global",
+   "ok": true
+  },
+  {
+   "name": "cadastro_modelo_201",
+   "ok": true
+  },
+  {
+   "name": "duplicidade_409",
+   "ok": true
+  },
+  {
+   "name": "busca_mostra_modelo_da_loja",
+   "ok": true
+  },
+  {
+   "name": "busca_por_alias",
+   "ok": true
+  },
+  {
+   "name": "modelo_da_loja2_invisivel_na_loja1",
+   "ok": true
+  },
+  {
+   "name": "lista_da_loja1_sem_loja2",
+   "ok": true
+  },
+  {
+   "name": "busca_com_header_loja2_403",
+   "ok": true
+  },
+  {
+   "name": "cadastro_na_loja2_403",
+   "ok": true
+  },
+  {
+   "name": "patch_modelo_loja2_pela_loja1_404",
+   "ok": true
+  },
+  {
+   "name": "query_storeId_loja2_403",
+   "ok": true
+  },
+  {
+   "name": "pelicula_relacao_manual",
+   "ok": true
+  },
+  {
+   "name": "pelicula_restaurar",
+   "ok": true
+  },
+  {
+   "name": "editar_200",
+   "ok": true
+  },
+  {
+   "name": "versao_desatualizada_409",
+   "ok": true
+  },
+  {
+   "name": "desativar_some_da_busca",
+   "ok": true
+  },
+  {
+   "name": "regressao /api/auth/session",
+   "ok": true
+  },
+  {
+   "name": "regressao /api/ops/inventory/lookup",
+   "ok": true
+  },
+  {
+   "name": "regressao /dashboard (sessão)",
+   "ok": true
+  }
+ ]
+}
