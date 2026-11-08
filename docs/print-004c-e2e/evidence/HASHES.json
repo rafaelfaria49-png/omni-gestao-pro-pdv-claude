@@ -188,7 +188,7 @@
     "e2e/specs/print-direct-004c.spec.ts": "640ba92967920c90a587eb5f48a9c626d88d95664a9497ce60883ef813f2062e",
     "e2e/fixtures/print-direct.ts": "9b72f0e0da6e4dd640dd36e0be1755d73a49dd3487ecd273c5b30a2517eb26b3",
     "e2e/print-direct.playwright.config.ts": "7dd1bdb8a73270741266db95e52ca4de903dbd1fb2ef364b901914c227729a15",
-    "prisma/schema.prisma": "7397421f1da174d04c5eedc309ce68f51aeacd358390bede8a9c4cf20fa0d136",
+    "prisma/schema.prisma": "924a474e86a54d84bbe199556596e2f36d5506c50c4083cf435a798990d1a357",
     "lib/pdv/parity-pin-keymap.component.test.ts": "7ee5e6c00df89925f4c64f1ab9e41527123953e5ef499d6de5ac017e548f38cc",
     "lib/pdv/classic-weight-sale-guard.component.test.ts": "68dc243cbaad0ef05640b1357d16890034ca8283672bab8e4a25b25382bdd831",
     "components/dashboard/vendas/direct-reprint-panel.tsx": "ac26690faac452bcd5a54ef7e49c2d230455ae7aeed549154ff7f98520a083f9",

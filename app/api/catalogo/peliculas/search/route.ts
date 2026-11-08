@@ -1,21 +1,38 @@
-import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
-import { auth } from "@/auth"
+import { prisma } from "@/lib/prisma"
 import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
-import { searchDeviceModels } from "@/lib/catalogo-aparelhos/catalogo-aparelhos"
-import { getPeliculasPorModelo } from "@/lib/catalogo-aparelhos/peliculas"
+import { getPeliculasPorModelo, type PeliculaGrupoMember } from "@/lib/catalogo-aparelhos/peliculas"
+import {
+  applyPeliculaOverrides,
+  buildLojaCatalogoIndex,
+  isManualModelKey,
+  lojaModeloCanonicalName,
+  overridesUtilizaveis,
+  searchDeviceModelsComLoja,
+  type LojaModelo,
+} from "@/lib/catalogo-aparelhos/loja-catalogo"
+import {
+  getLojaModelosByKeys,
+  listLojaCompatOverrides,
+  listLojaModelos,
+} from "@/lib/catalogo-aparelhos/loja-catalogo-store"
+import { resolveCatalogoLojaRead } from "@/lib/catalogo-aparelhos/loja-catalogo-api"
 import type { CatalogoIndex, DeviceModel } from "@/lib/catalogo-aparelhos/types"
 
 /**
  * CATALOGO-PELICULAS-BUSCADOR-MVP-002 — buscador de películas por modelo/alias.
  *
  * SOMENTE LEITURA. Mesmo padrão de `/api/catalogo/aparelhos/search`: catálogo global
- * (seeds versionados via `catalogo-loader`), sem escopo de loja, exige sessão.
+ * (seeds versionados via `catalogo-loader`), exige sessão.
  * Nada aqui cria produto, baixa estoque ou registra venda.
+ *
+ * CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001: na loja ativa, soma os modelos manuais
+ * e aplica as decisões da loja (relação manual / supressão de relação global). O seed
+ * global nunca é alterado; outra loja nunca vê essas decisões.
  *
  * Contrato:
  *  - GET ?q=A06           → busca por modelo/alias/marca e anexa grupos de película.
- *  - GET ?modelKey=<key>  → detalhe exato de um modelo canônico.
+ *  - GET ?modelKey=<key>  → detalhe exato de um modelo canônico (ou manual da loja).
  *
  * Nota de deploy: os CSVs são lidos via `fs` — a rota tem entrada própria em
  * `outputFileTracingIncludes` no next.config.mjs (sem ela, produção degrada em vazio).
@@ -48,7 +65,7 @@ function principalAliases(index: CatalogoIndex, modelKey: string, max = 6): stri
   return out
 }
 
-function modelPayload(model: DeviceModel) {
+function modelPayload(model: DeviceModel, source: "global" | "loja") {
   return {
     modelKey: model.modelKey,
     canonicalName: model.canonicalName,
@@ -56,15 +73,68 @@ function modelPayload(model: DeviceModel) {
     commercialLine: model.commercialLine,
     confidence: model.confidence,
     status: model.status,
+    source,
   }
 }
 
-export async function GET(req: Request) {
-  const moduleDenied = await requireModuleApi(req, "deviceCatalog")
-  if (moduleDenied) return moduleDenied
+type BaseResult = {
+  model: ReturnType<typeof modelPayload>
+  aliases: string[]
+  ambiguous: boolean
+  requiresBrandContext: boolean
+  flags: string[]
+  matchType?: string
+  matchedText?: string
+}
 
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+/** Anexa grupos globais + decisões da loja a cada resultado. */
+async function withPeliculaGroups(
+  index: CatalogoIndex,
+  storeId: string | null,
+  lojaModelos: readonly LojaModelo[],
+  base: BaseResult[],
+) {
+  const keys = base.map((r) => r.model.modelKey)
+  const allOverrides = storeId ? await listLojaCompatOverrides(prisma, storeId, "pelicula_tela", keys) : []
+
+  const manualByKey = new Map(lojaModelos.map((m) => [m.modelKey, m]))
+  const faltantes = allOverrides
+    .flatMap((o) => [o.modelKeyA, o.modelKeyB])
+    .filter((k) => isManualModelKey(k) && !manualByKey.has(k))
+  if (storeId && faltantes.length > 0) {
+    for (const m of await getLojaModelosByKeys(prisma, storeId, faltantes)) manualByKey.set(m.modelKey, m)
+  }
+
+  // Modelo manual desativado (ou de outra loja) e chave global que saiu do CSV não aparecem como equivalente.
+  const overrides = overridesUtilizaveis(
+    allOverrides,
+    (k) => index.modelByKey.has(k),
+    (k) => manualByKey.get(k)?.active === true,
+  )
+
+  const resolveMember = (modelKey: string): PeliculaGrupoMember => {
+    const g = index.modelByKey.get(modelKey)
+    if (g) return { modelKey, canonicalName: g.canonicalName || modelKey, brand: g.brand }
+    const m = manualByKey.get(modelKey)
+    if (m) return { modelKey, canonicalName: lojaModeloCanonicalName(m), brand: m.brand }
+    return { modelKey, canonicalName: modelKey, brand: "" }
+  }
+
+  return base.map((r) => {
+    const { grupos, suprimidos } = applyPeliculaOverrides(
+      r.model.modelKey,
+      getPeliculasPorModelo(index, r.model.modelKey),
+      overrides,
+      resolveMember,
+    )
+    return { ...r, peliculaGroups: grupos, suprimidosPelaLoja: suprimidos }
+  })
+}
+
+export async function GET(req: Request) {
+  const gate = await resolveCatalogoLojaRead(req)
+  if (!gate.ok) return gate.response
+  const storeId = gate.storeId
 
   const url = new URL(req.url)
   const q = (url.searchParams.get("q") ?? "").trim()
@@ -75,10 +145,13 @@ export async function GET(req: Request) {
 
   try {
     const index = loadCatalogoIndex()
+    const lojaModelos = storeId ? await listLojaModelos(prisma, storeId) : []
+    const lojaIndex = buildLojaCatalogoIndex(lojaModelos)
 
     // Detalhe exato por modelKey (após o operador escolher no autocomplete).
     if (modelKey) {
-      const model = index.modelByKey.get(modelKey)
+      const globalModel = index.modelByKey.get(modelKey)
+      const model = globalModel ?? lojaIndex.modelByKey.get(modelKey)
       if (!model) {
         return NextResponse.json({
           ok: true,
@@ -88,21 +161,17 @@ export async function GET(req: Request) {
           warnings: AVISOS_FIXOS,
         })
       }
-      return NextResponse.json({
-        ok: true,
-        query: modelKey,
-        results: [
-          {
-            model: modelPayload(model),
-            aliases: principalAliases(index, model.modelKey),
-            ambiguous: false,
-            requiresBrandContext: false,
-            flags: [],
-            peliculaGroups: getPeliculasPorModelo(index, model.modelKey),
-          },
-        ],
-        warnings: AVISOS_FIXOS,
-      })
+      const source = globalModel ? "global" : "loja"
+      const results = await withPeliculaGroups(index, storeId, lojaModelos, [
+        {
+          model: modelPayload(model, source),
+          aliases: principalAliases(globalModel ? index : lojaIndex, model.modelKey),
+          ambiguous: false,
+          requiresBrandContext: false,
+          flags: source === "loja" ? ["cadastro_manual_loja"] : [],
+        },
+      ])
+      return NextResponse.json({ ok: true, query: modelKey, results, warnings: AVISOS_FIXOS })
     }
 
     if (q.length < 2) {
@@ -115,24 +184,29 @@ export async function GET(req: Request) {
       })
     }
 
-    const matches = searchDeviceModels(index, q, { limit, brand })
-    const results = matches.map((r) => ({
-      model: {
-        modelKey: r.modelKey,
-        canonicalName: r.canonicalName,
-        brand: r.brand,
-        commercialLine: r.commercialLine,
-        confidence: r.confidence,
-        status: r.status,
-      },
-      aliases: r.aliases,
-      ambiguous: r.ambiguous,
-      requiresBrandContext: r.requiresBrandContext,
-      flags: r.reviewFlags,
-      matchType: r.matchType,
-      matchedText: r.matchedText,
-      peliculaGroups: getPeliculasPorModelo(index, r.modelKey),
-    }))
+    const matches = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand })
+    const results = await withPeliculaGroups(
+      index,
+      storeId,
+      lojaModelos,
+      matches.map((r) => ({
+        model: {
+          modelKey: r.modelKey,
+          canonicalName: r.canonicalName,
+          brand: r.brand,
+          commercialLine: r.commercialLine,
+          confidence: r.confidence,
+          status: r.status,
+          source: r.source ?? "global",
+        },
+        aliases: r.aliases,
+        ambiguous: r.ambiguous,
+        requiresBrandContext: r.requiresBrandContext,
+        flags: r.reviewFlags,
+        matchType: r.matchType,
+        matchedText: r.matchedText,
+      })),
+    )
 
     return NextResponse.json({
       ok: true,
