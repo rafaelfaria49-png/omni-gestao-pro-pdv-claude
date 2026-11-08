@@ -24,6 +24,22 @@ a compatibilidade de venda entre versões e as autorizações restantes.
 > `07-guard-check-opcional.sql` no head: sha256 LF `dea40868…` (o aprovado no A6). #335, #336 e esta PR foram
 > ressincronizadas por merge commit (§1). Registro: `_evidence/PADARIA-KG-STACK-RECONCILIATION-FINAL-001/`.
 
+> **Atualização 2026-11-08 (GOAL `PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001`) — prevalece sobre §1–§3
+> onde divergir.** A main andou para **`ce9228c`** (#339, catálogo de aparelhos por loja, migration aditiva
+> `20261107120000_catalogo_aparelhos_loja`). A pilha foi reconciliada por merge commit, em cascata, **sem conflito**:
+> #315 `9631590` (+ gate MIG-X no runbook, `df828d0`) → #335 → #336 → esta PR. Fora de `prisma/schema.prisma` e
+> `produto-ia.tsx` (ambos só com a parte KG), todo arquivo trazido pelo merge ficou idêntico à main; sha256 das três
+> migrations KG e do `07` (`dea40868…`) inalterados.
+>
+> Leitura RO de Production (Neon + Vercel, sem decriptar valores): Production serve `ce9228c` (`MIGRATION_SKIPPED`);
+> **24** migrations, a `20261107` aplicada fora do build pela frente do catálogo; nenhuma KG; 5 colunas `integer`;
+> 1 sessão de caixa ABERTA; **A7b fechado: `cron.job` inexistente nos 4 databases** (pg_cron só pré-carregado pela
+> plataforma, extensão não criada). Gate novo **MIG-X** (runbook §0.1): pendentes exatas antes de J4/J8/9b; migration
+> de outra frente nunca entra por `migrate deploy` do KG. V1 consolidado em §11. Provas novas: suíte KG 79/79 + 35 (2×),
+> E2E KG 13/13, ordem KG × `20261107` indiferente em PG 17, integração PG do catálogo 12/12 sobre o banco migrado
+> pela cadeia KG, build `MIGRATION_SKIPPED`/`PROXY_PRISMA_ARTIFACT_VERIFIED`, revisão independente APPROVE.
+> Registro: `_evidence/PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001/`.
+
 ## 1. Estado real conferido (atualizado 2026-11-07, GitHub; nada lido da produção)
 
 | Item | Valor | Conferência |
@@ -57,16 +73,18 @@ andar de novo antes da janela, repetir merge + CI na #315 e propagar por merge a
 | **A5+** plano cobrindo #335/#336 | PASS_COM_EVIDENCIA (este documento) | antes não havia plano para a migration aditiva, papel de sessão, ordem de merges |
 | **A6** decisão do `07` (CHECK milésimos) | PASS técnico (APPROVE do sha `dea40868…`) + **PENDENTE_AUTORIZACAO** (aplicar ou não) | `a6-guard-review-011/`; ensaio novo confirma que bloqueia o cliente Int (§6) |
 | **A7** conectores Neon/Vercel/GitHub indisponíveis a outras sessões | **PENDENTE_AUTORIZACAO** + PENDENTE_PRESENCIAL | depende do dono desconectar/confirmar (ChatGPT Neon, MCPs) — não verificável sem acesso |
-| **A7b** leitura `cron.job` no database `postgres` | **PENDENTE_AUTORIZACAO** | pg_cron detectado no A1; jobs podem ser escritores fora do inventário HTTP |
+| **A7b** leitura `cron.job` no database `postgres` | **PASS_COM_EVIDENCIA (2026-11-08)** — reconfirmar no J0 | extensão `pg_cron` não criada em `neondb`/`omnigestao_prod`/`omnigestao_prod_candidate`/`postgres`; `cron.job` inexistente (o A1 viu só o `shared_preload_libraries` da plataforma) |
 | **A8** janela + congelamento §3 | **PENDENTE_AUTORIZACAO** + PENDENTE_PRESENCIAL | aviso às pessoas e sessões de IA; data/hora |
 | Reconciliação #315 × main + CI do head exato | **PASS** (T2 concluída) | `bed911a` contém a main `7cac3d8`, CI 9/9; #335/#336/esta PR ressincronizadas por merge |
-| Inventário integral de deployments no início da janela | PENDENTE_AUTORIZACAO (exige token Vercel válido — o A4 recebeu 403) | — |
+| Inventário integral de deployments no início da janela | **V1 atualizado 2026-11-08 (§11)**; refazer no J0/J7 | token Vercel CLI válido em 2026-11-08 (leitura de metadados); valores `sensitive` não legíveis → BLOCKED_WITH_REASON onde dependem do valor |
+| Compatibilidade com a main `ce9228c` (#339) | **PASS_COM_EVIDENCIA** | merge limpo; catálogo 12/12 sobre banco migrado pela cadeia KG; revisão independente APPROVE |
+| Dependência de migrations de outras frentes (MIG-X) | **PASS hoje** — reconferir antes de J4/J8/9b | runbook §0.1 |
 | Checklist das duas lojas | **PENDENTE_PRESENCIAL** | modelo pronto (`KG_RELEASE_CHECKLIST_DONO.md`) |
 | Ensaio Neon 002 (ACL, suspend/start, pooler, corte, 01–06/99, retrato) | PASS_COM_EVIDENCIA (reaproveitado) | `neon-rehearsal-002/`; **não cobre** a migration aditiva da #335 — coberta agora pelo ensaio sintético (§6), sem Neon |
 | Isolamento do Preview (P1–P5) | PASS_COM_EVIDENCIA | `preview-isolation-003/` |
 | Compatibilidade de venda entre versões | **PASS_COM_EVIDENCIA (novo)** | §6 |
 | Desempenho dos gatilhos da #335 | era **BLOCKED** (defeito) → PASS após `20261106` | §6.3 |
-| R3 cruzada Codex da #336 | PENDENTE_TECNICO (cota até 2026-11-10) | não ocorreu; não declarar |
+| R3 cruzada Codex da #336 | PENDENTE_TECNICO — reconferido 2026-11-08: Codex CLI 0.166 sem cota até **2026-11-10 21:48** | não ocorreu; não declarar |
 
 **GO/NO-GO:** NO-GO. Nenhum item técnico bloqueante sem caminho: os restantes são autorizações e
 presença nas lojas.
@@ -324,3 +342,37 @@ A revisão cruzada por outra família de modelo (Codex) **não ocorreu** neste G
 7. Na janela, cada passo de escrita: J2, J3, J4, J6, J8, J9, 9b, J11 (troca de env, merge, scripts).
 8. Merges da #335, #336 e desta PR.
 9. Separadamente, a habilitação KG por loja (`PDV_MANUAL_KG_*`).
+
+## 11. V1 — inventário de escritores possíveis (somente leitura, 2026-11-08)
+
+Método: `vercel api` GET (metadados; nenhum valor decriptado) e psql RO no Neon de produção. Detalhe e JSON em
+`_evidence/PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001/`.
+
+| Caminho até o banco de produção | Estado | Fecha em | Situação |
+| --- | --- | --- | --- |
+| Production `omni-gestao-pro` atual (`ce9228c`, `dpl_GhyK8L…`, único com alias: `omni-gestao-pro.vercel.app`, `-git-main`, `-rafaelfaria49…`) | cliente Prisma **Int**; `DATABASE_URL`/`DIRECT_URL` Production (`p2OLtFuiyUymtIRA`/`38TkKDEr1OIgsxy0`, sem alteração desde 2026-07-27 → papel antigo, por continuidade) | J3/J4 (env → `omni_runtime_v2` + merge da #315) e J6 (corte do papel antigo) | PASS de inventário |
+| 7 deployments Production antigos do `omni-gestao-pro` (`7cac3d8`, `37acc3b`, `8cbd551`, `a07e067`, `4946688`, `aaab275`, `ba010ac`) | **sem alias**, mas URL de deployment **pública** (`ssoProtection=null`); mesma env Production do build → papel antigo | J6 (`04`/`05`: CONNECT revogado + sessões encerradas); J7 sonda `permission denied` | PASS de inventário; não removidos (fora do escopo) |
+| Previews `omni-gestao-pro` das 4 branches KG | #315 com override próprio (`VUjVxPk2…`/`BWFYesLF…`, 2026-10-27, Neon de Preview `pr315-kg`); #335/#336/#337 usam o Preview genérico (`CAgFUTJY…`/`WfY0iLLQ…`, atualizado pela última vez em 2026-10-27 = P3, projeto Neon de Preview isolado) | — | PASS por continuidade de metadados (IDs e `updatedAt` iguais aos da P3); o destino em si exige decriptar → **BLOCKED_WITH_REASON** para prova direta |
+| Previews de outras branches com override de banco (`codex/omni-print-d05-homologacao-fisica-001`) | override próprio (2026-11-05), frente Omni Print | — | fora da frente KG; registrado |
+| Projeto Vercel `omni-gestao` (`prj_IbJi32rh…`) — Production `e9eb984` (2026-10-15, alias `omni-gestao-pi.vercel.app`) + 2 antigos sem alias | `DATABASE_URL`/`DIRECT_URL` só em Production, criadas 2026-05-08 (antes do cutover Neon de 2026-07) e nunca atualizadas; builds Production novos são **ignorados** (`commandForIgnoringBuildStep` sai 0 em production; o de `ce9228c` ficou CANCELED); URLs com `ssoProtection=all_except_custom_domains` | se o destino for o Neon de produção com `neondb_owner`, o J6 também o corta | destino não comprovável sem decriptar → **BLOCKED_WITH_REASON**; recomendação ao dono: confirmar/neutralizar antes da janela |
+| Previews do projeto `omni-gestao` (inclui `3ebbd76`, `bc1c3fc`, `7b72223`) | sem `DATABASE_URL`/`DIRECT_URL` para Preview → não alcançam banco | — | PASS (ausência de credencial) |
+| `pg_cron` / jobs agendados | extensão não criada nos 4 databases | — | PASS (A7b) |
+| Conexões no momento da leitura | só a própria sessão RO (`neondb_owner`, `psql`) | — | retrato pontual; o J5/J7 refaz |
+| Sessões de IA/conectores (A7) | não verificável por leitura | presencial/dono | **PENDENTE_AUTORIZACAO** |
+
+Flags (metadados apenas; valores `sensitive`/`encrypted` não lidos):
+
+| Flag | Existência em Production | Conclusão |
+| --- | --- | --- |
+| `STOCK_WRITES_FROZEN` | **ausente** em todos os ambientes | trava desligada (esperado antes do J2) |
+| `MIGRATION_AUTHORITY_ENABLED` | presente (`PzB5wlYj…`, `sensitive`, atualizada 2026-10-16) | valor ilegível → BLOCKED_WITH_REASON; efeito observado: build `ce9228c` = `MIGRATION_SKIPPED` |
+| `PDV_MANUAL_KG_RELEASE` / `PDV_MANUAL_KG_STORES` | **ausentes** em todos os ambientes | venda KG desligada (padrão OFF) |
+| `SALE_SERVER_NUMBERING_ENABLED` | presente (`c0XM97qF…`, `encrypted`, 2026-08-18, sem alteração) | não alterar; valor não lido |
+
+Ligação com o runbook: Production atual e deployments antigos → J3–J7; Previews → isolamento P1–P5 (sem ação na
+janela); projeto `omni-gestao` → decisão do dono antes do J0 (V1 residual); flags → J2/J11 (`STOCK_WRITES_FROZEN`),
+J4 (`MIGRATION_SKIPPED`), F1 (`PDV_MANUAL_KG_*`).
+
+Observações fora do escopo KG (relatadas, não corrigidas): o `AUTH_SECRET` genérico `0CDB8CwX…` vale para
+`preview+production`; o projeto `omni-gestao` expõe credenciais reais de WhatsApp/Stripe a Previews; Node 20.x no
+`omni-gestao-pro` (aviso de depreciação).

@@ -1,0 +1,25 @@
+host ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech db /omnigestao_prod user neondb_owner
+             migration_name             |          started_at           |          finished_at          | applied_steps_count | sem_log 
+----------------------------------------+-------------------------------+-------------------------------+---------------------+---------
+ 20261107120000_catalogo_aparelhos_loja | 2026-11-08 05:46:22.425012+00 | 2026-11-08 05:46:22.425012+00 |                   1 | t
+ 20261022120000_platform_pilot_access   | 2026-10-22 23:26:26.148371+00 | 2026-10-22 23:26:26.148371+00 |                   0 | f
+ 0022_pessoas_cadastro_backend          | 2026-10-01 23:02:41.388712+00 | 2026-10-01 23:02:42.386305+00 |                   1 | t
+(3 linhas)
+
+ dono_catalogo |             relname             
+---------------+---------------------------------
+ neondb_owner  | catalogo_aparelhos_loja_compat
+ neondb_owner  | catalogo_aparelhos_loja_modelos
+(2 linhas)
+
+ modelos 
+---------
+       0
+(1 linha)
+
+ compat 
+--------
+      0
+(1 linha)
+
+PSQL_EXIT 0

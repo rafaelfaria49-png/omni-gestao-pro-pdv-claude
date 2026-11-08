@@ -54,3 +54,23 @@ Acrescente uma linha para **cada** aparelho/perfil usado nas lojas, inclusive os
 - Qualquer mensagem de "manutenção programada" ou venda pendente que não zera: avisar e **não** limpar o navegador.
 
 **Resultado da conferência:** GO / NO-GO · responsável: ______ · data e hora: ______ · autorização: ______
+
+## Painel de gates de liberação — situação técnica em 2026-11-08
+
+Retrato do GOAL `PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001`. **Nenhum item abaixo autoriza o rollout**;
+cada autorização é do proprietário e vale só para o passo indicado.
+
+| Gate | Situação | Quem decide / próximo passo |
+| --- | --- | --- |
+| A6 — script `07` (CHECK de milésimos) | revisado e aprovado tecnicamente (sha256 LF `dea40868…`, inalterado); aplicação **não autorizada** | dono: aplicar ou não no J9 (recomendação técnica: aplicar) |
+| A7 — congelamento de sessões e conectores escritores | **pendente** | dono: desligar conectores/MCPs com alcance à produção e listar sessões encerradas |
+| A7b — `cron.job` | **PASS** (2026-11-08): `pg_cron` não instalado em nenhum database; nenhum job | reconfirmar no J0 |
+| A8 — janela com RAFACELL e Rafa Brinquedos fechadas | **pendente** (1 sessão de caixa ABERTA na leitura de 2026-11-08) | dono: data/hora + congelamento |
+| V1 — inventário de escritores | atualizado (§11 do `KG_RELEASE_READINESS_A4_A8.md`); residual: projeto `omni-gestao` com banco de destino não comprovável sem decriptar | dono: confirmar/neutralizar o `omni-gestao`; refazer a lista no J0/J7 |
+| N1 — ponto de recuperação Neon (J1) | **não autorizado** | dono |
+| L1 — conferência presencial das duas lojas | **pendente** | este roteiro, em cada terminal |
+| F1 — ativação KG por loja | **desligada** (`PDV_MANUAL_KG_*` ausentes) | autorização separada, depois de W1–W3 estáveis |
+| Revisão cruzada Codex da #336 | **pendente** — sem cota até 2026-11-10 21:48 | repetir a partir dessa data |
+| Ordem de merge | #315 → #335 → #336 → #337, merge commit, cada uma retargetada para `main` só no seu passo | dono, na janela |
+| Compatibilidade com a main atual (`ce9228c`) | **PASS** — pilha reconciliada sem conflito; testes, build e E2E verdes | se a main andar de novo: reconciliar e repetir CI |
+| Migrations de outras frentes (MIG-X) | **PASS hoje** — a `20261107` do catálogo já está em Production; pendentes = só as 3 KG | reconferir antes de J4/J8/9b (runbook §0.1); qualquer outra pendente = NO-GO |
