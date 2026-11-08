@@ -20,7 +20,9 @@ describe.skipIf(!URL_)("P1-1 dois processos de agente com a mesma credencial", {
   const prisma = labPrisma(URL_ ?? "postgresql://x@127.0.0.1/print_lab_unused")
   const db = prismaDatabase(prisma as never)
   // Short send lease so killed in-flight attempts resolve inside the test; admission limit raised for the burst.
-  const runtime = labRuntime({ sendLeaseMs: 5000, maxRequestsPerMinute: 1000 })
+  // A lost claim response holds the serialized destination until the dispatch lease lapses (20 s by default): short
+  // leases keep that stall well inside the kill window below, as the send lease already is.
+  const runtime = labRuntime({ dispatchLeaseMs: 5000, sendLeaseMs: 5000, maxRequestsPerMinute: 1000 })
   const dir = mkdtempSync(path.join(os.tmpdir(), "p004c-two-agents-"))
   const paper = (n: string) => path.join(dir, n + ".paper.jsonl")
   const journal = (n: string) => path.join(dir, n + ".journal.jsonl")
@@ -94,6 +96,18 @@ describe.skipIf(!URL_)("P1-1 dois processos de agente com a mesma credencial", {
     let killedInFlight = false
     let killedSubmission: Json | null = null
     for (let i = 0; i < 12; i++) {
+      if (i === 5) {
+        // Stop B only while it is idle. Stopped mid-submission, B leaves an UNKNOWN attempt that keeps the printer held
+        // until B itself answers from its journal (by design: no resend), and A would never reach the submit barrier.
+        // Idle = nothing SENDING and no READY copy under a live dispatch lease.
+        for (let w = 0; w < 150; w++) {
+          const [{ n }] = await prisma.$queryRawUnsafe<Json[]>(`SELECT count(*)::int n FROM public.print_copies WHERE job_id = ANY($1::uuid[])
+            AND (state = 'SENDING' OR (state = 'READY' AND lease_until > clock_timestamp()))`, jobs)
+          if (n === 0) break
+          await sleep(100)
+        }
+        await B.stop() // only A works the next sales, so the kill below lands inside one of its submissions
+      }
       const kill = i === 6 ? A.killNextSubmit() : null
       try {
         if (kill) {
@@ -106,7 +120,6 @@ describe.skipIf(!URL_)("P1-1 dois processos de agente com a mesma credencial", {
         expect(r.ok).toBe(true)
         sales.push(s.id); jobs.push(r.job.jobId)
         if (i % 3 === 0 && i !== 6) server.faults.dropResponseOnce.add("/api/print/agent/claim")
-        if (i === 5) await B.stop() // only A works the next sale, so the kill below lands inside one of its submissions
         if (i === 6) {
           killedSubmission = await kill!.promise
           expect(killedSubmission.phase).toBe("SUBMITTING")

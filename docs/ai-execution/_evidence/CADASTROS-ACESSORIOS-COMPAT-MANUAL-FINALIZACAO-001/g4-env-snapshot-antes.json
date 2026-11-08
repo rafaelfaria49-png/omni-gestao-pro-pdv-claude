@@ -1,0 +1,1521 @@
+{
+ "at": "2026-11-07T23:21:11.529Z",
+ "pro": [
+  {
+   "id": "7OMkX92JAYHAkK1w",
+   "key": "NPM_CONFIG_INCLUDE",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "plain",
+   "updatedAt": 1793921291566,
+   "custom": []
+  },
+  {
+   "id": "JIuxA3LLg8E3zhkA",
+   "key": "WHATSAPP_WEBHOOK_STORE_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920947993,
+   "custom": []
+  },
+  {
+   "id": "IjIkVnIa8rmy4NAP",
+   "key": "WHATSAPP_VERIFY_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920945769,
+   "custom": []
+  },
+  {
+   "id": "VCUD0eiN1AwhcYZS",
+   "key": "WHATSAPP_APP_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920943648,
+   "custom": []
+  },
+  {
+   "id": "klxYKpQ17r5dZjCf",
+   "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "encrypted",
+   "updatedAt": 1793920941552,
+   "custom": []
+  },
+  {
+   "id": "2tfIueqqIcfk1j0A",
+   "key": "WHATSAPP_PHONE_NUMBER_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "encrypted",
+   "updatedAt": 1793920939499,
+   "custom": []
+  },
+  {
+   "id": "2htPOR3Dtk6auMWe",
+   "key": "WHATSAPP_ACCESS_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "encrypted",
+   "updatedAt": 1793920937366,
+   "custom": []
+  },
+  {
+   "id": "hlNGr4Qy0AcKalX3",
+   "key": "NEXT_TELEMETRY_DISABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920935347,
+   "custom": []
+  },
+  {
+   "id": "Nt5jlUQfhgHA0php",
+   "key": "MIGRATION_AUTHORITY_ENABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920933272,
+   "custom": []
+  },
+  {
+   "id": "Ic41ovVQQjFd8kGr",
+   "key": "OMNI_PRINT_RETENTION_ENABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920931071,
+   "custom": []
+  },
+  {
+   "id": "YftOx8s4e5RDXhVD",
+   "key": "OMNI_PRINT_DIRECT_RELEASE",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920928682,
+   "custom": []
+  },
+  {
+   "id": "bZ7Cr8CZc8f6OMOa",
+   "key": "OMNI_PRINT_DIRECT_ENABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "plain",
+   "updatedAt": 1793920926562,
+   "custom": []
+  },
+  {
+   "id": "2nvRCDlid4fvNs9l",
+   "key": "OMNI_PRINT_D05_ENVIRONMENT",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920924096,
+   "custom": []
+  },
+  {
+   "id": "wKGEIMP5aGsgHXxz",
+   "key": "CONTADOR_LEGACY_PORTAL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920922038,
+   "custom": []
+  },
+  {
+   "id": "vrrlAStbTIuhkUtn",
+   "key": "NEXT_PUBLIC_APP_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "encrypted",
+   "updatedAt": 1793920918510,
+   "custom": []
+  },
+  {
+   "id": "MPTApW9TPvmB3qF1",
+   "key": "NEXTAUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "encrypted",
+   "updatedAt": 1793920916435,
+   "custom": []
+  },
+  {
+   "id": "0Qe4vEPsF4gmoFne",
+   "key": "AUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "encrypted",
+   "updatedAt": 1793920914384,
+   "custom": []
+  },
+  {
+   "id": "iIMCuv0lSXlVVz0K",
+   "key": "AUTH_TRUST_HOST",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920912293,
+   "custom": []
+  },
+  {
+   "id": "hQ1gH8YBUuh9p1sp",
+   "key": "NODE_ENV",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920909851,
+   "custom": []
+  },
+  {
+   "id": "ud8OrglBdJc11qKO",
+   "key": "CONTADOR_PIN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920907788,
+   "custom": []
+  },
+  {
+   "id": "8xS1McrdOKNPPGmF",
+   "key": "CONTADOR_SESSION_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920905718,
+   "custom": []
+  },
+  {
+   "id": "swHf7KtVJeXDYe4C",
+   "key": "OMNI_PRINT_SIGNING_KEY",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920900460,
+   "custom": []
+  },
+  {
+   "id": "6NJo0srOYYsJaKwT",
+   "key": "OMNI_PRINT_CONTENT_KEY",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920898264,
+   "custom": []
+  },
+  {
+   "id": "V4t5s5BDTL0wEcxw",
+   "key": "ADMIN_DEFAULT_PASSWORD",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920896067,
+   "custom": []
+  },
+  {
+   "id": "Q2oqJg5cvc62ddjX",
+   "key": "AUTH_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920893755,
+   "custom": []
+  },
+  {
+   "id": "iAUnSaOSvL9rcNDR",
+   "key": "DIRECT_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920891525,
+   "custom": []
+  },
+  {
+   "id": "SNSzT9lD8FGpE2BN",
+   "key": "DATABASE_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/omni-print-d05-homologacao-fisica-001",
+   "type": "sensitive",
+   "updatedAt": 1793920889365,
+   "custom": []
+  },
+  {
+   "id": "BWFYesLFr0hAJWjT",
+   "key": "DIRECT_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "claude/estoque-manual-kg-001",
+   "type": "sensitive",
+   "updatedAt": 1793138733656,
+   "custom": []
+  },
+  {
+   "id": "VUjVxPk2VgPGdjEW",
+   "key": "DATABASE_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "claude/estoque-manual-kg-001",
+   "type": "sensitive",
+   "updatedAt": 1793138733337,
+   "custom": []
+  },
+  {
+   "id": "Eq2j99rXB9pbu0S1",
+   "key": "ADMIN_DEFAULT_PASSWORD",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "sensitive",
+   "updatedAt": 1792099352824,
+   "custom": []
+  },
+  {
+   "id": "xFYDHVcIoUpJ4mOy",
+   "key": "WHATSAPP_WEBHOOK_STORE_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099349368,
+   "custom": []
+  },
+  {
+   "id": "D2zbon6DfO6nLVek",
+   "key": "WHATSAPP_VERIFY_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099347078,
+   "custom": []
+  },
+  {
+   "id": "3aYcyMlmlmCA4oAI",
+   "key": "WHATSAPP_APP_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099345028,
+   "custom": []
+  },
+  {
+   "id": "pxSylutTUr1ot8zA",
+   "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099342952,
+   "custom": []
+  },
+  {
+   "id": "pwvTUqresjvZLcDN",
+   "key": "WHATSAPP_PHONE_NUMBER_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099340910,
+   "custom": []
+  },
+  {
+   "id": "3CIr3nFWNFIWkLvY",
+   "key": "WHATSAPP_ACCESS_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099338920,
+   "custom": []
+  },
+  {
+   "id": "zJjt19tOSjDWSeSf",
+   "key": "MIGRATION_AUTHORITY_ENABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099336978,
+   "custom": []
+  },
+  {
+   "id": "8sN4YZx3V6YO9JNp",
+   "key": "NEXT_PUBLIC_APP_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099334957,
+   "custom": []
+  },
+  {
+   "id": "KrB8WMMbP2MA0A7F",
+   "key": "AUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099332971,
+   "custom": []
+  },
+  {
+   "id": "t7jecHD1j96YalSC",
+   "key": "NEXTAUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099331029,
+   "custom": []
+  },
+  {
+   "id": "xktsqPNDdepUVKbK",
+   "key": "CONTADOR_LEGACY_PORTAL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099329082,
+   "custom": []
+  },
+  {
+   "id": "Y5MxmaApV3LkEmS4",
+   "key": "CONTADOR_PIN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "encrypted",
+   "updatedAt": 1792099327173,
+   "custom": []
+  },
+  {
+   "id": "nuwgUhMjphRB6p7Q",
+   "key": "CONTADOR_SESSION_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "sensitive",
+   "updatedAt": 1792099325238,
+   "custom": []
+  },
+  {
+   "id": "E4knCfqjyON0WTjo",
+   "key": "AUTH_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/ops-v4-goal003-family-regularization",
+   "type": "sensitive",
+   "updatedAt": 1792099321793,
+   "custom": []
+  },
+  {
+   "id": "wpAUfbTMEITEHAc3",
+   "key": "ADMIN_DEFAULT_PASSWORD",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "sensitive",
+   "updatedAt": 1792030876286,
+   "custom": []
+  },
+  {
+   "id": "8wNZfOkdeuQCKGPw",
+   "key": "WHATSAPP_WEBHOOK_STORE_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030872930,
+   "custom": []
+  },
+  {
+   "id": "XksBfPR2WR6zBto7",
+   "key": "WHATSAPP_VERIFY_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030871037,
+   "custom": []
+  },
+  {
+   "id": "AlJUmiPcB34nXJIC",
+   "key": "WHATSAPP_APP_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030869205,
+   "custom": []
+  },
+  {
+   "id": "YHrqNwe58HAsFpAY",
+   "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030867319,
+   "custom": []
+  },
+  {
+   "id": "Go6kAYom4ZbkBv3T",
+   "key": "WHATSAPP_PHONE_NUMBER_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030865438,
+   "custom": []
+  },
+  {
+   "id": "f94fveH9FqWaKRoB",
+   "key": "WHATSAPP_ACCESS_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030863497,
+   "custom": []
+  },
+  {
+   "id": "Nyrimdl2qphpsyD3",
+   "key": "MIGRATION_AUTHORITY_ENABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030861593,
+   "custom": []
+  },
+  {
+   "id": "bRQ2Pjc5q8I907jJ",
+   "key": "NEXT_PUBLIC_APP_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030859676,
+   "custom": []
+  },
+  {
+   "id": "SyAicCBFkLQaVIzB",
+   "key": "AUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030857853,
+   "custom": []
+  },
+  {
+   "id": "SKsD0ecgJzndOnFC",
+   "key": "NEXTAUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030855906,
+   "custom": []
+  },
+  {
+   "id": "3prwaEUjw5XrE0Jn",
+   "key": "CONTADOR_LEGACY_PORTAL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030853955,
+   "custom": []
+  },
+  {
+   "id": "eJncRg11RKTOrTUz",
+   "key": "CONTADOR_PIN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "encrypted",
+   "updatedAt": 1792030852070,
+   "custom": []
+  },
+  {
+   "id": "fHmtZSvWxz2jeSJt",
+   "key": "CONTADOR_SESSION_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "sensitive",
+   "updatedAt": 1792030850018,
+   "custom": []
+  },
+  {
+   "id": "7a4BTs3TZahrv6RV",
+   "key": "AUTH_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-datas",
+   "type": "sensitive",
+   "updatedAt": 1792030846584,
+   "custom": []
+  },
+  {
+   "id": "GKLzOE9m8JtKEdDA",
+   "key": "ADMIN_DEFAULT_PASSWORD",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "sensitive",
+   "updatedAt": 1792030836063,
+   "custom": []
+  },
+  {
+   "id": "ip9cIiExytjXEcGi",
+   "key": "WHATSAPP_WEBHOOK_STORE_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030832698,
+   "custom": []
+  },
+  {
+   "id": "SDjPucGJCKuEABs0",
+   "key": "WHATSAPP_VERIFY_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030830825,
+   "custom": []
+  },
+  {
+   "id": "0cNDSLug2wqtoDIB",
+   "key": "WHATSAPP_APP_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030829016,
+   "custom": []
+  },
+  {
+   "id": "eYm5D31GcLgbVHyZ",
+   "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030827184,
+   "custom": []
+  },
+  {
+   "id": "sMdQuV4Ao9KDmFBA",
+   "key": "WHATSAPP_PHONE_NUMBER_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030825398,
+   "custom": []
+  },
+  {
+   "id": "C2NpJlMVk1zQVln3",
+   "key": "WHATSAPP_ACCESS_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030823548,
+   "custom": []
+  },
+  {
+   "id": "3YscDDy5kIBiLBjV",
+   "key": "MIGRATION_AUTHORITY_ENABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030821689,
+   "custom": []
+  },
+  {
+   "id": "dmfOKtu9sItlU3qZ",
+   "key": "NEXT_PUBLIC_APP_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030819762,
+   "custom": []
+  },
+  {
+   "id": "IvALPmegtNxO1Vx8",
+   "key": "AUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030817827,
+   "custom": []
+  },
+  {
+   "id": "9qGEQA4iLPe9BTWR",
+   "key": "NEXTAUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030816044,
+   "custom": []
+  },
+  {
+   "id": "LS1wOU1sWa17C82A",
+   "key": "CONTADOR_LEGACY_PORTAL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030814209,
+   "custom": []
+  },
+  {
+   "id": "lifPgqejuOUf2vk7",
+   "key": "CONTADOR_PIN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "encrypted",
+   "updatedAt": 1792030812378,
+   "custom": []
+  },
+  {
+   "id": "tsfo80SvmozkY5qu",
+   "key": "CONTADOR_SESSION_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "sensitive",
+   "updatedAt": 1792030810528,
+   "custom": []
+  },
+  {
+   "id": "XNw1C7bLygRv6OK2",
+   "key": "AUTH_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+   "type": "sensitive",
+   "updatedAt": 1792030807187,
+   "custom": []
+  },
+  {
+   "id": "cBfGNr6mzEaREiY8",
+   "key": "ADMIN_DEFAULT_PASSWORD",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "sensitive",
+   "updatedAt": 1792015726246,
+   "custom": []
+  },
+  {
+   "id": "LE1G8z3RB8FWnpT2",
+   "key": "WHATSAPP_WEBHOOK_STORE_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015719202,
+   "custom": []
+  },
+  {
+   "id": "ZvYmMQTm8wsyjTzP",
+   "key": "WHATSAPP_VERIFY_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015715132,
+   "custom": []
+  },
+  {
+   "id": "zrxxoqmqvrgZcrV4",
+   "key": "WHATSAPP_APP_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015696390,
+   "custom": []
+  },
+  {
+   "id": "vr5v3qoelt6gDEkk",
+   "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015672601,
+   "custom": []
+  },
+  {
+   "id": "Mge2pSRHOPOeQUnl",
+   "key": "WHATSAPP_PHONE_NUMBER_ID",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015666899,
+   "custom": []
+  },
+  {
+   "id": "sre6d9Xa9blMSgjs",
+   "key": "WHATSAPP_ACCESS_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015662379,
+   "custom": []
+  },
+  {
+   "id": "IjA7fpNAu60pVFYO",
+   "key": "NEXT_PUBLIC_APP_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015649690,
+   "custom": []
+  },
+  {
+   "id": "2sfnFuGb8Vx6ADD3",
+   "key": "AUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015645975,
+   "custom": []
+  },
+  {
+   "id": "COdGz0km4IkYHLMI",
+   "key": "NEXTAUTH_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015643322,
+   "custom": []
+  },
+  {
+   "id": "EG0r8fkHv2D5jy13",
+   "key": "CONTADOR_LEGACY_PORTAL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015639831,
+   "custom": []
+  },
+  {
+   "id": "SB2IOIAvrzAZM8w0",
+   "key": "CONTADOR_PIN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015636593,
+   "custom": []
+  },
+  {
+   "id": "pht37aajnXP89cyu",
+   "key": "CONTADOR_SESSION_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "sensitive",
+   "updatedAt": 1792015632653,
+   "custom": []
+  },
+  {
+   "id": "TjXXGqHyjq825EDr",
+   "key": "AUTH_SECRET",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "sensitive",
+   "updatedAt": 1792015628285,
+   "custom": []
+  },
+  {
+   "id": "ozupokmR0AdYxskZ",
+   "key": "MIGRATION_AUTHORITY_ENABLED",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": "codex/release-ops-v4-vercel",
+   "type": "encrypted",
+   "updatedAt": 1792015657898,
+   "custom": []
+  },
+  {
+   "id": "P5ts2gVlZOVlxoFi",
+   "key": "CONTADOR_LEGACY_PORTAL",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787285250079,
+   "custom": []
+  },
+  {
+   "id": "UffVwCMMhoRp49c2",
+   "key": "CONTADOR_LEGACY_PORTAL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787285239470,
+   "custom": []
+  },
+  {
+   "id": "EXr9OospvRIHVVd9",
+   "key": "CONTADOR_PORTAL_V2",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787285187066,
+   "custom": []
+  },
+  {
+   "id": "KrjchtbzS3pc3Cmd",
+   "key": "R2_SECRET_ACCESS_KEY",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787285000817,
+   "custom": []
+  },
+  {
+   "id": "whKD2d8K9gV4OzXA",
+   "key": "R2_ACCESS_KEY_ID",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787284992441,
+   "custom": []
+  },
+  {
+   "id": "qWyVpQckc4hlxRmv",
+   "key": "R2_BUCKET",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787279683346,
+   "custom": []
+  },
+  {
+   "id": "AxBGRR5Jzc8dFMTW",
+   "key": "R2_ACCOUNT_ID",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787279674191,
+   "custom": []
+  },
+  {
+   "id": "PLvN4bdbxXpXavKf",
+   "key": "CONTADOR_STORAGE_PROVIDER",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1787279643222,
+   "custom": []
+  },
+  {
+   "id": "c0XM97qFUmrleaLB",
+   "key": "SALE_SERVER_NUMBERING_ENABLED",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "encrypted",
+   "updatedAt": 1787020698972,
+   "custom": []
+  },
+  {
+   "id": "5AGOaX1DcIDHTFdI",
+   "key": "FISCAL_A1_SENHA_LOJA_1",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1786459625800,
+   "custom": []
+  },
+  {
+   "id": "eZZylXEYo1SVFEfD",
+   "key": "FISCAL_A1_PFX_B64_LOJA_1",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1786459602958,
+   "custom": []
+  },
+  {
+   "id": "PzB5wlYjCWplArw7",
+   "key": "MIGRATION_AUTHORITY_ENABLED",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1792163993518,
+   "custom": []
+  },
+  {
+   "id": "iqqhBaY9J3MECrZn",
+   "key": "ASSISTEC_SUBSCRIPTION_SECRET",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1785846904013,
+   "custom": []
+  },
+  {
+   "id": "jrtbYTltrUG311by",
+   "key": "CONTADOR_EXTERNO_SESSION_SECRET",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1785598753090,
+   "custom": []
+  },
+  {
+   "id": "vFJN2RB2PQHJairQ",
+   "key": "DIRECT_URL",
+   "target": [
+    "development"
+   ],
+   "gitBranch": null,
+   "type": "encrypted",
+   "updatedAt": 1785195024620,
+   "custom": []
+  },
+  {
+   "id": "WfY0iLLQ8cbQOXHd",
+   "key": "DIRECT_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1793138732473,
+   "custom": []
+  },
+  {
+   "id": "38TkKDEr1OIgsxy0",
+   "key": "DIRECT_URL",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1785194925881,
+   "custom": []
+  },
+  {
+   "id": "CAgFUTJYNOJb64j1",
+   "key": "DATABASE_URL",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1793138732158,
+   "custom": []
+  },
+  {
+   "id": "p2OLtFuiyUymtIRA",
+   "key": "DATABASE_URL",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1785194789822,
+   "custom": []
+  },
+  {
+   "id": "U0Ez4AVqVvu2Xf3X",
+   "key": "CONTADOR_SESSION_SECRET",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1784050864735,
+   "custom": []
+  },
+  {
+   "id": "L4MuFQGzSRghPSlt",
+   "key": "CONTADOR_PIN",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1784050399974,
+   "custom": []
+  },
+  {
+   "id": "HMlR1LPzNwX5aLaj",
+   "key": "BARCODE_LOOKUP_PROVIDERS",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1783704244409,
+   "custom": []
+  },
+  {
+   "id": "wACPRF4UG3fGtx7y",
+   "key": "WHATSAPP_WEBHOOK_STORE_ID",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778472318404,
+   "custom": []
+  },
+  {
+   "id": "TtvJ6jn0lleNw016",
+   "key": "WHATSAPP_APP_SECRET",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778472147632,
+   "custom": []
+  },
+  {
+   "id": "RdEnNV183eNkyG8z",
+   "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778471512012,
+   "custom": []
+  },
+  {
+   "id": "BAsuVAUgNCGH4FKx",
+   "key": "WHATSAPP_PHONE_NUMBER_ID",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778471365037,
+   "custom": []
+  },
+  {
+   "id": "vMZLweCHSshtIFqb",
+   "key": "WHATSAPP_ACCESS_TOKEN",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778591253366,
+   "custom": []
+  },
+  {
+   "id": "fIvdV5EwXuZEuOkz",
+   "key": "WHATSAPP_VERIFY_TOKEN",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "plain",
+   "updatedAt": 1778471614731,
+   "custom": []
+  },
+  {
+   "id": "hebXh2TSFLkNTyMb",
+   "key": "ADMIN_DEFAULT_PASSWORD",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778295941178,
+   "custom": []
+  },
+  {
+   "id": "WuGEsf0tgQf3nVFC",
+   "key": "NEXTAUTH_URL",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778295910191,
+   "custom": []
+  },
+  {
+   "id": "0CDB8CwX0dkNhY8g",
+   "key": "AUTH_SECRET",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778295878293,
+   "custom": []
+  },
+  {
+   "id": "V1LvPCzW7FhaKp2e",
+   "key": "COSMOS_API_KEY",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "encrypted",
+   "updatedAt": 1783712819266,
+   "custom": []
+  }
+ ],
+ "second": [
+  {
+   "id": "HlCWKorfn7BzEm2N",
+   "key": "WHATSAPP_VERIFY_TOKEN",
+   "target": [
+    "preview"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778395290009,
+   "custom": []
+  },
+  {
+   "id": "ITEdgLrQMhvAqJnH",
+   "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778347064440,
+   "custom": []
+  },
+  {
+   "id": "gMeIaHnOcxjVHk3I",
+   "key": "WHATSAPP_ACCESS_TOKEN",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778390673736,
+   "custom": []
+  },
+  {
+   "id": "2DI04sYh9KAfBwC5",
+   "key": "WHATSAPP_PHONE_NUMBER_ID",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778347098740,
+   "custom": []
+  },
+  {
+   "id": "cpnsiZFmtuwZQz0B",
+   "key": "STRIPE_WEBHOOK_SECRET",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778336839309,
+   "custom": []
+  },
+  {
+   "id": "BuQurUirZpLdALBs",
+   "key": "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778300636999,
+   "custom": []
+  },
+  {
+   "id": "dTPINEIKgjm9712i",
+   "key": "STRIPE_SECRET_KEY",
+   "target": [
+    "preview",
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778300606050,
+   "custom": []
+  },
+  {
+   "id": "jk7Jr3A4rkW8yoln",
+   "key": "DIRECT_URL",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778262986690,
+   "custom": []
+  },
+  {
+   "id": "F0J5xtzoIm9gsAmf",
+   "key": "DATABASE_URL",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778262982465,
+   "custom": []
+  },
+  {
+   "id": "FzrYTLVJYhpp3OO7",
+   "key": "ASSISTEC_MASTER_PASSWORD",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778244822017,
+   "custom": []
+  },
+  {
+   "id": "mWgLSBAyCT7Ure6D",
+   "key": "NEXT_PUBLIC_APP_URL",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778244818049,
+   "custom": []
+  },
+  {
+   "id": "Etu1KKD2Z4kWFhHI",
+   "key": "OPENAI_MODEL",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778244814187,
+   "custom": []
+  },
+  {
+   "id": "MSXWGPzt4aEqNRvO",
+   "key": "OPENAI_API_BASE",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778244809989,
+   "custom": []
+  },
+  {
+   "id": "sjxjPENyVjybAx1z",
+   "key": "OPENAI_API_KEY",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778244806120,
+   "custom": []
+  },
+  {
+   "id": "cd6wYZpNCWDWyjMr",
+   "key": "OPENROUTER_API_KEY",
+   "target": [
+    "production"
+   ],
+   "gitBranch": null,
+   "type": "sensitive",
+   "updatedAt": 1778244802224,
+   "custom": []
+  }
+ ],
+ "ssoProtection": null
+}
