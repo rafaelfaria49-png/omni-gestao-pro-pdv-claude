@@ -14,7 +14,7 @@ const { spawnSync } = require("node:child_process")
 
 const PROJECT_ID = "prj_wjkHKw2jFQfY8regMYtkYXwgavuz", BR = "claude/cadastros-acessorios-compat-manual-001"
 const STATE = path.join(__dirname, "..", "g6-state.json")
-const H = path.join(__dirname, "acc-candidate.cjs")
+const H = path.join(__dirname, "acc-candidate.cjs.txt")
 const LOJA1 = "preview-loja-1", LOJA2 = "preview-loja-2-acc"
 const OVERRIDE_KEYS = ["DATABASE_URL", "DIRECT_URL", "AUTH_SECRET"]
 const tok = JSON.parse(fs.readFileSync(process.env.APPDATA + "/xdg.data/com.vercel.cli/auth.json", "utf8")).token
