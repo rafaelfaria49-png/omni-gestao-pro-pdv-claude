@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mkdtempSync, appendFileSync } from "node:fs"
+import { mkdtempSync, appendFileSync, existsSync, unlinkSync } from "node:fs"
 import { createHash } from "node:crypto"
 import os from "node:os"
 import path from "node:path"
@@ -73,6 +73,18 @@ describe("agente com spooler simulado (sem servidor)", { timeout: 30_000 }, () =
       payloadHash: createHash("sha256").update(payload).digest("hex"), ...extra }
   }
   const ok = [0x41, 0x0a, 0x1d, 0x56, 0x00]
+  it("revisão D05 P3-3: identidade da instância sem o diário é recusada (redelivery cercada a ela reimprimiria)", async () => {
+    const f = tmp(), sp = new FakeSpooler()
+    const first = new Agent({ serverUrl: "http://127.0.0.1:1", token: "x", journalFile: f, spooler: sp })
+    first.releaseLock()
+    expect(existsSync(f)).toBe(true) // created durably together with the identity, before any dispatch
+    await first.handle(dispatch(ok))
+    expect(sp.spooled.length).toBe(1)
+    unlinkSync(f) // journal removed by hand, identity (.instance) kept
+    expect(() => new Agent({ serverUrl: "http://127.0.0.1:1", token: "x", journalFile: f, spooler: sp })).toThrow("JOURNAL_MISSING")
+    expect(existsSync(f + ".lock")).toBe(false)
+    expect(sp.spooled.length).toBe(1)
+  })
   it("mesma sendKey reentregue nunca chega duas vezes ao spooler", async () => {
     const sp = new FakeSpooler()
     const agent = new Agent({ serverUrl: "http://127.0.0.1:1", token: "x", journalFile: tmp(), spooler: sp })
