@@ -87,6 +87,37 @@ A leitura de `cron.job` continua pendente de **autorização específica para es
 nem neste A5; autorização de outro passo não amplia automaticamente o alvo. Identificar papel, destino e alcance
 dos jobs antes de liberar a janela, pois podem representar escritores fora do inventário HTTP.
 
+### 0.1 Atualização 2026-11-08 — main `ce9228c`, migrations de outras frentes e V1 (somente leitura)
+
+GOAL `PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001`. Leitura RO autorizada (`BEGIN READ ONLY` +
+`default_transaction_read_only=on`, identidade travada no host direto). Registro:
+`docs/ai-execution/_evidence/PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001/` (na #337).
+
+| Item | Retrato 2026-11-08 ~06:07Z |
+| --- | --- |
+| Production servida | `omni-gestao-pro.vercel.app` → `dpl_GhyK8LebaGHAUjVBB5F4aT89gf8L` = main **`ce9228c`**, build `MIGRATION_SKIPPED` + `PROXY_PRISMA_ARTIFACT_VERIFIED` |
+| `_prisma_migrations` | **24** finalizadas, 0 falhas; última = `20261107120000_catalogo_aparelhos_loja` (checksum `57b39143…`), aplicada **fora do build** às 05:46:22Z pela frente do catálogo (#339/#340), não pelo KG |
+| Migrations KG | `20261025`, `20261029`, `20261106`: **ausentes**; 5 colunas `integer`; 0 funções/gatilhos `manual_kg_*`; 0 CHECKs do `07` |
+| Caixa | **1** sessão `ABERTA` (desde 2026-11-07 20:57Z); não identificada por loja nesta leitura — o J0 continua exigindo zero |
+| A7b | `pg_cron` está em `shared_preload_libraries` (plataforma Neon), mas a extensão **não está criada** em nenhum dos 4 databases (`neondb`, `omnigestao_prod`, `omnigestao_prod_candidate`, `postgres`): `cron.job` inexistente → nenhum escritor agendado. Reconfirmar no J0 |
+
+**Gate MIG-X (dependência de migrations de outras frentes) — obrigatório antes do J4, do J8 e do 9b:**
+
+1. Do checkout do head exato da #315 a mergear, `prisma migrate status` contra Production (credencial RO ou
+   migrator, sem aplicar nada) deve listar como pendente **exatamente** `20261025120000_estoque_quantidade_fracionada`.
+   Do checkout do topo (#337), antes do 9b, **exatamente** `20261029120000` e `20261106120000`.
+2. Qualquer outra pendente (migration nova de outra frente que chegou à `main`, ou a `20261107` revertida pelo
+   rollback do catálogo) = **NO-GO da janela KG**. A migration de outra frente só entra por rollout próprio,
+   autorizado pela frente dona, **antes** da janela — nunca por um `migrate deploy` do KG.
+3. O J8 nunca usa `migrate deploy` (script com retrato + `migrate resolve --applied` da `20261025`); o 9b usa
+   `migrate deploy` só depois do item 1 confirmar as duas pendentes exatas.
+4. Hoje (2026-11-08) o gate está **satisfeito**: a `20261107` já consta em Production, e no checkout reconciliado
+   as únicas pendentes contra o retrato são as três KG. A ordem KG × catálogo foi provada indiferente em PG 17
+   (KG antes ou depois da `20261107`: `migrate status` em dia, `migrate diff` vazio, objetos disjuntos).
+5. `MIGRATION_AUTHORITY_ENABLED` (Production, `sensitive`, atualizada pela última vez em 2026-10-16) não é legível;
+   o build de `ce9228c` registrou `MIGRATION_SKIPPED`. O gate do J4 continua: conferir `MIGRATION_SKIPPED` no log
+   do build do merge.
+
 ## 1. Por que a ordem importa (provado em PG 17 descartável)
 
 | Cliente Prisma × colunas | Leitura | Escrita |
