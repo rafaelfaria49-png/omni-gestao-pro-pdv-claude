@@ -51,6 +51,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
+import type { ClienteComAberto } from "@/lib/contas-receber-cliente-match"
 import { usePdvCliente, type PdvClienteResult } from "@/hooks/use-pdv-cliente"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import {
@@ -60,7 +61,6 @@ import {
 import {
   calcSaldoDevedorClienteDeSaldos,
   imprimirReciboLote,
-  imprimirReciboPagamento,
   resolveReciboLojaNome,
   type ReciboLoteItem,
 } from "@/lib/contas-receber-recibo"
@@ -138,7 +138,15 @@ type LoteResultado = {
   itens: Array<{ localKey: string; descricao: string; valorRecebido: number; saldoDepois: number }>
   saldoDevedorAtual: number
   jaRegistrado: boolean
+  /** Identidade da operação gravada no servidor (impressa no comprovante). */
+  operacaoId: string | null
+  /** Hora do servidor na confirmação (ISO) — nunca um relógio fixo. */
+  recebidoEm: string
+  cliente: string
 }
+
+/** Situação da última tentativa de impressão do comprovante (nunca afeta a baixa). */
+type ImpressaoEstado = "nao_tentada" | "aberta" | "falhou"
 
 export interface PdvRecebimentoModalProps {
   open: boolean
@@ -169,7 +177,19 @@ export function PdvRecebimentoModal({
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const storeId = lojaAtivaId?.trim() || ""
-  const { query, setQuery, results, loading: loadingClientes, clear: clearClienteSearch } = usePdvCliente(storeId)
+  const {
+    query,
+    setQuery,
+    results,
+    loading: loadingClientes,
+    error: buscaErro,
+    searched: buscaRespondida,
+    clear: clearClienteSearch,
+    retry: retryBusca,
+  } = usePdvCliente(storeId)
+  /** Clientes com saldo em aberto nesta loja (lista inicial, maiores devedores primeiro). */
+  const [clientesComAberto, setClientesComAberto] = useState<ClienteComAberto[]>([])
+  const [impressao, setImpressao] = useState<ImpressaoEstado>("nao_tentada")
 
   const [selectedCliente, setSelectedCliente] = useState<PdvClienteResult | null>(null)
   /** Resposta canônica COMPLETA da loja — as abas são derivadas, nunca filtram a fonte. */
@@ -242,6 +262,7 @@ export function PdvRecebimentoModal({
         rows?: ContaReceberRow[]
         audit?: Array<{ id?: string; localKey?: string; saldoAberto?: number; vencido?: boolean }>
         nomesAmbiguos?: string[]
+        clientesComAberto?: ClienteComAberto[]
         error?: string
       } | null
       if (!r.ok || !j) throw new Error(j?.error || `HTTP ${r.status}`)
@@ -267,6 +288,7 @@ export function PdvRecebimentoModal({
       } else {
         setAmbiguityResolved(false)
       }
+      setClientesComAberto(Array.isArray(j.clientesComAberto) ? j.clientesComAberto : [])
       // A listagem canônica inteira fica em memória: "Recebidos" precisa dos títulos
       // já baixados, que o filtro por status descartava cedo demais.
       setRows(list)
@@ -275,6 +297,7 @@ export function PdvRecebimentoModal({
       setError(msg)
       setAmbiguityResolved(false)
       setRows([])
+      setClientesComAberto([])
     } finally {
       setLoadingTitulos(false)
     }
@@ -291,6 +314,7 @@ export function PdvRecebimentoModal({
     setTab("abertos")
     setEtapa("lista")
     setResultado(null)
+    setImpressao("nao_tentada")
     encerrarSubmissao(travaRef.current)
     setGravando(false)
     // Nova sessão do modal: chaves pendentes de tentativas anteriores não valem mais.
@@ -428,6 +452,12 @@ export function PdvRecebimentoModal({
 
   const formaLabel = formasAtivas.find((f) => f.id === formaPagto)?.label ?? formaPagto
 
+  /** `Cliente.id → resumo em aberto` (servidor, mesmo matcher fail-closed). */
+  const abertoPorCliente = useMemo(
+    () => new Map(clientesComAberto.map((c) => [c.id, c])),
+    [clientesComAberto],
+  )
+
   /** Seleção só sobrevive enquanto o título continuar em aberto na lista recarregada. */
   useEffect(() => {
     const validos = new Set(selecionaveis(abertos))
@@ -487,75 +517,50 @@ export function PdvRecebimentoModal({
     [doCliente],
   )
 
-  const podeImprimir = !!impressaoConfig && crediarioPrintAllowed(impressaoConfig)
+  /** Impressão AUTOMÁTICA do comprovante (config "Imprimir crediário"). Manual é sempre possível. */
+  const autoImprimir = !!impressaoConfig && crediarioPrintAllowed(impressaoConfig)
 
-  const tryPrintRecibo = useCallback(
-    (linha: LinhaTitulo, valorPago: number, saldoRemanescenteTitulo: number) => {
-      if (!podeImprimir) return
-      if (
-        selectedCliente &&
-        !tituloPertenceAoCliente(
-          { clienteId: linha.row.clienteId, cliente: linha.row.cliente },
-          selectedCliente,
-          matchOpts,
-        )
-      ) {
-        return
-      }
-      try {
-        imprimirReciboPagamento(
-          {
-            lojaNome: reciboLojaNome,
-            cliente: linha.row.cliente || selectedCliente?.name || "—",
-            descricaoTitulo: linha.descricao,
-            valorPago,
-            dataPagamento: new Date(),
-            formaPagamento: formaLabel,
-            saldoDevedorAtual: saldoDevedorClienteApos(linha.localKey, saldoRemanescenteTitulo),
-          },
-          { bobina: impressaoConfig?.bobinaTamanho === "58mm" ? "58mm" : "80mm" },
-        )
-      } catch (e) {
-        console.error("[PdvRecebimentoModal] recibo:", e)
-        toast({
-          title: "Comprovante não impresso",
-          description: "O recebimento foi registrado. Tente reimprimir pelo financeiro.",
-        })
-      }
-    },
-    [podeImprimir, impressaoConfig, reciboLojaNome, formaLabel, selectedCliente?.name, toast, saldoDevedorClienteApos],
-  )
-
-  const tryPrintReciboLote = useCallback(
-    (res: LoteResultado) => {
-      if (!podeImprimir) return
+  /**
+   * Imprime o comprovante NÃO FISCAL de uma operação JÁ confirmada pelo servidor.
+   * Um cupom por operação (1 ou N títulos). Reimprimir chama esta mesma função com o
+   * mesmo resultado — nenhuma baixa nova. Falha de impressão só muda o aviso.
+   */
+  const imprimirComprovante = useCallback(
+    async (res: LoteResultado) => {
+      const bobina = impressaoConfig?.bobinaTamanho === "58mm" ? "58mm" : "80mm"
+      let ok = false
       try {
         const itens: ReciboLoteItem[] = res.itens.map((i) => ({
           descricao: i.descricao,
           valorRecebido: i.valorRecebido,
           saldoRestante: i.saldoDepois,
         }))
-        imprimirReciboLote(
+        ok = await imprimirReciboLote(
           {
             lojaNome: reciboLojaNome,
-            cliente: selectedCliente?.name || "—",
-            dataPagamento: new Date(),
+            cliente: res.cliente,
+            dataPagamento: new Date(res.recebidoEm),
             formaPagamento: res.formaLabel,
             itens,
             totalRecebido: res.totalRecebido,
             saldoDevedorAtual: res.saldoDevedorAtual,
+            operacaoId: res.operacaoId ?? undefined,
           },
-          { bobina: impressaoConfig?.bobinaTamanho === "58mm" ? "58mm" : "80mm" },
+          { bobina },
         )
       } catch (e) {
-        console.error("[PdvRecebimentoModal] recibo lote:", e)
+        console.error("[PdvRecebimentoModal] comprovante:", e)
+        ok = false
+      }
+      setImpressao(ok ? "aberta" : "falhou")
+      if (!ok) {
         toast({
           title: "Comprovante não impresso",
-          description: "O recebimento foi registrado. Tente reimprimir pelo financeiro.",
+          description: "O recebimento está gravado. Use Imprimir comprovante para tentar de novo.",
         })
       }
     },
-    [podeImprimir, impressaoConfig, reciboLojaNome, selectedCliente?.name, toast],
+    [impressaoConfig?.bobinaTamanho, reciboLojaNome, toast],
   )
 
   // ─── recebimento singular (preservado) ─────────────────────────────────────
@@ -612,7 +617,11 @@ export function PdvRecebimentoModal({
         error?: string
         code?: string
         valorRecebido?: number
+        jaRegistrado?: boolean
+        operacaoId?: string | null
+        recebidoEm?: string
         titulo?: { status?: string; valor?: number }
+        audit?: { saldoAberto?: number } | null
       } | null
       if (!r.ok || !j?.ok) {
         const code = j?.code || j?.error
@@ -628,7 +637,16 @@ export function PdvRecebimentoModal({
         return { ok: false as const, error: j?.error || `HTTP ${r.status}` }
       }
       dropIdempotencyKey(row, op, valor)
-      return { ok: true as const, valorRecebido: j.valorRecebido ?? valor ?? Number(row.valor) }
+      const saldoSrv = Number(j.audit?.saldoAberto)
+      return {
+        ok: true as const,
+        // Autoridade do valor é o servidor; sem ele não há o que afirmar no comprovante.
+        valorRecebido: Number(j.valorRecebido) || 0,
+        saldoDepois: Number.isFinite(saldoSrv) ? Math.max(0, saldoSrv) : 0,
+        jaRegistrado: j.jaRegistrado === true,
+        operacaoId: j.operacaoId?.trim() || idempotencyKey,
+        recebidoEm: j.recebidoEm || new Date().toISOString(),
+      }
     },
     [storeId, sessaoId, formaPagto, idempotencyKeyFor, dropIdempotencyKey, selectedCliente, matchOpts],
   )
@@ -657,17 +675,37 @@ export function PdvRecebimentoModal({
       try {
         const res = await postRecebimento(linha.row, "liquidar")
         if (!res.ok) throw new Error(res.error)
+        // Também no replay: a chave só é reusada quando a tentativa anterior NÃO chegou
+        // aqui (resposta perdida) — então a entrada local ainda não foi somada. Mesma
+        // regra do lote, abaixo.
         if (formaPagto === "dinheiro" && res.valorRecebido > 0) {
           adicionarEntrada(res.valorRecebido)
         }
-        toast({
-          title: "Recebimento confirmado",
-          description: `${linha.row.cliente || "—"} — ${brl(res.valorRecebido)} (${formaLabel}).`,
-        })
-        // Quitação total: nada remanesce DESTE título → saldo do recibo = demais títulos.
-        tryPrintRecibo(linha, res.valorRecebido, 0)
-        await fetchTitulos()
-        onReceived?.()
+        // Mesma tela de sucesso do lote: o operador decide imprimir/reimprimir; a baixa
+        // não some num toast. Saldo do recibo = o que sobrou neste título + demais títulos.
+        const sucesso: LoteResultado = {
+          totalRecebido: res.valorRecebido,
+          formaLabel,
+          itens: [
+            { localKey: linha.localKey, descricao: linha.descricao, valorRecebido: res.valorRecebido, saldoDepois: res.saldoDepois },
+          ],
+          saldoDevedorAtual: saldoDevedorClienteApos(linha.localKey, res.saldoDepois),
+          jaRegistrado: res.jaRegistrado,
+          operacaoId: res.operacaoId,
+          recebidoEm: res.recebidoEm,
+          cliente: selectedCliente?.name || linha.row.cliente || "—",
+        }
+        setResultado(sucesso)
+        setImpressao("nao_tentada")
+        setSelecionados([])
+        setEtapa("sucesso")
+        if (autoImprimir) void imprimirComprovante(sucesso)
+        try {
+          await fetchTitulos()
+          onReceived?.()
+        } catch {
+          /* a baixa já está confirmada; a lista recarrega na próxima abertura */
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         toast({ variant: "destructive", title: "Falha ao receber", description: msg })
@@ -683,7 +721,9 @@ export function PdvRecebimentoModal({
       adicionarEntrada,
       toast,
       fetchTitulos,
-      tryPrintRecibo,
+      autoImprimir,
+      imprimirComprovante,
+      saldoDevedorClienteApos,
       onReceived,
       selectedCliente,
       matchOpts,
@@ -740,6 +780,8 @@ export function PdvRecebimentoModal({
             jaRegistrado?: boolean
             totalRecebido?: number
             itens?: Array<{ localKey?: string; valorRecebido?: number; saldoDepois?: number }>
+            operacaoId?: string
+            recebidoEm?: string
             error?: string
             code?: string
             detalhes?: Array<{ localKey?: string; motivo?: string; saldoReal?: number; saldoEsperado?: number }>
@@ -787,6 +829,9 @@ export function PdvRecebimentoModal({
         itens: itensRecibo,
         saldoDevedorAtual,
         jaRegistrado: j.jaRegistrado === true,
+        operacaoId: j.operacaoId?.trim() || idempotencyKey,
+        recebidoEm: j.recebidoEm || new Date().toISOString(),
+        cliente: selectedCliente?.name || "—",
       }
 
       // Daqui para baixo o servidor JÁ gravou. Se algo na cauda (caixa local, recibo,
@@ -808,8 +853,9 @@ export function PdvRecebimentoModal({
       setSelecionados([])
       setParcialValue({})
       setParcialAtivo(false)
+      setImpressao("nao_tentada")
       setEtapa("sucesso")
-      tryPrintReciboLote(res)
+      if (autoImprimir) void imprimirComprovante(res)
       await fetchTitulos()
       onReceived?.()
     } catch (e) {
@@ -846,7 +892,9 @@ export function PdvRecebimentoModal({
     handleOpenChange,
     onReceived,
     toast,
-    tryPrintReciboLote,
+    autoImprimir,
+    imprimirComprovante,
+    selectedCliente?.name,
   ])
 
   const selectCliente = (c: PdvClienteResult) => {
@@ -919,18 +967,35 @@ export function PdvRecebimentoModal({
                 />
               </div>
             </div>
-            {loadingClientes && (
+            {query.trim().length === 0 ? (
+              <ClientesComAbertoLista
+                clientes={clientesComAberto}
+                carregando={loadingTitulos}
+                erro={error}
+                onRetry={() => void fetchTitulos()}
+                onSelect={selectCliente}
+              />
+            ) : buscaErro ? (
+              <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-3 text-sm text-destructive flex flex-wrap items-center justify-between gap-2 min-w-0">
+                <span className="min-w-0">{buscaErro}</span>
+                <Button type="button" size="sm" variant="outline" onClick={retryBusca}>
+                  <RefreshCw className="mr-1 h-3.5 w-3.5" /> Tentar de novo
+                </Button>
+              </div>
+            ) : loadingClientes || !buscaRespondida ? (
               <p className="text-sm text-muted-foreground flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Buscando clientes…
               </p>
-            )}
-            {!loadingClientes && query.trim().length >= 1 && results.length === 0 && (
+            ) : results.length === 0 ? (
               <p className="text-sm text-muted-foreground rounded-md border border-dashed border-border px-3 py-4 text-center">
-                Nenhum cliente encontrado.
+                Nenhum cliente encontrado para “{query.trim()}” nesta loja.
               </p>
-            )}
+            ) : null}
+            {query.trim().length > 0 && !buscaErro && (
             <ul className="space-y-1">
-              {results.map((c) => (
+              {ordenarPorAberto(results, abertoPorCliente).map((c) => {
+                const aberto = abertoPorCliente.get(c.id)
+                return (
                 <li key={c.id}>
                   <button
                     type="button"
@@ -944,19 +1009,31 @@ export function PdvRecebimentoModal({
                         {[c.document, c.phone].filter(Boolean).join(" · ") || "—"}
                       </p>
                     </div>
+                    {aberto ? (
+                      <span className="shrink-0 text-right text-xs">
+                        <span className="block font-bold tabular-nums text-foreground">{brl(aberto.totalAberto)}</span>
+                        <span className="text-muted-foreground">{aberto.qtdAbertos === 1 ? "1 em aberto" : `${aberto.qtdAbertos} em aberto`}</span>
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-[11px] text-muted-foreground">sem títulos em aberto</span>
+                    )}
                   </button>
                 </li>
-              ))}
+                )
+              })}
             </ul>
+            )}
           </div>
         ) : etapa === "sucesso" && resultado ? (
           <SucessoLote
             resultado={resultado}
             cliente={selectedCliente.name}
-            podeImprimir={podeImprimir}
-            onImprimir={() => tryPrintReciboLote(resultado)}
+            autoImprimir={autoImprimir}
+            impressao={impressao}
+            onImprimir={() => void imprimirComprovante(resultado)}
             onConcluir={() => {
               setResultado(null)
+              setImpressao("nao_tentada")
               setEtapa("lista")
             }}
             onFechar={() => handleOpenChange(false)}
@@ -1510,7 +1587,8 @@ function ConfirmarLote({
 function SucessoLote({
   resultado,
   cliente,
-  podeImprimir,
+  autoImprimir,
+  impressao,
   onImprimir,
   onConcluir,
   onFechar,
@@ -1518,7 +1596,8 @@ function SucessoLote({
 }: {
   resultado: LoteResultado
   cliente: string
-  podeImprimir: boolean
+  autoImprimir: boolean
+  impressao: ImpressaoEstado
   onImprimir: () => void
   onConcluir: () => void
   onFechar: () => void
@@ -1560,6 +1639,26 @@ function SucessoLote({
           Saldo devedor do cliente nesta loja:{" "}
           <strong className="tabular-nums text-foreground">{brl(resultado.saldoDevedorAtual)}</strong>
         </p>
+        <p className="mt-1 text-center text-[11px] text-muted-foreground">
+          {new Date(resultado.recebidoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+          {resultado.operacaoId ? <> · operação <span className="font-mono">{resultado.operacaoId.slice(0, 8)}</span></> : null}
+        </p>
+
+        <div
+          role="status"
+          className={cn(
+            "mx-auto mt-4 max-w-md rounded-md border px-3 py-2 text-xs",
+            impressao === "falhou" ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border bg-muted/30 text-muted-foreground",
+          )}
+        >
+          {impressao === "falhou"
+            ? "Não foi possível abrir a impressão do comprovante. O recebimento continua gravado — tente de novo."
+            : impressao === "aberta"
+              ? "Comprovante enviado ao diálogo de impressão. Se não saiu na impressora, reimprima."
+              : autoImprimir
+                ? "Preparando o comprovante para impressão…"
+                : "Impressão automática de comprovante desligada (Configurações → Impressão → Crediário). Imprima manualmente se o cliente pedir."}
+        </div>
       </div>
 
       <div className="shrink-0 border-t border-border bg-card p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3 min-w-0">
@@ -1567,19 +1666,102 @@ function SucessoLote({
           Recibo consolidado — um documento para os {qtd === 1 ? "1 título" : `${qtd} títulos`}.
         </span>
         <div className="flex items-center gap-2 ml-auto">
-          {podeImprimir && (
-            <Button type="button" variant="outline" onClick={onImprimir}>
-              <Printer className="mr-1 h-4 w-4" /> Imprimir recibo
-            </Button>
-          )}
+          <Button type="button" variant="outline" onClick={onImprimir}>
+            <Printer className="mr-1 h-4 w-4" />
+            {impressao === "nao_tentada" ? "Imprimir comprovante" : "Reimprimir comprovante"}
+          </Button>
           <Button type="button" variant="outline" onClick={onConcluir}>
             Ver títulos
           </Button>
           <Button type="button" className="font-bold" onClick={onFechar}>
-            Concluir <kbd className="ml-1.5 text-[10px] font-bold">{hotkeyLabel}</kbd>
+            {impressao === "nao_tentada" ? "Concluir sem imprimir" : "Concluir"}{" "}
+            <kbd className="ml-1.5 text-[10px] font-bold">{hotkeyLabel}</kbd>
           </Button>
         </div>
       </div>
     </>
+  )
+}
+
+/** Resultado da busca com os devedores primeiro (ordem estável no resto). */
+function ordenarPorAberto(
+  results: PdvClienteResult[],
+  aberto: Map<string, ClienteComAberto>,
+): PdvClienteResult[] {
+  return results
+    .map((c, i) => ({ c, i, t: aberto.get(c.id)?.totalAberto ?? 0 }))
+    .sort((a, b) => (b.t > 0 ? 1 : 0) - (a.t > 0 ? 1 : 0) || b.t - a.t || a.i - b.i)
+    .map((x) => x.c)
+}
+
+/** Lista inicial ao abrir F5/F9: clientes desta loja com títulos em aberto. */
+function ClientesComAbertoLista({
+  clientes,
+  carregando,
+  erro,
+  onRetry,
+  onSelect,
+}: {
+  clientes: ClienteComAberto[]
+  carregando: boolean
+  erro: string | null
+  onRetry: () => void
+  onSelect: (c: PdvClienteResult) => void
+}) {
+  if (carregando && clientes.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" /> Carregando clientes com contas em aberto…
+      </p>
+    )
+  }
+  if (erro) {
+    return (
+      <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-3 text-sm text-destructive flex flex-wrap items-center justify-between gap-2 min-w-0">
+        <span className="min-w-0">Não foi possível carregar as contas a receber: {erro}</span>
+        <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+          <RefreshCw className="mr-1 h-3.5 w-3.5" /> Tentar de novo
+        </Button>
+      </div>
+    )
+  }
+  if (clientes.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground rounded-md border border-dashed border-border px-3 py-4 text-center">
+        Nenhum cliente com conta em aberto vinculada nesta loja. Busque por nome, telefone ou CPF/CNPJ.
+      </p>
+    )
+  }
+  return (
+    <div className="space-y-1 min-w-0">
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <p className="text-xs font-medium text-muted-foreground">Clientes com contas em aberto</p>
+        {carregando ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Atualizando" /> : null}
+      </div>
+      <ul className="space-y-1">
+        {clientes.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-left hover:bg-muted/50 cursor-pointer min-w-0"
+              // Contato vem mascarado: a identidade para casar títulos é o `Cliente.id`.
+              onClick={() => onSelect({ id: c.id, name: c.name, phone: null, document: null })}
+            >
+              <User className="h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{c.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {[c.document, c.phone].filter(Boolean).join(" · ") || "—"}
+                </p>
+              </div>
+              <span className="shrink-0 text-right text-xs">
+                <span className="block font-bold tabular-nums text-foreground">{brl(c.totalAberto)}</span>
+                <span className="text-muted-foreground">{c.qtdAbertos === 1 ? "1 em aberto" : `${c.qtdAbertos} em aberto`}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

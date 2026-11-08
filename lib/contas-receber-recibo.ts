@@ -159,7 +159,43 @@ export type ReciboPagamentoPayload = {
   valorPago: number
   dataPagamento: Date
   formaPagamento: string
-  saldoDevedorAtual: number
+  /**
+   * O que o cliente ainda deve na unidade. `null` = não há como afirmar com segurança
+   * (ex.: 2ª via de pagamento antigo) — a linha some em vez de imprimir um número inventado.
+   */
+  saldoDevedorAtual: number | null
+  /** Saldo que ficou NESTE título depois da baixa (0 = quitado). */
+  saldoRestanteTitulo?: number
+  /** Identidade da operação gravada no servidor (chave de idempotência / lote). */
+  operacaoId?: string
+  /** Reimpressão a partir do registro original — nenhuma baixa nova. */
+  segundaVia?: boolean
+}
+
+/** Marca obrigatória: o cupom de recebimento NÃO é documento fiscal. */
+export const RECIBO_NAO_FISCAL_LABEL = "COMPROVANTE NÃO FISCAL"
+
+function brlRecibo(n: number): string {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
+
+function cabecalhoOperacao(operacaoId: string | undefined, segundaVia: boolean | undefined): string {
+  const partes: string[] = [`<p class="sub nf">${RECIBO_NAO_FISCAL_LABEL}</p>`]
+  if (segundaVia) partes.push(`<p class="sub nf">2ª VIA — REIMPRESSÃO</p>`)
+  const op = String(operacaoId ?? "").trim()
+  if (op) partes.push(`<div class="row"><span class="label">Operação</span>${escapeHtml(op)}</div>`)
+  return partes.join("\n    ")
+}
+
+/** Data/hora real do pagamento; data ausente/inválida imprime "—" (nunca "Invalid Date"). */
+function dataHoraRecibo(d: Date | null | undefined): string {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "—"
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+}
+
+function linhaSaldoDevedor(saldo: number | null | undefined): string {
+  if (saldo == null || !Number.isFinite(saldo)) return ""
+  return `<div class="saldo">SALDO DEVEDOR ATUAL: ${escapeHtml(brlRecibo(Math.max(0, saldo)))}</div>`
 }
 
 /** Estilos embutidos no cupom (impressão via área isolada no DOM). */
@@ -188,6 +224,7 @@ const RECIBO_THERMAL_CSS = `
   text-transform: uppercase;
 }
 .recibo-thermal .sub { text-align: center; font-size: 10px; margin: 0 0 10px; }
+.recibo-thermal .sub.nf { font-weight: 800; letter-spacing: 0.04em; margin: 0 0 6px; }
 .recibo-thermal .dash { border: none; border-top: 1px dashed #222; margin: 10px 0; }
 .recibo-thermal .row { margin: 6px 0; }
 .recibo-thermal .label { font-weight: 700; display: block; margin-bottom: 2px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.02em; }
@@ -222,11 +259,7 @@ const RECIBO_THERMAL_CSS = `
 
 export function buildReciboPagamentoInnerHtml(p: ReciboPagamentoPayload): string {
   const valorFmt = p.valorPago.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-  const dataFmt = p.dataPagamento.toLocaleString("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  })
-  const saldoFmt = p.saldoDevedorAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+  const dataFmt = dataHoraRecibo(p.dataPagamento)
   const loja = escapeHtml(p.lojaNome)
   const cliente = escapeHtml(p.cliente || "—")
   const desc = escapeHtml(p.descricaoTitulo || "—")
@@ -236,14 +269,24 @@ export function buildReciboPagamentoInnerHtml(p: ReciboPagamentoPayload): string
   <div class="recibo-thermal">
     <h1>${loja}</h1>
     <p class="sub">Recibo de pagamento</p>
+    ${cabecalhoOperacao(p.operacaoId, p.segundaVia)}
     <hr class="dash" />
     <div class="row"><span class="label">Cliente</span>${cliente}</div>
     <div class="row"><span class="label">Descrição do título</span>${desc}</div>
     <div class="forma"><span class="label">Forma de pagamento</span>${forma}</div>
     <div class="valor">${escapeHtml(valorFmt)}</div>
-    <div class="row"><span class="label">Data do pagamento</span>${escapeHtml(dataFmt)}</div>
+    <div class="row"><span class="label">Data do pagamento</span>${escapeHtml(dataFmt)}</div>${
+      p.saldoRestanteTitulo != null && Number.isFinite(p.saldoRestanteTitulo)
+        ? `
+    <div class="row"><span class="label">Situação do título</span>${
+          p.saldoRestanteTitulo > 0.009
+            ? `abatido — resta ${escapeHtml(brlRecibo(p.saldoRestanteTitulo))}`
+            : "quitado"
+        }</div>`
+        : ""
+    }
     <hr class="dash" />
-    <div class="saldo">SALDO DEVEDOR ATUAL: ${escapeHtml(saldoFmt)}</div>
+    ${linhaSaldoDevedor(p.saldoDevedorAtual)}
     <div class="sign-wrap">
       <div class="sign-label">Assinatura do recebedor</div>
       <div class="sign-space"></div>
@@ -269,8 +312,12 @@ export type ReciboLotePayload = {
   itens: ReciboLoteItem[]
   /** Total confirmado pelo SERVIDOR (`totalRecebido` da resposta do lote). */
   totalRecebido: number
-  /** O que o cliente ainda deve na unidade depois deste recebimento. */
-  saldoDevedorAtual: number
+  /** O que o cliente ainda deve na unidade depois deste recebimento (`null` = não afirmar). */
+  saldoDevedorAtual: number | null
+  /** Identidade da operação gravada no servidor (chave de idempotência / lote). */
+  operacaoId?: string
+  /** Reimpressão a partir do registro original — nenhuma baixa nova. */
+  segundaVia?: boolean
 }
 
 /** Estilos exclusivos do cupom consolidado — somados ao CSS térmico compartilhado. */
@@ -290,7 +337,7 @@ const RECIBO_LOTE_CSS = `
  */
 export function buildReciboLoteInnerHtml(p: ReciboLotePayload): string {
   const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-  const dataFmt = p.dataPagamento.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+  const dataFmt = dataHoraRecibo(p.dataPagamento)
   const loja = escapeHtml(p.lojaNome)
   const cliente = escapeHtml(p.cliente || "—")
   const forma = escapeHtml(p.formaPagamento || "—")
@@ -312,6 +359,7 @@ export function buildReciboLoteInnerHtml(p: ReciboLotePayload): string {
   <div class="recibo-thermal">
     <h1>${loja}</h1>
     <p class="sub">Recibo de recebimento</p>
+    ${cabecalhoOperacao(p.operacaoId, p.segundaVia)}
     <hr class="dash" />
     <div class="row"><span class="label">Cliente</span>${cliente}</div>
     <div class="forma"><span class="label">Forma de pagamento</span>${forma}</div>
@@ -324,7 +372,7 @@ export function buildReciboLoteInnerHtml(p: ReciboLotePayload): string {
     <div class="tot"><span>Total recebido</span><span>${escapeHtml(brl(p.totalRecebido))}</span></div>
     <div class="valor">${escapeHtml(brl(p.totalRecebido))}</div>
     <hr class="dash" />
-    <div class="saldo">SALDO DEVEDOR ATUAL: ${escapeHtml(brl(p.saldoDevedorAtual))}</div>
+    ${linhaSaldoDevedor(p.saldoDevedorAtual)}
     <div class="sign-wrap">
       <div class="sign-label">Assinatura do recebedor</div>
       <div class="sign-space"></div>
@@ -355,46 +403,72 @@ export type ImprimirReciboOpts = {
 export function imprimirReciboPagamento(
   payload: ReciboPagamentoPayload,
   opts?: ImprimirReciboOpts,
-): void {
-  printReciboInnerHtml(buildReciboPagamentoInnerHtml(payload), opts)
+): Promise<boolean> {
+  return printReciboInnerHtml(buildReciboPagamentoInnerHtml(payload), opts)
 }
 
 /**
  * Imprime o recibo CONSOLIDADO do lote — um único cupom para os N títulos baixados
  * na mesma operação. Compartilha a mesma montagem e o mesmo CSS do cupom singular.
  */
-export function imprimirReciboLote(payload: ReciboLotePayload, opts?: ImprimirReciboOpts): void {
-  printReciboInnerHtml(buildReciboLoteInnerHtml(payload), opts, RECIBO_LOTE_CSS)
+export function imprimirReciboLote(payload: ReciboLotePayload, opts?: ImprimirReciboOpts): Promise<boolean> {
+  return printReciboInnerHtml(buildReciboLoteInnerHtml(payload), opts, RECIBO_LOTE_CSS)
 }
 
-/** Montagem, `@page` e ciclo de impressão — compartilhados pelos dois cupons. */
-function printReciboInnerHtml(inner: string, opts?: ImprimirReciboOpts, extraCss = ""): void {
-  if (typeof document === "undefined") return
+/**
+ * Montagem, `@page` e ciclo de impressão — compartilhados pelos dois cupons.
+ *
+ * Resolve `true` quando o diálogo de impressão do navegador foi aberto e `false`
+ * quando não deu (sem DOM, `window.print` indisponível/bloqueado). O navegador não
+ * informa se a impressora física imprimiu; por isso a UI SEMPRE mantém o botão de
+ * reimpressão. Falha aqui nunca toca no recebimento já gravado.
+ */
+function printReciboInnerHtml(inner: string, opts?: ImprimirReciboOpts, extraCss = ""): Promise<boolean> {
+  if (typeof document === "undefined" || typeof window === "undefined") return Promise.resolve(false)
+  if (typeof window.print !== "function") return Promise.resolve(false)
   const pageSize = opts?.bobina === "58mm" ? "58mm" : "80mm"
   const pageCss = `
 @media print { @page { size: ${pageSize} auto; margin: 0; } }
 `
-  /** Montagem e `print()` fora do mesmo tick da baixa — evita travar a UI antes do loading sumir. */
-  window.setTimeout(() => {
-    const mount = ensurePrintMount()
-    mount.innerHTML = `<div class="recibo-print-root"><style>${pageCss}${RECIBO_THERMAL_CSS}${extraCss}</style>${inner}</div>`
-
-    document.documentElement.setAttribute("data-printing-recibo", "true")
-
-    const cleanup = () => {
-      document.documentElement.removeAttribute("data-printing-recibo")
-      mount.innerHTML = ""
+  return new Promise<boolean>((resolveRaw) => {
+    let settled = false
+    const resolve = (v: boolean) => {
+      if (settled) return
+      settled = true
+      resolveRaw(v)
     }
-
-    requestAnimationFrame(() => {
+    // Aba oculta/segundo plano pode nunca disparar o frame: sem impressão, desfecho = false.
+    window.setTimeout(() => resolve(false), 5_000)
+    /** Montagem e `print()` fora do mesmo tick da baixa — evita travar a UI antes do loading sumir. */
+    window.setTimeout(() => {
+      let mount: HTMLDivElement
       try {
-        window.print()
+        mount = ensurePrintMount()
+        mount.innerHTML = `<div class="recibo-print-root"><style>${pageCss}${RECIBO_THERMAL_CSS}${extraCss}</style>${inner}</div>`
       } catch {
-        cleanup()
+        resolve(false)
+        return
       }
-    })
 
-    window.addEventListener("afterprint", cleanup, { once: true })
-    window.setTimeout(cleanup, 1_200)
-  }, 0)
+      document.documentElement.setAttribute("data-printing-recibo", "true")
+
+      const cleanup = () => {
+        document.documentElement.removeAttribute("data-printing-recibo")
+        mount.innerHTML = ""
+      }
+
+      requestAnimationFrame(() => {
+        try {
+          window.print()
+          resolve(true)
+        } catch {
+          cleanup()
+          resolve(false)
+        }
+      })
+
+      window.addEventListener("afterprint", cleanup, { once: true })
+      window.setTimeout(cleanup, 1_200)
+    }, 0)
+  })
 }
