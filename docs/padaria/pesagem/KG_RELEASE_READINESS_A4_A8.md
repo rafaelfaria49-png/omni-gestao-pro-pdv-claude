@@ -5,7 +5,7 @@ GOAL `PADARIA-KG-RELEASE-READINESS-A4-A8-001` · 2026-11-06 · Claude Code (Opus
 sem migration, sem troca de env, sem papel novo. Todos os testes novos rodaram em PostgreSQL 17 descartável.
 
 ```text
-FINAL_STATUS=NO_GO_WITH_SPECIFIC_BLOCKERS   (todos os bloqueios são autorização/presencial; 1 técnico depende de push autorizado)
+FINAL_STATUS=NO_GO_WITH_SPECIFIC_BLOCKERS   (todos os bloqueios são autorização/presencial; o técnico de push — T1/T2 — foi concluído em 2026-11-07)
 PRODUCTION_UNCHANGED=YES
 KG_PRODUCTION_RELEASE=DISABLED
 DEFEITO_NOVO_ENCONTRADO=1 (gatilho de título da #335 varria todas as vendas da loja) → corrigido nesta PR, equivalência provada
@@ -16,20 +16,23 @@ A1–A8 / J0–J13 / F0–F4), que continua valendo para o estoque. Ele acrescen
 as migrations e binários da #335/#336, a ordem real dos merges com deploy automático da Vercel,
 a compatibilidade de venda entre versões e as autorizações restantes.
 
-> **Atenção — evidências fora do Git.** O runbook/checklist revisados no A5 e os registros A1–A6 existem
-> **apenas em disco** na worktree `.worktrees/estoque-manual-kg-001` (não commitados; o A5 registrou
-> `DOCS_COMMIT=NONE` por entrelaçamento com WIP anterior). O manifesto SHA-256 desses arquivos está em
-> `docs/ai-execution/_evidence/PADARIA-KG-RELEASE-READINESS-A4-A8-001/reused-evidence-manifest.txt`.
-> Versioná-los é a pendência T1 (§3).
+> **Atualização 2026-11-07 (GOAL `PADARIA-KG-STACK-RECONCILIATION-FINAL-001`).** T1 e T2 estão **concluídas**:
+> a #315 versionou o runbook/checklist do A5, o `07` revisado do A6 e os registros A1–A6 (`26febda`, `9127faf`)
+> e incorporou a main por merge (`d1a5d50`, `bed911a` = main `7cac3d8`), com CI 9/9. Conferência contra
+> `reused-evidence-manifest.txt`: 98 arquivos da #315 iguais (91 byte a byte, 7 só com CRLF/LF misto normalizado
+> pelo Git); os 10 de `PADARIA-GO-LIVE-FASTTRACK-002` fora da Fase 1 seguem intencionalmente não versionados.
+> `07-guard-check-opcional.sql` no head: sha256 LF `dea40868…` (o aprovado no A6). #335, #336 e esta PR foram
+> ressincronizadas por merge commit (§1). Registro: `_evidence/PADARIA-KG-STACK-RECONCILIATION-FINAL-001/`.
 
-## 1. Estado real conferido (2026-11-06, GitHub; nada lido da produção)
+## 1. Estado real conferido (atualizado 2026-11-07, GitHub; nada lido da produção)
 
 | Item | Valor | Conferência |
 | --- | --- | --- |
-| main | `37acc3b` (#326) | `gh api …/commits/main` |
-| #315 | `104d768`, OPEN, pronta (não draft), base `main`, MERGEABLE/CLEAN, CI 9/9 verde | **19 commits atrás da main** (#324/#325/#326/#328 não estão nela) |
-| #335 | `406ea48`, DRAFT, base `claude/estoque-manual-kg-001`, CLEAN, CI 11/11 | contém `104d768` e a main `37acc3b` |
-| #336 | `adbc66e`, DRAFT, base `claude/padaria-kg-venda-peso-integracao-001`, CLEAN, CI 8/8 | contém `406ea48` e a #331 `b0de724` |
+| main | `7cac3d8` (#338) | `gh api …/commits/main` |
+| #315 | `bed911a`, OPEN, pronta (não draft), base `main`, MERGEABLE, CI 9/9 verde | contém a main `7cac3d8` (T2 concluída) e as evidências A1–A6 (T1 concluída) |
+| #335 | `3ebbd76` (merge de `bed911a` sobre `406ea48`), DRAFT, base `claude/estoque-manual-kg-001` | merge sem conflito textual; código idêntico a `406ea48` (o lado #315 trouxe só docs) |
+| #336 | `bc1c3fc` (merge de `3ebbd76` sobre `adbc66e`), DRAFT, base `claude/padaria-kg-venda-peso-integracao-001` | contém a #331 `b0de724`; código idêntico a `adbc66e` |
+| Esta PR (#337) | merge de `bc1c3fc` sobre `1df1e79` | código idêntico a `1df1e79`; `20261106` intacta |
 | #331 | `b0de724`, DRAFT, base `main` | supersedida pela #336 no caminho KG — **não mergear isolada** |
 | Prisma | 6.19.3 em todos os heads (package.json idêntico main↔#336) | sem diferença de versão de pacote; a incompatibilidade é de **schema** (Int × Float) |
 | Migrations novas | `20261025120000_estoque_quantidade_fracionada` (#315, sha256 `f07242c4…a06a47e`) · `20261029120000_manual_kg_sale_quantity` (#335, `8757ee99…`) · **`20261106120000_manual_kg_title_guard_indexed` (esta PR)** | produção: 23 migrations, nenhuma destas (A4) |
@@ -37,8 +40,9 @@ a compatibilidade de venda entre versões e as autorizações restantes.
 | Revisões | #315 R4/R5/R7 APPROVE · #335 R6 APPROVE (Codex) · #336 R3 APPROVE_WITH_LIMITATIONS (Claude, Codex sem cota) | **R3 cruzada Codex da #336: ainda NÃO ocorreu**; possível a partir de 2026-11-10 |
 | Production em uso | último registro: deployment `7UqN8Rrkz9…`, commit `ba010ac` (A4, 2026-10-29) | desde então a main andou até `37acc3b`; o commit atual em Production **não foi conferido** (exige acesso Vercel) |
 
-`git merge-tree 37acc3b 104d768` = árvore `ff3870d4…`, **sem conflito**. Essa árvore é exatamente o que o J4
-publicaria em Production e **nunca passou por CI** (o CI da #315 rodou contra a main da época).
+Histórico (2026-11-06): `git merge-tree 37acc3b 104d768` = árvore `ff3870d4…`, sem CI na época. Superado: o J4
+agora publica o head `bed911a` da #315, que já contém a main `7cac3d8` e tem CI 9/9 do head exato. Se a main
+andar de novo antes da janela, repetir merge + CI na #315 e propagar por merge a #335/#336/esta PR.
 
 ## 2. Matriz A4–A8 (e gates que o A8 exige)
 
@@ -49,13 +53,13 @@ publicaria em Production e **nunca passou por CI** (o CI da #315 rodou contra a 
 | **A2** credenciais offline | PASS_COM_EVIDENCIA | `PADARIA-GO-LIVE-FASTTRACK-002` fase 1, 30/30; não regenerar |
 | **A3** papéis + GRANTs em produção | PASS_COM_EVIDENCIA (já executado; **01 não é idempotente**) | `a3-production-roles-grants-008/` |
 | **A4** login runtime direto/pooler + migrator, RO | **PASS_COM_EVIDENCIA** (2026-10-29 12:08Z) | `a4-production-login-readonly-009/12-final-summary.json`. Limite: capacidade de migrar do migrator **não exercitada** em produção (só após o 03) |
-| **A5** runbook consolidado | PASS_COM_EVIDENCIA (documental) + **PENDENTE_TECNICO** (versionar: T1) | `a5-runbook-consolidation-010/`, 55/55 checks locais |
+| **A5** runbook consolidado | PASS_COM_EVIDENCIA (documental, versionado na #315 — T1 concluída) | `a5-runbook-consolidation-010/`, 55/55 checks locais |
 | **A5+** plano cobrindo #335/#336 | PASS_COM_EVIDENCIA (este documento) | antes não havia plano para a migration aditiva, papel de sessão, ordem de merges |
 | **A6** decisão do `07` (CHECK milésimos) | PASS técnico (APPROVE do sha `dea40868…`) + **PENDENTE_AUTORIZACAO** (aplicar ou não) | `a6-guard-review-011/`; ensaio novo confirma que bloqueia o cliente Int (§6) |
 | **A7** conectores Neon/Vercel/GitHub indisponíveis a outras sessões | **PENDENTE_AUTORIZACAO** + PENDENTE_PRESENCIAL | depende do dono desconectar/confirmar (ChatGPT Neon, MCPs) — não verificável sem acesso |
 | **A7b** leitura `cron.job` no database `postgres` | **PENDENTE_AUTORIZACAO** | pg_cron detectado no A1; jobs podem ser escritores fora do inventário HTTP |
 | **A8** janela + congelamento §3 | **PENDENTE_AUTORIZACAO** + PENDENTE_PRESENCIAL | aviso às pessoas e sessões de IA; data/hora |
-| Reconciliação #315 × main + CI do head exato | **PENDENTE_TECNICO** que depende de **autorização de push** na branch da #315 (T2) | merge limpo provado; CI do resultado não existe |
+| Reconciliação #315 × main + CI do head exato | **PASS** (T2 concluída) | `bed911a` contém a main `7cac3d8`, CI 9/9; #335/#336/esta PR ressincronizadas por merge |
 | Inventário integral de deployments no início da janela | PENDENTE_AUTORIZACAO (exige token Vercel válido — o A4 recebeu 403) | — |
 | Checklist das duas lojas | **PENDENTE_PRESENCIAL** | modelo pronto (`KG_RELEASE_CHECKLIST_DONO.md`) |
 | Ensaio Neon 002 (ACL, suspend/start, pooler, corte, 01–06/99, retrato) | PASS_COM_EVIDENCIA (reaproveitado) | `neon-rehearsal-002/`; **não cobre** a migration aditiva da #335 — coberta agora pelo ensaio sintético (§6), sem Neon |
@@ -64,15 +68,15 @@ publicaria em Production e **nunca passou por CI** (o CI da #315 rodou contra a 
 | Desempenho dos gatilhos da #335 | era **BLOCKED** (defeito) → PASS após `20261106` | §6.3 |
 | R3 cruzada Codex da #336 | PENDENTE_TECNICO (cota até 2026-11-10) | não ocorreu; não declarar |
 
-**GO/NO-GO:** NO-GO. Nenhum item técnico bloqueante sem caminho: os restantes são autorizações,
-presença nas lojas e um push autorizado.
+**GO/NO-GO:** NO-GO. Nenhum item técnico bloqueante sem caminho: os restantes são autorizações e
+presença nas lojas.
 
 ## 3. Pendências reais (objetivas) e o próximo procedimento exato
 
 | # | Pendência | Tipo | Por que bloqueia | Próximo procedimento exato |
 | --- | --- | --- | --- | --- |
-| T1 | Runbook/checklist A5, script 07 corrigido (A6) e evidências A1–A6 só em disco | técnico + autorização (push na #315) | a janela precisa executar **o SHA revisado**; disco local não é fonte auditável | o dono autoriza um commit **só de docs/evidências** na branch da #315 (sem código); conferir `07-guard-check-opcional.sql` sha256 = `dea40868…` |
-| T2 | #315 atrás da main; árvore do J4 sem CI | técnico + autorização | J4 publica em Production uma árvore nunca testada | autorizar `git merge origin/main` na branch da #315 (fast-forward de `104d768`), push, CI verde do head exato; depois disso atualizar #335/#336 por merge (CI de cada) |
+| ~~T1~~ | **Concluída 2026-11-07** — docs/evidências A1–A6 e `07` versionados na #315 (`26febda`, `9127faf`) | — | — | na janela, só reconferir `07-guard-check-opcional.sql` sha256 LF = `dea40868…` |
+| ~~T2~~ | **Concluída 2026-11-07** — #315 `bed911a` contém a main `7cac3d8`, CI 9/9; #335/#336/esta PR atualizadas por merge | — | — | se a main andar antes da janela: novo merge na #315 + CI, e propagar |
 | T3 | Revisão desta PR (migration `20261106`) | técnico | altera função SECURITY DEFINER da #335 | revisão independente (2 rodadas, APPROVE na 2ª, §8) + revisão humana; R cruzada Codex opcional a partir de 2026-11-10 |
 | T4 | R3 cruzada Codex da #336 | técnico | política de revisão cruzada | repetir a partir de 2026-11-10 com `R3_PACOTE.md` |
 | A6 | aplicar ou não o `07` | autorização | barreira extra contra cliente Int | **recomendado aplicar** no J9 (ensaio novo: com o 07 o banco recusa a escrita Int; sem ele, o banco aceitou NaN e só a releitura do Prisma reverteu) |
@@ -109,11 +113,11 @@ janelas curtas separadas; não há obrigação de fazer tudo no mesmo dia, e sep
 
 | Passo pedido | Onde | Ação exata | Gate |
 | --- | --- | --- | --- |
-| 1. Pré-flight e autorização | antes de W1 | T1, T2, T3, A6–A8, V1, N1 autorizados; heads e SHAs (migrations, `07`, apply script) registrados na autorização | lista assinada |
+| 1. Pré-flight e autorização | antes de W1 | T3, A6–A8, V1, N1 autorizados (T1/T2 já concluídas); heads e SHAs (migrations, `07`, apply script) registrados na autorização | lista assinada |
 | 2. Verificação das duas lojas | W1 / J0 | `KG_RELEASE_CHECKLIST_DONO.md` em cada terminal + consulta RO de **todas** as sessões ABERTA | ABERTA=0, pendências=0 |
 | 3. Ponto de recuperação | W1 / J1 | branch Neon datado | id + LSN |
 | 4. Trava de escrita | W1 / J2 | `STOCK_WRITES_FROZEN=true` em Production | env listada |
-| 5. Deploy compatível | W1 / J3+J4 | envs → `omni_runtime_v2`; merge da #315 (já reconciliada, T2) | build READY, `MIGRATION_SKIPPED`, `PROXY_PRISMA_ARTIFACT_VERIFIED`, só esse commit desde o J3 |
+| 5. Deploy compatível | W1 / J3+J4 | envs → `omni_runtime_v2`; merge da #315 (já reconciliada: `bed911a`, ou o head que a reconciliar de novo) | build READY, `MIGRATION_SKIPPED`, `PROXY_PRISMA_ARTIFACT_VERIFIED`, só esse commit desde o J3 |
 | 6. Troca controlada do runtime | W1 / J3–J5 | runtime novo no ar com trava | sonda "manutenção programada" |
 | 7. Corte e drenagem dos escritores antigos | W1 / J6 | 03 → 04 → 05 (imediatamente) → 06 | `KG_CORTE_POSSE_OK`, `KG_CORTE_CONEXAO_OK`, `KG_SESSOES_ANTIGAS_ZERO`, 06 |
 | 8. Conferência das sessões | W1 / J7 | 06 de novo ≥ 5 min; transações abertas; sonda de URL antiga; lista de deployments | quatro conferências |
@@ -203,10 +207,10 @@ e o seu cliente Prisma gerado, contra o mesmo banco descartável (commits e árv
 
 | Versão | Commit / árvore | Papel |
 | --- | --- | --- |
-| main (hoje em produção, Int) | `37acc3b` | `neondb_owner`, antes do corte |
-| J4 → J11 (#315 sobre a main) | probe local `e058d9c`, árvore `ff3870d4…` = `merge-tree 37acc3b 104d768` | `omni_runtime_v2` |
+| main (Int; em produção na época do ensaio) | `37acc3b` | `neondb_owner`, antes do corte |
+| J4 → J11 (#315 sobre a main) | probe local `e058d9c`, árvore `ff3870d4…` = `merge-tree 37acc3b 104d768` (o head atual `bed911a` = essa árvore + 4 pins `ubuntu-24.04` de CI, sem diferença de código de app) | `omni_runtime_v2` |
 | W2 (#335) | `406ea48` | `omni_runtime_v2` |
-| W3 (#336 + esta PR) | `4385d3f` (limpo) | `omni_runtime_v2` |
+| W3 (#336 + esta PR) | `4385d3f` (limpo; o código fora de `docs/` é idêntico ao head ressincronizado desta PR) | `omni_runtime_v2` |
 
 Scripts oficiais do HEAD da #315 + `07` revisado do A6 (sha256 LF `dea40868…`); hashes LF de todos os scripts e
 migrations no mesmo JSON. Run-05 (mesma cadeia, topo ainda com harness não commitado, fila só v1) e run-03/04 (só main → topo) ficam como histórico.
@@ -233,6 +237,7 @@ uma v2 novas com resposta perdida; reenvio com fatos diferentes recusado com `Pe
 | Migration aditiva sem papel de dono (psql e `migrate deploy`) | recusada `KG_MIGRATION_OWNER_PUBLIC_SCHEMA_REQUIRED`, sem efeito |
 | Migrations aditivas por `prisma migrate deploy` com `options=-c role=omni_owner` (20261029 do checkout da #335; 20261106 do topo) | aplicadas; funções donas `omni_owner`; `migrate status` em dia; `migrate diff` vazio (#315 antes do 9b e topo depois); J10 frações=0, NaN/denormais=0 |
 | Venda KG sob a topologia real (runtime só DML, funções SECURITY DEFINER de `omni_owner`) | 0,35 kg + 1,25 kg, replay v1 e 3× v2 paralelos sem duplicar; saldo 3,4; `quantidade` NULL/`quantidadeKg` exato; adulteração direta recusada `MANUAL_KG_COMPATIBLE_WRITER_REQUIRED` |
+| `07` × venda/estoque KG (novo, 2026-11-07) | banco vazio → migrations `20261025`/`20261029`/`20261106` → `07` aplicado e validado (5 CHECKs) → suíte KG oficial **79/79** + 35 verificações com os CHECKs ativos; 30 saldos fracionados gravados sem `23514`; os 5 CHECKs continuam `convalidated` ao fim. O `07` não bloqueia nenhum caminho KG legítimo (`_evidence/PADARIA-KG-STACK-RECONCILIATION-FINAL-001/`) |
 | "Redeploy" proibido simulado: cliente Int da main com a credencial nova | **com o 07**: recusado pelo banco (`23514`, CHECK `estoque_produtos_stock_kg_milesimos`, valor enviado subnormal — `1.6e-322` no run-06), nada mudou. **Sem o 07**: o banco **aceitou** os valores corrompidos dentro da transação; o Prisma Int só abortou ao ler o retorno (`Could not convert from NaN to Int`) e a transação reverteu. Ou seja, sem o 07 a proteção deste caminho é acidental; caminhos que não releem o valor corrompem (`old-client-WRITE-after-migration.txt`, A6). Reforça: aplicar o 07 e manter o corte |
 
 ### 6.2 Itens pedidos × evidência
@@ -300,7 +305,7 @@ A revisão cruzada por outra família de modelo (Codex) **não ocorreu** neste G
 
 ## 9. Ordem final de PRs
 
-1. **#315** — depois de T1/T2 (docs versionados + main reconciliada + CI do head exato). Merge no **J4**.
+1. **#315** — T1/T2 concluídas (docs versionados, main reconciliada, CI do head exato). Merge no **J4**.
 2. Migrations `20261029` + `20261106` aplicadas no **9b** (W1), do head aprovado **desta PR**.
 3. **#335** — base trocada para `main`, CI verde, merge no **W2**.
 4. **#336** — base trocada para `main`, CI verde, merge no **W3**.
@@ -310,7 +315,7 @@ A revisão cruzada por outra família de modelo (Codex) **não ocorreu** neste G
 
 ## 10. Autorizações humanas necessárias
 
-1. Push de docs/evidências na branch da #315 (T1) e merge da main nela (T2).
+1. ~~Push de docs/evidências na branch da #315 (T1) e merge da main nela (T2)~~ — concluído em 2026-11-07.
 2. Decisão A6 (aplicar o `07`).
 3. A7: desligar conectores/sessões; A7b: leitura de `cron.job`.
 4. A8: janela W1 com lojas fechadas + congelamento; janelas W2 e W3.

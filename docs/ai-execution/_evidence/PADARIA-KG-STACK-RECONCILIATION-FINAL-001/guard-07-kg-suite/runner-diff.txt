@@ -1,0 +1,16 @@
+49c49,57
+<   if (JSON.stringify(before) !== JSON.stringify(after)) throw Error("HISTORICAL_INTEGER_VALUES_CHANGED")
+---
+>   if (JSON.stringify(before) !== JSON.stringify(after)) throw Error("HISTORICAL_INTEGER_VALUES_CHANGED")
+>   await db.$executeRawUnsafe("DO $g$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='omni_owner') THEN CREATE ROLE omni_owner NOLOGIN; END IF; END$g$")
+>   for (const t of ['estoque_produtos','produto_depositos','movimentacoes_estoque']) await db.$executeRawUnsafe('ALTER TABLE ' + t + ' OWNER TO omni_owner')
+>   const g = spawnSync('C:/Program Files/PostgreSQL/17/bin/psql.exe', ['-X','-h','127.0.0.1','-p','55479','-U','manual_kg','-d','manual_kg_sale_isolated','-v','ON_ERROR_STOP=1','-1','-f','docs/padaria/pesagem/rollout/07-guard-check-opcional.sql'], { stdio: 'inherit', windowsHide: true })
+>   if (g.status !== 0) throw Error('GUARD_07_FAILED')
+>   const [{ n }] = await db.$queryRawUnsafe("SELECT count(*)::int AS n FROM pg_constraint WHERE conname LIKE '%kg_milesimos' AND convalidated")
+>   if (n !== 5) throw Error('GUARD_07_NOT_VALIDATED')
+>   for (const t of ['estoque_produtos','produto_depositos','movimentacoes_estoque']) await db.$executeRawUnsafe('ALTER TABLE ' + t + ' OWNER TO manual_kg')
+>   console.log('GUARD_07_APPLIED_VALIDATED=5 OWNER_RESTORED')
+53c61
+< run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-hardening.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "lib/vendas/manual-kg-padaria-flow.pg.test.ts", "lib/pdv/devolucao/f8-venda-kg.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/manual-kg/integration.json"], {
+---
+> run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-hardening.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "lib/vendas/manual-kg-padaria-flow.pg.test.ts", "lib/pdv/devolucao/f8-venda-kg.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/kg07/integration.json"], {
