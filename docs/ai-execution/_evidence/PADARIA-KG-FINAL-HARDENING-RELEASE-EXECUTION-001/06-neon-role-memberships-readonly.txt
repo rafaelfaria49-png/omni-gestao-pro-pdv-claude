@@ -1,0 +1,22 @@
+host ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech db /omnigestao_prod user neondb_owner
+       db        |            ep            | ro
+-----------------+--------------------------+----
+ omnigestao_prod | ep-summer-tooth-acltc6wi | on
+(1 linha)
+
+    membro     |             grupo             | admin_option | inherit_option | set_option |   grantor
+---------------+-------------------------------+--------------+----------------+------------+--------------
+ neondb_owner  | neon_superuser                | f            | t              | t          | cloud_admin
+ neondb_owner  | omni_migrator                 | t            | f              | f          | cloud_admin
+ neondb_owner  | omni_owner                    | t            | f              | f          | cloud_admin
+ neondb_owner  | omni_runtime_v2               | t            | f              | f          | cloud_admin
+ neondb_owner  | omnigestao_candidate_audit_ro | t            | f              | f          | cloud_admin
+ omni_migrator | omni_owner                    | f            | t              | t          | neondb_owner
+(6 linhas)
+
+ createrole_self_grant
+-----------------------
+
+(1 linha)
+
+PSQL_EXIT 0

@@ -40,6 +40,28 @@ a compatibilidade de venda entre versões e as autorizações restantes.
 > pela cadeia KG, build `MIGRATION_SKIPPED`/`PROXY_PRISMA_ARTIFACT_VERIFIED`, revisão independente APPROVE.
 > Registro: `_evidence/PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001/`.
 
+> **Atualização 2026-11-08 ~12Z (GOAL `PADARIA-KG-FINAL-HARDENING-RELEASE-EXECUTION-001`) — prevalece sobre o
+> restante onde divergir.** Main inalterada (`ce9228c`). Heads: #315 `2284491`, #335 `dd264a6`, #336 `a413ad5`
+> (fix `20d2210`), esta PR = merge de `a413ad5` + registro.
+>
+> - **A6 decidido pelo dono:** aplicar o `07` só no J9 (`APPROVED_APPLY_07`, `W1_J9_ONLY`, execução ainda não
+>   autorizada). sha256 LF `dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935`; reensaio 235/235 + 161/161;
+>   suíte KG 80/80 com o 07 ativo.
+> - **V1:** o projeto Vercel `omni-gestao` **não alcança** o Neon de produção (envs de banco de 2026-05-08; projeto e
+>   endpoint Neon criados em 2026-07-27 — prova por metadados, sem decriptar). Os escritores restantes são todos do
+>   `omni-gestao-pro` com `neondb_owner`, fechados pelo J6/J7 (runbook §0.2). Por isso a linha do `omni-gestao` em §11
+>   passa de BLOCKED_WITH_REASON a **PASS**.
+> - **MIG-X** revalidado: 24 migrations, checksums iguais ao repositório, pendentes exatas por checkout.
+> - **Neon RO:** 1 caixa ABERTA; A7b mantido.
+> - **Revisão substituta de contexto limpo:** APPROVE_WITH_NOTES, depois **APPROVE** nos heads finais. O **P2-1**
+>   corrigido: uma venda do protocolo KG com só linhas UN não era cancelável (503); agora segue o caminho KG pelo
+>   marcador, como os gatilhos do banco. Teste PG RED→GREEN.
+> - **R3 Codex PENDING:** sem cota até 2026-11-10 21:48, reconfirmado por execução real.
+> - **Provas:** KG 80/80 + 35, E2E 13/13, catálogo PG 12/12, typecheck, ESLint 0 erros, build `MIGRATION_SKIPPED`;
+>   Vitest dirigido com 0 falhas novas contra a main.
+>
+> Registro: `_evidence/PADARIA-KG-FINAL-HARDENING-RELEASE-EXECUTION-001/`.
+
 ## 1. Estado real conferido (atualizado 2026-11-07, GitHub; nada lido da produção)
 
 | Item | Valor | Conferência |
@@ -354,7 +376,7 @@ Método: `vercel api` GET (metadados; nenhum valor decriptado) e psql RO no Neon
 | 7 deployments Production antigos do `omni-gestao-pro` (`7cac3d8`, `37acc3b`, `8cbd551`, `a07e067`, `4946688`, `aaab275`, `ba010ac`) | **sem alias**, mas URL de deployment **pública** (`ssoProtection=null`); mesma env Production do build → papel antigo | J6 (`04`/`05`: CONNECT revogado + sessões encerradas); J7 sonda `permission denied` | PASS de inventário; não removidos (fora do escopo) |
 | Previews `omni-gestao-pro` das 4 branches KG | #315 com override próprio (`VUjVxPk2…`/`BWFYesLF…`, 2026-10-27, Neon de Preview `pr315-kg`); #335/#336/#337 usam o Preview genérico (`CAgFUTJY…`/`WfY0iLLQ…`, atualizado pela última vez em 2026-10-27 = P3, projeto Neon de Preview isolado) | — | PASS por continuidade de metadados (IDs e `updatedAt` iguais aos da P3); o destino em si exige decriptar → **BLOCKED_WITH_REASON** para prova direta |
 | Previews de outras branches com override de banco (`codex/omni-print-d05-homologacao-fisica-001`) | override próprio (2026-11-05), frente Omni Print | — | fora da frente KG; registrado |
-| Projeto Vercel `omni-gestao` (`prj_IbJi32rh…`) — Production `e9eb984` (2026-10-15, alias `omni-gestao-pi.vercel.app`) + 2 antigos sem alias | `DATABASE_URL`/`DIRECT_URL` só em Production, criadas 2026-05-08 (antes do cutover Neon de 2026-07) e nunca atualizadas; builds Production novos são **ignorados** (`commandForIgnoringBuildStep` sai 0 em production; o de `ce9228c` ficou CANCELED); URLs com `ssoProtection=all_except_custom_domains` | se o destino for o Neon de produção com `neondb_owner`, o J6 também o corta | destino não comprovável sem decriptar → **BLOCKED_WITH_REASON**; recomendação ao dono: confirmar/neutralizar antes da janela |
+| Projeto Vercel `omni-gestao` (`prj_IbJi32rh…`) — Production `e9eb984` (2026-10-15, alias `omni-gestao-pi.vercel.app`) + 2 antigos sem alias | `DATABASE_URL`/`DIRECT_URL` só em Production, criadas 2026-05-08 (antes do cutover Neon de 2026-07) e nunca atualizadas; builds Production novos são **ignorados** (`commandForIgnoringBuildStep` sai 0 em production; o de `ce9228c` ficou CANCELED); URLs com `ssoProtection=all_except_custom_domains` | se o destino for o Neon de produção com `neondb_owner`, o J6 também o corta | ~~destino não comprovável sem decriptar~~ → **PASS (2026-11-08, FINAL-HARDENING)**: o projeto/endpoint Neon de produção só existe desde 2026-07-27 15:49Z (API Neon), 80 dias depois do último valor gravado nessas envs; o destino não pode ser `omnigestao_prod` |
 | Previews do projeto `omni-gestao` (inclui `3ebbd76`, `bc1c3fc`, `7b72223`) | sem `DATABASE_URL`/`DIRECT_URL` para Preview → não alcançam banco | — | PASS (ausência de credencial) |
 | `pg_cron` / jobs agendados | extensão não criada nos 4 databases | — | PASS (A7b) |
 | Conexões no momento da leitura | só a própria sessão RO (`neondb_owner`, `psql`) | — | retrato pontual; o J5/J7 refaz |
