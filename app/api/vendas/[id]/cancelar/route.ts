@@ -262,7 +262,12 @@ export async function POST(
         ? ((venda.payload as Record<string, unknown>).sessaoId as string | undefined)
         : undefined
 
-    const kgSale = venda.itens.some(isKgItem)
+    // Mesmo critério dos gatilhos do banco (manual_kg_venda_protected): marcador do protocolo no
+    // payload OU linha KG. Venda com o marcador e só linhas UN (produto virou UN antes do reenvio)
+    // também exige o writer KG; sem isto o update caía no gatilho e a rota respondia 503.
+    const usaProtocoloKg = (v: { payload: unknown; itens: Array<{ quantidadeKg?: unknown }> }) =>
+      (v.payload as { manualKgSale?: unknown } | null)?.manualKgSale === "classic-manual-kg-v1" || v.itens.some(isKgItem)
+    const kgSale = usaProtocoloKg(venda)
     let estornoReceber = false
     let titulosCancelados = 0
     let estoqueRepostoCount = 0
@@ -287,7 +292,7 @@ export async function POST(
         throw new CancelamentoConflitoError("venda_ja_cancelada", "Esta venda já foi cancelada anteriormente")
       }
       venda = current
-      if (current.itens.some(isKgItem)) {
+      if (usaProtocoloKg(current)) {
         if (await tx.devolucaoVenda.count({ where: { storeId, vendaLocalId: pedidoId } })) throw new Error("MANUAL_KG_CANCELLATION_STALE")
         await enterManualKgTransaction(tx)
         const fiscal = assertVendaFiscalCancelavel(current)

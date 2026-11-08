@@ -225,6 +225,30 @@ suite("F8 × venda manual KG — integração em PostgreSQL real", () => {
     expect(depois.body.code).toBe("VENDA_CANCELADA")
   })
 
+  it("venda com o marcador KG e só linhas UN (produto virou UN antes do reenvio) é cancelável pelo protocolo KG", async () => {
+    // Revisão substituta 2026-11-08 (P2-1): o cancelamento decidia o caminho KG só por linha KG,
+    // enquanto os gatilhos do banco protegem a venda pelo marcador do payload — o update caía no
+    // gatilho (writer KG exigido) e a rota respondia 503 genérico, sem saída operacional.
+    const suco = await produto({ name: "Suco ex-KG", price: 6, metadata: UN, sku: "SXK", estoque: 10 })
+    const sale = venda([{ id: suco.id, name: suco.name, quantity: 2, price: 6 }], { kg: true })
+    await persist(sale)
+    expect((await saldo(suco.id)).stock).toBe("8")
+    const row = await prisma.venda.findFirstOrThrow({ where: { pedidoId: sale.id }, include: { itens: true } })
+    expect((row.payload as { manualKgSale?: string }).manualKgSale).toBe(MANUAL_KG_SALE)
+    expect(row.itens.every((i) => i.quantidadeKg === null && i.quantidade === 2)).toBe(true)
+    // Política F8 inalterada: venda do protocolo KG não aceita devolução parcial.
+    const parcial = await devolver({ localId: "KGF8-MKUN-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [{ inventoryId: suco.id, quantidade: 1 }] })
+    expect(parcial.body.code).toBe("DEVOLUCAO_KG_BLOQUEADA")
+    const c = await cancelar(sale.id!)
+    expect(c.status, JSON.stringify(c.body)).toBe(200)
+    expect(await saldo(suco.id)).toEqual({ stock: "10", dep: "10" })
+    expect((await prisma.venda.findFirstOrThrow({ where: { pedidoId: sale.id } })).status).toBe("cancelada")
+    expect(await prisma.movimentacaoEstoque.count({ where: { storeId: A, produtoId: suco.id, origem: "cancelamento_pdv" } })).toBe(1)
+    const again = await cancelar(sale.id!)
+    expect(again.status).toBe(409)
+    expect(await saldo(suco.id)).toEqual({ stock: "10", dep: "10" })
+  })
+
   it("corrida: cancelamento × 5 devoluções simultâneas da venda KG — estoque reposto uma vez, nenhuma devolução gravada", async () => {
     const pao = await produto({ name: "Pão corrida", price: 18.9, metadata: KG, sku: "PCR", estoque: 3 })
     const sale = venda([{ id: pao.id, name: pao.name, quantity: 1.234, price: 18.9 }], { kg: true })
