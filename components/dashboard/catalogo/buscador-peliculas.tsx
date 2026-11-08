@@ -3,19 +3,33 @@
 /**
  * CATALOGO-PELICULAS-BUSCADOR-MVP-002 — buscador de películas para o balcão.
  *
- * 100% CONSULTA: busca modelos por nome/alias/marca na API read-only e exibe os
- * grupos de película com status/confiança/avisos honestos. NÃO cria produto,
- * NÃO baixa estoque, NÃO vende e NÃO grava nada.
+ * CONSULTA: busca modelos por nome/alias/marca e exibe os grupos de película com
+ * status/confiança/avisos honestos. NÃO cria produto, NÃO baixa estoque e NÃO vende.
+ *
+ * CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001: na loja ativa, permite cadastrar modelos
+ * novos e decidir equivalências de película (adicionar / remover / restaurar). Essas decisões
+ * são gravadas no servidor por loja; o catálogo global (seed) nunca é alterado.
  *
  * Cores: tokens semânticos `success`/`warning`/`destructive` como sinal de domínio
  * (status de compatibilidade) — sem cor hardcoded.
  */
 
 import { useEffect, useRef, useState } from "react"
-import { AlertTriangle, Info, Loader2, ScanSearch, Search, ShieldCheck } from "lucide-react"
+import { AlertTriangle, Info, Loader2, Plus, RotateCcw, ScanSearch, Search, ShieldCheck, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { LOJA_MANUAL_GROUP_PREFIX } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import { CadastrarModeloAparelhoDialog } from "./cadastrar-modelo-aparelho-dialog"
+import {
+  AdicionarEquivalenteDialog,
+  ModelosDaLojaPanel,
+  removerEquivalente,
+  restaurarEquivalente,
+} from "./catalogo-loja-gestao"
 
 // --- Tipos do contrato da API (espelham lib/catalogo-aparelhos/peliculas.ts) ---
 
@@ -46,12 +60,15 @@ interface ApiResult {
     commercialLine: string
     confidence: string
     status: string
+    source?: "global" | "loja"
   }
   aliases: string[]
   ambiguous: boolean
   requiresBrandContext: boolean
   flags: string[]
   peliculaGroups: ApiPeliculaGroup[]
+  /** Modelos que ESTA loja removeu de grupos globais (restauráveis). */
+  suprimidosPelaLoja?: ApiMember[]
 }
 
 interface ApiResponse {
@@ -107,6 +124,12 @@ export function BuscadorPeliculas() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const abortRef = useRef<AbortController | null>(null)
+  const { lojaAtivaId } = useLojaAtiva()
+  const lojaHeader = (lojaAtivaId ?? "").trim() || null
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const [cadastroOpen, setCadastroOpen] = useState(false)
+  const [adicionarPara, setAdicionarPara] = useState<{ modelKey: string; canonicalName: string } | null>(null)
+  const refresh = () => setRefreshNonce((n) => n + 1)
 
   // Busca com debounce contra a API read-only.
   useEffect(() => {
@@ -126,6 +149,8 @@ export function BuscadorPeliculas() {
       try {
         const res = await fetch(`/api/catalogo/peliculas/search?q=${encodeURIComponent(q)}`, {
           signal: controller.signal,
+          cache: "no-store",
+          ...(lojaHeader ? { headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader } } : {}),
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = (await res.json()) as ApiResponse
@@ -144,7 +169,7 @@ export function BuscadorPeliculas() {
       window.clearTimeout(t)
       controller.abort()
     }
-  }, [query])
+  }, [query, lojaHeader, refreshNonce])
 
   const results = data?.results ?? []
   const showEmpty = !loading && !error && query.trim().length >= 2 && data !== null && results.length === 0
@@ -207,31 +232,104 @@ export function BuscadorPeliculas() {
         </div>
       )}
       {showEmpty && (
-        <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          {data?.message ?? "Nenhum aparelho encontrado. Confira a grafia ou confirme o modelo fisicamente."}
+        <div className="space-y-3 rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          <p>{data?.message ?? "Nenhum aparelho encontrado. Confira a grafia ou confirme o modelo fisicamente."}</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => setCadastroOpen(true)}>
+            <Plus className="mr-1 h-4 w-4" /> Cadastrar novo modelo “{query.trim()}”
+          </Button>
         </div>
       )}
 
       {/* Resultados */}
       <div className="min-w-0 space-y-3">
         {results.map((r) => (
-          <ResultadoCard key={r.model.modelKey} result={r} />
+          <ResultadoCard
+            key={r.model.modelKey}
+            result={r}
+            lojaHeader={lojaHeader}
+            onChanged={refresh}
+            onAdicionar={() => setAdicionarPara({ modelKey: r.model.modelKey, canonicalName: r.model.canonicalName })}
+          />
         ))}
       </div>
+
+      {/* Gestão do catálogo DA LOJA (cadastro manual de lançamentos). */}
+      <ModelosDaLojaPanel lojaHeader={lojaHeader} onChanged={refresh} />
+
+      <CadastrarModeloAparelhoDialog
+        open={cadastroOpen}
+        onOpenChange={setCadastroOpen}
+        lojaHeader={lojaHeader}
+        initialName={query.trim()}
+        onCreated={() => refresh()}
+      />
+      <AdicionarEquivalenteDialog
+        baseModel={adicionarPara}
+        lojaHeader={lojaHeader}
+        onClose={() => setAdicionarPara(null)}
+        onSaved={() => {
+          setAdicionarPara(null)
+          refresh()
+        }}
+      />
     </div>
   )
 }
 
-function ResultadoCard({ result }: { result: ApiResult }) {
+function ResultadoCard({
+  result,
+  lojaHeader,
+  onChanged,
+  onAdicionar,
+}: {
+  result: ApiResult
+  lojaHeader: string | null
+  onChanged: () => void
+  onAdicionar: () => void
+}) {
   const { model, aliases, ambiguous, requiresBrandContext, peliculaGroups } = result
+  const suprimidos = result.suprimidosPelaLoja ?? []
+  const [actionError, setActionError] = useState("")
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+
+  const remover = async (member: ApiMember, manual: boolean) => {
+    setBusyKey(member.modelKey)
+    const res = await removerEquivalente(lojaHeader, model.modelKey, member.modelKey, manual)
+    setBusyKey(null)
+    if (!res.ok) setActionError(res.error)
+    else {
+      setActionError("")
+      onChanged()
+    }
+  }
+  const restaurar = async (member: ApiMember) => {
+    setBusyKey(member.modelKey)
+    const res = await restaurarEquivalente(lojaHeader, model.modelKey, member.modelKey)
+    setBusyKey(null)
+    if (!res.ok) setActionError(res.error)
+    else {
+      setActionError("")
+      onChanged()
+    }
+  }
+
   return (
-    <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-soft">
+    <div
+      className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-soft"
+      data-testid="catalogo-resultado"
+      data-model-key={model.modelKey}
+    >
       {/* Aparelho */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="truncate text-sm font-semibold text-foreground">{model.canonicalName}</span>
         <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
           {model.brand}
         </Badge>
+        {model.source === "loja" && (
+          <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+            Cadastro da loja
+          </Badge>
+        )}
         {ambiguous && (
           <Badge variant="outline" className="shrink-0 border-warning/40 text-[10px] text-warning">
             Alias ambíguo — confirme a marca
@@ -258,17 +356,65 @@ function ResultadoCard({ result }: { result: ApiResult }) {
       ) : (
         <div className="mt-3 space-y-3">
           {peliculaGroups.map((g) => (
-            <GrupoPelicula key={g.groupKey} grupo={g} />
+            <GrupoPelicula
+              key={g.groupKey}
+              grupo={g}
+              busyKey={busyKey}
+              onRemover={(m) => void remover(m, g.groupKey.startsWith(LOJA_MANUAL_GROUP_PREFIX))}
+            />
           ))}
         </div>
       )}
+
+      {suprimidos.length > 0 && (
+        <div className="mt-3 min-w-0 rounded-md border border-border bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Removidos por esta loja ({suprimidos.length})
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {suprimidos.map((m) => (
+              <Badge key={m.modelKey} variant="outline" className="max-w-full gap-1 text-[11px] font-normal">
+                <span className="truncate">{m.canonicalName}</span>
+                <button
+                  type="button"
+                  aria-label={`Restaurar ${m.canonicalName}`}
+                  disabled={busyKey === m.modelKey}
+                  onClick={() => void restaurar(m)}
+                  className="rounded-sm px-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={onAdicionar}>
+          <Plus className="mr-1 h-4 w-4" /> Adicionar película equivalente
+        </Button>
+        {actionError && (
+          <p role="alert" className="min-w-0 text-xs text-destructive">
+            {actionError}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
 
-function GrupoPelicula({ grupo }: { grupo: ApiPeliculaGroup }) {
+function GrupoPelicula({
+  grupo,
+  busyKey,
+  onRemover,
+}: {
+  grupo: ApiPeliculaGroup
+  busyKey: string | null
+  onRemover: (member: ApiMember) => void
+}) {
   return (
-    <div className="min-w-0 rounded-lg border border-border bg-muted/20 p-3">
+    <div className="min-w-0 rounded-lg border border-border bg-muted/20 p-3" data-testid="catalogo-grupo" data-group-key={grupo.groupKey}>
       <div className="flex flex-wrap items-center gap-2">
         <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -297,11 +443,21 @@ function GrupoPelicula({ grupo }: { grupo: ApiPeliculaGroup }) {
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {grupo.members.map((m) => (
-              <Badge key={m.modelKey} variant="secondary" className="max-w-full text-[11px] font-normal">
+              <Badge key={m.modelKey} variant="secondary" className="max-w-full gap-1 text-[11px] font-normal">
                 <span className="truncate">
                   {m.brand ? `${m.brand} · ` : ""}
                   {m.canonicalName}
                 </span>
+                <button
+                  type="button"
+                  aria-label={`Remover ${m.canonicalName} desta equivalência nesta loja`}
+                  title="Remover só nesta loja"
+                  disabled={busyKey === m.modelKey}
+                  onClick={() => onRemover(m)}
+                  className="rounded-sm px-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </Badge>
             ))}
           </div>

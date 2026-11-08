@@ -82,6 +82,8 @@ export interface DeviceSearchResult {
   requiresBrandContext: boolean
   /** Flags de revisão legíveis (ex.: "alias_curto_ambiguo", "modelo_em_revisao"). */
   reviewFlags: string[]
+  /** Origem: catálogo global (CSV) ou cadastro manual da loja ativa. Ausente = global. */
+  source?: "global" | "loja"
 }
 
 /** Opções da busca de modelos. */
