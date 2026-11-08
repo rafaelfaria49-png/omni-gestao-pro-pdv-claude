@@ -14,7 +14,7 @@ Substituir a pasta pelo ZIP recebido do CI da PR revisada e por sua extração. 
 ```powershell
 $D05Package = 'C:\HomologacaoD05\omni-print-agent'
 $D05Zip = 'C:\HomologacaoD05\omni-print-agent-0.2.0-d04.zip'
-$D05ExpectedSha = 'f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a'
+$D05ExpectedSha = 'e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77' # pacote da finalização 2026-11-08 (JOURNAL_MISSING)
 $D05Node = 'C:\Users\rafae\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
 $D05InstallRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgentApp-D05'
 $D05DataRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgent-D05'
@@ -113,3 +113,10 @@ Atualizar e desinstalar são alternativas conforme a etapa; não executar ambas 
 histórico, diário, `.lock`, `.guard`, instância, hosts ou fila; não restaurar diário antigo. Desmontagem de banco/Preview
 exige conferência e autorização separadas conforme o plano. Aprovação final do proprietário fica com referência/data;
 `PHYSICAL_HOMOLOGATION=PASS` só após conferir todos os casos aplicáveis e evidências físicas.
+
+## Finalização 2026-11-08
+
+- [ ] ZIP do CI do head final da #334 com SHA-256 `e974ca03…bc77` (ver variável `$D05ExpectedSha` acima).
+- [ ] Servidor de pareamento = alias da branch D05 (`https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app`).
+- [ ] Se o agente parar com `JOURNAL_MISSING`: não corrigir à mão; parar, arquivar a pasta inteira e pedir novo pareamento.
+- [ ] Nada de H01–H18 é marcado PASS sem papel contado, IDs técnicos e aceite final do proprietário.

@@ -27,14 +27,15 @@ test('outside the D05 branch the build is the unchanged project build (vercel.js
   for (const env of [
     { VERCEL: '1', NODE_ENV: 'production', VERCEL_ENV: 'production', VERCEL_TARGET_ENV: 'production', VERCEL_PROJECT_ID: D05_TARGET.projectId, VERCEL_GIT_COMMIT_REF: 'main' },
     { VERCEL: '1', NODE_ENV: 'production', VERCEL_ENV: 'preview', VERCEL_TARGET_ENV: 'preview', VERCEL_PROJECT_ID: D05_TARGET.projectId, VERCEL_GIT_COMMIT_REF: 'claude/omni-print-004c-e2e-001' },
-    {},
   ]) {
     let called = 0, seen = null
     assert.equal(main({ env, run: ({ env: e }) => { called++; seen = e; return 7 }, log: () => {} }), 7)
     assert.equal(called, 1); assert.equal(seen, env)
   }
   // The D05 branch, or any build carrying the D05 marker, still requires the full isolation proof.
-  for (const env of [{ ...valid(), VERCEL_ENV: 'production', VERCEL_TARGET_ENV: 'production' }, { VERCEL: '1', VERCEL_GIT_COMMIT_REF: D05_TARGET.branch },
+  // A build without git metadata (e.g. a CLI deploy of this code) cannot prove it is not the D05 branch: fail closed.
+  for (const env of [{}, { VERCEL: '1', VERCEL_ENV: 'production', VERCEL_TARGET_ENV: 'production' }, { VERCEL: '1', VERCEL_GIT_COMMIT_REF: '' },
+    { ...valid(), VERCEL_ENV: 'production', VERCEL_TARGET_ENV: 'production' }, { VERCEL: '1', VERCEL_GIT_COMMIT_REF: D05_TARGET.branch },
     { VERCEL: '1', VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main', OMNI_PRINT_D05_ENVIRONMENT: '1' }]) {
     let count = 0
     assert.equal(main({ env, run: () => { count++; return 0 }, log: () => {} }), 1)

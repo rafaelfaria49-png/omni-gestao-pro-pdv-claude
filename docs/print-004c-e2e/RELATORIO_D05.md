@@ -1,5 +1,9 @@
 # D05 — preparação técnica e homologação física pendente
 
+> **Atualização 2026-11-08 (GOAL OMNI-PRINT-FINALIZACAO-INTEGRAL-D05-RELEASE-READY-001):** pilha reconciliada sobre #327
+> `055d785`; achados da revisão independente corrigidos; causa do 500 do Preview (`AUTH_URL=""`) identificada e corrigida.
+> Estado vigente, SHAs, CI e pendências: **`FINALIZACAO_INTEGRAL_D05.md`**. O texto abaixo é o registro de 2026-11-05.
+
 GOAL `OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001`. **D05_PREPARED; PHYSICAL_HOMOLOGATION=PENDING.**
 Esta entrega prepara ambiente, operador e evidências. Não declara D05=PASS nem recomenda ativação em produção.
 
@@ -30,6 +34,7 @@ Pacote D04 reproduzido com gerador oficial: `omni-print-agent-0.2.0-d04.zip`, SH
 `f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a`, contentId
 `1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540`, 17 arquivos + manifesto, **sem assinatura**.
 Node 24 >=24.12 e PowerShell 5.1; mesma identidade Windows/DPAPI CurrentUser. Nenhuma instalação/tarefa/pareamento real.
+**Substituído na finalização de 2026-11-08** pelo pacote `e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77` (contentId `f6af488c0c5d59e70f555f640b2fd97224dbd315b26da8e669335051dec56a40`; agente com `JOURNAL_MISSING`). Ver `FINALIZACAO_INTEGRAL_D05.md`.
 
 ## Mudanças e limites
 

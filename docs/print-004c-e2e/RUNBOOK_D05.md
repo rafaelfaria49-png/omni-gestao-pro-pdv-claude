@@ -80,3 +80,11 @@ mudou. Recolher a impressora/cabos e restaurar a organização física da bancad
 
 `PHYSICAL_HOMOLOGATION=PASS` só depois de todos os casos aplicáveis executados, desvios resolvidos, evidências conferidas
 e aprovação escrita do proprietário. Esta preparação não muda nenhum caso físico para PASS.
+
+## Finalização 2026-11-08
+
+- Usar somente o ZIP do CI do head final da #334 (SHA-256 `e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77`); o pacote `f48b3097…` foi substituído e nunca instalado.
+- URL do servidor para pareamento: alias da branch D05 (`PLANO_AMBIENTE_D05.md`, seção de finalização). Não usar a URL por deployment.
+- `JOURNAL_MISSING` ao iniciar: não apagar `.instance`, não recriar diário. Parar, arquivar a pasta de dados inteira, revogar a instalação e parear de novo; conferir papel das tentativas UNKNOWN.
+- Instância morta com tentativa UNKNOWN mantém a impressora bloqueada (`DESTINATION_BLOCKED`) por design: conferir o papel, revogar e parear de novo; nunca liberar a fila à mão.
+- Estado de execução, SHAs e pendências: `FINALIZACAO_INTEGRAL_D05.md`.

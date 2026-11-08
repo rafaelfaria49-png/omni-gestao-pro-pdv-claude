@@ -1,0 +1,12 @@
+reset print_lab_d03_two
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:36:08
+   Duration  17.87s (transform 391ms, setup 0ms, import 1.03s, tests 16.61s, environment 0ms)
+
+
+exit=0

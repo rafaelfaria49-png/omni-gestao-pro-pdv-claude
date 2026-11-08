@@ -220,3 +220,7 @@ quem executou.
 | Produção | §6.3 núcleo | NÃO EXECUTADO | | |
 | Produção | §6.4–6.6 verify, promote, resolve | NÃO EXECUTADO | | |
 | Produção | §7 validação | NÃO EXECUTADO | | |
+
+## 12. Compatibilidade com a cadeia KG (finalização 2026-11-08)
+
+Ensaio PG17 descartável sobre baseline da main `ce9228c`: D02→KG e KG→D02 aplicam sem erro e resultam em esquemas idênticos (`evidence/d05/finalizacao-2026-11-08/kg-d02-matrix/`). Regras: (1) D02 é sempre manual por este roteiro, nunca pelo `migrate deploy` de uma liberação KG; (2) não executar a janela D02 e o MIG-X KG no mesmo deploy; (3) promover as pastas D02 a `prisma/migrations` somente depois do `resolve --applied` em Production; (4) timestamps D02 (`20261105…`) ficam entre KG `20261029…` e `20261106…`: o Prisma aplica pendências fora de ordem em `migrate deploy`, por isso o registro manual antes da promoção é obrigatório.

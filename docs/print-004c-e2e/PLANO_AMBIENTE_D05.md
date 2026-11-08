@@ -101,3 +101,7 @@ Remover variáveis da branch **e deployments antigos** autorizados: eles retêm 
 somente após autorização separada, evidências preservadas e UNKNOWN reconciliado/decisão humana registrada. Sem TTL que
 destrua automaticamente banco com provas pendentes. Registrar responsável, horário e IDs removidos, confirmar Production
 inalterada por escopo/ações; não acessar banco produtivo para produzir esse atestado.
+
+## Finalização 2026-11-08 — origem de autenticação do Preview
+
+`AUTH_URL`/`NEXTAUTH_URL` da branch D05 **não podem ser string vazia**: no Auth.js, `trustHost = !!(AUTH_URL ?? AUTH_TRUST_HOST ?? VERCEL …)` e `""` não é nulo, então `trustHost=false` e todo `/api/auth/*` responde 500 (`UntrustedHost`) — causa do `ADMIN_CSRF` do probe de 2026-11-07. Valor obrigatório: o alias estável da branch `https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app` (`D05_TARGET.origin`). `d05IsolationErrors` recusa qualquer outro valor (build e runtime). `private-state.ps1 -Mode Initialize` já grava o alias. O alias é a URL do servidor para o pareamento do agente.

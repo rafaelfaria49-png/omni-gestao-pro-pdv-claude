@@ -16,7 +16,7 @@ Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/pri
 | P08 | Matriz de transições inválidas | PASS_REAL_SOFTWARE | S23 (transições/imutabilidade/exclusão recusadas no banco) + R4 |
 | P09 | Segunda via e teste versus gaveta | PASS_REAL_SOFTWARE | unit (INITIAL/REPRINT sem pulso de gaveta; validador recusa ESC p); teste sintético não exposto |
 | P10 | Documentos PENDING/quarentena e estado comercial | PASS_REAL_SOFTWARE | S05/PW2 (venda pendente nunca imprime) + S22 (quarentena) + S14 |
-| P11 | Limites de comando, itens, vias e payload | PASS_REAL_SOFTWARE | S21 (COMMAND_LIMIT/SNAPSHOT_LIMIT/PAYLOAD_LIMIT/ITEM_LIMIT, zero efeitos) + S18; ressalva histórica resolvida |
+| P11 | Limites de comando, itens, vias e payload | PASS_REAL_SOFTWARE | S21 (COMMAND_LIMIT/SNAPSHOT_LIMIT/PAYLOAD_LIMIT/ITEM_LIMIT, zero efeitos) + S18; PW20 (vias configuradas > 2: aviso ao operador, 2 vias, 1 job; finalização 2026-11-08); ressalva histórica resolvida |
 | P12 | Grant expirado/revogado e replay após cleanup | PASS_REAL_SOFTWARE | S15 (sessionVersion/usuário inativo/delegação → AUTHORIZATION_LOST); D03 R02/R07 (identidades mantidas após expurgo; requisição vencida não executa) |
 | P13 | Minimização e logs | PASS_REAL_SOFTWARE | S19 (CPF fora do snapshot; nenhuma credencial/cipher na resposta) |
 | P14 | Venda histórica sem job anterior | PASS_REAL_SOFTWARE | S24 (segunda via de venda sem job anterior fecha o slot INITIAL) |
@@ -86,3 +86,7 @@ Nenhum PASS_SIMULATED_TRANSPORT é impressão física. Cenários S## = tools/pri
 | F05 | Fila padrão trocada/removida e binding revogado | DEFERRED_PHYSICAL_HARDWARE | fila padrão trocada/removida e vínculo revogado com fila real |
 | F06 | Gaveta desligada e teste sintético | DEFERRED_PHYSICAL_HARDWARE | gaveta desligada verificada em bytes; teste físico pendente |
 | F07 | A4 e fallback em Chrome/Edge | DEFERRED_PHYSICAL_HARDWARE | impressão do navegador em Chrome/Edge com impressora real |
+
+## Finalização 2026-11-08
+
+Totais inalterados (55/13/3/9): nenhum caso físico mudou de estado. P11 ganhou PW20. Agente: `.instance` sem diário recusa iniciar (`JOURNAL_MISSING`, unitário). Venda KG continua `KG_RECEIPT_BLOCKED` → fluxo de impressão anterior (PW10/PW11/PW18); compatibilidade com a cadeia KG em `FINALIZACAO_INTEGRAL_D05.md`.

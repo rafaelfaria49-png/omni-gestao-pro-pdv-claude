@@ -14,7 +14,7 @@ O parecer não autoriza hardware, transporte, banco, Preview, merge ou produçã
 
 Verificação independente: cinco testes offline PASS, incluindo novos negativos para os dois P2; plano PASS/PENDING;
 ZIP/manifesto/18 arquivos D04 íntegros em leitura, SHA-256 `f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a`,
-contentId `1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540`, sem assinatura. Nenhuma falha de teste de
+contentId `1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540`, sem assinatura (Substituído na finalização de 2026-11-08 pelo pacote `e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77` (contentId `f6af488c0c5d59e70f555f640b2fd97224dbd315b26da8e669335051dec56a40`; agente com `JOURNAL_MISSING`). Ver `FINALIZACAO_INTEGRAL_D05.md`.) Nenhuma falha de teste de
 software/spooler pode promover o template físico a PASS; inventário, contagens, fotos, IDs e aceite são exigidos no registro.
 A veracidade das observações/fotos continua sendo responsabilidade do operador e do proprietário, fora do alcance do validador.
 
@@ -71,3 +71,24 @@ restrita ao host simulado. Agent, FakeSpooler e políticas inalterados. Asserç�
 sendKey morto em UNKNOWN, único SUBMITTING/única chamada daquela venda e exit real antes da recuperação. Resultado local
 final PASS, com12 vendas,12 chamadas simuladas,3 processos,11 SPOOLER_ACCEPTED/1 UNKNOWN e max1 por venda; ESLint PASS.
 O SHA corrigido será vinculado ao parecer após congelamento. CI próprio obrigatório; FAIL anterior permanece preservado.
+
+## Finalização integral — 2026-11-08
+
+Dois revisores de contexto limpo, somente leitura (subagentes desta sessão; sem acesso a Vercel/Neon/produção).
+
+**Rodada 1 — pilha `aca73cc` (#327) + `66c359b` (#334): REQUEST_CHANGES.**
+
+| Achado | Correção | RED → GREEN |
+|---|---|---|
+| P1 — `vercel.json` da #334 aponta o build para `build-preview.mjs`, que recusava todo alvo fora do Preview D05: se a #334 chegasse à main, todo build de Production pararia | `build-preview.mjs` só exige a prova de isolamento na branch D05 (ou com o marcador D05); qualquer outro ref git roda `scripts/vercel-build.mjs` sem mudança | `evidence/d05/finalizacao-2026-11-08/red-isolation.tap.txt` → 12/12 |
+| P3-2 — vias acima de 2 eram reduzidas em silêncio no PDV | aviso não bloqueante `pdv-direct-print-copies-limit` | PW20 falhou com o componente anterior (`red-pw20.log`) → Playwright 20/20 |
+| P3-3 — `.instance` preservado com `journal.jsonl` apagado permitiria reenviar uma reentrega cercada à instância | agente recusa iniciar com `JOURNAL_MISSING`; diário criado e sincronizado antes da identidade | teste unitário novo RED (`expected false to be true`) → GREEN |
+| P3-5 — falha interna registrava até 300 caracteres da mensagem crua (Postgres `Failing row contains`) | `failureKind`: só classe e código curto | `http-failure-log.test.ts` |
+| P3-1 — gate HOMOLOGATION chegaria à main | mantido: exige Preview + projeto + branch + banco D05 exatos; inerte fora dele | documentado |
+| P3-4 — instância morta mantém tentativa UNKNOWN segurando a impressora | por design (sem reenvio); recuperação documentada: revogar, parear de novo, conferir papel | documentado |
+| P3-6 — `/api/print/agent/pair` sem limite por IP | código de 60 bits, uso único, 10 min; aceito, registrado como melhoria | documentado |
+| (executor) Preview D05: `/api/auth/csrf` HTTP 500 | `AUTH_URL=""` torna `trustHost=false` no Auth.js; isolamento passa a exigir `AUTH_URL`/`NEXTAUTH_URL` ausentes ou iguais ao alias da branch | `auth-trusthost-repro.jsonl`, testes de ativação |
+
+**Rodada 2 — `055d785` (#327) + `bef40f0` (#334): APPROVE_WITH_NITS**, sem P0/P1/P2. Nit de segurança tratado na mesma
+finalização: build sem ref git (deploy por CLI) agora falha fechado (`red-isolation-missing-ref.tap.txt` → 12/12). Nits de
+documentação (pinos antigos do pacote) anotados como substituídos.

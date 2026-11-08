@@ -36,6 +36,8 @@ try {
   $parameters = @($u.Query.TrimStart('?').Split('&') | Where-Object { $_ -and $_ -notmatch '^(sslmode|sslaccept)=' })
   $builder.Query = ($parameters + @('sslmode=require','sslaccept=strict')) -join '&'
   $url = $builder.Uri.AbsoluteUri
+  # Auth.js: an empty AUTH_URL override makes trustHost false (UntrustedHost). Use the D05 branch alias (homologation.mjs).
+  $D05Origin = 'https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app'
   function New-D05Secret {
     $bytes = New-Object byte[] 32
     $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
@@ -44,7 +46,7 @@ try {
   }
   $values = [ordered]@{ DATABASE_URL=$url; DIRECT_URL=$url; AUTH_SECRET=(New-D05Secret); ADMIN_DEFAULT_PASSWORD=(New-D05Secret)
     OMNI_PRINT_CONTENT_KEY=(New-D05Secret); OMNI_PRINT_SIGNING_KEY=(New-D05Secret); CONTADOR_SESSION_SECRET=(New-D05Secret); CONTADOR_PIN=(New-D05Secret)
-    NODE_ENV='production'; AUTH_TRUST_HOST='true'; AUTH_URL=''; NEXTAUTH_URL=''; NEXT_PUBLIC_APP_URL=''; CONTADOR_LEGACY_PORTAL='0'
+    NODE_ENV='production'; AUTH_TRUST_HOST='true'; AUTH_URL=$D05Origin; NEXTAUTH_URL=$D05Origin; NEXT_PUBLIC_APP_URL=''; CONTADOR_LEGACY_PORTAL='0'
     OMNI_PRINT_D05_ENVIRONMENT='1'; OMNI_PRINT_DIRECT_ENABLED='1'; OMNI_PRINT_DIRECT_RELEASE='OMNI-PRINT-D05-HOMOLOGACAO-1'
     OMNI_PRINT_RETENTION_ENABLED='0'; MIGRATION_AUTHORITY_ENABLED='false'; NEXT_TELEMETRY_DISABLED='1'
     WHATSAPP_ACCESS_TOKEN=''; WHATSAPP_PHONE_NUMBER_ID=''; WHATSAPP_BUSINESS_ACCOUNT_ID=''; WHATSAPP_APP_SECRET=''; WHATSAPP_VERIFY_TOKEN=''; WHATSAPP_WEBHOOK_STORE_ID='' }
