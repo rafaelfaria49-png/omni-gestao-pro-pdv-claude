@@ -16,9 +16,16 @@ const HEADERS = { "Cache-Control": "no-store, private", "X-Content-Type-Options"
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: HEADERS })
 const MAX_BODY = 16 * 1024
 
+/** Error class plus a short driver code (Prisma P2xxx / SQLSTATE) only — constant-shaped, no payload. */
+export function failureKind(error: unknown): string {
+  const name = error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : typeof error
+  const raw = (error as { code?: unknown } | null)?.code
+  return typeof raw === "string" && /^[A-Z0-9_]{1,16}$/.test(raw) ? `${name}:${raw}` : name
+}
 function failure(error: unknown): Response {
   const e = ledgerFailure(error)
-  if (e.status >= 500 && !(error instanceof PrintError)) console.error("[print-direct]", e.code, error instanceof Error ? error.message.slice(0, 300) : "")
+  // Never the raw message: a Postgres CHECK/FK error carries "Failing row contains (...)" with request data.
+  if (e.status >= 500 && !(error instanceof PrintError)) console.error("[print-direct]", e.code, failureKind(error))
   return json({ ok: false, error: e.code }, e.status)
 }
 async function body(req: Request): Promise<unknown> {

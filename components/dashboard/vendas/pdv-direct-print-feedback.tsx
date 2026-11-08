@@ -26,6 +26,8 @@ type Ui =
   | { kind: "confirm-browser"; risk: Risk; consent: string; job: JobView | null }
   | { kind: "browser-done"; mark: string }
 
+/** Same ceiling as the server policy (CANDIDATE_POLICY.maxCopies): beyond it the operator is told, never silently trimmed. */
+export const DIRECT_MAX_COPIES = 2
 const POLL_MS = 800
 const POLL_LIMIT_MS = 90_000
 const newContextId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `ctx-${Date.now().toString(36)}`)
@@ -76,7 +78,7 @@ export function PdvDirectPrintFeedback({ request, onDismiss, onUnsupported }: Pd
     const gen = ++generation.current
     setUi({ kind: "registering" })
     const r = await directPrintClient.createInitial(request.storeId, { saleId: request.saleId, terminalId: request.terminalId,
-      copies: Math.min(2, Math.max(1, request.copies)), uiContextId: newContextId() })
+      copies: Math.min(DIRECT_MAX_COPIES, Math.max(1, request.copies)), uiContextId: newContextId() })
     if (generation.current !== gen) return
     if (!r.ok && UNSUPPORTED_DIRECT_PRINT.has(r.error) && unsupportedRef.current) { unsupportedRef.current(); return }
     if (!r.ok) { setUi({ kind: "error", message: directPrintErrorMessage(r.error) }); return }
@@ -201,6 +203,11 @@ export function PdvDirectPrintFeedback({ request, onDismiss, onUnsupported }: Pd
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground">{title}</p>
           <p className="mt-1 text-xs text-muted-foreground" data-testid="pdv-direct-print-detail">{detail}</p>
+          {request.copies > DIRECT_MAX_COPIES && ui.kind !== "browser-done" && (
+            <p className="mt-1 text-xs text-muted-foreground" data-testid="pdv-direct-print-copies-limit">
+              A impressão direta emite no máximo {DIRECT_MAX_COPIES} vias; a configuração pede {request.copies}.
+            </p>
+          )}
         </div>
         <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-2 h-8 w-8 shrink-0" onClick={onDismiss} aria-label="Fechar aviso de impressão">
           <X className="h-4 w-4" />

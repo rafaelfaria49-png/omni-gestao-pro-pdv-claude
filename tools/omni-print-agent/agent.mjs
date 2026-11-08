@@ -46,10 +46,17 @@ export class Agent {
     mkdirSync(path.dirname(this.lockFile), { recursive: true })
     if (!this.lease) this.acquireLock()
     try {
-    this.journal = new Journal(opts.journalFile)
     // Stable identity of THIS journal: the server fences attempts to it, so only this process can get a redelivery.
+    // The identity is meaningless without the journal that dedups its sendKeys: a kept .instance with a missing journal
+    // would resubmit a redelivered attempt. Fail closed; the operator archives the data folder and pairs again.
     const idFile = opts.journalFile + ".instance"
-    if (!existsSync(idFile)) { const fd = openSync(idFile, 'wx'); try { writeFileSync(fd, randomUUID()); fsyncSync(fd) } finally { closeSync(fd) } }
+    if (existsSync(idFile) && !existsSync(opts.journalFile)) throw new Error('JOURNAL_MISSING')
+    this.journal = new Journal(opts.journalFile)
+    if (!existsSync(idFile)) {
+      // Journal file exists (possibly empty) BEFORE the identity, both fsync'ed: no window leaves an identity alone.
+      const jfd = openSync(opts.journalFile, 'a'); try { fsyncSync(jfd) } finally { closeSync(jfd) }
+      const fd = openSync(idFile, 'wx'); try { writeFileSync(fd, randomUUID()); fsyncSync(fd) } finally { closeSync(fd) }
+    }
     this.instanceId = readFileSync(idFile, "utf8").trim()
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(this.instanceId)) throw new Error('INSTANCE_CORRUPT')
     this.journal.recover()

@@ -72,9 +72,13 @@ de EOF do guard Linux; correções e repetições aprovadas. Um erro de tipo no 
 ## Pacote e operação
 
 [Pacote Windows do CI, sem assinatura](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/41946614613/artifacts/13378488760).
-ZIP: `omni-print-agent-0.2.0-d04.zip`. SHA-256:
-`f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a`.
+ZIP: `omni-print-agent-0.2.0-d04.zip`. SHA-256 atual (finalização D05, 2026-11-08, agente com `JOURNAL_MISSING`):
+`e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77`,
+`contentId=f6af488c0c5d59e70f555f640b2fd97224dbd315b26da8e669335051dec56a40`; reproduzido byte a byte com Node 24.22 e 26.12.
+Pacote D04 anterior (substituído, nunca instalado): `f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a`,
 `contentId=1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540`.
+Agente atual: identidade `.instance` sem `journal.jsonl` recusa iniciar (`JOURNAL_MISSING`); o diário é criado e
+sincronizado antes da identidade. Recuperação: parar, arquivar a pasta de dados inteira e parear de novo.
 Os mesmos bytes foram reproduzidos localmente; os 17 arquivos manifestados conferem com o código revisado. Node 24
 >=24.12 e PowerShell 5.1 são pré-requisitos externos; não há dependências npm no agente nem certificado produtivo.
 Procedimentos em português no README do pacote. O gerador oficial de `HASHES.json` cobre fontes, documentos e provas;

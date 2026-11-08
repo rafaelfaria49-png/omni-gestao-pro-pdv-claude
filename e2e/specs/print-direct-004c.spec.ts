@@ -552,3 +552,14 @@ test("PW19 registro de impressão indisponível: nada imprime, nada volta ao flu
   expect(await legacyPrint(page)).toEqual({ thermal: 0, html: 0 })
   expect(await reprintEvents(sale.id)).toEqual([])
 })
+
+test("PW20 vias configuradas acima do limite da impressão direta: operador é avisado; saem só as 2 permitidas, sem erro nem repetição", async ({ page }) => {
+  await mount(page, { viasCupom: 3 })
+  const before = (await spooled()).length
+  await sell(page)
+  await expect(feedback(page)).toContainText("Comprovante enviado à fila da impressora", { timeout: 15000 })
+  await expect(page.getByTestId("pdv-direct-print-copies-limit")).toContainText("no máximo 2 vias; a configuração pede 3")
+  expect((await spooled()).length - before).toBe(2)
+  expect(printCalls.filter(c => c === "POST /api/print/direct/jobs")).toHaveLength(1)
+  expect(await legacy(page)).toEqual({ auto: 0, dialog: 0 })
+})
