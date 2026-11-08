@@ -131,3 +131,39 @@ reenvio, lock de instância por diário, `JOURNAL_MISSING`.
 ## 10. Execução do Preview, CI final e limpeza
 
 Preenchido abaixo com o que de fato ocorreu (IDs, runs, SHAs). Ver também o relatório final na PR.
+
+### 10.1 Preview D05 (executado 2026-11-08, dentro da autorização de 2026-11-05)
+
+Gate cumprido antes de qualquer escrita: commit `1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf`, revisão independente do delta
+APPROVE_WITH_NITS (só nits de documentação, tratados no `RUNBOOK_D05.md`), CI 4/4 success
+(`authorized-environment/ACTIVATION_GATES_1c39fcd.json`).
+
+| Passo | Resultado | Prova |
+|---|---|---|
+| Estado privado D05 (DPAPI CurrentUser, fora do Git) | `AUTH_URL`/`NEXTAUTH_URL` = alias da branch; backup automático do arquivo anterior | `PREVIEW_AUTH_ORIGIN_SET.json` |
+| Vercel, só variáveis da branch D05 | PATCH de `AUTH_URL` (`0Qe4vEPsF4gmoFne`) e `NEXTAUTH_URL` (`MPTApW9TPvmB3qF1`); fingerprint dos metadados fora da branch D05 igual antes/depois; nenhum valor emitido | `PREVIEW_AUTH_ORIGIN_SET.json` |
+| Deployment Preview | `dpl_7WpCYjjAzai3weEYYUd4rjx9U8EQ`, `target=preview`, READY, ref/sha conferidos; `OMNI_PRINT_DIRECT_ENABLED=0` verificado antes de criar | `PREVIEW_DEPLOYMENT_CREATED_1c39fcd.json`, `PREVIEW_DEPLOYMENT_DISABLED_STATUS_1c39fcd.json` |
+| Alias da branch | aponta para o novo deployment (`vercel inspect`) | — |
+| Probe sintético (transporte desligado) | **PASS 7/7**: `/api/auth/csrf` 200; login ADMIN e CAIXA sintéticos; só `d05-synthetic-store` visível; `/api/print/direct/admin` 404 `DIRECT_PRINT_DISABLED`; heartbeat do agente sem credencial 404 | `PREVIEW_PROBE_DISABLED_1c39fcd.json` |
+
+Scripts usados arquivados em `operator-scripts/preview-finalize.mjs.txt` (sha256 `a85af248…5491c`) e
+`probe-finalize.mjs.txt` (sha256 `8cd77425…07fc`). O deployment anterior `dpl_B9vJfGhLWMuaJPqLkLArFyxzXmZa` foi preservado
+(não excluído). Production, outras branches e configurações do projeto: inalterados.
+
+**Transporte direto continua desligado** de propósito: só será ligado (uma variável da branch D05 + novo deployment +
+probe `enabled`) na janela presencial do operador, imediatamente antes de H01.
+
+### 10.2 CI final
+
+| PR | Head | Workflows |
+|---|---|---|
+| #327 | `055d7853ad80bacd7174ffed96e4d4ae196cf96d` | 6/6 success (D02, D03, D04, Plataforma, PDV visor de peso, Ramos e Cadastros) |
+| #334 | `1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf` (código) | 4/4 success (D02, D03, D04, D05) |
+
+O commit de evidências que segue `1c39fcd` só acrescenta documentos/provas; seu CI é informado na PR.
+
+### 10.3 Limpeza
+
+Removidos ao final: worktree temporária própria `.worktrees/omni-print-327-final` (commit já publicado), cluster PG17
+descartável do scratchpad (parado e apagado), cópias temporárias do pacote. Preservados: worktree D05 (continua a homologação),
+worktree da #327 de outra sessão, `.artifacts` anteriores, estado privado DPAPI, Neon QA, deployments, todas as demais worktrees.

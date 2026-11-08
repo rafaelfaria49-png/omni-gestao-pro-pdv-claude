@@ -88,3 +88,7 @@ e aprovação escrita do proprietário. Esta preparação não muda nenhum caso 
 - `JOURNAL_MISSING` ao iniciar: não apagar `.instance`, não recriar diário. Parar, arquivar a pasta de dados inteira, revogar a instalação e parear de novo; conferir papel das tentativas UNKNOWN.
 - Instância morta com tentativa UNKNOWN mantém a impressora bloqueada (`DESTINATION_BLOCKED`) por design: conferir o papel, revogar e parear de novo; nunca liberar a fila à mão.
 - Estado de execução, SHAs e pendências: `FINALIZACAO_INTEGRAL_D05.md`.
+- `D05_ISOLATION_BLOCKED` num build sem `VERCEL_GIT_COMMIT_REF` (deploy por CLI de pasta sem git/HEAD destacado) é
+  intencional: sem ref não há prova de que não é a branch D05. Builds Git de outras branches (main, #327) passam direto
+  para `scripts/vercel-build.mjs`. O alias em `private-state.ps1` duplica `D05_TARGET.origin`; se o alias mudar, atualizar
+  os dois (o `readiness`/isolamento recusa divergência no build).

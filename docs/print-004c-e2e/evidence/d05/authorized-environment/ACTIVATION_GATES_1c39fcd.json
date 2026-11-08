@@ -1,0 +1,41 @@
+{
+  "at": "2026-11-08T13:19:30.902Z",
+  "commit": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+  "independentReview": "APPROVE_WITH_NITS",
+  "reviewNits": "documentation only (non-git deploy note; origin literal duplicated in ps1)",
+  "reviewer": "clean-context subagent, read-only",
+  "runs": [
+    {
+      "id": 42483852580,
+      "workflowId": 408422269,
+      "name": "Omni Print D05 — preparação sem hardware",
+      "headSha": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+      "conclusion": "success"
+    },
+    {
+      "id": 42483852525,
+      "workflowId": 407203149,
+      "name": "Omni Print D02 — guarda das migrations",
+      "headSha": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+      "conclusion": "success"
+    },
+    {
+      "id": 42483852556,
+      "workflowId": 407569987,
+      "name": "Omni Print D04 — agente Windows",
+      "headSha": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+      "conclusion": "success"
+    },
+    {
+      "id": 42483852555,
+      "workflowId": 407417517,
+      "name": "Omni Print D03 — retenção segura",
+      "headSha": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+      "conclusion": "success"
+    }
+  ],
+  "previewBranchOnly": true,
+  "directTransportForDeployment": "0",
+  "physicalHomologation": "PENDING",
+  "authorizationSource": "AUTHORIZATION.json (2026-11-05) + GOAL OMNI-PRINT-FINALIZACAO-INTEGRAL-D05-RELEASE-READY-001"
+}
