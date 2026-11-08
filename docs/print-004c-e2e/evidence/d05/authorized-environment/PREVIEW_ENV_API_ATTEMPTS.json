@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-05T23:30:57.788Z",
+  "cliVersion": "57.0.0",
+  "rejectedArrayRequests": 5,
+  "rejection": "INVALID_JSON_400",
+  "cause": "CLI_HTTP_CLIENT_SERIALIZES_OBJECTS_ONLY_AFTER_STDIN_ARRAY_PARSE",
+  "fix": "ONE_REVIEWED_BRANCH_VARIABLE_OBJECT_PER_POST_WITH_JSON_CONTENT_TYPE",
+  "initialVariableCreationCount": 26,
+  "additionalBuildDependencyVariable": "NPM_CONFIG_INCLUDE=dev",
+  "finalBranchVariableCount": 27,
+  "legacyOrProductionVariablesModified": false,
+  "secretsEmittedInTheseErrors": false
+}

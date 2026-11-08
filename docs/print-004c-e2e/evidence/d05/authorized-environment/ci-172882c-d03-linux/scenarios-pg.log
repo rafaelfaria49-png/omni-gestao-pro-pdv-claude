@@ -1,0 +1,23 @@
+reset print_lab_d03_regression
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ tools/print-004c-e2e/scenarios.pg.test.ts (35 tests) 16232ms
+     ✓ S07 fila/spooler indisponível e erro de StartDoc → NO_EFFECT; erro no meio da escrita → UNKNOWN sem retry  4414ms
+     ✓ S08 timeout ANTES do envio → NO_EFFECT; timeout DEPOIS do envio → UNKNOWN, host reiniciado, zero reenvio  1750ms
+     ✓ S10 queda de conexão / reconexão: agente fora do ar → 'não enviado' após o lease; ao voltar, retry imprime uma vez  1467ms
+     ✓ S12 I17: tentativa UNKNOWN ausente do diário do agente segue UNKNOWN, libera a fila e nunca é reenviada  1258ms
+     ✓ S20 integridade comercial: impressão, falhas, retries, segunda via e reinícios não alteram venda/estoque/caixa/financeiro  322ms
+     ✓ S29 P2-1 relatório recusado de forma transitória é reenviado e libera a impressora; P2-3 envio lento não vira incerto; risco mudado na T3 → RISK_CHANGED  2438ms
+     ✓ S32 D03 rotação da chave de conteúdo com tentativa em voo: o claim não trava; a via em voo nunca é reenviada; venda nova imprime  1405ms
+
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+   Start at  23:06:48
+   Duration  16.80s (transform 329ms, setup 0ms, import 453ms, tests 16.23s, environment 0ms)
+
+stderr | tools/print-004c-e2e/scenarios.pg.test.ts > OMNI-PRINT-004C — direct print end-to-end (simulated transport) > S35 D01-A1 API direta: origem PDV/ausente não contorna o consentimento; 1ª via legítima preservada; token ausente/forjado/expirado/obsoleto; registro indisponível
+[print-direct] INTERNAL connect ECONNREFUSED 127.0.0.1:5432
+
+
+exit=0

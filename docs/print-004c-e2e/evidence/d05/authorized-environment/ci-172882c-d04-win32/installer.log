@@ -1,0 +1,44 @@
+{
+    "metadata":  {
+                     "installRoot":  "D:\\a\\_temp\\omni-d04-db73b883f47d43ae9ba966defb52879f\\app",
+                     "nodePath":  "C:\\hostedtoolcache\\windows\\node\\24.22.2\\x64\\node.exe",
+                     "contentId":  "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+                     "version":  "0.2.0-d04",
+                     "ownerSid":  "S-1-5-21-3708201392-4242277230-667464164-500",
+                     "dataRoot":  "D:\\a\\_temp\\omni-d04-db73b883f47d43ae9ba966defb52879f\\data",
+                     "taskArguments":  "\"D:\\a\\_temp\\omni-d04-db73b883f47d43ae9ba966defb52879f\\app\\releases\\0.2.0-d04-1cfecac07fae\\supervisor.mjs\" --data-dir \"D:\\a\\_temp\\omni-d04-db73b883f47d43ae9ba966defb52879f\\data\"",
+                     "taskName":  "OmniPrintAgent-Lab-8e3de6affe744781a7dfb2d856d4511c",
+                     "releaseRoot":  "D:\\a\\_temp\\omni-d04-db73b883f47d43ae9ba966defb52879f\\app\\releases\\0.2.0-d04-1cfecac07fae"
+                 },
+    "signed":  false,
+    "mode":  "PLAN",
+    "action":  "INSTALL_DISABLED_LOGON_TASK"
+}
+INSTALL_PASS_TASK_DISABLED_DATA_PRESERVED
+LOGON_TASK_DEFINITION_PASS (real logout/reboot remains D05)
+REGISTERED_LAUNCHER_EXECUTED_UNPAIRED_FAIL_CLOSED_PASS
+DRAINED_HOSTS_CLOSED
+STOP_PASS_HOSTS_CLOSED_DATA_PRESERVED
+{"status":"PASS","credential":"DPAPI_CURRENT_USER_OK","agentVersion":"omni-print-agent/0.2.0-d04","paired":true}
+{
+    "sameWindowsUser":  true,
+    "paired":  true,
+    "credentialProbe":  "DPAPI_CURRENT_USER_PASS",
+    "haltReason":  "FATAL",
+    "singleInstance":  true,
+    "version":  "0.2.0-d04",
+    "physicalHomologation":  "PENDING",
+    "signed":  false,
+    "logonInteractiveLimited":  true,
+    "integrity":  "PASS",
+    "taskState":  "Disabled",
+    "taskPresent":  true
+}
+DRAINED_HOSTS_CLOSED
+UPDATE_PASS_TASK_DISABLED_STATE_PRESERVED
+UPDATE_DPAPI_JOURNAL_INSTANCE_PRESERVED_PASS
+DRAINED_HOSTS_CLOSED
+UNINSTALL_PASS_TASK_REMOVED_ALL_HISTORY_RETAINED
+INSTALLER_VALIDATION_PASS (synthetic data, no physical printer, no real pairing)
+
+exit=0

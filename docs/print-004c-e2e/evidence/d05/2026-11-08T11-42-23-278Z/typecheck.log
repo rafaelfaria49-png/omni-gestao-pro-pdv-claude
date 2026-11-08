@@ -1,0 +1,117 @@
+app/api/catalogo/aparelhos/modelos/[id]/route.ts(29,43): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/aparelhos/modelos/resolve/route.ts(34,63): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/aparelhos/modelos/route.ts(36,44): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/aparelhos/modelos/route.ts(53,43): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/aparelhos/search/route.ts(42,83): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/peliculas/compat/route.ts(33,47): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/peliculas/search/route.ts(98,64): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/peliculas/search/route.ts(105,48): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+app/api/catalogo/peliculas/search/route.ts(148,57): error TS2345: Argument of type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(50,27): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(134,32): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(160,32): error TS2339: Property 'catalogoAparelhoLojaCompat' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(168,32): error TS2339: Property 'catalogoAparelhoLojaCompat' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(170,21): error TS2339: Property 'catalogoAparelhoLojaCompat' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(255,21): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(274,21): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(347,21): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+e2e/cadastros-ramos/11-acessorios-compat-manual.spec.ts(386,21): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(48,14): error TS2339: Property 'catalogoAparelhoLojaCompat' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(49,14): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(60,38): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(67,41): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(74,39): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(76,42): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(78,41): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(83,40): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(85,42): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(87,46): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(91,43): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(96,44): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(101,32): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(102,21): error TS2339: Property 'catalogoAparelhoLojaCompat' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(107,45): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(113,53): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(123,42): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(126,43): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(128,49): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(135,39): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(137,39): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(139,45): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(143,26): error TS2339: Property 'catalogoAparelhoLojaCompat' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(148,34): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(149,39): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(150,35): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(151,39): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(153,24): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(158,40): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(160,42): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(163,40): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(165,35): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(166,35): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(172,24): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(173,24): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(177,21): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(181,26): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(183,24): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(184,24): error TS2345: Argument of type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is not assignable to parameter of type 'Db'.
+  Type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>' is missing the following properties from type 'Db': catalogoAparelhoLojaModelo, catalogoAparelhoLojaCompat
+lib/catalogo-aparelhos/loja-catalogo-store.integration.test.ts(188,28): error TS2339: Property 'catalogoAparelhoLojaModelo' does not exist on type 'PrismaClient<{ datasourceUrl: string; }, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(36,30): error TS2344: Type '"catalogoAparelhoLojaModelo" | "catalogoAparelhoLojaCompat"' does not satisfy the constraint 'keyof PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+  Type '"catalogoAparelhoLojaModelo"' is not assignable to type 'keyof PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(128,24): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(148,24): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(169,24): error TS18046: 'db.catalogoAparelhoLojaCompat' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(173,22): error TS7006: Parameter 'r' implicitly has an 'any' type.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(195,10): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(243,16): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(246,27): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(290,27): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(322,23): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(326,27): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(383,13): error TS18046: 'db.catalogoAparelhoLojaCompat' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(385,28): error TS18046: 'db.catalogoAparelhoLojaCompat' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(424,22): error TS18046: 'db.catalogoAparelhoLojaModelo' is of type 'unknown'.
+lib/catalogo-aparelhos/loja-catalogo-store.ts(428,28): error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+exit=2

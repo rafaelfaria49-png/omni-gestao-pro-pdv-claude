@@ -23,6 +23,32 @@ test('D05 build accepts only the reviewed Preview and never runs a step before i
     assert.equal(count, 0, key)
   }
 })
+test('outside the D05 branch the build is the unchanged project build (vercel.json must not stop main/#327)', () => {
+  for (const env of [
+    { VERCEL: '1', NODE_ENV: 'production', VERCEL_ENV: 'production', VERCEL_TARGET_ENV: 'production', VERCEL_PROJECT_ID: D05_TARGET.projectId, VERCEL_GIT_COMMIT_REF: 'main' },
+    { VERCEL: '1', NODE_ENV: 'production', VERCEL_ENV: 'preview', VERCEL_TARGET_ENV: 'preview', VERCEL_PROJECT_ID: D05_TARGET.projectId, VERCEL_GIT_COMMIT_REF: 'claude/omni-print-004c-e2e-001' },
+    {},
+  ]) {
+    let called = 0, seen = null
+    assert.equal(main({ env, run: ({ env: e }) => { called++; seen = e; return 7 }, log: () => {} }), 7)
+    assert.equal(called, 1); assert.equal(seen, env)
+  }
+  // The D05 branch, or any build carrying the D05 marker, still requires the full isolation proof.
+  for (const env of [{ ...valid(), VERCEL_ENV: 'production', VERCEL_TARGET_ENV: 'production' }, { VERCEL: '1', VERCEL_GIT_COMMIT_REF: D05_TARGET.branch },
+    { VERCEL: '1', VERCEL_ENV: 'production', VERCEL_GIT_COMMIT_REF: 'main', OMNI_PRINT_D05_ENVIRONMENT: '1' }]) {
+    let count = 0
+    assert.equal(main({ env, run: () => { count++; return 0 }, log: () => {} }), 1)
+    assert.equal(count, 0)
+  }
+})
+test('auth origin overrides: empty string disables trusted host (UntrustedHost 500); only the D05 branch alias is accepted', () => {
+  for (const key of ['AUTH_URL', 'NEXTAUTH_URL']) {
+    for (const bad of ['', 'https://omni-gestao-pro.vercel.app', 'http://' + new URL(D05_TARGET.origin).host, D05_TARGET.origin + '/', D05_TARGET.origin + '/api/auth', 'not-a-url'])
+      assert.ok(d05IsolationErrors({ ...valid(), [key]: bad }).includes('D05_AUTH_ORIGIN_MISMATCH'), key + '=' + bad)
+    assert.deepEqual(d05IsolationErrors({ ...valid(), [key]: D05_TARGET.origin }), [])
+  }
+  assert.deepEqual(d05IsolationErrors(valid()), [])
+})
 test('foreign database, role, database name, missing TLS and pooled DIRECT_URL fail closed', () => {
   for (const name of ['DATABASE_URL', 'DIRECT_URL']) for (const value of [
     valid()[name].replace(D05_TARGET.host, 'another.invalid'), valid()[name].replace(D05_TARGET.database, 'another_database'),

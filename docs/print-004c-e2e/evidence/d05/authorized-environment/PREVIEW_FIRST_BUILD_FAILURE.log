@@ -1,0 +1,93 @@
+Vercel CLI 57.0.0 (Node.js 24.22.1)
+Fetching deployment "dpl_973a17utnmo8jysZAZWgT5QAnrKz" in rafaelfaria49-4373s-projects
+2026-11-05T23:23:19.897Z  Running build in Washington, D.C., USA (East) – iad1
+2026-11-05T23:23:19.897Z  Build machine configuration: 2 cores, 8 GB
+2026-11-05T23:23:20.003Z  Cloning github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude (Branch: codex/omni-print-d05-homologacao-fisica-001, Commit: 172882c)
+2026-11-05T23:23:22.607Z  Cloning completed: 2.604s
+2026-11-05T23:23:22.745Z  Found .vercelignore
+2026-11-05T23:23:22.770Z  Removed 27 ignored files defined in .vercelignore
+2026-11-05T23:23:22.770Z  /.git/config
+2026-11-05T23:23:22.770Z  /.git/description
+2026-11-05T23:23:22.770Z  /.git/FETCH_HEAD
+2026-11-05T23:23:22.770Z  /.git/HEAD
+2026-11-05T23:23:22.770Z  /.git/hooks/applypatch-msg.sample
+2026-11-05T23:23:22.770Z  /.git/hooks/commit-msg.sample
+2026-11-05T23:23:22.770Z  /.git/hooks/fsmonitor-watchman.sample
+2026-11-05T23:23:22.770Z  /.git/hooks/post-update.sample
+2026-11-05T23:23:22.770Z  /.git/hooks/pre-applypatch.sample
+2026-11-05T23:23:22.770Z  /.git/hooks/pre-commit.sample
+2026-11-05T23:23:22.839Z  Restored build cache from previous deployment (2aNaisN5cRS6e8eBttGhgkbLKVGc)
+2026-11-05T23:23:25.335Z  Running "vercel build"
+2026-11-05T23:23:25.343Z  Vercel CLI 65.11.0
+2026-11-05T23:23:25.878Z  Running "install" command: `npm install`...
+2026-11-05T23:23:26.242Z  npm warn Unknown env config "cache-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+2026-11-05T23:23:43.020Z  
+2026-11-05T23:23:43.020Z  > omni-gestao-pro@0.1.0 postinstall
+2026-11-05T23:23:43.020Z  > prisma generate
+2026-11-05T23:23:43.020Z  
+2026-11-05T23:23:43.864Z  Prisma schema loaded from prisma/schema.prisma
+2026-11-05T23:23:45.287Z  
+2026-11-05T23:23:45.287Z  ✔ Generated Prisma Client (v6.19.3) to ./generated/prisma in 685ms
+2026-11-05T23:23:45.287Z  
+2026-11-05T23:23:45.287Z  Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+2026-11-05T23:23:45.287Z  
+2026-11-05T23:23:45.288Z  Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+2026-11-05T23:23:45.288Z  
+2026-11-05T23:23:45.337Z  
+2026-11-05T23:23:45.337Z  removed 642 packages, and audited 317 packages in 19s
+2026-11-05T23:23:45.338Z  
+2026-11-05T23:23:45.338Z  33 packages are looking for funding
+2026-11-05T23:23:45.338Z  run `npm fund` for details
+2026-11-05T23:23:45.714Z  
+2026-11-05T23:23:45.714Z  22 vulnerabilities (1 low, 1 moderate, 16 high, 4 critical)
+2026-11-05T23:23:45.714Z  
+2026-11-05T23:23:45.714Z  To address issues that do not require attention, run:
+2026-11-05T23:23:45.714Z  npm audit fix
+2026-11-05T23:23:45.714Z  
+2026-11-05T23:23:45.714Z  To address all issues possible (including breaking changes), run:
+2026-11-05T23:23:45.714Z  npm audit fix --force
+2026-11-05T23:23:45.714Z  
+2026-11-05T23:23:45.714Z  Some issues need review, and may require choosing
+2026-11-05T23:23:45.714Z  a different dependency.
+2026-11-05T23:23:45.715Z  
+2026-11-05T23:23:45.715Z  Run `npm audit` for details.
+2026-11-05T23:23:45.715Z  npm warn install-scripts 4 packages have install scripts not yet covered by allowScripts:
+2026-11-05T23:23:45.716Z  npm warn install-scripts   @prisma/client@6.19.3 (postinstall: node scripts/postinstall.js)
+2026-11-05T23:23:45.716Z  npm warn install-scripts   @prisma/engines@6.19.3 (postinstall: node scripts/postinstall.js)
+2026-11-05T23:23:45.716Z  npm warn install-scripts   prisma@6.19.3 (preinstall: node scripts/preinstall-entry.js)
+2026-11-05T23:23:45.716Z  npm warn install-scripts   sharp@0.34.5 (install: node install/check.js || npm run build)
+2026-11-05T23:23:45.716Z  npm warn install-scripts
+2026-11-05T23:23:45.716Z  npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+2026-11-05T23:23:45.754Z  Detected Next.js version: 16.2.0
+2026-11-05T23:23:45.755Z  Running "node tools/print-d05/build-preview.mjs"
+2026-11-05T23:23:45.782Z  D05_ISOLATION_VERIFIED
+2026-11-05T23:23:45.782Z  MIGRATION_SKIPPED
+2026-11-05T23:23:45.974Z  npm warn Unknown env config "cache-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+2026-11-05T23:23:46.662Z  Prisma schema loaded from prisma/schema.prisma
+2026-11-05T23:23:48.038Z  ┌─────────────────────────────────────────────────────────┐
+2026-11-05T23:23:48.038Z  │  Update available 6.19.3 -> 8.0.0-rc.30                 │
+2026-11-05T23:23:48.038Z  │                                                         │
+2026-11-05T23:23:48.038Z  │  This is a major update - please follow the guide at    │
+2026-11-05T23:23:48.038Z  │  https://pris.ly/d/major-version-upgrade                │
+2026-11-05T23:23:48.038Z  │                                                         │
+2026-11-05T23:23:48.038Z  │  Run the following to update                            │
+2026-11-05T23:23:48.038Z  │    npm i --save-dev prisma@latest                       │
+2026-11-05T23:23:48.039Z  │    npm i @prisma/client@latest                          │
+2026-11-05T23:23:48.039Z  └─────────────────────────────────────────────────────────┘
+2026-11-05T23:23:48.039Z  
+2026-11-05T23:23:48.039Z  ✔ Generated Prisma Client (v6.19.3) to ./generated/prisma in 740ms
+2026-11-05T23:23:48.039Z  
+2026-11-05T23:23:48.039Z  Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+2026-11-05T23:23:48.039Z  
+2026-11-05T23:23:48.039Z  Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+2026-11-05T23:23:48.039Z  
+2026-11-05T23:23:48.257Z  npm warn Unknown env config "cache-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+2026-11-05T23:23:48.643Z  ⨯ Failed to load next.config.mjs, see more info here https://nextjs.org/docs/messages/next-config-error
+2026-11-05T23:23:48.643Z  
+2026-11-05T23:23:48.643Z  > Build error occurred
+2026-11-05T23:23:48.646Z  Error: Cannot find package '@ducanh2912/next-pwa' imported from /vercel/path0/next.config.mjs
+2026-11-05T23:23:48.646Z  at ignore-listed frames {
+2026-11-05T23:23:48.646Z  code: 'ERR_MODULE_NOT_FOUND'
+2026-11-05T23:23:48.646Z  }
+2026-11-05T23:23:48.664Z  Error: [BUILD_UTILS_SPAWN_1] Command "node tools/print-d05/build-preview.mjs" exited with 1
+status	● Error

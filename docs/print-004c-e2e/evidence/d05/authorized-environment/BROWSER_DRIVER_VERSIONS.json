@@ -1,0 +1,20 @@
+{
+  "at": "2026-11-05T23:10:38.7130260Z",
+  "readOnly": true,
+  "browsers": [
+    {
+      "name": "Chrome",
+      "installed": true,
+      "version": "156.0.8078.80"
+    },
+    {
+      "name": "Edge",
+      "installed": true,
+      "version": "156.0.4314.50"
+    }
+  ],
+  "queueDriverName": "POS-80 11.3.0.1",
+  "driverFileInfo": null,
+  "applicationsLaunched": false,
+  "physicalHomologation": "PENDING"
+}

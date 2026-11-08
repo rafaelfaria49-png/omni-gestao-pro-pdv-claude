@@ -27,3 +27,12 @@ describe("owner-authorized D05 Preview activation", () => {
     expect(directPrintRuntimeFromEnv({ ...env, OMNI_PRINT_DIRECT_ENABLED: "0" }).enabled).toBe(false)
   })
 })
+
+describe("D05 auth origin (Preview probe ADMIN_CSRF 500)", () => {
+  it("empty AUTH_URL/NEXTAUTH_URL overrides keep the runtime closed; the branch alias or unset is accepted", () => {
+    for (const key of ["AUTH_URL", "NEXTAUTH_URL"] as const) {
+      expect(directPrintRuntimeFromEnv({ ...environment(), [key]: "" }).enabled).toBe(false)
+      expect(directPrintRuntimeFromEnv({ ...environment(), [key]: D05_TARGET.origin })).toMatchObject({ enabled: true, mode: "HOMOLOGATION" })
+    }
+  })
+})

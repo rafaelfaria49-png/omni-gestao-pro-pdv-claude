@@ -8,8 +8,8 @@ export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const branch = 'codex/omni-print-d05-homologacao-fisica-001'
 export const gates = ['NEON_TEST_BRANCH', 'VERCEL_TEST_PREVIEW', 'WINDOWS_PHYSICAL_INSTALL', 'REAL_PRINTER_USE', 'D05_PHYSICAL_EXECUTION']
 export const packagePin = Object.freeze({
-  version: '0.2.0-d04', sha256: 'f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a',
-  contentId: '1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540', signed: false,
+  version: '0.2.0-d04', sha256: 'e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77',
+  contentId: 'f6af488c0c5d59e70f555f640b2fd97224dbd315b26da8e669335051dec56a40', signed: false,
 })
 export const cases = [
   ['H01', 'Fila, driver, USB e impressora identificados; montagem autorizada', true],

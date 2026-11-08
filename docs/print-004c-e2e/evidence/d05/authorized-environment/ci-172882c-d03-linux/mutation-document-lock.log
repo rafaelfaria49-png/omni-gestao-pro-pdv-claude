@@ -1,0 +1,53 @@
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 776ms
+     ↓ R01 before seven days preserved; exact final boundary; dry run counts without changing any row
+     ↓ R02 purge is irreversible/idempotent; no DELETE; hashes, sendKey/requestKey, first slot and key refs survive
+     ↓ R03 second copy reconstructs the sale only with fresh authorized consent, two tabs converge after purge
+     ↓ R04 READY/SENDING/UNKNOWN and partial operations are preserved even after years
+     ↓ R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved
+     ↓ R06 final failure waits for retry expiry; cancellation without a proven date is preserved
+     ↓ R07 unconsumed expired requests lose only command; browser consent/reason/firstCopy remains permanent
+     ↓ R08 store-scoped job cannot touch the other store; replay stays scoped after cleanup
+     ↓ R09 failure in the middle of a document rolls back content AND purge evidence, then resumes
+     ↓ R10 lost response after COMMIT and two retention workers do not duplicate events or updates
+     × R11 busy document is skipped without waiting, timeout rolls back and next run resumes 670ms
+     ↓ R12 least privilege role runs without keys, cannot delete/change state/read commerce; invalid role is refused
+     ↓ R13 bounded pages handle volume, interrupted batches resume and busy rows remain for the next sweep
+     ↓ R14 legacy cancellation after browser-while-SENDING + late NO_EFFECT + REPRINT cannot use the old browser date
+     ↓ R15 UNKNOWN alone is preserved, even with finished_at and released egress; oversized documents fail closed
+     ↓ R16 B19/B23 historical REPRINT closes INITIAL permanently, including after purge
+     ↓ R17 CLI defaults to dry run; execution disabled and invalid credentials never expose SQL/URL/secret
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  23:12:36
+   Duration  1.34s (transform 318ms, setup 0ms, import 438ms, tests 776ms, environment 0ms)
+
+
+::error file=/home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/tools/print-d03/retention.pg.test.ts,title=tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R11 busy document is skipped without waiting%2C timeout rolls back and next run resumes,line=229,column=58::AssertionError: expected +0 to be 1 // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- 1%0A+ 0%0A%0A ❯ tools/print-d03/retention.pg.test.ts:229:58%0A%0A
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R11 busy document is skipped without waiting, timeout rolls back and next run resumes
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tools/print-d03/retention.pg.test.ts:229:58
+    227|     const lock = db.transaction(async sql => { await sql.query("SELECT…
+    228|     await acquired
+    229|     try { const r = await run(); expect(r.busyDocuments).toBe(1); expe…
+       |                                                          ^
+    230|     let timeout = false
+    231|     const slow = clockDb(db, future(), async (sql, q, v) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1
