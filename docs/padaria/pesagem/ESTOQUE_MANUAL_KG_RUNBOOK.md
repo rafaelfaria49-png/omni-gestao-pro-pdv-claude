@@ -118,6 +118,51 @@ GOAL `PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001`. Leitura RO autorizad
    o build de `ce9228c` registrou `MIGRATION_SKIPPED`. O gate do J4 continua: conferir `MIGRATION_SKIPPED` no log
    do build do merge.
 
+### 0.2 Atualização 2026-11-08 ~11:20Z — V1 (escritores antigos), MIG-X e Neon revalidados (somente leitura)
+
+GOAL `PADARIA-KG-FINAL-HARDENING-RELEASE-EXECUTION-001`. Vercel por `vercel api` GET (metadados, nenhum valor
+decriptado), Neon por `BEGIN READ ONLY` com identidade `dry-mouse-36002471` / `br-muddy-meadow-ac7ah2wl` /
+`ep-summer-tooth-acltc6wi` / `omnigestao_prod` lida do próprio servidor (`neon.project_id`, `neon.endpoint_id`),
+e metadados do projeto pela API do Console Neon (GET). Evidência: `_evidence/PADARIA-KG-FINAL-HARDENING-RELEASE-EXECUTION-001/` (na #337).
+
+| Projeto / origem | Deployments | Credencial de banco (sem revelar valor) | Alcança `omnigestao_prod`? | Barreira | Status |
+| --- | --- | --- | --- | --- | --- |
+| `omni-gestao-pro` Production atual | `ce9228c` `dpl_GhyK8L…` (único com alias) | `DATABASE_URL`/`DIRECT_URL` Production `p2OL…`/`38Tk…`, criadas 2026-07-27 23:26Z (dia do cutover), nunca alteradas → papel antigo `neondb_owner` | **sim**, cliente `Int` | J3 (env → `omni_runtime_v2`) + J4 (merge #315) + J6 | planejada |
+| `omni-gestao-pro` 7 Production antigos | `7cac3d8`, `37acc3b`, `8cbd551`, `a07e067`, `4946688`, `aaab275`, `ba010ac`; sem alias, URL direta **pública** (`ssoProtection=null`) | mesma env Production → `neondb_owner` | **sim**, cliente `Int` | J6 `04` (REVOKE CONNECT de PUBLIC + `neondb_owner`) + `05`; J7 sonda `permission denied` | planejada; não remover deployments |
+| `omni-gestao-pro` 90 Previews READY | Preview genérico `CAgF…`/`WfY0…` (atualizado 2026-10-27 22:05Z, P3, outro projeto Neon) ou override da #315 (`VUjV…`/`BWFY…`) | previews criados **antes** de 2026-10-27 22:05Z carregam o retrato anterior: `neondb_owner@omnigestao_prod_candidate`, mesmo endpoint e senha | o código grava no candidate; a credencial abriria produção | J6 `04` corta CONNECT de `neondb_owner` em `omnigestao_prod` | planejada |
+| Projeto **`omni-gestao`** (`prj_IbJi32rh…`) Production `e9eb984` (alias `omni-gestao-pi.vercel.app`), `466c397`, `4a85dd9` | builds novos de Production **ignorados** (`ce9228c`, `7cac3d8`, `37acc3b` = CANCELED); SSO `all_except_custom_domains` | `DATABASE_URL`/`DIRECT_URL` só em Production, **criadas e alteradas pela última vez em 2026-05-08 17:56Z** | **não** — o projeto Neon `dry-mouse-36002471`, sua branch e o endpoint `ep-summer-tooth-acltc6wi` foram **criados em 2026-07-27 15:49:12Z** (API Neon), 80 dias depois; um valor gravado em maio não pode conter esse host. Pela data, destino = Supabase pré-cutover (congelado) | nenhuma necessária para o KG | **PASS** (prova por metadados, sem decriptar) |
+| `omni-gestao` 66 Previews READY | — | nenhuma env de banco para Preview | não | — | PASS |
+| Integrações Vercel (Neon etc.) | — | 0 configurações de integração na conta; nenhuma env com `configurationId` | — | — | PASS |
+| Neon: outras branches/endpoints | `br-wispy-mountain-accw2a7p` "kg-rehearsal-002-temp" (`ep-damp-dew-ac4qr1e2`, 2026-10-26, cópia do ensaio 002) | papéis do clone | não (cluster separado da branch de produção) | remoção só com autorização N própria — **não** remover nesta preparação | registrado |
+| Conexões em `omnigestao_prod` no retrato | só a própria sessão RO | — | — | J5/J7 refazem | PASS pontual |
+
+**Proteções exigidas no J6/J7 (complementam o §4):**
+
+1. O `04` precisa terminar com `CONNECT` em `omnigestao_prod` **somente** para `omni_runtime_v2` e `omni_migrator`
+   (hoje: `=Tc` de PUBLIC, `neondb_owner=CTc`, `omni_runtime_v2=c`, `omni_migrator=c`). Isso fecha ao mesmo tempo
+   o Production atual, os 7 antigos e os previews pré-P3, porque todos usam `neondb_owner`.
+2. `neondb_owner` é membro de `omni_owner`, `omni_migrator` e `omni_runtime_v2` com `inherit_option=f` e
+   `set_option=f` (auto-grant do criador, PG 16+; lido em `pg_auth_members`): não herda o `CONNECT` desses papéis
+   nem pode `SET ROLE`, então o `04` o corta — e o próprio `04` falha fechado (`KG_CORTE_CONEXAO_INEFICAZ`) se
+   `has_database_privilege` ainda vier verdadeiro. Porém `admin_option=t`: quem tiver a credencial `neondb_owner`
+   (arquivos locais, Console/API Neon) pode se re-conceder a membership **com** herança e reabrir o acesso. Isso é
+   caminho humano/agente, coberto pelo congelamento (§3/A7) e pela conferência do `06` no J7 — não pelo SQL.
+   O `05` encerra as sessões já abertas; o J7 repete o `06` após ≥ 5 min.
+3. J7: refazer este inventário (deployments READY desde o J3 de ambos os projetos) imediatamente antes do J8;
+   qualquer deployment novo fora do commit do merge = remover e repetir o J7.
+4. Nenhum deployment histórico é removido nesta preparação; as URLs antigas continuam públicas e só o corte de
+   conexão as neutraliza.
+
+**MIG-X (revalidado):** Production com **24** migrations, todas finalizadas, checksums idênticos aos arquivos do
+repositório (inclusive `20261107120000_catalogo_aparelhos_loja` = `57b39143…6e45`). Pendentes por checkout: main
+`ce9228c` = nenhuma; #315 `df828d0` = exatamente `20261025`; topo da pilha = exatamente `20261025`, `20261029`,
+`20261106`. Nenhuma PR aberta de outra frente adiciona migration. Gate **satisfeito hoje**; repetir no J4/J8/9b.
+
+**Neon (retrato):** 5 colunas KG `integer`, `venda_itens.quantidade` `integer`, 0 CHECKs, 0 objetos `manual_kg_*`,
+0 linhas fracionárias; donos das tabelas = `neondb_owner` (o `03` transfere para `omni_owner`); só `plpgsql` instalado,
+`cron.job` inexistente (A7b mantido); **1 sessão de caixa `ABERTA`** e 242 fechadas — o J0 exige zero, fechado pelo
+operador.
+
 ## 1. Por que a ordem importa (provado em PG 17 descartável)
 
 | Cliente Prisma × colunas | Leitura | Escrita |
@@ -288,9 +333,15 @@ como feito no A4. Nenhum SQL deste trecho foi executado no A5.
 - **A5 — preparação documental deste GOAL.** Consolidar A1–A4 e o hardening 005, revisar comandos,
   dependências, checksum e checklist; validar localmente. A conclusão documental não decide o 07 nem aprova
   J0. A versão adotada na janela e seu SHA devem constar da autorização operacional futura.
-- **A6 — PENDENTE, NÃO AUTORIZADO.** Decidir o `07` (CHECK "finito em milésimos") mediante revisão independente
-  própria e decisão expressa de aplicar ou de deixar fora. É candidato a barreira adicional contra os casos
-  de cliente Int ensaiados; sua existência no repositório e o A5 não aprovam execução nem tornam Int seguro.
+- **A6 — DECIDIDO: APLICAR O `07` NO J9 (decisão do dono, 2026-11-08).** `A6_OWNER_DECISION=APPROVED_APPLY_07`,
+  `A6_APPLY_TIMING=W1_J9_ONLY`, `A6_PRODUCTION_EXECUTION=NOT_YET_AUTHORIZED`. Origem: decisão expressa do
+  proprietário no GOAL `PADARIA-KG-FINAL-HARDENING-RELEASE-EXECUTION-001` (2026-11-08). Artefato aprovado:
+  `rollout/07-guard-check-opcional.sql`, **4.996 bytes LF, sha256 LF
+  `dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935`** (revisão independente APPROVE em
+  `a6-guard-review-011/06-independent-review.md`; reensaio 2026-11-08 em PG 17 descartável: 235/235 + 161/161
+  e suíte KG 80/80 com os 5 CHECKs validados). Alterar um byte exige nova revisão e nova decisão. A decisão
+  **não** autoriza execução: o 07 só roda no J9, depois do J8, com a autorização da janela (A8) e os gates
+  J0–J8 aprovados. Não torna cliente Int seguro: o corte J6/J7 continua obrigatório.
 - **A7 — PENDENTE, NÃO AUTORIZADO.** Confirmar o alcance de conectores Neon/Vercel/GitHub e sua indisponibilidade
   para outras sessões durante a janela. A leitura pendente de `cron.job` em `postgres` requer autorização
   específica, para mapear também os escritores agendados; não a executar sob autorização implícita do A7.
@@ -357,8 +408,14 @@ como feito no A4. Nenhum SQL deste trecho foi executado no A5.
   **Gate:** `KG_MIGRATION_OK` com contagens e md5; `_prisma_migrations.checksum` = sha256 acima.
   **O COMMIT deste script é o ponto de não-retorno (§5).** Falha por `lock_timeout` ou retrato divergente não
   altera nada: segue F2, repetir J7–J8.
-- **J9. (Opcional, somente com decisão/revisão própria no A6 e autorização de aplicação na janela)**
-  `rollout/07-guard-check-opcional.sql`. `SCRIPT_07_DECISION=PENDING` nesta revisão.
+- **J9. Barreira `07` (decisão A6 = aplicar; execução só com a autorização da janela).** Antes: conferir o sha256
+  LF do arquivo = `dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935` (divergente = não executar),
+  J8 concluído com `KG_MIGRATION_OK`, trava ligada e identidade do banco conferida na mesma sessão. Executar como
+  `omni_migrator` (o script faz `SET LOCAL ROLE omni_owner`; após o `03` o dono das 3 tabelas é `omni_owner`):
+  `psql -X -v ON_ERROR_STOP=1 -1 -d omnigestao_prod -f docs/padaria/pesagem/rollout/07-guard-check-opcional.sql`.
+  **Gate:** exit 0 e `SELECT conname, convalidated FROM pg_constraint WHERE conname LIKE '%_kg_milesimos'` = 5 linhas,
+  todas `t`. Falha (`lock_timeout`, `KG_GUARD_REQUIRES_FIVE_FLOAT8_NOT_NULL_COLUMNS`, VALIDATE com dado inválido):
+  a transação desfaz tudo, trava segue ligada, não corrigir dados nem fazer DROP automático — diagnosticar (F3).
 - **J10. Conferir com a trava ainda ligada:**
   - frações = 0 nas 5 colunas (`count(*) WHERE <col> <> trunc(<col>)`);
   - NaN/denormais = 0 nas 5 colunas (`count(*) WHERE <col> = 'NaN' OR (<col> <> 0 AND abs(<col>) < 2.2250738585072014e-308)`);
