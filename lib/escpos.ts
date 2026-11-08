@@ -72,6 +72,15 @@ export type EscposBuildOptions = {
   maxChars?: number
 }
 
+/**
+ * Quantidade de uma linha de comprovante. KG: peso com 3 casas e unidade ("0,350 kg");
+ * demais: o formato legado "2x". O peso já chega validado em milésimos pelo PDV/servidor.
+ */
+export function formatReceiptQuantity(quantity: number, unit?: string): string {
+  if (unit !== "KG") return `${quantity}x`
+  return `${(Math.round(quantity * 1000) / 1000).toFixed(3).replace(".", ",")} kg`
+}
+
 function sepLine(maxChars: number): string {
   const n = Math.max(16, Math.min(48, maxChars))
   return "-".repeat(n)
@@ -109,7 +118,8 @@ export type PdvReceiptInput = {
   cashTendered?: number
   /** Troco calculado sobre o dinheiro aplicado na venda. */
   troco?: number
-  itens: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number }>
+  /** `quantityUnit: "KG"`: `quantity` é o peso vendido (até 3 casas) e `unitPrice` o preço por kg. */
+  itens: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number; quantityUnit?: "KG" }>
   subtotal: number
   taxes: number
   discount: number
@@ -197,9 +207,11 @@ export function buildPdvReceiptEscPos(
     parts.push(line(`${input.itens.length} item(ns)`))
   } else {
     for (const it of input.itens) {
-      const titulo = truncateField(`${it.quantity}x ${it.name}`, maxChars)
+      const titulo = truncateField(`${formatReceiptQuantity(it.quantity, it.quantityUnit)} ${it.name}`, maxChars)
       parts.push(line(titulo))
-      parts.push(line(`   ${br.format(it.lineTotal)}`))
+      parts.push(line(it.quantityUnit === "KG"
+        ? `   ${br.format(it.unitPrice)}/kg = ${br.format(it.lineTotal)}`
+        : `   ${br.format(it.lineTotal)}`))
     }
   }
 

@@ -83,6 +83,13 @@ export function createCatalogSyncController<T>(deps: CatalogSyncDeps<T>) {
     setKnownVersion(version: unknown): void {
       if (isCatalogVersion(version)) known = version
     },
+    /**
+     * Esquece a versão conhecida: o próximo check baixa o snapshot mesmo que a versão remota
+     * não tenha mudado (ex.: saldos locais sobrescritos por uma confirmação fora do catálogo).
+     */
+    invalidate(): void {
+      known = null
+    },
     /** Só checa depois da carga inicial — evita corrida com o snapshot do mount. */
     enable(): void {
       enabled = true
@@ -118,6 +125,65 @@ export function createCatalogSyncController<T>(deps: CatalogSyncDeps<T>) {
 }
 
 export type CatalogSyncController<T> = ReturnType<typeof createCatalogSyncController<T>>
+
+/** Atrasos da revalidação após o catálogo ser invalidado fora do controlador (ms). O último se repete. */
+export const CATALOG_REVALIDATION_DELAYS_MS = [2_000, 5_000, 15_000, 30_000, 60_000, 120_000] as const
+/** Prazo de cada tentativa (versão + corpo do snapshot); vencido, a tentativa é descartada. */
+export const CATALOG_REVALIDATION_ATTEMPT_TIMEOUT_MS = 15_000
+
+/**
+ * Invalida a versão conhecida e agenda recargas forçadas até uma aplicar um snapshot válido,
+ * INDEPENDENTE de haver tela observando o catálogo (offline prolongado, PDV fechado). Cada falha
+ * ou tentativa vencida passa ao próximo atraso; depois do último, ele se repete até `updated`,
+ * `disposed` ou o cancelamento (troca de loja / desmontagem). Uma tentativa vencida é
+ * substituída pela seguinte: o check forçado aborta o que o controlador tiver em voo.
+ */
+export function scheduleCatalogRevalidation(
+  controller: Pick<CatalogSyncController<unknown>, "invalidate" | "check">,
+  opts: {
+    delaysMs?: readonly number[]
+    attemptTimeoutMs?: number
+    setTimer?: (fn: () => void, ms: number) => unknown
+    clearTimer?: (handle: unknown) => void
+    onSettled?: (status: CatalogCheckStatus | "timeout") => void
+  } = {},
+): () => void {
+  const delays = opts.delaysMs?.length ? opts.delaysMs : CATALOG_REVALIDATION_DELAYS_MS
+  const attemptTimeoutMs = opts.attemptTimeoutMs ?? CATALOG_REVALIDATION_ATTEMPT_TIMEOUT_MS
+  const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms))
+  const clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>))
+  let cancelled = false
+  let delayHandle: unknown = null
+  let timeoutHandle: unknown = null
+  let generation = 0
+  controller.invalidate()
+  const attempt = (index: number) => {
+    if (cancelled) return
+    delayHandle = setTimer(() => {
+      delayHandle = null
+      if (cancelled) return
+      const mine = ++generation
+      const settle = (status: CatalogCheckStatus | "timeout") => {
+        if (cancelled || mine !== generation) return
+        generation++
+        if (timeoutHandle !== null) clearTimer(timeoutHandle)
+        timeoutHandle = null
+        opts.onSettled?.(status)
+        if (status !== "updated" && status !== "disposed") attempt(index + 1)
+      }
+      timeoutHandle = setTimer(() => settle("timeout"), attemptTimeoutMs)
+      void controller.check({ force: true }).then(settle, () => settle("unavailable"))
+    }, delays[Math.min(index, delays.length - 1)])
+  }
+  attempt(0)
+  return () => {
+    cancelled = true
+    if (delayHandle !== null) clearTimer(delayHandle)
+    if (timeoutHandle !== null) clearTimer(timeoutHandle)
+    delayHandle = null
+    timeoutHandle = null
+  }
+}
 
 export type CatalogChangedMessage = {
   type: "catalog-changed"

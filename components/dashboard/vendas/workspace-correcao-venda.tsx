@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
+import { planKgWeightCorrection } from "@/lib/vendas/manual-kg-correction-plan"
+import { saleLineTotalCents } from "@/lib/vendas/manual-kg-contract"
 import { computeCorrecaoItensPlan, type CorrecaoLineInput } from "@/lib/vendas/correcao-itens-plan"
 import { computeCorrecaoPagamentoPlan } from "@/lib/financeiro/correcao-pagamento-plan"
 import { parseVencimentoBr } from "@/lib/vendas/correcao-cliente-titulo-plan"
@@ -79,6 +81,7 @@ type Devolucao = {
 }
 
 type VendaFull = {
+  manualKgSale?: boolean; manualKgRevision?: number; manualKgTax?: unknown
   id: string; dbId: string; at: string; total: number; desconto: number; status: string
   operador: string | null; clienteNome: string | null; clienteId: string | null; clienteCpf: string | null
   observacao: string | null; sessaoId: string | null; terminalId?: string | null
@@ -87,7 +90,7 @@ type VendaFull = {
   estoqueReposto?: boolean; estornoFinanceiro?: boolean
   paymentBreakdown: Partial<PaymentBreakdownFull> | null
   pagamentos: Array<{ label: string; valor: number }>
-  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number; precoUnitario: number; lineTotal: number; metadata?: Record<string, string> | null }>
+  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number; precoUnitario: number; lineTotal: number; quantityUnit?: string; metadata?: Record<string, string> | null }>
   correcoes: Correcao[]
   devolucoes: Devolucao[]
   clienteCompleto: ClienteCompleto | null
@@ -333,7 +336,9 @@ export function WorkspaceCorrecaoVenda({
   const [tab, setTab] = useState<string>("resumo")
 
   // ── Edição de produtos (F2) ────────────────────────────────────────────────
-  type DraftLine = { uid: string; inventoryId: string; nome: string; quantidade: number; precoUnitario: number; desconto: number; isAvulso: boolean }
+  type DraftLine = { uid: string; id?: string; inventoryId: string; nome: string; quantidade: number; precoUnitario: number; desconto: number; isAvulso: boolean }
+  const [kgCommandId, setKgCommandId] = useState("")
+  const kgMode = venda?.manualKgSale === true
   const [editProdutos, setEditProdutos] = useState(false)
   const [draft, setDraft] = useState<DraftLine[]>([])
   const [showConfirm, setShowConfirm] = useState(false)
@@ -408,6 +413,7 @@ export function WorkspaceCorrecaoVenda({
       venda.itens.map((it, i) => {
         const invId = it.inventoryId ?? it.id
         return {
+          id: it.id,
           uid: `${it.id}-${i}`,
           inventoryId: invId,
           nome: it.nome,
@@ -418,6 +424,7 @@ export function WorkspaceCorrecaoVenda({
         }
       }),
     )
+    setKgCommandId(crypto.randomUUID())
     setEditProdutos(true)
     setShowConfirm(false)
     setMotivo("")
@@ -465,6 +472,7 @@ export function WorkspaceCorrecaoVenda({
   // Plano de pré-visualização (reusa o MESMO planner puro do servidor).
   const draftPlan = useMemo(() => {
     if (!venda || !editProdutos) return null
+    if (venda.manualKgSale) return planKgWeightCorrection({ oldLines: venda.itens, newLines: draft, oldTotal: venda.total, oldBreakdown: venda.paymentBreakdown, discount: venda.desconto, tax: venda.manualKgTax })
     const oldLines: CorrecaoLineInput[] = venda.itens.map((it) => ({
       inventoryId: it.inventoryId ?? it.id, nome: it.nome, quantidade: it.quantidade, precoUnitario: it.precoUnitario,
     }))
@@ -485,8 +493,9 @@ export function WorkspaceCorrecaoVenda({
         body: JSON.stringify({
           motivo: motivo.trim(),
           supervisorPin: pin.trim(),
+          commandId: kgCommandId, expectedRevision: venda.manualKgRevision,
           expectedTotal: venda.total,
-          itens: draft.map((l) => ({ inventoryId: l.inventoryId, nome: l.nome, quantidade: l.quantidade, precoUnitario: l.precoUnitario, desconto: l.desconto, isAvulso: l.isAvulso })),
+          itens: draft.map((l) => ({ id: l.id, inventoryId: l.inventoryId, nome: l.nome, quantidade: l.quantidade, precoUnitario: l.precoUnitario, desconto: l.desconto, isAvulso: l.isAvulso })),
         }),
       })
       const data = await res.json()
@@ -502,9 +511,9 @@ export function WorkspaceCorrecaoVenda({
     } finally {
       setApplying(false)
     }
-  }, [venda, draftPlan, motivo, pin, draft, storeId, toast, resetEdicao, load])
+  }, [venda, kgCommandId, draftPlan, motivo, pin, draft, storeId, toast, resetEdicao, load])
 
-  const draftTotal = useMemo(() => draft.reduce((s, l) => s + Math.max(0, l.precoUnitario * l.quantidade - l.desconto), 0), [draft])
+  const draftTotal = useMemo(() => kgMode ? draftPlan?.newTotal ?? venda?.total ?? 0 : draft.reduce((s, l) => s + Math.max(0, l.precoUnitario * l.quantidade - l.desconto), 0), [draft, kgMode, draftPlan, venda?.total])
 
   // ════════════════════════════════════════════════════════════════════════════
   // F3 — Pagamento / Cliente / Conta a Receber (editáveis)
@@ -969,7 +978,7 @@ export function WorkspaceCorrecaoVenda({
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <SectionTitle icon={FileText}>Observação da venda</SectionTitle>
                       {venda.status !== "cancelada" && !editObs && (
-                        <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditObs}><Pencil className="h-3.5 w-3.5" /> Editar observação</Button>
+                        <Button size="sm" variant="outline" className="gap-1.5" disabled={kgMode} onClick={startEditObs}><Pencil className="h-3.5 w-3.5" /> Editar observação</Button>
                       )}
                     </div>
                     {!editObs ? (
@@ -1007,7 +1016,7 @@ export function WorkspaceCorrecaoVenda({
                           {venda.clienteCompleto && !editCliDados && (
                             <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditCliDados}><Pencil className="h-3.5 w-3.5" /> Editar dados</Button>
                           )}
-                          <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditCli}><RotateCcw className="h-3.5 w-3.5" /> Trocar cliente</Button>
+                          <Button size="sm" variant="outline" className="gap-1.5" disabled={kgMode} onClick={startEditCli}><RotateCcw className="h-3.5 w-3.5" /> Trocar cliente</Button>
                         </div>
                       )}
                     </div>
@@ -1129,7 +1138,7 @@ export function WorkspaceCorrecaoVenda({
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Corrigir pagamento reconcilia caixa, financeiro e Conta a Receber. Exige motivo e PIN.</p>
                       {venda.status !== "cancelada" && (
-                        <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditPag}><Pencil className="h-3.5 w-3.5" /> Editar pagamento</Button>
+                        <Button size="sm" variant="outline" className="gap-1.5" disabled={kgMode} onClick={startEditPag}><Pencil className="h-3.5 w-3.5" /> Editar pagamento</Button>
                       )}
                     </div>
                     {breakdownRows.length > 0 ? (
@@ -1306,7 +1315,7 @@ export function WorkspaceCorrecaoVenda({
                                     <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.lineTotal)}</TableCell>
                                     <TableCell className="text-center">
                                       {venda.status !== "cancelada" && (
-                                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => startMeta(idx, md)}><Pencil className="h-3 w-3" /> {md ? "Editar" : "Add"}</Button>
+                                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" disabled={kgMode} onClick={() => startMeta(idx, md)}><Pencil className="h-3 w-3" /> {md ? "Editar" : "Add"}</Button>
                                       )}
                                     </TableCell>
                                   </TableRow>
@@ -1347,7 +1356,7 @@ export function WorkspaceCorrecaoVenda({
                     {/* Aviso */}
                     <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span>Correções alteram caixa, estoque e financeiro. Revise no preview antes de aplicar.</span>
+                      <span>{kgMode ? "KG: altere somente o peso de uma venda com um item, em dinheiro e sem desconto. Preço e alíquota originais são preservados; os demais casos continuam bloqueados." : "Correções alteram caixa, estoque e financeiro. Revise no preview antes de aplicar."}</span>
                     </div>
 
                     {/* Linhas editáveis */}
@@ -1380,23 +1389,23 @@ export function WorkspaceCorrecaoVenda({
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  <Input type="number" min={1} value={l.quantidade} onChange={(e) => updateLine(l.uid, { quantidade: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className="h-8 w-16 text-center text-sm mx-auto" />
+                                  <Input aria-label={kgMode ? "Peso corrigido (kg)" : "Quantidade"} type="number" min={kgMode ? 0.001 : 1} step={kgMode ? "0.001" : "1"} value={l.quantidade} onChange={(e) => updateLine(l.uid, { quantidade: kgMode ? Number(e.target.value) : Math.max(1, Math.round(Number(e.target.value) || 1)) })} className="h-8 w-16 text-center text-sm mx-auto" />
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <Input type="number" min={0} step="0.01" value={l.precoUnitario} onChange={(e) => updateLine(l.uid, { precoUnitario: Math.max(0, Number(e.target.value) || 0) })} className="h-8 w-24 text-right text-sm ml-auto" />
+                                  <Input disabled={kgMode} type="number" min={0} step="0.01" value={l.precoUnitario} onChange={(e) => updateLine(l.uid, { precoUnitario: Math.max(0, Number(e.target.value) || 0) })} className="h-8 w-24 text-right text-sm ml-auto" />
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <Input type="number" min={0} step="0.01" value={l.desconto} onChange={(e) => updateLine(l.uid, { desconto: Math.max(0, Number(e.target.value) || 0) })} className="h-8 w-24 text-right text-sm ml-auto" />
+                                  <Input disabled={kgMode} type="number" min={0} step="0.01" value={l.desconto} onChange={(e) => updateLine(l.uid, { desconto: Math.max(0, Number(e.target.value) || 0) })} className="h-8 w-24 text-right text-sm ml-auto" />
                                 </TableCell>
-                                <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(Math.max(0, l.precoUnitario * l.quantidade - l.desconto))}</TableCell>
+                                <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(kgMode ? (saleLineTotalCents(l.quantidade, l.precoUnitario) ?? 0) / 100 : Math.max(0, l.precoUnitario * l.quantidade - l.desconto))}</TableCell>
                                 <TableCell>
                                   <div className="flex items-center justify-center gap-1">
                                     {!l.isAvulso && (
-                                      <Button size="icon" variant="ghost" className="h-7 w-7" title="Trocar produto" onClick={() => { setSwapTarget(l.uid); setBuscaProduto(""); setResultados([]) }}>
+                                      <Button size="icon" variant="ghost" className="h-7 w-7" title="Trocar produto" disabled={kgMode} onClick={() => { setSwapTarget(l.uid); setBuscaProduto(""); setResultados([]) }}>
                                         <RotateCcw className="h-3.5 w-3.5" />
                                       </Button>
                                     )}
-                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" title="Remover" onClick={() => removeLine(l.uid)}>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" title="Remover" disabled={kgMode} onClick={() => removeLine(l.uid)}>
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
                                   </div>
@@ -1415,12 +1424,13 @@ export function WorkspaceCorrecaoVenda({
                           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input
                             className="pl-8 h-9 text-sm"
+                            disabled={kgMode}
                             placeholder={swapTarget ? "Buscar produto para TROCAR…" : "Buscar produto para adicionar…"}
                             value={buscaProduto}
                             onChange={(e) => { setBuscaProduto(e.target.value); void buscarProdutos(e.target.value) }}
                           />
                         </div>
-                        <Button size="sm" variant="outline" className="gap-1.5" onClick={addAvulso}>
+                        <Button size="sm" variant="outline" className="gap-1.5" disabled={kgMode} onClick={addAvulso}>
                           <Plus className="h-3.5 w-3.5" /> Item avulso
                         </Button>
                         {swapTarget && (

@@ -159,6 +159,9 @@ export async function POST(
       return NextResponse.json({ ok: false, error: fiscalGate.error, code: fiscalGate.code }, { status: fiscalGate.status })
     }
 
+    if (venda.payload && typeof venda.payload === "object" && (venda.payload as Record<string, unknown>).manualKgSale === "classic-manual-kg-v1") {
+      return NextResponse.json({ ok: false, error: "Alteração de pagamento/cliente de venda KG indisponível. Use o cancelamento integral autorizado.", code: "MANUAL_KG_CORRECTION_BLOCKED" }, { status: 409 })
+    }
     const payload = (venda.payload && typeof venda.payload === "object" ? venda.payload : {}) as Record<string, unknown>
     const oldPb = (payload.paymentBreakdown ?? {}) as Partial<PaymentBreakdownFull>
     const now = new Date()

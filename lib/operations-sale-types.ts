@@ -25,6 +25,7 @@ export interface PaymentBreakdownFull {
 }
 
 export interface SaleLineRecord {
+  itemId?: string
   inventoryId: string
   /**
    * Cuid do `Produto` (`InventoryItem.dbId`) no catálogo da loja no momento da venda.
@@ -37,6 +38,8 @@ export interface SaleLineRecord {
   unitPrice: number
   lineTotal: number
   qtyReturned?: number
+  quantityUnit?: "KG"
+  weightSource?: "manual"
   /** Produto, serviço real, item avulso ou linha originada de O.S. */
   itemType?: SaleLineItemType
   /**
@@ -66,6 +69,9 @@ export interface SaleLineRecord {
 }
 
 export interface SaleRecord {
+  manualKgRevision?: number
+  manualKgTax?: import("@/lib/vendas/manual-kg-tax").ManualKgTaxSnapshot
+  manualKgSale?: "classic-manual-kg-v1"
   /**
    * Número comercial exibido (`pedidoId` / VDA) depois da reconciliação.
    * No fluxo V2 offline, começa como referência provisória `PEND-…` — nunca um VDA inventado.

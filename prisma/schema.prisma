@@ -1547,7 +1547,10 @@ model ItemVenda {
   venda         Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
   inventoryId   String? @map("inventoryId")
   nome          String  @default("") @map("nome")
-  quantidade    Int     @default(1) @map("quantidade")
+  /** UN keeps the legacy integer OID. KG uses NULL so required-Int clients fail closed. */
+  quantidade    Int?    @default(1) @map("quantidade")
+  /** Exact KG quantity. CHECK limits precision to three decimals without SQL rounding. */
+  quantidadeKg  Decimal? @map("quantidadeKg") @db.Decimal(65, 30)
   precoUnitario Float   @default(0) @map("precoUnitario")
   lineTotal     Float   @default(0) @map("lineTotal")
 

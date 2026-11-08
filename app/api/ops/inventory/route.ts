@@ -1,3 +1,4 @@
+import { manualKgAvailable, isManualKgProduct } from "@/lib/vendas/manual-kg-server"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -86,7 +87,7 @@ type InvPayload = {
   vendaPesoIndisponivel?: true
 }
 
-function rowToItem(row: Produto): InvPayload {
+function rowToItem(row: Produto, manualKgReleased = false): InvPayload {
   const sku = typeof (row as unknown as { sku?: unknown }).sku === "string" ? String((row as unknown as { sku: string }).sku) : ""
   const barcode =
     typeof (row as unknown as { barcode?: unknown }).barcode === "string"
@@ -115,6 +116,7 @@ function rowToItem(row: Produto): InvPayload {
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
     ...(accessoryConfig ? { accessoryConfig } : {}),
     ...inventoryWeightSaleProjection(row.metadata),
+    ...(manualKgReleased && isManualKgProduct(row.metadata) ? { manualKgSaleAvailable: true as const } : {}),
   }
 }
 
@@ -170,9 +172,10 @@ export async function GET(req: Request) {
     const rows = await withDbRetry("findMany", () =>
       prisma.produto.findMany({ where: { storeId: lojaIdRecebido }, orderBy: { name: "asc" } })
     )
+    const manualKgReleased = await manualKgAvailable(prisma, lojaIdRecebido)
     console.log("Dados encontrados no banco (por loja):", rows.length)
     return NextResponse.json({
-      items: rows.map(rowToItem),
+      items: rows.map((row) => rowToItem(row, manualKgReleased)),
       version,
       _lojaIdRecebido: lojaIdRecebido,
       _gateBypassedInDev: !gate.ok && bypassSubscriptionCheck(),

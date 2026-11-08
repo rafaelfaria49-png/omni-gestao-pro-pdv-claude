@@ -1,0 +1,118 @@
+{
+  "GOAL": "PDV-PADARIA-KG-RELEASE-HARDENING-002",
+  "MIGRATION_COMPATIBILITY": "PASS",
+  "OLD_PRISMA_CLIENT_RISK": "CONTROLLED",
+  "KG_SALE": "PASS",
+  "PARTIAL_RETURN": "BLOCKED",
+  "ITEM_CORRECTION": "PASS",
+  "HISTORICAL_RECOVERY": "BLOCKED",
+  "KG_TAX_ESTIMATE": "PASS",
+  "FULL_CANCELLATION": "PASS",
+  "PR322_COMPATIBILITY": "PASS",
+  "A01_STORE": "PASS",
+  "E2E": "PASS",
+  "INDEPENDENT_REVIEW": "APPROVE",
+  "codeCommits": [
+    "436b862f3c6c9b83aa23cfa795fc462028922bf6",
+    "9d5716d0dd559ec16fffed6495fa5b202d06a7cd"
+  ],
+  "PRODUCTION_WRITES": 0,
+  "PUSH": "NO",
+  "MERGE": "NO",
+  "DEPLOY": "NO",
+  "RELEASE_READY": "NO",
+  "REMAINING_BLOCKERS": [
+    "Devolução parcial/troca/vale de devolução KG: contrato por linha, limites concorrentes e crédito/refund server-first.",
+    "Criação por recovery histórico KG: política de déficit/ajuste absorvido, sessão e identidade.",
+    "Retirada de leitores/deploys antigos nas lojas KG antes da ativação; SUM antigo não contabiliza KG.",
+    "Aprovação/publicação próprias da #315/A6 e autorização humana separada para habilitação."
+  ],
+  "validation": {
+    "postgresql": {
+      "version": 17,
+      "disposable": true,
+      "corePassed": 54,
+      "coreFailed": 0,
+      "migrationChecks": 35,
+      "migrationPassed": true,
+      "clusterStopped": true
+    },
+    "regression": {
+      "baseline": "104d768d7b7497fe34e2872f4253c4fd97feb5bb",
+      "baselineFailures": 35,
+      "currentFailures": 35,
+      "identical": true,
+      "newFailures": [],
+      "passed": 940,
+      "skipped": 50
+    },
+    "e2e": {
+      "primary": {
+        "startTime": "2026-10-29T18:32:58.825Z",
+        "duration": 41764.103,
+        "expected": 11,
+        "skipped": 1,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "isolatedMain": {
+        "startTime": "2026-10-29T18:44:40.148Z",
+        "duration": 46199.727999999996,
+        "expected": 12,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "primarySkippedReason": "PR322 visor scenario runs only in the isolated integration containing the visor."
+    },
+    "pr322Unit": {
+      "passed": 113,
+      "failed": 0
+    },
+    "typecheck": {
+      "primary": "PASS",
+      "isolatedMain": "PASS"
+    },
+    "build": {
+      "primary": "PASS",
+      "isolatedMain": "PASS",
+      "migrationsSkipped": true,
+      "proxyPrismaArtifactVerified": true
+    },
+    "lint": {
+      "involvedFiles": 41,
+      "errors": 0,
+      "warnings": 5,
+      "finalTestDeltaErrors": 0,
+      "fullErrors": 105,
+      "fullWarnings": 108,
+      "fullErrorsIdenticalToBaseline": true
+    },
+    "sourceIntegrity": {
+      "sourceCommit": "9d5716d0dd559ec16fffed6495fa5b202d06a7cd",
+      "main": "35a3971c31f62e6e802b7dd8763be81475334780",
+      "mergeTree": "1a7d0ce82e38c8af116bcfe23f7283dc756e288c",
+      "conflicts": 0,
+      "filesCompared": 4864,
+      "differences": [],
+      "mergePerformed": false,
+      "productionWrites": 0,
+      "eolOnlyDifferences": 43,
+      "comparison": "Bytewise; text differences accepted only when CRLF-to-LF yields identical UTF-8 bytes"
+    },
+    "independentReview": "APPROVE; final code delta re-reviewed, no remaining P0/P1",
+    "observedAndResolved": [
+      "Required-Int Prisma client writing into Float reproduced as 13 -> 6.4e-323.",
+      "Legacy unlinked KG returns and separate title writes protected in database.",
+      "KG cache correction, delayed response/store isolation and date/scope fixed.",
+      "Initial browser regression when API payload omitted at fixed by authoritative DB time.",
+      "E2E fixtures corrected for payment DTO, terminal re-entry, menu network synchronization and receipt/visor teardown."
+    ],
+    "limitations": [
+      "KG item correction is weight-only for one cash-paid KG item, no discount or incompatible fiscal/return/credit/title links.",
+      "Web Serial uses synthetic frames; no physical scale or fiscal emission was authorized.",
+      "Playwright blocks service workers; unmodified next-pwa registration logs a waiting error in that harness. Installed-PWA rollout remains a publication preflight."
+    ]
+  },
+  "migrationSha256": "8757ee993cf0fd233d8d0ace7027717009e064b68f39a4a4f07123861d83ddb3"
+}

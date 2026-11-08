@@ -46,7 +46,7 @@ export type CreateVendaFiscalSnapshotResult =
     }
   | {
       ok: false
-      code: SnapshotErrorCode | "venda_nao_encontrada"
+      code: SnapshotErrorCode | "venda_nao_encontrada" | "manual_kg_fiscal_blocked"
       error: string
       pendencias: string[]
     }
@@ -115,12 +115,16 @@ export async function createVendaFiscalSnapshot(params: {
         select: { name: true, kind: true, document: true, phone: true, email: true, city: true },
       },
       itens: {
-        select: { id: true, inventoryId: true, nome: true, quantidade: true, precoUnitario: true, lineTotal: true },
+        select: { id: true, inventoryId: true, nome: true, quantidade: true, quantidadeKg: true, precoUnitario: true, lineTotal: true },
       },
     },
   })
   if (!venda) {
     return { ok: false, code: "venda_nao_encontrada", error: "Venda não encontrada nesta loja.", pendencias: [] }
+  }
+
+  if (asRecord(venda.payload).manualKgSale === "classic-manual-kg-v1" || venda.itens.some((item) => item.quantidadeKg != null)) {
+    return { ok: false, code: "manual_kg_fiscal_blocked", error: "Venda KG exige contrato fiscal próprio. Emissão bloqueada; comprovante não fiscal disponível.", pendencias: ["Contrato fiscal para unidade KG não autorizado neste rollout."] }
   }
 
   // 3) Identidade fiscal da loja (emitente).

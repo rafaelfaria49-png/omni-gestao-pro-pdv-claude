@@ -50,3 +50,6 @@ components/pdv-github-original/
 # AEP/1.0-R2 — Agent Execution Protocol
 .aep-active
 /import/
+
+# Disposable manual KG local database and process logs
+/.local-kg/

@@ -1,3 +1,4 @@
+import { itemCommercialQuantity, isKgItem } from "@/lib/vendas/item-quantity"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/vendas/historico
@@ -116,7 +117,7 @@ export async function GET(req: Request) {
     const [rows, totalCount] = await Promise.all([
       prisma.venda.findMany({
         where,
-        include: { itens: { select: { quantidade: true } } },
+        include: { itens: { select: { quantidade: true, quantidadeKg: true } } },
         // `id` desempata vendas no mesmo instante: páginas sem repetição nem salto.
         orderBy: [{ at: "desc" }, { id: "desc" }],
         take,
@@ -170,7 +171,8 @@ export async function GET(req: Request) {
       operador: r.operador || null,
       terminalId: r.terminalId ?? null,
       formaPagamento: historicoFormasPagamentoLabel(r.payload),
-      quantidadeItens: r.itens.reduce((acc, it) => acc + it.quantidade, 0),
+      quantidadeItens: r.itens.reduce((acc, it) => acc + (isKgItem(it) ? 1 : itemCommercialQuantity(it)), 0),
+      pesoTotalKg: r.itens.reduce((acc, it) => acc + (isKgItem(it) ? Math.round(itemCommercialQuantity(it) * 1000) : 0), 0) / 1000,
       cancelada: r.status === "cancelada",
       canceladaEm: r.canceladaEm?.toISOString() ?? null,
       motivoCancelamento: r.motivoCancelamento ?? null,

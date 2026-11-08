@@ -1,3 +1,4 @@
+import { manualKgAvailable, isManualKgProduct } from "@/lib/vendas/manual-kg-server"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -23,7 +24,7 @@ function bypassSubscriptionCheck(): boolean {
 }
 
 /** Espelha `rowToItem` de `app/api/ops/inventory/route.ts` para que o PDV consuma o mesmo formato. */
-function rowToItem(row: Produto) {
+function rowToItem(row: Produto, manualKgReleased = false) {
   const sku =
     typeof (row as unknown as { sku?: unknown }).sku === "string"
       ? String((row as unknown as { sku: string }).sku)
@@ -55,6 +56,7 @@ function rowToItem(row: Produto) {
         : "",
     // Mesma marca de `/api/ops/inventory`: o bipe remoto não pode contornar o bloqueio de peso.
     ...inventoryWeightSaleProjection(row.metadata),
+    ...(manualKgReleased && isManualKgProduct(row.metadata) ? { manualKgSaleAvailable: true as const } : {}),
   }
 }
 
@@ -120,7 +122,8 @@ export async function GET(req: Request) {
       take: 10,
     })
 
-    return NextResponse.json({ items: rows.map(rowToItem), _lojaId: lojaId, _code: code })
+    const manualKgReleased = await manualKgAvailable(prisma, lojaId)
+    return NextResponse.json({ items: rows.map((row) => rowToItem(row, manualKgReleased)), _lojaId: lojaId, _code: code })
   } catch (e) {
     const dev = process.env.NODE_ENV === "development"
     const msg = e instanceof Error ? e.message : String(e)

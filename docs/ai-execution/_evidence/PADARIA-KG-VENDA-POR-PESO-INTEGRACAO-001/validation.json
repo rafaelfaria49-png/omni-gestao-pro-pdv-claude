@@ -1,0 +1,83 @@
+{
+  "goal": "PADARIA-KG-VENDA-POR-PESO-INTEGRACAO-001",
+  "date": "2026-11-06",
+  "codeHead": "008d56b",
+  "postgres": {
+    "server": "PostgreSQL 17.10 descartável 127.0.0.1:55479 (initdb no scratchpad, recriado a cada rodada)",
+    "total": 71,
+    "passed": 71,
+    "failed": 0,
+    "files": [
+      {
+        "file": "lib/vendas/manual-kg-contract.test.ts",
+        "passed": 19,
+        "total": 19
+      },
+      {
+        "file": "lib/vendas/manual-kg-hardening.test.ts",
+        "passed": 8,
+        "total": 8
+      },
+      {
+        "file": "lib/vendas/manual-kg-padaria-flow.pg.test.ts",
+        "passed": 17,
+        "total": 17
+      },
+      {
+        "file": "lib/vendas/manual-kg-sale.pg.test.ts",
+        "passed": 27,
+        "total": 27
+      }
+    ],
+    "migrationCompatibilityChecks": "35 PASS (schema anterior sintético → #315 → aditiva; cliente Prisma exato da #315 + RLS)"
+  },
+  "e2e": {
+    "runner": "scripts/pdv/run-manual-kg-e2e.mjs (next start + Chromium; contas ADMIN STORE, A01 e CAIXA sintéticas)",
+    "runs": [
+      {
+        "expected": 12,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      {
+        "expected": 12,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      {
+        "expected": 12,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      {
+        "expected": 12,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      {
+        "expected": 12,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    ]
+  },
+  "mutationProof": "Sem a pré-trava por produtoId e sem abortar NOT_FOUND, os 2 testes de exclusão concorrente gravam a venda sem baixa ('ok'); com as correções, PRODUTO_NAO_RESOLVIDO.",
+  "regression": {
+    "fullSuiteLocal": {
+      "pass": 10732,
+      "fail": 304,
+      "failingFiles": 78,
+      "note": "falhas ambientais idênticas à main 37acc3b nos mesmos 78 arquivos; 7 testes falhavam só nesta pilha e foram corrigidos em a8aaf8a"
+    },
+    "finalSubsetVsMain": "0 falha nova; lib/pdv-scale-visor.component.test.ts falhou 1x sob carga e passou 3/3 isolado (2/2 na main)"
+  },
+  "typecheck": "PASS",
+  "lint": "0 erros nos arquivos alterados",
+  "build": "PASS — MIGRATION_SKIPPED, PROXY_PRISMA_ARTIFACT_VERIFIED",
+  "production": {
+    "writes": 0,
+    "migrations": 0,
+    "deploy": false,
+    "databaseAccess": false
+  }
+}

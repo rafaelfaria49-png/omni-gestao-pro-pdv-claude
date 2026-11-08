@@ -1,3 +1,5 @@
+import { readManualKgConfirmation } from "@/lib/vendas/manual-kg-confirmation-server"
+import { itemCommercialQuantity, isKgItem } from "@/lib/vendas/item-quantity"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * GET /api/vendas/[id]
@@ -100,6 +102,11 @@ export async function GET(
 
     if (!venda) {
       return NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 })
+    }
+
+    if (new URL(req.url).searchParams.get("confirmation") === "manual-kg") {
+      const confirmation = await readManualKgConfirmation(storeId, pedidoId)
+      return confirmation ? NextResponse.json({ ok: true, confirmation }) : NextResponse.json({ ok: false, error: "Snapshot KG indisponível" }, { status: 409 })
     }
 
     // Buscar devoluções vinculadas via vendaLocalId
@@ -268,6 +275,9 @@ export async function GET(
       venda: {
         id: venda.pedidoId,
         dbId: venda.id,
+        manualKgRevision: venda.payload && typeof venda.payload === "object" ? (venda.payload as Record<string, unknown>).manualKgRevision ?? 0 : 0,
+        manualKgTax: venda.payload && typeof venda.payload === "object" ? (venda.payload as Record<string, unknown>).manualKgTax ?? null : null,
+        manualKgSale: !!(venda.payload && typeof venda.payload === "object" && (venda.payload as Record<string, unknown>).manualKgSale === "classic-manual-kg-v1"),
         at: venda.at.toISOString(),
         paymentBreakdown: pbRaw,
         recovery,
@@ -299,7 +309,8 @@ export async function GET(
           const pl = venda.payload && typeof venda.payload === "object"
             ? (venda.payload as Record<string, unknown>).lines
             : undefined
-          const line = Array.isArray(pl) && pl[i] && typeof pl[i] === "object" ? (pl[i] as Record<string, unknown>) : null
+          const matched = Array.isArray(pl) ? pl.find((line) => line && typeof line === "object" && (line as Record<string, unknown>).itemId === it.id) ?? pl[i] : null
+          const line = matched && typeof matched === "object" ? matched as Record<string, unknown> : null
           const metadata = line && line.metadata && typeof line.metadata === "object" ? line.metadata : null
           // Read-back de accessorySelection (004C): mesmo casamento por posição
           // já usado para `metadata` (F4) — payload.lines[i] ↔ ItemVenda[i].
@@ -308,7 +319,8 @@ export async function GET(
             id: it.id,
             inventoryId: it.inventoryId,
             nome: it.nome,
-            quantidade: it.quantidade,
+            quantidade: itemCommercialQuantity(it),
+            quantityUnit: isKgItem(it) ? "KG" : "UN",
             precoUnitario: it.precoUnitario,
             lineTotal: it.lineTotal,
             metadata,

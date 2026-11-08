@@ -1,5 +1,7 @@
 "use client"
 
+import { kgReturnBlocked, MANUAL_KG_SALE, saleQuantityGrams } from "@/lib/vendas/manual-kg-contract"
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
 import type { Orcamento } from "@/lib/orcamento-types"
@@ -9,7 +11,7 @@ import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
-import { mergeSalesById } from "@/lib/operations-sales-merge"
+import { mergeSalesById, kgCashProjectionDelta, selectManualKgSnapshot } from "@/lib/operations-sales-merge"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { resolveSaleLineItemType, type SaleLineItemType } from "@/lib/sale-line-classification"
 import { saleLineRecordFromFinalizeInput } from "@/lib/operations-sale-line"
@@ -144,6 +146,7 @@ import { markPdvMountStep } from "@/lib/pdv-mount-diagnostics"
 import {
   CATALOG_SYNC_INTERVAL_MS,
   createCatalogSyncController,
+  scheduleCatalogRevalidation,
   subscribeCatalogChanged,
   type CatalogCheckStatus,
   type CatalogSyncController,
@@ -190,6 +193,7 @@ export interface InventoryItem {
   accessoryConfig?: ProdutoAcessoriosMetadataV1
   /** Projetado por `/api/ops/inventory`: produto declarado por peso, venda ainda bloqueada. */
   vendaPesoIndisponivel?: boolean
+  manualKgSaleAvailable?: boolean
 }
 
 export interface CaixaState {
@@ -337,7 +341,8 @@ function alreadyConfirmedResult(pedidoId: string): ManualSyncResult {
 
 function saleMatches(s: SaleRecord, token: { id: string; clientSaleId?: string }): boolean {
   if (token.clientSaleId && s.clientSaleId === token.clientSaleId) return true
-  return s.id === token.id
+  // `id` vazio nunca identifica venda (recovery KG usa só a clientSaleId).
+  return token.id !== "" && s.id === token.id
 }
 
 function clearSaleSyncFailure(sale: SaleRecord): SaleRecord {
@@ -370,28 +375,39 @@ function applyConfirmedFlags(
   }
 }
 
+type ManualKgConfirmation = { storeId: string; sale: SaleRecord; stocks: Array<{ id: string; stock: number }>; credit?: { cpf: string; nome: string; saldo: number } }
+
 function applyLocalConfirmationToState(
   prev: OpsState,
   token: { id: string; clientSaleId?: string },
   confirmed?: { pedidoId: string; id: string; clientSaleId?: string | null },
+  kg?: ManualKgConfirmation,
 ): OpsState {
   const current = prev.sales.find((s) => saleMatches(s, token))
   if (!current) return prev
-  let inventory = prev.inventory
+  if (kg && selectManualKgSnapshot(current, kg.sale) === current) return prev
+  const effective = kg ? { ...kg.sale, localEffectsApplied: current.localEffectsApplied } : current
+  let inventory = kg ? prev.inventory.map((item) => { const stock = kg.stocks.find((p) => p.id === item.dbId || p.id === item.id); return stock ? { ...item, stock: stock.stock } : item }) : prev.inventory
   let caixa = prev.caixa
   let dailyLedger = prev.dailyLedger
   let customerCredits = prev.customerCredits
   let ordens = prev.ordens
-  if (current.localEffectsApplied === false) {
+  if (kg && current.localEffectsApplied === true) {
+    const cash = kgCashProjectionDelta([current], [kg.sale], { sessaoId: prev.caixaSessaoId })
+    const daily = kgCashProjectionDelta([current], [kg.sale], { ledgerDate: prev.dailyLedger.date })
+    caixa = { ...caixa, totalEntradas: Math.round((caixa.totalEntradas + cash) * 100) / 100 }
+    dailyLedger = { ...dailyLedger, totalVendas: Math.round((dailyLedger.totalVendas + daily) * 100) / 100, vendasDinheiro: Math.round((dailyLedger.vendasDinheiro + daily) * 100) / 100 }
+  }
+  if (current.localEffectsApplied === false && effective.status !== "cancelada") {
     const applied = applyConfirmedLocalEffects(
       { inventory, caixa: { totalEntradas: caixa.totalEntradas }, dailyLedger, customerCredits },
-      current,
-      { applyStock: true },
+      effective,
+      { applyStock: !kg },
     )
     inventory = applied.state.inventory
-    caixa = { ...caixa, totalEntradas: applied.state.caixa.totalEntradas }
-    dailyLedger = applied.state.dailyLedger
-    customerCredits = applied.state.customerCredits
+    caixa = kg ? { ...caixa, totalEntradas: effective.sessaoId === prev.caixaSessaoId ? Math.round((caixa.totalEntradas + effective.total - effective.paymentBreakdown.aPrazo - effective.paymentBreakdown.creditoVale) * 100) / 100 : caixa.totalEntradas } : { ...caixa, totalEntradas: applied.state.caixa.totalEntradas }
+    dailyLedger = !kg || effective.at.slice(0, 10) === dailyLedger.date ? applied.state.dailyLedger : dailyLedger
+    customerCredits = kg ? customerCredits : applied.state.customerCredits
     if (current.linkedOsId) {
       const now = new Date()
       const linkedOsId = current.linkedOsId
@@ -407,6 +423,7 @@ function applyLocalConfirmationToState(
       )
     }
   }
+  if (kg?.credit) customerCredits = { ...customerCredits, [kg.credit.cpf]: { nome: kg.credit.nome, saldo: kg.credit.saldo } }
   return {
     ...prev,
     inventory,
@@ -414,7 +431,7 @@ function applyLocalConfirmationToState(
     dailyLedger,
     customerCredits,
     ordens,
-    sales: prev.sales.map((s) => (saleMatches(s, token) ? applyConfirmedFlags(s, confirmed) : s)),
+    sales: prev.sales.map((s) => (saleMatches(s, token) ? applyConfirmedFlags(kg ? { ...kg.sale, localEffectsApplied: s.localEffectsApplied } : s, confirmed) : s)),
   }
 }
 
@@ -612,6 +629,8 @@ interface OperationsContextType {
    * definitivo). Retry/sync confirma com a MESMA identidade (`clientSaleId`).
    */
   finalizeSaleTransaction: (input: {
+    manualKgSale?: typeof MANUAL_KG_SALE
+    discountTotal?: number
     lines: Array<
       SaleLine & {
         name?: string
@@ -1324,6 +1343,8 @@ export function OperationsProvider({
   // Checks automáticos (foco/aba/rede/intervalo) só com um PDV montado: o provider envolve o
   // dashboard inteiro e outras telas não devem pagar o polling. Aviso de cadastro vale sempre.
   const catalogWatchersRef = useRef(0)
+  /** Revalidação agendada do catálogo após um snapshot KG (independe de watchers). */
+  const catalogRevalidateRef = useRef<(() => void) | null>(null)
   const watchCatalogSync = useCallback(() => {
     catalogWatchersRef.current += 1
     return () => {
@@ -1391,7 +1412,19 @@ export function OperationsProvider({
     document.addEventListener("visibilitychange", onVisibility)
     const unsubscribe = subscribeCatalogChanged(lj, () => sync(true))
     const timer = window.setInterval(onVisibility, CATALOG_SYNC_INTERVAL_MS)
+    let cancelRevalidation: (() => void) | null = null
+    const revalidate = () => {
+      cancelRevalidation?.()
+      cancelRevalidation = scheduleCatalogRevalidation(controller, {
+        onSettled: () => {
+          if (catalogSyncRef.current === controller) setCatalogVersion(controller.knownVersion())
+        },
+      })
+    }
+    catalogRevalidateRef.current = revalidate
     return () => {
+      cancelRevalidation?.()
+      if (catalogRevalidateRef.current === revalidate) catalogRevalidateRef.current = null
       controller.dispose()
       if (catalogSyncRef.current === controller) catalogSyncRef.current = null
       window.removeEventListener("focus", onFocus)
@@ -1481,10 +1514,14 @@ export function OperationsProvider({
         if (!cancelled) {
           setState((prev) => {
             const adjustedItems = withPendingDevolucaoStock(items, prev.devolucoes)
+            const cashDelta = kgCashProjectionDelta(prev.sales, remoteSales, { sessaoId: prev.caixaSessaoId })
+            const dailyDelta = kgCashProjectionDelta(prev.sales, remoteSales, { ledgerDate: prev.dailyLedger.date })
             const sales = mergeSalesById(prev.sales, remoteSales)
             reconcilePersistedSaleAttempts(lj, sales)
             return {
               ...prev,
+              caixa: cashDelta ? { ...prev.caixa, totalEntradas: Math.round((prev.caixa.totalEntradas + cashDelta) * 100) / 100 } : prev.caixa,
+              dailyLedger: dailyDelta ? { ...prev.dailyLedger, totalVendas: Math.round((prev.dailyLedger.totalVendas + dailyDelta) * 100) / 100, vendasDinheiro: Math.round((prev.dailyLedger.vendasDinheiro + dailyDelta) * 100) / 100 } : prev.dailyLedger,
               inventory: adjustedItems,
               ordens,
               sales,
@@ -1839,11 +1876,29 @@ export function OperationsProvider({
   )
 
   const markSaleConfirmed = useCallback(
-    (
+    async (
       token: { id: string; clientSaleId?: string },
       confirmed?: { pedidoId: string; id: string; clientSaleId?: string | null },
       meta?: { source: SaleAttemptSource; outcome?: SaleSyncAttemptOutcome },
     ) => {
+      if (storageKeyRef.current !== storageKey) throw new Error("STORE_CHANGED")
+      const local = stateRef.current.sales.find((item) => saleMatches(item, token))
+      let kg: ManualKgConfirmation | undefined
+      if (local?.manualKgSale === MANUAL_KG_SALE) {
+        // Mesmo prazo da verificação (fetch + corpo): um snapshot pendurado não pode prender a
+        // tentativa nem o lock entre abas; o timeout preserva a identidade para o reenvio.
+        const response = await fetchTextWithTimeout(
+          `/api/vendas/${encodeURIComponent(confirmed?.pedidoId ?? token.id)}?confirmation=manual-kg`,
+          { credentials: "include", cache: "no-store", headers: persistHeaders(opsLojaIdFromStorageKey(storageKey)) },
+          SALE_VERIFY_TIMEOUT_MS,
+        )
+        let body: { confirmation?: ManualKgConfirmation } = {}
+        try { body = JSON.parse(response.text) as { confirmation?: ManualKgConfirmation } } catch { body = {} }
+        kg = body.confirmation
+        if (storageKeyRef.current !== storageKey) throw new Error("STORE_CHANGED")
+        if (!response.ok || kg?.storeId !== opsLojaIdFromStorageKey(storageKey) || kg?.sale.manualKgSale !== MANUAL_KG_SALE || !Array.isArray(kg.stocks) || kg.sale.id !== (confirmed?.pedidoId ?? token.id)) throw new Error("Snapshot confirmado KG indisponível; a tentativa foi preservada para reenvio.")
+      }
+      if (storageKeyRef.current !== storageKey) throw new Error("STORE_CHANGED")
       vendaAutoRetryHoldRef.current.delete(token.id)
       if (token.clientSaleId) vendaAutoRetryHoldRef.current.delete(token.clientSaleId)
       autoRetryStateRef.current.delete(saleLocalKey(token))
@@ -1854,7 +1909,7 @@ export function OperationsProvider({
       })
       const at = new Date().toISOString()
       setState((prev) => {
-        const next = applyLocalConfirmationToState(prev, token, confirmed)
+        const next = storageKeyRef.current === storageKey ? applyLocalConfirmationToState(prev, token, confirmed, kg) : prev
         if (!meta || next === prev) return next
         const after = {
           id: confirmed?.pedidoId ?? token.id,
@@ -1875,11 +1930,28 @@ export function OperationsProvider({
           ),
         }
       })
+      const latest = stateRef.current.sales.find((item) => saleMatches(item, token))
+      // Os saldos do snapshot KG podem chegar depois de um catálogo mais novo: invalida a versão
+      // conhecida e agenda recargas (com retentativa) do catálogo autoritativo, mesmo sem o PDV
+      // montado. A primeira só sai depois do pós-venda (não concorre com a confirmação).
+      if (kg) catalogRevalidateRef.current?.()
+      return kg ? selectManualKgSnapshot(latest ?? kg.sale, kg.sale) : undefined
     },
     [storageKey],
   )
 
+  /**
+   * Recovery KG: identidade SÓ pela `clientSaleId` — nunca pelo VDA antigo, que pode ser
+   * compartilhado por outra venda em quarentena. `id` vazio nunca casa em `saleMatches`.
+   */
+  const confirmRecoveredKgSale = useCallback(
+    (clientSaleId: string, confirmed: { pedidoId: string; id: string }) =>
+      markSaleConfirmed({ id: "", clientSaleId }, { pedidoId: confirmed.pedidoId, id: confirmed.id, clientSaleId }),
+    [markSaleConfirmed],
+  )
+
   const markSaleBlocked = useCallback((token: { id: string; clientSaleId?: string }, patch?: string | SaleSyncFailurePatch) => {
+    if (storageKeyRef.current !== storageKey) return
     const next: SaleSyncFailurePatch = typeof patch === "string" ? { code: patch } : patch ?? {}
     // Navegador offline ANTES do envio = a requisição nem saiu (não é "resultado desconhecido").
     // Medido antes do fetch: a rede pode cair DEPOIS do commit e antes da resposta.
@@ -1892,7 +1964,7 @@ export function OperationsProvider({
       offline,
     }
     const outcome = attemptOutcomeFromFailure(failure)
-    setState((prev) => ({
+    setState((prev) => storageKeyRef.current !== storageKey ? prev : ({
       ...prev,
       sales: prev.sales.map((s) =>
         saleMatches(s, token)
@@ -1913,7 +1985,7 @@ export function OperationsProvider({
           : s,
       ),
     }))
-  }, [])
+  }, [storageKey])
 
   /** Registra horário/desfecho de uma tentativa que não chegou ao servidor (sem tocar no código). */
   const noteSaleAttempt = useCallback(
@@ -2049,11 +2121,12 @@ export function OperationsProvider({
           markSaleBlocked(token, { code: INCONCLUSIVE_RESPONSE, httpStatus: res.status, message, networkError: false, source })
           return { ok: false, reason: message, code: INCONCLUSIVE_RESPONSE, httpStatus: res.status }
         }
-        markSaleConfirmed(token, confirmed, { source })
-        emitVendaFinalizadaOnce(
+        if (storageKeyRef.current !== storageKey) return { ok: false, reason: "Loja alterada durante a sincronização. A tentativa foi preservada na loja original.", code: "STORE_CHANGED" }
+        const snapshot = await markSaleConfirmed(token, confirmed, { source })
+        if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(
           lojaId,
           { id: confirmed.pedidoId, clientSaleId: sale.clientSaleId ?? confirmed.clientSaleId },
-          { ...sale, id: confirmed.pedidoId, serverId: confirmed.id, syncPending: false },
+          snapshot ?? { ...sale, id: confirmed.pedidoId, serverId: confirmed.id, syncPending: false },
         )
         return {
           ok: true,
@@ -2086,7 +2159,7 @@ export function OperationsProvider({
         ...(parsed.unresolvedInventoryIds ? { unresolvedInventoryIds: parsed.unresolvedInventoryIds } : {}),
       }
     },
-    [emitVendaFinalizadaOnce, markSaleBlocked, markSaleConfirmed, verifySaleOnServer],
+    [emitVendaFinalizadaOnce, markSaleBlocked, markSaleConfirmed, storageKey, verifySaleOnServer],
   )
 
   const persistPendingSale = useCallback(
@@ -2107,6 +2180,7 @@ export function OperationsProvider({
       setSalePhase(phaseKey, "enviando")
       try {
         const res = useV2 ? await postV2Sale(lojaId, sale, retroactive) : await postV1Sale(lojaId, sale, retroactive)
+        if (storageKeyRef.current !== storageKey) return { ok: false, reason: "Loja alterada durante a sincronização. A tentativa foi preservada na loja original.", code: "STORE_CHANGED" }
         noteServerReachability(true)
         if (!res.ok && useV2) {
           const parsed = parseSalePersistError(res.text)
@@ -2123,6 +2197,7 @@ export function OperationsProvider({
         }
         return await settlePersistResponse(res, sale, lojaId, source)
       } catch (err) {
+        if (storageKeyRef.current !== storageKey) return { ok: false, reason: "Loja alterada durante a sincronização. A tentativa foi preservada na loja original.", code: "STORE_CHANGED" }
         const msg = err instanceof Error ? err.message : String(err)
         const timedOut = err instanceof SaleSyncTimeoutError
         noteServerReachability(false)
@@ -2145,7 +2220,7 @@ export function OperationsProvider({
         persistInFlightRef.current.delete(flightKey)
       }
     },
-    [convertPendingV2ToV1, markSaleBlocked, noteServerReachability, postV1Sale, postV2Sale, setSalePhase, settlePersistResponse],
+    [convertPendingV2ToV1, markSaleBlocked, noteServerReachability, postV1Sale, postV2Sale, setSalePhase, settlePersistResponse, storageKey],
   )
 
   /** A versão MAIS NOVA da venda ainda pendente (outra aba ou o automático podem ter confirmado). */
@@ -2235,10 +2310,14 @@ export function OperationsProvider({
         if (!rV.ok) return
         const jV = (await rV.json()) as { sales?: SaleRecord[] }
         const remoteSales = jV.sales ?? []
+        if (storageKeyRef.current !== storageKey) return
         setState((prev) => {
+          if (storageKeyRef.current !== storageKey) return prev
+          const cashDelta = kgCashProjectionDelta(prev.sales, remoteSales, { sessaoId: prev.caixaSessaoId })
+            const dailyDelta = kgCashProjectionDelta(prev.sales, remoteSales, { ledgerDate: prev.dailyLedger.date })
           const merged = mergeSalesById(prev.sales, remoteSales)
           reconcilePersistedSaleAttempts(lj, merged)
-          return merged === prev.sales ? prev : { ...prev, sales: merged }
+          return merged === prev.sales ? prev : { ...prev, sales: merged, caixa: cashDelta ? { ...prev.caixa, totalEntradas: Math.round((prev.caixa.totalEntradas + cashDelta) * 100) / 100 } : prev.caixa, dailyLedger: dailyDelta ? { ...prev.dailyLedger, totalVendas: Math.round((prev.dailyLedger.totalVendas + dailyDelta) * 100) / 100, vendasDinheiro: Math.round((prev.dailyLedger.vendasDinheiro + dailyDelta) * 100) / 100 } : prev.dailyLedger }
         })
       } catch {
         /* best-effort — reconciliação não bloqueia o caixa */
@@ -2308,11 +2387,19 @@ export function OperationsProvider({
           if (latest.clientSaleId) {
             const verified = await verifySaleOnServer(lj, latest.clientSaleId)
             if (verified.kind === "found") {
-              markSaleConfirmed(token, verified.venda, { source: "manual", outcome: "JA_EXISTIA_NO_SERVIDOR" })
-              emitVendaFinalizadaOnce(
+              let snapshot: SaleRecord | undefined
+              try {
+                snapshot = await markSaleConfirmed(token, verified.venda, { source: "manual", outcome: "JA_EXISTIA_NO_SERVIDOR" })
+              } catch (err) {
+                // KG: a venda existe no servidor, mas o snapshot autenticado não veio. Nada local
+                // foi aplicado e a identidade segue pendente para nova verificação.
+                const msg = err instanceof Error ? err.message : String(err)
+                return { ok: false, code: "KG_SNAPSHOT_INDISPONIVEL", reason: `A venda já está no servidor, mas a confirmação em KG não pôde ser lida (${msg}). Nada foi duplicado; tente de novo em instantes.` }
+              }
+              if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(
                 lj,
                 { id: verified.venda.pedidoId, clientSaleId: latest.clientSaleId },
-                { ...latest, id: verified.venda.pedidoId, serverId: verified.venda.id, syncPending: false },
+                snapshot ?? { ...latest, id: verified.venda.pedidoId, serverId: verified.venda.id, syncPending: false },
               )
               return { ok: true, reconciled: true, pedidoId: verified.venda.pedidoId }
             }
@@ -2467,6 +2554,11 @@ export function OperationsProvider({
             reason: "Servidor não devolveu evidência da venda recuperada. A quarentena foi preservada.",
           }
         }
+        if (sale.manualKgSale === MANUAL_KG_SALE && confirmed) {
+          const snapshot = await confirmRecoveredKgSale(clientSaleId, confirmed)
+          if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(lj, { id: confirmed.pedidoId, clientSaleId }, snapshot ?? { ...sale, syncPending: false })
+          return { ok: true, saleId: confirmed.pedidoId }
+        }
         for (const confirmation of confirmations) {
           vendaAutoRetryHoldRef.current.delete(confirmation.clientSaleId)
           vendaAutoRetryHoldRef.current.delete(confirmation.pedidoId)
@@ -2486,7 +2578,7 @@ export function OperationsProvider({
         return { ok: false, reason: `Falha de rede: ${msg}` }
       }
     },
-    [emitVendaFinalizadaOnce, storageKey],
+    [confirmRecoveredKgSale, emitVendaFinalizadaOnce, storageKey],
   )
 
   /**
@@ -2544,8 +2636,20 @@ export function OperationsProvider({
    * persistida.
    */
   const reconcileRecoveredSales = useCallback(
-    (confirmations: readonly RecoveryConfirmation[]): number => {
-      if (confirmations.length === 0) return 0
+    async (confirmations: readonly RecoveryConfirmation[]): Promise<number> => {
+      let kgReconciled = 0
+      const ordinary: RecoveryConfirmation[] = []
+      for (const confirmation of confirmations) {
+        const local = stateRef.current.sales.find((sale) => sale.clientSaleId === confirmation.clientSaleId)
+        if (local?.manualKgSale !== MANUAL_KG_SALE) { ordinary.push(confirmation); continue }
+        try {
+          const snapshot = await confirmRecoveredKgSale(confirmation.clientSaleId, { id: confirmation.serverId, pedidoId: confirmation.pedidoId })
+          if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(opsLojaIdFromStorageKey(storageKey), { id: confirmation.pedidoId, clientSaleId: confirmation.clientSaleId }, snapshot ?? { ...local, syncPending: false })
+          kgReconciled++
+        } catch { /* A missing current snapshot keeps KG pending, without local effects. */ }
+      }
+      confirmations = ordinary
+      if (confirmations.length === 0) return kgReconciled
       const lj = opsLojaIdFromStorageKey(storageKey)
       for (const confirmation of confirmations) {
         vendaAutoRetryHoldRef.current.delete(confirmation.clientSaleId)
@@ -2562,9 +2666,9 @@ export function OperationsProvider({
         ...prev,
         sales: applyRecoveryConfirmations(prev.sales, confirmations).sales,
       }))
-      return applyRecoveryConfirmations(stateRef.current.sales, confirmations).reconciled
+      return kgReconciled + applyRecoveryConfirmations(stateRef.current.sales, confirmations).reconciled
     },
-    [emitVendaFinalizadaOnce, storageKey],
+    [confirmRecoveredKgSale, emitVendaFinalizadaOnce, storageKey],
   )
 
   const previewQuarantineRecovery = useCallback<
@@ -2647,7 +2751,7 @@ export function OperationsProvider({
           const body = await res.text().catch(() => "")
           if (!res.ok) {
             // Reconcilia o que já foi confirmado antes de relatar a falha.
-            reconcileRecoveredSales(buildRecoveryConfirmations(results))
+            await reconcileRecoveredSales(buildRecoveryConfirmations(results))
             const parsed = parseSalePersistError(body)
             return { ok: false, reason: parsed.message, code: parsed.code }
           }
@@ -2657,10 +2761,10 @@ export function OperationsProvider({
 
         // Só sai da quarentena o que tem venda real no servidor. `REQUIRES_CONFIRMATION`,
         // `BLOCKED` e `FAILED` preservam a cópia local intacta.
-        const reconciled = reconcileRecoveredSales(buildRecoveryConfirmations(results))
+        const reconciled = await reconcileRecoveredSales(buildRecoveryConfirmations(results))
         return { ok: true, results, summary: summarizeRecoveryResults(results), reconciled }
       } catch (err) {
-        reconcileRecoveredSales(buildRecoveryConfirmations(results))
+        await reconcileRecoveredSales(buildRecoveryConfirmations(results))
         const msg = err instanceof Error ? err.message : String(err)
         return { ok: false, reason: `Falha de rede: ${msg}` }
       }
@@ -2748,7 +2852,7 @@ export function OperationsProvider({
 
     // 3. Só sai da preservação o que tem venda real no servidor.
     const confirmations = buildRecoveryConfirmations(results)
-    reconcileRecoveredSales(confirmations)
+    await reconcileRecoveredSales(confirmations)
 
     const now = Date.now()
     const confirmed = new Set(confirmations.map((confirmation) => confirmation.clientSaleId))
@@ -2827,11 +2931,11 @@ export function OperationsProvider({
           if (res.ok) {
             const body: unknown = await res.json().catch(() => null)
             const confirmed = extractConfirmedVenda(body)
-            markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId }, confirmed ?? undefined)
-            emitVendaFinalizadaOnce(
+            const snapshot = await markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId }, confirmed ?? undefined)
+            if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(
               lj,
               { id: confirmed?.pedidoId ?? sale.id, clientSaleId: sale.clientSaleId },
-              { ...sale, syncPending: false },
+              snapshot ?? { ...sale, syncPending: false },
             )
             return {
               ok: true,
@@ -2855,8 +2959,8 @@ export function OperationsProvider({
           headers: { [ASSISTEC_LOJA_HEADER]: lj },
         })
         if (res.ok) {
-          markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId })
-          emitVendaFinalizadaOnce(lj, { id: saleId }, { ...sale, syncPending: false })
+          const snapshot = await markSaleConfirmed({ id: sale.id, clientSaleId: sale.clientSaleId })
+          if (snapshot?.status !== "cancelada") emitVendaFinalizadaOnce(lj, { id: saleId }, snapshot ?? { ...sale, syncPending: false })
           return {
             ok: true,
             mode: "reconciled",
@@ -3207,6 +3311,8 @@ export function OperationsProvider({
 
   const finalizeSaleTransaction = useCallback<OperationsContextType["finalizeSaleTransaction"]>(
     async ({
+      manualKgSale,
+      discountTotal,
       lines,
       total,
       linkedOsId,
@@ -3230,6 +3336,11 @@ export function OperationsProvider({
         const q = line?.quantity
         if (typeof q !== "number" || !Number.isFinite(q)) {
           return { ok: false, reason: "Quantidade inválida." }
+        }
+        const item = stateRef.current.inventory.find((p) => p.id === line.inventoryId)
+        if (manualKgSale === MANUAL_KG_SALE && item?.manualKgSaleAvailable === true && !line.isAvulso) {
+          if (saleQuantityGrams(q) === null) return { ok: false, reason: "Peso inválido: use até 3 casas decimais." }
+          continue
         }
         if (!isIntegerSaleQuantity(q)) {
           return { ok: false, reason: FRACTIONAL_QUANTITY_MESSAGE }
@@ -3448,6 +3559,7 @@ export function OperationsProvider({
       if (already) return reusePending(already)
 
       const saleRow: SaleRecord = {
+        ...(manualKgSale === MANUAL_KG_SALE ? { manualKgSale, discountTotal } : {}),
         id: saleId,
         ...(clientSaleId ? { clientSaleId } : {}),
         at: new Date().toISOString(),
@@ -3610,6 +3722,7 @@ export function OperationsProvider({
     const prev = stateRef.current
     const sale = prev.sales.find((s) => s.id === saleId)
     if (!sale) return { ok: false, reason: "Venda/cupom não encontrado." }
+    if (kgReturnBlocked(sale, prev.inventory)) return { ok: false, reason: "Devolução de venda em KG indisponível. Solicite cancelamento integral autorizado." }
 
     const next: OpsState = {
       ...prev,

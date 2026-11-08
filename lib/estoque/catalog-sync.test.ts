@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   createCatalogSyncController,
   notifyCatalogChanged,
+  scheduleCatalogRevalidation,
   subscribeCatalogChanged,
   type CatalogSnapshot,
 } from "./catalog-sync"
@@ -55,6 +56,21 @@ describe("createCatalogSyncController", () => {
     c.enable()
     expect(await c.check()).toBe("unchanged")
     expect(fetchSnapshot).not.toHaveBeenCalled()
+  })
+
+  it("invalidate: recarga forçada que falha não deixa a versão conhecida 'atual' (próximo check baixa)", async () => {
+    // Snapshot KG sobrescreveu saldos locais: a versão remota não mudou, mas o catálogo precisa voltar.
+    let t = 0
+    const { c, applied } = makeController({ versions: ["v1:1:1"], snapshots: [null, snap("v1:1:1", 12)], now: () => t })
+    c.setKnownVersion("v1:1:1")
+    c.enable()
+    c.invalidate()
+    expect(await c.check({ force: true })).toBe("unavailable")
+    expect(c.knownVersion()).toBeNull()
+    t = 10_000
+    expect(await c.check({ force: false })).toBe("updated")
+    expect(applied.map((s) => s.items[0]!.price)).toEqual([12])
+    expect(c.knownVersion()).toBe("v1:1:1")
   })
 
   it("versão mudou → baixa, aplica e passa a conhecer a versão nova", async () => {
@@ -192,5 +208,95 @@ describe("notifyCatalogChanged / subscribeCatalogChanged", () => {
     await tick()
     expect(cb).not.toHaveBeenCalled()
     off()
+  })
+})
+
+describe("scheduleCatalogRevalidation (snapshot KG fora do catálogo)", () => {
+  const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)) }
+  function timers() {
+    const live: Array<{ fn: () => void; ms: number; cleared?: boolean }> = []
+    return {
+      pending: () => live.filter((t) => !t.cleared).map((t) => t.ms),
+      setTimer: (fn: () => void, ms: number) => { const t = { fn, ms }; live.push(t); return t },
+      clearTimer: (h: unknown) => { (h as { cleared?: boolean }).cleared = true },
+      /** Dispara o timer pendente mais antigo com este prazo. */
+      async fire(ms: number) {
+        const t = live.find((x) => !x.cleared && x.ms === ms)
+        if (!t) throw Error("sem timer de " + ms + " ms")
+        t.cleared = true; t.fn(); await flush()
+      },
+    }
+  }
+  const OPTS = { delaysMs: [10, 20, 30], attemptTimeoutMs: 999 }
+
+  it("sem watchers: invalida, recarrega até um snapshot válido e para", async () => {
+    // 1ª recarga falha, 2ª aplica o saldo autoritativo — nenhuma tela observando o catálogo.
+    const { c, applied } = makeController({ snapshots: [null, snap("v1:1:9", 12)] })
+    c.setKnownVersion("v1:1:9")
+    c.enable()
+    const t = timers()
+    const statuses: string[] = []
+    scheduleCatalogRevalidation(c, { ...OPTS, setTimer: t.setTimer, clearTimer: t.clearTimer, onSettled: (st) => statuses.push(st) })
+    expect(c.knownVersion()).toBeNull()
+    await t.fire(10)
+    expect(statuses).toEqual(["unavailable"])
+    expect(t.pending()).toEqual([20])
+    await t.fire(20)
+    expect(statuses).toEqual(["unavailable", "updated"])
+    expect(applied.map((x) => x.items[0]!.price)).toEqual([12])
+    expect(c.knownVersion()).toBe("v1:1:9")
+    expect(t.pending()).toEqual([])
+  })
+
+  it("cancelamento (troca de loja/desmontagem) não dispara mais recargas", async () => {
+    const { c, fetchSnapshot } = makeController({ snapshots: [snap("v1:1:9", 12)] })
+    c.enable()
+    const t = timers()
+    const cancel = scheduleCatalogRevalidation(c, { ...OPTS, setTimer: t.setTimer, clearTimer: t.clearTimer })
+    cancel()
+    expect(t.pending()).toEqual([])
+    expect(fetchSnapshot).not.toHaveBeenCalled()
+  })
+
+  it("offline prolongado: depois do último atraso continua tentando nele até aplicar", async () => {
+    const { c, applied } = makeController({ snapshots: [null, null, null, null, snap("v1:1:3", 7)] })
+    c.setKnownVersion("v1:1:1")
+    c.enable()
+    const t = timers()
+    scheduleCatalogRevalidation(c, { ...OPTS, setTimer: t.setTimer, clearTimer: t.clearTimer })
+    await t.fire(10); await t.fire(20); await t.fire(30)
+    expect(t.pending()).toEqual([30])
+    expect(c.knownVersion()).toBeNull()
+    await t.fire(30)
+    expect(t.pending()).toEqual([30])
+    await t.fire(30)
+    expect(applied.map((x) => x.items[0]!.price)).toEqual([7])
+    expect(c.knownVersion()).toBe("v1:1:3")
+    expect(t.pending()).toEqual([])
+  })
+
+  it("consulta pendurada vence o prazo e a próxima tentativa a substitui", async () => {
+    const hung = deferred<CatalogSnapshot<Item> | null>()
+    let calls = 0
+    const applied: CatalogSnapshot<Item>[] = []
+    const c = createCatalogSyncController<Item>({
+      storeId: "loja-a", fetchVersion: async () => null,
+      fetchSnapshot: async (_s, signal) => { calls++; if (calls === 1) { signal.addEventListener("abort", () => hung.resolve(snap("v1:1:1", 1))); return hung.promise } return snap("v1:1:2", 9) },
+      apply: (x) => applied.push(x), now: () => 0, minGapMs: 3_000,
+    })
+    c.enable()
+    const t = timers()
+    const statuses: string[] = []
+    scheduleCatalogRevalidation(c, { ...OPTS, setTimer: t.setTimer, clearTimer: t.clearTimer, onSettled: (st) => statuses.push(st) })
+    await t.fire(10)
+    expect(t.pending()).toEqual([999])
+    await t.fire(999)
+    expect(statuses).toEqual(["timeout"])
+    expect(t.pending()).toEqual([20])
+    await t.fire(20)
+    expect(statuses).toEqual(["timeout", "updated"])
+    // A resposta tardia da consulta abortada nunca é aplicada.
+    expect(applied.map((x) => x.items[0]!.price)).toEqual([9])
+    expect(c.knownVersion()).toBe("v1:1:2")
   })
 })
