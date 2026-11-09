@@ -1,0 +1,27 @@
+guard.db_ok=1
+session.read_only=on user=neondb_owner pg=17.11 (11592b3)
+neon.neon.branch_id=br-muddy-meadow-ac7ah2wl
+neon.neon.endpoint_id=ep-summer-tooth-acltc6wi
+neon.neon.project_id=dry-mouse-36002471
+neon.neon.tenant_id=3898df296ae365ab4464a82323e3f4df
+neon.neon.timeline_id=917bebec2f4d28fdac429bd6029b87b6
+system_identifier=7667235400144430878
+db.owner=neondb_owner acl=NULL
+databases=neondb,omnigestao_prod,omnigestao_prod_candidate,postgres
+roles.omni=omnigestao_candidate_audit_ro
+roles.md5=51d0374d66165bf5971f37974f639a2f n=21
+members.md5=05beb343e5ff985c64559676a5ae602b n=12
+owners.public=neondb_owner/i:394 neondb_owner/proc:4 neondb_owner/r:110 neondb_owner/typee:36
+schema.public.owner=pg_database_owner acl={pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}
+rls.tables=0 forced=0 policies=0
+table.acl.md5=d3aa81315362ccc9af21253b220e8b91
+default_acl=2
+extensions=plpgsql@1.0:cloud_admin
+shdepend.owner.fora_do_escopo=0
+shdepend.owner.por_classe=pg_class:110 pg_proc:4 pg_type:36
+schema.cols.md5=b7b53c1eeafc04d17f554acb2185d7a1 n=1265
+kg.cols=estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+kg.constraints=(nenhuma)
+migrations=23 finished=23 last=20261022120000_platform_pilot_access md5=e0944cbf768228318a5d3fac418ae367
+migrations.kg=0
+rows.estoque_produtos=14109 produto_depositos=13725 movimentacoes_estoque=2546

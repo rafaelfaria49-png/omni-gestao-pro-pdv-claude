@@ -1,0 +1,47 @@
+
+## papéis próprios do Preview (owner = papel padrão do projeto novo; runtime só DML, criado por SQL)
+ok
+
+## schema da main (origin/main) por diff-from-empty
+3354
+psql:base.sql:2: NOTA:  esquema "public" já existe, ignorando
+base aplicada
+
+## resolve --applied de todas as migrations da main
+resolvidas=23
+23 migrations found in prisma/migrations
+Database schema is up to date!
+No pending migrations to apply.
+drift main (0=vazio): 0
+
+## grants do runtime (DML, sem DDL)
+ok
+tabelas=110 sem_dml_runtime=0 rls=0
+runtime_create_public=false runtime_super=false runtime_bypassrls=false
+
+## colunas KG na base da main (esperado: integer)
+estoque_produtos.stock:integer
+movimentacoes_estoque.estoqueAntes:integer
+movimentacoes_estoque.estoqueDepois:integer
+movimentacoes_estoque.quantidade:integer
+produto_depositos.quantidade:integer
+
+## branch filho p/ a PR #315 (simulado por TEMPLATE) + migrate deploy com o prisma da PR
+ok
+Following migration have not yet been applied:
+20261025120000_estoque_quantidade_fracionada
+Applying migration `20261025120000_estoque_quantidade_fracionada`
+The following migration(s) have been applied:
+  └─ 20261025120000_estoque_quantidade_fracionada/
+All migrations have been successfully applied.
+Database schema is up to date!
+drift kg (0=vazio): 0
+estoque_produtos.stock:double precision
+movimentacoes_estoque.estoqueAntes:double precision
+movimentacoes_estoque.estoqueDepois:double precision
+movimentacoes_estoque.quantidade:double precision
+produto_depositos.quantidade:double precision
+ERRO:  sequência de bytes é inválida para codificação "UTF8": 0x85
+kg sem_dml_runtime=0
+
+FIM

@@ -1293,6 +1293,51 @@ export type ListagemProdutosResultado = {
   erroFiltros?: ErroFiltrosProdutos;
 };
 
+/** Linha da listagem → DTO da ficha; mesmo mapeamento para a listagem e para a ficha aberta por link. */
+function mapProdutoListagemRow(p: {
+  id: string;
+  name: string;
+  sku: string | null;
+  barcode: string | null;
+  category: string | null;
+  brand: string;
+  supplierName: string;
+  stock: number | null;
+  price: number | null;
+  precoCusto: number | null;
+  warrantyDays: number | null;
+  active: boolean;
+  metadata: unknown;
+}): ProdutoDTO {
+  const preco = Number(p.price ?? 0);
+  const custo = Number(p.precoCusto ?? 0);
+  const margem = preco > 0 ? ((preco - custo) / preco) * 100 : 0;
+  const status =
+    !p.name || !p.category || preco <= 0
+      ? ("Incompleto" as const)
+      : p.active
+        ? ("Ativo" as const)
+        : ("Inativo" as const);
+  return {
+    id: p.id,
+    nome: p.name,
+    sku: p.sku ?? "—",
+    barras: p.barcode ?? "",
+    categoria: p.category ?? "—",
+    marca: p.brand || "—",
+    fornecedor: p.supplierName || "—",
+    estoque: p.stock ?? 0,
+    custo,
+    preco,
+    margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
+    garantia: p.warrantyDays ?? 0,
+    status,
+    metadata: produtoMetadataRecord(p.metadata),
+    importacao: resumoImportacaoProduto(p.metadata),
+    skuSintetico: isSyntheticImportSku(p.sku),
+  };
+}
+
 // ─── Listagem paginada (CadastrosHub → ProdutosPanel) ───────────────────────
 // Os demais callers (osStore, executor, api/estoque) continuam usando
 // `listProdutos` (retorna ProdutoDTO[]) e não foram alterados.
@@ -1361,50 +1406,6 @@ export async function listProdutosPaginado(
     }
   }
 
-  const mapRow = (p: {
-    id: string;
-    name: string;
-    sku: string | null;
-    barcode: string | null;
-    category: string | null;
-    brand: string;
-    supplierName: string;
-    stock: number | null;
-    price: number | null;
-    precoCusto: number | null;
-    warrantyDays: number | null;
-    active: boolean;
-    metadata: unknown;
-  }): ProdutoDTO => {
-    const preco = Number(p.price ?? 0);
-    const custo = Number(p.precoCusto ?? 0);
-    const margem = preco > 0 ? ((preco - custo) / preco) * 100 : 0;
-    const status =
-      !p.name || !p.category || preco <= 0
-        ? ("Incompleto" as const)
-        : p.active
-          ? ("Ativo" as const)
-          : ("Inativo" as const);
-    return {
-      id: p.id,
-      nome: p.name,
-      sku: p.sku ?? "—",
-      barras: p.barcode ?? "",
-      categoria: p.category ?? "—",
-      marca: p.brand || "—",
-      fornecedor: p.supplierName || "—",
-      estoque: p.stock ?? 0,
-      custo,
-      preco,
-      margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
-      garantia: p.warrantyDays ?? 0,
-      status,
-      metadata: produtoMetadataRecord(p.metadata),
-      importacao: resumoImportacaoProduto(p.metadata),
-      skuSintetico: isSyntheticImportSku(p.sku),
-    };
-  };
-
   const resultado = await consultarProdutosSql({
     storeId,
     q: opts?.q,
@@ -1420,7 +1421,28 @@ export async function listProdutosPaginado(
   // inteiro como se o filtro tivesse funcionado.
   if (!resultado.ok) return { produtos: [], total: 0, erroFiltros: resultado.erro };
 
-  return { produtos: resultado.rows.map(mapRow), total: resultado.total };
+  return { produtos: resultado.rows.map(mapProdutoListagemRow), total: resultado.total };
+}
+
+/**
+ * Ficha canônica aberta por link (`/dashboard/cadastros-v2?aba=produtos&produto=<id>`):
+ * a tela histórica de Gestão de Produtos encaminha para cá o produto que ela não sabe
+ * editar sem truncar (por peso). Mesmo gate da listagem; produto de outra loja = `null`.
+ */
+export async function obterProdutoFicha(storeId: string, produtoId: string): Promise<ProdutoDTO | null> {
+  await requireModuleAction(storeId, "catalog")
+
+  storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
+  const id = String(produtoId ?? "").trim();
+  if (!id) return null;
+  const p = await prisma.produto.findFirst({
+    where: { id, storeId },
+    select: {
+      id: true, name: true, sku: true, barcode: true, category: true, brand: true, supplierName: true,
+      stock: true, price: true, precoCusto: true, warrantyDays: true, active: true, metadata: true,
+    },
+  });
+  return p ? mapProdutoListagemRow(p) : null;
 }
 
 export type UpsertProdutoResult =

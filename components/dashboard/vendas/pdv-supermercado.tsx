@@ -56,6 +56,8 @@ import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { displaySaleNumber } from "@/lib/vendas/local-sale-identity"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice, pdvWeightSaleFlag } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { canAutoFocusPdvBipe, isPdvScanLikeQuery } from "@/lib/pdv-scan-input"
 import { hasBlockingPdvDialog, resolvePdvScanUnregisteredPolicy } from "@/lib/pdv-scan-unregistered-action"
@@ -165,6 +167,7 @@ function inventoryItemToPdvProduct(inv: InventoryItem): PdvCatalogProduct {
     precoPorKg: inv.precoPorKg,
     atributos: inv.atributos,
     ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
+    ...pdvWeightSaleFlag(inv),
   }
 }
 
@@ -458,6 +461,9 @@ export function PdvSupermercado({
     () => sanitizeInventoryItems<InventoryItem>(inventory).map(inventoryItemToPdvProduct),
     [inventory]
   )
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), paused: isPaymentModalOpen })
 
   const quickItems = useMemo(() => {
     const safeInventory = sanitizeInventoryItems<InventoryItem>(inventory)
@@ -558,6 +564,11 @@ export function PdvSupermercado({
 
   const addToCart = useCallback(
     (product: Product, qtyOverride?: number) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const nq = normalizeQtyForProduct(product, qtyOverride)
       if (product.stock <= 0) {
         toast({ title: "Sem estoque", description: `${product.name} está sem saldo no estoque.` })

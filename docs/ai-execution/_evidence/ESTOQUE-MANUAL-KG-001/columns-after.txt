@@ -1,0 +1,5 @@
+estoque_produtos|stock|double precision|0
+movimentacoes_estoque|estoqueAntes|double precision|
+movimentacoes_estoque|estoqueDepois|double precision|
+movimentacoes_estoque|quantidade|double precision|
+produto_depositos|quantidade|double precision|0

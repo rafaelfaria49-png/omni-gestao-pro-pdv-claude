@@ -128,6 +128,27 @@ describe("PATCH /api/produtos/[id] — boundary canônico (CAD-R2-007)", () => {
     expect(h.applyStockMutation).not.toHaveBeenCalled()
     expect(h.applyStockMutationTx).not.toHaveBeenCalled()
   })
+  it("KG: ajuste REST recusado com orientação de entrada pela ficha, sem escrita", async () => {
+    h.findFirst.mockResolvedValue(ROW({ stock: 3.25, metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } } }))
+    const { res, json } = await runPatch("seed-1", { name: "Pão", stock: 3 })
+    expect(res.status).toBe(409)
+    expect(json.error).toMatch(/Registre a entrada em kg pela ficha de Cadastros/)
+    expect(h.updateProductTx).not.toHaveBeenCalled()
+    expect(h.applyStockMutation).not.toHaveBeenCalled()
+    expect(h.applyStockMutationTx).not.toHaveBeenCalled()
+  })
+  it.each([2.5, "2.5", "2,5", "3kg", Number.NaN])("stock fracionado/inválido é recusado, nunca truncado: %s", async (stock) => {
+    const { res } = await runPatch("seed-1", { stock })
+    expect(res.status).toBe(400)
+    expect(h.findFirst).not.toHaveBeenCalled()
+    expect(h.applyStockMutation).not.toHaveBeenCalled()
+    expect(h.applyStockMutationTx).not.toHaveBeenCalled()
+  })
+  it("stock inteiro em texto continua aceito (contrato REST)", async () => {
+    const { res } = await runPatch("seed-1", { stock: "8" })
+    expect(res.status).toBe(200)
+    expect(h.applyStockMutation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ kind: "ajuste", novoSaldo: 8 }))
+  })
   it("cadastral usa ProductWriteService (sem ledger)", async () => {
     const { res, json } = await runPatch("seed-1", { name: "Novo nome", price: 29.9 })
     expect(res.status).toBe(200)

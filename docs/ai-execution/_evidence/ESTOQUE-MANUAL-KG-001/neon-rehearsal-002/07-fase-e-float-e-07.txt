@@ -1,0 +1,38 @@
+# fase E — cliente Float (KG) e barreira 07 — 2026-10-26T12:23:44.312Z
+  runtime_v2 Float direto grava pão 3,96 kg: SUCESSO (39ms) -> 3.96
+  runtime_v2 Float direto increment 0,125 kg: SUCESSO (28ms) -> 4.085
+  runtime_v2 Float pooler grava pão 3,96 kg: SUCESSO (64ms) -> 3.96
+  runtime_v2 Float pooler increment 0,125 kg: SUCESSO (67ms) -> 4.085
+  cliente Int antigo (papel antigo) após migration (esperado: recusado): FALHOU (478ms) -> -pos-migration" }) → 248 await tryOp("cliente Int antigo (papel antigo) após migration (esperado: recusado)", () => old.produto.update( Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+
+## risco residual SEM 07: build Int com a credencial nova (só nos sintéticos)
+  Int + runtime_v2 grava un13 -> 13: SUCESSO (38ms) -> {"id":"kg-ensaio-002-un13"}
+  valor gravado (lido em texto): 
+kg-ensaio-002-pao=4.085 kg-ensaio-002-un13=6.4e-323 kg-ensaio-002-un7=7
+  restaura un13 = 13 (correção pelo migrator, só sintético): exit=0 -> 13
+
+## 07 opcional (VALIDATE sobre a cópia dos dados reais)
+  07-guard-check-opcional.sql [omni_migrator@omnigestao_prod] guard CHECK: exit=0 395ms 
+  constraints criadas e validadas: exit=0 -> estoque_produtos_stock_kg_milesimos:validated=true produto_depositos_quantidade_kg_milesimos:validated=true movimentacoes_estoque_quantidade_kg_milesimos:validated=true movimentacoes_estoque_estoqueAntes_kg_milesimos:validated=true movimentacoes_estoque_estoqueDepois_kg_milesimos:validated=true
+  COM 07: Int + runtime_v2 grava un13 -> 13 (esperado: recusado 23514): FALHOU (17ms) -> -002-un13, kg-ensaio-002-loja, sintetico kg-ensaio-002-un13, 6.4e-323, 0, 0, 2026-10-26 12:18:54.476, 2026-10-26 12:23:47.472, null, null, null, t, , Ativo, , 0, null)."), column: None, hint: None }), transient: false })
+  COM 07: Int + runtime_v2 grava -1 (NaN) (esperado: recusado): FALHOU (14ms) -> nsaio-002-un13, kg-ensaio-002-loja, sintetico kg-ensaio-002-un13, NaN, 0, 0, 2026-10-26 12:18:54.476, 2026-10-26 12:23:47.489, null, null, null, t, , Ativo, , 0, null)."), column: None, hint: None }), transient: false })
+  COM 07: Int increment (limite conhecido: no-op silencioso): SUCESSO (30ms) -> {"id":"kg-ensaio-002-un13"}
+  COM 07: Float grava 3,96: SUCESSO (28ms) -> 3.96
+  COM 07: Float grava 1,2345 (4 casas, esperado: recusado): FALHOU (20ms) -> saio-002-pao, kg-ensaio-002-loja, sintetico kg-ensaio-002-pao, 1.2345, 0, 0, 2026-10-26 12:18:54.534, 2026-10-26 12:23:47.698, null, null, null, t, , Ativo, , 0, null)."), column: None, hint: None }), transient: false })
+  COM 07: Float grava 999999999999999 (teto UN/G): SUCESSO (15ms) -> 999999999999999
+  COM 07: Float grava 1e15 (acima do teto, esperado: recusado): FALHOU (14ms) -> ensaio-002-un7, kg-ensaio-002-loja, sintetico kg-ensaio-002-un7, 1e+15, 0, 0, 2026-10-26 12:18:54.52, 2026-10-26 12:23:47.733, null, null, null, t, , Ativo, , 0, null)."), column: None, hint: None }), transient: false })
+  sintéticos: 
+kg-ensaio-002-pao=3.96 kg-ensaio-002-un13=13 kg-ensaio-002-un7=999999999999999
+  linhas fora do contrato (todas as tabelas KG): exit=0 -> estoque=0 depositos=0 livro=0
+  06-verificacao.sql [omni_migrator@omnigestao_prod] verificacao final: exit=0 255ms 
+    
+    database=omnigestao_prod dono=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+    papel neon_service connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel neondb_owner connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel omni_migrator connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=true
+    papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    papel omnigestao_candidate_audit_ro connect=false escreve_estoque=false pg_write_all_data=false dono_por_heranca=false
+    sessoes papel=omni_migrator app=kg-rehearsal-002 n=1
+    sessoes papel=omni_runtime_v2 app=runtime-v2-float-pooler n=1
+    objetos do papel antigo=0
+    colunas estoque_produtos.stock:double precision movimentacoes_estoque.estoqueAntes:double precision movimentacoes_estoque.estoqueDepois:double precision movimentacoes_estoque.quantidade:double precision produto_depositos.quantidade:double precision

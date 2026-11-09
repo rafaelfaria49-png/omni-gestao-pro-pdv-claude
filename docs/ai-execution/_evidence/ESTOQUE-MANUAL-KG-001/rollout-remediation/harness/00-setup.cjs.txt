@@ -1,0 +1,44 @@
+// Cenário "hoje": um único papel dono (simula neondb_owner) usado por Production, Preview,
+// candidate e máquinas locais; prod e candidate são dois databases do MESMO cluster.
+const path = require("node:path")
+const { psql, pw, client, DIR } = require("./lib.cjs")
+
+function must(r, label) {
+  if (!r.ok) { console.error(`FALHOU ${label}: ${r.err}`); process.exit(1) }
+  return r.out
+}
+
+async function main() {
+  for (const s of [
+    "DROP DATABASE IF EXISTS omnigestao_prod WITH (FORCE)",
+    "DROP DATABASE IF EXISTS omnigestao_prod_candidate WITH (FORCE)",
+    "DROP ROLE IF EXISTS omni_runtime_v2", "DROP ROLE IF EXISTS omni_migrator", "DROP ROLE IF EXISTS omni_owner",
+    "DROP ROLE IF EXISTS neondb_owner_sim", "DROP ROLE IF EXISTS neon_superuser_sim",
+    // Topologia lida do cluster Neon real (neon-ro-topology.txt): neondb_owner ∈ neon_superuser (inherit),
+    // e neon_superuser ∈ pg_read_all_data / pg_write_all_data / pg_signal_backend / pg_monitor.
+    "CREATE ROLE neon_superuser_sim NOLOGIN CREATEROLE CREATEDB BYPASSRLS",
+    "GRANT pg_read_all_data, pg_write_all_data, pg_signal_backend, pg_monitor TO neon_superuser_sim WITH ADMIN OPTION",
+    `CREATE ROLE neondb_owner_sim LOGIN CREATEROLE CREATEDB BYPASSRLS PASSWORD '${pw("neondb_owner_sim")}'`,
+    "GRANT neon_superuser_sim TO neondb_owner_sim WITH INHERIT TRUE, SET TRUE",
+  ]) must(psql("pgadmin", "postgres", s), s.slice(0, 40))
+  must(psql("pgadmin", "postgres", "CREATE DATABASE omnigestao_prod OWNER neondb_owner_sim"), "db prod")
+  must(psql("pgadmin", "postgres", "CREATE DATABASE omnigestao_prod_candidate OWNER neondb_owner_sim"), "db cand")
+  for (const db of ["omnigestao_prod", "omnigestao_prod_candidate"]) {
+    // como no Neon: schema public pertence a pg_database_owner (padrao PG15+), nao ao papel
+    must(psql("neondb_owner_sim", db, path.join(DIR, "old-ddl.sql"), { file: true }), `ddl ${db}`)
+  }
+  // Seed com o cliente da main (Int), como a produção de hoje.
+  const db = client("old", "neondb_owner_sim", "omnigestao_prod", "seed")
+  await db.store.create({ data: { id: "loja-1", name: "RafaCell (sim)" } })
+  await db.store.create({ data: { id: "loja-2", name: "Rafa Brinquedos (sim)" } })
+  for (const [id, storeId, stock] of [["p-un-13", "loja-1", 13], ["p-un-7", "loja-2", 7], ["p-pao", "loja-1", 3]]) {
+    await db.produto.create({ data: { id, storeId, name: id, stock, price: 1 } })
+  }
+  await db.$disconnect()
+  console.log(must(psql("pgadmin", "omnigestao_prod", `
+    SELECT 'tabelas do dono=' || count(*) FROM pg_tables WHERE schemaname='public' AND tableowner='neondb_owner_sim';
+    SELECT 'stock=' || string_agg(id || ':' || stock::text, ',' ORDER BY id) FROM estoque_produtos;
+    SELECT 'tipo stock=' || data_type FROM information_schema.columns WHERE table_name='estoque_produtos' AND column_name='stock';
+  `), "verify"))
+}
+main().catch((e) => { console.error(e); process.exit(1) })

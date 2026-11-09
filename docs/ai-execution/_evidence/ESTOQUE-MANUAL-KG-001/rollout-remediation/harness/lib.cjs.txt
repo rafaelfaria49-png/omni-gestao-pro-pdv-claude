@@ -1,0 +1,44 @@
+// Harness da prova de isolamento de credenciais (PG 17 descartável, porta 55447).
+// Nunca aponta para Neon/produção: host fixo 127.0.0.1 e guarda de porta.
+const { spawnSync } = require("node:child_process")
+const fs = require("node:fs")
+const path = require("node:path")
+const crypto = require("node:crypto")
+
+const DIR = __dirname
+const PORT = 55447
+const HOST = "127.0.0.1"
+const PSQL = "C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe"
+
+function pw(role) {
+  const f = path.join(DIR, `pw-${role}.txt`)
+  if (role === "pgadmin") return fs.readFileSync(path.join(DIR, "superpw.txt"), "utf8").trim()
+  if (!fs.existsSync(f)) fs.writeFileSync(f, crypto.randomBytes(18).toString("hex"))
+  return fs.readFileSync(f, "utf8").trim()
+}
+
+function url(role, db, extra = "") {
+  return `postgresql://${role}:${pw(role)}@${HOST}:${PORT}/${db}?connection_limit=2${extra}`
+}
+
+/** Roda SQL via psql; devolve { ok, out, err }. Nunca imprime senha. */
+function psql(role, db, sql, { file = false } = {}) {
+  const args = ["-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-h", HOST, "-p", String(PORT), "-U", role, "-d", db]
+  if (file) args.push("-f", sql)
+  else args.push("-c", sql)
+  const r = spawnSync(PSQL, args, { env: { ...process.env, PGPASSWORD: pw(role), PGAPPNAME: `psql-${role}`, PGCLIENTENCODING: "UTF8" }, encoding: "utf8" })
+  return { ok: r.status === 0, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() }
+}
+
+function client(kind, role, db, appName) {
+  const { PrismaClient } = require(path.join(DIR, kind, "client"))
+  return new PrismaClient({ datasources: { db: { url: url(role, db, `&application_name=${appName}`) } } })
+}
+
+function errLine(e) {
+  const m = String(e && e.message ? e.message : e).replace(/\s+/g, " ")
+  const code = e && (e.code || (e.meta && e.meta.code)) ? ` [${e.code || ""}${e.meta && e.meta.code ? " pg:" + e.meta.code : ""}]` : ""
+  return (m.length > 240 ? m.slice(-240) : m) + code
+}
+
+module.exports = { DIR, PORT, HOST, pw, url, psql, client, errLine }

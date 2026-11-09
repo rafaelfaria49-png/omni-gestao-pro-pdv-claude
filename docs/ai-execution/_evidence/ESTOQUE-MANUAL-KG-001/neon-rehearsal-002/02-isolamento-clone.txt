@@ -1,0 +1,7 @@
+direct exit 0 
+dry-mouse-36002471 br-wispy-mountain-accw2a7p ep-damp-dew-ac4qr1e2 timeline=479ec817dedfb9242b17816a681328de db=omnigestao_prod user=neondb_owner addr=169.254.254.254/32 
+pooler exit 0 
+dry-mouse-36002471 br-wispy-mountain-accw2a7p ep-damp-dew-ac4qr1e2 timeline=479ec817dedfb9242b17816a681328de db=omnigestao_prod user=neondb_owner addr=::1/128 
+prod(RO) exit 0 dry-mouse-36002471 br-muddy-meadow-ac7ah2wl ep-summer-tooth-acltc6wi timeline=917bebec2f4d28fdac429bd6029b87b6 db=omnigestao_prod user=neondb_owner addr=169.254.254.254/32
+trava host prod: RECUSADO: host do clone é o endpoint de produção
+trava branch errado: exit 1 ERROR:  division by zero

@@ -1,0 +1,132 @@
+/**
+ * ESTOQUE-MANUAL-KG-001 · remediação do rollout (P3) — prova de fila/idempotência no servidor.
+ * PostgreSQL descartável 127.0.0.1:55447 (KG_PROOF_DATABASE_URL), schema da PR #315 via db push.
+ * Handlers reais de /api/ops/venda-persist (v1 e v2); o cliente da fila é representado pelo
+ * classificador real (`classifyPendingSyncFailure`) que decide reenviar ou parar.
+ */
+import { randomUUID } from "node:crypto"
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { PrismaClient } from "@/generated/prisma"
+import type { SalePayload } from "@/lib/ops-upsert-venda"
+import { classifyPendingSyncFailure, PENDING_SYNC_CLASS } from "@/lib/vendas/pending-sync-classification"
+
+const h = vi.hoisted(() => ({ db: undefined as unknown }))
+vi.mock("@/lib/prisma", () => ({ get prisma() { return h.db }, prismaEnsureConnected: async () => {} }))
+vi.mock("@/auth", () => ({ auth: async () => ({ user: { id: "fixture", role: "ADMIN", name: "CI", platformAuthority: true } }) }))
+vi.mock("@/lib/auth/api-enterprise-guard", () => ({ apiGuardEnterpriseOrOps: async () => null }))
+vi.mock("@/lib/automation/automation-engine", () => ({ handleEvent: vi.fn() }))
+vi.mock("@/lib/vendas/sale-numbering-runtime-gate", () => ({ resolveSaleNumberingWriter: () => ({ writer: "v2", reason: "flag" }) }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
+import { POST as postV1 } from "@/app/api/ops/venda-persist/route"
+import { POST as postV2 } from "@/app/api/ops/venda-persist/v2/route"
+
+const url = process.env.KG_PROOF_DATABASE_URL
+if (url && !/^postgresql:\/\/[^@]+@127\.0\.0\.1:55447\/kg_queue(\?|$)/.test(url)) throw new Error("KG_PROOF_DISPOSABLE_DB_REQUIRED")
+
+describe.skipIf(!url)("rollout KG: fila do PDV durante trava, retomada e reenvio", () => {
+  let db: PrismaClient
+  let storeId: string, sessionId: string, productId: string
+
+  beforeAll(() => { db = new PrismaClient({ datasourceUrl: url }); h.db = db })
+  afterAll(async () => { await db?.$disconnect() })
+  beforeEach(async () => {
+    vi.unstubAllEnvs()
+    storeId = `kg-queue-${randomUUID()}`
+    await db.store.create({ data: { id: storeId, name: "Loja sintética", codigoNumeracaoVenda: randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase() } })
+    productId = (await db.produto.create({ data: { storeId, name: "Unitário", sku: "UNIT", price: 10, stock: 10 } })).id
+    sessionId = (await db.sessaoCaixa.create({ data: { storeId, operador: "CI" } })).id
+  })
+
+  const sale = (): SalePayload => ({ id: `VDA-KG-${randomUUID()}`, at: new Date().toISOString(), total: 20, sessaoId: sessionId,
+    lines: [{ inventoryId: "UNIT", name: "Unitário", quantity: 2, unitPrice: 10, lineTotal: 20 }], paymentBreakdown: { dinheiro: 20 } })
+  async function post(version: "v1" | "v2", payload: SalePayload, clientSaleId: string) {
+    const req = new Request(`http://localhost/api/ops/venda-persist/${version}`, { method: "POST",
+      headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId }, body: JSON.stringify({ sale: payload, clientSaleId }) })
+    const res = await (version === "v1" ? postV1(req) : postV2(req))
+    const body = await res.json() as { code?: string; error?: string; replayed?: boolean; venda?: { id: string } }
+    return { status: res.status, body, fila: classifyPendingSyncFailure({ httpStatus: res.status, code: body.code ?? null, message: body.error ?? null }) }
+  }
+  async function snapshot() {
+    return {
+      vendas: await db.venda.count({ where: { storeId } }),
+      itens: await db.itemVenda.count({ where: { venda: { storeId } } }),
+      financeiro: await db.movimentacaoFinanceira.count({ where: { storeId } }),
+      livro: await db.movimentacaoEstoque.count({ where: { storeId } }),
+      stock: (await db.produto.findUniqueOrThrow({ where: { id: productId }, select: { stock: true } })).stock,
+      depositos: await db.produtoDeposito.findMany({ where: { storeId }, select: { quantidade: true } }),
+    }
+  }
+
+  it.each(["v1", "v2"] as const)("%s: trava → 5xx AUTO_RETRY sem efeito; retomada grava 1×; reenvio e reenvio sob nova trava viram replay", async (v) => {
+    const payload = sale(), cs = `cs_${randomUUID().replaceAll("-", "")}`
+    const inicial = await snapshot()
+
+    vi.stubEnv("STOCK_WRITES_FROZEN", "true")
+    for (let i = 0; i < 3; i++) {
+      const r = await post(v, payload, cs)
+      expect(r.status).toBeGreaterThanOrEqual(500)
+      expect(r.fila).toBe(PENDING_SYNC_CLASS.AUTO_RETRY) // a fila mantém a venda e reenvia sozinha
+    }
+    expect(await snapshot()).toEqual(inicial) // nem venda, nem item, nem financeiro, nem livro, nem saldo
+
+    vi.unstubAllEnvs()
+    const ok = await post(v, payload, cs)
+    expect(ok.status).toBe(200)
+    expect(ok.body.replayed).toBe(false)
+    const depois = await snapshot()
+    expect(depois).toMatchObject({ vendas: 1, livro: 1, stock: 8 })
+
+    // resposta perdida (aba fechou, rede caiu depois do COMMIT): a fila reenvia a mesma identidade
+    const replay = await post(v, payload, cs)
+    expect(replay.status).toBe(200)
+    expect(replay.body).toMatchObject({ replayed: true, venda: { id: ok.body.venda!.id } })
+    expect(await snapshot()).toEqual(depois)
+
+    // a trava volta a ser ligada (2ª janela) com a venda já confirmada ainda na fila
+    vi.stubEnv("STOCK_WRITES_FROZEN", "true")
+    const sobTrava = await post(v, payload, cs)
+    expect([200, 500, 503]).toContain(sobTrava.status)
+    if (sobTrava.status === 200) expect(sobTrava.body.replayed).toBe(true)
+    else expect(sobTrava.fila).toBe(PENDING_SYNC_CLASS.AUTO_RETRY)
+    expect(await snapshot()).toEqual(depois)
+  })
+
+  it("mesma venda reenviada em paralelo (duas abas / reenvio durante a requisição em voo) grava uma vez", async () => {
+    // a fila manda venda com clientSaleId ao writer v2 (operations-store: useV2); v1 só via fallback SALE_WRITER_V1_ACTIVE
+    const payload = sale(), cs = `cs_${randomUUID().replaceAll("-", "")}`
+    const results = await Promise.all([post("v2", payload, cs), post("v2", payload, cs), post("v2", payload, cs)])
+    const ok = results.filter((r) => r.status === 200)
+    expect(ok.length).toBeGreaterThanOrEqual(1)
+    for (const r of results) if (r.status !== 200) expect(r.fila).not.toBe(PENDING_SYNC_CLASS.CONFIRMED)
+    expect(new Set(ok.map((r) => r.body.venda?.id)).size).toBe(1)
+    expect(await snapshot()).toMatchObject({ vendas: 1, livro: 1, stock: 8 })
+    // quem não recebeu 200 reenvia depois e cai no replay
+    const tarde = await post("v2", payload, cs)
+    expect(tarde.body).toMatchObject({ replayed: true })
+    expect(await snapshot()).toMatchObject({ vendas: 1, livro: 1, stock: 8 })
+  })
+
+  it("PRÉ-CONDIÇÃO da janela (comportamento atual da main, fora do escopo da #315): trocar o writer duplica venda confirmada sem resposta", async () => {
+    const payload = sale(), cs = `cs_${randomUUID().replaceAll("-", "")}`
+    expect((await post("v2", payload, cs)).status).toBe(200) // v2 gravou; a resposta se perdeu
+    // writer passa a responder SALE_WRITER_V1_ACTIVE → a fila converte e manda ao v1, que não conhece o clientSaleId
+    const viaV1 = await post("v1", payload, cs)
+    expect(viaV1.status).toBe(200)
+    expect(await snapshot()).toMatchObject({ vendas: 2, livro: 2, stock: 6 }) // DUPLICOU: por isso SALE_SERVER_NUMBERING_ENABLED não muda na janela
+  })
+
+  it("venda iniciada antes da trava e confirmada depois dela não duplica nem some", async () => {
+    const payload = sale(), cs = `cs_${randomUUID().replaceAll("-", "")}`
+    expect((await post("v2", payload, cs)).status).toBe(200) // gravada antes da janela
+    const gravada = await snapshot()
+    vi.stubEnv("STOCK_WRITES_FROZEN", "true")
+    const outra = sale(), cs2 = `cs_${randomUUID().replaceAll("-", "")}`
+    const bloqueada = await post("v2", outra, cs2) // venda nova durante a janela
+    expect(bloqueada.fila).toBe(PENDING_SYNC_CLASS.AUTO_RETRY)
+    expect(await snapshot()).toEqual(gravada)
+    vi.unstubAllEnvs()
+    expect((await post("v2", outra, cs2)).body).toMatchObject({ replayed: false })
+    expect((await post("v2", payload, cs)).body).toMatchObject({ replayed: true })
+    expect(await snapshot()).toMatchObject({ vendas: 2, livro: 2, stock: 6 })
+  })
+})

@@ -26,11 +26,12 @@ function normalizeSearch(s: string) {
   return s.trim()
 }
 
+/** Estoque inicial REST é inteiro: fração é recusada, nunca truncada. */
 function parseStock(body: unknown): number | null {
-  if (typeof body === "number" && Number.isFinite(body)) return Math.floor(body)
-  if (typeof body === "string" && body.trim() !== "") {
-    const n = parseInt(body, 10)
-    return Number.isFinite(n) ? n : null
+  if (typeof body === "number") return Number.isSafeInteger(body) ? body : null
+  if (typeof body === "string" && /^-?\d+$/.test(body.trim())) {
+    const n = Number(body.trim())
+    return Number.isSafeInteger(n) ? n : null
   }
   return null
 }

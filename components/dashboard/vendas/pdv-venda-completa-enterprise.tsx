@@ -68,6 +68,8 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice, pdvWeightSaleFlag } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
@@ -236,9 +238,14 @@ export function PdvVendaCompletaEnterprise({
         vendaPorPeso: inv.vendaPorPeso,
         precoPorKg: inv.precoPorKg,
         atributos: inv.atributos,
+        ...pdvWeightSaleFlag(inv),
       }
     })
   }, [inventory])
+
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), paused: isPaymentOpen })
 
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim()
@@ -378,6 +385,11 @@ export function PdvVendaCompletaEnterprise({
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
     (product: PdvCatalogProduct) => {
+      const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
+      if (pesoBloqueado) {
+        toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
       const isService = product.category === "Servicos"
       if (!isService && product.stock <= 0) {
         toast({

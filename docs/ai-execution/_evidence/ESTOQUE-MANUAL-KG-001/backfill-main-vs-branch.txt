@@ -1,0 +1,22 @@
+# script da main (913864f) — comportamento ANTIGO
+[EXEC] 1 loja(s).
+  kgiso-a: principal=ok · produtos=5 · Σstock=2147483666 · Σdepósito=0 · drift=-2147483666
+
+[ALERTA] drift total = 2147483666 — investigar antes de prosseguir.
+exit=1
+kgiso-kg-legado|4.25|2e-323
+kgiso-pao-kg|3.96|1.5e-323
+kgiso-un-0|0|0
+kgiso-un-10|12|6e-323
+kgiso-un-max|2147483647|1.060997895e-314
+# script desta branch — detecta e corrige
+[EXEC] 1 loja(s).
+  principal=ok · kgiso-a: produtos=5 · Σstock=2147483667.21 · Σdepósito=2147483667.21 · drift=0 · divergentes=0
+
+[OK] invariante verde: depósitos == Produto.stock por produto, em milésimos exatos.
+exit=0
+kgiso-kg-legado|4.25|4.25
+kgiso-pao-kg|3.96|3.96
+kgiso-un-0|0|0
+kgiso-un-10|12|12
+kgiso-un-max|2147483647|2147483647

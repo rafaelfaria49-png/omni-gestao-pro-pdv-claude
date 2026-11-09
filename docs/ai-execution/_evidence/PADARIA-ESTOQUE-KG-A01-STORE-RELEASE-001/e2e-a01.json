@@ -1,0 +1,32 @@
+{
+  "account": {
+    "scope": "PLATFORM (legado interno)",
+    "store": "kg-padaria-a"
+  },
+  "entry": "Gestão de Produtos histórica → ficha canônica",
+  "product": "Queijo Sintético A01 KG",
+  "entries": [
+    "10,500",
+    "2,250"
+  ],
+  "produtoStock": 12.75,
+  "depositos": [
+    12.75
+  ],
+  "ledger": [
+    {
+      "quantidade": 10.5,
+      "estoqueAntes": 0,
+      "estoqueDepois": 10.5
+    },
+    {
+      "quantidade": 2.25,
+      "estoqueAntes": 10.5,
+      "estoqueDepois": 12.75
+    }
+  ],
+  "legacyPatchesForKg": 0,
+  "restKgAdjust": 409,
+  "restFractionalUn": 400,
+  "productionWrites": 0
+}
