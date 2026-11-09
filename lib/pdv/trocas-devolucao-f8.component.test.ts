@@ -206,7 +206,8 @@ describe("F8 — troca imediata na mesma tela", () => {
   it("busca no servidor e respeita o devolvível agregado (2 vendidas − 1 devolvida = 1)", async () => {
     await abrirVendaPeloServidor()
     expect(rt.calls).toEqual(["busca"])
-    expect(screen.getByText(/Vendido: 2 · Devolvido: 1 · Disponível:/)).toBeTruthy()
+    // Texto do contrato configurável: unidade da linha + vendido/já devolvido/disponível.
+    expect(screen.getByText(/Vendido: 2 · Já devolvido: 1 · Disponível:/)).toBeTruthy()
   })
 
   it("bipe do código de barras adiciona o novo produto; diferença positiva cobrada após a devolução confirmada", async () => {
