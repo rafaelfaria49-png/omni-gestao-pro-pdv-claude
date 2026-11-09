@@ -1,6 +1,6 @@
 "use client"
 
-import { kgReturnBlocked, MANUAL_KG_SALE, saleQuantityGrams } from "@/lib/vendas/manual-kg-contract"
+import { MANUAL_KG_SALE, saleQuantityGrams } from "@/lib/vendas/manual-kg-contract"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
@@ -552,6 +552,18 @@ export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
   "MANUAL_KG_SALE_BLOCKED",
   "PRODUTO_POR_PESO_NAO_OPERACIONAL",
   "PRODUTO_COMERCIAL_INVALIDO",
+  // Contrato KG configurável (PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001):
+  // política da loja, estrutura de banco e condição da mercadoria são decisões
+  // DEFINITIVAS — distinguem erro de política de erro transitório (sem loop de
+  // reenvio). O código legado DEVOLUCAO_KG_BLOQUEADA permanece para itens antigos.
+  "TROCA_KG_DESATIVADA_LOJA",
+  "TROCA_KG_SCHEMA_INDISPONIVEL",
+  "QUANTIDADE_KG_INVALIDA",
+  "QUANTIDADE_ITEM_INVALIDA",
+  "CONDICAO_MERCADORIA_OBRIGATORIA_KG",
+  "CONDICAO_MERCADORIA_INVALIDA",
+  "JUSTIFICATIVA_CONDICAO_OBRIGATORIA",
+  "LINHA_VENDA_QUANTIDADE_INVALIDA",
 ])
 
 /**
@@ -559,7 +571,7 @@ export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
  * confirmado pelo servidor) a correspondência é ESTRITA: sem o item no snapshot local não
  * há espelho (o servidor já gravou; a próxima sincronização do catálogo traz o saldo) — o
  * SKU de hoje pode ser de outro produto. Produto por peso (KG) nunca recebe compensação
- * de unidade: devolução KG é bloqueada e somar UN ao saldo em kg corromperia o espelho.
+ * de unidade local: o saldo em kg é autoridade do servidor — somar UN corromperia o espelho.
  */
 function inventoryMatchesDevLine(
   inv: { id: string; dbId?: string; vendaPorPeso?: boolean; vendaPesoIndisponivel?: boolean },
@@ -777,7 +789,16 @@ interface OperationsContextType {
   >
   registrarDevolucao: (input: {
     saleId: string
-    lines: { inventoryId: string; quantity: number }[]
+    lines: {
+      inventoryId: string
+      produtoId?: string
+      quantity: number
+      /** Linha KG: peso em kg com até 3 casas (`quantity` carrega o mesmo valor). */
+      quantidadeKg?: number
+      quantityUnit?: "KG"
+      condicao?: string
+      justificativa?: string
+    }[]
     mode: "vale_credito" | "somente_estoque"
     customerCpf: string
     customerName: string
@@ -794,7 +815,7 @@ interface OperationsContextType {
     serverConfirmed?: {
       localId: string
       creditIssued: number
-      lines: { inventoryId: string; produtoId?: string; name: string; quantity: number; valor: number }[]
+      lines: { inventoryId: string; produtoId?: string; name: string; quantity: number; valor: number; quantityUnit?: "KG"; quantidadeKg?: number; condicao?: string }[]
     }
   }) => { ok: true; devolucaoId: string; creditIssued: number } | { ok: false; reason: string }
   /**
@@ -3300,11 +3321,14 @@ export function OperationsProvider({
         const saleLine = sale?.lines.find((l) => l.inventoryId === it.inventoryId)
         const valorUnitario = saleLine ? (saleLine.lineTotal / saleLine.quantity) : 0
         const produtoId = it.produtoId || saleLine?.produtoId
+        const kg = it.quantityUnit === "KG"
         return {
           inventoryId: it.inventoryId,
           ...(produtoId ? { produtoId } : {}),
           nome: it.name,
-          quantidade: it.quantity,
+          ...(kg ? { quantidadeKg: String(it.quantidadeKg ?? it.quantity) } : { quantidade: it.quantity }),
+          ...(it.condicao ? { condicao: it.condicao } : {}),
+          ...(it.justificativa ? { justificativa: it.justificativa } : {}),
           valorUnitario,
           valorTotal: it.valor,
         }
@@ -4031,7 +4055,6 @@ export function OperationsProvider({
 
     const sale = prev.sales.find((s) => s.id === saleId)
     if (!sale) return { ok: false, reason: "Venda/cupom não encontrado." }
-    if (kgReturnBlocked(sale, prev.inventory)) return { ok: false, reason: "Devolução de venda em KG indisponível. Solicite cancelamento integral autorizado." }
 
     const next: OpsState = {
       ...prev,
@@ -4064,27 +4087,55 @@ export function OperationsProvider({
       if (isVirtualSaleLine(req.inventoryId)) {
         return { ok: false, reason: "Serviço/item avulso não gera vale nem volta ao estoque (sem política aprovada)." }
       }
+      // ── Unidade HISTÓRICA da linha (PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001):
+      // linha KG devolve por peso (3 casas); linha UN devolve em unidades. Venda mista
+      // nunca é bloqueada inteira — cada linha segue a própria unidade.
+      const linhaKg = req.quantityUnit === "KG"
+      if (doItem.some((l) => (l.quantityUnit === "KG") !== linhaKg)) {
+        return { ok: false, reason: `Venda mistura unidade e peso no mesmo produto (${saleLine.name}): exige conferência.` }
+      }
+      if (linhaKg !== (saleLine.quantityUnit === "KG")) {
+        return { ok: false, reason: linhaKg
+          ? `${saleLine.name}: este item foi vendido por unidade — devolva em unidades inteiras.`
+          : `${saleLine.name}: este item foi vendido por peso — informe o peso em kg (até 3 casas).` }
+      }
       const already = saleLine.qtyReturned ?? 0
       const canReturn = saleLine.quantity - already
       if (req.quantity <= 0) {
         return { ok: false, reason: "Quantidade inválida." }
       }
+      if (linhaKg && !(Number.isFinite(req.quantity) && Math.round(req.quantity * 1000) === req.quantity * 1000)) {
+        return { ok: false, reason: `${saleLine.name}: peso inválido — use até 3 casas decimais (ex.: 0,750 kg).` }
+      }
       if (canReturn < req.quantity) {
         return { ok: false, reason: `Devolução maior que o disponível para ${saleLine.name}.` }
       }
-      const inv = next.inventory.find((i) => i.id === req.inventoryId)
-      if (!inv) return { ok: false, reason: "Produto não está mais no cadastro de estoque." }
+      if (linhaKg && !req.condicao) {
+        return { ok: false, reason: `${saleLine.name}: informe a condição da mercadoria (apta para revenda, não apta, não recebida ou descarte).` }
+      }
+      if (req.condicao && req.condicao !== "apto_revenda" && !(req.justificativa ?? "").trim()) {
+        return { ok: false, reason: `${saleLine.name}: mercadoria fora de condição de revenda exige justificativa.` }
+      }
+      const geraEntradaLocal = (req.condicao ?? "apto_revenda") === "apto_revenda"
+      const inv = linhaKg ? undefined : next.inventory.find((i) => i.id === req.inventoryId)
+      if (!linhaKg && !inv) return { ok: false, reason: "Produto não está mais no cadastro de estoque." }
 
       const unit = saleLine.lineTotal / saleLine.quantity
       const valor = Math.round(unit * req.quantity * 100) / 100
-      inv.stock += req.quantity
+      // Estoque KG é autoridade do servidor (saldo em kg vem da sincronização do
+      // catálogo) — o espelho local nunca soma peso; UN apto continua como hoje.
+      if (inv && geraEntradaLocal) inv.stock += req.quantity
       saleCopy.lines = distribuirQtyReturned(saleCopy.lines, req.inventoryId, req.quantity)
       creditIssued += mode === "vale_credito" ? valor : 0
       outLines.push({
         inventoryId: req.inventoryId,
+        ...(req.produtoId || saleLine.produtoId ? { produtoId: req.produtoId || saleLine.produtoId } : {}),
         name: saleLine.name,
         quantity: req.quantity,
         valor,
+        ...(linhaKg ? { quantityUnit: "KG" as const, quantidadeKg: req.quantity } : {}),
+        ...(req.condicao ? { condicao: req.condicao } : {}),
+        ...((req.justificativa ?? "").trim() ? { justificativa: req.justificativa!.trim() } : {}),
       })
     }
 
@@ -4128,10 +4179,14 @@ export function OperationsProvider({
         const sale = next.sales.find((s) => s.id === devRow.saleId)
         const saleLine = sale?.lines.find((l) => l.inventoryId === it.inventoryId)
         const valorUnitario = saleLine ? (saleLine.lineTotal / saleLine.quantity) : 0
+        const kg = it.quantityUnit === "KG"
         return {
           inventoryId: it.inventoryId,
+          ...(it.produtoId || saleLine?.produtoId ? { produtoId: it.produtoId || saleLine?.produtoId } : {}),
           nome: it.name,
-          quantidade: it.quantity,
+          ...(kg ? { quantidadeKg: String(it.quantidadeKg ?? it.quantity) } : { quantidade: it.quantity }),
+          ...(it.condicao ? { condicao: it.condicao } : {}),
+          ...(it.justificativa ? { justificativa: it.justificativa } : {}),
           valorUnitario,
           valorTotal: it.valor,
         }

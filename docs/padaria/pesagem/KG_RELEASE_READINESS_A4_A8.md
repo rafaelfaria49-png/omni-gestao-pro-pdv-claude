@@ -164,13 +164,13 @@ janelas curtas separadas; não há obrigação de fazer tudo no mesmo dia, e sep
 | 9. Migration com retrato | W1 / J8 | `estoque-kg-migration-apply.sql` (migrator, `-1`) + `migrate resolve --applied 20261025…` — **PONTO DE NÃO-RETORNO** | `KG_MIGRATION_OK`, checksum |
 | 9a. Barreira opcional | W1 / J9 | `07` se A6 autorizado | sem erro, 5 CHECKs validados |
 | 10. Verificações pós-migration | W1 / J10 (**antes** do 9b) | frações/NaN/denormais = 0; 06; `migrate status` e `migrate diff` **do checkout do merge da #315** = só drift 0019 | os cinco itens |
-| **10b. Migrations aditivas da venda (novo, "9b")** | W1, logo **depois** do J10, trava ligada | preflight §5.2; depois, **do checkout do head aprovado desta PR**: `prisma migrate deploy` com `DIRECT_URL`/`DATABASE_URL` do migrator **+ `options=-c role=omni_owner`** → aplica só `20261029` e `20261106` | `migrate status` **deste checkout** em dia; `migrate diff` **deste checkout** = só drift 0019 (o diff do checkout da #315 aqui acusaria `quantidadeKg` — esperado, **não "corrigir"**); funções `manual_kg_*` donas `omni_owner`; 8 gatilhos; `venda_itens.quantidade` ainda `integer` |
+| **10b. Migrations aditivas da venda (novo, "9b")** | W1, logo **depois** do J10, trava ligada | preflight §5.2; depois, **do checkout do head aprovado desta PR**: `prisma migrate deploy` com `DIRECT_URL`/`DATABASE_URL` do migrator **+ `options=-c role=omni_owner`** → aplica só `20261029`, `20261106` e `20261108120000_f8_devolucao_kg_fracionada` (trocas KG configuráveis — GOAL `PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001`) | `migrate status` **deste checkout** em dia; `migrate diff` **deste checkout** = só drift 0019 (o diff do checkout da #315 aqui acusaria `quantidadeKg` — esperado, **não "corrigir"**); funções `manual_kg_*`/`f8_kg_*` donas `omni_owner`; 8 gatilhos (nomes intactos); `venda_itens.quantidade` e `itens_devolucao_venda.quantidade` ainda `integer`; `itens_devolucao_venda` com `quantidadeKg` + CHECK + índice único parcial |
 | 11. Remoção da trava | W1 / J11 | remover `STOCK_WRITES_FROZEN`; Redeploy **do deployment do merge da #315** (conferir SHA) | READY, pendências zerando |
 | 12. Sincronização de filas | W1 / J11–J13 | terminais reabrem no endereço canônico; filas reenviam sozinhas (replay provado §6) | pendências = 0 em cada terminal |
 | 13. Smoke estoque KG | W1 / J12 | loja de homologação, produto KG sintético: entrada 0,001 kg, histórico, ficha; venda por peso recusada | quatro itens |
 | — | W1 / J13 | reabrir lojas com o binário da #315 | — |
 | 14. Integração #335 | W2 | trocar base da #335 para `main`; CI verde; merge (deploy automático) **com `PDV_MANUAL_KG_RELEASE` ausente** | READY; venda UN normal; venda por peso recusada; leitura de histórico OK |
-| 15. Integração #336 | W3 | trocar base para `main`; CI; merge | F8 UN funciona; `DEVOLUCAO_KG_BLOQUEADA` |
+| 15. Integração #336 | W3 | trocar base para `main`; CI; merge | F8 UN funciona; **trocas KG por loja (PADRÃO ATIVADO, `printerConfig.pdvTrocasPeso`) — SUBSTITUÍDO o bloqueio `DEVOLUCAO_KG_BLOQUEADA` pela decisão do dono em 2026-11-09 (GOAL `PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001`; migration `20261108120000` entra no 9b junto)** |
 | 15a. Esta PR | após W3 (ou junto) | merge: só docs + migration já aplicada no 9b + runner de teste; sem mudança de runtime | `migrate status` em dia a partir da main |
 | 16. Regressão | W1/W2/W3 | smoke UN em cada loja (venda, cancelamento, caixa), sem venda comercial real como teste automático | — |
 | 17. Flags KG | depois, autorização separada | `PDV_MANUAL_KG_RELEASE=PDV-PADARIA-KG-RELEASE-HARDENING-002` + `PDV_MANUAL_KG_STORES=<storeId exato>` + Redeploy do mesmo commit | uma loja por vez |
@@ -288,7 +288,8 @@ uma v2 novas com resposta perdida; reenvio com fatos diferentes recusado com `Pe
 | Fila offline / vendas pendentes | §6.1 (fila → 1º envio) + `rollout-remediation/30-fila-pdv.txt` (trava → 5xx → AUTO_RETRY) | PASS; a fila vive no navegador por origem → checklist |
 | Sessões de caixa | `requireCaixaSession` ativo em todas as fases; sessão é por terminal (E2E #335) | PASS; ABERTA=0 no J0 |
 | Fechamento financeiro | 1 movimento por venda (§6.1); centavos half-up (#335) | PASS |
-| Cancelamento | `f8-venda-kg.pg.test.ts` caso 3 e 4 (cancelamento × 5 devoluções) | PASS (79/79 nesta PR) |
+| Cancelamento | `f8-venda-kg.pg.test.ts` (cancelamento × devolução KG concorrentes) | PASS (86/86 na #336 atual: 15 casos F8×KG do contrato configurável) |
+| Trocas KG por peso | `f8-venda-kg.pg.test.ts` (parciais 3 casas, venda mista, política por loja, teto no banco, condição da mercadoria, replay) | PASS — REGRA NOVA do dono (2026-11-09): padrão ATIVADO por loja |
 | Vale da F8 | `f8-venda-kg` caso 3; R2-P2 da #336 (vale da fila reconciliado) | PASS |
 | Estoque fracionado | boundary em milésimos; `07` | PASS |
 | SKU alterado e `Produto.id` | `f8-venda-kg` caso 5; R1-P1 da #336; `PRODUTO_NAO_RESOLVIDO` (#335) | PASS |

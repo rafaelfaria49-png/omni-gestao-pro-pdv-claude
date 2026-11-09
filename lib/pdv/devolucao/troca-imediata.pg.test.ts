@@ -526,16 +526,27 @@ describe.skipIf(!url)("F8 troca imediata — integração real (PG descartável)
     expect(ok.body).toMatchObject({ valorTotal: 10, creditoEmitido: 10 })
   })
 
-  it("KG: produto vendido por peso não é devolvido (bloqueado até aprovação do schema R3)", async () => {
+  it("cadastro virou KG depois da venda UN: linha histórica continua UN — devolve em unidades, sem entrada no estoque em kg", async () => {
     const pid = await produtoId("MEIA")
     const origem = await vender([{ sku: "MEIA", qty: 1, unit: 5 }], { dinheiro: 5 })
     await db.produto.update({ where: { id: pid }, data: { metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } } } })
     const antes = await efeitos()
-    const r = await devolver({ localId: "DEV-KG", vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "MEIA", quantidade: 1 }] })
-    expect(r.status).toBe(409)
-    expect(r.body.code).toBe("DEVOLUCAO_KG_BLOQUEADA")
+    // Unidade errada para a LINHA vendida (KG numa linha UN): recusado, nada gravado.
+    const errada = await devolver({ localId: "DEV-KG-UNIDADE", vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "MEIA", quantidadeKg: "0.500", condicao: "apto_revenda" }] })
+    expect(errada.status).toBe(422)
+    expect(errada.body.code).toBe("QUANTIDADE_ITEM_INVALIDA")
     expect(await efeitos()).toEqual(antes)
-    expect((await eleg(origem.id)).body.vendas[0].lines[0].bloqueioDevolucao).toMatch(/peso/)
+    // Unidade histórica correta (UN): devolve com crédito do pago, sem entrada no
+    // estoque de um produto agora declarado em kg (1 UN nunca vira 1 kg).
+    const estoqueAntes = await stock("MEIA")
+    const r = await devolver({ localId: "DEV-KG", vendaLocalId: origem.id, tipo: "vale_credito", itens: [{ inventoryId: "MEIA", quantidade: 1 }] })
+    expect(r.status, JSON.stringify(r.body)).toBe(200)
+    expect(r.body).toMatchObject({ valorTotal: 5, creditoEmitido: 5 })
+    expect(r.body.itens[0]).toMatchObject({ quantidade: 1, quantidadeKg: null, estoque: "sem_entrada" })
+    expect(await stock("MEIA")).toBe(estoqueAntes) // sem entrada compensatória
+    const line = (await eleg(origem.id)).body.vendas[0].lines[0]
+    expect(line.unidade).toBe("UN")
+    expect(line.bloqueioDevolucao).toBeUndefined()
   })
 
   it("venda de origem AUSENTE: nada é gravado; quando a venda chega, o reenvio com o MESMO localId grava uma vez", async () => {

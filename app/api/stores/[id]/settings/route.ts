@@ -1,5 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
-import { hasModule } from "@/lib/auth/enterprise-permissions"
+import { getPermissionsFromSession, hasModule } from "@/lib/auth/enterprise-permissions"
 import { isPlatformSession } from "@/lib/auth/access-policy"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -10,6 +10,7 @@ import { validateCapabilitiesPayload } from "@/lib/capabilities-persistence-v1"
 import { isDedicatedCapabilitiesPatch } from "@/lib/pdv-settings-server-first"
 import { persistStoreSettingsPut, type StoreSettingsPutDb } from "@/lib/store-settings-put"
 import type { StoreSettingsPutPayload } from "@/lib/store-settings-types"
+import { normalizeTrocasPesoValue, TROCAS_PESO_KEY } from "@/lib/pdv/devolucao/trocas-peso-policy"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -71,6 +72,18 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
         const capsValidation = validateCapabilitiesPayload(pConf.capabilities)
         if (!capsValidation.ok) {
           return NextResponse.json({ ok: false, error: capsValidation.error }, { status: 400 })
+        }
+      }
+      // ── Trocas por peso (PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001) ─────
+      // Chave por loja com permissão ESPECÍFICA (proprietário/admin ou gerente):
+      // `admin.configuracoes` abre a tela, `pdv.configTrocasPeso` altera ESTA chave.
+      // Valor fora do contrato é recusado — lixo nunca vira política.
+      if (Object.hasOwn(pConf, TROCAS_PESO_KEY)) {
+        if (normalizeTrocasPesoValue(pConf[TROCAS_PESO_KEY]) === null) {
+          return NextResponse.json({ ok: false, error: "Valor inválido para a política de trocas por peso (use enabled ou disabled)." }, { status: 400 })
+        }
+        if (!isPlatformSession(guard.session) && !getPermissionsFromSession(guard.session, id).pdv.configTrocasPeso) {
+          return NextResponse.json({ ok: false, error: "Somente o proprietário ou um gerente pode alterar trocas de produtos por peso." }, { status: 403 })
         }
       }
     }

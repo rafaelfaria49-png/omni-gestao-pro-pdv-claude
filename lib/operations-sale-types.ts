@@ -177,7 +177,19 @@ export interface DevolucaoRecord {
   customerCpf: string
   customerName: string
   /** `produtoId` = Produto.id histórico confirmado pelo servidor (identidade; SKU é só busca). */
-  lines: { inventoryId: string; produtoId?: string; name: string; quantity: number; valor: number }[]
+  lines: {
+    inventoryId: string
+    produtoId?: string
+    name: string
+    quantity: number
+    valor: number
+    /** Linha KG (vendida por peso): `quantity` é o peso em kg com até 3 casas. */
+    quantityUnit?: "KG"
+    quantidadeKg?: number
+    /** Condição da mercadoria devolvida (GOAL §5) — só `apto_revenda` gera entrada local. */
+    condicao?: string
+    justificativa?: string
+  }[]
   mode: "vale_credito" | "somente_estoque"
   creditIssued: number
   /** true = devolução gravada localmente mas ainda não confirmada no servidor. */

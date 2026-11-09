@@ -105,7 +105,8 @@ GOAL `PADARIA-KG-STACK-MAIN-RECONCILIATION-V1-CLOSURE-001`. Leitura RO autorizad
 
 1. Do checkout do head exato da #315 a mergear, `prisma migrate status` contra Production (credencial RO ou
    migrator, sem aplicar nada) deve listar como pendente **exatamente** `20261025120000_estoque_quantidade_fracionada`.
-   Do checkout do topo (#337), antes do 9b, **exatamente** `20261029120000` e `20261106120000`.
+   Do checkout do topo (#337), antes do 9b, **exatamente** `20261029120000`, `20261106120000` e
+   `20261108120000_f8_devolucao_kg_fracionada` (trocas KG configuráveis — ver §0.3).
 2. Qualquer outra pendente (migration nova de outra frente que chegou à `main`, ou a `20261107` revertida pelo
    rollback do catálogo) = **NO-GO da janela KG**. A migration de outra frente só entra por rollout próprio,
    autorizado pela frente dona, **antes** da janela — nunca por um `migrate deploy` do KG.
@@ -162,6 +163,60 @@ repositório (inclusive `20261107120000_catalogo_aparelhos_loja` = `57b39143…6
 0 linhas fracionárias; donos das tabelas = `neondb_owner` (o `03` transfere para `omni_owner`); só `plpgsql` instalado,
 `cron.job` inexistente (A7b mantido); **1 sessão de caixa `ABERTA`** e 242 fechadas — o J0 exige zero, fechado pelo
 operador.
+
+### 0.3 2026-11-09 — trocas/devoluções KG CONFIGURÁVEIS por loja (decisão do proprietário)
+
+GOAL `PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001` (PR #336). O proprietário **rejeitou
+expressamente** o bloqueio comercial anterior ("venda KG não devolve nada") que esta
+trilha havia estabelecido em `PADARIA-KG-F8-INTEGRACAO-SEGURA-001`. Regra definitiva:
+
+```
+F8_KG_EXCHANGE_DEFAULT=ENABLED      # trocas KG permitidas POR PADRÃO
+F8_KG_EXCHANGE_SCOPE=PER_STORE      # configuração independente por loja
+F8_KG_EXCHANGE_OWNER_CONFIGURABLE=YES
+F8_KG_EXCHANGE_PARTIAL=SUPPORTED    # 3 casas (mínimo 0,001 kg)
+F8_KG_UN_MIXED_EXCHANGE=SUPPORTED   # por linha, venda mista nunca bloqueada inteira
+```
+
+- **Configuração**: `StoreSettings.printerConfig.pdvTrocasPeso` (`enabled|disabled`;
+  chave ausente = padrão APROVADO ativado; valor presente inválido = fail-closed
+  DESATIVADO). UI em Configurações → PDV → Trocas e Devoluções; só proprietário/admin
+  ou gerente (`pdv.configTrocasPeso`) altera; PUT valida valor + permissão e o diff vai
+  para `logs_auditoria` (usuário, loja, antigo/novo, IP). A chave **não** libera venda
+  KG — o gate F1 (`PDV_MANUAL_KG_RELEASE`/`PDV_MANUAL_KG_STORES`) segue obrigatório.
+- **Desativada**: recusa (409 `TROCA_KG_DESATIVADA_LOJA`) apenas as linhas KG de trocas
+  voluntárias; linhas UN da mesma venda seguem liberadas; nada financeiro/estoque é
+  gravado na recusa; direitos legais do consumidor seguem pelo encaminhamento ao
+  Financeiro com justificativa (auditoria), sem fluxo de dinheiro.
+- **Migration** `20261108120000_f8_devolucao_kg_fracionada` (aditiva, após
+  `20261029120000` na ordem cronológica; `20261107120000` do catálogo já está em
+  Production): `itens_devolucao_venda.quantidadeKg NUMERIC(65,30)` + `quantidade`
+  nullable (o par exato de `venda_itens`; cliente Prisma `Int` antigo continua gravando
+  UN e falha fechado ao ler linha KG), CHECK `itens_devolucao_venda_quantity_contract`
+  (XOR, >0, ≤3 casas), índice único parcial por `(devolucaoId, inventoryId)` para KG, e
+  os triggers `manual_kg_guard_return`/`manual_kg_guard_return_item` atualizados: venda
+  KG sai do bloqueio absoluto para o **caminho transacional auditável** do F8 (GUC
+  `omni.f8_kg_return_writer='f8-kg-v1'` na mesma transação), com revalidação NO BANCO
+  de política da loja (`F8_KG_RETURN_POLICY_DISABLED`), teto vendido−devolvido por
+  produto (`F8_KG_RETURN_EXCEEDS_SOLD`) e âncora histórica da linha (cadastro alterado
+  após a venda não muda a unidade; gravadores legados sem âncora continuam bloqueados —
+  verificado em `verify-manual-kg-migration.mjs`, 35 checks).
+- **Compatibilidade**: clientes Prisma antigos (UN) e deployments Vercel antigos
+  intactos; `manualKgAvailable` (8 triggers por NOME + fingerprint do CHECK de
+  `venda_itens`) segue passando — a migration não renomeia trigger nenhum e não toca o
+  script `07` (A6: aplicação futura em J9). Rollback: reverter o código e `CREATE OR
+  REPLACE` dos dois corpos de trigger ao bloqueio absoluto anterior (a coluna
+  `quantidadeKg` pode permanecer — linhas UN nunca a escrevem).
+- **Comportamento do estoque**: só `apto_revenda` gera entrada (KG em kg com 3 casas;
+  UN preserva o comportamento validado); `nao_apto_revenda`/`nao_recebido`/`descarte`
+  exigem justificativa, não movem estoque e ficam em `DevolucaoVenda.payload.mercadoria`.
+  Cadastro que trocou de unidade depois da venda: crédito exato pela LINHA histórica,
+  sem entrada de estoque (0,3 kg nunca vira 300 UN).
+- **Provas** (PG 17 descartável, porta 55479): `scripts/pdv/run-manual-kg-tests.mjs`
+  **86/86** (inclui 15 casos novos F8×KG em `f8-venda-kg.pg.test.ts` + verificador de
+  compatibilidade 35 checks), `troca-imediata.pg.test.ts` **34/34**, E2E autenticado
+  `run-manual-kg-e2e.mjs` **13/13**, typecheck/eslint/build limpos. Evidência:
+  `_evidence/PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001/`.
 
 ## 1. Por que a ordem importa (provado em PG 17 descartável)
 
@@ -539,6 +594,8 @@ J10, smoke do J12, horário de cada passo.
 
 ## Fora deste rollout
 
-Venda por peso (continua bloqueada), Ajuste/contagem de inventário em KG e balança física
-seguem fechados. Ver `ESTOQUE_MANUAL_KG.md`. Renomeação do índice da 0019 (§6.1) e dedupe de `clientSaleId` no
-writer v1 ficam para entregas próprias.
+Venda por peso nas lojas (segue no gate F1 por loja — SUBSTITUÍDA a política antiga de
+"trocas de venda KG bloqueadas": desde 2026-11-09 trocas/devoluções por peso são
+configuráveis por loja, padrão ATIVADO; ver §0.3), ajuste/contagem de inventário em KG
+e balança física seguem fechados. Ver `ESTOQUE_MANUAL_KG.md`. Renomeação do índice da
+0019 (§6.1) e dedupe de `clientSaleId` no writer v1 ficam para entregas próprias.
