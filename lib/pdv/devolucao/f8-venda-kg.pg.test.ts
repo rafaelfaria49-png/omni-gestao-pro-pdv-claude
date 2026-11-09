@@ -1,11 +1,15 @@
 /**
- * PADARIA-KG-F8-INTEGRACAO-SEGURA-001 — F8 (troca/devolução, #331) × venda manual KG (#335)
- * em PostgreSQL 17 REAL e descartável, com a migration KG aplicada (triggers e CHECK reais).
+ * PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001 — F8 × KG com trocas por peso CONFIGURÁVEIS.
+ *
+ * Contrato aprovado pelo proprietário: trocas/devoluções de linhas KG são permitidas por
+ * padrão (F8_KG_EXCHANGE_DEFAULT=ENABLED), por loja (printerConfig.pdvTrocasPeso),
+ * com quantidade fracionária de 3 casas, vendas mistas KG+UN por linha, condição da
+ * mercadoria no retorno e proteções de banco (trigger + CHECK + unique parcial).
  *
  * Roda os handlers de PRODUÇÃO (`POST /api/ops/devolucao`, `GET …/elegibilidade`,
- * `POST /api/vendas/[id]/cancelar`) e o writer real de venda (`upsertVendaInTransaction`).
- * Só roda pelo `scripts/pdv/run-manual-kg-tests.mjs` (mesmo banco isolado das suítes KG);
- * sem a variável a suíte é pulada. Dados 100% sintéticos.
+ * `POST /api/vendas/[id]/cancelar`, `PUT /api/stores/[id]/settings`) e o writer real de
+ * venda (`upsertVendaInTransaction`) contra o banco isolado das suítes KG. Só roda pelo
+ * `scripts/pdv/run-manual-kg-tests.mjs`; sem a variável a suíte é pulada. Dados sintéticos.
  */
 import { randomUUID } from "node:crypto"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
@@ -20,7 +24,7 @@ vi.mock("@/lib/auth/api-enterprise-guard", async (orig) => {
       check(getEnterprisePermissions("ADMIN") as never) ? null : new Response(JSON.stringify({ error: msg }), { status: 403 }),
   }
 })
-vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: async () => ({ ok: true }) }))
+vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: async () => ({ ok: true, session: SESSAO }) }))
 vi.mock("@/lib/vendas/guard-estorno-venda", () => ({
   requireEstornoStepUp: async () => ({ ok: true, supervisorId: "sup-sintetico", supervisorNome: "Supervisor Sintético" }),
 }))
@@ -37,7 +41,7 @@ import { MANUAL_KG_SALE, saleLineTotalCents } from "@/lib/vendas/manual-kg-contr
 import { POST as postDevolucao } from "@/app/api/ops/devolucao/route"
 import { GET as getElegibilidade } from "@/app/api/ops/devolucao/elegibilidade/route"
 import { POST as postCancelar } from "@/app/api/vendas/[id]/cancelar/route"
-import { encaminharPendenciaDevolucao } from "@/lib/pdv/devolucao/pendencia-financeiro"
+import { PUT as putStoreSettings } from "@/app/api/stores/[id]/settings/route"
 
 const url = "postgresql://manual_kg@127.0.0.1:55479/manual_kg_sale_isolated"
 const enabled = process.env.MANUAL_KG_TEST_DATABASE_URL === url
@@ -52,6 +56,10 @@ const UN = { comercial: { version: 1, modoVenda: "unidade", unidade: "UN", baseP
 const LIVE = { enforceStock: true, requireCaixaSession: true }
 const deps = { db: prisma as unknown as { $transaction<T>(fn: (tx: StockLedgerTx) => Promise<T>): Promise<T> } }
 
+/** Condições da mercadoria devolvida (GOAL §5). */
+const APTO = "apto_revenda" as const
+const NAO_APTO = "nao_apto_revenda" as const
+
 type Linha = { id: string; name: string; quantity: number; price: number; produtoId?: string }
 
 async function produto(input: { name: string; price: number; metadata: object; sku: string; storeId?: string; estoque: number }) {
@@ -64,16 +72,18 @@ async function produto(input: { name: string; price: number; metadata: object; s
   return p
 }
 
-function venda(lines: Linha[], opts: { kg: boolean; storeId?: string; pb?: SalePayload["paymentBreakdown"] }): SalePayload {
+function venda(lines: Linha[], opts: { kg: boolean; storeId?: string; pb?: SalePayload["paymentBreakdown"]; totalPago?: number; discountReais?: number }): SalePayload {
   const storeId = opts.storeId ?? A
   const items = lines.map((l) => ({
     inventoryId: l.id, ...(l.produtoId ? { produtoId: l.produtoId } : {}), name: l.name, quantity: l.quantity, unitPrice: l.price,
     lineTotal: (opts.kg ? saleLineTotalCents(l.quantity, l.price)! : Math.round(l.quantity * l.price * 100)) / 100,
   }))
-  const total = items.reduce((s, l) => s + Math.round(l.lineTotal * 100), 0) / 100
+  const subtotal = items.reduce((s, l) => s + Math.round(l.lineTotal * 100), 0) / 100
+  const total = opts.totalPago ?? subtotal
   return {
     id: "KG-F8-" + randomUUID(), ...(opts.kg ? { manualKgSale: MANUAL_KG_SALE } : {}), sessaoId: storeId + "-cash",
-    at: new Date().toISOString(), total, customerCpf: CPF, customerName: NOME, lines: items, paymentBreakdown: opts.pb ?? { dinheiro: total },
+    at: new Date().toISOString(), total, ...(opts.discountReais !== undefined ? { discountReais: opts.discountReais } : {}),
+    customerCpf: CPF, customerName: NOME, lines: items, paymentBreakdown: opts.pb ?? { dinheiro: total },
   }
 }
 const persist = (sale: SalePayload, lojaId = A) =>
@@ -97,6 +107,12 @@ async function cancelar(id: string, loja = A) {
   )
   return { status: res.status, body: await res.json() }
 }
+async function salvarConfig(storeId: string, printerConfig: Record<string, unknown>) {
+  const res = await putStoreSettings(new Request(`http://localhost/api/stores/${storeId}/settings`, {
+    method: "PUT", headers: headers(storeId), body: JSON.stringify({ printerConfig }),
+  }), { params: Promise.resolve({ id: storeId }) })
+  return { status: res.status, body: await res.json() }
+}
 
 /** Texto do PostgreSQL (sem conversão para double) do saldo de produto + depósitos. */
 async function saldo(id: string) {
@@ -107,6 +123,7 @@ async function saldo(id: string) {
 }
 const saldoVale = async (loja = A) =>
   (await prisma.clienteCredito.aggregate({ where: { storeId: loja, clienteDoc: CPF, status: "ativo" }, _sum: { saldoAtual: true } }))._sum.saldoAtual ?? 0
+const auditoriaConfig = (storeId: string) => prisma.logsAuditoria.findFirst({ where: { detail: { contains: "pdvTrocasPeso" } }, orderBy: { createdAt: "desc" } })
 
 /** Tudo que uma devolução poderia alterar, lido como texto do banco. */
 async function efeitos(pedidoId: string, produtos: string[], loja = A) {
@@ -126,200 +143,411 @@ async function efeitos(pedidoId: string, produtos: string[], loja = A) {
   }
 }
 
-suite("F8 × venda manual KG — integração em PostgreSQL real", () => {
+/** Linha KG de devolução pronta (condição explícita é obrigatória para KG). */
+const kgItem = (produtoId: string, kg: number | string, condicao: string = APTO, justificativa?: string) => ({
+  inventoryId: produtoId, quantidadeKg: String(kg), condicao, ...(justificativa ? { justificativa } : {}),
+})
+const unItem = (produtoId: string, quantidade: number, condicao?: string) => ({
+  inventoryId: produtoId, quantidade, ...(condicao ? { condicao } : {}),
+})
+
+suite("F8 × KG — trocas por peso configuráveis (PostgreSQL real)", { timeout: 30_000 }, () => {
   beforeAll(async () => {
-    for (const [id, code] of [[A, "KFA"], [B, "KFB"]]) {
-      await prisma.store.create({ data: { id, name: "Padaria F8 sintética " + code, codigoNumeracaoVenda: code } })
-      await prisma.sessaoCaixa.create({ data: { id: id + "-cash", storeId: id, operador: "Operador", status: "ABERTA" } })
+    for (const [id, code] of [[A, "KFA"], [B, "KFB"]] as const) {
+      await prisma.store.upsert({ where: { id }, create: { id, name: "Padaria F8 sintética " + code, codigoNumeracaoVenda: code }, update: {} })
+      const sessao = await prisma.sessaoCaixa.findFirst({ where: { id: id + "-cash" }, select: { id: true } })
+      if (!sessao) await prisma.sessaoCaixa.create({ data: { id: id + "-cash", storeId: id, operador: "Operador", status: "ABERTA" } })
+      // Política por loja começa ausente (= padrão APROVADO ativado) em cada rodada.
+      await prisma.storeSettings.deleteMany({ where: { storeId: id } })
     }
   })
   afterAll(() => prisma.$disconnect())
 
-  it("venda KG mista (KG + UN): troca, vale ou reembolso de qualquer linha é recusado sem alterar a venda KG confirmada", async () => {
-    const pao = await produto({ name: "Pão francês", price: 18.9, metadata: KG, sku: "PAO", estoque: 5 })
-    const refri = await produto({ name: "Refrigerante", price: 7.5, metadata: UN, sku: "REF", estoque: 10 })
+  // ── A · B · K: parcial, integral e múltiplas devoluções KG ────────────────────
+  it("KG parcial em etapas: 0,500 + 0,875 de 2,375 kg; saldo, crédito e estoque exatos; sobra 1,000 kg", async () => {
+    const pao = await produto({ name: "Pão salgado", price: 20, metadata: KG, sku: "PSL", estoque: 5 })
+    const sale = venda([{ id: pao.id, name: pao.name, quantity: 2.375, price: 20 }], { kg: true }) // R$ 47,50
+    await persist(sale)
+    const valeAntes = await saldoVale()
+    expect((await saldo(pao.id)).stock).toBe("2.625")
+    const pago = 4750 // centavos pagos pela linha
+
+    const d1 = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.500")] })
+    expect(d1.status, JSON.stringify(d1.body)).toBe(200)
+    expect(d1.body.itens[0]).toMatchObject({ quantidadeKg: 0.5, valorTotal: 10 })
+    expect((await saldo(pao.id)).stock).toBe("3.125")
+
+    const d2 = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.875")] })
+    expect(d2.status, JSON.stringify(d2.body)).toBe(200)
+    expect(d2.body.itens[0].valorTotal).toBe(17.5)
+    expect(await saldoVale()).toBe(valeAntes + 27.5)
+    expect((await saldo(pao.id)).stock).toBe("4")
+
+    // Elegibilidade relata o saldo exato em kg com 3 casas.
+    const e = await eleg(sale.id!)
+    const kgLine = (e.body.vendas[0].lines as Array<{ produtoId: string; quantity: number; qtyReturned: number; unidade: string; bloqueioDevolucao?: string }>).find((l) => l.produtoId === pao.id)!
+    expect(kgLine.quantity).toBe(2.375)
+    expect(kgLine.qtyReturned).toBe(1.375)
+    expect(kgLine.unidade).toBe("KG")
+    expect(kgLine.bloqueioDevolucao).toBeUndefined()
+    expect(e.body.trocasPesoPermitidas).toBe(true)
+
+    // Exceder o saldo devolvível continua recusado — nada gravado.
+    const excede = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "1.001")] })
+    expect(excede.status).toBe(409)
+    expect(excede.body.code).toBe("QUANTIDADE_EXCEDE_DEVOLVIVEL")
+
+    // Integral: a última devolução absorve o resto — Σ créditos = pago, nunca acima.
+    const d3 = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "1.000")] })
+    expect(d3.status).toBe(200)
+    expect(d3.body.itens[0].valorTotal).toBe((pago - 1000 - 1750) / 100)
+    expect(await saldoVale()).toBe(valeAntes + 47.5)
+    expect((await prisma.venda.findFirstOrThrow({ where: { pedidoId: sale.id } })).status).toBe("devolvida")
+  })
+
+  it("KG com desconto global proporcional e centavos: crédito = valor efetivamente pago, sem perda nem sobra", async () => {
+    const queijo = await produto({ name: "Queijo minas", price: 30, metadata: KG, sku: "QMN", estoque: 4 })
+    // 0,820 kg × R$30 = R$ 24,60 de linha; desconto global de R$ 4,60 → total R$ 20,00.
+    const sale = venda([{ id: queijo.id, name: queijo.name, quantity: 0.82, price: 30 }], { kg: true, totalPago: 20, discountReais: 4.6 })
+    await persist(sale)
+    const valeAntes = await saldoVale()
+    const d1 = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(queijo.id, "0.100")] })
+    expect(d1.body.itens[0].valorTotal).toBe(2.44) // 2000 cents × 100/820 = 243,9 → 244
+    const d2 = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(queijo.id, "0.720")] })
+    expect(d2.body.itens[0].valorTotal).toBe(17.56) // última absorve o arredondamento
+    expect(await saldoVale()).toBe(valeAntes + 20)
+  })
+
+  // ── E · F: venda mista e troca mista simultânea ───────────────────────────────
+  it("venda mista 1,500 kg + 2 UN + 0,750 kg: cada linha devolve isolada ou juntas na mesma operação", async () => {
+    const pao = await produto({ name: "Pão mista", price: 18.9, metadata: KG, sku: "PMS", estoque: 5 })
+    const refri = await produto({ name: "Refrigerante mista", price: 7.5, metadata: UN, sku: "RMS", estoque: 10 })
+    const queijo = await produto({ name: "Queijo mista", price: 40, metadata: KG, sku: "QMS", estoque: 3 })
     const sale = venda([
-      { id: pao.id, name: pao.name, quantity: 0.437, price: 18.9 },
+      { id: pao.id, name: pao.name, quantity: 1.5, price: 18.9 },
       { id: refri.id, name: refri.name, quantity: 2, price: 7.5 },
+      { id: queijo.id, name: queijo.name, quantity: 0.75, price: 40 },
     ], { kg: true })
     await persist(sale)
-    expect((await saldo(pao.id)).stock).toBe("4.563")
-    const antes = await efeitos(sale.id!, [pao.id, refri.id])
-    expect(antes.itens.map((i) => [i.q, i.kg === null ? null : Number(i.kg)])).toEqual(expect.arrayContaining([[null, 0.437], ["2", null]]))
+    const antes = await efeitos(sale.id!, [pao.id, refri.id, queijo.id])
 
-    const tentativas = [
-      { localId: "KGF8-UN", tipo: "vale_credito", itens: [{ inventoryId: refri.id, quantidade: 1 }] },
-      { localId: "KGF8-TROCA", tipo: "troca", itens: [{ inventoryId: refri.sku, quantidade: 2 }] },
-      { localId: "KGF8-ESTQ", tipo: "somente_estoque", itens: [{ inventoryId: refri.id, quantidade: 1 }] },
-      { localId: "KGF8-KG", tipo: "vale_credito", itens: [{ inventoryId: pao.id, quantidade: 1 }] },
-    ]
-    for (const t of tentativas) {
-      const r = await devolver({ ...t, vendaLocalId: sale.id })
-      expect(r.status, JSON.stringify(r.body)).toBe(409)
-      expect(r.body.code).toBe("DEVOLUCAO_KG_BLOQUEADA")
+    // Só 1 refrigerante (UN parcial numa venda KG).
+    const soUn = await devolver({ localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id, itens: [unItem(refri.id, 1)] })
+    expect(soUn.status, JSON.stringify(soUn.body)).toBe(200)
+    expect(soUn.body.itens[0]).toMatchObject({ quantidade: 1, valorTotal: 7.5 })
+    expect((await saldo(refri.id)).stock).toBe("9")
+
+    // Os três itens NA MESMA operação: KG parcial + UN parcial + KG parcial.
+    const juntos = await devolver({
+      localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id,
+      itens: [kgItem(pao.id, "0.500"), unItem(refri.id, 1), kgItem(queijo.id, "0.250", NAO_APTO, "embalagem violada")],
+    })
+    expect(juntos.status, JSON.stringify(juntos.body)).toBe(200)
+    expect(juntos.body.itens).toHaveLength(3)
+    // Apto volta ao estoque; não apto NÃO aumenta o disponível.
+    expect((await saldo(pao.id)).stock).toBe("4")
+    expect((await saldo(refri.id)).stock).toBe("10")
+    expect((await saldo(queijo.id)).stock).toBe("2.25")
+    const devRow = await prisma.devolucaoVenda.findFirstOrThrow({ where: { localId: juntos.body.localId } })
+    const mercadoria = (devRow.payload as { mercadoria?: Array<{ produtoId: string; condicao: string; justificativa?: string; estoque: string }> }).mercadoria
+    expect(mercadoria).toEqual(expect.arrayContaining([
+      { produtoId: pao.id, condicao: APTO, estoque: "entrada" },
+      { produtoId: refri.id, condicao: APTO, estoque: "entrada" },
+      { produtoId: queijo.id, condicao: NAO_APTO, justificativa: "embalagem violada", estoque: "sem_entrada" },
+    ]))
+    // Sem movimento de estoque para o queijo não apto: 3 linhas devolvidas, 2 entradas.
+    const entradas = await prisma.movimentacaoEstoque.count({ where: { storeId: A, documento: juntos.body.localId } })
+    expect(entradas).toBe(2)
+    expect(antes.devolucoes + 2).toBe(await prisma.devolucaoVenda.count({ where: { storeId: A } }))
+  })
+
+  // ── Validações de quantidade KG ────────────────────────────────────────────────
+  it("quantidade KG fora do contrato é recusada sem gravar: zero, negativa, 4 casas, abaixo de 0,001, NaN", async () => {
+    const pao = await produto({ name: "Pão validação", price: 10, metadata: KG, sku: "PVD", estoque: 2 })
+    const sale = venda([{ id: pao.id, name: pao.name, quantity: 1, price: 10 }], { kg: true })
+    await persist(sale)
+    const antes = await efeitos(sale.id!, [pao.id])
+    for (const kg of ["0", "-0.5", "0.1234", "0.0009", "1e-3", "abc"]) {
+      const r = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, kg)] })
+      expect(r.status, `${kg} → ${JSON.stringify(r.body)}`).toBe(422)
+      expect(r.body.code).toBe("QUANTIDADE_KG_INVALIDA")
     }
-    const dinheiro = await devolver({ localId: "KGF8-CASH", tipo: "devolucao", vendaLocalId: sale.id, itens: [{ inventoryId: refri.id, quantidade: 1 }] })
+    // KG sem condição explícita da mercadoria também não grava (perecível exige aptidão confirmada).
+    const semCondicao = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [{ inventoryId: pao.id, quantidadeKg: "0.5" }] })
+    expect(semCondicao.status).toBe(422)
+    expect(semCondicao.body.code).toBe("CONDICAO_MERCADORIA_OBRIGATORIA_KG")
+    // Condição não-aptos sem justificativa não grava.
+    const semJust = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.5", NAO_APTO)] })
+    expect(semJust.status).toBe(422)
+    expect(semJust.body.code).toBe("JUSTIFICATIVA_CONDICAO_OBRIGATORIA")
+    expect(await efeitos(sale.id!, [pao.id])).toEqual(antes)
+  })
+
+  // ── P · Q · R · S: configuração por loja ──────────────────────────────────────
+  it("config desativada: recusa linhas KG (motivo claro), mantém UN da mesma venda mista, não desativa o F8", async () => {
+    const pao = await produto({ name: "Pão config-off", price: 20, metadata: KG, sku: "PCO", estoque: 3 })
+    const refri = await produto({ name: "Refri config-off", price: 5, metadata: UN, sku: "RCO", estoque: 10 })
+    const sale = venda([
+      { id: pao.id, name: pao.name, quantity: 0.9, price: 20 },
+      { id: refri.id, name: refri.name, quantity: 3, price: 5 },
+    ], { kg: true })
+    await persist(sale)
+    expect((await prisma.storeSettings.findUnique({ where: { storeId: A } }))?.printerConfig ?? {}).toEqual({}) // ausente = ATIVADO (padrão)
+
+    // Padrão ausente = liberado.
+    const livre = await devolver({ localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.100")] })
+    expect(livre.status, JSON.stringify(livre.body)).toBe(200)
+
+    const saved = await salvarConfig(A, { pdvTrocasPeso: "disabled" })
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200)
+
+    const antes = await efeitos(sale.id!, [pao.id, refri.id])
+    const kg = await devolver({ localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.200")] })
+    expect(kg.status).toBe(409)
+    expect(kg.body.code).toBe("TROCA_KG_DESATIVADA_LOJA")
+    expect(kg.body.error).toMatch(/peso/i)
+    // O próprio banco defende a política: mesmo com o writer do F8, linha KG não passa.
+    await expect(prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('omni.f8_kg_return_writer', 'f8-kg-v1', true)`
+      const dev = await tx.devolucaoVenda.create({
+        data: { storeId: A, localId: "TF-DBPOL-" + randomUUID(), vendaLocalId: sale.id!, tipo: "vale_credito", valorTotal: 1, creditoEmitido: 1 },
+        select: { id: true },
+      })
+      await tx.itemDevolucaoVenda.create({
+        data: { devolucaoId: dev.id, inventoryId: pao.id, nome: pao.name, quantidade: null, quantidadeKg: "0.100", valorUnitario: 2, valorTotal: 2 },
+      })
+    })).rejects.toThrow(/F8_KG_RETURN_POLICY_DISABLED/)
+    // UN da MESMA venda mista segue liberado; nada de financeiro/estoque na recusada.
+    const un = await devolver({ localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id, itens: [unItem(refri.id, 1)] })
+    expect(un.status, JSON.stringify(un.body)).toBe(200)
+    expect((await saldo(refri.id)).stock).toBe("8")
+    expect(await efeitos(sale.id!, [pao.id, refri.id])).toEqual({
+      ...antes,
+      saldos: [antes.saldos[0], { stock: "8", dep: "8" }],
+      devolucoes: antes.devolucoes + 1,
+      itensDevolucao: antes.itensDevolucao + 1,
+      creditos: antes.creditos + 1,
+      movEstoque: antes.movEstoque + 1,
+    })
+
+    // Elegibilidade explica o bloqueio só nas linhas KG e informa a política.
+    const e = await eleg(sale.id!)
+    expect(e.body.trocasPesoPermitidas).toBe(false)
+    const lines = e.body.vendas[0].lines as Array<{ produtoId: string; unidade: string; bloqueioDevolucao?: string }>
+    expect(lines.find((l) => l.produtoId === pao.id)!.bloqueioDevolucao).toMatch(/peso/i)
+    expect(lines.find((l) => l.produtoId === refri.id)!.bloqueioDevolucao).toBeUndefined()
+
+    // Auditoria da alteração de configuração: usuário, loja, valores antigo/novo.
+    const audit = await auditoriaConfig(A)
+    expect(audit).toBeTruthy()
+    expect(audit!.detail).toContain("pdvTrocasPeso")
+
+    // Reativar volta a liberar (alteração imediata, lida do servidor no commit).
+    await salvarConfig(A, { pdvTrocasPeso: "enabled" })
+    const deNovo = await devolver({ localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.200")] })
+    expect(deNovo.status, JSON.stringify(deNovo.body)).toBe(200)
+  })
+
+  it("isolamento da configuração: desativada na loja A não afeta a loja B", async () => {
+    await salvarConfig(A, { pdvTrocasPeso: "disabled" })
+    const paoB = await produto({ name: "Pão loja B", price: 10, metadata: KG, sku: "PLB", estoque: 2, storeId: B })
+    const saleB = venda([{ id: paoB.id, name: paoB.name, quantity: 0.5, price: 10 }], { kg: true, storeId: B })
+    await persist(saleB, B)
+    const rB = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: saleB.id, itens: [kgItem(paoB.id, "0.250")] }, B)
+    expect(rB.status, JSON.stringify(rB.body)).toBe(200)
+    const paoA = await produto({ name: "Pão loja A off", price: 10, metadata: KG, sku: "PLA", estoque: 2 })
+    const saleA = venda([{ id: paoA.id, name: paoA.name, quantity: 0.5, price: 10 }], { kg: true })
+    await persist(saleA)
+    const rA = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: saleA.id, itens: [kgItem(paoA.id, "0.250")] })
+    expect(rA.status).toBe(409)
+    expect(rA.body.code).toBe("TROCA_KG_DESATIVADA_LOJA")
+    await salvarConfig(A, { pdvTrocasPeso: "enabled" })
+  })
+
+  // ── L · M: concorrência e replay/idempotência KG ──────────────────────────────
+  it("dois caixas simultâneos na mesma venda KG: só uma devolução passa; replay do mesmo localId não duplica", async () => {
+    const pao = await produto({ name: "Pão corrida KG", price: 20, metadata: KG, sku: "PCR", estoque: 4 })
+    const sale = venda([{ id: pao.id, name: pao.name, quantity: 1, price: 20 }], { kg: true })
+    await persist(sale)
+    const valeAntes = await saldoVale()
+    const [a, b] = await Promise.all([
+      devolver({ localId: "TF-RACE-A-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.600")] }),
+      devolver({ localId: "TF-RACE-B-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.600")] }),
+    ])
+    expect([a.status, b.status].sort()).toEqual([200, 409])
+    // estoque 4 − 1,000 vendido + 0,600 devolvido (vencedora) = 3,600.
+    expect((await saldo(pao.id)).stock).toBe("3.6")
+    expect(await saldoVale()).toBe(valeAntes + 12)
+
+    // Replay idêntico (resposta perdida): mesma devolução, crédito uma vez só.
+    const vencedora = a.status === 200 ? a : b
+    const replay = await devolver({ localId: vencedora.body.localId, tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.600")] })
+    expect(replay.status, JSON.stringify(replay.body)).toBe(200)
+    expect(replay.body.idempotente).toBe(true)
+    expect(replay.body.devolucaoId).toBe(vencedora.body.devolucaoId)
+    expect(await saldoVale()).toBe(valeAntes + 12)
+    // Mesmo localId com conteúdo diferente = conflito, sem segunda devolução.
+    const conflito = await devolver({ localId: vencedora.body.localId, tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.400")] })
+    expect(conflito.status).toBe(409)
+    expect(conflito.body.code).toBe("LOCAL_ID_CONFLITO")
+    expect(await prisma.devolucaoVenda.count({ where: { storeId: A, vendaLocalId: sale.id! } })).toBe(1)
+  })
+
+  it("cancelamento concorrente com devolução KG: uma vence, estoque e vale nunca em dobro", async () => {
+    const pao = await produto({ name: "Pão cancel race", price: 20, metadata: KG, sku: "PCA", estoque: 3 })
+    const sale = venda([{ id: pao.id, name: pao.name, quantity: 1, price: 20 }], { kg: true })
+    await persist(sale)
+    const valeAntes = await saldoVale()
+    const [c, d] = await Promise.all([
+      cancelar(sale.id!),
+      devolver({ localId: "TF-CR-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.500")] }),
+    ])
+    expect([c.status, d.status].sort()).toEqual([200, 409])
+    if (c.status === 200) {
+      expect(await saldo(pao.id)).toEqual({ stock: "3", dep: "3" })
+      expect(await prisma.devolucaoVenda.count({ where: { storeId: A, vendaLocalId: sale.id! } })).toBe(0)
+    } else {
+      expect(await saldo(pao.id)).toEqual({ stock: "2.5", dep: "2.5" })
+      expect(await saldoVale()).toBe(valeAntes + 10)
+    }
+  })
+
+  // ── W: identidade histórica da linha ──────────────────────────────────────────
+  it("cadastro mudou depois da venda: linha KG continua KG e linha UN continua UN (crédito exato, estoque íntegro)", async () => {
+    const pao = await produto({ name: "Pão virou UN", price: 20, metadata: KG, sku: "PVU", estoque: 2 })
+    const bolo = await produto({ name: "Bolo virou KG", price: 12, metadata: UN, sku: "BVK", estoque: 4 })
+    const sale = venda([
+      { id: pao.id, name: pao.name, quantity: 0.8, price: 20 },
+      { id: bolo.id, name: bolo.name, quantity: 2, price: 12 },
+    ], { kg: true })
+    await persist(sale)
+    // O pão virou UN no cadastro; a linha vendida era KG.
+    await prisma.produto.update({ where: { id: pao.id }, data: { metadata: UN } })
+    // O bolo virou KG no cadastro; a linha vendida era UN.
+    await prisma.produto.update({ where: { id: bolo.id }, data: { metadata: KG } })
+    const kg = await devolver({ localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.300")] })
+    expect(kg.status, JSON.stringify(kg.body)).toBe(200)
+    expect(kg.body.itens[0].quantidadeKg).toBe(0.3)
+    expect(kg.body.itens[0].valorTotal).toBe(6) // 0,300 kg × R$20 — valor da LINHA, não do cadastro
+    const un = await devolver({ localId: "TF-" + randomUUID(), tipo: "troca", vendaLocalId: sale.id, itens: [unItem(bolo.id, 1)] })
+    expect(un.status, JSON.stringify(un.body)).toBe(200)
+    expect(un.body.itens[0].quantidade).toBe(1)
+    expect(un.body.itens[0].valorTotal).toBe(12)
+    // Unidade do cadastro divergente da linha: crédito exato, SEM entrada de estoque
+    // (0,3 não pode virar 300 UN, nem 1 UN virar 1 kg).
+    expect((await saldo(pao.id)).stock).toBe("1.2")
+    expect((await saldo(bolo.id)).stock).toBe("2")
+  })
+
+  // ── X · Y: clientes legados, triggers e CHECKs do banco ───────────────────────
+  it("cliente legado (só quantidade inteira) continua gravando devolução UN", async () => {
+    const refri = await produto({ name: "Refri legado", price: 5, metadata: UN, sku: "RLG", estoque: 10 })
+    const sale = venda([{ id: refri.id, name: refri.name, quantity: 4, price: 5 }], { kg: false })
+    await persist(sale)
+    // Formato legado: apenas quantidade inteira (cliente Prisma Int antigo).
+    const legado = await devolver({ localId: "TF-" + randomUUID(), tipo: "somente_estoque", vendaLocalId: sale.id, itens: [{ inventoryId: refri.id, quantidade: 2 }] })
+    expect(legado.status, JSON.stringify(legado.body)).toBe(200)
+    expect(legado.body.itens[0].quantidade).toBe(2)
+    expect((await saldo(refri.id)).stock).toBe("8")
+  })
+
+  it("defesa em profundidade: escrita DIRETA sem o writer do F8 é recusada pelo trigger do banco", async () => {
+    const pao = await produto({ name: "Pão trigger KG", price: 20, metadata: KG, sku: "PTG", estoque: 1 })
+    const sale = venda([{ id: pao.id, name: pao.name, quantity: 0.5, price: 20 }], { kg: true })
+    await persist(sale)
+    // Sem o GUC do escritor F8: nem o documento, nem a linha KG passam.
+    await expect(prisma.devolucaoVenda.create({
+      data: { storeId: A, localId: "TF-RAW-" + randomUUID(), vendaLocalId: sale.id!, tipo: "vale_credito", valorTotal: 1, creditoEmitido: 1 },
+    })).rejects.toThrow(/MANUAL_KG_PARTIAL_RETURN_BLOCKED/)
+    // Com o writer DENTRO da transação o documento passa — a linha KG ainda é validada.
+    const dev = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('omni.f8_kg_return_writer', 'f8-kg-v1', true)`
+      return tx.devolucaoVenda.create({
+        data: { storeId: A, localId: "TF-RAW-" + randomUUID(), vendaLocalId: sale.id!, tipo: "vale_credito", valorTotal: 1, creditoEmitido: 1 },
+        select: { id: true },
+      })
+    })
+    // Linha KG FORA do writer (gravação legada direta) continua recusada.
+    await expect(prisma.itemDevolucaoVenda.create({
+      data: { devolucaoId: dev.id, inventoryId: pao.id, nome: pao.name, quantidade: null, quantidadeKg: "0.100", valorUnitario: 2, valorTotal: 2 },
+    })).rejects.toThrow(/F8_KG_/)
+    // Teto no banco: com o writer, exceder o vendido não passa.
+    await expect(prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('omni.f8_kg_return_writer', 'f8-kg-v1', true)`
+      await tx.itemDevolucaoVenda.create({
+        data: { devolucaoId: dev.id, inventoryId: pao.id, nome: pao.name, quantidade: null, quantidadeKg: "0.600", valorUnitario: 2, valorTotal: 2 },
+      })
+    })).rejects.toThrow(/F8_KG_RETURN_EXCEEDS_SOLD/)
+    // Duplicata da mesma linha KG na mesma devolução é impedida pelo índice único parcial.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('omni.f8_kg_return_writer', 'f8-kg-v1', true)`
+      await tx.itemDevolucaoVenda.create({
+        data: { devolucaoId: dev.id, inventoryId: pao.id, nome: pao.name, quantidade: null, quantidadeKg: "0.100", valorUnitario: 2, valorTotal: 2 },
+      })
+    })
+    await expect(prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('omni.f8_kg_return_writer', 'f8-kg-v1', true)`
+      await tx.itemDevolucaoVenda.create({
+        data: { devolucaoId: dev.id, inventoryId: pao.id, nome: pao.name, quantidade: null, quantidadeKg: "0.200", valorUnitario: 2, valorTotal: 2 },
+      })
+    })).rejects.toThrow()
+  })
+
+  it("CHECK de contrato impede quantidade KG inválida e violação XOR no banco", async () => {
+    const dev = await prisma.devolucaoVenda.create({
+      data: { storeId: A, localId: "TF-CHK-" + randomUUID(), vendaLocalId: "sem-venda", tipo: "somente_estoque" },
+      select: { id: true },
+    })
+    for (const row of [
+      { quantidade: null, quantidadeKg: "0" },
+      { quantidade: null, quantidadeKg: "-0.5" },
+      { quantidade: null, quantidadeKg: "0.1234" },
+      { quantidade: 2, quantidadeKg: "0.5" },
+    ]) {
+      await expect(prisma.itemDevolucaoVenda.create({
+        data: { devolucaoId: dev.id, inventoryId: "x", nome: "x", ...row },
+      })).rejects.toThrow()
+    }
+  })
+
+  // ── Config: valores inválidos não viram política ──────────────────────────────
+  it("PUT settings normaliza/valida a chave: valor inválido é recusado e não destrói a política", async () => {
+    const antes = (await prisma.storeSettings.findUnique({ where: { storeId: A } }))?.printerConfig ?? {}
+    const r = await salvarConfig(A, { pdvTrocasPeso: "maybe" })
+    expect(r.status).toBe(400)
+    expect((await prisma.storeSettings.findUnique({ where: { storeId: A } }))?.printerConfig ?? {}).toEqual(antes)
+  })
+
+  it("reembolso em dinheiro permanece bloqueado por política; devolução sem estoque (não recebido) não gera movimento", async () => {
+    const pao = await produto({ name: "Pão dinheiro", price: 20, metadata: KG, sku: "PDN", estoque: 1 })
+    const sale = venda([{ id: pao.id, name: pao.name, quantity: 0.4, price: 20 }], { kg: true })
+    await persist(sale)
+    const dinheiro = await devolver({ localId: "TF-" + randomUUID(), tipo: "devolucao", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.4")] })
     expect(dinheiro.status).toBe(409)
     expect(dinheiro.body.code).toBe("REEMBOLSO_DINHEIRO_BLOQUEADO_POR_POLITICA")
-    // Replay: o mesmo localId reenviado em paralelo (fila offline + clique) continua recusado e sem efeito.
-    const replays = await Promise.all(Array.from({ length: 4 }, () => devolver({ ...tentativas[0], vendaLocalId: sale.id })))
-    expect(replays.map((r) => r.body.code)).toEqual(Array(4).fill("DEVOLUCAO_KG_BLOQUEADA"))
-    expect(await efeitos(sale.id!, [pao.id, refri.id])).toEqual(antes)
+    const naoRecebido = await devolver({
+      localId: "TF-" + randomUUID(), tipo: "somente_estoque", vendaLocalId: sale.id,
+      itens: [kgItem(pao.id, "0.4", "nao_recebido", "cliente ficou com o produto")],
+    })
+    expect(naoRecebido.status, JSON.stringify(naoRecebido.body)).toBe(200)
+    expect(naoRecebido.body.creditoEmitido).toBe(0)
+    expect((await saldo(pao.id)).stock).toBe("0.6") // não recebido: nada entra
+  })
 
-    // Busca do F8: a venda aparece com peso e valores exatos, e TODA linha sinaliza o bloqueio.
+  it("elegibilidade da venda KG mostra vendido/devolvido/disponível por linha sem bloqueio global", async () => {
+    const pao = await produto({ name: "Pão eleg", price: 20, metadata: KG, sku: "PEG", estoque: 2 })
+    const refri = await produto({ name: "Refri eleg", price: 5, metadata: UN, sku: "REG", estoque: 6 })
+    const sale = venda([
+      { id: pao.id, name: pao.name, quantity: 1.5, price: 20 },
+      { id: refri.id, name: refri.name, quantity: 2, price: 5 },
+    ], { kg: true })
+    await persist(sale)
+    await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [kgItem(pao.id, "0.350")] })
     const e = await eleg(sale.id!)
-    expect(e.status).toBe(200)
-    const lines = e.body.vendas[0].lines as Array<{ produtoId: string; quantity: number; lineTotal: number; bloqueioDevolucao?: string }>
-    expect(lines).toHaveLength(2)
-    for (const l of lines) expect(l.bloqueioDevolucao).toMatch(/KG/)
-    const kgLine = lines.find((l) => l.produtoId === pao.id)!
-    expect(kgLine.quantity).toBe(0.437)
-    expect(kgLine.lineTotal).toBe(saleLineTotalCents(0.437, 18.9)! / 100)
-  })
-
-  it("defesa em profundidade: escrita direta de devolução numa venda KG é recusada pelo trigger do banco", async () => {
-    const pao = await produto({ name: "Pão KG trigger", price: 20, metadata: KG, sku: "PTG", estoque: 2 })
-    const sale = venda([{ id: pao.id, name: pao.name, quantity: 0.25, price: 20 }], { kg: true })
-    await persist(sale)
-    await expect(prisma.devolucaoVenda.create({
-      data: { storeId: A, localId: "KGF8-RAW-" + randomUUID(), vendaLocalId: sale.id!, tipo: "vale_credito", valorTotal: 1, creditoEmitido: 1 },
-    })).rejects.toThrow(/MANUAL_KG_PARTIAL_RETURN_BLOCKED/)
-  })
-
-  it("troca UN gera vale, nova venda KG paga com o vale; cancelar a venda KG restaura vale e estoque KG exatos", async () => {
-    const pao = await produto({ name: "Queijo KG", price: 20, metadata: KG, sku: "QJ", estoque: 5 })
-    const refri = await produto({ name: "Suco UN", price: 7.5, metadata: UN, sku: "SUC", estoque: 10 })
-    const valeAntes = await saldoVale()
-    const origem = venda([{ id: refri.sku!, name: refri.name, quantity: 2, price: 7.5 }], { kg: false })
-    await persist(origem)
-    expect((await saldo(refri.id)).stock).toBe("8")
-
-    // Troca UN (#331): devolve 1 suco → vale de 7,50 e estoque UN +1.
-    const troca = await devolver({ localId: "KGF8-TR-" + randomUUID(), tipo: "troca", vendaLocalId: origem.id, itens: [{ inventoryId: refri.sku, quantidade: 1 }] })
-    expect(troca.status, JSON.stringify(troca.body)).toBe(200)
-    expect(troca.body.creditoEmitido).toBe(7.5)
-    expect((await saldo(refri.id)).stock).toBe("9")
-    expect(await saldoVale()).toBe(valeAntes + 7.5)
-    const origemStatus = (await prisma.venda.findFirstOrThrow({ where: { pedidoId: origem.id } })).status
-    expect(origemStatus).toBe("parcialmente_devolvida")
-
-    // Nova venda da troca é KG: 0,350 kg × R$ 20,00 = R$ 7,00 pagos com vale.
-    const nova = venda([{ id: pao.id, name: pao.name, quantity: 0.35, price: 20 }], { kg: true, pb: { creditoVale: 7 } })
-    await persist(nova)
-    expect((await saldo(pao.id)).stock).toBe("4.65")
-    expect(await saldoVale()).toBe(valeAntes + 0.5)
-
-    // A venda KG confirmada não aceita devolução parcial; o caminho é o cancelamento integral.
-    const parcial = await devolver({ localId: "KGF8-NV-" + randomUUID(), tipo: "vale_credito", vendaLocalId: nova.id, itens: [{ inventoryId: pao.id, quantidade: 1 }] })
-    expect(parcial.body.code).toBe("DEVOLUCAO_KG_BLOQUEADA")
-    const c = await cancelar(nova.id!)
-    expect(c.status, JSON.stringify(c.body)).toBe(200)
-    expect(await saldo(pao.id)).toEqual({ stock: "5", dep: "5" })
-    expect(await saldoVale()).toBe(valeAntes + 7.5)
-    // Venda UN de origem e a troca já gravada ficam intactas.
-    expect((await prisma.venda.findFirstOrThrow({ where: { pedidoId: origem.id } })).status).toBe(origemStatus)
-    expect((await saldo(refri.id)).stock).toBe("9")
-    // Cancelada, a venda KG continua sem devolução possível (status precede o bloqueio KG).
-    const depois = await devolver({ localId: "KGF8-POS-" + randomUUID(), tipo: "vale_credito", vendaLocalId: nova.id, itens: [{ inventoryId: pao.id, quantidade: 1 }] })
-    expect(depois.status).toBe(409)
-    expect(depois.body.code).toBe("VENDA_CANCELADA")
-  })
-
-  it("venda com o marcador KG e só linhas UN (produto virou UN antes do reenvio) é cancelável pelo protocolo KG", async () => {
-    // Revisão substituta 2026-11-08 (P2-1): o cancelamento decidia o caminho KG só por linha KG,
-    // enquanto os gatilhos do banco protegem a venda pelo marcador do payload — o update caía no
-    // gatilho (writer KG exigido) e a rota respondia 503 genérico, sem saída operacional.
-    const suco = await produto({ name: "Suco ex-KG", price: 6, metadata: UN, sku: "SXK", estoque: 10 })
-    const sale = venda([{ id: suco.id, name: suco.name, quantity: 2, price: 6 }], { kg: true })
-    await persist(sale)
-    expect((await saldo(suco.id)).stock).toBe("8")
-    const row = await prisma.venda.findFirstOrThrow({ where: { pedidoId: sale.id }, include: { itens: true } })
-    expect((row.payload as { manualKgSale?: string }).manualKgSale).toBe(MANUAL_KG_SALE)
-    expect(row.itens.every((i) => i.quantidadeKg === null && i.quantidade === 2)).toBe(true)
-    // Política F8 inalterada: venda do protocolo KG não aceita devolução parcial.
-    const parcial = await devolver({ localId: "KGF8-MKUN-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [{ inventoryId: suco.id, quantidade: 1 }] })
-    expect(parcial.body.code).toBe("DEVOLUCAO_KG_BLOQUEADA")
-    const c = await cancelar(sale.id!)
-    expect(c.status, JSON.stringify(c.body)).toBe(200)
-    expect(await saldo(suco.id)).toEqual({ stock: "10", dep: "10" })
-    expect((await prisma.venda.findFirstOrThrow({ where: { pedidoId: sale.id } })).status).toBe("cancelada")
-    expect(await prisma.movimentacaoEstoque.count({ where: { storeId: A, produtoId: suco.id, origem: "cancelamento_pdv" } })).toBe(1)
-    const again = await cancelar(sale.id!)
-    expect(again.status).toBe(409)
-    expect(await saldo(suco.id)).toEqual({ stock: "10", dep: "10" })
-  })
-
-  it("corrida: cancelamento × 5 devoluções simultâneas da venda KG — estoque reposto uma vez, nenhuma devolução gravada", async () => {
-    const pao = await produto({ name: "Pão corrida", price: 18.9, metadata: KG, sku: "PCR", estoque: 3 })
-    const sale = venda([{ id: pao.id, name: pao.name, quantity: 1.234, price: 18.9 }], { kg: true })
-    await persist(sale)
-    const [c, ...devs] = await Promise.all([
-      cancelar(sale.id!),
-      ...Array.from({ length: 5 }, (_, i) => devolver({ localId: `KGF8-RACE-${i}-${randomUUID()}`, tipo: "vale_credito", vendaLocalId: sale.id, itens: [{ inventoryId: pao.id, quantidade: 1 }] })),
-    ])
-    expect(c.status, JSON.stringify(c.body)).toBe(200)
-    for (const d of devs) {
-      expect(d.status).toBe(409)
-      expect(["DEVOLUCAO_KG_BLOQUEADA", "VENDA_CANCELADA"]).toContain(d.body.code)
-    }
-    expect(await saldo(pao.id)).toEqual({ stock: "3", dep: "3" })
-    expect(await prisma.devolucaoVenda.count({ where: { storeId: A, vendaLocalId: sale.id! } })).toBe(0)
-    expect(await prisma.movimentacaoEstoque.count({ where: { storeId: A, produtoId: pao.id, origem: "cancelamento_pdv" } })).toBe(1)
-  })
-
-  it("SKU alterado depois da venda UN numa loja KG: o SKU antigo devolve o produto certo; o KG não é tocado", async () => {
-    const pao = await produto({ name: "Pão KG vizinho", price: 18.9, metadata: KG, sku: "PVZ", estoque: 2 })
-    const bolo = await produto({ name: "Bolo UN", price: 12, metadata: UN, sku: "BOLO", estoque: 4 })
-    const skuAntigo = bolo.sku!
-    const origem = venda([{ id: skuAntigo, name: bolo.name, quantity: 2, price: 12 }], { kg: false })
-    await persist(origem)
-    await prisma.produto.update({ where: { id: bolo.id }, data: { sku: "BOLO-NOVO-" + randomUUID().slice(0, 6) } })
-    const r = await devolver({ localId: "KGF8-SKU-" + randomUUID(), tipo: "vale_credito", vendaLocalId: origem.id, itens: [{ inventoryId: skuAntigo, quantidade: 2 }] })
-    expect(r.status, JSON.stringify(r.body)).toBe(200)
-    expect(r.body.itens[0].produtoId).toBe(bolo.id)
-    expect((await saldo(bolo.id)).stock).toBe("4")
-    expect(await saldo(pao.id)).toEqual({ stock: "2", dep: "2" })
-  })
-
-  it("declaração comercial inválida após a venda UN: recusa 409 sem vale nem estoque", async () => {
-    const item = await produto({ name: "Item UN que virou inválido", price: 9, metadata: UN, sku: "INV", estoque: 3 })
-    const origem = venda([{ id: item.id, name: item.name, quantity: 1, price: 9 }], { kg: false })
-    await persist(origem)
-    await prisma.produto.update({ where: { id: item.id }, data: { metadata: { comercial: { version: 2, modoVenda: "unidade", unidade: "UN", basePreco: "UN" } } } })
-    const antes = await efeitos(origem.id!, [item.id])
-    const r = await devolver({ localId: "KGF8-INV-" + randomUUID(), tipo: "vale_credito", vendaLocalId: origem.id, itens: [{ inventoryId: item.id, quantidade: 1 }] })
-    expect(r.status).toBe(409)
-    expect(r.body.code).toBe("PRODUTO_COMERCIAL_INVALIDO")
-    expect(await efeitos(origem.id!, [item.id])).toEqual(antes)
-    expect((await eleg(origem.id!)).body.vendas[0].lines[0].bloqueioDevolucao).toMatch(/inválida/)
-  })
-
-  it("encaminhamento ao Financeiro de devolução de venda KG: referência = valor pago da linha KG, nunca zero, sem efeito (R1 P2)", async () => {
-    const queijo = await produto({ name: "Queijo pendência", price: 20, metadata: KG, sku: "QPD", estoque: 3 })
-    const sale = venda([{ id: queijo.id, name: queijo.name, quantity: 1, price: 20 }], { kg: true })
-    await persist(sale)
-    const antes = await efeitos(sale.id!, [queijo.id])
-    const r = await prisma.$transaction((tx) => encaminharPendenciaDevolucao(tx, {
-      storeId: A, localId: "KGF8-PEND-" + randomUUID(), vendaLocalId: sale.id!, categoria: "VALE_EMITIDO", estado: "RECUSA_DEFINITIVA",
-      valorDeclarado: 20, motivoRecusa: "DEVOLUCAO_KG_BLOQUEADA", justificativa: "Vale local emitido antes da integração", usuarioId: "fixture-op", usuarioNome: "Operador Sintético",
-      itens: [{ inventoryId: queijo.id, quantidade: 1 }],
-    }))
-    expect(r).toMatchObject({ vendaOrigemNoServidor: true, valorReferenciaServidor: 20, valorDeclarado: 20 })
-    expect(await efeitos(sale.id!, [queijo.id])).toEqual(antes)
-  })
-
-  it("isolamento entre lojas: a venda KG da loja A não é vista nem devolvida pela loja B", async () => {
-    const pao = await produto({ name: "Pão loja A", price: 18.9, metadata: KG, sku: "PLA", estoque: 2 })
-    const sale = venda([{ id: pao.id, name: pao.name, quantity: 0.5, price: 18.9 }], { kg: true })
-    await persist(sale)
-    const antesA = await efeitos(sale.id!, [pao.id])
-    const antesB = await efeitos(sale.id!, [], B)
-    const r = await devolver({ localId: "KGF8-ISO-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [{ inventoryId: pao.id, quantidade: 1 }] }, B)
-    expect(r.status).toBe(409)
-    expect(r.body.code).toBe("VENDA_ORIGEM_NAO_ENCONTRADA")
-    expect((await eleg(sale.id!, B)).body.vendas).toEqual([])
-    expect((await eleg(pao.id, B)).body.vendas).toEqual([])
-    expect(await efeitos(sale.id!, [pao.id])).toEqual(antesA)
-    expect(await efeitos(sale.id!, [], B)).toEqual(antesB)
+    const lines = e.body.vendas[0].lines as Array<{ produtoId: string; quantity: number; qtyReturned: number; unidade: string }>
+    const kg = lines.find((l) => l.produtoId === pao.id)!
+    expect(kg).toMatchObject({ quantity: 1.5, qtyReturned: 0.35, unidade: "KG" })
+    const un = lines.find((l) => l.produtoId === refri.id)!
+    expect(un).toMatchObject({ quantity: 2, qtyReturned: 0, unidade: "UN" })
   })
 })

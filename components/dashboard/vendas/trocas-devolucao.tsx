@@ -1,6 +1,5 @@
 "use client"
 
-import { kgReturnBlocked as saleKgReturnBlocked } from "@/lib/vendas/manual-kg-contract"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Search, Package, Wallet, RotateCcw, Printer, Plus, Minus, X, ShoppingCart } from "lucide-react"
@@ -12,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { useConfigEmpresa, configPadrao } from "@/lib/config-empresa"
+import { parseKgQuantityInput } from "@/lib/estoque/stock-quantity"
 import { useOperationsStore, nextDevolucaoId, classificarRespostaDevolucao, type SaleRecord, type InventoryItem } from "@/lib/operations-store"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { buildValeTrocaEscPos } from "@/lib/escpos"
@@ -50,11 +50,26 @@ type ServerDevolucaoOk = {
   creditoEmitido: number
   saldoCreditoCliente: number
   operador: string
-  itens: Array<{ inventoryId: string; produtoId?: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
+  itens: Array<{ inventoryId: string; produtoId?: string; nome: string; quantidade: number | null; quantidadeKg?: number | null; valorUnitario: number; valorTotal: number; condicao?: string; estoque?: string }>
 }
 
 /** Linha de venda como a tela usa: `produtoId` = identidade histórica; bloqueio = sem política. */
-type LinhaVendaF8 = SaleRecord["lines"][number] & { bloqueioDevolucao?: string }
+type LinhaVendaF8 = SaleRecord["lines"][number] & { bloqueioDevolucao?: string; unidade?: "UN" | "KG" }
+
+/** Quantidade no formato do operador: KG com 3 casas e vírgula (pt-BR), UN inteira. */
+export function formatarQtdDevolucao(v: number, kg: boolean): string {
+  return kg
+    ? `${v.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3, useGrouping: false })} kg`
+    : String(v)
+}
+
+/** Condições da mercadoria devolvida (GOAL §5) — só "apto_revenda" volta ao estoque. */
+export const CONDICOES_MERCADORIA_UI = [
+  { value: "apto_revenda", label: "Apto para revenda", hint: "Volta ao estoque" },
+  { value: "nao_apto_revenda", label: "Não apto para revenda", hint: "Não volta ao estoque — exige justificativa" },
+  { value: "nao_recebido", label: "Não recebido", hint: "Cliente ficou com o produto — exige justificativa" },
+  { value: "descarte", label: "Descarte/perda", hint: "Sem entrada de estoque — exige justificativa" },
+] as const
 
 /**
  * Funde linhas repetidas do mesmo item (o Clássico cria uma linha por bipe): a tela e o
@@ -93,7 +108,7 @@ export function bloqueioLinhaDevolucao(l: LinhaVendaF8): string | null {
 type PendingMirror = {
   saleId: string
   tipo: "troca" | "vale_credito" | "somente_estoque"
-  lines: { inventoryId: string; quantity: number }[]
+  lines: { inventoryId: string; produtoId?: string; quantity: number; quantityUnit?: "KG"; quantidadeKg?: number; condicao?: string; justificativa?: string }[]
   cpf: string
   nome: string
   payload: Record<string, unknown>
@@ -188,6 +203,11 @@ export function TrocasDevolucao({
   const [showSearch, setShowSearch] = useState(!initialSaleId)
   const [sale, setSale] = useState<SaleRecord | null>(null)
   const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({})
+  /** Condição da mercadoria por linha (GOAL §5); KG exige escolha explícita. */
+  const [condicaoByLine, setCondicaoByLine] = useState<Record<string, string>>({})
+  const [justificativaByLine, setJustificativaByLine] = useState<Record<string, string>>({})
+  /** Política da loja para trocas por peso (elegibilidade informa; servidor decide no commit). */
+  const [trocasPesoPermitidas, setTrocasPesoPermitidas] = useState(true)
   const [mode, setMode] = useState<DevMode>("vale_credito")
   const [motivo, setMotivo] = useState("")
   const [cpfExtra, setCpfExtra] = useState("")
@@ -303,7 +323,7 @@ export function TrocasDevolucao({
     clienteNome: string
     clienteCpf: string
     operador: string
-    itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
+    itensDevolvidos: { nome: string; quantidade: number; unidade?: "KG"; valorTotal: number }[]
     itensNovos: { nome: string; quantidade: number; valorTotal: number }[]
     valorDevolvido: number
     totalNovaCompra: number
@@ -345,9 +365,10 @@ export function TrocasDevolucao({
         headers: { "x-assistec-loja-id": lojaAtivaId },
       })
         .then(async (res) => {
-          const j = res.ok ? ((await res.json()) as { vendas?: SaleRecord[] }) : null
+          const j = res.ok ? ((await res.json()) as { vendas?: SaleRecord[]; trocasPesoPermitidas?: boolean }) : null
           const v = j?.vendas?.find((x) => x.id.toUpperCase() === upper)
           if (cancelado) return
+          if (typeof j?.trocasPesoPermitidas === "boolean") setTrocasPesoPermitidas(j.trocasPesoPermitidas)
           if (v) aplicarVenda(v, "servidor")
           else fallback()
         })
@@ -369,7 +390,8 @@ export function TrocasDevolucao({
     if (JSON.stringify(lines) !== JSON.stringify(sale.lines)) setSale({ ...fresh, lines })
   }, [sales, sale, saleSource])
 
-  const kgReturnBlocked = !!sale && saleKgReturnBlocked(sale, inventory)
+  const vendaTemLinhaKg = !!sale?.lines.some((l) => l.quantityUnit === "KG")
+  const bloqueioKgPorPolitica = vendaTemLinhaKg && !trocasPesoPermitidas
 
   const nomeLoja =
     (config.empresa.nomeFantasia || "").trim() || configPadrao.empresa.nomeFantasia
@@ -390,6 +412,8 @@ export function TrocasDevolucao({
       q[l.inventoryId] = max > 0 ? "0" : "0"
     }
     setQtyByLine(q)
+    setCondicaoByLine({})
+    setJustificativaByLine({})
     setCpfExtra(s.customerCpf ?? "")
     setNomeExtra(s.customerName ?? "")
     setLastDevolucao(null)
@@ -544,16 +568,28 @@ export function TrocasDevolucao({
   }, [sale])
 
   // ── Cálculos da troca imediata ─────────────────────────────────────────────
+  /** Quantidade digitada na linha, na unidade dela (KG: vírgula, 3 casas; UN: inteiro). */
+  const qtyEfetiva = useCallback((l: LinhaVendaF8): { ok: boolean; value: number } => {
+    const texto = (qtyByLine[l.inventoryId] ?? "").trim()
+    if (l.quantityUnit === "KG") {
+      const p = parseKgQuantityInput(texto)
+      return p.ok ? { ok: true, value: p.value } : { ok: false, value: 0 }
+    }
+    const v = parseInt(texto || "0", 10)
+    return { ok: Number.isFinite(v) && v >= 0, value: Number.isFinite(v) ? v : 0 }
+  }, [qtyByLine])
+
   /** Valor devolvido baseado nas quantidades atuais × preço unitário da venda original. */
   const valorDevolvido = useMemo(() => {
     if (!sale) return 0
     let total = 0
     for (const l of linhasComMax) {
-      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
-      if (q > 0 && l.quantity > 0) total += (l.lineTotal / l.quantity) * q
+      const q = qtyEfetiva(l)
+      if (!q.ok) continue
+      if (q.value > 0 && l.quantity > 0) total += (l.lineTotal / l.quantity) * q.value
     }
     return Math.round(total * 100) / 100
-  }, [sale, linhasComMax, qtyByLine])
+  }, [sale, linhasComMax, qtyEfetiva])
 
   const totalNovaCompra = useMemo(
     () => Math.round(trocaCart.reduce((s, l) => s + l.unitPrice * l.quantity, 0) * 100) / 100,
@@ -653,21 +689,77 @@ export function TrocasDevolucao({
   }, [mode, sale?.id])
 
   /** Linhas a devolver validadas contra o saldo devolvível exibido (o servidor revalida sob lock). */
-  const coletarLinhasDevolucao = (): { inventoryId: string; quantity: number }[] | null => {
-    const lines: { inventoryId: string; quantity: number }[] = []
+  const coletarLinhasDevolucao = (): {
+    inventoryId: string
+    produtoId?: string
+    quantity: number
+    quantityUnit?: "KG"
+    quantidadeKg?: number
+    condicao?: string
+    justificativa?: string
+  }[] | null => {
+    const lines: {
+      inventoryId: string
+      produtoId?: string
+      quantity: number
+      quantityUnit?: "KG"
+      quantidadeKg?: number
+      condicao?: string
+      justificativa?: string
+    }[] = []
     for (const l of linhasComMax) {
-      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
-      if (q > 0) {
+      const q = qtyEfetiva(l)
+      if (!q.ok) {
+        toast({
+          title: "Quantidade inválida",
+          description: l.quantityUnit === "KG"
+            ? `${l.name}: use vírgula e até 3 casas (ex.: 0,750 kg).`
+            : `${l.name}: informe uma quantidade inteira.`,
+          variant: "destructive",
+        })
+        return null
+      }
+      if (q.value > 0) {
         const bloqueio = bloqueioLinhaDevolucao(l)
         if (bloqueio) {
           toast({ title: "Item não devolvível", description: `${l.name}: ${bloqueio}`, variant: "destructive" })
           return null
         }
-        if (q > l.maxReturn) {
-          toast({ title: "Quantidade inválida", description: `${l.name}: máximo ${l.maxReturn}`, variant: "destructive" })
+        if (q.value > l.maxReturn + 1e-9) {
+          toast({
+            title: "Quantidade inválida",
+            description: `${l.name}: máximo ${formatarQtdDevolucao(l.maxReturn, l.quantityUnit === "KG")}`,
+            variant: "destructive",
+          })
           return null
         }
-        lines.push({ inventoryId: l.inventoryId, quantity: q })
+        const condicao = (condicaoByLine[l.inventoryId] ?? "").trim()
+        const justificativa = (justificativaByLine[l.inventoryId] ?? "").trim()
+        if (l.quantityUnit === "KG" && !condicao) {
+          toast({
+            title: "Condição da mercadoria obrigatória",
+            description: `${l.name}: informe se está apta para revenda, não apta, não recebida ou descarte.`,
+            variant: "destructive",
+          })
+          return null
+        }
+        if (condicao && condicao !== "apto_revenda" && !justificativa) {
+          toast({
+            title: "Justificativa obrigatória",
+            description: `${l.name}: mercadoria fora de condição de revenda exige justificativa (registrada para auditoria).`,
+            variant: "destructive",
+          })
+          return null
+        }
+        const kg = l.quantityUnit === "KG"
+        lines.push({
+          inventoryId: l.inventoryId,
+          ...(l.produtoId ? { produtoId: l.produtoId } : {}),
+          quantity: kg ? Math.round(q.value * 1000) / 1000 : Math.round(q.value),
+          ...(kg ? { quantityUnit: "KG" as const, quantidadeKg: Math.round(q.value * 1000) / 1000 } : {}),
+          ...(condicao ? { condicao } : {}),
+          ...(justificativa ? { justificativa } : {}),
+        })
       }
     }
     if (lines.length === 0) {
@@ -689,13 +781,20 @@ export function TrocasDevolucao({
    */
   const gravarDevolucaoConfirmada = async (args: {
     tipo: "troca" | "vale_credito" | "somente_estoque"
-    lines: { inventoryId: string; quantity: number }[]
+    lines: { inventoryId: string; produtoId?: string; quantity: number; quantityUnit?: "KG"; quantidadeKg?: number; condicao?: string; justificativa?: string }[]
     cpf: string
     nome: string
     payload: Record<string, unknown>
   }): Promise<ServerDevolucaoResult & { localId?: string }> => {
     if (!sale || !lojaAtivaId) return { kind: "rejected", status: 400, message: "Loja ou venda não selecionada." }
-    const fp = [sale.id, args.tipo, args.cpf, ...args.lines.map((l) => `${l.inventoryId}:${l.quantity}`).sort()].join("#")
+    const fp = [
+      sale.id,
+      args.tipo,
+      args.cpf,
+      ...args.lines
+        .map((l) => `${l.inventoryId}:${l.quantityUnit === "KG" ? `g${Math.round((l.quantidadeKg ?? l.quantity) * 1000)}` : `u${l.quantity}`}:${l.condicao ?? ""}`)
+        .sort(),
+    ].join("#")
 
     const incerta = pendingDevRef.current
     if (incerta && incerta.fp !== fp) {
@@ -733,11 +832,16 @@ export function TrocasDevolucao({
       itens: args.lines.map((l) => {
         const sl = sale.lines.find((x) => x.inventoryId === l.inventoryId)
         // Identidade histórica (Produto.id da venda) quando o servidor a informou.
+        // KG viaja como string exata (3 casas); UN como inteiro legado.
         return {
           inventoryId: l.inventoryId,
           ...(sl?.produtoId ? { produtoId: sl.produtoId } : {}),
           nome: sl?.name ?? "",
-          quantidade: l.quantity,
+          ...(l.quantityUnit === "KG"
+            ? { quantidadeKg: String(l.quantidadeKg ?? l.quantity) }
+            : { quantidade: l.quantity }),
+          ...(l.condicao ? { condicao: l.condicao } : {}),
+          ...(l.justificativa ? { justificativa: l.justificativa } : {}),
         }
       }),
       payload: { ...args.payload, localId },
@@ -774,7 +878,15 @@ export function TrocasDevolucao({
       serverConfirmed: {
         localId: data.localId,
         creditIssued: data.creditoEmitido,
-        lines: data.itens.map((i) => ({ inventoryId: i.inventoryId, ...(i.produtoId ? { produtoId: i.produtoId } : {}), name: i.nome, quantity: i.quantidade, valor: i.valorTotal })),
+        lines: data.itens.map((i) => ({
+          inventoryId: i.inventoryId,
+          ...(i.produtoId ? { produtoId: i.produtoId } : {}),
+          name: i.nome,
+          quantity: i.quantidade ?? i.quantidadeKg ?? 0,
+          valor: i.valorTotal,
+          ...(i.quantidadeKg != null ? { quantityUnit: "KG" as const, quantidadeKg: i.quantidadeKg } : {}),
+          ...(i.condicao ? { condicao: i.condicao } : {}),
+        })),
       },
     })
   }
@@ -831,7 +943,7 @@ export function TrocasDevolucao({
       let dev: ServerDevolucaoOk
       let cpf: string
       let nome: string
-      let itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
+      let itensDevolvidos: { nome: string; quantidade: number; unidade?: "KG"; valorTotal: number }[]
 
       if (trocaRecovery && trocaRecovery.saleId === sale.id && trocaRecovery.novaVendaPendenteId) {
         toast({
@@ -883,7 +995,7 @@ export function TrocasDevolucao({
         dev = r.data
         setTrocaRecovery({ saleId: sale.id, dev, cpf, nome })
       }
-      itensDevolvidos = dev.itens.map((i) => ({ nome: i.nome, quantidade: i.quantidade, valorTotal: i.valorTotal }))
+      itensDevolvidos = dev.itens.map((i) => ({ nome: i.nome, quantidade: i.quantidadeKg ?? i.quantidade ?? 0, ...(i.quantidadeKg != null ? { unidade: "KG" as const } : {}), valorTotal: i.valorTotal }))
 
       // Valores autoritativos: o devolvido é o que o servidor gravou.
       const devolvidoServidor = Math.round(dev.valorTotal * 100) / 100
@@ -1006,7 +1118,7 @@ export function TrocasDevolucao({
     let devolucaoLocalId = ""
     let devolucaoServerId: string | undefined
     let operadorCupom = "—"
-    let itensDev: { nome: string; quantidade: number; valorTotal: number }[] = []
+    let itensDev: { nome: string; quantidade: number; unidade?: "KG"; valorTotal: number }[] = []
     let pendenteSync = false
     try {
       const r = saleSource === "servidor" ? await gravarDevolucaoConfirmada({ tipo, lines, cpf, nome, payload }) : null
@@ -1019,7 +1131,7 @@ export function TrocasDevolucao({
         devolucaoLocalId = r.data.localId
         devolucaoServerId = r.data.devolucaoId
         operadorCupom = r.data.operador || "—"
-        itensDev = r.data.itens.map((i) => ({ nome: i.nome, quantidade: i.quantidade, valorTotal: i.valorTotal }))
+        itensDev = r.data.itens.map((i) => ({ nome: i.nome, quantidade: i.quantidadeKg ?? i.quantidade ?? 0, ...(i.quantidadeKg != null ? { unidade: "KG" as const } : {}), valorTotal: i.valorTotal }))
       } else {
         if (r && r.kind === "network" && pendingDevRef.current) {
           // Sem resposta: o servidor PODE ter gravado. Não cria pendência local com outro
@@ -1242,7 +1354,7 @@ export function TrocasDevolucao({
 
       {sale && (
         <div className="w-full space-y-4">
-          {kgReturnBlocked && <p role="alert" className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">Devolução parcial e troca de venda KG indisponíveis. O contrato de crédito e reposição por peso depende de validação própria. Use o cancelamento integral autorizado.</p>}
+          {bloqueioKgPorPolitica && <p role="alert" data-testid="aviso-trocas-peso-desativadas" className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">Esta loja não aceita trocas voluntárias de produtos vendidos por peso — as linhas KG desta venda estão bloqueadas abaixo. Produtos por unidade continuam liberados.</p>}
           {/* Cabeçalho Compacto da Venda de Origem */}
           <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border border-border bg-muted/15">
             <div className="flex items-center gap-3">
@@ -1393,60 +1505,152 @@ export function TrocasDevolucao({
 
                   <div className="space-y-2">
                     {linhasComMax.map((l) => {
-                      const currentQty = parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0
+                      const kg = l.quantityUnit === "KG"
                       const bloqueio = bloqueioLinhaDevolucao(l)
+                      const q = qtyEfetiva(l)
+                      const currentQty = q.ok ? q.value : 0
+                      const condicao = (condicaoByLine[l.inventoryId] ?? "").trim()
+                      const justificativa = (justificativaByLine[l.inventoryId] ?? "").trim()
+                      const estimativa = q.ok && currentQty > 0 && l.quantity > 0
+                        ? Math.round(((l.lineTotal / l.quantity) * currentQty) * 100) / 100
+                        : 0
                       return (
                         <div
                           key={l.inventoryId}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-1.5 px-3 rounded-lg border border-border bg-muted/20"
+                          className="flex flex-col gap-2 py-1.5 px-3 rounded-lg border border-border bg-muted/20"
+                          data-testid={`linha-devolucao-${kg ? "kg" : "un"}`}
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-xs text-foreground truncate">{l.name}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{bloqueio ? 0 : l.maxReturn}</span>
-                            </p>
-                            {bloqueio && (
-                              <p className="text-[10px] text-destructive mt-0.5" data-testid="linha-bloqueada-devolucao">{bloqueio}</p>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-xs text-foreground truncate">
+                                {l.name}
+                                <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[9px] font-bold text-muted-foreground">{kg ? "KG" : "UN"}</span>
+                              </p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                Vendido: {formatarQtdDevolucao(l.quantity, kg)} · Já devolvido: {formatarQtdDevolucao(l.qtyReturned ?? 0, kg)} · Disponível:{" "}
+                                <span className="font-medium text-foreground">{bloqueio ? formatarQtdDevolucao(0, kg) : formatarQtdDevolucao(l.maxReturn, kg)}</span>
+                                {estimativa > 0 && <> · <span className="font-medium text-foreground">Crédito estimado: {formatBrl(estimativa)}</span></>}
+                              </p>
+                              {bloqueio && (
+                                <p className="text-[10px] text-destructive mt-0.5" data-testid="linha-bloqueada-devolucao">{bloqueio}</p>
+                              )}
+                            </div>
+
+                            {kg ? (
+                              /* Peso: digitação amigável com vírgula decimal e 3 casas (GOAL §12). */
+                              <div className="flex items-center gap-1 self-start sm:self-center" data-testid="input-peso-linha">
+                                <div className="flex items-center bg-background border border-border rounded-md shadow-sm">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    className="w-24 bg-transparent border-0 font-bold text-xs text-foreground tabular-nums focus:ring-0 focus:outline-none text-center"
+                                    value={qtyByLine[l.inventoryId] ?? ""}
+                                    placeholder="0,000"
+                                    disabled={!!bloqueio}
+                                    aria-label={`Peso em kg a devolver de ${l.name}`}
+                                    onChange={(e) => {
+                                      const v = e.target.value.replace(/[^\d,.]/g, "").replace(".", ",")
+                                      setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: v }))
+                                    }}
+                                  />
+                                  <span className="pr-2 text-[10px] font-semibold text-muted-foreground">kg</span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-[10px]"
+                                  disabled={!!bloqueio || l.maxReturn <= 0}
+                                  onClick={() => {
+                                    setQtyByLine((prev) => ({
+                                      ...prev,
+                                      [l.inventoryId]: l.maxReturn.toLocaleString("pt-BR", { maximumFractionDigits: 3, useGrouping: false }),
+                                    }))
+                                  }}
+                                >
+                                  Máx
+                                </Button>
+                                {!q.ok && (qtyByLine[l.inventoryId] ?? "").trim() !== "" && (
+                                  <span className="text-[10px] text-destructive">Use vírgula, até 3 casas</span>
+                                )}
+                              </div>
+                            ) : (
+                              /* UN: incrementador +/- legado. */
+                              <div className="flex items-center gap-1 bg-background border border-border rounded-md p-0.5 self-start sm:self-center shadow-sm">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
+                                  disabled={l.maxReturn <= 0 || currentQty <= 0}
+                                  aria-label={`Devolver uma unidade a menos de ${l.name}`}
+                                  onClick={() => {
+                                    const val = Math.max(0, currentQty - 1)
+                                    setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
+                                  }}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <input
+                                  type="text"
+                                  className="w-10 text-center bg-transparent border-0 font-bold text-xs text-foreground tabular-nums focus:ring-0 focus:outline-none"
+                                  value={qtyByLine[l.inventoryId] ?? "0"}
+                                  readOnly
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
+                                  disabled={!!bloqueio || l.maxReturn <= 0 || currentQty >= l.maxReturn}
+                                  aria-label={`Devolver mais uma unidade de ${l.name}`}
+                                  onClick={() => {
+                                    const val = Math.min(l.maxReturn, currentQty + 1)
+                                    setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
                             )}
                           </div>
 
-                          {/* Incrementador +/- Premium Compacto */}
-                          <div className="flex items-center gap-1 bg-background border border-border rounded-md p-0.5 self-start sm:self-center shadow-sm">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                              disabled={l.maxReturn <= 0 || currentQty <= 0}
-                              aria-label={`Devolver uma unidade a menos de ${l.name}`}
-                              onClick={() => {
-                                const val = Math.max(0, currentQty - 1)
-                                setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
-                              }}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <input
-                              type="text"
-                              className="w-10 text-center bg-transparent border-0 font-bold text-xs text-foreground tabular-nums focus:ring-0 focus:outline-none"
-                              value={qtyByLine[l.inventoryId] ?? "0"}
-                              readOnly
-                            />
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                              disabled={!!bloqueio || l.maxReturn <= 0 || currentQty >= l.maxReturn}
-                              aria-label={`Devolver mais uma unidade de ${l.name}`}
-                              onClick={() => {
-                                const val = Math.min(l.maxReturn, currentQty + 1)
-                                setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
-                              }}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          {/* Condição da mercadoria devolvida (GOAL §5): KG exige escolha
+                              explícita (perecível); UN mantém "apto" como padrão. */}
+                          {q.ok && currentQty > 0 && (
+                            <div className="flex flex-col gap-1 border-t border-border/40 pt-1.5" data-testid="condicao-mercadoria">
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[10px] font-semibold text-muted-foreground">
+                                  Condição da mercadoria{kg ? " (obrigatória)" : ""}:
+                                </span>
+                                {CONDICOES_MERCADORIA_UI.map((c) => (
+                                  <button
+                                    key={c.value}
+                                    type="button"
+                                    title={c.hint}
+                                    disabled={!!bloqueio}
+                                    onClick={() => setCondicaoByLine((prev) => ({ ...prev, [l.inventoryId]: prev[l.inventoryId] === c.value ? "" : c.value }))}
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                                      condicao === c.value
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : "border-border bg-background text-muted-foreground hover:bg-muted/50"
+                                    }`}
+                                  >
+                                    {c.label}
+                                  </button>
+                                ))}
+                              </div>
+                              {condicao && condicao !== "apto_revenda" && (
+                                <input
+                                  type="text"
+                                  className="h-7 w-full rounded-md border border-border bg-background px-2 text-[11px] focus:ring-1 focus:ring-primary focus:outline-none"
+                                  placeholder="Justificativa/destino (obrigatória — registrada para auditoria)"
+                                  value={justificativa}
+                                  onChange={(e) => setJustificativaByLine((prev) => ({ ...prev, [l.inventoryId]: e.target.value }))}
+                                />
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -1601,8 +1805,8 @@ export function TrocasDevolucao({
                         type="button"
                         size="sm"
                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold h-8.5 px-4 rounded-md text-xs"
-                        onClick={() => { if (!kgReturnBlocked) void handleRegistrar() }}
-                        disabled={kgReturnBlocked || enviando || valorDevolvido <= 0 || (mode === "devolucao" && REEMBOLSO_DINHEIRO_BLOQUEADO)}
+                        onClick={() => { void handleRegistrar() }}
+                        disabled={enviando || valorDevolvido <= 0 || (mode === "devolucao" && REEMBOLSO_DINHEIRO_BLOQUEADO)}
                       >
                         {enviando ? "Confirmando…" : "Confirmar Devolução"}
                       </Button>
@@ -1690,9 +1894,8 @@ export function TrocasDevolucao({
                         type="button"
                         size="sm"
                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold flex-1 h-8.5 text-xs"
-                        onClick={() => { if (!kgReturnBlocked) void handleFinalizarTroca() }}
+                        onClick={() => { void handleFinalizarTroca() }}
                         disabled={
-                          kgReturnBlocked ||
                           enviando ||
                           trocaCart.length === 0 ||
                           (!(trocaRecovery && trocaRecovery.saleId === sale.id) && valorDevolvido <= 0)
@@ -1752,7 +1955,7 @@ function CupomTroca({
     clienteNome: string
     clienteCpf: string
     operador: string
-    itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
+    itensDevolvidos: { nome: string; quantidade: number; unidade?: "KG"; valorTotal: number }[]
     itensNovos: { nome: string; quantidade: number; valorTotal: number }[]
     valorDevolvido: number
     totalNovaCompra: number
@@ -1788,7 +1991,7 @@ function CupomTroca({
       `Cliente: ${data.clienteNome} (${data.clienteCpf})`,
       "",
       "ITENS DEVOLVIDOS",
-      ...data.itensDevolvidos.map((i) => `  ${i.quantidade}× ${i.nome} — ${formatBrl(i.valorTotal)}`),
+      ...data.itensDevolvidos.map((i) => `  ${formatarQtdDevolucao(i.quantidade, i.unidade === "KG")}× ${i.nome} — ${formatBrl(i.valorTotal)}`),
       `  Total devolvido: ${formatBrl(data.valorDevolvido)}`,
     ]
     if (data.itensNovos.length > 0) {
@@ -1817,7 +2020,7 @@ function CupomTroca({
   const imprimirHtml = useCallback(() => {
     const esc = (s: string) => escapeHtml(s)
     const linhasDev = data.itensDevolvidos
-      .map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">${formatBrl(i.valorTotal)}</td></tr>`)
+      .map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${formatarQtdDevolucao(i.quantidade, i.unidade === "KG")}</td><td style="text-align:right">${formatBrl(i.valorTotal)}</td></tr>`)
       .join("")
     const linhasNovos = data.itensNovos
       .map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">${formatBrl(i.valorTotal)}</td></tr>`)
@@ -1910,7 +2113,7 @@ function CupomTroca({
           <div className="mt-1 space-y-1">
             {data.itensDevolvidos.map((i, idx) => (
               <div key={idx} className="flex justify-between text-xs">
-                <span>{i.quantidade}× {i.nome}</span>
+                <span>{formatarQtdDevolucao(i.quantidade, i.unidade === "KG")}× {i.nome}</span>
                 <span className="font-medium">{formatBrl(i.valorTotal)}</span>
               </div>
             ))}

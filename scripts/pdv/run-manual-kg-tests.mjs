@@ -32,7 +32,9 @@ try {
     }
     schema = schema.replace(match[0], block)
   }
-  schema = schema.replace(/(quantidade\s+)Int\?/, "$1Int").replace(/^.*quantidadeKg\s+Decimal.*\r?\n/m, "")
+  // Legado integral: ItemVenda E ItemDevolucaoVenda voltam a Int obrigatório sem KG
+  // (a migration 20261108120000 devolve o par fracionário para a devolução).
+  schema = schema.replace(/(quantidade\s+)Int\?/g, "$1Int").replace(/^.*quantidadeKg\s+Decimal.*\r?\n/gm, "")
   const baseline = out + "/schema-before.prisma"
   await writeFile(baseline, schema)
   run(["node_modules/prisma/build/index.js", "db", "push", "--schema", baseline, "--skip-generate"])
@@ -42,12 +44,12 @@ try {
   await db.$executeRawUnsafe("INSERT INTO venda_itens (id, \"vendaId\", \"inventoryId\", nome, quantidade, \"precoUnitario\", \"lineTotal\") VALUES ('kg-historical-item', 'kg-historical-sale', 'kg-historical-un', 'UN histórica', 2147483647, 20, 20)")
   const snapshot = () => db.$queryRawUnsafe("SELECT (SELECT stock::text FROM estoque_produtos WHERE id = 'kg-historical-un') AS stock, (SELECT quantidade::text FROM venda_itens WHERE id = 'kg-historical-item') AS quantity")
   const before = await snapshot()
-  for (const migration of ["20261025120000_estoque_quantidade_fracionada", "20261029120000_manual_kg_sale_quantity"]) {
+  for (const migration of ["20261025120000_estoque_quantidade_fracionada", "20261029120000_manual_kg_sale_quantity", "20261108120000_f8_devolucao_kg_fracionada"]) {
     run(["node_modules/prisma/build/index.js", "db", "execute", "--schema", "prisma/schema.prisma", "--file", "prisma/migrations/" + migration + "/migration.sql"])
   }
   const after = await snapshot()
   if (JSON.stringify(before) !== JSON.stringify(after)) throw Error("HISTORICAL_INTEGER_VALUES_CHANGED")
-  await writeFile(out + "/migration.json", JSON.stringify({ identity, before, after, historicalUnPreserved: true, newMigration: "20261029120000_manual_kg_sale_quantity", productionWrites: 0 }, null, 2))
+  await writeFile(out + "/migration.json", JSON.stringify({ identity, before, after, historicalUnPreserved: true, newMigration: "20261108120000_f8_devolucao_kg_fracionada", productionWrites: 0 }, null, 2))
 } finally { await db.$disconnect() }
 run(["scripts/pdv/verify-manual-kg-migration.mjs"])
 run(["node_modules/vitest/vitest.mjs", "run", "lib/vendas/manual-kg-contract.test.ts", "lib/vendas/manual-kg-hardening.test.ts", "lib/vendas/manual-kg-sale.pg.test.ts", "lib/vendas/manual-kg-padaria-flow.pg.test.ts", "lib/pdv/devolucao/f8-venda-kg.pg.test.ts", "--maxWorkers=1", "--reporter=json", "--outputFile=test-results/manual-kg/integration.json"], {

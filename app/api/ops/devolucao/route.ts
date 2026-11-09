@@ -27,7 +27,16 @@ const itemSchema = z.object({
   /** Chave histórica da linha (Produto.id) vinda da elegibilidade — autoridade de identidade. */
   produtoId: z.string().optional(),
   nome: z.string().default(""),
-  quantidade: z.number().int().min(1),
+  /**
+   * UN (legado, única forma de clientes Prisma antigos): inteiro ≥ 1.
+   * KG: use `quantidadeKg` (string com até 3 casas) — exatamente um dos dois.
+   * A semântica (qual unidade a LINHA vendida aceita) é validada no escritor.
+   */
+  quantidade: z.number().int().min(1).optional(),
+  quantidadeKg: z.string().min(1).max(24).optional(),
+  /** Condição da mercadoria devolvida (GOAL §5) — obrigatória para KG. */
+  condicao: z.enum(["apto_revenda", "nao_apto_revenda", "nao_recebido", "descarte"]).optional(),
+  justificativa: z.string().max(500).optional(),
   // Aceitos por compatibilidade com clientes antigos; IGNORADOS — o servidor deriva
   // unitário e total dos itens persistidos da venda de origem.
   valorUnitario: z.number().min(0).optional(),
@@ -53,7 +62,18 @@ const schema = z.object({
 })
 
 function businessStatus(e: DevolucaoBusinessError): number {
-  if (e.code === "VENDA_ORIGEM_OBRIGATORIA" || e.code === "ITENS_DUPLICADOS" || e.code === "CLIENTE_DOC_OBRIGATORIO") return 422
+  if (
+    e.code === "VENDA_ORIGEM_OBRIGATORIA" ||
+    e.code === "ITENS_DUPLICADOS" ||
+    e.code === "CLIENTE_DOC_OBRIGATORIO" ||
+    e.code === "QUANTIDADE_ITEM_INVALIDA" ||
+    e.code === "QUANTIDADE_KG_INVALIDA" ||
+    e.code === "CONDICAO_MERCADORIA_OBRIGATORIA_KG" ||
+    e.code === "CONDICAO_MERCADORIA_INVALIDA" ||
+    e.code === "JUSTIFICATIVA_CONDICAO_OBRIGATORIA"
+  ) {
+    return 422
+  }
   return 409
 }
 
