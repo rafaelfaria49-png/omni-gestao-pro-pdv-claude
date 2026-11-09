@@ -285,9 +285,15 @@ test("authenticated Workspace corrects only KG weight, survives lost acknowledge
  await page.keyboard.press("Escape")
  await row.locator('button[aria-haspopup="menu"]').click()
  await page.getByRole("menuitem", { name: "Troca / Devolução" }).click()
- await expect(page.getByRole("alert").filter({ hasText: "Devolução parcial e troca de venda KG indisponíveis" })).toBeVisible()
- await expect(page.getByRole("button", { name: "Confirmar Devolução", exact: true })).toBeDisabled()
- await page.screenshot({ animations: "disabled", path: "test-results/manual-kg/return-blocked.png", fullPage: true })
+ // Contrato configurável: venda KG (mesmo corrigida) NÃO bloqueia mais a tela inteira —
+ // a linha aparece com unidade KG, saldo exato e campo de peso (nenhuma devolução é
+ // registrada aqui; o cancelamento integral segue sendo o caminho deste teste).
+ await expect(page.getByRole("alert").filter({ hasText: "Devolução parcial e troca de venda KG indisponíveis" })).toHaveCount(0)
+ await expect(page.getByTestId("linha-devolucao-kg")).toBeVisible()
+ await expect(page.getByTestId("linha-devolucao-kg")).toContainText("Vendido: 0,300 kg")
+ await expect(page.getByTestId("linha-devolucao-kg")).toContainText("Disponível: 0,300 kg")
+ await expect(page.getByRole("button", { name: "Confirmar Devolução", exact: true })).toBeVisible()
+ await page.screenshot({ animations: "disabled", path: "test-results/manual-kg/return-kg-liberado.png", fullPage: true })
  const approval = await auth.post("/api/auth/admin", { headers: { ...H, Origin: baseURL }, data: { pin: process.env.MANUAL_KG_E2E_PIN, action: "estornar_venda", resource: sale.id } })
  expect(approval.status()).toBe(200)
  expect((await auth.post("/api/vendas/" + sale.id + "/cancelar", { headers: H, data: { motivo: "Cancelamento sintético após correção" } })).status()).toBe(200)
