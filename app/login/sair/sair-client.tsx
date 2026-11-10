@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { signOut } from "next-auth/react"
 import { verifiedSignOut, type VerifiedSignOutResult } from "@/lib/auth/verified-sign-out"
+import { purgeSessionRuntimeCaches } from "@/lib/pwa/purge-session-caches"
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -16,6 +17,9 @@ export function SairClient() {
     void (async () => {
       const r = await verifiedSignOut({ signOut, fetchImpl: fetch, wait })
       if (r.ok) {
+        // Só depois da confirmação do servidor: dados da sessão encerrada saem do cache do SW
+        // (localStorage — fila offline, carrinho, caixa — não é tocado).
+        await purgeSessionRuntimeCaches(typeof caches === "undefined" ? undefined : caches)
         window.location.replace("/login")
         return
       }
