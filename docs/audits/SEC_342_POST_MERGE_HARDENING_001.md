@@ -169,6 +169,26 @@ cadastro é gravado no navegador.
 | Probes antes/depois (QA) | tabela acima |
 | CI das PRs | ver cada PR |
 
+## Revisão independente
+
+Revisor Claude separado, somente leitura, lendo o código e `node_modules/next-auth`. Não achou P0 nem P1.
+
+| # | Sev. | Achado | Tratamento |
+|---|---|---|---|
+| 1 | P2 | A sonda `GET /api/auth/session` cai na regra `apis` (NetworkFirst) do SW; `cache: "no-store"` não fura o SW. A resposta podia vir do cache | **corrigido**: URL única por sonda (`?confirmar=…`) |
+| 2 | P2 | A confirmação era um ponto único. Uma resposta em voo de **outra aba** pode regravar o cookie logo depois | **corrigido**: duas leituras seguidas sem sessão, com 1 s entre elas. O risco residual de multi-aba fica documentado na seção 2 |
+| 3 | P3 | A limpeza remove o `/login` guardado em `pages`/`start-url`. Se o aparelho cair offline entre a limpeza e a carga, o PWA abre em erro | aceito: ninguém entra offline, e a próxima abertura online guarda de novo |
+| 4 | P3 | Só os **efeitos automáticos** ficam bloqueados com a chave legada; ações do operador (venda, devolução, quarentena) não | mensagem do commit corrigida; sem PDV utilizável antes de a loja resolver |
+| 5 | P3 | "Atualizar caixa" com loja nunca resolvida mostra "Caixa ainda carregando" | aceito (cosmético) |
+| 6 | P3 | `ChangePasswordForm` ainda usa `signOut({ callbackUrl })` | sem risco de ressurreição: a troca de senha faz `sessionVersion++`, e o callback `jwt` relê o banco a cada leitura e rejeita o token antigo |
+
+Veredito do revisor: isolamento APPROVE_WITH_NITS (nit resolvido), assistente APPROVE, logout
+REQUEST_CHANGES leve (itens 1 e 2, ambos resolvidos), cache APPROVE_WITH_NITS (item 3 aceito).
+
+**Escopo da prova local.** Os probes "depois" e o E2E offline com SW rodaram no build com as 4 correções
+**antes** dos ajustes da revisão (itens 1 e 2): sonda com URL única e segunda confirmação. Esses dois
+ajustes têm teste unitário (7/7), e os E2E autenticados do CI exercitam o logout na versão final.
+
 ## Pendências e bloqueios
 
 1. **Domínio legado:** decisão do proprietário (passos da seção 1); uso real e webhooks não verificáveis sem
