@@ -425,7 +425,7 @@ function PdvSectionContent() {
     setConfirmarDesativarTrocasPeso(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (confirmadoTrocasPeso = false) => {
     const lojaHeader = lojaAtivaId?.trim();
     if (!lojaHeader) {
       toast({
@@ -436,9 +436,10 @@ function PdvSectionContent() {
       return;
     }
     // Desativar trocas por peso é decisão comercial da unidade: exige confirmação explícita.
-    if (draftTrocasPeso === "disabled" && savedTrocasPeso === "enabled" && !confirmarDesativarTrocasPeso) {
-      setConfirmarDesativarTrocasPeso(true);
-      return;
+    // `confirmadoTrocasPeso` vem do próprio diálogo (o estado React não muda no mesmo tick).
+    if (draftTrocasPeso === "disabled" && savedTrocasPeso === "enabled" && !confirmadoTrocasPeso) {
+      setConfirmarDesativarTrocasPeso(true)
+      return
     }
     setSaving(true);
     try {
@@ -1076,8 +1077,7 @@ function PdvSectionContent() {
                 size="sm"
                 data-testid="confirmar-desativar-trocas-peso"
                 onClick={() => {
-                  setConfirmarDesativarTrocasPeso(true)
-                  void handleSave()
+                  void handleSave(true)
                 }}
                 disabled={saving}
               >
