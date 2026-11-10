@@ -3,20 +3,37 @@ import { verifiedSignOut } from "./verified-sign-out"
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })
 const noWait = async () => {}
+const fetchFrom = (responses: Array<Response | Promise<Response>>) =>
+  vi.fn(() => Promise.resolve(responses.shift()!)) as unknown as typeof fetch
 
 describe("verifiedSignOut (SEC-342)", () => {
-  it("termina na 1ª tentativa quando o servidor confirma que não há sessão", async () => {
+  it("termina na 1ª tentativa quando duas leituras seguidas do servidor não têm sessão", async () => {
     const signOut = vi.fn(async () => undefined)
     const fetchImpl = vi.fn(async () => json({})) as unknown as typeof fetch
     expect(await verifiedSignOut({ signOut, fetchImpl, wait: noWait })).toEqual({ ok: true, attempts: 1 })
     expect(signOut).toHaveBeenCalledTimes(1)
     expect(signOut).toHaveBeenCalledWith({ redirect: false })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it("cada sonda usa URL única (o cache NetworkFirst do SW não pode responder por ela)", async () => {
+    const fetchImpl = vi.fn(async () => json({})) as unknown as typeof fetch
+    await verifiedSignOut({ signOut: async () => undefined, fetchImpl, wait: noWait })
+    const urls = vi.mocked(fetchImpl).mock.calls.map((c) => String(c[0]))
+    expect(urls.every((u) => u.startsWith("/api/auth/session?confirmar="))).toBe(true)
+    expect(new Set(urls).size).toBe(urls.length)
   })
 
   it("cookie ressuscitado por resposta atrasada: repete o signout até o servidor confirmar", async () => {
     const signOut = vi.fn(async () => undefined)
-    const sessions = [json({ user: { id: "u1" } }), json(null)]
-    const fetchImpl = vi.fn(async () => sessions.shift()!) as unknown as typeof fetch
+    const fetchImpl = fetchFrom([json({ user: { id: "u1" } }), json(null), json(null)])
+    expect(await verifiedSignOut({ signOut, fetchImpl, wait: noWait })).toEqual({ ok: true, attempts: 2 })
+    expect(signOut).toHaveBeenCalledTimes(2)
+  })
+
+  it("sessão que volta logo depois da 1ª confirmação (outra aba) não conta como saída", async () => {
+    const signOut = vi.fn(async () => undefined)
+    const fetchImpl = fetchFrom([json({}), json({ user: { id: "u1" } }), json({}), json({})])
     expect(await verifiedSignOut({ signOut, fetchImpl, wait: noWait })).toEqual({ ok: true, attempts: 2 })
     expect(signOut).toHaveBeenCalledTimes(2)
   })
@@ -34,12 +51,12 @@ describe("verifiedSignOut (SEC-342)", () => {
     expect(await verifiedSignOut({ signOut, fetchImpl, wait: noWait })).toEqual({ ok: false, attempts: 3, reason: "sem-confirmacao" })
   })
 
-  it("espera o período de silêncio antes do 1º signout", async () => {
+  it("espera o silêncio antes do 1º signout e a pausa entre as duas confirmações", async () => {
     const order: string[] = []
     const wait = vi.fn(async (ms: number) => { order.push(`wait:${ms}`) })
     const signOut = vi.fn(async () => { order.push("signout") })
-    const fetchImpl = vi.fn(async () => json({})) as unknown as typeof fetch
-    await verifiedSignOut({ signOut, fetchImpl, wait, quietMs: 800 })
-    expect(order).toEqual(["wait:800", "signout", "wait:300"])
+    const fetchImpl = vi.fn(async () => { order.push("probe"); return json({}) }) as unknown as typeof fetch
+    await verifiedSignOut({ signOut, fetchImpl, wait, quietMs: 800, confirmMs: 1_000 })
+    expect(order).toEqual(["wait:800", "signout", "wait:300", "probe", "wait:1000", "probe"])
   })
 })
