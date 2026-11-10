@@ -26,8 +26,8 @@ início: main `ce9228c` · #315 `2284491` · #335 `dd264a6` · #336 `a413ad5` ·
 | main | `ce9228c` (intocada; MERGE_MAIN=NO) |
 | #315 | `2284491` (intocada — nenhum contrato da #315/#335 precisou mudar) |
 | #335 | `dd264a6` (intocada) |
-| #336 | `a413ad5` → `07df5bb` (implementação + runbook) |
-| #337 | `3a11f61` → `38d225f` (merge da #336 + docs readiness/checklist) |
+| #336 | `a413ad5` → `e19cc3a` (implementação + docs + correções da revisão) |
+| #337 | `3a11f61` → `e1ac2d6` (merges da #336 + docs readiness/checklist) |
 
 Sem force-push; pilha preservada por merges: main → #315 → #335 → #336 → #337.
 
@@ -151,10 +151,26 @@ serão removidos ao fim da sessão. Worktrees das outras frentes e WIPs intocado
 
 ## 8. Revisão independente — status verdadeiro
 
-- **Revisão de contexto limpo (mesma família do executor)**: ver §8 do relatório final
-  da conversa — subagente de revisão foi despachado com o pacote desta entrega; o
-  resultado está registrado abaixo em REVISAO_INDEPENDENTE do relatório final.
-- **R3 cruzada Codex da #336**: permanece PENDENTE por limite de cota (reabre
+- **Revisão de contexto limpo (subagente somente leitura, executada em 2026-11-09 sobre
+  `a413ad5..0ff81f5`)**: veredito **APPROVE_WITH_NOTES** — núcleo autoritativo (créditos
+  Σ≤pago em inteiros, teto sob lock, política no banco, migration com guardas) sem
+  achados em créditos, cálculos KG do servidor, concorrência, permissões e regressões
+  UN. **Todos os achados corrigidos** no commit `e19cc3a`, com revalidação completa:
+  - **P2-1** validação de peso do caminho LOCAL por gramas (`toStockUnits`) — igualdade
+    em double recusava pesos legítimos de 3 casas (1,001 kg);
+  - **P2-2** `distribuirQtyReturned` preserva milésimos (0,4 kg não colapsa em 0 nem
+    0,6 em 1) — espelho local fiel, com teste novo;
+  - **P3-1** trigger `manual_kg_guard_return_item` recriado com DELETE (o original era
+    INSERT OR UPDATE; DELETE direto de linha KG liberaria teto);
+  - **P3-2** readiness compara o fingerprint do CHECK (`f8-kg-return-v1:` md5);
+  - **P3-3** busca manual do F8 também atualiza `trocasPesoPermitidas` (banner);
+  - **P3-4** espelho de estoque local só soma/subtrai mercadoria apta; replay devolve
+    condição/estoque reais do payload gravado;
+  - **P3-5** linha ilegível da venda aparece com motivo explícito na elegibilidade.
+  - Duas tentativas anteriores de despachar o revisor falharam por limite de uso da
+    conta (janelas 2026-11-09 01:51 e 2026-11-10 07:00) — registradas; a terceira
+    executou normalmente.
+- **R3 cruzada Codex da #336**: permanece **PENDENTE** por limite de cota (reabre
   2026-11-10, conforme `KG_RELEASE_CHECKLIST_DONO.md`). Nenhuma aprovação inventada.
 
 ## 9. Pendências externas (herdadas, não criadas aqui)
