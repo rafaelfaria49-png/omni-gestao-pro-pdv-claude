@@ -159,7 +159,7 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     const dialog = await abrirTrocaPorF8(page)
     await buscarPorSku(dialog)
     await expect(dialog.getByText(origem)).toBeVisible()
-    await expect(dialog.getByText(/Vendido: 2 · Devolvido: 0 · Disponível:/)).toBeVisible()
+    await expect(dialog.getByText(/Vendido: 2 · Já devolvido: 0 · Disponível:/)).toBeVisible()
     await dialog.getByPlaceholder("Somente números").fill(CPF)
     await dialog.getByPlaceholder("Nome completo").fill("Cliente Sintético E2E")
     await dialog.getByRole("button", { name: "Troca Imediata" }).click()
@@ -202,7 +202,7 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     await expect(page.getByRole("dialog", { name: /Troca \/ Devolução/ })).toHaveCount(0)
     const dialog = await abrirTrocaPorF8(page)
     await buscarPorSku(dialog)
-    await expect(dialog.getByText(/Vendido: 2 · Devolvido: 1 · Disponível:/)).toBeVisible()
+    await expect(dialog.getByText(/Vendido: 2 · Já devolvido: 1 · Disponível:/)).toBeVisible()
   })
 
   await test.step("SKU alterado depois da venda: o SKU novo acha a venda antiga e o devolvível continua 1", async () => {
@@ -214,7 +214,7 @@ test("F8 no Clássico: troca imediata com diferença positiva, vale consumido e 
     const dialog = await abrirTrocaPorF8(page)
     await buscarPorSku(dialog, novoSku)
     await expect(dialog.getByText(origem)).toBeVisible()
-    await expect(dialog.getByText(/Vendido: 2 · Devolvido: 1 · Disponível:/)).toBeVisible()
+    await expect(dialog.getByText(/Vendido: 2 · Já devolvido: 1 · Disponível:/)).toBeVisible()
   })
 
   await ctx.close()
