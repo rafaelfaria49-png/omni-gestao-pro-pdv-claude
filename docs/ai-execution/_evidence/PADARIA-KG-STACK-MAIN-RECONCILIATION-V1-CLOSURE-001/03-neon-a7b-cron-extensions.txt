@@ -1,0 +1,5 @@
+databases: neondb, omnigestao_prod, omnigestao_prod_candidate, postgres
+neondb: dblink avail=1.2 inst=-; pg_cron avail=1.6 inst=-; postgres_fdw avail=1.1 inst=- | shared_preload=neon,pg_stat_statements,timescaledb,pg_cron,pg_partman_bgw,rag_bge_small_en_v15,rag_jina_reranker_v1_tiny_en,lakebase_vector,lakebase_text
+omnigestao_prod: dblink avail=1.2 inst=-; pg_cron avail=1.6 inst=-; postgres_fdw avail=1.1 inst=- | shared_preload=neon,pg_stat_statements,timescaledb,pg_cron,pg_partman_bgw,rag_bge_small_en_v15,rag_jina_reranker_v1_tiny_en,lakebase_vector,lakebase_text
+omnigestao_prod_candidate: dblink avail=1.2 inst=-; pg_cron avail=1.6 inst=-; postgres_fdw avail=1.1 inst=- | shared_preload=neon,pg_stat_statements,timescaledb,pg_cron,pg_partman_bgw,rag_bge_small_en_v15,rag_jina_reranker_v1_tiny_en,lakebase_vector,lakebase_text
+postgres: dblink avail=1.2 inst=-; pg_cron avail=1.6 inst=-; postgres_fdw avail=1.1 inst=- | shared_preload=neon,pg_stat_statements,timescaledb,pg_cron,pg_partman_bgw,rag_bge_small_en_v15,rag_jina_reranker_v1_tiny_en,lakebase_vector,lakebase_text

@@ -1,0 +1,10 @@
+Suíte KG oficial (scripts/pdv/run-manual-kg-tests.mjs), PostgreSQL 17.10 descartável 127.0.0.1:55479, banco recriado a cada rodada.
+
+baseline fcccc34 (antes do teste novo)          79/79 + 35 checks (migration/Prisma315/RLS)
+baseline fcccc34 + 07 aplicado após migrations   79/79 + 35, 5 CHECKs *_kg_milesimos validados
+RED  (teste novo, sem o fix)                     79/80 — "venda com o marcador KG e só linhas UN ... é cancelável pelo protocolo KG":
+     AssertionError: {"ok":false,"error":"Falha ao cancelar venda"}: expected 503 to be 200 (f8-venda-kg.pg.test.ts:243)
+GREEN rodada 1 (fix 20d2210)                     80/80 + 35
+GREEN rodada 2                                   80/80 + 35
+GREEN com 07 ativo                               80/80 + 35, 5 CHECKs validados
+árvore final #337 28ef9e2 (antes deste registro) 80/80 + 35

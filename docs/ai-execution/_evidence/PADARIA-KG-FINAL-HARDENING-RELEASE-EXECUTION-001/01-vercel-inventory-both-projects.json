@@ -1,0 +1,1320 @@
+{
+ "capturedAt": "2026-11-08T11:16:20.223Z",
+ "method": "vercel api GET, metadata only (no decrypt, env values and bypass secrets dropped)",
+ "projects": {
+  "omni-gestao-pro": {
+   "id": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+   "framework": "nextjs",
+   "nodeVersion": "20.x",
+   "link": {
+    "type": "github",
+    "repo": "omni-gestao-pro-pdv-claude",
+    "org": "rafaelfaria49-png",
+    "productionBranch": "main"
+   },
+   "ssoProtection": null,
+   "passwordProtection": false,
+   "trustedIps": false,
+   "protectionBypassCount": 1,
+   "commandForIgnoringBuildStep": null,
+   "gitForkProtection": true,
+   "crons": {
+    "enabledAt": "2026-04-13T01:25",
+    "definitions": []
+   },
+   "domains": [
+    {
+     "name": "omni-gestao-pro.vercel.app",
+     "verified": true,
+     "gitBranch": null,
+     "redirect": null
+    }
+   ],
+   "envKeyCount": 40,
+   "envKeys": [
+    "ADMIN_DEFAULT_PASSWORD",
+    "ASSISTEC_SUBSCRIPTION_SECRET",
+    "AUTH_SECRET",
+    "AUTH_TRUST_HOST",
+    "AUTH_URL",
+    "BARCODE_LOOKUP_PROVIDERS",
+    "CONTADOR_EXTERNO_SESSION_SECRET",
+    "CONTADOR_LEGACY_PORTAL",
+    "CONTADOR_PIN",
+    "CONTADOR_PORTAL_V2",
+    "CONTADOR_SESSION_SECRET",
+    "CONTADOR_STORAGE_PROVIDER",
+    "COSMOS_API_KEY",
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "FISCAL_A1_PFX_B64_LOJA_1",
+    "FISCAL_A1_SENHA_LOJA_1",
+    "MIGRATION_AUTHORITY_ENABLED",
+    "NEXTAUTH_URL",
+    "NEXT_PUBLIC_APP_URL",
+    "NEXT_TELEMETRY_DISABLED",
+    "NODE_ENV",
+    "NPM_CONFIG_INCLUDE",
+    "OMNI_PRINT_CONTENT_KEY",
+    "OMNI_PRINT_D05_ENVIRONMENT",
+    "OMNI_PRINT_DIRECT_ENABLED",
+    "OMNI_PRINT_DIRECT_RELEASE",
+    "OMNI_PRINT_RETENTION_ENABLED",
+    "OMNI_PRINT_SIGNING_KEY",
+    "R2_ACCESS_KEY_ID",
+    "R2_ACCOUNT_ID",
+    "R2_BUCKET",
+    "R2_SECRET_ACCESS_KEY",
+    "SALE_SERVER_NUMBERING_ENABLED",
+    "WHATSAPP_ACCESS_TOKEN",
+    "WHATSAPP_APP_SECRET",
+    "WHATSAPP_BUSINESS_ACCOUNT_ID",
+    "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_VERIFY_TOKEN",
+    "WHATSAPP_WEBHOOK_STORE_ID"
+   ],
+   "dbEnvs": [
+    {
+     "key": "DIRECT_URL",
+     "id": "iAUnSaOSvL9rcNDR",
+     "type": "sensitive",
+     "target": "preview",
+     "branch": "codex/omni-print-d05-homologacao-fisica-001",
+     "created": "2026-11-05T23:21",
+     "updated": "2026-11-05T23:21",
+     "integration": "no"
+    },
+    {
+     "key": "DATABASE_URL",
+     "id": "SNSzT9lD8FGpE2BN",
+     "type": "sensitive",
+     "target": "preview",
+     "branch": "codex/omni-print-d05-homologacao-fisica-001",
+     "created": "2026-11-05T23:21",
+     "updated": "2026-11-05T23:21",
+     "integration": "no"
+    },
+    {
+     "key": "DIRECT_URL",
+     "id": "BWFYesLFr0hAJWjT",
+     "type": "sensitive",
+     "target": "preview",
+     "branch": "claude/estoque-manual-kg-001",
+     "created": "2026-10-27T22:05",
+     "updated": "2026-10-27T22:05",
+     "integration": "no"
+    },
+    {
+     "key": "DATABASE_URL",
+     "id": "VUjVxPk2VgPGdjEW",
+     "type": "sensitive",
+     "target": "preview",
+     "branch": "claude/estoque-manual-kg-001",
+     "created": "2026-10-27T22:05",
+     "updated": "2026-10-27T22:05",
+     "integration": "no"
+    },
+    {
+     "key": "DIRECT_URL",
+     "id": "vFJN2RB2PQHJairQ",
+     "type": "encrypted",
+     "target": "development",
+     "branch": "",
+     "created": "2026-07-27T23:30",
+     "updated": "2026-07-27T23:30",
+     "integration": "no"
+    },
+    {
+     "key": "DIRECT_URL",
+     "id": "WfY0iLLQ8cbQOXHd",
+     "type": "sensitive",
+     "target": "preview",
+     "branch": "",
+     "created": "2026-07-27T23:30",
+     "updated": "2026-10-27T22:05",
+     "integration": "no"
+    },
+    {
+     "key": "DIRECT_URL",
+     "id": "38TkKDEr1OIgsxy0",
+     "type": "sensitive",
+     "target": "production",
+     "branch": "",
+     "created": "2026-07-27T23:28",
+     "updated": "2026-07-27T23:28",
+     "integration": "no"
+    },
+    {
+     "key": "DATABASE_URL",
+     "id": "CAgFUTJYNOJb64j1",
+     "type": "sensitive",
+     "target": "preview",
+     "branch": "",
+     "created": "2026-07-27T23:27",
+     "updated": "2026-10-27T22:05",
+     "integration": "no"
+    },
+    {
+     "key": "DATABASE_URL",
+     "id": "p2OLtFuiyUymtIRA",
+     "type": "sensitive",
+     "target": "production",
+     "branch": "",
+     "created": "2026-07-27T23:26",
+     "updated": "2026-07-27T23:26",
+     "integration": "no"
+    }
+   ],
+   "productionDeployments": [
+    {
+     "id": "dpl_GhyK8LebaGHAUjVBB5F4aT89gf8L",
+     "url": "omni-gestao-ajsc53tqg-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "ce9228c57617f72e9c350cc0232f973fb57a0eaa",
+     "ref": "main",
+     "created": "2026-11-08T05:32",
+     "aliases": [
+      "omni-gestao-pro-rafaelfaria49-4373s-projects.vercel.app",
+      "omni-gestao-pro-git-main-rafaelfaria49-4373s-projects.vercel.app",
+      "omni-gestao-pro.vercel.app"
+     ]
+    },
+    {
+     "id": "dpl_BtbfbnoAMBt3dauihEr9e4dpTL8x",
+     "url": "omni-gestao-3frhbad1o-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "7cac3d8020472a01b208c5bb3f278c5e7de0a707",
+     "ref": "main",
+     "created": "2026-11-07T22:48",
+     "aliases": []
+    },
+    {
+     "id": "dpl_2aNaisN5cRS6e8eBttGhgkbLKVGc",
+     "url": "omni-gestao-66v97j9p3-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+     "ref": "main",
+     "created": "2026-11-04T00:23",
+     "aliases": []
+    },
+    {
+     "id": "dpl_A5QFFpq4G1BtUMJ3tomewdb1Xmod",
+     "url": "omni-gestao-fpuyj9n3n-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "8cbd551419798091db5402a038a41be9a4f3648a",
+     "ref": "main",
+     "created": "2026-11-03T17:15",
+     "aliases": []
+    },
+    {
+     "id": "dpl_CAGHeFeL3LGEiKHbzVQrsGUqsZ3N",
+     "url": "omni-gestao-jvb1ymmi7-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "a07e0676909f4683c9ba697822ef4b104c1d6e95",
+     "ref": "main",
+     "created": "2026-11-02T22:01",
+     "aliases": []
+    },
+    {
+     "id": "dpl_8jUppiZtpS1Yzpvxv4dSvCQ6EhRw",
+     "url": "omni-gestao-88isa3svg-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "49466887164960b8064124646e62f1c63db6dc86",
+     "ref": "main",
+     "created": "2026-11-02T20:44",
+     "aliases": []
+    },
+    {
+     "id": "dpl_9ixMLdNTZQzwA3eWZTLCVj2ujTcP",
+     "url": "omni-gestao-h1o0wcmvv-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "aaab27505a03903d9fb8333baef5b52424821093",
+     "ref": "main",
+     "created": "2026-10-29T12:34",
+     "aliases": []
+    },
+    {
+     "id": "dpl_7UqN8Rrkz9Vi7ezB3ArkL6TDcvvW",
+     "url": "omni-gestao-7dq6cvmmh-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "ba010ace89e2513aac2eb4ca274d52cbaac6abb4",
+     "ref": "main",
+     "created": "2026-10-28T23:32",
+     "aliases": []
+    }
+   ],
+   "readyPreviewDeployments": [
+    {
+     "id": "dpl_BTwvePn6fKfMjrpbHRoPHpQvBXjK",
+     "sha": "fcccc34",
+     "ref": "claude/padaria-kg-release-readiness-a4-a8-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_89bA6CeTzDjwgU7d22XvKdRnqgks",
+     "sha": "709c64e",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_47FHSmKLbuc9E7Jt4hVSqWZirS5R",
+     "sha": "2a5a8f2",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_Hb6iuqKCUH9rvX7EboSdPgqw2CbH",
+     "sha": "df828d0",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_GavkE8HRkLTsDRjH3akuf2Rwyihe",
+     "sha": "aca73cc",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-08T06:01"
+    },
+    {
+     "id": "dpl_58Hf1CkvN7vJRaniVxrEeJHCCnzP",
+     "sha": "51092f8",
+     "ref": "docs/catalogo-rollout-compat-manual-final-001",
+     "created": "2026-11-08T05:50"
+    },
+    {
+     "id": "dpl_7wn6Hwf9Fzqo1XiDkCKz5q4qTbJW",
+     "sha": "31fd075",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-08T05:41"
+    },
+    {
+     "id": "dpl_6FvrGWvRvEuaGxitZue158vn4Epc",
+     "sha": "7b72223",
+     "ref": "claude/padaria-kg-release-readiness-a4-a8-001",
+     "created": "2026-11-08T05:05"
+    },
+    {
+     "id": "dpl_HrXaaMjgirmxNBJpSM4spYCvCuGR",
+     "sha": "bc1c3fc",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-08T04:54"
+    },
+    {
+     "id": "dpl_6eSo2c34SoYgcd275RWY3yt4tA2J",
+     "sha": "3ebbd76",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-08T04:54"
+    },
+    {
+     "id": "dpl_Gimb76TRaVtKSZ8eauAtamHSUoSV",
+     "sha": "2016850",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-08T01:53"
+    },
+    {
+     "id": "dpl_ocJvKoqAqvTSCBSBmvh51XsR4PWQ",
+     "sha": "27aeef5",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-08T01:33"
+    },
+    {
+     "id": "dpl_GWhMYf2oZnFotoyfDh4nKVo7SEL3",
+     "sha": "91374ed",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-08T00:01"
+    },
+    {
+     "id": "dpl_89sZ34JvYc2yVxMraqaVi4rVeoLu",
+     "sha": "8c20dd6",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-07T23:45"
+    },
+    {
+     "id": "dpl_GKXB6BSPV7JobJ8LMSguoGNm7dww",
+     "sha": "a1b52ee",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-07T23:38"
+    },
+    {
+     "id": "dpl_GU2pVqzpCfRiHyYthBrLGHrP6s3Y",
+     "sha": "bb124d8",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-07T23:23"
+    },
+    {
+     "id": "dpl_FzAP11t1Xc2tL9VQhEv5avbtufJ8",
+     "sha": "7636e53",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-07T22:57"
+    },
+    {
+     "id": "dpl_3Mb3bL4jN2Q5bjPXKjagCqBKhCUU",
+     "sha": "bed911a",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-07T22:52"
+    },
+    {
+     "id": "dpl_3Uetc3a89TrKzPXZg4dZ5m8ZM63J",
+     "sha": "4ea5df3",
+     "ref": "fix/ci-playwright-ubuntu-2404-20261107",
+     "created": "2026-11-07T22:00"
+    },
+    {
+     "id": "dpl_EFAZFsHREMqvP8KCJ7k6zSXjVRgA",
+     "sha": "a51fcd8",
+     "ref": "fix/ci-playwright-ubuntu-2404-20261107",
+     "created": "2026-11-07T22:00"
+    },
+    {
+     "id": "dpl_Fh8VbWhRnQUrKGPqdNS8QnreNVaK",
+     "sha": "9127faf",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-07T12:26"
+    },
+    {
+     "id": "dpl_4vbsBgNMx6yFqD9LZf78J36iBXWR",
+     "sha": "26febda",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-07T12:00"
+    },
+    {
+     "id": "dpl_DGovvapoU7oAgJX75P9GNQPs2U6G",
+     "sha": "1df1e79",
+     "ref": "claude/padaria-kg-release-readiness-a4-a8-001",
+     "created": "2026-11-07T02:16"
+    },
+    {
+     "id": "dpl_7a9ABtNtX6hHd9NMj2uY6B8hNKZ3",
+     "sha": "adbc66e",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:53"
+    },
+    {
+     "id": "dpl_HL4DiSJTDo963YcfyKVpcyeTswJM",
+     "sha": "065bdf5",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:40"
+    },
+    {
+     "id": "dpl_BUwwxHUnkBkNBGEzPzHgPFtvnFor",
+     "sha": "3e2e795",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:17"
+    },
+    {
+     "id": "dpl_BUAZNMN5PGskSPFHaf1THdWtpFLx",
+     "sha": "6b85245",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:03"
+    },
+    {
+     "id": "dpl_AV6xGBWwWA95nPnGz3Uii4wzkaf9",
+     "sha": "406ea48",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-06T10:18"
+    },
+    {
+     "id": "dpl_HAcKk7vqpbk9kYNNW2Sosv9DJuJS",
+     "sha": "8497849",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-06T10:08"
+    },
+    {
+     "id": "dpl_J8aXzKkQom52S6AiDqr9N3JoHECQ",
+     "sha": "9eef30f",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-06T05:27"
+    },
+    {
+     "id": "dpl_B9vJfGhLWMuaJPqLkLArFyxzXmZa",
+     "sha": "172882c",
+     "ref": "codex/omni-print-d05-homologacao-fisica-001",
+     "created": "2026-11-05T23:28"
+    },
+    {
+     "id": "dpl_G9R8VziRxckDQ5r4Pv91ddKUCdum",
+     "sha": "0e9eb95",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-05T14:18"
+    },
+    {
+     "id": "dpl_Fn5A9VWFAS4AGa4M1i1wFSZagKqQ",
+     "sha": "b0de724",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-05T10:15"
+    },
+    {
+     "id": "dpl_EpDVhfLFX1sLc8FKp8uFTYxTrwwY",
+     "sha": "b9d4802",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T01:38"
+    },
+    {
+     "id": "dpl_43sjahRTAs4oP4kJ6yaD6BAHs7qT",
+     "sha": "03e8580",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-05T01:17"
+    },
+    {
+     "id": "dpl_7ocVbhNniGvAAj9UssKMcB7B3xhu",
+     "sha": "683b017",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T01:09"
+    },
+    {
+     "id": "dpl_4Ln9tsaBuEgCoToXEi4ZSFWqcHBP",
+     "sha": "ae7a2da",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-05T01:04"
+    },
+    {
+     "id": "dpl_Bsm6X45g4B3iA37xT8upzkNJM31j",
+     "sha": "ac35419",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T01:00"
+    },
+    {
+     "id": "dpl_9K5uMRynomWzXbWwVicJzfVB8fkT",
+     "sha": "9781cb6",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T00:54"
+    },
+    {
+     "id": "dpl_D2HBGwBZdhTi6TdKUFLh9zQzxpT3",
+     "sha": "3c12aa2",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T23:05"
+    },
+    {
+     "id": "dpl_BmRF4zcVhLGW47uZpm2viMpxm3AR",
+     "sha": "54fe86d",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:55"
+    },
+    {
+     "id": "dpl_6bVemJoQsxbivnYFVJx2AZWnnCq2",
+     "sha": "8723ffc",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:35"
+    },
+    {
+     "id": "dpl_DXZMzoJmAev3pqAzoAKmJ9XCM7hs",
+     "sha": "5fd8743",
+     "ref": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+     "created": "2026-11-04T22:27"
+    },
+    {
+     "id": "dpl_J4aredtaWeh6vrRoDyD5JXWLU3ci",
+     "sha": "5bcc514",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:25"
+    },
+    {
+     "id": "dpl_DN9Sri1BNHxnWbbxhVXxHmmwsUDP",
+     "sha": "7a74a3e",
+     "ref": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+     "created": "2026-11-04T22:10"
+    },
+    {
+     "id": "dpl_49LcAexp2gRUTt7pgnJnvMFxnK8L",
+     "sha": "2927860",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:08"
+    },
+    {
+     "id": "dpl_3jyZqjPZFDi1hMNiFwduReXggZt7",
+     "sha": "cc68c35",
+     "ref": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+     "created": "2026-11-04T22:01"
+    },
+    {
+     "id": "dpl_7egBAgAwhVwJgMXuAhnKFxHXJ1GJ",
+     "sha": "deb2830",
+     "ref": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+     "created": "2026-11-04T21:19"
+    },
+    {
+     "id": "dpl_22QbuyUaujgTfdGc72jNhQsWhdh9",
+     "sha": "98495c4",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T20:47"
+    },
+    {
+     "id": "dpl_Bm74ccAS5HCw237bAxncuvH5MtWf",
+     "sha": "2364a4a",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T20:00"
+    },
+    {
+     "id": "dpl_3fSQFY59g9v4tpPVHPqvThXt6rCo",
+     "sha": "027bba5",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-04T19:01"
+    },
+    {
+     "id": "dpl_GPNoci557nXvh24NMFth5ELDQmFp",
+     "sha": "d31e820",
+     "ref": "claude/omni-print-d02-migrations-seguras",
+     "created": "2026-11-04T18:52"
+    },
+    {
+     "id": "dpl_H6ENN3Y7xemmNPUq1TnPBkNGFS79",
+     "sha": "d8d7d37",
+     "ref": "claude/omni-print-d02-migrations-seguras",
+     "created": "2026-11-04T18:52"
+    },
+    {
+     "id": "dpl_8r32nDRUyHWhV2BeJHQtiHeZ9wUQ",
+     "sha": "c9f573b",
+     "ref": "claude/omni-print-d02-migrations-seguras",
+     "created": "2026-11-04T17:33"
+    },
+    {
+     "id": "dpl_GNVwQet2KGCxTouV7NHyMQ4VaD7r",
+     "sha": "1b2912c",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-04T13:18"
+    },
+    {
+     "id": "dpl_3T3EHxo7yEmdg84YzBqzgkP7vabY",
+     "sha": "a8c9a4c",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-04T13:14"
+    },
+    {
+     "id": "dpl_77cczavLSL7FBQThFWmto9JxnfGu",
+     "sha": "7ef8124",
+     "ref": "claude/omni-print-d01-a1-reimpressao",
+     "created": "2026-11-04T03:55"
+    },
+    {
+     "id": "dpl_BRtB52nr72Rd1ehTzY4Souiq41Hb",
+     "sha": "7e86fdd",
+     "ref": "claude/omni-print-d01-a1-reimpressao",
+     "created": "2026-11-04T03:17"
+    },
+    {
+     "id": "dpl_A5DfLQu4pV2S4Rr6YGEZqhJ7dLJn",
+     "sha": "f639248",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-04T02:24"
+    },
+    {
+     "id": "dpl_5uJiS1ANE24kbnvggyaCYpPVSak8",
+     "sha": "8edd892",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-04T00:37"
+    },
+    {
+     "id": "dpl_7socr7aiRa3w782edPLGmUUWrVzH",
+     "sha": "04acea7",
+     "ref": "claude/pdv-offline-sync-confiabilidade-e2e-001",
+     "created": "2026-11-03T17:33"
+    },
+    {
+     "id": "dpl_9qXuTLTDdAZRpAXdiEFGqcmoWino",
+     "sha": "39b6525",
+     "ref": "claude/pdv-offline-sync-confiabilidade-e2e-001",
+     "created": "2026-11-03T17:24"
+    },
+    {
+     "id": "dpl_2p7kKNjxPYuuTz8YSGyzGL8veyMQ",
+     "sha": "619dbf1",
+     "ref": "fix/pdv-classic-mocks-post-325-20261103",
+     "created": "2026-11-03T17:10"
+    },
+    {
+     "id": "dpl_35KtxffgTSDzH8mGV6oA8obP8PTJ",
+     "sha": "9069dca",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-03T16:20"
+    },
+    {
+     "id": "dpl_FEBcNr96kc88o6183pqaEALbpWKP",
+     "sha": "6c12d6c",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-03T10:12"
+    },
+    {
+     "id": "dpl_BD3GNiosrtKu8Wo5r3geaGXjioyi",
+     "sha": "37690c4",
+     "ref": "claude/pdv-offline-sync-confiabilidade-e2e-001",
+     "created": "2026-11-03T09:20"
+    },
+    {
+     "id": "dpl_23Cs4nKAJGcfPyiVLJ2GR5tsGTb9",
+     "sha": "1292ce6",
+     "ref": "claude/pdv-offline-sync-confiabilidade-e2e-001",
+     "created": "2026-11-03T01:10"
+    },
+    {
+     "id": "dpl_C8642ZJXLkebQVpLuC3qmJq3wZ26",
+     "sha": "41324a8",
+     "ref": "claude/pdv-offline-sync-confiabilidade-e2e-001",
+     "created": "2026-11-03T00:45"
+    },
+    {
+     "id": "dpl_2WP1jYQbNNESanz6TTGHDHLx3gcb",
+     "sha": "4e656a5",
+     "ref": "claude/pdv-cadastros-sync-automatico-001",
+     "created": "2026-11-02T19:30"
+    },
+    {
+     "id": "dpl_65UixVfbXpG1XBFMDL1rg1MHC3E5",
+     "sha": "c15861a",
+     "ref": "claude/pdv-cadastros-sync-automatico-001",
+     "created": "2026-11-02T19:21"
+    },
+    {
+     "id": "dpl_Fz2eBGWnZh8MYpDmoQCBMdGqHfEq",
+     "sha": "0ddd5a7",
+     "ref": "claude/pdv-sync-produto-nao-resolvido-recovery-001",
+     "created": "2026-11-01T16:31"
+    },
+    {
+     "id": "dpl_BY97Be3pEvoLeTkB8GQ2iWer6tYq",
+     "sha": "44f311a",
+     "ref": "codex/pessoas-001b-recovery-002-rev10",
+     "created": "2026-10-29T13:52"
+    },
+    {
+     "id": "dpl_3U6sV53tBeUo5Ac25gPwAMKWhizR",
+     "sha": "104d768",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-10-29T01:43"
+    },
+    {
+     "id": "dpl_FbaaVBoTuVagTk14TFXfoNAmw6gu",
+     "sha": "cc67ad7",
+     "ref": "feat/relatorios-produtos-vendidos-real-001",
+     "created": "2026-10-28T01:50"
+    },
+    {
+     "id": "dpl_4FRuaQ4GxfuXyXcyqtUy7MzogDsB",
+     "sha": "7a6df14",
+     "ref": "goal/pessoas-001b-recovery-001",
+     "created": "2026-10-23T03:24"
+    },
+    {
+     "id": "dpl_Cyrid36PccfsQA6WphYcii7CHopf",
+     "sha": "5bd39a9",
+     "ref": "goal/fiscal-025b-archive-foundation-001",
+     "created": "2026-10-15T10:26"
+    },
+    {
+     "id": "dpl_ACcdzwNcowbhBz1kBh1QKsNoi2R7",
+     "sha": "7f505c2",
+     "ref": "codex/aep-pessoas-001b-blocked-reconciliation",
+     "created": "2026-10-12T19:46"
+    },
+    {
+     "id": "dpl_6JoJDdU5WpTRTq591JVK6eDmBEnc",
+     "sha": "a004c3b",
+     "ref": "goal/fiscal-022-pilot-homologation-activation",
+     "created": "2026-09-17T04:09"
+    },
+    {
+     "id": "dpl_2mREeZ5u1fY1WfSkHdmzM9ov2MDb",
+     "sha": "2884007",
+     "ref": "cursor/fiscal-017-h9-h10-expired-window-recovery-84f7",
+     "created": "2026-08-24T21:24"
+    },
+    {
+     "id": "dpl_Ffzdz7V3tKsRB4VdWrnEtmX5MjWS",
+     "sha": "a366524",
+     "ref": "cursor/ops-v4-checklist-rajada-fix-08c0",
+     "created": "2026-08-24T18:47"
+    },
+    {
+     "id": "dpl_EVdSdc6vf1tHuzmwqWKg7rF9xRBY",
+     "sha": "a7be1be",
+     "ref": "cursor/setup-dev-environment-b543",
+     "created": "2026-08-20T02:53"
+    },
+    {
+     "id": "dpl_DJF7CuLMha6MjpUUmgY9xCBur1f4",
+     "sha": "8b528a9",
+     "ref": "cursor/fiscal-017-h9-h10-new-window-materialization-a58c",
+     "created": "2026-08-18T13:30"
+    },
+    {
+     "id": "dpl_HDAd36wr1N96NkGcJhPGdH5d7uik",
+     "sha": "2ca4404",
+     "ref": "cursor/pdv-vendas-writer-v2-006f-d-audit-ef3b",
+     "created": "2026-08-18T13:04"
+    },
+    {
+     "id": "dpl_2NNiPbTKQpaFAX4npcfF2ey1Y11F",
+     "sha": "99e1c5a",
+     "ref": "cursor/vendas-polling-bounded-003b-8dd3",
+     "created": "2026-08-18T03:00"
+    },
+    {
+     "id": "dpl_FPrxHqDVS2tkEimLWNqnQSF1TedR",
+     "sha": "51f9d5b",
+     "ref": "cursor/fiscal-021-danfce-qr-regulatory-audit-b491",
+     "created": "2026-08-17T03:19"
+    },
+    {
+     "id": "dpl_5tNAnKuACq9be2XNMmS6z8DFUsUU",
+     "sha": "9efd676",
+     "ref": "cursor/fiscal-020a-contingencia-nfce-policy-contracts-5be7",
+     "created": "2026-08-17T00:00"
+    },
+    {
+     "id": "dpl_875hpi9dDbNzBRyRiUUnkDkmk9mJ",
+     "sha": "4296c22",
+     "ref": "cursor/fiscal-020-contingencia-nfce-audit-plan-4646",
+     "created": "2026-08-16T18:05"
+    },
+    {
+     "id": "dpl_Bv6pbJW8eYPhBfrAvgpDy37Nb61q",
+     "sha": "e225f77",
+     "ref": "cursor/fiscal-019-inutilizacao-nfce-offline-foundation-493f",
+     "created": "2026-08-16T16:27"
+    },
+    {
+     "id": "dpl_FsxnqLEHfZBMt95XQ31dVQFeLBfd",
+     "sha": "c702677",
+     "ref": "cursor/fiscal-018-cancelamento-regulatory-package-39c6",
+     "created": "2026-08-16T15:46"
+    },
+    {
+     "id": "dpl_7D453xvWN1PEHLY4vcQmSks9FXY8",
+     "sha": "a44ffe4",
+     "ref": "cursor/fiscal-018-cancelamento-offline-foundation-39c6",
+     "created": "2026-08-16T14:24"
+    }
+   ]
+  },
+  "omni-gestao": {
+   "id": "prj_IbJi32rh4TsQwWFYYVVjs133fw3H",
+   "framework": "nextjs",
+   "nodeVersion": "24.x",
+   "link": {
+    "type": "github",
+    "repo": "omni-gestao-pro-pdv-claude",
+    "org": "rafaelfaria49-png",
+    "productionBranch": "main"
+   },
+   "ssoProtection": {
+    "deploymentType": "all_except_custom_domains"
+   },
+   "passwordProtection": false,
+   "trustedIps": false,
+   "protectionBypassCount": 0,
+   "commandForIgnoringBuildStep": "node -e \"process.exit(process.env.VERCEL_ENV === 'production' ? 0 : 1)\"",
+   "gitForkProtection": true,
+   "crons": {
+    "enabledAt": "2026-05-08T12:37",
+    "definitions": []
+   },
+   "domains": [
+    {
+     "name": "omni-gestao-pi.vercel.app",
+     "verified": true,
+     "gitBranch": null,
+     "redirect": null
+    }
+   ],
+   "envKeyCount": 15,
+   "envKeys": [
+    "ASSISTEC_MASTER_PASSWORD",
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "NEXT_PUBLIC_APP_URL",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "OPENAI_API_BASE",
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OPENROUTER_API_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "WHATSAPP_ACCESS_TOKEN",
+    "WHATSAPP_BUSINESS_ACCOUNT_ID",
+    "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_VERIFY_TOKEN"
+   ],
+   "dbEnvs": [
+    {
+     "key": "DIRECT_URL",
+     "id": "jk7Jr3A4rkW8yoln",
+     "type": "sensitive",
+     "target": "production",
+     "branch": "",
+     "created": "2026-05-08T17:56",
+     "updated": "2026-05-08T17:56",
+     "integration": "no"
+    },
+    {
+     "key": "DATABASE_URL",
+     "id": "F0J5xtzoIm9gsAmf",
+     "type": "sensitive",
+     "target": "production",
+     "branch": "",
+     "created": "2026-05-08T17:56",
+     "updated": "2026-05-08T17:56",
+     "integration": "no"
+    }
+   ],
+   "productionDeployments": [
+    {
+     "id": "dpl_DeTRqmthRZB54v6CWQSbnCjZLPFQ",
+     "url": "omni-gestao-rk1dkfhb0-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "CANCELED",
+     "sha": "ce9228c57617f72e9c350cc0232f973fb57a0eaa",
+     "ref": "main",
+     "created": "2026-11-08T05:32",
+     "aliases": []
+    },
+    {
+     "id": "dpl_27dEZFSRjLqvWWyo5oyosydN9yxQ",
+     "url": "omni-gestao-5ig0ywdgi-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "CANCELED",
+     "sha": "7cac3d8020472a01b208c5bb3f278c5e7de0a707",
+     "ref": "main",
+     "created": "2026-11-07T22:48",
+     "aliases": []
+    },
+    {
+     "id": "dpl_2bUodD6L5t9fpwA9tocindb6pqx4",
+     "url": "omni-gestao-bh3mzuza9-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "CANCELED",
+     "sha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+     "ref": "main",
+     "created": "2026-11-04T00:23",
+     "aliases": []
+    },
+    {
+     "id": "dpl_H9sR4GHi2zrnspBHZVSWVCVP1hUM",
+     "url": "omni-gestao-a5opb4c49-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "e9eb98498bf4f637e5a9cfb8f3eb9b5339d698b6",
+     "ref": "main",
+     "created": "2026-10-15T21:29",
+     "aliases": [
+      "omni-gestao-git-main-rafaelfaria49-4373s-projects.vercel.app",
+      "omni-gestao-pi.vercel.app",
+      "omni-gestao-rafaelfaria49-4373s-projects.vercel.app"
+     ]
+    },
+    {
+     "id": "dpl_Ar1XfZ3U7GJrKrR5GobCbyTFvzJ5",
+     "url": "omni-gestao-krxyjwaax-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "466c397e4ff44a1f82c93c8ba92057d07136d67f",
+     "ref": "main",
+     "created": "2026-10-15T14:39",
+     "aliases": []
+    },
+    {
+     "id": "dpl_D2xKQ3v7BiSw3wN9wJHpJFeP1vRQ",
+     "url": "omni-gestao-5ppeifvt4-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "4a85dd95202b56873487b31c318fc2d751fc26f5",
+     "ref": "main",
+     "created": "2026-10-15T02:56",
+     "aliases": []
+    }
+   ],
+   "readyPreviewDeployments": [
+    {
+     "id": "dpl_WDPVx8FW6eowF8vmWtbCp1QMY7gi",
+     "sha": "fcccc34",
+     "ref": "claude/padaria-kg-release-readiness-a4-a8-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_4f64dLWaUTyJphcXWcZh7hYQPJEf",
+     "sha": "709c64e",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_HFV3BpfoX6fCSenjxFXLH59TEyCS",
+     "sha": "2a5a8f2",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_ZVMXs48Mqpsq4YSmt6h6yrGypZgi",
+     "sha": "df828d0",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-08T06:26"
+    },
+    {
+     "id": "dpl_H3taV3HZLei1PnBkXYEcDqn7E8vA",
+     "sha": "aca73cc",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-08T06:01"
+    },
+    {
+     "id": "dpl_FrTGFjmfcQt1fmLWXDcsqXduTiaz",
+     "sha": "51092f8",
+     "ref": "docs/catalogo-rollout-compat-manual-final-001",
+     "created": "2026-11-08T05:50"
+    },
+    {
+     "id": "dpl_DBRa7XwNEzgtjdxuZeQT2jYq3fFQ",
+     "sha": "31fd075",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-08T05:41"
+    },
+    {
+     "id": "dpl_6Z5B1ixv8gjFsnnJ76xLE9DZMvHL",
+     "sha": "7b72223",
+     "ref": "claude/padaria-kg-release-readiness-a4-a8-001",
+     "created": "2026-11-08T05:05"
+    },
+    {
+     "id": "dpl_CikcZk3iRp7Xhaj6p6UTw7jrVZ5R",
+     "sha": "bc1c3fc",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-08T04:54"
+    },
+    {
+     "id": "dpl_8H2ZvUqAxewtPmwHo4tGVqCpdrih",
+     "sha": "3ebbd76",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-08T04:54"
+    },
+    {
+     "id": "dpl_9DEQa7jEMbY9w8U48DP4EvJ9Wi3C",
+     "sha": "2016850",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-08T01:53"
+    },
+    {
+     "id": "dpl_C7QAcFUVf3TBa2o6JJYPrQ1eQ7tb",
+     "sha": "27aeef5",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-08T01:33"
+    },
+    {
+     "id": "dpl_EEXD47PWddNsn7o1fvmujX15qqNJ",
+     "sha": "91374ed",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-08T00:01"
+    },
+    {
+     "id": "dpl_F1EEompEpQVsDQCWG54oFEqSdsBX",
+     "sha": "8c20dd6",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-07T23:45"
+    },
+    {
+     "id": "dpl_GC1Seqzz43czE6cR24HCfAGZ5xNu",
+     "sha": "a1b52ee",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-07T23:38"
+    },
+    {
+     "id": "dpl_6VHwwkrBCLzQRBN2RT1eWTLwYKh3",
+     "sha": "bb124d8",
+     "ref": "claude/cadastros-acessorios-compat-manual-001",
+     "created": "2026-11-07T23:23"
+    },
+    {
+     "id": "dpl_BuLjURsiAU6Pv7FFBEKMr3xajW1x",
+     "sha": "7636e53",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-07T22:57"
+    },
+    {
+     "id": "dpl_GNtJ55SDmN4DLmom5toSfCNcKZ4s",
+     "sha": "bed911a",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-07T22:52"
+    },
+    {
+     "id": "dpl_BSkdq43psDrvbjbqdyrC4A3Zzap9",
+     "sha": "4ea5df3",
+     "ref": "fix/ci-playwright-ubuntu-2404-20261107",
+     "created": "2026-11-07T22:00"
+    },
+    {
+     "id": "dpl_HugfTcJ8V5S3XPsQXdnbBfydU2sT",
+     "sha": "9127faf",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-07T12:26"
+    },
+    {
+     "id": "dpl_6Xb9GAamuN1PWYwdGZ91NFbKvFt8",
+     "sha": "26febda",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-11-07T12:00"
+    },
+    {
+     "id": "dpl_CZY8t7vjy2zCDh61gQQ6Nu6S6vsW",
+     "sha": "1df1e79",
+     "ref": "claude/padaria-kg-release-readiness-a4-a8-001",
+     "created": "2026-11-07T02:16"
+    },
+    {
+     "id": "dpl_Be56sY3f3pm9R2ftQeXRyWMGuaFz",
+     "sha": "adbc66e",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:53"
+    },
+    {
+     "id": "dpl_71oHKfMr7wzuexG12yXDT53orZ2d",
+     "sha": "065bdf5",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:40"
+    },
+    {
+     "id": "dpl_53jU8zFvMPvEqmQeP1btPhip1NpX",
+     "sha": "3e2e795",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:17"
+    },
+    {
+     "id": "dpl_ADt2p9ZYa9Zv5UfwDxvpzqadsb5d",
+     "sha": "6b85245",
+     "ref": "claude/padaria-kg-f8-integracao-segura-001",
+     "created": "2026-11-06T13:03"
+    },
+    {
+     "id": "dpl_4hMo5CCyzJqbJvGh1rY1YMtUqYUS",
+     "sha": "406ea48",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-06T10:18"
+    },
+    {
+     "id": "dpl_6RCcpwhQv1UexCfAegBkZHYfNBU8",
+     "sha": "8497849",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-06T10:08"
+    },
+    {
+     "id": "dpl_7UWqvt7iPvaVT7FbWCGXvJrtWJZf",
+     "sha": "9eef30f",
+     "ref": "claude/padaria-kg-venda-peso-integracao-001",
+     "created": "2026-11-06T05:27"
+    },
+    {
+     "id": "dpl_8f2z3xeHkqBaM8ko1vhqTUkaGmkf",
+     "sha": "0e9eb95",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-05T14:18"
+    },
+    {
+     "id": "dpl_HQPu3Nye7U5gVkAT4YVa8NaKgL5J",
+     "sha": "146430d",
+     "ref": "claude/omni-print-004c-e2e-001",
+     "created": "2026-11-05T14:16"
+    },
+    {
+     "id": "dpl_HdFXcMVQrtKrU6Tgng9eMVgzRrsL",
+     "sha": "b0de724",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-05T10:15"
+    },
+    {
+     "id": "dpl_FR9vcNJAajzYoys6yd27Z5JnY66Y",
+     "sha": "b9d4802",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T01:38"
+    },
+    {
+     "id": "dpl_8esdkzWMCHvpkYFAjzxWmpJCX8Xv",
+     "sha": "03e8580",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-05T01:17"
+    },
+    {
+     "id": "dpl_DM7ASk5r8zA64Uy7cxoEM9cdMrsD",
+     "sha": "dd85b65",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-05T01:16"
+    },
+    {
+     "id": "dpl_A1mo3X42XPhR9aaNa1EKC24gQSfb",
+     "sha": "a107d27",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-05T01:10"
+    },
+    {
+     "id": "dpl_5QCvfjsVbSRyQZoM7szMZX69Dxi6",
+     "sha": "683b017",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T01:09"
+    },
+    {
+     "id": "dpl_5jXbjgPzjiDHTC7HG6WsGVT16PYB",
+     "sha": "7969af4",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T01:05"
+    },
+    {
+     "id": "dpl_B2Dyg2va31EJfXrcANaQJLx8Qehj",
+     "sha": "9781cb6",
+     "ref": "codex/omni-print-d04-windows-agent-finalizacao-001",
+     "created": "2026-11-05T00:54"
+    },
+    {
+     "id": "dpl_FsEWc4dYSTMrnFy1ernqSisBSTbp",
+     "sha": "3c12aa2",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T23:05"
+    },
+    {
+     "id": "dpl_Ck2z2vjWUP7Bptw8C99Du1XTWrUq",
+     "sha": "54fe86d",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:55"
+    },
+    {
+     "id": "dpl_GMKZ1YTvcHUKt5yLmMLheKsd1Bug",
+     "sha": "8723ffc",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:35"
+    },
+    {
+     "id": "dpl_9ZsNpHvqSudTgrDwJb3uQjpSjTRb",
+     "sha": "5fd8743",
+     "ref": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+     "created": "2026-11-04T22:27"
+    },
+    {
+     "id": "dpl_HggktdbyC1vE3vi35DNxoZUqS1Eb",
+     "sha": "5bcc514",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:25"
+    },
+    {
+     "id": "dpl_9188qXpP4amE4kxRPL7No8ZFiHrm",
+     "sha": "7a74a3e",
+     "ref": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+     "created": "2026-11-04T22:10"
+    },
+    {
+     "id": "dpl_Cd2UwpW6ZQR5N1ShnwabjWASUMYg",
+     "sha": "2927860",
+     "ref": "claude/pdv-f8-troca-imediata-001",
+     "created": "2026-11-04T22:08"
+    },
+    {
+     "id": "dpl_B6PphAnjYwAXtqAxCkog1HngoKHG",
+     "sha": "cc68c35",
+     "ref": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+     "created": "2026-11-04T22:01"
+    },
+    {
+     "id": "dpl_2ePkuvGxowGYEzi5ZhnJaHUBSPod",
+     "sha": "44f311a",
+     "ref": "codex/pessoas-001b-recovery-002-rev10",
+     "created": "2026-10-29T13:52"
+    },
+    {
+     "id": "dpl_FSHA5k8RsKyPf4mm6rWBBpKE7Xtj",
+     "sha": "104d768",
+     "ref": "claude/estoque-manual-kg-001",
+     "created": "2026-10-29T01:43"
+    },
+    {
+     "id": "dpl_8Rn5ybwiyy44vkJ4h5sLagqg3XJW",
+     "sha": "cc67ad7",
+     "ref": "feat/relatorios-produtos-vendidos-real-001",
+     "created": "2026-10-28T01:50"
+    },
+    {
+     "id": "dpl_FpVDTdNPM18pKWVoFH3LZ7EDpECo",
+     "sha": "7a6df14",
+     "ref": "goal/pessoas-001b-recovery-001",
+     "created": "2026-10-23T03:24"
+    },
+    {
+     "id": "dpl_FbhvXkDVL9fmvmjtuze3mGX7shdZ",
+     "sha": "5bd39a9",
+     "ref": "goal/fiscal-025b-archive-foundation-001",
+     "created": "2026-10-15T10:26"
+    },
+    {
+     "id": "dpl_8SQi8a1wRA2R5a7bjLKUgLC4vgAE",
+     "sha": "7f505c2",
+     "ref": "codex/aep-pessoas-001b-blocked-reconciliation",
+     "created": "2026-10-12T19:46"
+    },
+    {
+     "id": "dpl_EarEmTa2rbVGTMjG2jLbf1i3mC6V",
+     "sha": "a004c3b",
+     "ref": "goal/fiscal-022-pilot-homologation-activation",
+     "created": "2026-09-17T04:09"
+    },
+    {
+     "id": "dpl_9mjbygncvkBT4D8wN4ZUnhDkpmD3",
+     "sha": "2884007",
+     "ref": "cursor/fiscal-017-h9-h10-expired-window-recovery-84f7",
+     "created": "2026-08-24T21:24"
+    },
+    {
+     "id": "dpl_FHVCr54BxEbCfc5YCdKqX31JsAup",
+     "sha": "a366524",
+     "ref": "cursor/ops-v4-checklist-rajada-fix-08c0",
+     "created": "2026-08-24T18:47"
+    },
+    {
+     "id": "dpl_8mZquaGE5bkJ3NUREc77uGGhaSnV",
+     "sha": "a7be1be",
+     "ref": "cursor/setup-dev-environment-b543",
+     "created": "2026-08-20T02:53"
+    },
+    {
+     "id": "dpl_4tji2uZkuPKB4b3rKazoWxJTRM1B",
+     "sha": "8b528a9",
+     "ref": "cursor/fiscal-017-h9-h10-new-window-materialization-a58c",
+     "created": "2026-08-18T13:30"
+    },
+    {
+     "id": "dpl_F6wyRvRCtG1XM58Gvma7CYSyE91Q",
+     "sha": "2ca4404",
+     "ref": "cursor/pdv-vendas-writer-v2-006f-d-audit-ef3b",
+     "created": "2026-08-18T13:04"
+    },
+    {
+     "id": "dpl_2RuzLGYRHvytLUGQ2qDTFp41C3dc",
+     "sha": "99e1c5a",
+     "ref": "cursor/vendas-polling-bounded-003b-8dd3",
+     "created": "2026-08-18T03:00"
+    },
+    {
+     "id": "dpl_4Du5E4nJWdxdqr4HQtn4hnLhbYEp",
+     "sha": "51f9d5b",
+     "ref": "cursor/fiscal-021-danfce-qr-regulatory-audit-b491",
+     "created": "2026-08-17T03:19"
+    },
+    {
+     "id": "dpl_3fh3h7DvTs3m2XfUvm2maoYiWdAY",
+     "sha": "9efd676",
+     "ref": "cursor/fiscal-020a-contingencia-nfce-policy-contracts-5be7",
+     "created": "2026-08-17T00:00"
+    },
+    {
+     "id": "dpl_i8EDiUrUihSuCXjqVCXYUJi5Pz8U",
+     "sha": "4296c22",
+     "ref": "cursor/fiscal-020-contingencia-nfce-audit-plan-4646",
+     "created": "2026-08-16T18:05"
+    },
+    {
+     "id": "dpl_w8wPU9tvhymSrDV6sPnQR4ibxqpX",
+     "sha": "e225f77",
+     "ref": "cursor/fiscal-019-inutilizacao-nfce-offline-foundation-493f",
+     "created": "2026-08-16T16:27"
+    },
+    {
+     "id": "dpl_Br2SMHzjSMe4KACn91UbdaqZV34J",
+     "sha": "c702677",
+     "ref": "cursor/fiscal-018-cancelamento-regulatory-package-39c6",
+     "created": "2026-08-16T15:46"
+    },
+    {
+     "id": "dpl_CD2qTogk564CY1KJtRFHSfWMLLnq",
+     "sha": "a44ffe4",
+     "ref": "cursor/fiscal-018-cancelamento-offline-foundation-39c6",
+     "created": "2026-08-16T14:24"
+    }
+   ]
+  }
+ },
+ "integrations": []
+}

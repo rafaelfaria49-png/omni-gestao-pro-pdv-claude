@@ -1,0 +1,32 @@
+{
+  "phase": "old-after",
+  "identity": {
+    "db": "sim_guard",
+    "usr": "omni_runtime_v2",
+    "port": 55493,
+    "host": "127.0.0.1"
+  },
+  "oldAfter": {
+    "rejected": true,
+    "error": "\nInvalid `tx.produto.update()` invocation in\nC:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main/lib/estoque/stock-ledger-service.ts:535:22\n\n  532       },\n  533     } as never)\n  534 }\n→ 535 await tx.produto.update(\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: \"23514\", message: \"new row for relation \\\"estoque_produtos\\\" violates check constraint \\\"estoque_produtos_stock_kg_milesimos\\\"\", severity: \"ERROR\", detail: Some(\"Failing row contains (prod-un-1, loja-sim-1, null, null, Produto UN sintético, , , 1.6e-322, 0, 10, null, 0, Ativo, t, null, 2026-11-07 02:12:53.226, 2026-11-07 02:13:49.581).\"), column: None, hint: None }), transient: false })",
+    "before": {
+      "vendas": "16",
+      "itens": "16",
+      "livro": "16",
+      "financeiro": "16",
+      "stock": "33",
+      "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+      "stock_type": "double precision"
+    },
+    "after": {
+      "vendas": "16",
+      "itens": "16",
+      "livro": "16",
+      "financeiro": "16",
+      "stock": "33",
+      "deltas": "-2,-3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+      "stock_type": "double precision"
+    },
+    "corruptedValues": "0"
+  }
+}

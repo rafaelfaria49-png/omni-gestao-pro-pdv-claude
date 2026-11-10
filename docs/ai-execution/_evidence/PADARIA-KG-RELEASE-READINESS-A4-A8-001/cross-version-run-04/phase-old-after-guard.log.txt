@@ -1,0 +1,12 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main
+
+ ↓ test-results/kg-readiness/old-after-guard.cross-version.test.ts:54:28 > cross-version old-after > old: seed + v1 + v2 with lost responses
+ ↓ test-results/kg-readiness/old-after-guard.cross-version.test.ts:71:28 > cross-version old-after > new: replays of old sales never duplicate; first send of queued sale once
+ ✓ test-results/kg-readiness/old-after-guard.cross-version.test.ts:107:34 > cross-version old-after > old-after: Int client with the new credential (forbidden Redeploy) 242ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 2 skipped (3)
+   Start at  22:46:56
+   Duration  2.35s (transform 649ms, setup 0ms, import 1.63s, tests 251ms, environment 0ms)
+

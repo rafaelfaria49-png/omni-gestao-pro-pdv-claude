@@ -1,0 +1,95 @@
+host ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech db /omnigestao_prod user neondb_owner
+== identidade
+       db        |     usr      | ro | replica |       ver       |             agora             
+-----------------+--------------+----+---------+-----------------+-------------------------------
+ omnigestao_prod | neondb_owner | on | f       | 17.11 (9045acd) | 2026-11-08 06:15:27.165125+00
+
+== migrations (contagem e as 8 ultimas)
+ total | nao_finalizadas 
+-------+-----------------
+    24 |               0
+
+             migration_name             | finished | rolled_back |    checksum16    
+----------------------------------------+----------+-------------+------------------
+ 20261107120000_catalogo_aparelhos_loja | t        | f           | 57b3914343f26652
+ 20261022120000_platform_pilot_access   | t        | f           | 6583bb30dc008aa5
+ 0022_pessoas_cadastro_backend          | t        | f           | f4d1f09f47e7d70b
+ 0021_cliente_document_key_unique       | t        | f           | 409d7aeaf6d1a127
+ 0020_cliente_document_key              | t        | f           | 7f2a7450b70cdea3
+ 0019_movimentacao_estoque_idempotency  | t        | f           | 642cecfd1fef82b6
+ 0018_user_pin_hash                     | t        | f           | 78b3dfe82b5df032
+ 0017_contador_agenda                   | t        | f           | b1ef1aa9106f63ea
+
+== migrations KG/catalogo presentes
+                  migration                   | registrada 
+----------------------------------------------+------------
+ 20261025120000_estoque_quantidade_fracionada | f
+ 20261029120000_manual_kg_sale_quantity       | f
+ 20261106120000_manual_kg_title_guard_indexed | f
+ 20261107120000_catalogo_aparelhos_loja       | t
+
+== colunas KG e de venda
+      table_name       |  column_name  | data_type 
+-----------------------+---------------+-----------
+ estoque_produtos      | stock         | integer
+ movimentacoes_estoque | estoqueAntes  | integer
+ movimentacoes_estoque | estoqueDepois | integer
+ movimentacoes_estoque | quantidade    | integer
+ produto_depositos     | quantidade    | integer
+ venda_itens           | quantidade    | integer
+
+== tabelas do catalogo 20261107
+                t                | existe 
+---------------------------------+--------
+ catalogo_aparelhos_loja_modelos | t
+ catalogo_aparelhos_loja_compat  | t
+
+== funcoes/gatilhos manual_kg e CHECKs do 07
+ funcoes_manual_kg 
+-------------------
+                 0
+
+ gatilhos_manual_kg 
+--------------------
+                  0
+
+ conname 
+---------
+
+== sessoes de caixa abertas (sem identificar loja)
+ sessoes_abertas |       mais_antiga       
+-----------------+-------------------------
+               1 | 2026-11-07 20:57:46.867
+
+== extensoes / cron
+ extname | extversion 
+---------+------------
+ plpgsql | 1.0
+
+ cron_job_existe 
+-----------------
+ f
+
+== conexoes ativas por papel/aplicacao (sem texto de query)
+   usename    | application_name | state  | count 
+--------------+------------------+--------+-------
+ neondb_owner | psql             | active |     1
+
+== papeis e CONNECT
+            rolname            | rolcanlogin | pode_connect 
+-------------------------------+-------------+--------------
+ neondb_owner                  | t           | t
+ omni_migrator                 | t           | t
+ omni_owner                    | f           | t
+ omni_runtime_v2               | t           | t
+ omnigestao_candidate_audit_ro | t           | t
+
+== dono das 3 tabelas de estoque
+        relname        |     dono     
+-----------------------+--------------
+ estoque_produtos      | neondb_owner
+ movimentacoes_estoque | neondb_owner
+ produto_depositos     | neondb_owner
+ venda_itens           | neondb_owner
+
+PSQL_EXIT 0

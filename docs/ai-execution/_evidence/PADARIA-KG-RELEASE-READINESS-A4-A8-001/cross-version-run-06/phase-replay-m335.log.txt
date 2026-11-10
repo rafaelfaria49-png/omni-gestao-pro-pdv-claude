@@ -1,0 +1,12 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/kg-readiness-mid335
+
+ ↓ test-results/kg-readiness/replay-m335.cross-version.test.ts:64:28 > cross-version replay > old: seed + v1 + v2 with lost responses
+ ✓ test-results/kg-readiness/replay-m335.cross-version.test.ts:88:31 > cross-version replay > replay: no confirmed sale is written twice across versions 789ms
+ ↓ test-results/kg-readiness/replay-m335.cross-version.test.ts:147:34 > cross-version replay > old-after: Int client with the new credential (forbidden Redeploy)
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 2 skipped (3)
+   Start at  23:13:27
+   Duration  3.11s (transform 828ms, setup 0ms, import 1.96s, tests 800ms, environment 0ms)
+

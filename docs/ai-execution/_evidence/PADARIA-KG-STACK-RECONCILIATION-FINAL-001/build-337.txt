@@ -1,0 +1,4 @@
+MIGRATION_SKIPPED
+✓ Compiled successfully in 7.9min
+PROXY_PRISMA_ARTIFACT_VERIFIED
+build-exit=0
