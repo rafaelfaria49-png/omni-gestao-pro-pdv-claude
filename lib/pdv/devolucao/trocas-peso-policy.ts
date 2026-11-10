@@ -80,7 +80,9 @@ export async function f8KgReturnSchemaReady(db: Pick<Prisma.TransactionClient, "
         AND tablename = 'itens_devolucao_venda' AND indexname = 'itens_devolucao_venda_kg_produto_unique')
       AND EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
         WHERE n.nspname = current_schema() AND t.relname = 'itens_devolucao_venda'
-        AND c.conname = 'itens_devolucao_venda_quantity_contract' AND c.convalidated) AS ready`
+        AND c.conname = 'itens_devolucao_venda_quantity_contract' AND c.convalidated
+        -- Fingerprint retido pela migration: CHECK substituído/drifted NÃO passa como pronto.
+        AND obj_description(c.oid, 'pg_constraint') = 'f8-kg-return-v1:' || md5(pg_get_constraintdef(c.oid))) AS ready`
   return rows[0]?.ready === true
 }
 

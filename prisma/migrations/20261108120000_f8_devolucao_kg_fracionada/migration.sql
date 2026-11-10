@@ -118,7 +118,12 @@ BEGIN
   IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END $$;
 
--- Retain the installed constraint fingerprint; readiness rejects drifted CHECKs.
+-- O trigger original da 20261029120000 é BEFORE INSERT OR UPDATE (sem DELETE): a linha
+-- KG de devolução precisava da defesa no DELETE direto também (sem apagar o documento,
+-- um DELETE liberaria saldo no teto). Mesmo nome/ função — manualKgAvailable segue contando 1.
+DROP TRIGGER IF EXISTS "manual_kg_guard_return_item" ON "itens_devolucao_venda";
+CREATE TRIGGER "manual_kg_guard_return_item" BEFORE INSERT OR UPDATE OR DELETE ON "itens_devolucao_venda"
+FOR EACH ROW EXECUTE FUNCTION "manual_kg_guard_return_item"();
 DO $$ DECLARE definition text; BEGIN
   SELECT 'f8-kg-return-v1:' || md5(pg_get_constraintdef(oid)) INTO definition FROM pg_constraint WHERE conname='itens_devolucao_venda_quantity_contract' AND conrelid='public.itens_devolucao_venda'::regclass;
   EXECUTE format('COMMENT ON CONSTRAINT itens_devolucao_venda_quantity_contract ON public.itens_devolucao_venda IS %L', definition);

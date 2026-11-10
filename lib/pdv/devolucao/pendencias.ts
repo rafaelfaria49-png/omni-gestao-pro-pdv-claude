@@ -124,17 +124,19 @@ export function distribuirQtyReturned<L extends { inventoryId: string; quantity:
   inventoryId: string,
   delta: number,
 ): L[] {
-  let resto = Math.round(delta)
+  // Milésimos exatos: UN (inteiro) é idempotente e KG nunca arredonda 0,4→0 / 0,6→1
+  // (o espelho local precisa acompanhar o saldo fracionário do servidor).
+  let resto = Math.round(delta * 1000) / 1000
   const out = lines.map((l) => ({ ...l }))
   if (resto > 0) {
     for (const l of out) {
       if (resto <= 0) break
       if (l.inventoryId !== inventoryId) continue
-      const livre = Math.max(0, l.quantity - (l.qtyReturned ?? 0))
+      const livre = Math.max(0, Math.round((l.quantity - (l.qtyReturned ?? 0)) * 1000) / 1000)
       const usa = Math.min(livre, resto)
       if (usa > 0) {
-        l.qtyReturned = (l.qtyReturned ?? 0) + usa
-        resto -= usa
+        l.qtyReturned = Math.round(((l.qtyReturned ?? 0) + usa) * 1000) / 1000
+        resto = Math.round((resto - usa) * 1000) / 1000
       }
     }
   } else if (resto < 0) {
@@ -143,8 +145,8 @@ export function distribuirQtyReturned<L extends { inventoryId: string; quantity:
       if (l.inventoryId !== inventoryId) continue
       const tira = Math.min(l.qtyReturned ?? 0, -resto)
       if (tira > 0) {
-        l.qtyReturned = (l.qtyReturned ?? 0) - tira
-        resto += tira
+        l.qtyReturned = Math.round(((l.qtyReturned ?? 0) - tira) * 1000) / 1000
+        resto = Math.round((resto + tira) * 1000) / 1000
       }
     }
   }

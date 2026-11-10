@@ -74,6 +74,20 @@ describe("pendências de devolução (PDV-F8-FINALIZACAO-COMPLETA-001)", () => {
     expect(distribuirQtyReturned(mais, "P", -1).map((l) => l.qtyReturned)).toEqual([1, 0])
     expect(ls.map((l) => l.qtyReturned)).toEqual([0, 0]) // sem mutar a entrada
   })
+
+  it("distribuirQtyReturned preserva MILÉSIMOS kg — 0,4 não colapsa em 0 nem 0,6 em 1 (R-P2)", () => {
+    const kg = [{ inventoryId: "PAO", quantity: 0.75, qtyReturned: 0 }]
+    expect(distribuirQtyReturned(kg, "PAO", 0.4).map((l) => l.qtyReturned)).toEqual([0.4])
+    expect(distribuirQtyReturned(kg, "PAO", 0.6).map((l) => l.qtyReturned)).toEqual([0.6])
+    const kgGrande = [{ inventoryId: "PAO", quantity: 2.375, qtyReturned: 0 }]
+    expect(distribuirQtyReturned(kgGrande, "PAO", 1.001).map((l) => l.qtyReturned)).toEqual([1.001])
+    // Estorno simétrico devolve o saldo exato (nunca -0 no double).
+    const dev = distribuirQtyReturned(kg, "PAO", 0.35)
+    expect(distribuirQtyReturned(dev, "PAO", -0.35).map((l) => l.qtyReturned)).toEqual([0])
+    // UN continua inteiro (idempotente).
+    const un = [{ inventoryId: "REF", quantity: 2, qtyReturned: 0 }]
+    expect(distribuirQtyReturned(un, "REF", 1).map((l) => l.qtyReturned)).toEqual([1])
+  })
 })
 
 describe("fatorValorPago", () => {

@@ -1,6 +1,7 @@
 "use client"
 
 import { MANUAL_KG_SALE, saleQuantityGrams } from "@/lib/vendas/manual-kg-contract"
+import { toStockUnits } from "@/lib/estoque/stock-quantity"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
@@ -604,7 +605,8 @@ function estornarEfeitosLocaisDevolucao<S extends {
     return { ...sv, lines }
   })
   const inventory = prev.inventory.map((i) => {
-    const back = dev.lines.find((x) => inventoryMatchesDevLine(i, x))
+    // Estorno simétrico à entrada: só o que tinha entrado (mercadoria apta) sai.
+    const back = dev.lines.find((x) => (x.condicao ?? "apto_revenda") === "apto_revenda" && inventoryMatchesDevLine(i, x))
     return back ? { ...i, stock: i.stock - back.quantity } : i
   })
   return { ...prev, inventory, customerCredits, sales }
@@ -1113,6 +1115,10 @@ function withPendingDevolucaoStock(items: InventoryItem[], devolucoes: Devolucao
       const lineId = typeof line.inventoryId === "string" ? line.inventoryId : ""
       const qty = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
       if (!lineId || qty <= 0) continue
+      // Mercadoria fora de condição de revenda NÃO volta ao estoque (GOAL §5):
+      // o espelho local acompanha a decisão do servidor.
+      const condicao = typeof line.condicao === "string" ? line.condicao : "apto_revenda"
+      if (condicao !== "apto_revenda") continue
       // Mesma identidade do espelho e do estorno (Produto.id estrito; nunca em produto por
       // peso): somar unidade pelo SKU num saldo KG não seria desfeito pela recusa depois.
       const produtoId = typeof line.produtoId === "string" ? line.produtoId : undefined
@@ -4002,8 +4008,9 @@ export function OperationsProvider({
       // falhava com "Saldo de crédito insuficiente".
       const build = (cur: OpsState): OpsState => {
         // Estoque local pelo Produto.id confirmado (SKU pode ter mudado/sido reutilizado).
+        // Só mercadoria APTA entrou no servidor — `sem_entrada` nunca infla o espelho.
         const inventory = cur.inventory.map((i) => {
-          const back = serverConfirmed.lines.find((l) => inventoryMatchesDevLine(i, l))
+          const back = serverConfirmed.lines.find((l) => (l.condicao ?? "apto_revenda") === "apto_revenda" && inventoryMatchesDevLine(i, l))
           return back ? { ...i, stock: i.stock + back.quantity } : i
         })
         // Linhas repetidas do mesmo item (uma por bipe): distribui, sem contar em dobro.
@@ -4104,7 +4111,9 @@ export function OperationsProvider({
       if (req.quantity <= 0) {
         return { ok: false, reason: "Quantidade inválida." }
       }
-      if (linhaKg && !(Number.isFinite(req.quantity) && Math.round(req.quantity * 1000) === req.quantity * 1000)) {
+      // Gramas exatas pelo boundary canônico (Float 1,001*1000 = 1001,0000000001 —
+      // comparação de igualdade em double recusaria pesos legítimos de 3 casas).
+      if (linhaKg && toStockUnits(req.quantity, "KG") === null) {
         return { ok: false, reason: `${saleLine.name}: peso inválido — use até 3 casas decimais (ex.: 0,750 kg).` }
       }
       if (canReturn < req.quantity) {
