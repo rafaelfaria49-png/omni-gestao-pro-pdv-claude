@@ -1,0 +1,15 @@
+{
+  "refresh": {
+    "pageSetsSessionCookie": true,
+    "apiSetsSessionCookie": true,
+    "sessionGetSetsSessionCookie": true
+  },
+  "held": 3,
+  "fulfilled": 3,
+  "lateErrors": [],
+  "after": {
+    "cookies": [],
+    "authenticated": false
+  },
+  "dashboardStatus": 307
+}

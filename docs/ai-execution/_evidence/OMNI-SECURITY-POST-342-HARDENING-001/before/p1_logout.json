@@ -1,0 +1,17 @@
+{
+  "refresh": {
+    "pageSetsSessionCookie": true,
+    "apiSetsSessionCookie": true,
+    "sessionGetSetsSessionCookie": true
+  },
+  "held": 1,
+  "fulfilled": 1,
+  "lateErrors": [],
+  "after": {
+    "cookies": [
+      "authjs.session-token"
+    ],
+    "authenticated": true
+  },
+  "dashboardStatus": 200
+}

@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "credentialRedactions": 0,
+  "app": "next start (build de produção) em 127.0.0.1",
+  "database": "PostgreSQL descartável do job, identidade conferida",
+  "auth": "NextAuth Credentials real; usuários sintéticos com senha aleatória por execução (não registrada)",
+  "schemaChanged": false,
+  "schemaMaterialization": "prisma db push em banco vazio",
+  "migrationsExecuted": false,
+  "productionWrites": 0
+}

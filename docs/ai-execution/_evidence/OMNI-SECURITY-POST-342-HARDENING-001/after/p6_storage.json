@@ -1,0 +1,80 @@
+{
+  "lsBefore": [
+    "assistec-pro-config-v2",
+    "assistec-pro-financeiro-v2-default",
+    "assistec-pro-financeiro-v2-loja-1",
+    "assistec-pro-loja-ativa-v1",
+    "assistec-pro-ops-v1",
+    "assistec-pro-ops-v1-loja-1",
+    "omni-legibility",
+    "omni-studio-dual-theme",
+    "omnigestao:caixa:loja-1",
+    "omnigestao:workspace-focus:docked:v1",
+    "qa-marker-offline"
+  ],
+  "lsAtSeg": [
+    "assistec-pro-config-v2",
+    "assistec-pro-financeiro-v2-default",
+    "assistec-pro-financeiro-v2-loja-1",
+    "assistec-pro-loja-ativa-v1",
+    "assistec-pro-ops-v1",
+    "assistec-pro-ops-v1-loja-1",
+    "omni-legibility",
+    "omni-studio-dual-theme",
+    "omnigestao:caixa:loja-1",
+    "omnigestao:workspace-focus:docked:v1",
+    "qa-marker-offline"
+  ],
+  "lsAfter": {
+    "origin": "http://localhost:3006",
+    "href": "http://localhost:3006/login",
+    "keys": [
+      "assistec-pro-config-v2",
+      "assistec-pro-financeiro-v2-default",
+      "assistec-pro-financeiro-v2-loja-1",
+      "assistec-pro-loja-ativa-v1",
+      "assistec-pro-ops-v1",
+      "assistec-pro-ops-v1-loja-1",
+      "omni-legibility",
+      "omni-studio-dual-theme",
+      "omnigestao:caixa:loja-1",
+      "omnigestao:workspace-focus:docked:v1",
+      "qa-marker-offline"
+    ]
+  },
+  "signoutHeaders": [
+    [
+      "transfer-encoding",
+      "x-dns-prefetch-control",
+      "location",
+      "connection",
+      "referrer-policy",
+      "x-content-type-options",
+      "permissions-policy",
+      "keep-alive",
+      "date",
+      "content-type",
+      "vary",
+      "x-frame-options"
+    ]
+  ],
+  "clearSiteData": [
+    null
+  ],
+  "navs": [
+    "http://localhost:3006/dashboard/configuracoes?sec=seguranca",
+    "http://localhost:3006/dashboard/configuracoes?sec=seguranca",
+    "http://localhost:3006/login/sair",
+    "http://localhost:3006/login/sair",
+    "http://localhost:3006/login",
+    "http://localhost:3006/login",
+    "http://localhost:3006/login",
+    "http://localhost:3006/login",
+    "http://localhost:3006/dashboard?storeAccess=denied",
+    "http://localhost:3006/dashboard?storeAccess=denied",
+    "http://localhost:3006/dashboard?storeAccess=denied",
+    "http://localhost:3006/dashboard?storeAccess=denied"
+  ],
+  "bLoja1Statuses": [],
+  "bDirectLoja1Settings": 403
+}

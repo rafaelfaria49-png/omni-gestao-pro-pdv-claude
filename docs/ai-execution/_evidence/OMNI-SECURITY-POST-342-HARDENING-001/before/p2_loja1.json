@@ -1,0 +1,58 @@
+{
+  "activeStore": "qa-b",
+  "total": 9,
+  "writes": [],
+  "sample": [
+    {
+      "method": "GET",
+      "url": "/api/ops/inventory?lojaId=loja-1",
+      "header": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/ordens?lojaId=loja-1",
+      "header": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/caixa/sessoes?lojaId=loja-1&status=ABERTA&take=1",
+      "header": "loja-1"
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/inventory?lojaId=loja-1",
+      "header": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/ordens?lojaId=loja-1",
+      "header": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/caixa/sessoes?lojaId=loja-1&status=ABERTA&take=1",
+      "header": "loja-1"
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/inventory?lojaId=loja-1",
+      "header": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/ordens?lojaId=loja-1",
+      "header": null
+    },
+    {
+      "method": "GET",
+      "url": "/api/ops/caixa/sessoes?lojaId=loja-1&status=ABERTA&take=1",
+      "header": "loja-1"
+    }
+  ],
+  "localKeysLoja1": [
+    "omnigestao:caixa:loja-1",
+    "assistec-pro-ops-v1",
+    "assistec-pro-ops-v1-loja-1",
+    "assistec-pro-financeiro-v2-loja-1"
+  ]
+}

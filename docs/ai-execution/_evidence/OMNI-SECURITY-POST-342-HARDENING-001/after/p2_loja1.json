@@ -1,0 +1,12 @@
+{
+  "activeStore": "qa-b",
+  "total": 0,
+  "writes": [],
+  "sample": [],
+  "localKeysLoja1": [
+    "omnigestao:caixa:loja-1",
+    "assistec-pro-ops-v1",
+    "assistec-pro-ops-v1-loja-1",
+    "assistec-pro-financeiro-v2-loja-1"
+  ]
+}
