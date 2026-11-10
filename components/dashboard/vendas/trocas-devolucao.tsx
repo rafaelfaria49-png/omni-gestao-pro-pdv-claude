@@ -441,7 +441,8 @@ export function TrocasDevolucao({
           headers: { "x-assistec-loja-id": lojaAtivaId },
         })
         if (res.ok) {
-          const j = (await res.json()) as { criterio: string; produtoNome?: string; vendas: SaleRecord[] }
+          const j = (await res.json()) as { criterio: string; produtoNome?: string; vendas: SaleRecord[]; trocasPesoPermitidas?: boolean }
+          if (typeof j.trocasPesoPermitidas === "boolean") setTrocasPesoPermitidas(j.trocasPesoPermitidas)
           const vendas = Array.isArray(j.vendas) ? j.vendas : []
           if (vendas.length === 1) {
             aplicarVenda(vendas[0]!, "servidor")

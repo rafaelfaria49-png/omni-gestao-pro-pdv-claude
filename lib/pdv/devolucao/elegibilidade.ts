@@ -148,16 +148,18 @@ export async function buscarVendasElegiveis(
       const linha = d.quantidadeKg !== null && d.quantidadeKg !== undefined ? Number(String(d.quantidadeKg)) : d.quantidade || 0
       retorno.set(k, (retorno.get(k) ?? 0) + linha)
     }
-    const bloqueio = (k: string, unidade: UnidadeLinha): string | undefined =>
-      historicoNaoResolvido
+    const bloqueio = (k: string, db: { unidade: UnidadeLinha; ilegivel?: boolean }): string | undefined =>
+      db.ilegivel
+        ? "Não devolvível: linha da venda com quantidade ilegível (sem unidade nem peso) — exige conferência manual."
+        : historicoNaoResolvido
         ? "Não devolvível: há devolução anterior desta venda com item não identificável — exige conferência manual."
         : isVirtualSaleLine(k) || !keys.isProduto(k)
         ? `Não devolvível: serviço/avulso não gera vale nem volta ao estoque (sem política aprovada).`
         : keys.isComercialInvalido(k)
           ? "Não devolvível: declaração comercial do produto inválida (revise o cadastro)."
-          : unidade === "KG" && !schemaKgPronto
+          : db.unidade === "KG" && !schemaKgPronto
             ? "Não devolvível: a estrutura de devolução por peso ainda não foi aplicada no banco desta loja."
-            : unidade === "KG" && !trocasPeso
+            : db.unidade === "KG" && !trocasPeso
               ? "Não devolvível por peso: esta loja desativou trocas/devoluções de produtos vendidos por peso. Produtos por unidade seguem liberados."
               : undefined
 
@@ -173,7 +175,7 @@ export async function buscarVendasElegiveis(
       itens: r.itens,
     })
     // Quantidade/valor/unidade por item vêm do banco (ItemVenda), não do payload do client.
-    const porItem = new Map<string, { unidade: UnidadeLinha; quantidade: number; lineTotal: number; nome: string }>()
+    const porItem = new Map<string, { unidade: UnidadeLinha; quantidade: number; lineTotal: number; nome: string; ilegivel?: boolean }>()
     for (const it of r.itens) {
       const k = (it.inventoryId ?? "").trim()
       if (!k) continue
@@ -181,7 +183,7 @@ export async function buscarVendasElegiveis(
       const linha = linhaVendidaUnidades(it)
       // Linha ilegível (sem quantidade nem peso): aparece bloqueada — conferência manual.
       if (!linha) {
-        if (!cur) porItem.set(k, { unidade: "UN", quantidade: 0, lineTotal: 0, nome: it.nome })
+        if (!cur) porItem.set(k, { unidade: "UN", quantidade: 0, lineTotal: 0, nome: it.nome, ilegivel: true })
         continue
       }
       if (!cur) porItem.set(k, { unidade: linha.unidade, quantidade: linha.unidade === "KG" ? linha.units / 1000 : linha.units, lineTotal: it.lineTotal || 0, nome: it.nome })
@@ -201,7 +203,7 @@ export async function buscarVendasElegiveis(
       const db = k ? porItem.get(k) : undefined
       if (!db || usados.has(k)) continue
       usados.add(k)
-      const b = bloqueio(k, db.unidade)
+      const b = bloqueio(k, db)
       lines.push({
         ...base,
         quantity: db.quantidade,
@@ -215,7 +217,7 @@ export async function buscarVendasElegiveis(
     }
     for (const [k, v] of porItem) {
       if (usados.has(k)) continue
-      const b = bloqueio(k, v.unidade)
+      const b = bloqueio(k, v)
       lines.push({
         inventoryId: k,
         name: v.nome,

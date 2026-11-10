@@ -257,6 +257,7 @@ type ExistingDev = {
   valorTotal: number
   creditoEmitido: number
   operador: string
+  payload: unknown
   itens: Array<{ inventoryId: string | null; nome: string; quantidade: number | null; quantidadeKg: { toString(): string } | null; valorUnitario: number; valorTotal: number }>
 }
 
@@ -269,6 +270,7 @@ const EXISTING_SELECT = {
   valorTotal: true,
   creditoEmitido: true,
   operador: true,
+  payload: true,
   itens: { select: { inventoryId: true, nome: true, quantidade: true, quantidadeKg: true, valorUnitario: true, valorTotal: true } },
 } as const
 
@@ -358,6 +360,8 @@ async function classifyReplay(
       { localId: input.localId },
     )
   }
+  // Condição/estoque reais do replay vêm do payload gravado (espelho local fiel).
+  const mercadoria = ((existing.payload as { mercadoria?: Array<{ produtoId: string; condicao: CondicaoMercadoria; estoque?: string }> } | null)?.mercadoria) ?? []
   return {
     ok: true,
     idempotente: true,
@@ -369,17 +373,20 @@ async function classifyReplay(
     creditoEmitido: arredonda2(existing.creditoEmitido),
     saldoCreditoCliente: await saldoAtivoCliente(tx, input.storeId, existing.clienteDoc),
     operador: existing.operador,
-    itens: existing.itens.map((i) => ({
-      inventoryId: chaveDoClient(i.inventoryId),
-      produtoId: normInv(i.inventoryId),
-      nome: i.nome,
-      quantidade: i.quantidade,
-      quantidadeKg: i.quantidadeKg === null ? null : Number(String(i.quantidadeKg)),
-      valorUnitario: i.valorUnitario,
-      valorTotal: i.valorTotal,
-      condicao: "apto_revenda",
-      estoque: "entrada",
-    })),
+    itens: existing.itens.map((i) => {
+      const m = mercadoria.find((x) => x.produtoId === normInv(i.inventoryId))
+      return {
+        inventoryId: chaveDoClient(i.inventoryId),
+        produtoId: normInv(i.inventoryId),
+        nome: i.nome,
+        quantidade: i.quantidade,
+        quantidadeKg: i.quantidadeKg === null ? null : Number(String(i.quantidadeKg)),
+        valorUnitario: i.valorUnitario,
+        valorTotal: i.valorTotal,
+        condicao: m?.condicao ?? "apto_revenda",
+        estoque: (m?.estoque === "sem_entrada" ? "sem_entrada" : "entrada") as "entrada" | "sem_entrada",
+      }
+    }),
   }
 }
 
