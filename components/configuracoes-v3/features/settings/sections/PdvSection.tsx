@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu, Eye, ArrowLeft, ScanBarcode } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu, Eye, ArrowLeft, ScanBarcode, Scale, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/configuracoes-v3/components/ui/radio-group";
@@ -39,6 +39,12 @@ import {
   normalizePdvScanUnregisteredAction,
   type PdvScanUnregisteredAction,
 } from "@/lib/pdv-scan-unregistered-action";
+import {
+  DEFAULT_TROCAS_PESO,
+  normalizeTrocasPesoValue,
+  TROCAS_PESO_KEY,
+  type TrocasPesoValue,
+} from "@/lib/pdv/devolucao/trocas-peso-policy";
 
 /** Layout principal por unidade — ver `lib/pdv-layout-storage.ts`. */
 
@@ -331,6 +337,11 @@ function PdvSectionContent() {
   const [savedClassicModo, setSavedClassicModo] = useState<ClassicModoInicial>("normal");
   const [draftScanAction, setDraftScanAction] = useState<PdvScanUnregisteredAction>(DEFAULT_PDV_SCAN_UNREGISTERED_ACTION);
   const [savedScanAction, setSavedScanAction] = useState<PdvScanUnregisteredAction>(DEFAULT_PDV_SCAN_UNREGISTERED_ACTION);
+  /** Trocas/devoluções de produtos por peso, por unidade (PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001). */
+  const [draftTrocasPeso, setDraftTrocasPeso] = useState<TrocasPesoValue>(DEFAULT_TROCAS_PESO);
+  const [savedTrocasPeso, setSavedTrocasPeso] = useState<TrocasPesoValue>(DEFAULT_TROCAS_PESO);
+  /** Confirmação explícita antes de DESATIVAR (recusa lojas inteiras de trocas por peso). */
+  const [confirmarDesativarTrocasPeso, setConfirmarDesativarTrocasPeso] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewFlow, setPreviewFlow] = useState<PreviewVariant | null>(null);
 
@@ -366,6 +377,13 @@ function PdvSectionContent() {
     const scanAction = normalizePdvScanUnregisteredAction(base[PDV_SCAN_UNREGISTERED_KEY]);
     setDraftScanAction(scanAction);
     setSavedScanAction(scanAction);
+    // Chave ausente = padrão aprovado (ATIVADO); presente com valor fora do contrato
+    // nunca vira liberação na UI (o servidor decide no commit de cada troca).
+    const trocasPesoSalvo = base[TROCAS_PESO_KEY] === undefined
+      ? DEFAULT_TROCAS_PESO
+      : normalizeTrocasPesoValue(base[TROCAS_PESO_KEY]) ?? "disabled";
+    setDraftTrocasPeso(trocasPesoSalvo);
+    setSavedTrocasPeso(trocasPesoSalvo);
   }, [lojaAtivaId, settings?.printerConfig]);
 
   // Revalidação do provider não substitui um rascunho em andamento.
@@ -379,8 +397,9 @@ function PdvSectionContent() {
     if (draftFlow !== savedFlow) return true;
     if (draftFlow === "classico" && draftClassicModo !== savedClassicModo) return true;
     if (draftScanAction !== savedScanAction) return true;
+    if (draftTrocasPeso !== savedTrocasPeso) return true;
     return false;
-  }, [draftFlow, savedFlow, draftClassicModo, savedClassicModo, draftScanAction, savedScanAction]);
+  }, [draftFlow, savedFlow, draftClassicModo, savedClassicModo, draftScanAction, savedScanAction, draftTrocasPeso, savedTrocasPeso]);
   useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
@@ -402,9 +421,11 @@ function PdvSectionContent() {
     setDraftFlow(savedFlow);
     setDraftClassicModo(savedClassicModo);
     setDraftScanAction(savedScanAction);
+    setDraftTrocasPeso(savedTrocasPeso);
+    setConfirmarDesativarTrocasPeso(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (confirmadoTrocasPeso = false) => {
     const lojaHeader = lojaAtivaId?.trim();
     if (!lojaHeader) {
       toast({
@@ -413,6 +434,12 @@ function PdvSectionContent() {
         variant: "destructive",
       });
       return;
+    }
+    // Desativar trocas por peso é decisão comercial da unidade: exige confirmação explícita.
+    // `confirmadoTrocasPeso` vem do próprio diálogo (o estado React não muda no mesmo tick).
+    if (draftTrocasPeso === "disabled" && savedTrocasPeso === "enabled" && !confirmadoTrocasPeso) {
+      setConfirmarDesativarTrocasPeso(true)
+      return
     }
     setSaving(true);
     try {
@@ -434,6 +461,7 @@ function PdvSectionContent() {
             }
           : {}),
         ...(draftScanAction !== savedScanAction ? { [PDV_SCAN_UNREGISTERED_KEY]: draftScanAction } : {}),
+        ...(draftTrocasPeso !== savedTrocasPeso ? { [TROCAS_PESO_KEY]: draftTrocasPeso } : {}),
       };
 
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
@@ -476,10 +504,17 @@ function PdvSectionContent() {
       setSavedFlow(draftFlow);
       setSavedClassicModo(draftFlow === "classico" ? draftClassicModo : "normal");
       setSavedScanAction(draftScanAction);
+      setSavedTrocasPeso(draftTrocasPeso);
+      setConfirmarDesativarTrocasPeso(false);
       await refresh();
       toast({
         title: "PDV atualizado",
-        description: "Preferências gravadas com sucesso.",
+        description:
+          draftTrocasPeso !== savedTrocasPeso
+            ? draftTrocasPeso === "enabled"
+              ? "Trocas por peso LIBERADAS para esta unidade."
+              : "Trocas por peso DESATIVADAS para esta unidade."
+            : "Preferências gravadas com sucesso.",
       });
     } catch (e) {
       toast({
@@ -493,6 +528,9 @@ function PdvSectionContent() {
   };
 
   const controlsDisabled = busy || noLoja;
+  /** Permissão específica: proprietário/admin ou gerente (o servidor revalida no PUT). */
+  const podeConfigTrocasPeso =
+    permissions?.platformAuthority === true || permissions?.pdv?.configTrocasPeso === true;
 
   // PDV Next é experimental (já persiste vendas reais pelo motor oficial, mas
   // recursos de balcão ainda em desenvolvimento): ocultar o card da galeria em
@@ -966,6 +1004,88 @@ function PdvSectionContent() {
             </div>
           </RadioGroup>
         </div>
+
+        {/* Trocas e Devoluções — produtos vendidos por peso (PADARIA-KG-F8-TROCAS-CONFIGURAVEIS-FINAL-001) */}
+        <div
+          className="mt-6 rounded-xl border border-border/50 bg-card/50 p-5 shadow-sm"
+          data-testid="pdv-trocas-peso-card"
+        >
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <Scale className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Trocas e Devoluções</h3>
+              <p className="text-xs text-muted-foreground">Produtos vendidos por peso — configuração independente desta unidade.</p>
+            </div>
+          </div>
+
+          <RadioGroup
+            className="gap-3 md:pl-11"
+            value={draftTrocasPeso}
+            onValueChange={(v) => {
+              if (v === "enabled" || v === "disabled") setDraftTrocasPeso(v);
+            }}
+            disabled={controlsDisabled || !podeConfigTrocasPeso}
+          >
+            <div className="flex items-start space-x-2.5">
+              <RadioGroupItem value="enabled" id="pdv-trocas-peso-enabled" className="mt-0.5" />
+              <Label htmlFor="pdv-trocas-peso-enabled" className="cursor-pointer text-xs font-medium text-foreground">
+                Permitir trocas e devoluções por KG/gramas
+                <span className="block text-[11px] font-normal text-muted-foreground">
+                  Quando ativado, permite trocar ou devolver produtos vendidos por peso, inclusive quantidades parciais e vendas com produtos por unidade.
+                </span>
+              </Label>
+            </div>
+            <div className="flex items-start space-x-2.5">
+              <RadioGroupItem value="disabled" id="pdv-trocas-peso-disabled" className="mt-0.5" />
+              <Label htmlFor="pdv-trocas-peso-disabled" className="cursor-pointer text-xs font-medium text-foreground">
+                Não aceitar trocas voluntárias por peso
+                <span className="block text-[11px] font-normal text-muted-foreground">
+                  A loja não aceita trocas voluntárias de produtos por peso. Produtos por unidade continuam liberados.
+                </span>
+              </Label>
+            </div>
+          </RadioGroup>
+
+          {!podeConfigTrocasPeso && (
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground" data-testid="pdv-trocas-peso-somente-leitura">
+              <ShieldAlert className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden />
+              Somente o proprietário ou um gerente pode alterar esta configuração. Estado atual: {draftTrocasPeso === "enabled" ? "permitidas" : "desativadas"}.
+            </p>
+          )}
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            Não habilita a venda por peso no caixa (liberação própria por loja). A alteração vale imediatamente para as próximas trocas e fica registrada na auditoria.
+          </p>
+        </div>
+
+        {/* Confirmação explícita antes de desativar trocas por peso */}
+        <Dialog open={confirmarDesativarTrocasPeso} onOpenChange={(open) => { if (!open) setConfirmarDesativarTrocasPeso(false); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Desativar trocas por peso nesta unidade?</DialogTitle>
+              <DialogDescription>
+                A partir da próxima troca, produtos vendidos por KG/gramas serão recusados no F8 desta unidade — inclusive parciais. Produtos por unidade seguem liberados e o F8 continua funcionando. Direitos legais do consumidor seguem disponíveis pelo encaminhamento ao Financeiro com justificativa.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmarDesativarTrocasPeso(false)} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                data-testid="confirmar-desativar-trocas-peso"
+                onClick={() => {
+                  void handleSave(true)
+                }}
+                disabled={saving}
+              >
+                {saving ? "Salvando…" : "Desativar trocas por peso"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Tip Informativo Minimalista */}
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground/80 pl-1">

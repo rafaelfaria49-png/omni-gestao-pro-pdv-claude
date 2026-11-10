@@ -176,7 +176,20 @@ export interface DevolucaoRecord {
   saleId: string
   customerCpf: string
   customerName: string
-  lines: { inventoryId: string; name: string; quantity: number; valor: number }[]
+  /** `produtoId` = Produto.id histórico confirmado pelo servidor (identidade; SKU é só busca). */
+  lines: {
+    inventoryId: string
+    produtoId?: string
+    name: string
+    quantity: number
+    valor: number
+    /** Linha KG (vendida por peso): `quantity` é o peso em kg com até 3 casas. */
+    quantityUnit?: "KG"
+    quantidadeKg?: number
+    /** Condição da mercadoria devolvida (GOAL §5) — só `apto_revenda` gera entrada local. */
+    condicao?: string
+    justificativa?: string
+  }[]
   mode: "vale_credito" | "somente_estoque"
   creditIssued: number
   /** true = devolução gravada localmente mas ainda não confirmada no servidor. */
@@ -188,6 +201,25 @@ export interface DevolucaoRecord {
   motivo?: string
   observacao?: string
   payload?: any
+  /**
+   * Recusa DEFINITIVA do servidor (ex.: reembolso bloqueado, quantidade acima do
+   * devolvível): sai da fila, o vale local é estornado, entra no audit-log e é listada no
+   * painel de Troca/Devolução (F8) para tratamento manual.
+   */
+  syncRejectedCode?: string
+  syncRejectedReason?: string
+  /**
+   * PDV-F8-FINALIZACAO-COMPLETA-001 — espera explícita: `AGUARDANDO_VENDA_ORIGEM` quando o
+   * servidor ainda não conhece a venda de origem. Nada foi gravado no servidor.
+   */
+  syncWaitingCode?: "AGUARDANDO_VENDA_ORIGEM"
+  syncWaitingSince?: string
+  syncAttempts?: number
+  syncLastAttemptAt?: string
+  /** Bloqueio persistente: a retentativa automática parou; só retomada manual ou reconciliação. */
+  syncBlocked?: boolean
+  /** Encaminhamento ao Financeiro (registro auditável no servidor — não é lançamento). */
+  conciliacao?: { ref: string; at: string; operador: string; categoria: string; valorDeclarado: number }
 }
 
 export interface CaixaOperacaoRecord {
