@@ -1,0 +1,26 @@
+{
+  "at": "2026-11-11",
+  "neon": {
+    "content": [
+      {
+        "type": "text",
+        "text": "[\n  {\n    \"database\": \"omni_print_d05\",\n    \"version\": \"17.11 (9045acd)\",\n    \"store_ids\": [\n      \"d05-synthetic-store\"\n    ],\n    \"sales_count\": \"0\",\n    \"print_tables\": \"11\",\n    \"print_migrations\": [\n      \"20261105120000_omni_print_d02_idx_vendas\",\n      \"20261105120100_omni_print_d02_idx_terminais\",\n      \"20261105120200_omni_print_d02_core\"\n    ]\n  }\n]"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "preview": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"result\": {\n    \"deployment\": {\n      \"id\": \"dpl_7WpCYjjAzai3weEYYUd4rjx9U8EQ\",\n      \"name\": \"omni-gestao-pro\",\n      \"url\": \"omni-gestao-dcfs4lq6z-rafaelfaria49-4373s-projects.vercel.app\",\n      \"type\": \"LAMBDAS\",\n      \"state\": \"READY\",\n      \"createdAt\": 1794144173169,\n      \"creator\": {\n        \"uid\": \"fJ4byGr1EcKkYHdyaRu71QIy\",\n        \"username\": \"rafaelfaria49-4373\"\n      },\n      \"project\": {\n        \"id\": \"prj_wjkHKw2jFQfY8regMYtkYXwgavuz\",\n        \"name\": \"omni-gestao-pro\",\n        \"framework\": \"nextjs\"\n      },\n      \"meta\": {\n        \"githubCommitRef\": \"codex/omni-print-d05-homologacao-fisica-001\",\n        \"githubCommitSha\": \"1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf\",\n        \"githubCommitMessage\": \"fix(print-d05): fail closed without git ref; finalization docs and evidence\\n\\n- build-preview.mjs: a build without VERCEL_GIT_COMMIT_REF (CLI deploy)\\n  cannot prove it is not the D05 branch and now requires isolation\\n  (re-review nit; RED recorded, GREEN 12/12).\\n- private-state.ps1 Initialize writ...\",\n        \"githubRepo\": \"omni-gestao-pro-pdv-claude\",\n        \"githubOrg\": \"rafaelfaria49-png\"\n      },\n      \"alias\": [\n        \"omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app\"\n      ],\n      \"target\": null,\n      \"regions\": [\n        \"gru1\"\n      ],\n      \"buildingAt\": 1794144174318,\n      \"ready\": 1794144484783,\n      \"readyState\": \"READY\",\n      \"source\": \"cli\",\n      \"aliasError\": null\n    }\n  }\n}"
+        }
+      ],
+      "structuredContent": null,
+      "isError": false
+    }
+  }
+}

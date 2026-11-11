@@ -1,0 +1,88 @@
+{
+  "at": "2026-11-11T12:36:20.3285558-03:00",
+  "scope": "Nine original task-related worktrees plus own worktree; stale registry entries outside this scope not audited",
+  "worktrees": [
+    {
+      "path": "C:\\Projetos\\omni-gestao",
+      "head": "5ae661d730af827006fd10c389ddbdd4f18edc51",
+      "branch": "codex/db-migration-reconciliation-001",
+      "wipCount": 16,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.worktrees\\omni-print-d03",
+      "head": "5fd8743ce0c67c0847b09429f1b9e6ae5cae1e5a",
+      "branch": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+      "wipCount": 0,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.worktrees\\omni-print-d04",
+      "head": "b9d4802ee4afff2156b24e02abb6f8ff0aec6803",
+      "branch": "codex/omni-print-d04-windows-agent-finalizacao-001",
+      "wipCount": 0,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.worktrees\\omni-print-d05",
+      "head": "797b7ee297e624217feb9f66c504e09c47bf0a94",
+      "branch": "codex/omni-print-d05-homologacao-fisica-001",
+      "wipCount": 0,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.claude\\worktrees\\pdv-f8-troca-001",
+      "head": "b0de724b4abac15258e498a7a44ab700348ebe17",
+      "branch": "claude/pdv-f8-troca-imediata-001",
+      "wipCount": 0,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.claude\\worktrees\\aparelhos-001",
+      "head": "e8b95701fc9724aeeb5447eb5cd496edfe0b7574",
+      "branch": "claude/aparelhos-endtoend-001",
+      "wipCount": 7,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.worktrees\\kg-f8-001",
+      "head": "ef3826088aec9cf0a86153df6eba55b9b12299f7",
+      "branch": "claude/padaria-kg-f8-integracao-segura-001",
+      "wipCount": 0,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.worktrees\\kg-venda-peso-001",
+      "head": "dd264a662d37a0799093856ea5c148c4b964f2fd",
+      "branch": "claude/padaria-kg-venda-peso-integracao-001",
+      "wipCount": 0,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.worktrees\\fin-receb-f9-print-001",
+      "head": "ab713112fe9913ee03b87ef3fb25cb44b7c4bf0d",
+      "branch": "claude/financeiro-recebimentos-f9-print-001",
+      "wipCount": 0,
+      "isOwn": false,
+      "statusReadSucceeded": true
+    },
+    {
+      "path": "C:\\Projetos\\omni-gestao\\.worktrees\\omni-print-usb-windows-finalizacao-real-001",
+      "head": "7a0abe923884e5faa1a6b1ffb51bec80dc48e939",
+      "branch": "codex/omni-print-usb-windows-finalizacao-real-001",
+      "wipCount": 7,
+      "isOwn": true,
+      "statusReadSucceeded": true
+    }
+  ],
+  "otherWorktreesMutatedByThisTask": false,
+  "ownCommitPendingDocumentation": true
+}

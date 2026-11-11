@@ -1,0 +1,3 @@
+{"result":"PASS","worker":"public/sw.js_FROM_ACTUAL_NEXT_BUILD","online":{"status":404,"body":{"ok":false,"error":"DIRECT_PRINT_DISABLED","reason":"OWNER_APPROVAL_REQUIRED"},"controlled":true},"disconnected":{"sentinelRemains":true,"networkFailed":true},"serviceWorkers":"allow","offlineMechanism":"PROXY_DROPS_PAGE_AND_WORKER_CONNECTIONS","authenticatedPdv":false,"physicalPrint":false}
+
+exit=0

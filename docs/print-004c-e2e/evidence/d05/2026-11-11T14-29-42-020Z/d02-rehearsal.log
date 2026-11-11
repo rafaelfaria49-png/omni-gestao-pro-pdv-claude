@@ -1,0 +1,12 @@
+reset print_lab_d03_d02r
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-usb-windows-finalizacao-real-001
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  11:35:56
+   Duration  18.15s (transform 307ms, setup 0ms, import 751ms, tests 17.15s, environment 0ms)
+
+
+exit=0

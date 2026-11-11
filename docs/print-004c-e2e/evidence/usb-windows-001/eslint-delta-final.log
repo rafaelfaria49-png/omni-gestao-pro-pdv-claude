@@ -1,0 +1,10 @@
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\vendas\pdv-classic.tsx
+   845:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+   908:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 1164) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+   908:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 1180) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+  1368:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array                                                                                react-hooks/exhaustive-deps
+
+✖ 4 problems (0 errors, 4 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
