@@ -7,7 +7,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const out = path.join(root, "docs/print-004c-e2e/evidence/d03")
 mkdirSync(out, { recursive: true })
 const unit = ["node_modules/vitest/vitest.mjs", "run", "lib/printing/direct", "tools/omni-print-agent", "tools/print-d03/options.test.ts", "tools/print-d02/d02-guard.test.ts",
-  "components/dashboard/vendas/reimpressao-registrada.static.test.ts", "lib/vendas/venda-cupom-mapper.test.ts"]
+  "components/dashboard/vendas/reimpressao-registrada.static.test.ts", "lib/vendas/venda-cupom-mapper.test.ts",
+  "app/api/print/raw/route.test.ts", "lib/pdv-print-runtime.test.ts"]
 const pg = (db, file) => ["tools/print-004c-e2e/run-pg.mjs", db, file]
 export const steps = [
   ["generator", ["tools/print-004c-e2e/generate-agent-migration.mjs", "--check"]],
@@ -27,6 +28,7 @@ export const steps = [
   ["typecheck", ["--max-old-space-size=4096", "node_modules/typescript/lib/tsc.js", "--noEmit"]],
   ["eslint", ["node_modules/eslint/bin/eslint.js", "lib/printing/direct/retention.ts", "lib/printing/direct/core.ts", "lib/printing/direct/status.ts", "lib/printing/direct/codec.ts", "lib/printing/direct/activation.ts", "lib/printing/direct/homologation.mjs", "lib/printing/direct/homologation.test.ts", "tools/print-d05", "tools/print-d03", "tools/print-004c-e2e/pg-lab.mjs", "tools/print-004c-e2e/d02-rehearsal.pg.test.ts", "tools/print-004c-e2e/two-agents.pg.test.ts", "tools/print-004c-e2e/agent-host.mjs", "tools/print-004c-e2e/manifest.mjs", "tools/print-004c-e2e/matrix-80.mjs", "--ignore-pattern", "tools/print-d05/.artifacts/**"]],
   ["build", ["scripts/vercel-build.mjs"]],
+  ["sw-proof", ["tools/print-004c-e2e/sw-network-proof.mjs"]],
 ]
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const summary = { goal: "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001", at: new Date().toISOString(), node: process.version,

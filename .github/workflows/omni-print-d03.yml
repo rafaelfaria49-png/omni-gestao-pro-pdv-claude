@@ -2,6 +2,8 @@ name: Omni Print D03 — retenção segura
 on:
   pull_request:
     paths:
+      - "app/api/print/raw/**"
+      - "lib/pdv-print-runtime*"
       - "lib/printing/direct/**"
       - "tools/print-d03/**"
       - "tools/print-004c-e2e/**"

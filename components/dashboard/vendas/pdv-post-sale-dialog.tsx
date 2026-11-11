@@ -19,6 +19,7 @@ export interface PdvPostSaleDialogProps {
   onOpenChange: (open: boolean) => void
   printInput: PdvReceiptInput | null
   impressaoConfig: PdvImpressaoConfig
+  requireAgent?: boolean
   logoUrl?: string
   onAfterClose?: () => void
 }
@@ -28,6 +29,7 @@ export function PdvPostSaleDialog({
   onOpenChange,
   printInput,
   impressaoConfig,
+  requireAgent = false,
   logoUrl,
   onAfterClose,
 }: PdvPostSaleDialogProps) {
@@ -59,6 +61,7 @@ export function PdvPostSaleDialog({
     try {
       result = await printPdvSaleReceipt({
         config: impressaoConfig,
+        requireAgent,
         receiptFooter: printInput.receiptFooter ?? undefined,
         logoUrl: logoUrl ?? null,
         input: printInput,
@@ -80,7 +83,7 @@ export function PdvPostSaleDialog({
       })
     } else {
       const target = impressaoConfig.impressoraHost.trim()
-      const errMsg = target
+      const errMsg = requireAgent ? result.error || "Confira o agente Omni Print deste terminal." : target
         ? `Impressora ${target}:${impressaoConfig.impressoraPorta} inacessível. ${result.error || "Verifique a conexão."}`
         : result.error || "Nenhuma impressora térmica respondeu."
       setPrintError(errMsg)

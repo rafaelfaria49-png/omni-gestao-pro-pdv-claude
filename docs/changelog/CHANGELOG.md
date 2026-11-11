@@ -1,5 +1,11 @@
 # Changelog — OmniGestão Pro
 
+## 2026-11-11 — Omni Print USB: proteção do transporte legado (candidato)
+
+- A escolha pelo agente Omni Print impede queda silenciosa para TCP e abertura automática do navegador quando o vínculo não está disponível.
+- O endpoint legado exige destino configurado no servidor, recusa sobrescrita pelo navegador e localhost na Vercel; impressoras de rede explicitamente configuradas continuam suportadas para usuários de plataforma.
+- Aceite do transporte é informado sem prometer papel impresso. Alterações em branch candidata; publicação e homologação física Omni Print pendentes.
+
 ## 2026-08-19 — Operações V4: documentos, assinatura, fotos e anexos
 
 - Termo de Garantia, Termo de Entrega, OS cliente, via interna, etiqueta e orçamento imprimem/reimprimem pelo motor V3 já existente.
