@@ -24,6 +24,7 @@ let runtime: EnabledRuntime = baseRuntime
 let server: LabServer, token = "", host: ChildProcess
 let salePosts: Json[] = [], printCalls: string[] = [], errors: string[] = [], seq = 0
 let legacyRawCalls: Json[] = []
+let allowLegacyRaw = false
 const journal = path.join(mkdtempSync(path.join(os.tmpdir(), "p004c-pw-")), "journal.jsonl")
 
 // The REAL agent runs in its own OS process (plain Node, no test transpiler) with a SIMULATED spooler, driven over IPC.
@@ -55,7 +56,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await stopAgent(); host?.kill(); await server?.stop(); await prisma.$disconnect() })
 
 test.beforeEach(async ({ context, page }) => {
-  salePosts = []; printCalls = []; errors = []; registryDown = null; legacyRawCalls = []
+  salePosts = []; printCalls = []; errors = []; registryDown = null; legacyRawCalls = []; allowLegacyRaw = false
   runtime = baseRuntime
   await setPrinter({ online: true })
   page.on("pageerror", e => errors.push(e.message))
@@ -72,7 +73,7 @@ async function handle(route: Route) {
   if (req.method() === "GET" && ["/", "/fixture.js", "/favicon.ico", "/reprint", "/reprint.js"].includes(url.pathname)) { await route.continue(); return }
   const ok = (body: unknown) => route.fulfill({ status: 200, json: body })
   const key = `${req.method()} ${url.pathname}`
-  if (key === "POST /api/print/raw") {
+  if (key === "POST /api/print/raw" && allowLegacyRaw) {
     legacyRawCalls.push(JSON.parse(req.postData() ?? "{}"))
     await ok({ ok: true }); return
   }
@@ -331,6 +332,7 @@ test("PW21 agente escolhido com disponibilidade desconhecida: feedback REAL não
 })
 
 test("PW22 KG recusado sem job: feedback/runtime REAIS preservam uma tentativa de rede explicitamente configurada", async ({ page }) => {
+  allowLegacyRaw = true
   await mount(page, { realLegacyFeedback: true, impressoraHost: "192.168.0.50" })
   await sell(page, "Queijo minas [KG]")
   await expect(page.getByTestId("pdv-auto-print-feedback")).toContainText("envio aceito pelo transporte")
@@ -339,6 +341,8 @@ test("PW22 KG recusado sem job: feedback/runtime REAIS preservam uma tentativa d
   expect(Buffer.from(legacyRawCalls[0].data, "base64").toString("latin1")).toContain("Queijo minas")
   expect(await browserCounts(page)).toMatchObject({ open: 0, print: 0, childPrint: 0 })
   expect(salePosts).toHaveLength(1)
+  const jobs = await prisma.$queryRawUnsafe<Json[]>(`SELECT count(*)::int n FROM public.print_jobs j JOIN public.print_documents d ON d.id=j.document_id WHERE d.sale_id=$1 AND j.store_id=$2`, "srv-" + salePosts[0].clientSaleId, STORE)
+  expect(jobs[0].n).toBe(0)
 })
 
 // ── D01-A1: reimpressão registrada pelo Histórico de vendas / Conferência do caixa (mesmo diálogo real: CupomNaoFiscal) ──
