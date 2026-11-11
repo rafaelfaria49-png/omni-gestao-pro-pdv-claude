@@ -23,6 +23,7 @@ const baseRuntime: EnabledRuntime = labRuntime()
 let runtime: EnabledRuntime = baseRuntime
 let server: LabServer, token = "", host: ChildProcess
 let salePosts: Json[] = [], printCalls: string[] = [], errors: string[] = [], seq = 0
+let legacyRawCalls: Json[] = []
 const journal = path.join(mkdtempSync(path.join(os.tmpdir(), "p004c-pw-")), "journal.jsonl")
 
 // The REAL agent runs in its own OS process (plain Node, no test transpiler) with a SIMULATED spooler, driven over IPC.
@@ -54,7 +55,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await stopAgent(); host?.kill(); await server?.stop(); await prisma.$disconnect() })
 
 test.beforeEach(async ({ context, page }) => {
-  salePosts = []; printCalls = []; errors = []; registryDown = null
+  salePosts = []; printCalls = []; errors = []; registryDown = null; legacyRawCalls = []
   runtime = baseRuntime
   await setPrinter({ online: true })
   page.on("pageerror", e => errors.push(e.message))
@@ -71,6 +72,10 @@ async function handle(route: Route) {
   if (req.method() === "GET" && ["/", "/fixture.js", "/favicon.ico", "/reprint", "/reprint.js"].includes(url.pathname)) { await route.continue(); return }
   const ok = (body: unknown) => route.fulfill({ status: 200, json: body })
   const key = `${req.method()} ${url.pathname}`
+  if (key === "POST /api/print/raw") {
+    legacyRawCalls.push(JSON.parse(req.postData() ?? "{}"))
+    await ok({ ok: true }); return
+  }
   if (url.pathname.startsWith("/api/print/direct/")) {
     printCalls.push(key)
     if (registryDown && url.pathname.endsWith(registryDown)) { await route.fulfill({ status: 503, json: { ok: false, error: "LEDGER_BUSY" } }); return }
@@ -312,6 +317,28 @@ test("PW11 venda KG com impressão automática desligada → diálogo manual exi
   await feedback(page).getByRole("button", { name: "Imprimir comprovante" }).click()
   await expect.poll(() => legacy(page)).toEqual({ auto: 0, dialog: 1 })
   await expect(feedback(page)).toHaveCount(0)
+})
+
+test("PW21 agente escolhido com disponibilidade desconhecida: feedback REAL não tenta TCP nem navegador", async ({ page }) => {
+  registryDown = "/terminal-status"
+  await mount(page, { realLegacyFeedback: true, impressoraHost: "192.168.0.50" })
+  await sell(page)
+  await expect(page.getByTestId("pdv-auto-print-feedback")).toContainText("Omni Print")
+  expect(legacyRawCalls).toHaveLength(0)
+  expect(printCalls.filter(c => c === "POST /api/print/direct/jobs")).toHaveLength(0)
+  expect(await browserCounts(page)).toMatchObject({ open: 0, print: 0, childPrint: 0 })
+  expect(salePosts).toHaveLength(1)
+})
+
+test("PW22 KG recusado sem job: feedback/runtime REAIS preservam uma tentativa de rede explicitamente configurada", async ({ page }) => {
+  await mount(page, { realLegacyFeedback: true, impressoraHost: "192.168.0.50" })
+  await sell(page, "Queijo minas [KG]")
+  await expect(page.getByTestId("pdv-auto-print-feedback")).toContainText("envio aceito pelo transporte")
+  expect(legacyRawCalls).toHaveLength(1)
+  expect(legacyRawCalls[0].host).toBe("192.168.0.50")
+  expect(Buffer.from(legacyRawCalls[0].data, "base64").toString("latin1")).toContain("Queijo minas")
+  expect(await browserCounts(page)).toMatchObject({ open: 0, print: 0, childPrint: 0 })
+  expect(salePosts).toHaveLength(1)
 })
 
 // ── D01-A1: reimpressão registrada pelo Histórico de vendas / Conferência do caixa (mesmo diálogo real: CupomNaoFiscal) ──
