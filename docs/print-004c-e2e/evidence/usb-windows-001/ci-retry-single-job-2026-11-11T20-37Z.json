@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-11T20:41:45.1928050+00:00",
+  "operation": "rerun_workflow_job",
+  "requestedJob": 130617633176,
+  "run": 43048161987,
+  "codeHead": "7a0abe923884e5faa1a6b1ffb51bec80dc48e939",
+  "status": "completed",
+  "conclusion": "startup_failure",
+  "annotation": "An unexpected error has occurred and we've been automatically notified.",
+  "githubSupportRequestIds": [
+    "BCB1:30A7BC:D82F00:166F6E3:6AF4D1EC"
+  ],
+  "newJobsCreated": 0,
+  "testsExecuted": false,
+  "productionWrites": 0
+}

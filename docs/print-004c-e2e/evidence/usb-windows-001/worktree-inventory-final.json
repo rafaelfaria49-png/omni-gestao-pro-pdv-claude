@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-11T12:36:20.3285558-03:00",
+  "at": "2026-11-11T17:43:15.4615976-03:00",
   "scope": "Nine original task-related worktrees plus own worktree; stale registry entries outside this scope not audited",
   "worktrees": [
     {
@@ -76,7 +76,7 @@
     },
     {
       "path": "C:\\Projetos\\omni-gestao\\.worktrees\\omni-print-usb-windows-finalizacao-real-001",
-      "head": "7a0abe923884e5faa1a6b1ffb51bec80dc48e939",
+      "head": "cb6deeae9eed2997a7b3dfd9652dbf02f3abcb42",
       "branch": "codex/omni-print-usb-windows-finalizacao-real-001",
       "wipCount": 7,
       "isOwn": true,

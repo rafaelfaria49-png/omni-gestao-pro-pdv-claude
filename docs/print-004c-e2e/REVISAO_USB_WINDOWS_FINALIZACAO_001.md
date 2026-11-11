@@ -45,3 +45,16 @@ seleção entre os dois hosts HTTPS oficiais fixos já presentes na lista, consu
 explícita se ambos estiverem indisponíveis. Nenhum teste/gate alterado; sem alteração de DNS global, `/etc/hosts`, proxy
 ou TLS. O CI real do `7a0abe9` confirmou indisponibilidade dos dois hosts nos quatro jobs que precisam desse provisionamento;
 evidências em `evidence/usb-windows-001/ci-final.json`. O bloqueio externo continua aberto.
+
+## Complemento documental D02 e retomada de CI
+
+APROVADO, sem findings P0–P3. O `RUNBOOK_D02.md` agora distingue a preparação no espelho externo (§6.5), registro
+`resolve --schema`/`verify --prisma` (§6.6) e a promoção canônica para o repositório após registro produtivo comprovado
+(§6.7). QA termina sem preencher registro produtivo. Guarda e verificações precedem commit/merge autorizado.
+A sequência corresponde aos contratos existentes de `d02.mjs` e ao espelho usado em `environment.mjs`; ferramenta,
+SQL/migrations e gates permanecem inalterados. A retirada de `D02_ORDER` dos bloqueios do relatório foi aprovada.
+Revisão somente leitura, sem banco, cloud, credenciais ou impressão. `git diff --check` dos documentos PASS.
+
+A retomada de CI às 17:31 BRT encerrou os três workflows com `startup_failure`, erro interno GitHub antes de novos jobs.
+A tentativa individual D03 teve o mesmo resultado. IDs de suporte e horários estão nas duas evidências `ci-retry-*`.
+Essas tentativas não contam como testes executados nem aprovação de CI.

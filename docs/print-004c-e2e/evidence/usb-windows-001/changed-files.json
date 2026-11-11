@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-11T15:35:50.860Z",
+  "at": "2026-11-11T20:43:11.074Z",
   "sourceBase": "0dbeb5d9267f9920dc1a763649989b3e37546d49",
   "codeHead": "7a0abe923884e5faa1a6b1ffb51bec80dc48e939",
   "files": [
@@ -292,6 +292,14 @@
       "status": "A"
     },
     {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-retry-2026-11-11T20-31Z.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-retry-single-job-2026-11-11T20-37Z.json",
+      "status": "A"
+    },
+    {
       "file": "docs/print-004c-e2e/evidence/usb-windows-001/cleanup-final.json",
       "status": "A"
     },
@@ -418,6 +426,10 @@
     {
       "file": "docs/print-004c-e2e/REVISAO_USB_WINDOWS_FINALIZACAO_001.md",
       "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/RUNBOOK_D02.md",
+      "status": "M"
     },
     {
       "file": "e2e/fixtures/print-direct.ts",

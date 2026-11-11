@@ -117,7 +117,7 @@ Os primeiros runs antecedem os corretivos da revisão e não substituem a repeti
 | Tipos / lint focado / build | PASS também na repetição final (build em 423 s) |
 | Service Worker real do build | PASS também na repetição final: worker controla a página; offline por proxy derruba página E worker; sentinel de outra loja não é servido pela API de impressão |
 | Lint completo `eslint .` | FAIL: 105 erros / 109 warnings; os cinco arquivos com erro e a configuração são idênticos à main. Sem erros novos atribuídos ao delta |
-| CI #346 no código `7a0abe9` | 11 jobs concluídos: 7 PASS e 4 FAIL no provisionamento por DNS dos dois mirrors oficiais. Testes dependentes desse provisionamento não executados |
+| CI #346 no código `7a0abe9` | Primeira execução: 7 jobs PASS e 4 FAIL no provisionamento DNS. Retomadas dos três workflows e de um job individual: startup_failure interno do GitHub, sem novos jobs/testes |
 | Revisão independente | APROVADO tecnicamente, com os achados corrigidos; ver `REVISAO_USB_WINDOWS_FINALIZACAO_001.md` |
 
 ESLint de todo o delta final: zero erros, quatro warnings preexistentes no Clássico, sem `--fix` nem alteração da
@@ -126,7 +126,7 @@ revisão suplementar no `58015fe`. O run local final começou no `2066b30` com `
 teste do `58015fe` já estava no disco quando os 22 cenários foram executados. As execuções remotas estão ligadas aos
 SHAs exatos. Os commits seguintes alteram somente provisionamento CI/manifesto; o código da aplicação permaneceu igual.
 
-CI final do código `7a0abe923884e5faa1a6b1ffb51bec80dc48e939`, com todos os workflows encerrados:
+Primeira execução concluída do código `7a0abe923884e5faa1a6b1ffb51bec80dc48e939` (snapshot às 12:33 BRT):
 
 | Workflow | Run | Resultado dos jobs |
 |---|---|---|
@@ -137,6 +137,15 @@ CI final do código `7a0abe923884e5faa1a6b1ffb51bec80dc48e939`, com todos os wor
 | Ramos | [43048161339](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/43048161339) | PG real PASS; contratos/tipos/lint/build PASS; dois jobs FAIL no DNS antes de smoke/E2E |
 
 Identificadores, etapas e trechos dos quatro erros em `evidence/usb-windows-001/ci-final.json`.
+
+**Retomada de 2026-11-11, 17:31–17:40 BRT:** repetidos somente os jobs falhos dos runs D03, Plataforma e Ramos no mesmo
+SHA. Os três workflows encerraram com `startup_failure`, sem criar novos jobs. A anotação pública informa erro interno
+inesperado do GitHub, com IDs de suporte preservados em `ci-retry-2026-11-11T20-31Z.json`. A tentativa adicional de
+reexecutar apenas o job D03 `130617633176` também encerrou antes de iniciar, com o mesmo tipo de erro interno
+(request ID `BCB1:30A7BC:D82F00:166F6E3:6AF4D1EC`), registrada em `ci-retry-single-job-2026-11-11T20-37Z.json`.
+O status público de Actions consultado estava operacional e sem incidente; isso não elimina os erros específicos
+observados nestas requisições. Não há novos resultados de testes nessas retomadas. D04/D05 continuam PASS; CI completo
+continua bloqueado. Não há workflow em execução após o encerramento das retomadas.
 
 Tentativas remotas preservadas: `azure.archive.ubuntu.com` não resolveu durante `playwright install --with-deps`,
 exit 100 na instalação de pacotes Ubuntu, sem chegar aos testes dependentes de navegador. Builds, tipos e contratos
@@ -197,9 +206,10 @@ Nenhuma energia, USB, rede, serviço ou computador foi interrompido para provoca
 6. Só depois elaborar/aprovar a liberação produtiva com alvo, executor, janela e restauração: D02 manual conforme
    [RUNBOOK_D02 §6](RUNBOOK_D02.md#6-aplicação-segura), merge/deploy autorizado da #327 e corretivos de runtime,
    release/chaves D03, instalação produtiva, pareamento e ativação de uma loja/terminal. O §6 detalha índices CONCURRENTLY
-   → núcleo transacional → verify → promote no checkout → resolve no banco → verify --prisma → APLICACAO.json e commit
-   → merge. O §12 descreve uma ordem diferente entre promote/resolve; essa divergência precisa de harmonização técnica
-   documentada antes da janela produtiva. Nenhum desses passos foi executado aqui. Não levar ferramentas D05 à main sem
+   → núcleo transacional → verify → preparação de espelho externo → resolve no banco pelo schema do espelho → verify
+   --prisma → APLICACAO.json produtivo → promoção canônica para prisma/migrations → guarda/verificações → commit e merge
+   autorizado. Os §6/§12 foram harmonizados documentalmente conforme o contrato existente e a revisão independente:
+   espelho externo não é promoção canônica. Nenhum desses passos foi executado aqui. Não levar ferramentas D05 à main sem
    decisão própria. Coordenar com MIG-X KG; não usar migrate deploy genérico contra Production.
 
 Rollback QA/prod segue RUNBOOK_D03/D04/D05: pausar emissões, preservar relatos/UNKNOWN, desativar a flag no alvo correto,
@@ -215,6 +225,9 @@ auth, proxy e schema não foram alterados por este corretivo. A mudança do pós
 
 `docs/changelog/CHANGELOG.md` registra o candidato. `CURRENT_STATUS.md` e `MASTER_CONTEXT.md` não foram alterados:
 não houve mudança do estado produtivo nem nova arquitetura. Este relatório registra a preparação QA e os bloqueios.
+O `RUNBOOK_D02.md` foi harmonizado somente na documentação: espelho externo antes do registro, promoção canônica após
+registro produtivo comprovado. Essa sequência já era suportada pela ferramenta e usada no D05; revisão independente
+suplementar APROVADO, sem findings P0–P3. Nenhuma ferramenta, migration ou gate foi alterado.
 
 O último commit de entrega contém somente documentos/evidências/HASHES, com `[skip ci]`; fontes e workflows permanecem
 idênticos ao código `7a0abe9` executado acima. Isso não torna o CI verde: o bloqueio remoto permanece explícito.
@@ -266,14 +279,14 @@ PLAYWRIGHT=22_OF_22_PASS_FINAL
 TYPECHECK=PASS_FINAL_REPEAT
 LINT=DELTA_ZERO_ERRORS_4_WARNINGS_GLOBAL_FAIL_105_INHERITED_ERRORS
 BUILD=PASS_FINAL_REPEAT
-CI=PARTIAL_PASS_LINUX_BLOCKED_OFFICIAL_UBUNTU_MIRRORS_DNS_UNAVAILABLE
+CI=BLOCKED_GITHUB_ACTIONS_STARTUP_FAILURE_PRIOR_7_PASS_4_DNS_FAIL
 INDEPENDENT_REVIEW=APPROVED_NO_PENDING_FINDINGS
 PRODUCTION_MERGES=0
 PRODUCTION_MIGRATIONS=0
 PRODUCTION_DEPLOYS=0
 PRODUCTION_FLAGS_CHANGED=0
 NEW_PRS=346_DRAFT_BASE_334
-REMAINING_BLOCKERS=UBUNTU_RUNNER_DNS_CI_CORRECTIVE_QA_INTEGRATION_PAIRING_PHYSICAL_H01_H18_PRODUCTION_D02_ORDER
+REMAINING_BLOCKERS=GITHUB_ACTIONS_STARTUP_FAILURE_PRIOR_DNS_CI_CORRECTIVE_QA_INTEGRATION_PAIRING_PHYSICAL_H01_H18
 OWNER_APPROVAL_REQUIRED=CORRECTIVE_INTEGRATION_QA_PREVIEW_AND_PER_EVENT_PHYSICAL_GATES
 WORKTREE_CLEANUP=OWN_PG_STOPPED_DATA_PRESERVED_TASK_QA_DISABLED_OTHER_WIP_PRESERVED
 FINAL_STATUS=BLOCKED_WITH_EVIDENCE
