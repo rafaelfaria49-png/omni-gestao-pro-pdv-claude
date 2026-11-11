@@ -20,6 +20,7 @@ const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004
   // D02-A: migrations recortadas, ferramenta do operador e exclusão de loja com registros de impressão.
   "tools/print-d02", "app/api/stores/[id]/route.ts", ".gitattributes",
   "tools/print-d03", ".github/workflows/omni-print-d03.yml", "tools/print-d04", ".github/workflows/omni-print-d04.yml",
+  ".github/workflows/platform-pilot.yml", ".github/workflows/ramos-cadastros.yml",
   "tools/print-d05", ".github/workflows/omni-print-d05.yml", "vercel.json"]
 const files = []
 const walk = (rel) => {

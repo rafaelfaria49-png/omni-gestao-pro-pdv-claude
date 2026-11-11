@@ -87,6 +87,12 @@ jobs:
           AUTH_SECRET: isolated-platform-build-only
           AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://localhost:3000
+      - name: Usar mirrors Ubuntu oficiais alternativos
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
+            grep -Eq '^https://(archive|security)\.ubuntu\.com/ubuntu/' /etc/apt/apt-mirrors.txt
+            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          fi
       - run: npx playwright install --with-deps chromium
       - name: Migration aditiva e E2E autenticado real em banco vazio
         run: node scripts/platform/run-pilot-e2e.mjs

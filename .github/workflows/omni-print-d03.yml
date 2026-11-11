@@ -55,6 +55,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci --no-audit --no-fund
+      - name: Usar mirrors Ubuntu oficiais alternativos
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
+            grep -Eq '^https://(archive|security)\.ubuntu\.com/ubuntu/' /etc/apt/apt-mirrors.txt
+            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          fi
       - name: PostgreSQL 17 descartável
         run: |
           sudo apt-get update

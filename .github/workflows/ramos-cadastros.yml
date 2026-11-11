@@ -141,6 +141,12 @@ jobs:
           npm run build 2>&1 | tee /tmp/ramos-build.log
           grep -q PROXY_PRISMA_ARTIFACT_VERIFIED /tmp/ramos-build.log
           grep -q MIGRATION_SKIPPED /tmp/ramos-build.log
+      - name: Usar mirrors Ubuntu oficiais alternativos
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
+            grep -Eq '^https://(archive|security)\.ubuntu\.com/ubuntu/' /etc/apt/apt-mirrors.txt
+            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          fi
       - run: npx playwright install --with-deps chromium
       - name: Smoke dos componentes reais em desktop e celular
         run: node scripts/cadastros/smoke-ramos.mjs
@@ -227,6 +233,12 @@ jobs:
           AUTH_SECRET: isolated-ramo-e2e-build-only
           AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://127.0.0.1:3000
+      - name: Usar mirrors Ubuntu oficiais alternativos
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
+            grep -Eq '^https://(archive|security)\.ubuntu\.com/ubuntu/' /etc/apt/apt-mirrors.txt
+            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          fi
       - run: npx playwright install --with-deps chromium
       - name: Jornadas autenticadas reais (Padaria, lojas mistas, permissões, multiloja, Clientes vCard e QR, PDV offline)
         run: node scripts/cadastros/run-ramos-e2e-isolated.mjs
