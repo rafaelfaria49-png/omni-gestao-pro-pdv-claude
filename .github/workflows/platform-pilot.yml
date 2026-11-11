@@ -89,9 +89,19 @@ jobs:
           NEXTAUTH_URL: http://localhost:3000
       - name: Usar mirrors Ubuntu oficiais alternativos
         run: |
-          if [ -f /etc/apt/apt-mirrors.txt ] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
-            grep -Eq '^https://(archive|security)\.ubuntu\.com/ubuntu/' /etc/apt/apt-mirrors.txt
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            selected=''
+            for mirror in archive.ubuntu.com security.ubuntu.com; do
+              if grep -Fq "https://$mirror/ubuntu/" /etc/apt/apt-mirrors.txt && timeout 10 getent ahostsv4 "$mirror" >/dev/null; then
+                selected="$mirror"
+                break
+              fi
+            done
+            if [ -z "$selected" ]; then
+              echo 'UBUNTU_OFFICIAL_MIRRORS_DNS_UNAVAILABLE' >&2
+              exit 1
+            fi
+            printf 'https://%s/ubuntu/\n' "$selected" | sudo tee /etc/apt/apt-mirrors.txt
           fi
       - run: npx playwright install --with-deps chromium
       - name: Migration aditiva e E2E autenticado real em banco vazio
