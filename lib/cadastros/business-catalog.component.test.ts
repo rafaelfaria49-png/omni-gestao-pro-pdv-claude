@@ -248,7 +248,54 @@ describe("Editor oficial de configuração", () => {
     fireEvent.click(box)
     fireEvent.click(box)
     expect(screen.getAllByText("Sugestão do ramo").length).toBe(5)
+    expect(screen.getAllByText("Ativação manual").length).toBe(1)
     expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it.each(["padaria", "assistencia", "acessorios"] as const)("%s: aparelhos por IMEI aparece desligado e como ativação manual, não como sugestão", (branch) => {
+    h.capabilities = { version: 1, business: { primaryBranch: branch } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement
+    expect(box.checked).toBe(false)
+    const row = box.closest("label")!
+    expect(row.textContent).toContain("Ativação manual")
+    expect(row.textContent).not.toContain("Sugestão do ramo")
+    expect(row.textContent).toMatch(/Desligado por padrão em todos os ramos/)
+  })
+  it("ligar aparelhos por IMEI grava só esse override explícito da unidade", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement
+    fireEvent.click(box)
+    expect(box.checked).toBe(true)
+    expect(box.closest("label")!.textContent).toContain("Escolha explícita")
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }))
+    await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
+    expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: {},
+      overrides: { "catalog.serializedDevices": true } } } })
+  })
+  it("ligar e desligar aparelhos por IMEI volta à ativação manual sem gravar nada", () => {
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ })
+    fireEvent.click(box)
+    fireEvent.click(box)
+    expect(box.closest("label")!.textContent).toContain("Ativação manual")
+    expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it("sem liberação do catálogo de aparelhos a opção de IMEI não é oferecida", () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    h.deviceCatalog = false
+    h.permitted = false
+    render(React.createElement(BusinessResourcesCard))
+    expect(screen.queryByRole("checkbox", { name: /Aparelhos por IMEI/ })).toBeNull()
+  })
+  it("escolha não salva de IMEI na loja A não vaza para a loja B", () => {
+    const ui = render(React.createElement(BusinessResourcesCard))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }))
+    h.storeId = "loja-b"
+    ui.rerender(React.createElement(BusinessResourcesCard))
+    expect((screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement).checked).toBe(false)
+    expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+    expect(h.save).not.toHaveBeenCalled()
   })
   it("exibe preparação com honestidade e desabilita edição sem permissão", () => {
     h.canConfigure = false

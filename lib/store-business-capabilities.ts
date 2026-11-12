@@ -33,6 +33,14 @@ export const BUSINESS_RESOURCES = [
 ] as const
 export type BusinessResourceKey = (typeof BUSINESS_RESOURCES)[number]["key"]
 
+/**
+ * Recursos que nenhum ramo nem perfil legado liga: sem escolha explícita ficam desligados e a
+ * origem é "manual" (não é "sugestão do ramo"). OMNI-APARELHOS-ENDTOEND-001.
+ */
+export const MANUAL_ONLY_RESOURCES: ReadonlySet<BusinessResourceKey> = new Set<BusinessResourceKey>(["catalog.serializedDevices"])
+/** explicit = escolha da loja · preset = sugestão do ramo · legacy = loja sem ramo · manual = só por escolha explícita. */
+export type BusinessResourceSource = "explicit" | "preset" | "legacy" | "manual"
+
 const PRESETS: Record<BusinessBranch, readonly BusinessResourceKey[]> = {
   padaria: ["catalog.weight"],
   assistencia: ["service.technical", "catalog.deviceCompatibility", "pdv.accessoryModelColor"],
@@ -79,16 +87,17 @@ export function resolveBusinessResource(
     ? (key === "catalog.deviceCompatibility" || key === "pdv.accessoryModelColor" ||
         (key === "service.technical" && legacyBusinessBranch(legacyProfile) === "assistencia"))
     : PRESETS[branch].includes(key)
-  // Recurso novo sem sugestão automática: ativação explícita por loja (rollout controlado).
-  const suggestedFinal = key === "catalog.serializedDevices" ? false : suggested
+  // Recurso sem sugestão automática: ativação explícita por loja (rollout controlado).
+  const manualOnly = MANUAL_ONLY_RESOURCES.has(key)
   const explicit = explicitCapabilityEnabled(capabilities?.overrides?.[key])
-  const requested = explicit ?? suggestedFinal
+  const requested = explicit ?? (manualOnly ? false : suggested)
+  const source: BusinessResourceSource = explicit !== undefined ? "explicit" : manualOnly ? "manual" : legacy ? "legacy" : "preset"
   return {
     requested,
     enabled: requested && permitted,
     operational: requested && permitted && definition.stage === "operational",
     stage: definition.stage,
-    source: explicit === undefined ? (legacy ? "legacy" : "preset") : "explicit",
+    source,
   }
 }
 
