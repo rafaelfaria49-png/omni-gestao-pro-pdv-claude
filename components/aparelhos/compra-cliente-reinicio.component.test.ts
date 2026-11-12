@@ -80,4 +80,23 @@ describe("useReiniciarAoAbrir", () => {
     ui.rerender(React.createElement(Sonda, { open: true, valor: c, onReinicio }))
     expect(onReinicio.mock.calls).toEqual([[a], [c]])
   })
+  function SondaVersao({ open, versao, onReinicio }: { open: boolean; versao: number; onReinicio: (v: number) => void }) {
+    useReiniciarAoAbrir(open, () => onReinicio(versao), versao)
+    return null
+  }
+  it("com versão: aberto reinicia quando chega versão nova, nunca na recarga da mesma versão", () => {
+    const onReinicio = vi.fn()
+    const ui = render(React.createElement(SondaVersao, { open: true, versao: 1, onReinicio }))
+    ui.rerender(React.createElement(SondaVersao, { open: true, versao: 1, onReinicio }))
+    expect(onReinicio.mock.calls).toEqual([[1]])
+    // Política salva, diálogo reaberto antes da recarga: a versão 2 chega com ele aberto.
+    ui.rerender(React.createElement(SondaVersao, { open: false, versao: 1, onReinicio }))
+    ui.rerender(React.createElement(SondaVersao, { open: true, versao: 1, onReinicio }))
+    ui.rerender(React.createElement(SondaVersao, { open: true, versao: 2, onReinicio }))
+    expect(onReinicio.mock.calls).toEqual([[1], [1], [2]])
+    // Fechado, a mudança de versão não roda nada; ao abrir, reinicia uma vez só.
+    ui.rerender(React.createElement(SondaVersao, { open: false, versao: 3, onReinicio }))
+    ui.rerender(React.createElement(SondaVersao, { open: true, versao: 3, onReinicio }))
+    expect(onReinicio.mock.calls).toEqual([[1], [1], [2], [3]])
+  })
 })

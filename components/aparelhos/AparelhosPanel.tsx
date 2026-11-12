@@ -464,11 +464,12 @@ function PoliticaDialog({ open, onOpenChange, storeId, resumo, onSaved }: { open
   const [aprov, setAprov] = useState(true)
   const [conf, setConf] = useState(true)
   const [saving, setSaving] = useState(false)
-  // Só ao abrir: recarregar o resumo com o diálogo aberto não descarta a edição em curso.
+  // Ao abrir e quando chega versão nova da política (reaberto antes da recarga, não edita a anterior);
+  // recarga com a mesma versão não descarta a edição em curso.
   useReiniciarAoAbrir(open, () => {
     setPresets(p.presetsContratuaisDias.join(", ")); setPadrao(p.contratualPadraoDias); setMax(p.contratualMaxDias); setCond(p.condicoesTermo)
     setAprov(p.aquisicaoExigeAprovacao); setConf(p.liberacaoExigeConferencia)
-  })
+  }, p.versao)
   async function salvar() {
     setSaving(true)
     try {
