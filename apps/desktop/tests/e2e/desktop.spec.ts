@@ -252,7 +252,7 @@ test("logout: cookie de A não ressuscita, B entra normalmente, caches de dados 
   const page = await appPage(app)
   await page.click("#enter")
   await expect(page.locator("#page")).toHaveText("dashboard")
-  expect(await page.evaluate(() => (window as unknown as { __fillCache: () => Promise<number> }).__fillCache())).toBe(3)
+  expect(await page.evaluate(() => (window as unknown as { __fillCache: () => Promise<number> }).__fillCache())).toBe(4)
   await page.evaluate(() => localStorage.setItem("pdv-pendentes", "venda-offline-1"))
   // Documento do usuário A aberto (cupom).
   const popupPromise = app.waitForEvent("window")
@@ -271,7 +271,11 @@ test("logout: cookie de A não ressuscita, B entra normalmente, caches de dados 
   await expect.poll(sessionCookie).toEqual([])
   await expect
     .poll(() => page.evaluate(async () => (await caches.keys()).sort()))
-    .toEqual(["workbox-precache-v2-http://127.0.0.1/"])
+    .toEqual(["static-js-assets", "workbox-precache-v2-http://127.0.0.1/"])
+  // No cache estático, o HTML com o usuário A some; o JS de verdade fica.
+  await expect
+    .poll(() => page.evaluate(async () => (await (await caches.open("static-js-assets")).keys()).map((r) => new URL(r.url).pathname)))
+    .toEqual(["/_next/static/chunks/real.js"])
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
   expect(await page.evaluate(() => localStorage.getItem("pdv-pendentes"))).toBe("venda-offline-1")
   expect(await app.evaluate(({ session }, origin) => session.fromPartition("persist:omnigestao-development").cookies.get({ url: origin }).then((c) => c.map((x) => x.name)), FIXTURE_ORIGIN)).toContain("pref")

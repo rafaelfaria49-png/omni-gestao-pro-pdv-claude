@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { classifyLoadFailure, hasForbiddenDebugSwitch, parseSquirrelEvent } from "../../src/shared/startup"
 import { compareSemver, isUpdateAvailable, parseUpdateManifest } from "../../src/shared/update-manifest"
-import { isAuthSessionCookie } from "../../src/main/privacy"
+import { isAuthSessionCookie, SHARED_SAFE_CACHE, STATIC_ASSET_CONTENT_TYPE } from "../../src/main/privacy"
 
 describe("Squirrel", () => {
   it("lê o evento do segundo argumento", () => {
@@ -71,5 +71,25 @@ describe("cookie de sessão do NextAuth", () => {
     expect(isAuthSessionCookie("__Secure-authjs.session-token.1")).toBe(true)
     expect(isAuthSessionCookie("authjs.csrf-token")).toBe(false)
     expect(isAuthSessionCookie("assistec_staff_session")).toBe(false)
+  })
+})
+
+describe("limpeza de caches na troca de usuário", () => {
+  it("só nomes de cache estáticos podem ser mantidos", () => {
+    for (const keep of ["workbox-precache-v2-https://x/", "static-js-assets", "static-style-assets", "next-static-js-assets", "next-image", "google-fonts-webfonts"]) {
+      expect(SHARED_SAFE_CACHE.test(keep)).toBe(true)
+    }
+    for (const drop of ["apis", "pages", "pages-rsc", "pages-rsc-prefetch", "next-data", "others", "start-url", "cross-origin"]) {
+      expect(SHARED_SAFE_CACHE.test(drop)).toBe(false)
+    }
+  })
+  it("dentro de um cache estático só sobrevive conteúdo estático", () => {
+    for (const ok of ["application/javascript; charset=utf-8", "text/javascript", "text/css", "font/woff2", "image/png", "image/svg+xml", "application/wasm"]) {
+      expect(STATIC_ASSET_CONTENT_TYPE.test(ok)).toBe(true)
+    }
+    // HTML com usuário logado servido no lugar de um .js inexistente (provado na QA real).
+    for (const bad of ["text/html; charset=utf-8", "application/json", "text/x-component", "text/plain", ""]) {
+      expect(STATIC_ASSET_CONTENT_TYPE.test(bad)).toBe(false)
+    }
   })
 })

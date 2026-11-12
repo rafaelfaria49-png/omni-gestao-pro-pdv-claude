@@ -13,6 +13,14 @@ export function isAuthSessionCookie(name: string): boolean {
 export const SHARED_SAFE_CACHE = /^(workbox-precache|static-|next-static-|next-image|google-fonts)/
 
 /**
+ * Conteúdo que pode continuar nesses caches. HTML, JSON, RSC (text/x-component) ou resposta sem
+ * tipo são apagados mesmo dentro de um cache "estático": provado na QA real que o SW guardou em
+ * `static-js-assets` um `.js` inexistente respondido com o HTML da tela logada (nome e e-mail).
+ */
+export const STATIC_ASSET_CONTENT_TYPE =
+  /^\s*(application\/(javascript|x-javascript|wasm)|text\/(javascript|css)|font\/|image\/|application\/font|application\/vnd\.ms-fontobject)/i
+
+/**
  * Proteção de logout do desktop.
  *
  * Ao chegar em /login vindo de outra tela (logout ou sessão expirada):
@@ -46,7 +54,13 @@ export class LogoutGuard {
     session.webRequest.onBeforeRequest({ urls: [`${appOrigin}/*`] }, (details, callback) => {
       if (this.armed && details.method === "POST") {
         this.armed = false
-        this.log("logout-guard desarmada (novo login enviado)")
+        let p = ""
+        try {
+          p = new URL(details.url).pathname
+        } catch {
+          /* url inválida */
+        }
+        this.log(`logout-guard desarmada (POST ${p})`)
       }
       callback({})
     })
@@ -66,17 +80,33 @@ export class LogoutGuard {
       done.push(`cookie:${c.name}`)
     }
     try {
-      const deleted = (await page.executeJavaScript(
+      const result = (await page.executeJavaScript(
         `(async () => {
-          if (!("caches" in self)) return []
+          if (!("caches" in self)) return { caches: [], entries: 0 }
           const keep = ${SHARED_SAFE_CACHE.toString()}
-          const names = (await caches.keys()).filter((n) => !keep.test(n))
+          const staticType = ${STATIC_ASSET_CONTENT_TYPE.toString()}
+          const all = await caches.keys()
+          const names = all.filter((n) => !keep.test(n))
           await Promise.all(names.map((n) => caches.delete(n)))
-          return names
+          // Caches "estáticos" mantidos: só ficam respostas que são de fato JS/CSS/fonte/imagem.
+          // Um .js inexistente pode ter sido respondido com HTML da tela logada e guardado como script.
+          let entries = 0
+          for (const n of all.filter((x) => keep.test(x) && !/^workbox-precache/.test(x))) {
+            const c = await caches.open(n)
+            for (const req of await c.keys()) {
+              const res = await c.match(req)
+              const type = (res && res.headers.get("content-type")) || ""
+              if (!staticType.test(type)) {
+                await c.delete(req)
+                entries++
+              }
+            }
+          }
+          return { caches: names, entries }
         })()`,
         true,
-      )) as string[]
-      done.push(`caches:${deleted.join("|") || "-"}`)
+      )) as { caches: string[]; entries: number }
+      done.push(`caches:${result.caches.join("|") || "-"}`, `entradas-nao-estaticas:${result.entries}`)
     } catch {
       // Página já saiu: apaga tudo da origem (perde o precache, mas nunca vaza dado).
       await this.session.clearStorageData({ origin: this.appOrigin, storages: ["cachestorage"] })

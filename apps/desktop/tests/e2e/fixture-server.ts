@@ -33,6 +33,10 @@ const DASHBOARD = page(
     await c.put("/api/clientes", new Response('{"usuario":"A"}'))
     await (await caches.open("pages-rsc")).put("/dashboard", new Response("rsc do usuario A"))
     await (await caches.open("workbox-precache-v2-http://127.0.0.1/")).put("/_next/static/app.js", new Response("js"))
+    // Cache "estático" com um .js de verdade e um .js inexistente respondido com HTML da tela logada.
+    const st = await caches.open("static-js-assets")
+    await st.put("/_next/static/chunks/real.js", new Response("console.log(1)", { headers: { "content-type": "application/javascript" } }))
+    await st.put("/_vercel/insights/script.js", new Response("<html>Usuario A logado</html>", { headers: { "content-type": "text/html; charset=utf-8" } }))
     return (await caches.keys()).length
   }
 </script>
