@@ -75,16 +75,26 @@ do proprietário). IMEI completo só para gerente/proprietário na lista
 
 ## Bloqueios conhecidos (não fingidos)
 
-- **Pagamento da compra de cliente**: o protocolo registra forma/situação, mas NÃO lança saída no
-  caixa nem conta a pagar — não há contrato canônico para isso neste escopo. Integração em PR
-  separada (`lib/financeiro`).
+- **Pagamento da compra de cliente** (`lib/aparelhos/financeiro.ts`): a APROVAÇÃO cria, na mesma
+  transação, um título PENDENTE em Contas a Pagar (chave `pagar:manual:{loja}:aparelho-aquisicao-{id}`,
+  categoria "Compra de aparelhos (estoque)", vencimento = dia da aprovação → aparece como vencido no
+  mesmo dia). O pagamento efetivo só acontece no Financeiro (Contas a Pagar → pagar), que exige permissão
+  financeira e gera a saída de caixa/carteira pelo fluxo existente. Pagamento em dinheiro no balcão NÃO
+  passa pela sessão de caixa do PDV (não há sangria automática): quem paga dá baixa no Financeiro.
+  A situação exibida (a pagar/parcial/pago) vem sempre do título. "Crédito na loja" e "Abatimento em
+  venda" são recusados (`PAGAMENTO_NAO_INTEGRADO`) — sem contrato canônico de liquidação. Teto de
+  R$ 200.000,00 por protocolo. Atenção DRE: o título pago entra como despesa da categoria acima; avaliar
+  com o contador se deve ser tratado como estoque (CMV) para não contar duas vezes.
 - **Consulta oficial de restrição de IMEI**: sem integração autorizada. Só conferência manual
   registrada (fonte, data, operador). O sistema nunca afirma "limpo" sem registro.
 - **Cancelamento de venda**: integrado. Na mesma transação do cancelamento, a garantia vira
   `cancelada` e a unidade volta a `disponivel` (casa com o estorno de +1 do produto). Se o aparelho
   precisar de avaliação, mude para "Em revisão" (retira do saldo pelo ledger).
 - **Devolução (F8) e correção de itens**: NÃO integradas → fail-closed para vendas com aparelho
-  (`APARELHO_DEVOLUCAO_NAO_INTEGRADA`, nada é gravado). O F8 poderá recuperar a unidade exata por
+  (`APARELHO_DEVOLUCAO_NAO_INTEGRADA`, nada é gravado). O bloqueio vale no servidor E no terminal:
+  `registrarDevolucao` (troca e devolução, `lib/operations-store.tsx`) recusa a linha com `deviceSale`
+  antes de gravar estoque/crédito local — sem devolução parcial "pendente para sempre". PR #331 (F8)
+  segue draft; integrar depois pela unidade exata (`AparelhoVenda.aparelhoId`). O F8 poderá recuperar a unidade exata por
   `AparelhoVenda.aparelhoId` (transição `vendido → devolvido` já prevista).
 - **Recompra** de aparelho vendido pela própria loja: reaproveita a mesma unidade; na aprovação a
   garantia anterior vira `recomprada`; se a compra for recusada, a unidade volta como estava.
@@ -99,6 +109,19 @@ do proprietário). IMEI completo só para gerente/proprietário na lista
 - **Ajuste manual, inventário e OS** ainda podem mexer no saldo de um modelo serializado fora deste
   módulo; a invariante de estoque só é garantida pelos fluxos de aparelhos.
 - **Impressora física 80 mm**: preview validado no navegador; papel/térmica não testados.
+
+## Publicação e rollback
+
+- O build de Production (`scripts/vercel-build.mjs`) hoje emite `MIGRATION_SKIPPED`: o merge publica o
+  código SEM criar as tabelas. É seguro: tabelas novas, nenhuma coluna nova em tabela existente; vendas,
+  cancelamento, devolução e estoque comuns não consultam as tabelas novas; a API de aparelhos responde
+  503 `APARELHOS_NAO_INSTALADO` (nunca 500) se alguém ligar o recurso antes do apply.
+- Aplicar a migration em Production é um passo SEPARADO e autorizado pelo proprietário (flag
+  `MIGRATION_AUTHORITY_ENABLED` no projeto canônico ou apply assistido), com backup/PITR do Neon antes.
+- Rollback de código: promover o deployment anterior na Vercel (sem dados novos envolvidos enquanto o
+  recurso estiver desligado). `down.sql` só vale sem dados reais — não é rollback produtivo garantido.
+- Modelo serializado nunca sai sem unidade em nenhum escritor (inclusive sync legado):
+  `APARELHO_IMEI_OBRIGATORIO`.
 
 ## Testes
 

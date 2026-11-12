@@ -574,6 +574,8 @@ export async function cancelarReserva(ctx: AparelhoCtx, id: string, raw: unknown
 const TIPOS_AQUISICAO = ["compra_cliente", "fornecedor", "lote", "negociacao"] as const
 const DOC_ORIGEM = ["declaracao_procedencia", "nota_fiscal", "recibo", "outro"] as const
 
+const VALOR_MAXIMO_AQUISICAO = 200_000
+
 export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = prisma) {
   if (!ctx.perms.comprarDeCliente) return fail(403, "SEM_PERMISSAO", "Sem permissão para registrar compra de aparelhos.")
   const r = (raw ?? {}) as Record<string, unknown>
@@ -609,6 +611,8 @@ export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = pr
   }
   if (!(FORMAS_PAGAMENTO_AQUISICAO as readonly string[]).includes(formaPagamento)) return fail(400, "VALIDACAO", "Selecione a forma de pagamento.", "formaPagamento")
   if (valorTotal === null || valorTotal < 0) return fail(400, "VALIDACAO", "Informe o valor da compra.", "valorTotal")
+  // Teto de sanidade: o valor vira título a pagar na aprovação; erro de digitação não pode virar dívida.
+  if (valorTotal > VALOR_MAXIMO_AQUISICAO) return fail(400, "VALOR_ACIMA_DO_LIMITE", "Valor acima do limite de R$ 200.000,00 por protocolo. Confira a digitação.", "valorTotal")
   if (itens.length === 0) return fail(400, "VALIDACAO", "Inclua ao menos um aparelho.")
   if (pessoaFisica && itens.length !== 1) return fail(400, "VALIDACAO", "Compra de cliente registra um aparelho por protocolo.")
   const parsedItens: AparelhoInput[] = []
@@ -716,12 +720,7 @@ export async function decidirAquisicao(ctx: AparelhoCtx, id: string, raw: unknow
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "aparelhos_aquisicoes" WHERE "id" = ${id} AND "storeId" = ${ctx.storeId} FOR UPDATE`
     if (!rows[0]) stop(404, "NAO_ENCONTRADO", "Aquisição não encontrada nesta loja.")
     const aq = await tx.aparelhoAquisicao.findUniqueOrThrow({ where: { id }, include: { aparelhos: true } })
-    if (aq.status !== "aguardando_aprovacao") {
-      if ((decisao === "aprovar" && aq.status === "confirmada") || (decisao === "recusar" && aq.status === "recusada")) {
-        return { ok: true as const, aquisicao: { id: aq.id, status: aq.status }, replay: true }
-      }
-      stop(409, "AQUISICAO_DECIDIDA", `Aquisição já ${aq.status}.`)
-    }
+    // Permissão ANTES do replay: quem não pode decidir não descobre nem o estado da decisão.
     const politica = await getPoliticaTx(tx, ctx.storeId)
     const exigeSegregacao = politica.aquisicaoExigeAprovacao
     const permitido = exigeSegregacao ? podeAprovarAquisicao(ctx.perms, aq.createdBy, ctx.actorId) : ctx.perms.aprovarAquisicao
@@ -729,6 +728,12 @@ export async function decidirAquisicao(ctx: AparelhoCtx, id: string, raw: unknow
       stop(403, "SEGREGACAO_FUNCOES", ctx.perms.aprovarAquisicao
         ? "Quem registrou a compra não pode aprová-la. Peça a outro gerente ou ao proprietário."
         : "Somente gerente ou proprietário aprova aquisições.")
+    }
+    if (aq.status !== "aguardando_aprovacao") {
+      if ((decisao === "aprovar" && aq.status === "confirmada") || (decisao === "recusar" && aq.status === "recusada")) {
+        return { ok: true as const, aquisicao: { id: aq.id, status: aq.status }, replay: true }
+      }
+      stop(409, "AQUISICAO_DECIDIDA", `Aquisição já ${aq.status}.`)
     }
     if (decisao === "aprovar") {
       await tx.aparelhoAquisicao.update({ where: { id }, data: { status: "confirmada", aprovadaPor: ctx.actorLabel, aprovadaEm: new Date() } })

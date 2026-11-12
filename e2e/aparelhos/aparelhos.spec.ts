@@ -299,7 +299,8 @@ test("03 Venda Completa — cliente obrigatório, unidade pelo IMEI, garantia 6 
   const mobile = await newPage(browser, { width: 390, height: 844 })
   await login(mobile, "caixa")
   await mobile.goto("/dashboard/vendas/venda-completa")
-  await expect(mobile.getByPlaceholder("Nome, CPF ou telefone… [F2]")).toBeVisible({ timeout: 60_000 })
+  // O layout pode montar mais de uma instância do campo (responsivo); vale a visível.
+  await expect(mobile.getByPlaceholder("Nome, CPF ou telefone… [F2]").locator("visible=true").first()).toBeVisible({ timeout: 60_000 })
   await mobile.screenshot({ path: shot("12-venda-completa-mobile.png"), fullPage: true })
   await semRolagemHorizontal(mobile)
   await mobile.context().close()

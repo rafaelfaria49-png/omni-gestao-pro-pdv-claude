@@ -1062,9 +1062,11 @@ export async function upsertVendaInTransaction(
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
     if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
     const resolved = resolvedProductMap.get(productResolutionKey(line).key)
-    // Modelo serializado nunca sai sem a unidade (IMEI) no fluxo ao vivo — fail-closed.
-    if (resolved?.serialized && enforceStock && !lineHasDeviceSale(line)) {
-      throw new deviceSaleModule!.DeviceSaleError(
+    // Modelo serializado nunca sai sem a unidade (IMEI) — em QUALQUER escritor (ao vivo ou sync
+    // legado), senão Produto.stock deixa de casar com as unidades disponíveis. Fail-closed.
+    if (resolved?.serialized && !lineHasDeviceSale(line)) {
+      const mod = deviceSaleModule ?? (await import("@/lib/aparelhos/sale-hook"))
+      throw new mod.DeviceSaleError(
         "APARELHO_IMEI_OBRIGATORIO",
         `"${resolved.name}" é aparelho individualizado: selecione a unidade pelo IMEI antes de finalizar.`,
       )

@@ -76,6 +76,10 @@ export async function registrarObrigacaoAquisicaoTx(
   const payload = appendFinanceiroHistorico(
     buildContaPagarPayload({
       origem: FINANCEIRO_ORIGEM.SISTEMA,
+      // Categoria e forma lidas pelo HUB (pickStringFromPayload planoContas/categoria, formaPagamento).
+      planoContas: "Compra de aparelhos (estoque)",
+      categoria: "Compra de aparelhos (estoque)",
+      formaPagamento: aq.formaPagamento,
       referencia: aq.protocolo,
       numeroDocumento: aq.protocolo,
       createdFrom: "aparelhos.aquisicao",

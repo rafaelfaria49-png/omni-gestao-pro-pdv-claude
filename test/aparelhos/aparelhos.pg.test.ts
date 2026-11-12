@@ -572,3 +572,29 @@ describe("Venda mista e compatibilidade (GOAL 002)", () => {
     expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("vendido")
   })
 })
+
+describe("Revisão pré-merge (GOAL 002)", () => {
+  it("modelo serializado sem IMEI é recusado também sem enforceStock (sync legado)", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Sync Legado" })
+    const base = saleFor(u)
+    const semUnidade = { ...base, lines: [{ ...base.lines![0]!, deviceSale: undefined }] } as SalePayload
+    const stockAntes = (await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock
+    expect(await erroDe(db.$transaction((tx) => upsertVendaInTransaction(tx, LOJA_A, semUnidade, "Sync QA", {}), { timeout: 20_000 }))).toBe("APARELHO_IMEI_OBRIGATORIO")
+    expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(stockAntes)
+    expect(await db.venda.count({ where: { pedidoId: semUnidade.id } })).toBe(0)
+  })
+  it("quem não pode decidir não recebe replay da decisão; valor acima do teto é recusado", async () => {
+    const aq = ok(await svc.criarAquisicao(VENDEDOR_A, {
+      tipo: "compra_cliente", vendedorNome: "Teto", vendedorDocumento: "529.982.247-25", documentoOrigemTipo: "declaracao_procedencia",
+      formaPagamento: "dinheiro", valorTotal: 300, aparelhos: [device({ custoAquisicao: 0, despesas: 0 })],
+    }, D))
+    ok(await svc.decidirAquisicao(GERENTE_A, aq.aquisicao.id, { decisao: "aprovar" }, D))
+    expect(await svc.decidirAquisicao(CAIXA_A, aq.aquisicao.id, { decisao: "aprovar" }, D)).toMatchObject({ ok: false, code: "SEGREGACAO_FUNCOES" })
+    expect(await svc.criarAquisicao(VENDEDOR_A, {
+      tipo: "compra_cliente", vendedorNome: "Teto", vendedorDocumento: "529.982.247-25", documentoOrigemTipo: "declaracao_procedencia",
+      formaPagamento: "pix", valorTotal: 1e9, aparelhos: [device({ custoAquisicao: 0, despesas: 0 })],
+    }, D)).toMatchObject({ ok: false, code: "VALOR_ACIMA_DO_LIMITE" })
+    const t = await db.contaPagarTitulo.findFirstOrThrow({ where: { storeId: LOJA_A, localKey: `pagar:manual:${LOJA_A}:aparelho-aquisicao-${aq.aquisicao.id}` } })
+    expect(t.payload).toMatchObject({ planoContas: "Compra de aparelhos (estoque)", formaPagamento: "dinheiro" })
+  })
+})

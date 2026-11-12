@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { APARELHO_REVERSAO_NAO_INTEGRADA } from "@/lib/aparelhos/sale-reversal"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
 import type { Orcamento } from "@/lib/orcamento-types"
 import { normalizeDocDigits } from "@/lib/cpf"
@@ -3640,6 +3641,9 @@ export function OperationsProvider({
       if (canReturn < req.quantity) {
         return { ok: false, reason: `Devolução maior que o disponível para ${saleLine.name}.` }
       }
+      // Aparelho por IMEI: devolução ainda não integrada (F8). Recusa ANTES de gravar algo local
+      // (estoque/crédito), igual ao servidor — nunca uma devolução parcial pendente para sempre.
+      if (saleLine.deviceSale) return { ok: false, reason: APARELHO_REVERSAO_NAO_INTEGRADA.message }
       const inv = next.inventory.find((i) => i.id === req.inventoryId)
       if (!inv) return { ok: false, reason: "Produto não está mais no cadastro de estoque." }
 
