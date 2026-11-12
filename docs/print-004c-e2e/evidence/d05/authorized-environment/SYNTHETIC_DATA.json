@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-05T19:29:30.705Z",
+  "storeId": "d05-synthetic-store",
+  "users": [
+    "admin-d05@example.invalid",
+    "operador-d05@example.invalid"
+  ],
+  "terminals": 2,
+  "products": 3,
+  "stockInitializedByCanonicalLedger": true,
+  "directPrintEnabledInStore": false,
+  "automaticPrint": false,
+  "credentials": "DPAPI_CURRENT_USER_OUTSIDE_REPOSITORY",
+  "productionAccess": false,
+  "physicalHomologation": "PENDING"
+}

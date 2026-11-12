@@ -1,0 +1,40 @@
+reset print_lab_d03_d02
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+ ❯ tools/print-d02/d02-migrations.pg.test.ts (8 tests | 8 skipped) 16426ms
+
+ Test Files  1 failed (1)
+      Tests  8 skipped (8)
+   Start at  14:07:29
+   Duration  19.14s (transform 1.41s, setup 0ms, import 1.92s, tests 16.43s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d02/d02-migrations.pg.test.ts > D02-A — migrations seguras do Omni Print (PostgreSQL descartável)
+AssertionError: Prisma schema loaded from tools\print-d05\.artifacts\temp-pg\p004-d02m-vGzpyN\mirror\schema.prisma
+Datasource "db": PostgreSQL database "print_lab_d03_d02", schema "public" at "127.0.0.1:57495"
+Error: P1001: Can't reach database server at `127.0.0.1:57495`
+
+Please make sure your database server is running at `127.0.0.1:57495`.
+: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tools/print-d02/d02-migrations.pg.test.ts:164:29
+    162|     for (const n of names) {
+    163|       const r = await prismaCli(template, schema, "migrate", "resolve"…
+    164|       expect(r.code, r.out).toBe(0)
+       |                             ^
+    165|     }
+    166|   }, 300_000)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

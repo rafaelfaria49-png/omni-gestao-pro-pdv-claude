@@ -1,0 +1,30 @@
+{
+  "operation": "d02-register",
+  "at": "2026-11-05T19:17:46.494Z",
+  "projectId": "super-credit-72834107",
+  "branchId": "br-billowing-cake-b627zsxv",
+  "database": "omni_print_d05",
+  "source": "NEW_EMPTY_TEST_PROJECT",
+  "productionAccess": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "mirror-only",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "60838b18ec855d450751fc6c2d5bf0f2f6ca58e41b514a52b50afbc9acf5e123"
+    },
+    {
+      "step": "register",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "ada28c1267054f8c21c6b7756482af6c04371a15eafe3f9adbe62f710d30fcc5"
+    },
+    {
+      "step": "verify-prisma",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "ebc92bd83afbed8058898a9bc9668944a9b9198390eb0bf33bf993fce76ec3ef"
+    }
+  ]
+}

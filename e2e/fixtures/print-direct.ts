@@ -37,8 +37,9 @@ async function serve() {
     "components/dashboard/vendas/pdv-recebimento-modal.tsx": `export const PdvRecebimentoModal=()=>null`,
     "components/dashboard/vendas/acessorios/selecionar-acessorio-dialog.tsx": `export const SelecionarAcessorioDialog=()=>null`,
     "components/dashboard/vendas/cupom-nao-fiscal.tsx": `export const CupomNaoFiscal=()=>null`,
-    // Legacy paths are observed (not executed): the direct path must replace them when available.
-    "components/dashboard/vendas/pdv-auto-print-feedback.tsx": `export const PdvAutoPrintFeedback=(p)=>{if(p.printInput&&!window.__legacy.seen.has(p.printInput)){window.__legacy.seen.add(p.printInput);window.__legacy.auto++}return null}`,
+    // Default: observe the legacy path. Routing regressions opt in to the REAL feedback/runtime with simulated HTTP I/O.
+    "components/dashboard/vendas/pdv-auto-print-feedback.tsx": `import {PdvAutoPrintFeedback as Actual} from '${resolve(root, "components/dashboard/vendas/pdv-auto-print-feedback.tsx").replaceAll("\\", "/")}?actual';
+      export const PdvAutoPrintFeedback=(p)=>{if(window.__printCfg.realLegacyFeedback)return <Actual {...p}/>;if(p.printInput&&!window.__legacy.seen.has(p.printInput)){window.__legacy.seen.add(p.printInput);window.__legacy.auto++}return null}`,
     "components/dashboard/vendas/pdv-post-sale-dialog.tsx": `export const PdvPostSaleDialog=(p)=>{if(p.open&&p.printInput&&!window.__legacy.seen.has(p.printInput)){window.__legacy.seen.add(p.printInput);window.__legacy.dialog++}return null}`,
   }
   const names: Record<string, string> = {

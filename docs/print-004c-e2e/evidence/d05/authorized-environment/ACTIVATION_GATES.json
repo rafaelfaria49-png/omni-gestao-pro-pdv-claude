@@ -1,0 +1,41 @@
+{
+  "at": "2026-11-05T23:13:27.672Z",
+  "commit": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+  "independentReview": "APPROVE",
+  "reviewer": "/root/d05_independent_review",
+  "strictTlsProof": "STRICT_TLS.json",
+  "runs": [
+    {
+      "id": 42126804692,
+      "workflowId": 408422269,
+      "name": "Omni Print D05 — preparação sem hardware",
+      "headSha": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+      "conclusion": "success"
+    },
+    {
+      "id": 42126804691,
+      "workflowId": 407203149,
+      "name": "Omni Print D02 — guarda das migrations",
+      "headSha": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+      "conclusion": "success"
+    },
+    {
+      "id": 42126804856,
+      "workflowId": 407569987,
+      "name": "Omni Print D04 — agente Windows",
+      "headSha": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+      "conclusion": "success"
+    },
+    {
+      "id": 42126804958,
+      "workflowId": 407417517,
+      "name": "Omni Print D03 — retenção segura",
+      "headSha": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+      "conclusion": "success"
+    }
+  ],
+  "previewBranchOnly": true,
+  "directTransportForFirstDeployment": "0",
+  "physicalHomologation": "PENDING",
+  "operatorNameAndWindowStillRequired": true
+}

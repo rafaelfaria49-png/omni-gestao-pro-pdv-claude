@@ -1,0 +1,17 @@
+{
+  "projectId": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+  "name": "omni-gestao-pro",
+  "accountId": "team_IInBSQbKO8P5XpAsvz16Kc3g",
+  "framework": "nextjs",
+  "autoExposeSystemEnvs": true,
+  "ssoProtection": null,
+  "passwordProtectionConfigured": false,
+  "gitLink": {
+    "type": "github",
+    "repo": "omni-gestao-pro-pdv-claude",
+    "org": "rafaelfaria49-png",
+    "repoId": 1208557742
+  },
+  "at": "2026-11-05T19:17:10.498Z",
+  "environmentValuesNotCollected": true
+}

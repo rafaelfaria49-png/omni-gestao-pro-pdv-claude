@@ -1,0 +1,26 @@
+{
+  "at": "2026-11-08T13:22:00.242Z",
+  "commit": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+  "projectId": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+  "branch": "codex/omni-print-d05-homologacao-fisica-001",
+  "keys": [
+    "AUTH_URL",
+    "NEXTAUTH_URL"
+  ],
+  "origin": "https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app",
+  "variableIds": [
+    {
+      "key": "AUTH_URL",
+      "id": "0Qe4vEPsF4gmoFne"
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "id": "MPTApW9TPvmB3qF1"
+    }
+  ],
+  "privateStateUpdated": true,
+  "nonD05Fingerprint": "53be4cf65a4a0b05700dee7e76c21bc62f1f9e171349ebb66a1f5861adec6f78",
+  "nonD05MetadataUnchanged": true,
+  "directTransportEnabled": false,
+  "valuesNotEmitted": true
+}

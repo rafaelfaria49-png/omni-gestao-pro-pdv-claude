@@ -238,6 +238,18 @@ function redact(text, secret) {
   return out
 }
 
+/** Preserve libpq certificate verification when invoking Prisma's distinct TLS implementation. */
+export function prismaResolveUrl(t) {
+  const u = new URL(`postgresql://${encodeURIComponent(t.user)}:${encodeURIComponent(t.env.PGPASSWORD)}@${t.host}:${t.port}/${encodeURIComponent(t.db)}`)
+  const strict = ['verify-ca', 'verify-full'].includes(t.env.PGSSLMODE)
+  if (t.env.PGSSLMODE) u.searchParams.set('sslmode', strict ? 'require' : t.env.PGSSLMODE)
+  if (strict) {
+    u.searchParams.set('sslaccept', 'strict')
+    if (t.env.PGSSLROOTCERT && t.env.PGSSLROOTCERT !== 'system') u.searchParams.set('sslcert', t.env.PGSSLROOTCERT)
+  }
+  return u.toString()
+}
+
 function resolve(t, opts, log) {
   const st = state(t)
   if (st.state !== "CORE_APPLIED") throw new Stop(EXIT.REFUSED, `resolve só com o banco APLICADO (estado ${st.state}): nunca registrar o que não existe`)
@@ -246,7 +258,7 @@ function resolve(t, opts, log) {
   for (const name of Object.values(NAMES))
     if (!existsSync(path.join(dir, name, "migration.sql")) || !readFileSync(path.join(dir, name, "migration.sql")).equals(readFileSync(staged(name))))
       throw new Stop(EXIT.REFUSED, `${name} não promovida com bytes idênticos em ${dir}: rode promote`)
-  const url = `postgresql://${encodeURIComponent(t.user)}:${encodeURIComponent(t.env.PGPASSWORD)}@${t.host}:${t.port}/${encodeURIComponent(t.db)}${t.env.PGSSLMODE ? `?sslmode=${t.env.PGSSLMODE}` : ""}`
+  const url = prismaResolveUrl(t)
   const cli = path.join(ROOT, "node_modules/prisma/build/index.js")
   for (const name of Object.values(NAMES)) {
     if (st.prisma[name]?.finished && !st.prisma[name].rolledBack) { log(`${name}: já registrada`); continue }

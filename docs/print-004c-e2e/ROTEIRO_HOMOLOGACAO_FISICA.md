@@ -1,13 +1,14 @@
 # Roteiro de homologação física na loja — OMNI-PRINT-004C
 
-**D05 PENDING — não executado.** Checklist operacional atualizado: [RUNBOOK_D05.md](RUNBOOK_D05.md). D04-A liberou a
+**D05 PENDING — não executado.** Checklist operacional atualizado: [RUNBOOK_D05.md](RUNBOOK_D05.md),
+[comandos Windows](CHECKLIST_OPERADOR_D05.md) e [plano isolado](PLANO_AMBIENTE_D05.md). D04-A liberou a
 preparação do software; não liberou instalação/pareamento/impressão real ou configuração de banco/Preview nesta sessão.
 
 Pré-condições (gates humanos, nenhum foi aberto por este candidato):
 
 - D02 (schema) e D04 (transporte por agente local) aprovados pelo proprietário; D03 (limites/retenção/chaves) com valores definidos; D05 (hardware) com consentimento.
-- Migration recortada a partir de `tools/print-004c-e2e/candidate-migrations/future/` e aplicada **em ambiente de homologação** (nunca produção sem janela aprovada), com `00` fora de transação e conferência de `indisvalid`.
-- Release aprovada registrada em `lib/printing/direct/activation.ts` (`APPROVED_RELEASE`) por commit revisado; `OMNI_PRINT_DIRECT_ENABLED=1`, `OMNI_PRINT_DIRECT_RELEASE=<id>`, `OMNI_PRINT_CONTENT_KEY` e `OMNI_PRINT_SIGNING_KEY` (32 bytes base64url, distintas) somente no ambiente de homologação.
+- D02 aplicado **somente no banco de homologação autorizado**, conforme RUNBOOK_D02.md, com índices concorrentes fora de transação e conferência de `indisvalid`; nenhuma promoção produtiva nesta D05.
+- Release de homologação em commit revisado com ativação exclusiva de Preview/branch/projeto/release autorizados, conforme PLANO_AMBIENTE_D05.md. Esse commit ainda está bloqueado pela autorização do transporte. `APPROVED_RELEASE` de produção permanece NULL; não mudar NODE_ENV nem contornar o gate usando variáveis de LAB. Chaves distintas de 32 bytes só no secret store da homologação.
 - Banco de homologação = branch Neon separado (nunca o banco da loja), com o D02 aplicado pelo plano de `DECISOES_PROPRIETARIO_OMNI_PRINT.md` (lock_timeout, `00` fora de transação). As variáveis acima ficam com escopo **Preview fixado na branch de homologação** na Vercel (Preview sem branch vale para todas as branches), apontando para esse branch Neon; **nunca** escopo Production. Conferir se a proteção de deployment da Vercel barra o agente (usar o bypass de automação só nesse deployment). Ao final: remover as variáveis, remover os deployments de homologação (deployments antigos mantêm as variáveis) e revogar o agente.
 - Loja piloto com usuário ADMIN (configurar) e CAIXA (vender); terminal PDV cadastrado.
 
@@ -30,7 +31,7 @@ Pré-condições (gates humanos, nenhum foi aberto por este candidato):
 
 ## 3. Teste de cupom
 
-1. Venda real de valor simbólico com **dados de teste** (sem cliente real, sem CPF), 2 itens com acentos (ex.: "Pão de queijo", "Café com açúcar"), pagamento em dinheiro com troco.
+1. Venda exclusivamente sintética no banco de teste, sem cliente real/CPF, com 2 itens com acentos (ex.: "Pão de queijo", "Café com açúcar"), pagamento sintético em dinheiro com troco; nenhuma movimentação em loja real.
 2. Esperado: nenhuma janela/diálogo do navegador; aviso "Comprovante enviado à fila da impressora"; papel sai com: nome/CNPJ da loja, "NÃO É DOCUMENTO FISCAL", número da venda, itens, valores, forma de pagamento, troco, rodapé, **acentos corretos**, linhas dentro da largura (32/48 colunas).
 3. Medir tempo venda→papel (meta < 3 s com o host PowerShell já aquecido). Registrar foto do cupom e o `spoolJobId` mostrado no log do agente.
 

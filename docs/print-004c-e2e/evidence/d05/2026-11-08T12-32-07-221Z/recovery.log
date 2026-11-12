@@ -1,0 +1,80 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+ ❯ tools/print-d04/recovery.test.ts (24 tests | 4 failed) 545759ms
+     × OS lease excludes two agents and does not alter the legitimate owner 50725ms
+     × a live owner remains protected even when its guard has disappeared 80042ms
+     × real PowerShell host exits after its Node parent is force-killed 120285ms
+     × an unregistered legacy host blocks recovery and is never killed automatically 51149ms
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  4 failed | 26 passed (30)
+   Start at  09:58:40
+   Duration  555.67s (transform 2.19s, setup 0ms, import 4.16s, tests 546.02s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d04/recovery.test.ts > D04 recovery invariants > OS lease excludes two agents and does not alter the legitimate owner
+AssertionError: expected [Function] to throw error including 'AGENT_ALREADY_RUNNING' but got 'RUNTIME_HELPER_TIMEOUT'
+
+Expected: "AGENT_ALREADY_RUNNING"
+Received: "RUNTIME_HELPER_TIMEOUT"
+
+ ❯ tools/print-d04/recovery.test.ts:113:34
+    111|     const f=path.join(temp(),'j'), lease=await acquireLease(f); cleanu…
+    112|     const before=readFileSync(f+'.lock','utf8')
+    113|     await expect(acquireLease(f)).rejects.toThrow('AGENT_ALREADY_RUNNI…
+       |                                  ^
+    114|     expect(readFileSync(f+'.lock','utf8')).toBe(before)
+    115|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tools/print-d04/recovery.test.ts > D04 recovery invariants > a live owner remains protected even when its guard has disappeared
+AssertionError: expected [Function] to throw error including 'AGENT_ALREADY_RUNNING' but got 'RUNTIME_HELPER_TIMEOUT'
+
+Expected: "AGENT_ALREADY_RUNNING"
+Received: "RUNTIME_HELPER_TIMEOUT"
+
+ ❯ tools/print-d04/recovery.test.ts:119:34
+    117|     const f=path.join(temp(),'j'), owner=await inspectProcess(process.…
+    118|     writeFileSync(f+'.lock',JSON.stringify({...owner,nonce:'synthetic'…
+    119|     await expect(acquireLease(f)).rejects.toThrow('AGENT_ALREADY_RUNNI…
+       |                                  ^
+    120|     expect(JSON.parse(readFileSync(f+'.lock','utf8')).nonce).toBe('syn…
+    121|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tools/print-d04/recovery.test.ts > D04 real Windows, synthetic data only > real PowerShell host exits after its Node parent is force-killed
+Error: Test timed out in 120000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tools/print-d04/recovery.test.ts:154:3
+    152|
+    153| describe.skipIf(process.platform!=='win32')('D04 real Windows, synthet…
+    154|   it('real PowerShell host exits after its Node parent is force-killed…
+       |   ^
+    155|     const dir=temp(), child=fork(path.join(__dirname,'host-parent.mjs'…
+    156|     cleanups.push(()=>{if(child.exitCode===null)child.kill('SIGKILL')})
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tools/print-d04/recovery.test.ts > D04 real Windows, synthetic data only > an unregistered legacy host blocks recovery and is never killed automatically
+AssertionError: expected [Function] to throw error including 'LEGACY_HOST_UNPROVEN_REBOOT_REQUIRED' but got 'RUNTIME_HELPER_TIMEOUT'
+
+Expected: "LEGACY_HOST_UNPROVEN_REBOOT_REQUIRED"
+Received: "RUNTIME_HELPER_TIMEOUT"
+
+ ❯ tools/print-d04/recovery.test.ts:172:63
+    170|     cleanups.push(()=>{if(child.exitCode===null)child.kill('SIGKILL')})
+    171|     await once(child.stdout,'data')
+    172|     await expect(acquireLease(path.join(dir,'journal.jsonl'))).rejects…
+       |                                                               ^
+    173|     expect((await inspectProcess(child.pid)).state).toBe('alive')
+    174|     const exited=once(child,'exit');child.kill('SIGKILL');await exited
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+exit=1

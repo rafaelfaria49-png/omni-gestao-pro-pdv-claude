@@ -1,0 +1,42 @@
+{
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "runId": "2026-11-05T17-04-09-598Z",
+  "at": "2026-11-05T17:04:09.617Z",
+  "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+  "workingTreeChanged": true,
+  "node": "v24.22.1",
+  "platform": "win32",
+  "productionAccess": false,
+  "productionWrites": 0,
+  "windowsPhysicalInstallation": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "d05-tests",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 1,
+      "sha256": "42659b6ff97a0767174def877717f2453d5bc846dc2e8c0fc32a852c190017d7"
+    },
+    {
+      "step": "d05-plan",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "79a614bc8e5f0e00b0b4dfacc162fe576f813dec61df07a81a9d67138774f5f3"
+    },
+    {
+      "step": "d05-eslint",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 76,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    }
+  ]
+}

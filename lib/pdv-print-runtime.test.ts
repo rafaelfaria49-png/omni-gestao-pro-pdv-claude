@@ -67,6 +67,36 @@ afterEach(() => {
 })
 
 describe("PDV thermal print runtime", () => {
+  it("opção pelo agente nunca chama TCP legado nem abre fallback automático", async () => {
+    const browser = captureBrowserPrint()
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock)
+    const result = await printPdvSaleReceipt({ config: config({ impressaoDireta: true }), requireAgent: true, input: receipt })
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("Omni Print")
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(browser.open).not.toHaveBeenCalled()
+  })
+
+  it("fallback explícito do navegador continua disponível com agente selecionado", async () => {
+    const browser = captureBrowserPrint()
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock)
+    expect(await printPdvSaleReceipt({ config: config({ impressaoDireta: true }), requireAgent: true, input: receipt, forceBrowserFallback: true }))
+      .toEqual({ ok: true, via: "html" })
+    expect(browser.open).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+    assertPrintedNotice(browser.document())
+  })
+
+  it.each([undefined, false])("preserva rede dos outros PDVs e fallback sem job (KG) com requireAgent=%s", async requireAgent => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, json: async () => ({ ok: true }) }))
+    vi.stubGlobal("fetch", fetchMock)
+    const input = requireAgent === false ? { ...receipt, itens: [{ name: "Queijo KG", quantity: 0.5, unitPrice: 30, lineTotal: 15 }] } : receipt
+    expect(await printPdvSaleReceipt({ config: config({ impressaoDireta: true, impressoraHost: "192.168.0.50" }), requireAgent, input }))
+      .toEqual({ ok: true, via: "proxy" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).host).toBe("192.168.0.50")
+  })
+
   it("inclui dinheiro recebido e troco no ESC/POS real", () => {
     const bytes = buildPdvReceiptEscPos(receipt)
     const text = Buffer.from(bytes).toString("latin1")

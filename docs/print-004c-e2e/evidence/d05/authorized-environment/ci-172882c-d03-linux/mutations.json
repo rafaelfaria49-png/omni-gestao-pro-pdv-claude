@@ -1,0 +1,54 @@
+{
+  "at": "2026-11-05T23:12:44.429Z",
+  "sourceRestored": true,
+  "results": [
+    {
+      "mutant": "seven-days",
+      "test": "R01",
+      "status": "KILLED",
+      "exit": 1
+    },
+    {
+      "mutant": "held-egress",
+      "test": "R05",
+      "status": "KILLED",
+      "exit": 1
+    },
+    {
+      "mutant": "evidence-details",
+      "test": "R05",
+      "status": "KILLED",
+      "exit": 1
+    },
+    {
+      "mutant": "idempotent",
+      "test": "R02",
+      "status": "KILLED",
+      "exit": 1
+    },
+    {
+      "mutant": "document-lock",
+      "test": "R11",
+      "status": "KILLED",
+      "exit": 1
+    },
+    {
+      "mutant": "unknown-is-not-final",
+      "test": "R15",
+      "status": "KILLED",
+      "exit": 1
+    },
+    {
+      "mutant": "key-reference",
+      "test": "R02",
+      "status": "KILLED",
+      "exit": 1
+    },
+    {
+      "mutant": "exact-cancellation-date",
+      "test": "R14",
+      "status": "KILLED",
+      "exit": 1
+    }
+  ]
+}

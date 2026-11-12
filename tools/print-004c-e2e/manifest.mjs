@@ -8,6 +8,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004c-e2e", "app/api/print/direct", "app/api/print/agent", "docs/print-004c-e2e",
   "components/dashboard/vendas/pdv-direct-print-feedback.tsx", "components/configuracoes-v3/features/settings/sections/ImpressaoDiretaAgenteCard.tsx",
   "components/configuracoes-v3/features/settings/sections/PdvSection.tsx", "components/dashboard/vendas/pdv-classic.tsx", "lib/pdv-impressao-config.ts",
+  "components/dashboard/vendas/pdv-auto-print-feedback.tsx", "components/dashboard/vendas/pdv-post-sale-dialog.tsx",
+  "app/api/print/raw/route.ts", "app/api/print/raw/route.test.ts", "lib/pdv-print-runtime.ts", "lib/pdv-print-runtime.test.ts",
   "e2e/specs/print-direct-004c.spec.ts", "e2e/fixtures/print-direct.ts", "e2e/print-direct.playwright.config.ts", "prisma/schema.prisma",
   // CI corretivo da PR #327: mocks do PDV Clássico alinhados ao #325.
   "lib/pdv/parity-pin-keymap.component.test.ts", "lib/pdv/classic-weight-sale-guard.component.test.ts",
@@ -17,7 +19,9 @@ const roots = ["lib/printing/direct", "tools/omni-print-agent", "tools/print-004
   "components/dashboard/caixa/conferencia-caixa.tsx", "lib/vendas/venda-cupom-mapper.ts", "lib/vendas/venda-cupom-mapper.test.ts",
   // D02-A: migrations recortadas, ferramenta do operador e exclusão de loja com registros de impressão.
   "tools/print-d02", "app/api/stores/[id]/route.ts", ".gitattributes",
-  "tools/print-d03", ".github/workflows/omni-print-d03.yml", "tools/print-d04", ".github/workflows/omni-print-d04.yml"]
+  "tools/print-d03", ".github/workflows/omni-print-d03.yml", "tools/print-d04", ".github/workflows/omni-print-d04.yml",
+  ".github/workflows/platform-pilot.yml", ".github/workflows/ramos-cadastros.yml",
+  "tools/print-d05", ".github/workflows/omni-print-d05.yml", "vercel.json"]
 const files = []
 const walk = (rel) => {
   const abs = path.join(root, rel)

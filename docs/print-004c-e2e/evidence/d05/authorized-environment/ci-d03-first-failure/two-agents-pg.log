@@ -1,0 +1,38 @@
+reset print_lab_d03_two
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ❯ tools/print-004c-e2e/two-agents.pg.test.ts (1 test | 1 failed) 12299ms
+     × rajada de vendas com perdas de resposta e kill -9 de um processo: nenhuma venda chega duas vezes ao spooler; terceiro processo no mesmo diário é recusado 12024ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  22:02:27
+   Duration  12.82s (transform 304ms, setup 0ms, import 414ms, tests 12.30s, environment 0ms)
+
+
+::error file=/home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/tools/print-004c-e2e/two-agents.pg.test.ts,title=tools/print-004c-e2e/two-agents.pg.test.ts > P1-1 dois processos de agente com a mesma credencial > rajada de vendas com perdas de resposta e kill -9 de um processo%3A nenhuma venda chega duas vezes ao spooler; terceiro processo no mesmo diário é recusado,line=117,column=28::AssertionError: expected false to be true // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- true%0A+ false%0A%0A ❯ tools/print-004c-e2e/two-agents.pg.test.ts:117:28%0A%0A
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-004c-e2e/two-agents.pg.test.ts > P1-1 dois processos de agente com a mesma credencial > rajada de vendas com perdas de resposta e kill -9 de um processo: nenhuma venda chega duas vezes ao spooler; terceiro processo no mesmo diário é recusado
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tools/print-004c-e2e/two-agents.pg.test.ts:117:28
+    115|     const pids = new Set(papers().map(p => p.pid))
+    116|     expect(pids.size).toBeGreaterThanOrEqual(2) // both processes real…
+    117|     expect(killedInFlight).toBe(true) // the SIGKILL hit a submission …
+       |                            ^
+    118|     expect(states.some(r => r.state === "UNKNOWN")).toBe(true) // that…
+    119|     const counts: Record<string, number> = {}
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

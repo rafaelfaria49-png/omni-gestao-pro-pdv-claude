@@ -1,0 +1,39 @@
+{
+  "observedAt": "2026-11-05T21:54:37.2895337Z",
+  "readOnly": true,
+  "computer": "RAFACELL",
+  "windowsUser": "RAFACELL\\rafae",
+  "sid": "S-1-5-21-2955230094-2425622295-3406629455-1002",
+  "queue": {
+    "name": "POS-80",
+    "driver": "POS-80 11.3.0.1",
+    "port": "USB005",
+    "status": "Normal",
+    "workOffline": false,
+    "printerStatus": 3,
+    "jobCount": 0
+  },
+  "port": {
+    "name": "USB005",
+    "monitor": "Dynamic Print Monitor",
+    "description": "UnknownPrinter"
+  },
+  "driver": {
+    "name": "POS-80 11.3.0.1",
+    "manufacturer": "POS",
+    "majorVersion": 3
+  },
+  "usbPrintDevices": [
+    {
+      "Status": "OK",
+      "FriendlyName": "Nenhuma Impressora Conectada"
+    },
+    {
+      "Status": "OK",
+      "FriendlyName": "Microsoft IPP Class Driver"
+    }
+  ],
+  "physicalPaperOutput": "NOT_TESTED",
+  "support58mm": "NOT_CONFIRMED",
+  "changesApplied": false
+}

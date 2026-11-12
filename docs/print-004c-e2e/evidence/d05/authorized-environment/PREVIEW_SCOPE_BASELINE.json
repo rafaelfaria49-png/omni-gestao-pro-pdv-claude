@@ -1,0 +1,780 @@
+{
+  "at": "2026-11-05T22:02:39.765Z",
+  "projectId": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+  "branch": "codex/omni-print-d05-homologacao-fisica-001",
+  "valuesDiscarded": true,
+  "nonD05Fingerprint": "21f85d5bea08e9bfe4c21224756f0687e46dafb9708c5c008ce30eac9c23db26",
+  "variables": [
+    {
+      "key": "DIRECT_URL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "claude/estoque-manual-kg-001",
+      "createdAt": 1793138733656,
+      "updatedAt": 1793138733656
+    },
+    {
+      "key": "DATABASE_URL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "claude/estoque-manual-kg-001",
+      "createdAt": 1793138733337,
+      "updatedAt": 1793138733337
+    },
+    {
+      "key": "ADMIN_DEFAULT_PASSWORD",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099352824,
+      "updatedAt": 1792099352824
+    },
+    {
+      "key": "WHATSAPP_WEBHOOK_STORE_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099349368,
+      "updatedAt": 1792099349368
+    },
+    {
+      "key": "WHATSAPP_VERIFY_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099347078,
+      "updatedAt": 1792099347078
+    },
+    {
+      "key": "WHATSAPP_APP_SECRET",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099345028,
+      "updatedAt": 1792099345028
+    },
+    {
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099342952,
+      "updatedAt": 1792099342952
+    },
+    {
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099340910,
+      "updatedAt": 1792099340910
+    },
+    {
+      "key": "WHATSAPP_ACCESS_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099338920,
+      "updatedAt": 1792099338920
+    },
+    {
+      "key": "MIGRATION_AUTHORITY_ENABLED",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099336978,
+      "updatedAt": 1792099336978
+    },
+    {
+      "key": "NEXT_PUBLIC_APP_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099334957,
+      "updatedAt": 1792099334957
+    },
+    {
+      "key": "AUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099332971,
+      "updatedAt": 1792099332971
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099331029,
+      "updatedAt": 1792099331029
+    },
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099329082,
+      "updatedAt": 1792099329082
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099327173,
+      "updatedAt": 1792099327173
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099325238,
+      "updatedAt": 1792099325238
+    },
+    {
+      "key": "AUTH_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/ops-v4-goal003-family-regularization",
+      "createdAt": 1792099321793,
+      "updatedAt": 1792099321793
+    },
+    {
+      "key": "ADMIN_DEFAULT_PASSWORD",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030876286,
+      "updatedAt": 1792030876286
+    },
+    {
+      "key": "WHATSAPP_WEBHOOK_STORE_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030872930,
+      "updatedAt": 1792030872930
+    },
+    {
+      "key": "WHATSAPP_VERIFY_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030871037,
+      "updatedAt": 1792030871037
+    },
+    {
+      "key": "WHATSAPP_APP_SECRET",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030869205,
+      "updatedAt": 1792030869205
+    },
+    {
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030867319,
+      "updatedAt": 1792030867319
+    },
+    {
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030865438,
+      "updatedAt": 1792030865438
+    },
+    {
+      "key": "WHATSAPP_ACCESS_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030863497,
+      "updatedAt": 1792030863497
+    },
+    {
+      "key": "MIGRATION_AUTHORITY_ENABLED",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030861593,
+      "updatedAt": 1792030861593
+    },
+    {
+      "key": "NEXT_PUBLIC_APP_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030859676,
+      "updatedAt": 1792030859676
+    },
+    {
+      "key": "AUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030857853,
+      "updatedAt": 1792030857853
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030855906,
+      "updatedAt": 1792030855906
+    },
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030853955,
+      "updatedAt": 1792030853955
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030852070,
+      "updatedAt": 1792030852070
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030850018,
+      "updatedAt": 1792030850018
+    },
+    {
+      "key": "AUTH_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-datas",
+      "createdAt": 1792030846584,
+      "updatedAt": 1792030846584
+    },
+    {
+      "key": "ADMIN_DEFAULT_PASSWORD",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030836063,
+      "updatedAt": 1792030836063
+    },
+    {
+      "key": "WHATSAPP_WEBHOOK_STORE_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030832698,
+      "updatedAt": 1792030832698
+    },
+    {
+      "key": "WHATSAPP_VERIFY_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030830825,
+      "updatedAt": 1792030830825
+    },
+    {
+      "key": "WHATSAPP_APP_SECRET",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030829016,
+      "updatedAt": 1792030829016
+    },
+    {
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030827184,
+      "updatedAt": 1792030827184
+    },
+    {
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030825398,
+      "updatedAt": 1792030825398
+    },
+    {
+      "key": "WHATSAPP_ACCESS_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030823548,
+      "updatedAt": 1792030823548
+    },
+    {
+      "key": "MIGRATION_AUTHORITY_ENABLED",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030821689,
+      "updatedAt": 1792030821689
+    },
+    {
+      "key": "NEXT_PUBLIC_APP_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030819762,
+      "updatedAt": 1792030819762
+    },
+    {
+      "key": "AUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030817827,
+      "updatedAt": 1792030817827
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030816044,
+      "updatedAt": 1792030816044
+    },
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030814209,
+      "updatedAt": 1792030814209
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030812378,
+      "updatedAt": 1792030812378
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030810528,
+      "updatedAt": 1792030810528
+    },
+    {
+      "key": "AUTH_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "goal/ops-v4-financeiro-retirada-garantia-002",
+      "createdAt": 1792030807187,
+      "updatedAt": 1792030807187
+    },
+    {
+      "key": "ADMIN_DEFAULT_PASSWORD",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015726246,
+      "updatedAt": 1792015726246
+    },
+    {
+      "key": "WHATSAPP_WEBHOOK_STORE_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015719202,
+      "updatedAt": 1792015719202
+    },
+    {
+      "key": "WHATSAPP_VERIFY_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015715132,
+      "updatedAt": 1792015715132
+    },
+    {
+      "key": "WHATSAPP_APP_SECRET",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015696390,
+      "updatedAt": 1792015696390
+    },
+    {
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015672601,
+      "updatedAt": 1792015672601
+    },
+    {
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015666899,
+      "updatedAt": 1792015666899
+    },
+    {
+      "key": "WHATSAPP_ACCESS_TOKEN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015662379,
+      "updatedAt": 1792015662379
+    },
+    {
+      "key": "NEXT_PUBLIC_APP_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015649690,
+      "updatedAt": 1792015649690
+    },
+    {
+      "key": "AUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015645975,
+      "updatedAt": 1792015645975
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015643322,
+      "updatedAt": 1792015643322
+    },
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015639831,
+      "updatedAt": 1792015639831
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015636593,
+      "updatedAt": 1792015636593
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015632653,
+      "updatedAt": 1792015632653
+    },
+    {
+      "key": "AUTH_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015628285,
+      "updatedAt": 1792015628285
+    },
+    {
+      "key": "MIGRATION_AUTHORITY_ENABLED",
+      "type": "encrypted",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/release-ops-v4-vercel",
+      "createdAt": 1792015315968,
+      "updatedAt": 1792015657898
+    },
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": null,
+      "createdAt": 1787285239470,
+      "updatedAt": 1787285239470
+    },
+    {
+      "key": "DIRECT_URL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": null,
+      "createdAt": 1785195001255,
+      "updatedAt": 1793138732473
+    },
+    {
+      "key": "DATABASE_URL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": null,
+      "createdAt": 1785194836568,
+      "updatedAt": 1793138732158
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1784050864735,
+      "updatedAt": 1784050864735
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1784050399974,
+      "updatedAt": 1784050399974
+    },
+    {
+      "key": "WHATSAPP_WEBHOOK_STORE_ID",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778472318404,
+      "updatedAt": 1778472318404
+    },
+    {
+      "key": "WHATSAPP_APP_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778472147632,
+      "updatedAt": 1778472147632
+    },
+    {
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778471512012,
+      "updatedAt": 1778471512012
+    },
+    {
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778471365037,
+      "updatedAt": 1778471365037
+    },
+    {
+      "key": "WHATSAPP_ACCESS_TOKEN",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778471243863,
+      "updatedAt": 1778591253366
+    },
+    {
+      "key": "WHATSAPP_VERIFY_TOKEN",
+      "type": "plain",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778469609350,
+      "updatedAt": 1778471614731
+    },
+    {
+      "key": "ADMIN_DEFAULT_PASSWORD",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778295941178,
+      "updatedAt": 1778295941178
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778295910191,
+      "updatedAt": 1778295910191
+    },
+    {
+      "key": "AUTH_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "createdAt": 1778295878293,
+      "updatedAt": 1778295878293
+    }
+  ]
+}

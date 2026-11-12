@@ -1,0 +1,22 @@
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ lib/vendas/venda-cupom-mapper.test.ts (16 tests) 11ms
+ ✓ lib/printing/direct/direct-print.test.ts (12 tests) 38ms
+ ✓ tools/omni-print-agent/agent.test.ts (11 tests) 47ms
+ ✓ tools/print-d02/d02-guard.test.ts (6 tests) 24ms
+ ✓ tools/print-d03/options.test.ts (15 tests) 21ms
+ ✓ lib/printing/direct/store-print-links.test.ts (6 tests) 81ms
+ ✓ lib/printing/direct/homologation.test.ts (9 tests) 6ms
+ ✓ components/dashboard/vendas/reimpressao-registrada.static.test.ts (4 tests) 6ms
+ ✓ lib/printing/direct/legacy-raw-guard.test.ts (2 tests) 7ms
+ ✓ tools/omni-print-agent/spooler-windows.test.ts (6 tests | 4 skipped) 396ms
+     ✓ timeout → reset espera o host morrer; o host novo atende sem ser rejeitado pelo antigo; nenhum órfão  369ms
+
+ Test Files  10 passed (10)
+      Tests  83 passed | 4 skipped (87)
+   Start at  23:06:22
+   Duration  1.04s (transform 419ms, setup 0ms, import 696ms, tests 637ms, environment 1ms)
+
+
+exit=0

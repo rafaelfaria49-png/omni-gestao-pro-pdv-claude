@@ -1,0 +1,9 @@
+[1/1] e2e\specs\print-direct-004c.spec.ts:556:5 › PW20 vias configuradas acima do limite da impressão direta: operador é avisado; saem só as 2 permitidas, sem erro nem repetição
+  1) e2e\specs\print-direct-004c.spec.ts:556:5 › PW20 vias configuradas acima do limite da impressão direta: operador é avisado; saem só as 2 permitidas, sem erro nem repetição 
+    Error: Timed out 5000ms waiting for expect(locator).toContainText(expected)
+      - expect.toContainText with timeout 5000ms
+      560 |   await expect(feedback(page)).toContainText("Comprovante enviado à fila da impressora", { timeout: 15000 })
+    > 561 |   await expect(page.getByTestId("pdv-direct-print-copies-limit")).toContainText("no máximo 2 vias; a configuração pede 3")
+    Error Context: ..\..\..\..\Users\rafae\AppData\Local\Temp\print-direct-004c-playwright\print-direct-004c-PW20-via-a3292-idas-sem-erro-nem-repetição\error-context.md
+  1 failed
+    e2e\specs\print-direct-004c.spec.ts:556:5 › PW20 vias configuradas acima do limite da impressão direta: operador é avisado; saem só as 2 permitidas, sem erro nem repetição 

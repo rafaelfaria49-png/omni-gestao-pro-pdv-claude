@@ -1,16 +1,37 @@
 # D05 — homologação física preparada, não executada
 
-Estado: **PENDING**. Todas as linhas abaixo começam **NÃO EXECUTADO**. D04-A autoriza a preparação do software;
-não autoriza instalar no caixa, criar branch Neon, configurar Preview, parear, imprimir ou declarar homologação.
+Estado físico: **PENDING**. Todas as linhas abaixo permanecem **NÃO EXECUTADO**. O proprietário autorizou em 2026-11-05
+o ambiente exclusivo D05 e a instalação no RAFACELL/usuário consentido, sujeitos aos requisitos registrados no plano.
+Neon QA novo já preparado; Preview/transporte aguardam commit revisado, CI verde e isolamento. Nome/janela ainda pendentes.
 `APPROVED_RELEASE=null`. Não houve operação produtiva nesta entrega.
+
+Preparação técnica D05: **D05_PREPARED**, branch `codex/omni-print-d05-homologacao-fisica-001` baseada no head
+`0e9eb95d578c6c57e7e7f4b8b71355f460d970a4` da #327, com #332/#333 integradas. Nenhum caso físico foi executado.
+Plano de ambiente e rollback: [PLANO_AMBIENTE_D05.md](PLANO_AMBIENTE_D05.md). Comandos e consentimentos:
+[CHECKLIST_OPERADOR_D05.md](CHECKLIST_OPERADOR_D05.md). Relatório: [RELATORIO_D05.md](RELATORIO_D05.md).
+Registro inicial com H01–H18 BLOCKED: `evidence/d05/H01-H18.template.json`. Copiar para a pasta privada de uma execução
+futura; não substituir o template por resultados. Verificador offline:
+
+```powershell
+node --test tools/print-d05/readiness.test.mjs
+node tools/print-d05/readiness.mjs check
+node tools/print-d04/package.mjs tools/print-d05/.artifacts
+node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent
+```
+
+Esses comandos preparam/validam arquivos locais. Não instalam agente, não acessam banco e não autorizam hardware.
+Preview Git automático desta branch está bloqueado em `vercel.json`. Release de homologação ainda não publicada:
+`OMNI-PRINT-D05-HOMOLOGACAO-1`. O novo runtime é restrito ao Preview/projeto/branch/banco autorizados, com validação TLS
+estrita; exige revisão e CI do commit específico. Release produtivo NULL. O `PLAN.json` é o snapshot histórico inicial;
+estado atual em `evidence/d05/authorized-environment/`, sem valores de segredos.
 
 ## Próxima liberação necessária
 
-O proprietário deve definir por escrito: local/bancada ou loja piloto, data, operador responsável, consentimento da loja,
-computadores/usuários Windows, impressora POS-80 USB e autorização de ambiente de homologação. Só depois preparar banco
-isolado e Preview fixado na branch autorizada, pelo RUNBOOK_D02; chaves sintéticas distintas pelo RUNBOOK_D03; registrar
-release de homologação revisada sem tocar Production. Não reutilizar dados/clientes reais. Conferir acesso HTTPS do agente
-ao deployment, incluindo proteção de deployment, sem relaxar TLS ou seguir redirects.
+O proprietário já confirmou RAFACELL, `RAFACELL\rafae`/SID terminado 1002, consentimento e POS-80 USB/USB005, bobina80mm.
+Faltam nome do operador e dia/horário presencial; os placeholders da resposta não são uma janela válida. Diagnosticar
+a fila offline antes de imprimir. 58 mm depende de suporte real e N/A aprovado. Conferir acesso HTTPS do agente
+ao deployment e isolamento comprovado, sem relaxar TLS ou seguir redirects. Reinício, interrupção do atendimento e falhas
+provocadas aguardam confirmação presencial própria. Não instalar, parear ou imprimir antes dos requisitos pendentes.
 
 Registrar antes de iniciar: PR/SHA, SHA-256 do ZIP, assinatura ausente, operador, loja de teste, terminal, SID/usuário
 Windows, versão do Windows/Node/Chrome/Edge, modelo e número de série da impressora, USB/porta, nome exato da fila, driver
@@ -59,3 +80,15 @@ mudou. Recolher a impressora/cabos e restaurar a organização física da bancad
 
 `PHYSICAL_HOMOLOGATION=PASS` só depois de todos os casos aplicáveis executados, desvios resolvidos, evidências conferidas
 e aprovação escrita do proprietário. Esta preparação não muda nenhum caso físico para PASS.
+
+## Finalização 2026-11-08
+
+- Usar somente o ZIP do CI do head final da #334 (SHA-256 `e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77`); o pacote `f48b3097…` foi substituído e nunca instalado.
+- URL do servidor para pareamento: alias da branch D05 (`PLANO_AMBIENTE_D05.md`, seção de finalização). Não usar a URL por deployment.
+- `JOURNAL_MISSING` ao iniciar: não apagar `.instance`, não recriar diário. Parar, arquivar a pasta de dados inteira, revogar a instalação e parear de novo; conferir papel das tentativas UNKNOWN.
+- Instância morta com tentativa UNKNOWN mantém a impressora bloqueada (`DESTINATION_BLOCKED`) por design: conferir o papel, revogar e parear de novo; nunca liberar a fila à mão.
+- Estado de execução, SHAs e pendências: `FINALIZACAO_INTEGRAL_D05.md`.
+- `D05_ISOLATION_BLOCKED` num build sem `VERCEL_GIT_COMMIT_REF` (deploy por CLI de pasta sem git/HEAD destacado) é
+  intencional: sem ref não há prova de que não é a branch D05. Builds Git de outras branches (main, #327) passam direto
+  para `scripts/vercel-build.mjs`. O alias em `private-state.ps1` duplica `D05_TARGET.origin`; se o alias mudar, atualizar
+  os dois (o `readiness`/isolamento recusa divergência no build).

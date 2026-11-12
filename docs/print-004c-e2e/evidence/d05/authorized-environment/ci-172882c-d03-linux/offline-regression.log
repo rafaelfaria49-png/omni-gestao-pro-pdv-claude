@@ -1,0 +1,179 @@
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ lib/vendas/offline-sync.component.test.ts (33 tests) 2514ms
+ ✓ lib/vendas/sale-sync-engine.test.ts (55 tests) 57ms
+ ✓ lib/pdv/pending-identity-restore.test.ts (10 tests) 11ms
+ ✓ lib/pdv/classic-offline-sequence.component.test.ts (1 test) 395ms
+     ✓ depois de liberar o carrinho com F6, o F12 abre o pagamento da venda seguinte  394ms
+ ✓ lib/pdv/pending-sale-attempt.test.ts (9 tests) 6ms
+ ✓ lib/pdv/pending-local-effects.test.ts (4 tests) 4ms
+ ✓ lib/vendas/sale-client-sync.test.ts (13 tests) 6ms
+ ✓ lib/vendas/pending-sync-classification.test.ts (10 tests) 5ms
+
+ Test Files  8 passed (8)
+      Tests  135 passed (135)
+   Start at  23:06:23
+   Duration  6.49s (transform 778ms, setup 0ms, import 1.24s, tests 3.00s, environment 1.45s)
+
+stderr | lib/vendas/offline-sync.component.test.ts > online > T58 — 2xx sem a venda no corpo (portal Wi-Fi) NÃO vira sincronizada
+[venda-persist] PEND-cs_cbf2ec04d9414617ad83db788b3ce276 lojaId: loja-off-a HTTP 200 sem a venda no corpo da resposta — não confirmada.
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T02/T04/T31/T32/T33/T05 — venda offline durável antes do 1º envio; sobrevive ao F5; volta da rede sincroniza sozinha
+[venda-persist] PEND-cs_d2338a97de7448cc86e36769b41ecda5 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T34 — vendas offline IDÊNTICAS em sequência (carrinho encerrado entre elas) são vendas distintas
+[venda-persist] PEND-cs_27ea635930cc4a93934b655e7a4b596c lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T34 — vendas offline IDÊNTICAS em sequência (carrinho encerrado entre elas) são vendas distintas
+[venda-persist] PEND-cs_6fe79a8f03824404aa6ec2ec20931e5f lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T34 — vendas offline IDÊNTICAS em sequência (carrinho encerrado entre elas) são vendas distintas
+[venda-persist] PEND-cs_d6773f1e0aef451494154a6d76d99005 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T34-V1 — writer V1 (sem clientSaleId): segunda venda idêntica offline NÃO é absorvida pela primeira
+[venda-persist] VDA-2026-0002 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T34-V1 — writer V1 (sem clientSaleId): segunda venda idêntica offline NÃO é absorvida pela primeira
+[venda-persist] VDA-2026-0003 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T34b — depois de recarregar a página, carrinho idêntico é venda nova (a pendente restaurada não absorve)
+[venda-persist] PEND-cs_d41f6cca4e8d45908d1f5cbed512f393 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T34b — depois de recarregar a página, carrinho idêntico é venda nova (a pendente restaurada não absorve)
+[venda-persist] PEND-cs_3b090242367b428e85e3d2aa856ceed9 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T47/T48 — Pix e cartão offline ficam DECLARADOS (não confirmados); crédito/vale, a prazo e carnê são recusados sem gravar
+[venda-persist] PEND-cs_bfb1b00593d4488a8ef3ebb14a9634b7 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T45/T59 — pendência intacta depois de mudança de catálogo e da volta da rede (sem reload)
+[venda-persist] PEND-cs_2491e7dc1ecf446b9260f6f881b94cda lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > offline — registro local, fila durável e sincronização automática > T45/T59 — pendência intacta depois de mudança de catálogo e da volta da rede (sem reload)
+[venda-persist] re-sync PEND-cs_2491e7dc1ecf446b9260f6f881b94cda lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > Reenviar manual — tentativa real, progresso e resultado autoritativo > T56 — clique offline responde na hora, sem fetch, e grava o desfecho na venda
+[venda-persist] PEND-cs_bcc6b9559d234858951fccd2576d682d lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > Reenviar manual — tentativa real, progresso e resultado autoritativo > T55 — navegador 'online' mas servidor fora: verifica, não envia, explica
+[venda-persist] PEND-cs_32fb522fa6bf42f5b1d81874496b3c51 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > Reenviar manual — tentativa real, progresso e resultado autoritativo > T06/T07/T08/T16 — resposta perdida DEPOIS do commit: Reenviar acha a venda e reconcilia sem 2º POST
+[venda-persist] PEND-cs_b7c90339def044a093f85f2d3f11c882 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > Reenviar manual — tentativa real, progresso e resultado autoritativo > T12/T36 — 10 reenvios simultâneos e 10 seguidos da mesma identidade: uma venda, uma baixa, um caixa
+[venda-persist] PEND-cs_9f3b6253b4d5481fbae42c080c8c324a lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > Reenviar manual — tentativa real, progresso e resultado autoritativo > T15 — servidor pendurado: prazo estoura, venda fica pendente com SEM_RESPOSTA; Reenviar depois confirma uma vez
+[venda-persist] PEND-cs_50f87bd86ec04168863ce9b49ee88f28 lojaId: loja-off-a Sem resposta do servidor: O servidor não respondeu em 25 s
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T18 — 500 transitório: backoff segura o intervalo; a volta da rede tenta já e confirma
+[venda-persist] PEND-cs_b09d0808edea48f7b20cd41661324c0d lojaId: loja-off-a HTTP 500 — falha temporária
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T38 — sessão expirada (401): preserva a venda como AUTH_REQUIRED e volta a enviar quando houver sessão
+[venda-persist] PEND-cs_c1abc27ccf13424a9ae218e641dfaea4 lojaId: loja-off-a HTTP 401 — Não autenticado
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_13f86b08e9fa4def99c80cd4d9e019ed lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_13f86b08e9fa4def99c80cd4d9e019ed lojaId: loja-off-a HTTP 409 — recusa PRODUTO_NAO_RESOLVIDO — (PRODUTO_NAO_RESOLVIDO)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_ee402fe0b2ec43ad9f0241b3dee43489 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_ee402fe0b2ec43ad9f0241b3dee43489 lojaId: loja-off-a HTTP 409 — recusa ESTOQUE_INSUFICIENTE — (ESTOQUE_INSUFICIENTE)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_2012d1fcd85d4efd8272e0bd46873eb0 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_2012d1fcd85d4efd8272e0bd46873eb0 lojaId: loja-off-a HTTP 409 — recusa STOCK_INVARIANT_DRIFT — (STOCK_INVARIANT_DRIFT)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_d355b885662442338905a2405101bdeb lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_d355b885662442338905a2405101bdeb lojaId: loja-off-a HTTP 409 — recusa CAIXA_ORIGINAL_FECHADO — (CAIXA_ORIGINAL_FECHADO)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_6f7b1bba76634ab9b0c765c0dea0dc72 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_6f7b1bba76634ab9b0c765c0dea0dc72 lojaId: loja-off-a HTTP 409 — recusa SESSAO_INVALIDA — (SESSAO_INVALIDA)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_df426c9143a34eb3a5c06228ab3c6668 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_df426c9143a34eb3a5c06228ab3c6668 lojaId: loja-off-a HTTP 409 — recusa PAGAMENTOS_TOTAL_DIVERGENTE — (PAGAMENTOS_TOTAL_DIVERGENTE)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_723d5d6c0f6f4113a883aee3a10aa4de lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_723d5d6c0f6f4113a883aee3a10aa4de lojaId: loja-off-a HTTP 409 — recusa CREDITO_VALE_INSUFICIENTE — (CREDITO_VALE_INSUFICIENTE)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] PEND-cs_1a51b4e85ae74de39e81cf580362037c lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T19/T57/T23/T25/T26/T27/T28/T29 — recusa de negócio na pendência não entra em loop automático
+[venda-persist] retry cs_1a51b4e85ae74de39e81cf580362037c lojaId: loja-off-a HTTP 409 — recusa IDEMPOTENCY_KEY_REUSED — (IDEMPOTENCY_KEY_REUSED)
+
+stderr | lib/vendas/offline-sync.component.test.ts > erros transitórios, sessão e recusas de negócio > T54 — recusa definitiva na finalização descarta a tentativa e ela não ressuscita depois do F5
+[venda-persist] recusa definitiva — tentativa descartada PRODUTO_NAO_RESOLVIDO PEND-cs_2c3e2582325e4d848f76d631fbb70791 lojaId: loja-off-a
+
+stderr | lib/vendas/offline-sync.component.test.ts > fila mista e concorrência manual × automático > T35 — fila com aprovadas e recusada: cada uma no seu estado, a recusada não some nem entra em loop
+[venda-persist] PEND-cs_c1f8debe19a0422081dc5606b93ac882 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > fila mista e concorrência manual × automático > T35 — fila com aprovadas e recusada: cada uma no seu estado, a recusada não some nem entra em loop
+[venda-persist] PEND-cs_ce5febb48f9d4570924f06832fe518da lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > fila mista e concorrência manual × automático > T35 — fila com aprovadas e recusada: cada uma no seu estado, a recusada não some nem entra em loop
+[venda-persist] PEND-cs_bf1777f15044402eaf93547425facded lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > fila mista e concorrência manual × automático > T36 — Reenviar manual durante o envio automático em voo: junta-se a ele, um único POST
+[venda-persist] PEND-cs_8383970cbfbe498cae20e1bdbd8029ae lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > T14/T44 — duas abas: a fila de uma não é sobrescrita pela outra; ambas reenviam e o servidor guarda UMA venda
+[venda-persist] PEND-cs_add1a19564924d7699f821341f3e10c3 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV-P0 — recusa definitiva na aba A tira da aba B a pendência que ela adotou; B nunca a envia nem regrava
+[venda-persist] recusa definitiva — tentativa descartada PRODUTO_NAO_RESOLVIDO PEND-cs_7cdff391a781444386f528da7ee12d6c lojaId: loja-off-a
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV-P1 — evento de storage sem novidade não re-renderiza nem regrava (abas convergem)
+[venda-persist] PEND-cs_596dcf0a2490477f935e3fab33311e8d lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV-P2-7 — depois do F5, carrinho idêntico a uma venda com resultado DESCONHECIDO é barrado até verificar
+[venda-persist] PEND-cs_f2fe6ec9f78b4cbc9d45ac752c205ce5 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV-P2-7 — depois do F5, carrinho idêntico a uma venda com resultado DESCONHECIDO é barrado até verificar
+[venda-persist] re-sync PEND-cs_f2fe6ec9f78b4cbc9d45ac752c205ce5 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV3 — 'É outra venda' só com decisão EXPLÍCITA: repetir não libera; a escolha libera identidade nova e preserva a anterior
+[venda-persist] PEND-cs_7f92a31169544ddfb85e60c1e882899f lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV3 — 'É outra venda' só com decisão EXPLÍCITA: repetir não libera; a escolha libera identidade nova e preserva a anterior
+[venda-persist] re-sync PEND-cs_7f92a31169544ddfb85e60c1e882899f lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV3 — 'É outra venda' só com decisão EXPLÍCITA: repetir não libera; a escolha libera identidade nova e preserva a anterior
+[venda-persist] PEND-cs_0b56b26a6693485f8ecc2cec2d8ec488 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > REV2-P2 — rede cai DEPOIS do envio: o desfecho é desconhecido (não 'nada foi enviado')
+[venda-persist] PEND-cs_069f78a64d79482f9e443f47f540acf0 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > T39/T40 — quota esgotada: avisa, mantém na memória e recusa NOVA venda offline
+[venda-persist] PEND-cs_c4314e3aa8514bd0ad9f9a16776539f3 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > T41 — fila corrompida vai para quarentena e a gravação volta a funcionar
+[venda-persist] PEND-cs_1754d6f0c3be4927a4cb1fd1558d0db9 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/vendas/offline-sync.component.test.ts > abas, lojas e armazenamento local > T60 — toda pendência fica explicitamente classificada
+[venda-persist] PEND-cs_ec913fa959ed458ea23d2c342b708ad8 lojaId: loja-off-a Falha de rede: Failed to fetch
+
+stderr | lib/pdv/classic-offline-sequence.component.test.ts > PDV-OFFLINE-SYNC — Clássico real: venda pendente → F6 → venda idêntica → F12 > depois de liberar o carrinho com F6, o F12 abre o pagamento da venda seguinte
+[venda-persist] PEND-cs_e7f28d155c2c4b1fb6c3fdacde80005e lojaId: n5-c-synthetic Falha de rede: Synthetic network failure
+
+
+exit=0

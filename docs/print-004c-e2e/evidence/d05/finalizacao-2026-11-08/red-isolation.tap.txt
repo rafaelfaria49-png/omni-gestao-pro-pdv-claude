@@ -1,0 +1,4 @@
+not ok 2 - outside the D05 branch the build is the unchanged project build (vercel.json must not stop main/\#327)
+not ok 3 - auth origin overrides: empty string disables trusted host (UntrustedHost 500); only the D05 branch alias is accepted
+# pass 5
+# fail 2

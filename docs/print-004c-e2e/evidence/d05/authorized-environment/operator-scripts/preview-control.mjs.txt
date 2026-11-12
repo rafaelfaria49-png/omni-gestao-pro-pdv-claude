@@ -1,0 +1,146 @@
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { privateEnvironment } from '../environment.mjs'
+import { D05_TARGET } from '../../../lib/printing/direct/homologation.mjs'
+
+const sha = '172882c6e721bee506307c5ec2aac50ec2fca9ef'
+const teamId = 'team_IInBSQbKO8P5XpAsvz16Kc3g', scope = 'rafaelfaria49-4373s-projects'
+const cli = 'C:/Users/rafae/AppData/Roaming/npm/node_modules/vercel/dist/index.js'
+const privateRoot = 'C:/Users/rafae/.codex/visualizations/2026/11/05/01a1ac95-8f12-7141-9a0c-f878d5bf822f/d05-private'
+const out = 'docs/print-004c-e2e/evidence/d05/authorized-environment/'
+const hash = data => createHash('sha256').update(JSON.stringify(data)).digest('hex')
+const save = (name, value) => writeFileSync(out + name + '.json', JSON.stringify(value, null, 2) + '\n')
+function command(args, input) {
+  const r = spawnSync(process.execPath, [cli, ...args, '--scope', scope], { input, encoding: 'utf8', windowsHide: true,
+    timeout: 120000, maxBuffer: 32 << 20, env: { ...process.env, NO_UPDATE_NOTIFIER: '1', VERCEL_TELEMETRY_DISABLED: '1' } })
+  if (r.status !== 0 || r.error) {
+    let details = null
+    for (const raw of [r.stdout, r.stderr]) { try { const parsed = JSON.parse(raw); const e = parsed.error ?? parsed;
+      details = { code: typeof e.code === 'string' && /^[A-Za-z0-9_.-]+$/.test(e.code) ? e.code : null,
+        key: typeof e.key === 'string' && keys.includes(e.key) ? e.key : null } } catch { /* discard raw data */ } }
+    console.error(JSON.stringify({ event: 'D05_VERCEL_REQUEST_FAILURE', command: args[0], endpoint: args[0] === 'api' ? args[1] : 'PREVIEW_METADATA',
+      exit: r.status, processError: r.error?.code ?? null, network: /ETIMEDOUT|ENOTFOUND|ECONNRESET|fetch failed/.test(r.stderr ?? ''), details,
+      mentionedKeys: keys.filter(key => (r.stderr ?? '').includes(key)),
+      reasonWords: ['empty','required','reserved','invalid','sensitive','encrypted','branch','target','quota','billing','plan','permission','team','project','not found','body','object','array','authentication','limit','cannot'].filter(word => (r.stderr ?? '').toLowerCase().includes(word)) }))
+    throw new Error('D05_VERCEL_REQUEST_FAILED')
+  }
+  try { return JSON.parse(r.stdout) } catch { throw new Error('D05_VERCEL_RESPONSE_INVALID') }
+}
+function api(endpoint, method = 'GET', data) {
+  // CLI57 parses stdin arrays but its HTTP client serializes only objects; array bodies arrive invalid at the API.
+  if (Array.isArray(data)) throw new Error('D05_CLI_ARRAY_BODY_REFUSED')
+  const url = endpoint + (endpoint.includes('?') ? '&' : '?') + 'teamId=' + teamId
+  return command(['api', url, '--method', method, '--raw', ...(data ? ['--header', 'Content-Type: application/json', '--input', '-'] : [])], data ? JSON.stringify(data) : undefined)
+}
+function checkedProject() {
+  const p = api('/v9/projects/' + D05_TARGET.projectId), team = api('/v2/teams/' + teamId)
+  if (p.id !== D05_TARGET.projectId || p.name !== 'omni-gestao-pro' || p.accountId !== teamId ||
+      p.link?.type !== 'github' || p.link.org !== 'rafaelfaria49-png' || p.link.repo !== 'omni-gestao-pro-pdv-claude' || Number(p.link.repoId) !== 1208557742 ||
+      team.id !== teamId || team.billing?.plan !== 'hobby' || team.billing?.status !== 'active' || p.ssoProtection || p.passwordProtection || !p.autoExposeSystemEnvs) {
+    throw new Error('D05_VERCEL_TARGET_OR_COST_OR_ACCESS_REFUSED')
+  }
+  return p
+}
+function metadata() {
+  const data = command(['env', 'ls', 'preview', '--project', D05_TARGET.projectId, '--format', 'json'])
+  return data.envs.map(e => ({ id: e.id, key: e.key, type: e.type, target: [...e.target].sort(), gitBranch: e.gitBranch ?? null,
+    createdAt: e.createdAt ?? null, updatedAt: e.updatedAt ?? null,
+    ...(e.gitBranch === D05_TARGET.branch && e.key === 'OMNI_PRINT_DIRECT_ENABLED' ? { nonSecretDirectFlag: e.value } : {}) })).sort((a, b) => String(a.id).localeCompare(String(b.id)))
+}
+const others = rows => rows.filter(e => e.gitBranch !== D05_TARGET.branch)
+function gate() {
+  const proof = JSON.parse(readFileSync(out + 'ACTIVATION_GATES.json', 'utf8'))
+  const workflows = [407203149, 407417517, 407569987, 408422269]
+  if (proof.commit !== sha || proof.independentReview !== 'APPROVE' || !Array.isArray(proof.runs) || proof.runs.length !== 4 ||
+      new Set(proof.runs.map(r => r.id)).size !== 4 || workflows.some(id => !proof.runs.some(r => r.workflowId === id)) ||
+      proof.runs.some(r => r.headSha !== sha || r.conclusion !== 'success') || proof.strictTlsProof !== 'STRICT_TLS.json') throw new Error('D05_REVIEW_CI_ISOLATION_GATE_REQUIRED')
+  for (const expected of proof.runs) {
+    const result = spawnSync('gh', ['api', 'repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/' + expected.id], { encoding: 'utf8', windowsHide: true, timeout: 30000 })
+    if (result.status !== 0) throw new Error('D05_CURRENT_CI_UNAVAILABLE')
+    const actual = JSON.parse(result.stdout)
+    if (actual.id !== expected.id || actual.workflow_id !== expected.workflowId || actual.head_sha !== sha || actual.head_branch !== D05_TARGET.branch ||
+        actual.status !== 'completed' || actual.conclusion !== 'success') throw new Error('D05_CURRENT_CI_NOT_GREEN')
+  }
+  const r = spawnSync('git', ['diff', '--quiet', sha, '--', 'lib/printing/direct', 'tools/print-d02', 'tools/print-d03', 'tools/print-d04', 'tools/print-d05', 'tools/omni-print-agent', 'vercel.json', '.github/workflows'], { windowsHide: true })
+  if (r.status !== 0) throw new Error('D05_REVIEWED_SOURCE_CHANGED')
+}
+function assertUnchanged(before, after) {
+  if (hash(others(before)) !== hash(others(after))) throw new Error('D05_NON_BRANCH_METADATA_CHANGED_STOP')
+}
+const keys = ['DATABASE_URL','DIRECT_URL','AUTH_SECRET','ADMIN_DEFAULT_PASSWORD','OMNI_PRINT_CONTENT_KEY','OMNI_PRINT_SIGNING_KEY',
+  'CONTADOR_SESSION_SECRET','CONTADOR_PIN','NODE_ENV','AUTH_TRUST_HOST','AUTH_URL','NEXTAUTH_URL','NEXT_PUBLIC_APP_URL','CONTADOR_LEGACY_PORTAL',
+  'OMNI_PRINT_D05_ENVIRONMENT','OMNI_PRINT_DIRECT_ENABLED','OMNI_PRINT_DIRECT_RELEASE','OMNI_PRINT_RETENTION_ENABLED','MIGRATION_AUTHORITY_ENABLED','NEXT_TELEMETRY_DISABLED',
+  'WHATSAPP_ACCESS_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_BUSINESS_ACCOUNT_ID','WHATSAPP_APP_SECRET','WHATSAPP_VERIFY_TOKEN','WHATSAPP_WEBHOOK_STORE_ID','NPM_CONFIG_INCLUDE']
+try {
+  const [operation, argument] = process.argv.slice(2)
+  if (operation === 'inspect') {
+    checkedProject(); const rows = metadata()
+    if (!existsSync(out + 'PREVIEW_SCOPE_BASELINE.json')) save('PREVIEW_SCOPE_BASELINE', { at: new Date().toISOString(), projectId: D05_TARGET.projectId, branch: D05_TARGET.branch, valuesDiscarded: true, nonD05Fingerprint: hash(others(rows)), variables: rows })
+    const previous = JSON.parse(readFileSync(out + 'PREVIEW_SCOPE_BASELINE.json', 'utf8'))
+    assertUnchanged(previous.variables, rows)
+    console.log(JSON.stringify({ status: 'D05_INSPECT_PASS', nonD05Fingerprint: hash(others(rows)), d05Keys: rows.filter(e => e.gitBranch === D05_TARGET.branch).map(e => e.key), valuesNotEmitted: true }))
+  } else if (operation === 'configure-disabled') {
+    gate(); checkedProject()
+    const before = metadata(), baseline = JSON.parse(readFileSync(out + 'PREVIEW_SCOPE_BASELINE.json', 'utf8'))
+    assertUnchanged(baseline.variables, before)
+    const values = privateEnvironment(privateRoot)
+    values.OMNI_PRINT_DIRECT_ENABLED = '0'
+    values.NPM_CONFIG_INCLUDE = 'dev' // build-time devDependencies are required by next.config.mjs; keep NODE_ENV=production
+    if (before.filter(e => !e.gitBranch).some(e => !keys.includes(e.key))) throw new Error('D05_UNSHADOWED_INHERITED_VARIABLE')
+    const owned = before.filter(e => e.gitBranch === D05_TARGET.branch)
+    const progressFile = out + 'PREVIEW_SCOPE_PROGRESS.json'
+    const progress = existsSync(progressFile) ? JSON.parse(readFileSync(progressFile, 'utf8')) : { commit: sha, created: [] }
+    const actualIds = owned.length ? api('/v10/projects/' + D05_TARGET.projectId + '/env?target=preview').envs.filter(e => e.gitBranch === D05_TARGET.branch).map(e => ({ id: e.id, key: e.key, target: e.target })) : []
+    if (progress.commit !== sha || owned.some(e => { const actual = actualIds.find(a => a.key === e.key); return !actual || !progress.created.some(c => c.id === actual.id && c.key === e.key) || actual.target.length !== 1 || actual.target[0] !== 'preview' || e.target.length !== 1 || e.target[0] !== 'preview' })) throw new Error('D05_EXISTING_BRANCH_CONFIG_REQUIRES_RECONCILIATION')
+    if (existsSync(out + 'PREVIEW_SCOPE_CONFIGURED.json') && !existsSync(out + 'PREVIEW_SCOPE_CONFIGURED_26.json')) save('PREVIEW_SCOPE_CONFIGURED_26', JSON.parse(readFileSync(out + 'PREVIEW_SCOPE_CONFIGURED.json', 'utf8')))
+    const payload = keys.map(key => ({ key, value: values[key], type: ['OMNI_PRINT_DIRECT_ENABLED', 'NPM_CONFIG_INCLUDE'].includes(key) ? 'plain' : values[key] === '' ? 'encrypted' : 'sensitive', target: ['preview'], gitBranch: D05_TARGET.branch, comment: 'D05 owner-authorized synthetic test environment only' }))
+    if (payload.some(e => typeof e.value !== 'string')) throw new Error('D05_MISSING_PRIVATE_VALUE')
+    for (const item of payload) {
+      if (owned.some(e => e.key === item.key)) continue
+      const response = api('/v10/projects/' + D05_TARGET.projectId + '/env', 'POST', item)
+      const created = response.created
+      if (response.failed?.length || !created || created.key !== item.key || created.gitBranch !== D05_TARGET.branch || created.target?.length !== 1 || created.target[0] !== 'preview') throw new Error('D05_BRANCH_CONFIG_PARTIAL_FAILURE')
+      progress.created.push({ id: created.id, key: created.key, target: created.target, gitBranch: created.gitBranch })
+      save('PREVIEW_SCOPE_PROGRESS', progress)
+      console.log('D05_BRANCH_VARIABLE_CREATED ' + progress.created.length)
+    }
+    const after = metadata(); assertUnchanged(before, after)
+    const branch = after.filter(e => e.gitBranch === D05_TARGET.branch)
+    if (branch.length !== keys.length || keys.some(key => !branch.some(e => e.key === key && e.target.length === 1 && e.target[0] === 'preview')) || branch.find(e => e.key === 'OMNI_PRINT_DIRECT_ENABLED')?.nonSecretDirectFlag !== '0') throw new Error('D05_BRANCH_CONFIG_INCOMPLETE')
+    save('PREVIEW_SCOPE_CONFIGURED', { at: new Date().toISOString(), commit: sha, projectId: D05_TARGET.projectId, branch: D05_TARGET.branch,
+      directTransportEnabled: false, nonD05MetadataUnchanged: true, beforeFingerprint: hash(others(before)), afterFingerprint: hash(others(after)), variables: branch, valuesNotEmitted: true })
+    console.log('D05_BRANCH_CONFIGURED_TRANSPORT_DISABLED')
+  } else if (operation === 'deploy-disabled') {
+    gate(); checkedProject()
+    const proof = JSON.parse(readFileSync(out + 'PREVIEW_SCOPE_CONFIGURED.json', 'utf8'))
+    if (proof.commit !== sha || proof.directTransportEnabled !== false) throw new Error('D05_DISABLED_CONFIG_REQUIRED')
+    const current = metadata(), baseline = JSON.parse(readFileSync(out + 'PREVIEW_SCOPE_BASELINE.json', 'utf8'))
+    assertUnchanged(baseline.variables, current)
+    const branch = current.filter(e => e.gitBranch === D05_TARGET.branch)
+    if (hash(branch) !== hash(proof.variables) || branch.find(e => e.key === 'OMNI_PRINT_DIRECT_ENABLED')?.nonSecretDirectFlag !== '0') throw new Error('D05_CURRENT_CONFIG_CHANGED')
+    if (existsSync(out + 'PREVIEW_DEPLOYMENT_CREATED.json')) {
+      const previous = JSON.parse(readFileSync(out + 'PREVIEW_DEPLOYMENT_CREATED.json', 'utf8'))
+      const status = JSON.parse(readFileSync(out + 'PREVIEW_DEPLOYMENT_DISABLED_STATUS.json', 'utf8'))
+      if (status.id !== previous.id || status.state !== 'ERROR') throw new Error('D05_PREVIOUS_DEPLOYMENT_REQUIRES_REVIEW')
+      if (!/^dpl_[A-Za-z0-9]+$/.test(previous.id)) throw new Error('D05_PREVIOUS_DEPLOYMENT_ID_INVALID')
+      save('PREVIEW_FAILED_' + previous.id, { created: previous, status })
+      if (!existsSync(out + 'PREVIEW_FIRST_FAILED_DEPLOYMENT.json')) save('PREVIEW_FIRST_FAILED_DEPLOYMENT', { created: previous, status })
+    }
+    const p = api('/v13/deployments', 'POST', { name: 'omni-gestao-pro', project: D05_TARGET.projectId,
+      gitSource: { type: 'github', repoId: 1208557742, ref: D05_TARGET.branch, sha } })
+    if (p.target && p.target !== 'preview') throw new Error('D05_DEPLOYMENT_TARGET_REFUSED')
+    save('PREVIEW_DEPLOYMENT_CREATED', { at: new Date().toISOString(), commit: sha, projectId: D05_TARGET.projectId, branch: D05_TARGET.branch,
+      id: p.id, url: p.url, target: p.target ?? 'preview', readyState: p.readyState, directTransportEnabled: false, requestHadNoProjectSettingsOrAliases: true })
+    console.log(JSON.stringify({ id: p.id, url: p.url, state: p.readyState, target: p.target ?? 'preview' }))
+  } else if (operation === 'status') {
+    if (!/^dpl_[A-Za-z0-9]+$/.test(argument ?? '')) throw new Error('D05_DEPLOYMENT_ID_REQUIRED')
+    const known = JSON.parse(readFileSync(out + 'PREVIEW_DEPLOYMENT_CREATED.json', 'utf8'))
+    if (known.id !== argument) throw new Error('D05_UNKNOWN_DEPLOYMENT_REFUSED')
+    const p = api('/v13/deployments/' + argument)
+    if (p.projectId !== D05_TARGET.projectId || (p.target && p.target !== 'preview') || p.meta?.githubCommitRef !== D05_TARGET.branch || p.meta?.githubCommitSha !== sha) throw new Error('D05_DEPLOYMENT_SCOPE_MISMATCH')
+    const result = { at: new Date().toISOString(), projectId: p.projectId, id: p.id, url: p.url, target: p.target ?? 'preview', state: p.readyState,
+      gitRef: p.meta.githubCommitRef, sha: p.meta.githubCommitSha, buildCommand: p.projectSettings?.buildCommand, nodeVersion: p.projectSettings?.nodeVersion, errorCode: p.errorCode ?? null }
+    save('PREVIEW_DEPLOYMENT_DISABLED_STATUS', result); console.log(JSON.stringify(result))
+  } else throw new Error('D05_PREVIEW_OPERATION_REQUIRED')
+} catch (e) { console.error(e instanceof Error && /^D05_[A-Z_]+$/.test(e.message) ? e.message : 'D05_PREVIEW_OPERATION_FAILED'); process.exitCode = 1 }

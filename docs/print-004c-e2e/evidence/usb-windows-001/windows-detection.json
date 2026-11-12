@@ -1,0 +1,62 @@
+{
+  "at": "2026-11-11T11:00:56.6391114-03:00",
+  "computer": "RAFACELL",
+  "user": "RAFACELL\\rafae",
+  "printers": [
+    {
+      "Name": "POS-80",
+      "DriverName": "POS-80 11.3.0.1",
+      "PortName": "USB005",
+      "WorkOffline": false,
+      "PrinterStatus": 3,
+      "Default": true,
+      "DetectedErrorState": 0
+    },
+    {
+      "Name": "EPSON L4160 Series",
+      "DriverName": "Microsoft IPP Class Driver",
+      "PortName": "USB001",
+      "WorkOffline": false,
+      "PrinterStatus": 3,
+      "Default": false,
+      "DetectedErrorState": 0
+    }
+  ],
+  "spooler": {
+    "Status": 4,
+    "StartType": 2
+  },
+  "ports": [
+    {
+      "Name": "USB001",
+      "Description": "EPSONL4160 Series",
+      "PortMonitor": "Dynamic Print Monitor"
+    },
+    {
+      "Name": "USB005",
+      "Description": "UnknownPrinter",
+      "PortMonitor": "Dynamic Print Monitor"
+    }
+  ],
+  "usb": [
+    {
+      "Status": "OK",
+      "Class": "USB",
+      "FriendlyName": "Nenhuma Impressora Conectada",
+      "InstanceId": "USBPRINT\\UNKNOWNPRINTER\\7&B75588B&0&USB005"
+    },
+    {
+      "Status": "OK",
+      "Class": "USB",
+      "FriendlyName": "Printer POS80 Printer USB",
+      "InstanceId": "USB\\VID_0416&PID_5011\\83700000000"
+    }
+  ],
+  "queue": {
+    "Name": "POS-80",
+    "JobCount": 0,
+    "PrinterStatus": 0
+  },
+  "paperWidth": "80mm_OPERATOR_CONFIRMED",
+  "cut": "NOT_TESTED"
+}

@@ -1,0 +1,9 @@
+{
+  "Run": 42483852556,
+  "Artifact": 13619046097,
+  "SourceCommit": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+  "ArtifactSha256": "01537f788c7a1ab2fccf0cc56588c7bf98e34985be6f42ef27c1cf5be143ea8a",
+  "PackageSha256": "e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77",
+  "Signed": false,
+  "Installed": false
+}

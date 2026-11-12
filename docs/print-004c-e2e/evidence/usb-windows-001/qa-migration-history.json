@@ -1,0 +1,13 @@
+{
+  "scope": "READ_ONLY_D05_SYNTHETIC_DATABASE",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "[\n  {\n    \"migration_name\": \"20261105120000_omni_print_d02_idx_vendas\",\n    \"finished\": true,\n    \"rolled_back\": false\n  },\n  {\n    \"migration_name\": \"20261105120100_omni_print_d02_idx_terminais\",\n    \"finished\": true,\n    \"rolled_back\": false\n  },\n  {\n    \"migration_name\": \"20261105120200_omni_print_d02_core\",\n    \"finished\": true,\n    \"rolled_back\": false\n  }\n]"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  }
+}

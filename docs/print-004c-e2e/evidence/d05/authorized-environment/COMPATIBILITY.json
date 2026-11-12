@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-05T22:10:19.727Z",
+  "headSha": "76ec7c363b915b871c6e91f55a17ceda862d9fb9",
+  "referenceMainSha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+  "referencePr331Sha": "b0de724b4abac15258e498a7a44ab700348ebe17",
+  "mergeBase": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+  "referenceMainIsAncestor": true,
+  "readOnlyMergeTreeConflictMarkers": 0,
+  "scope": "TEXTUAL_COMPATIBILITY_ONLY_AGAINST_RECORDED_REFERENCES",
+  "branchesMerged": false,
+  "functionalPr331CombinationExecuted": false,
+  "physicalHomologation": "PENDING"
+}

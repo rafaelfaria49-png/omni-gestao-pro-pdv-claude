@@ -143,3 +143,7 @@ gate foi aprovado; `APPROVED_RELEASE` segue `null`; nada foi aplicado, configura
 - Matriz de 80: classificações inalteradas (6 BLOCKED_HUMAN_GATE, 9 DEFERRED_PHYSICAL_HARDWARE); evidência de I12/B17–B19
   atualizada. Roteiro físico ganhou critérios de parada e registro de execução (todas as linhas NÃO EXECUTADO).
 - Revisão independente: rodada 5 (`REVISAO_INDEPENDENTE.md`) — REQUEST_CHANGES (5 P2) → corrigido → APPROVE; P3 tratados.
+
+## 8. Finalização integral D05 (2026-11-08)
+
+Correções do núcleo em `055d785` (agente `JOURNAL_MISSING`, log sem mensagem crua, aviso de vias acima do limite, PW20). CI da #327 em `055d785`: 6/6 workflows success. Pacote do agente: `e974ca03…bc77`. Estado consolidado e gates: `FINALIZACAO_INTEGRAL_D05.md`.

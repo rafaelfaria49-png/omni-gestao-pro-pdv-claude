@@ -1,0 +1,11 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+
+ Test Files  8 passed (8)
+      Tests  135 passed (135)
+   Start at  08:42:49
+   Duration  65.92s (transform 6.27s, setup 0ms, import 19.01s, tests 6.33s, environment 37.11s)
+
+
+exit=0

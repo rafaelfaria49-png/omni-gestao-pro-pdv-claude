@@ -1,0 +1,124 @@
+{
+  "goal": "OMNI-PRINT-D04-WINDOWS-AGENT-FINALIZACAO-001",
+  "provenance": {
+    "platform": "win32",
+    "node": "v24.22.2",
+    "githubRunId": "42126804856",
+    "githubRunAttempt": "1",
+    "commit": "ef7674b96a5a7232b27215af4c9c2ca9c008a031",
+    "localChanges": false
+  },
+  "sameRun": true,
+  "currentHead": "ef7674b96a5a7232b27215af4c9c2ca9c008a031",
+  "status": "PENDING",
+  "productionWrites": 0,
+  "physicalHomologation": "PENDING",
+  "realPairing": false,
+  "steps": [
+    {
+      "step": "generator",
+      "status": "PENDING"
+    },
+    {
+      "step": "d02-generator",
+      "status": "PENDING"
+    },
+    {
+      "step": "unit",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "87 passed (87)",
+      "sha256": "ca1c1bcc33e02ec5c834a6cfed193e0753a53f6713b863438a1a818d0d2ab083"
+    },
+    {
+      "step": "offline-regression",
+      "status": "PENDING"
+    },
+    {
+      "step": "retention-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "offline-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "d02-pg",
+      "status": "PENDING"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PENDING"
+    },
+    {
+      "step": "playwright",
+      "status": "PENDING"
+    },
+    {
+      "step": "typecheck",
+      "status": "PENDING"
+    },
+    {
+      "step": "eslint",
+      "status": "PENDING"
+    },
+    {
+      "step": "build",
+      "status": "PENDING"
+    },
+    {
+      "step": "recovery",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "30 passed (30)",
+      "sha256": "1906ad82776d56b1e643f73396ed61b8a3e509854e98f3b0ee87df2a220cc954"
+    },
+    {
+      "step": "package",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "2455cfcabcf82e7717dc42b51c1fe974bb5de25d07afe8b2abb567c8074abf06"
+    },
+    {
+      "step": "d04-eslint",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "powershell-parse",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "b6aa105adb1389fc898ea0567c3ed6b0a21b08bf29d08c28324fda2a3183e498"
+    },
+    {
+      "step": "installer",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "0a58b82593691c9bb1b2663337cb9d4e9491803a26244d7a9238d75b6d522c20"
+    },
+    {
+      "step": "cross-user-dpapi",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "34dd5e50f792c7e971e44f5e283d6afa2ade486b309c6306d6d72cea49901fb9"
+    }
+  ]
+}

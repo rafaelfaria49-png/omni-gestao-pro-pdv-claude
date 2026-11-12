@@ -1,0 +1,29 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+ ❯ tools/omni-print-agent/spooler-windows.test.ts (6 tests | 1 failed) 9772ms
+     × lista filas do Windows pelo host persistente (somente leitura) 8139ms
+
+ Test Files  1 failed | 8 passed (9)
+      Tests  1 failed | 77 passed (78)
+   Start at  13:57:47
+   Duration  11.63s (transform 4.05s, setup 0ms, import 6.18s, tests 11.51s, environment 10ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/omni-print-agent/spooler-windows.test.ts > WindowsSpooler (real PowerShell host, no hardware) > lista filas do Windows pelo host persistente (somente leitura)
+Error: Acesso a um recurso CIM não estava disponível para o cliente.
+ ❯ WindowsSpooler.listPrinters tools/omni-print-agent/spooler-windows.mjs:203:36
+    201|   async listPrinters() {
+    202|     const r = await this.request("list", {}, 60_000)
+    203|     if (!r.ok) throw Object.assign(new Error(r.error), { reason: "SPOO…
+       |                                    ^
+    204|     return (Array.isArray(r.printers) ? r.printers : r.printers ? [r.p…
+    205|   }
+ ❯ tools/omni-print-agent/spooler-windows.test.ts:45:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1
