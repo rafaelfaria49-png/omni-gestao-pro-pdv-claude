@@ -1,4 +1,4 @@
-import { cancelarAparelhosDaVendaTx } from "@/lib/aparelhos/sale-reversal"
+import { AparelhoCancelamentoBloqueadoError, cancelarAparelhosDaVendaTx } from "@/lib/aparelhos/sale-reversal"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/cancelar
@@ -519,6 +519,9 @@ export async function POST(
       },
     })
   } catch (e) {
+    if (e instanceof AparelhoCancelamentoBloqueadoError) {
+      return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: 409 })
+    }
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[vendas/cancelar]", msg)
     return NextResponse.json(

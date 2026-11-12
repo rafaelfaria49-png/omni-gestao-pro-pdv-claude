@@ -176,7 +176,9 @@ export async function applyDeviceSaleLinesTx(
 
     const contratual = validateContratualDias(ds.contratualDias, politica.contratualMaxDias)
     if (!contratual.ok) throw new DeviceSaleError(contratual.code, contratual.message)
-    const dataEntrega = ds.dataEntrega ?? dataVendaKey
+    const dataVendaClienteKey = localDateKey(ctx.at)
+    let dataEntrega = ds.dataEntrega ?? dataVendaKey
+    if (isDateKey(dataEntrega) && dataEntrega < dataVendaKey && dataEntrega >= dataVendaClienteKey) dataEntrega = dataVendaKey
     if (!isDateKey(dataEntrega) || dataEntrega < dataVendaKey || dataEntrega > entregaMax) {
       throw new DeviceSaleError("APARELHO_DATA_ENTREGA", "Data de entrega inválida (entre hoje e 30 dias).")
     }

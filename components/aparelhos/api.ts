@@ -76,6 +76,7 @@ export async function abrirDocumento(storeId: string, params: Record<string, str
   const q = new URLSearchParams({ ...params, storeId, ...(canal === "venda" ? { canal: "venda" } : {}) })
   const w = window.open(`/api/aparelhos/documentos?${q.toString()}`, "_blank")
   if (!w) throw new ApiError("O navegador bloqueou a janela de impressão. Permita pop-ups para este site.", "POPUP", 0)
+  w.opener = null
 }
 
 export async function abrirPrevia(storeId: string, body: Record<string, unknown>): Promise<void> {

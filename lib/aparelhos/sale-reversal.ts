@@ -42,35 +42,64 @@ export function operacaoTocaAparelho(payload: unknown, inventoryIds: Iterable<st
   return linhas.some((l) => alvo.has(l.inventoryId) || alvo.has(l.produtoId))
 }
 
+/** Cancelamento recusado: a unidade não está mais como a venda a deixou (ex.: recomprada). */
+export class AparelhoCancelamentoBloqueadoError extends Error {
+  readonly code = "APARELHO_CANCELAMENTO_BLOQUEADO"
+  constructor(message: string) {
+    super(message)
+    this.name = "AparelhoCancelamentoBloqueadoError"
+  }
+}
+
+/** Devolução de modelo serializado sem passar pela unidade (fail-closed). */
+export class AparelhoDevolucaoBloqueadaError extends Error {
+  readonly code = APARELHO_REVERSAO_NAO_INTEGRADA.code
+  constructor() {
+    super(APARELHO_REVERSAO_NAO_INTEGRADA.message)
+    this.name = "AparelhoDevolucaoBloqueadaError"
+  }
+}
+
 export async function cancelarAparelhosDaVendaTx(
   tx: Prisma.TransactionClient,
   args: { storeId: string; vendaId: string; pedidoId: string; operador: string; payload: unknown },
 ): Promise<number> {
-  if (linhasAparelhoDoPayload(args.payload).length === 0) return 0
+  const linhas = linhasAparelhoDoPayload(args.payload)
+  if (linhas.length === 0) return 0
   const vinculos = await tx.aparelhoVenda.findMany({
-    where: { storeId: args.storeId, vendaId: args.vendaId, status: "ativa" },
-    select: { id: true, aparelhoId: true, numeroGarantia: true },
+    where: { storeId: args.storeId, vendaId: args.vendaId },
+    select: { id: true, aparelhoId: true, numeroGarantia: true, status: true },
   })
-  for (const v of vinculos) {
-    const rows = await tx.$queryRaw<Array<{ status: string }>>`
-      SELECT "status" FROM "aparelhos_fisicos" WHERE "id" = ${v.aparelhoId} AND "storeId" = ${args.storeId} FOR UPDATE`
-    const de = rows[0]?.status ?? null
-    await tx.aparelhoVenda.update({ where: { id: v.id }, data: { status: "cancelada" } })
-    if (de === "vendido") {
-      await tx.aparelhoFisico.update({ where: { id: v.aparelhoId }, data: { status: "disponivel", version: { increment: 1 } } })
+  // Pré-validação de TODAS as unidades antes de qualquer escrita: o cancelamento devolve +1 ao
+  // produto de cada linha, então cada unidade precisa estar vendida, ativa e no mesmo produto.
+  const travadas: Array<{ v: (typeof vinculos)[number]; de: string }> = []
+  for (const linha of linhas) {
+    const v = vinculos.find((x) => x.aparelhoId === linha.aparelhoId)
+    const rows = await tx.$queryRaw<Array<{ status: string; produtoId: string }>>`
+      SELECT "status", "produtoId" FROM "aparelhos_fisicos" WHERE "id" = ${linha.aparelhoId} AND "storeId" = ${args.storeId} FOR UPDATE`
+    const u = rows[0]
+    if (!v || v.status !== "ativa" || !u || u.status !== "vendido" || (linha.produtoId && u.produtoId !== linha.produtoId)) {
+      throw new AparelhoCancelamentoBloqueadoError(
+        "O aparelho desta venda já mudou de situação (recompra, revisão ou outra operação). Cancelamento bloqueado para não desalinhar estoque e garantia — procure o gerente.",
+      )
     }
+    travadas.push({ v, de: u.status })
+  }
+  for (const { v, de } of travadas) {
+    await tx.aparelhoVenda.update({ where: { id: v.id }, data: { status: "cancelada" } })
+    await tx.aparelhoFisico.update({ where: { id: v.aparelhoId }, data: { status: "disponivel", version: { increment: 1 } } })
     await tx.aparelhoEvento.create({
       data: {
         storeId: args.storeId,
         aparelhoId: v.aparelhoId,
         tipo: "venda_cancelada",
         deStatus: de,
-        paraStatus: de === "vendido" ? "disponivel" : de,
+        paraStatus: "disponivel",
         operador: args.operador,
         idempotencyKey: `venda-cancelada:${args.vendaId}:${v.aparelhoId}`,
         dados: { pedidoId: args.pedidoId, numeroGarantia: v.numeroGarantia },
       },
     })
   }
-  return vinculos.length
+  return travadas.length
 }

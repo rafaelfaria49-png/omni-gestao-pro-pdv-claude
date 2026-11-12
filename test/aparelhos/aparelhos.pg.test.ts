@@ -447,3 +447,32 @@ describe("Regressões da revisão independente", () => {
     expect(ok(await svc.listarAparelhos(ADMIN_A, { page: Number("abc") }, D)).page).toBe(1)
   })
 })
+
+describe("Regressões da 2ª rodada da revisão", () => {
+  it("P2-A: cancelar venda cujo aparelho está em recompra é bloqueado sem efeito", async () => {
+    const { cancelarAparelhosDaVendaTx, AparelhoCancelamentoBloqueadoError } = await import("@/lib/aparelhos/sale-reversal")
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Cancela Recompra" })
+    const sale = saleFor(u)
+    await vender(LOJA_A, sale)
+    ok(await svc.criarAquisicao(VENDEDOR_A, {
+      tipo: "compra_cliente", vendedorNome: "Revende", vendedorDocumento: "529.982.247-25", documentoOrigemTipo: "declaracao_procedencia",
+      formaPagamento: "pix", pagamentoStatus: "pendente", valorTotal: 500, aparelhos: [device({ imei1: u.imei1, modelo: "iPhone Cancela Recompra", custoAquisicao: 0, despesas: 0 })],
+    }, D))
+    const venda = await db.venda.findFirstOrThrow({ where: { pedidoId: sale.id } })
+    await expect(db.$transaction((tx) => cancelarAparelhosDaVendaTx(tx, { storeId: LOJA_A, vendaId: venda.id, pedidoId: sale.id!, operador: "QA", payload: venda.payload })))
+      .rejects.toBeInstanceOf(AparelhoCancelamentoBloqueadoError)
+    expect((await db.aparelhoVenda.findFirstOrThrow({ where: { vendaId: venda.id } })).status).toBe("ativa")
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("em_avaliacao")
+  })
+  it("P2-C: venda pendente de ontem reenviada hoje usa entrega de hoje (nunca pior ao cliente)", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Meia Noite" })
+    const hoje = localDateKey(new Date())
+    const ontem = addDaysKey(hoje, -1)
+    const sale = { ...saleFor(u, { dataEntrega: ontem }), at: new Date(Date.now() - 20 * 3_600_000).toISOString() }
+    const atKey = localDateKey(new Date(sale.at!))
+    if (atKey === hoje) (sale.lines![0]!.deviceSale as { dataEntrega?: string }).dataEntrega = hoje
+    await vender(LOJA_A, sale)
+    const av = await db.aparelhoVenda.findFirstOrThrow({ where: { aparelhoId: u.id } })
+    expect(av.dataEntrega.toISOString().slice(0, 10)).toBe(hoje)
+  })
+})

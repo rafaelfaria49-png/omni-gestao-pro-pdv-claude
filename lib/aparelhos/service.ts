@@ -664,6 +664,11 @@ export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = pr
           status: unit.status, propriedade: unit.propriedade, origem: unit.origem, aquisicaoId: unit.aquisicaoId, produtoId: unit.produtoId,
           marca: unit.marca, modelo: unit.modelo, armazenamento: unit.armazenamento, cor: unit.cor, condicao: unit.condicao,
           custoAquisicao: unit.custoAquisicao, despesas: unit.despesas, custoTotal: unit.custoTotal, precoVenda: unit.precoVenda,
+          variante: unit.variante, memoriaRam: unit.memoriaRam, imei1: unit.imei1, imei2: unit.imei2, serial: unit.serial,
+          precoSugerido: unit.precoSugerido, checklist: unit.checklist, acessorios: unit.acessorios, estadoFisico: unit.estadoFisico,
+          bateriaSaude: unit.bateriaSaude, bateriaFonte: unit.bateriaFonte, observacoes: unit.observacoes,
+          restricaoStatus: unit.restricaoStatus, restricaoFonte: unit.restricaoFonte,
+          restricaoConferidaEm: unit.restricaoConferidaEm, restricaoConferidaPor: unit.restricaoConferidaPor,
         }
         // Fora do saldo (vendido/baixado/devolvido): trocar de produto não mexe em estoque.
         const produtoId = await resolveProdutoModeloTx(tx, ctx.storeId, { ...item, produtoId: undefined })
@@ -737,6 +742,8 @@ export async function decidirAquisicao(ctx: AparelhoCtx, id: string, raw: unknow
         // Recompra recusada: a unidade volta exatamente como estava (venda/garantia anteriores intactas).
         const a = anterior.anterior as Record<string, never>
         await tx.aparelhoFisico.update({ where: { id: u.id }, data: { ...a, version: { increment: 1 } } })
+        const prev = anterior.anterior as { imei1?: string | null; imei2?: string | null; serial?: string | null }
+        await syncIdentificadoresTx(tx, ctx.storeId, u.id, { imei1: prev.imei1 ?? null, imei2: prev.imei2 ?? null, serial: prev.serial ?? null })
         await eventoTx(tx, ctx, u.id, "aquisicao_recusada", u.status, String(a.status), { protocolo: aq.protocolo, motivo, recompra: true })
         continue
       }
