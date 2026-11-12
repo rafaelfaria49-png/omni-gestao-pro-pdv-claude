@@ -1,0 +1,124 @@
+{
+  "sourceSummary": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/summary.json",
+  "sourceCommit": "2066b30b37447a80c18846addf4ee38644c3898c",
+  "workingTreeChanged": true,
+  "codeCommit": "58015fe0e142328f8e00279445ba8352f34e1ea0",
+  "allPass": true,
+  "steps": {
+    "d05-tests": {
+      "status": "PASS",
+      "seconds": 0,
+      "tests": null
+    },
+    "d05-plan": {
+      "status": "PASS",
+      "seconds": 0,
+      "tests": null
+    },
+    "generator": {
+      "status": "PASS",
+      "seconds": 0,
+      "tests": null
+    },
+    "d02-generator": {
+      "status": "PASS",
+      "seconds": 0,
+      "tests": null
+    },
+    "unit": {
+      "status": "PASS",
+      "seconds": 5,
+      "tests": "136 passed (136)"
+    },
+    "offline-regression": {
+      "status": "PASS",
+      "seconds": 24,
+      "tests": "135 passed (135)"
+    },
+    "retention-pg": {
+      "status": "PASS",
+      "seconds": 70,
+      "tests": "17 passed (17)"
+    },
+    "offline-pg": {
+      "status": "PASS",
+      "seconds": 7,
+      "tests": "10 passed (10)"
+    },
+    "scenarios-pg": {
+      "status": "PASS",
+      "seconds": 28,
+      "tests": "35 passed (35)"
+    },
+    "two-agents-pg": {
+      "status": "PASS",
+      "seconds": 29,
+      "tests": "1 passed (1)"
+    },
+    "synthetic-pg": {
+      "status": "PASS",
+      "seconds": 11,
+      "tests": "3 passed (3)"
+    },
+    "d02-pg": {
+      "status": "PASS",
+      "seconds": 196,
+      "tests": "8 passed (8)"
+    },
+    "d02-rehearsal": {
+      "status": "PASS",
+      "seconds": 21,
+      "tests": "5 passed (5)"
+    },
+    "playwright": {
+      "status": "PASS",
+      "seconds": 142,
+      "tests": "22 passed (2.0m)"
+    },
+    "typecheck": {
+      "status": "PASS",
+      "seconds": 682,
+      "tests": null
+    },
+    "eslint": {
+      "status": "PASS",
+      "seconds": 66,
+      "tests": null
+    },
+    "build": {
+      "status": "PASS",
+      "seconds": 423,
+      "tests": null
+    },
+    "sw-proof": {
+      "status": "PASS",
+      "seconds": 37,
+      "tests": null
+    },
+    "recovery": {
+      "status": "PASS",
+      "seconds": 63,
+      "tests": "30 passed (30)"
+    },
+    "package": {
+      "status": "PASS",
+      "seconds": 0,
+      "tests": null
+    },
+    "package-integrity": {
+      "status": "PASS",
+      "seconds": 0,
+      "tests": null
+    },
+    "d05-eslint": {
+      "status": "PASS",
+      "seconds": 92,
+      "tests": null
+    },
+    "powershell-parse": {
+      "status": "PASS",
+      "seconds": 1,
+      "tests": null
+    }
+  }
+}

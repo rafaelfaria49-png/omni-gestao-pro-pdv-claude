@@ -1,6 +1,8 @@
 # Roteiro operacional D02-A — aplicação manual das tabelas de impressão
 
-**Situação:** preparado e ensaiado só em PostgreSQL 17 descartável. **Nada foi aplicado em homologação ou produção.**
+**Situação original da preparação:** ensaiado em PostgreSQL 17 descartável. A execução posterior no QA D05 está registrada
+em `evidence/d05/authorized-environment/`; ela não constitui aplicação produtiva. Nenhuma aplicação produtiva foi realizada
+no GOAL USB Windows 001.
 Executar este roteiro depende de aprovação expressa do proprietário para cada ambiente (janela, executor, ponto de
 restauração). A aprovação da estratégia D02-A não autoriza a execução.
 
@@ -26,7 +28,7 @@ conferidas byte a byte pelo teste `d02-guard.test.ts`:
 | (i) b | `20261105120100_omni_print_d02_idx_terminais` | `CREATE UNIQUE INDEX CONCURRENTLY p004_term_id_store_uq` | não bloqueia o PDV; `lock_timeout` 5 s |
 | (ii) | `20261105120200_omni_print_d02_core` | 11 tabelas `print_*`, 7 funções `p004_*`, 46 gatilhos, 39 FKs, numa única transação | guarda `CUT_GUARD "01"`: `lock_timeout` 2 s e locks pais no início, `vendas` primeiro |
 
-Nenhuma coluna ou linha existente é alterada. As pastas ficam em `tools/print-d02/migrations/` até o passo 6.5, fora de
+Nenhuma coluna ou linha existente é alterada. As pastas ficam em `tools/print-d02/migrations/` até o passo 6.7, fora de
 `prisma/migrations`, para que nenhum build as aplique.
 
 ## 2. Pré-condições (todas obrigatórias)
@@ -108,15 +110,25 @@ Em todos os comandos abaixo, `$E` é o definido no §3 (no PowerShell, `@E`).
    - todas as restrições validadas;
    - dono correto;
    - nenhum privilégio para `PUBLIC`.
-5. **Promoção (no checkout da PR):** `node tools/print-d02/d02.mjs promote`. Ela copia as 3 pastas para
-   `prisma/migrations` com os mesmos bytes (LF, garantido por `.gitattributes`) e recusa uma cópia diferente.
-6. **Registro no Prisma:** `node tools/print-d02/d02.mjs resolve $E`.
-   - Roda `prisma migrate resolve --applied` para as 3 pastas, e só com o banco no estado `CORE_APPLIED`.
-   - Termina com `VERIFY PASS`, conferindo também as 3 linhas em `_prisma_migrations` e os checksums iguais aos arquivos.
-7. **Registro da execução:** preencher `tools/print-d02/APLICACAO.json`:
+5. **Preparação em espelho externo:** criar uma pasta privada fora do repositório e copiar, sem alterações, o
+   `prisma/schema.prisma` do commit aprovado para `<espelho>/schema.prisma`. Executar
+   `node tools/print-d02/d02.mjs promote --migrations-dir "<espelho>/migrations"`.
+   - Essa operação só copia as 3 pastas para o espelho, com bytes idênticos; recusa cópia diferente. Não toca o banco.
+   - `prisma/migrations` do repositório continua sem D02. Não adicionar credenciais ao schema ou ao Git.
+6. **Registro no Prisma pelo espelho:** `node tools/print-d02/d02.mjs resolve $E --schema "<espelho>/schema.prisma"`.
+   - Roda `prisma migrate resolve --applied` para as 3 pastas adjacentes ao schema do espelho, somente com o banco no
+     estado `CORE_APPLIED` e os arquivos idênticos aos candidatos.
+   - Exigir saída zero e `VERIFY PASS`; confirmar também com `node tools/print-d02/d02.mjs verify $E --prisma`.
+     A verificação confere as 3 linhas em `_prisma_migrations` e os checksums iguais aos arquivos.
+   - **Ensaio/homologação termina aqui**, com evidência própria. Não preencher registro produtivo nem promover para
+     `prisma/migrations` do repositório com base em um resultado QA.
+7. **Somente depois do registro comprovado em Production:** preencher `tools/print-d02/APLICACAO.json`:
    - `status`: `APLICADA_E_REGISTRADA`;
    - banco, endpoint, executor, aprovação, janela, ponto de restauração, commit e saída do `verify --prisma`.
+   - Só então executar `node tools/print-d02/d02.mjs promote` no checkout da PR: esta é a promoção canônica para
+     `prisma/migrations`, com os mesmos bytes LF. Ela não reaplica SQL nem altera o banco.
 8. **Commit e merge:**
+   - Conferir as 3 pastas byte a byte, executar a guarda D02 (`tools/print-d02/d02-guard.test.ts`) e as verificações do §7.
    - Commitar com caminhos explícitos: as 3 pastas em `prisma/migrations` e `APLICACAO.json`.
    - **Manter** `tools/print-d02/migrations`: o `d02-guard`, o `generate.mjs --check` e a ferramenta comparam as pastas
      promovidas com elas.
@@ -126,7 +138,8 @@ Em todos os comandos abaixo, `$E` é o definido no §3 (no PowerShell, `@E`).
 
 ## 7. Validação de integridade
 
-Depois do §6:
+Depois do §6.7 produtivo. O espelho D02 da homologação verifica apenas o registro D02; não certifica todo o histórico
+Prisma da main. Compatibilidade do schema e histórico do QA exigem conferência separada antes de publicar seu Preview.
 
 | Verificação | Comando | Esperado |
 |---|---|---|
@@ -150,7 +163,7 @@ Parar imediatamente, sem novas tentativas, se:
 | Índice inválido (saída 4 em (i)) | `apply-indexes --repair-invalid` em momento calmo; se repetir, encerrar a janela |
 | Núcleo desistiu 3 vezes | encerrar; nada a desfazer além dos índices (opcional, §9) |
 | `INDEXES_PARTIAL` (parada entre os dois índices) | `apply-indexes` de novo: mantém o válido e cria o que falta |
-| Aplicado mas não registrado (`verify --prisma` acusa ausência) | `promote` + `resolve`; **nunca** registrar o que não existe (a ferramenta recusa) |
+| Aplicado mas não registrado (`verify --prisma` acusa ausência) | preparar o espelho externo (§6.5), `resolve --schema` pelo espelho e `verify --prisma` (§6.6); **nunca** registrar o que não existe. Promoção canônica só depois do registro produtivo (§6.7) |
 | Checksum diferente em `_prisma_migrations` | **PARAR — não apagar, editar ou recriar linhas de `_prisma_migrations` manualmente.** Preservar o histórico, coletar evidências e confirmar backup; comparar os bytes originais (LF), os checksums das três `migration.sql` e os registros do Prisma. Identificar a causa (CRLF, arquivo alterado, divergência de histórico) e elaborar recuperação controlada validada em cópia, com aprovação técnica expressa. Não executar `promote`/`resolve`, merge ou deploy enquanto houver divergência; `prisma migrate resolve` só nos casos suportados e após conferir o catálogo real. |
 | `prisma migrate deploy` rodou o núcleo e falhou (ver §10) | `prisma migrate resolve --rolled-back 20261105120200_omni_print_d02_core` e reaplicar pelo §6 |
 | Vendas paradas além do previsto | interromper o `psql` (Ctrl+C) ou `SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name='omni-print-d02'`. A transação (ii) volta inteira |
@@ -176,8 +189,9 @@ Parar imediatamente, sem novas tentativas, se:
 
 ## 10. Prisma: registro, build e riscos
 
-- **Registro manual:** feito por `d02.mjs resolve` (§6.6). O checksum gravado é o SHA-256 dos bytes do arquivo; por isso
-  as pastas são LF em qualquer checkout (`.gitattributes`), e `promote` recusa cópia com CRLF.
+- **Registro manual:** feito por `d02.mjs resolve --schema "<espelho>/schema.prisma"` (§6.6), com as pastas adjacentes
+  preparadas pelo `promote --migrations-dir` externo (§6.5). O checksum gravado é o SHA-256 dos bytes do arquivo;
+  a promoção canônica (§6.7) conserva LF (`.gitattributes`) e recusa cópia com CRLF.
 - **Proteção do build:**
   - `scripts/vercel-build.mjs` roda `prisma migrate deploy` em Production quando a autoridade de migration está ligada.
   - As pastas D02 ficam fora de `prisma/migrations` até estarem aplicadas e registradas.
@@ -213,14 +227,15 @@ quem executou.
 
 | Ambiente | Etapa | Resultado | Evidência | Executor / data |
 |---|---|---|---|---|
-| Cópia (branch Neon) | §6 completo + tempos dos índices | NÃO EXECUTADO | | |
+| Cópia (branch Neon autorizado) | §6.1–6.6 no espelho + tempos dos índices; sem promoção canônica | NÃO EXECUTADO | | |
 | Produção | §3 identificação | NÃO EXECUTADO | | |
 | Produção | §4 backup | NÃO EXECUTADO | | |
 | Produção | §6.2 índices | NÃO EXECUTADO | | |
 | Produção | §6.3 núcleo | NÃO EXECUTADO | | |
-| Produção | §6.4–6.6 verify, promote, resolve | NÃO EXECUTADO | | |
+| Produção | §6.4–6.6 verify, espelho externo, resolve e verify --prisma | NÃO EXECUTADO | | |
+| Produção | §6.7 registro produtivo e promoção canônica; §6.8 guarda/commit/merge autorizado | NÃO EXECUTADO | | |
 | Produção | §7 validação | NÃO EXECUTADO | | |
 
 ## 12. Compatibilidade com a cadeia KG (finalização 2026-11-08)
 
-Ensaio PG17 descartável sobre baseline da main `ce9228c`: D02→KG e KG→D02 aplicam sem erro e resultam em esquemas idênticos (`evidence/d05/finalizacao-2026-11-08/kg-d02-matrix/`). Regras: (1) D02 é sempre manual por este roteiro, nunca pelo `migrate deploy` de uma liberação KG; (2) não executar a janela D02 e o MIG-X KG no mesmo deploy; (3) promover as pastas D02 a `prisma/migrations` somente depois do `resolve --applied` em Production; (4) timestamps D02 (`20261105…`) ficam entre KG `20261029…` e `20261106…`: o Prisma aplica pendências fora de ordem em `migrate deploy`, por isso o registro manual antes da promoção é obrigatório.
+Ensaio PG17 descartável sobre baseline da main `ce9228c`: D02→KG e KG→D02 aplicam sem erro e resultam em esquemas idênticos (`evidence/d05/finalizacao-2026-11-08/kg-d02-matrix/`). Regras: (1) D02 é sempre manual por este roteiro, nunca pelo `migrate deploy` de uma liberação KG; (2) não executar a janela D02 e o MIG-X KG no mesmo deploy; (3) a promoção canônica das pastas D02 para `prisma/migrations` (§6.7) ocorre somente depois do `resolve --applied` em Production, preparado pelo espelho externo (§6.5–6.6); (4) timestamps D02 (`20261105…`) ficam entre KG `20261029…` e `20261106…`: o Prisma aplica pendências fora de ordem em `migrate deploy`, por isso o registro manual antes da promoção canônica é obrigatório.

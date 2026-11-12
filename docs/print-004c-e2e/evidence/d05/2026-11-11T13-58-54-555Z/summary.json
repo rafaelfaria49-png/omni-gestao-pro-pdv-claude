@@ -1,0 +1,195 @@
+{
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "runId": "2026-11-11T13-58-54-555Z",
+  "at": "2026-11-11T13:58:54.556Z",
+  "sourceCommit": "0dbeb5d9267f9920dc1a763649989b3e37546d49",
+  "workingTreeChanged": true,
+  "node": "v24.22.1",
+  "platform": "win32",
+  "productionAccess": false,
+  "productionWrites": 0,
+  "windowsPhysicalInstallation": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "d05-tests",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "983ddb2b5e70e3dc9bfa844f5b0a6627e3f6978fe52c06addc98427823a07caf"
+    },
+    {
+      "step": "d05-plan",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "79a614bc8e5f0e00b0b4dfacc162fe576f813dec61df07a81a9d67138774f5f3"
+    },
+    {
+      "step": "generator",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "69b65a382307e13a58e48a30b55c1fb432e902425e153cc7265a2a00edf1c31c"
+    },
+    {
+      "step": "d02-generator",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "d093662a9b07a9a75722658642531c22f1c746090be143cc53af55ef43995297"
+    },
+    {
+      "step": "unit",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 7,
+      "sha256": "aa5159d80b15ecd746e13b0fe52e13c2faf46288ac8b57ad4232cdcc8755cb54"
+    },
+    {
+      "step": "offline-regression",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 26,
+      "sha256": "d8f7527a96dd7e46d3df4ad74bec6b3ab76ca87433fa6c25de4f0b0f8a654949"
+    },
+    {
+      "step": "retention-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 74,
+      "sha256": "a7283e6ccbec49e224ad686922bdd3eeec65b4f73ef3430988a329b00a8a5e1c"
+    },
+    {
+      "step": "offline-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 11,
+      "sha256": "34a74bfcf18eb49e62ab2f08c1e62a8a1247249afd92b35e5ae50c8763e7c963"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 22,
+      "sha256": "29426c62d36fc61d37801ac229d094ab8e5408d36e84179b7a4ac95612e68240"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 18,
+      "sha256": "b5bdbbab7a96adfd5fe9e73db3b9898ce3b3c8b2231768efedafdeb1d421061e"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 4,
+      "sha256": "4e63fef4860e035ddded251383f53c5ef60d28a72d4e9ffd17fe4c7b3c37dff8"
+    },
+    {
+      "step": "d02-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 249,
+      "sha256": "38e22c874df841f10c1e263b3d0c1d10cd38831142d52827e7dfc9846d87c094"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 27,
+      "sha256": "cddc57ae941926e3c995dbe88ba968d403bfef684a94adb7ee0b8788c281c675"
+    },
+    {
+      "step": "playwright",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 142,
+      "sha256": "ae4660ae6e181d7cea7df1847132b31731e60f3cda4295cb3f0eb8d94e410109"
+    },
+    {
+      "step": "typecheck",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 263,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "eslint",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 74,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "package",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "b5a0c415d93921a1ade13ed057507a63c1377f98e9e5585e229d0ce72c8d500b"
+    },
+    {
+      "step": "package-integrity",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 0,
+      "sha256": "0b2626e6268cef7f0e9428d2b1fe405c971827f0f934ecc13e349c1f47e9e071"
+    },
+    {
+      "step": "d05-eslint",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 4,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "powershell-parse",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 2,
+      "sha256": "b6aa105adb1389fc898ea0567c3ed6b0a21b08bf29d08c28324fda2a3183e498"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "node tools/print-d05/build-preview.mjs",
-  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false, "codex/fix-a01-login-proxy": false, "codex/omni-print-d05-homologacao-fisica-001": false } },
+  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false, "codex/fix-a01-login-proxy": false, "codex/omni-print-d05-homologacao-fisica-001": false, "codex/omni-print-usb-windows-finalizacao-real-001": false } },
 
   "headers": [
     {

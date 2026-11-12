@@ -1,0 +1,149 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-usb-windows-finalizacao-real-001
+
+ ❯ lib/pdv-print-runtime.test.ts (23 tests | 1 failed) 223ms
+     × opção pelo agente nunca chama TCP legado nem abre fallback automático 59ms
+ ❯ app/api/print/raw/route.test.ts (12 tests | 11 failed) 40122ms
+     × sem destino no servidor não tenta localhost nem aceita host do navegador 5021ms
+     × mantém uma impressora de rede explicitamente configurada 5016ms
+     × recusa sobrescrever o destino fixado: {"host":"169.254.169.254","port":80} 5014ms
+     × recusa sobrescrever o destino fixado: {"host":"192.168.0.50","port":22} 5015ms
+     × recusa loopback 127.0.0.1 no runtime Vercel 5017ms
+     × recusa loopback localhost no runtime Vercel 5016ms
+     × recusa loopback ::1 no runtime Vercel 5004ms
+     × preserva bridge configurada, sem seguir redirect ou expor resposta privada 5ms
+     × recusa URL de bridge inválida 2ms
+     × recusa URL de bridge inválida 1ms
+     × recusa payload inválido antes de qualquer transporte 5005ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 12 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/pdv-print-runtime.test.ts > PDV thermal print runtime > opção pelo agente nunca chama TCP legado nem abre fallback automático
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ lib/pdv-print-runtime.test.ts:74:23
+     72|     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock)
+     73|     const result = await printPdvSaleReceipt({ config: config({ impres…
+     74|     expect(result.ok).toBe(false)
+       |                       ^
+     75|     expect(result.error).toContain("Omni Print")
+     76|     expect(fetchMock).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > sem destino no servidor não tenta localhost nem aceita host do navegador
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ app/api/print/raw/route.test.ts:26:3
+     24|
+     25| describe("destino explícito do transporte legado", () => {
+     26|   it("sem destino no servidor não tenta localhost nem aceita host do n…
+       |   ^
+     27|     for (const extra of [{}, { host: "169.254.169.254", port: 80 }]) {
+     28|       expect((await POST(request(extra))).status).toBe(503)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > mantém uma impressora de rede explicitamente configurada
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ app/api/print/raw/route.test.ts:32:3
+     30|     expect(h.destinations).toEqual([])
+     31|   })
+     32|   it("mantém uma impressora de rede explicitamente configurada", async…
+       |   ^
+     33|     vi.stubEnv("THERMAL_PRINT_HOST", "192.168.0.50")
+     34|     vi.stubEnv("THERMAL_PRINT_PORT", "9100")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa sobrescrever o destino fixado: {"host":"169.254.169.254","port":80}
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa sobrescrever o destino fixado: {"host":"192.168.0.50","port":22}
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ app/api/print/raw/route.test.ts:39:87
+     37|     expect(h.writes).toEqual([Buffer.from("cupom")])
+     38|   })
+     39|   it.each([{ host: "169.254.169.254", port: 80 }, { host: "192.168.0.5…
+       |                                                                                       ^
+     40|     vi.stubEnv("THERMAL_PRINT_HOST", "192.168.0.50")
+     41|     expect((await POST(request(extra))).status).toBe(403)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa loopback 127.0.0.1 no runtime Vercel
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa loopback localhost no runtime Vercel
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa loopback ::1 no runtime Vercel
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ app/api/print/raw/route.test.ts:44:45
+     42|     expect(h.destinations).toEqual([])
+     43|   })
+     44|   it.each(["127.0.0.1", "localhost", "::1"])("recusa loopback %s no ru…
+       |                                             ^
+     45|     vi.stubEnv("VERCEL", "1"); vi.stubEnv("THERMAL_PRINT_HOST", host)
+     46|     expect((await POST(request())).status).toBe(503)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > preserva bridge configurada, sem seguir redirect ou expor resposta privada
+AssertionError: expected '{"ok":false,"error":"Bridge HTTP: 502…' not to contain 'private bridge details'
+
+Expected: "private bridge details"
+Received: "{"ok":false,"error":"Bridge HTTP: 502 private bridge details"}"
+
+ ❯ app/api/print/raw/route.test.ts:55:34
+     53|     const res = await POST(request())
+     54|     expect(res.status).toBe(502)
+     55|     expect(await res.text()).not.toContain("private bridge details")
+       |                                  ^
+     56|     expect(fetchMock).toHaveBeenCalledExactlyOnceWith("https://bridge.…
+     57|     expect(h.destinations).toEqual([])
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa URL de bridge inválida
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa URL de bridge inválida
+AssertionError: expected 502 to be 503 // Object.is equality
+
+- Expected
++ Received
+
+- 503
++ 502
+
+ ❯ app/api/print/raw/route.test.ts:62:44
+     60|     vi.stubEnv("THERMAL_PRINT_HTTP_URL", url)
+     61|     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock)
+     62|     expect((await POST(request())).status).toBe(503)
+       |                                            ^
+     63|     expect(fetchMock).not.toHaveBeenCalled()
+     64|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  app/api/print/raw/route.test.ts > destino explícito do transporte legado > recusa payload inválido antes de qualquer transporte
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ app/api/print/raw/route.test.ts:65:3
+     63|     expect(fetchMock).not.toHaveBeenCalled()
+     64|   })
+     65|   it("recusa payload inválido antes de qualquer transporte", async () …
+       |   ^
+     66|     vi.stubEnv("THERMAL_PRINT_HOST", "192.168.0.50")
+     67|     expect((await POST(request({ data: "!!!!" }))).status).toBe(400)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  12 failed | 23 passed (35)
+   Start at  10:53:37
+   Duration  74.16s (transform 329ms, setup 0ms, import 1.37s, tests 40.35s, environment 28.21s)
+

@@ -483,8 +483,8 @@ export function PdvClassic({
   const [storeLogoUrl, setStoreLogoUrl] = useState("")
   /** Fluxo pós-venda: oferecer impressão após a venda ser persistida. */
   const [postSalePrintOpen, setPostSalePrintOpen] = useState(false)
-  const [postSalePrintInput, setPostSalePrintInput] = useState<PdvReceiptInput | null>(null)
-  const [autoPrintInput, setAutoPrintInput] = useState<PdvReceiptInput | null>(null)
+  const [postSalePrintInput, setPostSalePrintInput] = useState<{ input: PdvReceiptInput; requireAgent: boolean } | null>(null)
+  const [autoPrintInput, setAutoPrintInput] = useState<{ input: PdvReceiptInput; requireAgent: boolean } | null>(null)
   /** OMNI-PRINT-004C: impressão direta (agente local) de venda CONFIRMADA; desligada por padrão. */
   const [directPrintRequest, setDirectPrintRequest] = useState<DirectPrintRequest | null>(null)
   const [directPrintInput, setDirectPrintInput] = useState<PdvReceiptInput | null>(null)
@@ -2503,9 +2503,9 @@ export function PdvClassic({
               copies: impressaoConfig.viasCupom,
             })
           } else if (impressaoConfig.imprimirAutomatico && _hadItems) {
-            setAutoPrintInput(_printInput)
+            setAutoPrintInput({ input: _printInput, requireAgent: impressaoConfig.impressaoDireta })
           } else if (_hadItems) {
-            setPostSalePrintInput(_printInput)
+            setPostSalePrintInput({ input: _printInput, requireAgent: impressaoConfig.impressaoDireta })
             setPostSalePrintOpen(true)
           }
           if (aPrazo > 0.02 && selectedCustomer && !result.pending) {
@@ -2678,14 +2678,16 @@ export function PdvClassic({
         onOpenChange={(o) => {
           if (!o) { setPostSalePrintOpen(false); setPostSalePrintInput(null) }
         }}
-        printInput={postSalePrintInput}
+        printInput={postSalePrintInput?.input ?? null}
+        requireAgent={postSalePrintInput?.requireAgent}
         impressaoConfig={impressaoConfig}
         logoUrl={storeLogoUrl}
         onAfterClose={focusShellBipe}
       />
 
       <PdvAutoPrintFeedback
-        printInput={autoPrintInput}
+        printInput={autoPrintInput?.input ?? null}
+        requireAgent={autoPrintInput?.requireAgent}
         impressaoConfig={impressaoConfig}
         logoUrl={storeLogoUrl}
         onDismiss={() => setAutoPrintInput(null)}
@@ -2698,9 +2700,9 @@ export function PdvClassic({
           // Venda fora do contrato da impressão direta (KG/fracionada, limites, pagamento): exatamente o fluxo anterior.
           setDirectPrintRequest(null)
           if (!directPrintInput) return
-          if (impressaoConfig.imprimirAutomatico) setAutoPrintInput(directPrintInput)
+          if (impressaoConfig.imprimirAutomatico) setAutoPrintInput({ input: directPrintInput, requireAgent: false })
           else {
-            setPostSalePrintInput(directPrintInput)
+            setPostSalePrintInput({ input: directPrintInput, requireAgent: false })
             setPostSalePrintOpen(true)
           }
         }}

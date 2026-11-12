@@ -1,0 +1,43 @@
+{
+  "at": "2026-11-11T20:36:57.6208285+00:00",
+  "requestedAfterUserContinue": true,
+  "operation": "rerun_failed_workflow_run_jobs",
+  "codeHead": "7a0abe923884e5faa1a6b1ffb51bec80dc48e939",
+  "records": [
+    {
+      "run": 43048161987,
+      "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/43048161987",
+      "status": "completed",
+      "conclusion": "startup_failure",
+      "newJobsCreated": 0,
+      "annotation": "An unexpected error has occurred and we've been automatically notified.",
+      "githubSupportRequestId": "BA95:171D15:D5F0CA:163322D:6AF4D09E"
+    },
+    {
+      "run": 43048161752,
+      "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/43048161752",
+      "status": "completed",
+      "conclusion": "startup_failure",
+      "newJobsCreated": 0,
+      "annotation": "An unexpected error has occurred and we've been automatically notified.",
+      "githubSupportRequestId": "A09E:2BE72:D54318:1625447:6AF4D0A0"
+    },
+    {
+      "run": 43048161339,
+      "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/43048161339",
+      "status": "completed",
+      "conclusion": "startup_failure",
+      "newJobsCreated": 0,
+      "annotation": "An unexpected error has occurred and we've been automatically notified.",
+      "githubSupportRequestId": "314C:123FD6:D6A8FD:163EDE7:6AF4D0A7"
+    }
+  ],
+  "githubPublicStatus": {
+    "url": "https://www.githubstatus.com/api/v2/summary.json",
+    "updatedAt": "2026-11-11T20:29:11.88Z",
+    "actions": "operational",
+    "incidentCount": 0
+  },
+  "testsExecutedInRetry": false,
+  "productionWrites": 0
+}
