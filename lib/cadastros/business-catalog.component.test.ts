@@ -26,7 +26,7 @@ vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
   resource: (key: Parameters<typeof resolveBusinessResource>[1]) => resolveBusinessResource(h.capabilities, key, undefined, h.permitted),
 }) }))
-vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted } }) }))
+vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted && h.deviceCatalog } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-a" }) }))
 vi.mock("@/components/configuracoes-v3/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -248,7 +248,59 @@ describe("Editor oficial de configuração", () => {
     fireEvent.click(box)
     fireEvent.click(box)
     expect(screen.getAllByText("Sugestão do ramo").length).toBe(5)
+    expect(screen.getAllByText("Ativação manual").length).toBe(1)
     expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it.each(["padaria", "assistencia", "acessorios"] as const)("%s: aparelhos por IMEI aparece desligado e como ativação manual, não como sugestão", (branch) => {
+    h.capabilities = { version: 1, business: { primaryBranch: branch } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement
+    expect(box.checked).toBe(false)
+    const row = box.closest("label")!
+    expect(row.textContent).toContain("Ativação manual")
+    expect(row.textContent).not.toContain("Sugestão do ramo")
+    expect(row.textContent).toMatch(/Desligado por padrão em todos os ramos/)
+    // A explicação é descrição, não nome: o nome acessível continua curto.
+    expect(screen.getByRole("checkbox", { name: /^Aparelhos por IMEI \(compra, venda e garantia\)\s*Ativação manual$/, description: /Desligado por padrão em todos os ramos/ })).toBe(box)
+  })
+  it("ligar aparelhos por IMEI grava só esse override explícito da unidade", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement
+    fireEvent.click(box)
+    expect(box.checked).toBe(true)
+    expect(box.closest("label")!.textContent).toContain("Escolha explícita")
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }))
+    await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
+    expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: {},
+      overrides: { "catalog.serializedDevices": true } } } })
+  })
+  it("ligar e desligar aparelhos por IMEI volta à ativação manual sem gravar nada", () => {
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ })
+    fireEvent.click(box)
+    fireEvent.click(box)
+    expect(box.closest("label")!.textContent).toContain("Ativação manual")
+    expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it("sem liberação do catálogo de aparelhos a opção de IMEI não é oferecida", () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    h.deviceCatalog = false
+    render(React.createElement(BusinessResourcesCard))
+    expect(screen.queryByRole("checkbox", { name: /Aparelhos por IMEI/ })).toBeNull()
+    // Controle positivo: o formulário renderizou e só os recursos de aparelho saíram.
+    expect(screen.getByRole("checkbox", { name: /Produtos por peso/ })).toBeTruthy()
+    expect(screen.getByRole("checkbox", { name: /Assistência técnica/ })).toBeTruthy()
+    expect(screen.queryByRole("checkbox", { name: /Acessórios para aparelhos/ })).toBeNull()
+  })
+  it("escolha não salva de IMEI na loja A não vaza para a loja B", () => {
+    const ui = render(React.createElement(BusinessResourcesCard))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }))
+    h.storeId = "loja-b"
+    ui.rerender(React.createElement(BusinessResourcesCard))
+    expect((screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement).checked).toBe(false)
+    expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+    expect(h.save).not.toHaveBeenCalled()
   })
   it("exibe preparação com honestidade e desabilita edição sem permissão", () => {
     h.canConfigure = false

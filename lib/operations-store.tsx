@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { APARELHO_REVERSAO_NAO_INTEGRADA } from "@/lib/aparelhos/sale-reversal"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
 import type { Orcamento } from "@/lib/orcamento-types"
 import { normalizeDocDigits } from "@/lib/cpf"
@@ -188,6 +189,8 @@ export interface InventoryItem {
   atributos?: ProdutoAtributoDef[]
   /** Configuração saneada e opcional projetada por `/api/ops/inventory`. */
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /** Modelo de aparelho por IMEI — venda exige escolher a unidade física. */
+  serializedDevice?: boolean
 }
 
 export interface CaixaState {
@@ -621,6 +624,8 @@ interface OperationsContextType {
         custoUnitario?: number | null
         /** Seleção de modelo/cor do acessório (dado passivo, ver SaleLineRecord). */
         accessorySelection?: AccessorySelectionV1
+        /** Aparelho individualizado (unidade + garantia) — ver SaleLineRecord. */
+        deviceSale?: SaleLineRecord["deviceSale"]
         serviceId?: string
         serviceCategory?: string
         warrantyDays?: number
@@ -3636,6 +3641,9 @@ export function OperationsProvider({
       if (canReturn < req.quantity) {
         return { ok: false, reason: `Devolução maior que o disponível para ${saleLine.name}.` }
       }
+      // Aparelho por IMEI: devolução ainda não integrada (F8). Recusa ANTES de gravar algo local
+      // (estoque/crédito), igual ao servidor — nunca uma devolução parcial pendente para sempre.
+      if (saleLine.deviceSale) return { ok: false, reason: APARELHO_REVERSAO_NAO_INTEGRADA.message }
       const inv = next.inventory.find((i) => i.id === req.inventoryId)
       if (!inv) return { ok: false, reason: "Produto não está mais no cadastro de estoque." }
 

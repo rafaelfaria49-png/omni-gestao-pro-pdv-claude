@@ -37,6 +37,9 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
+import { VendaAparelhoDialog, DocumentosAparelhoDialog, liberarReservaAparelho, type LinhaAparelho } from "@/components/aparelhos/VendaAparelhoDialog"
+import { useAparelhosVendaHabilitado } from "@/components/aparelhos/use-aparelhos-venda"
+import { validateImei } from "@/lib/aparelhos/imei"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { TrocasDevolucao } from "./trocas-devolucao"
@@ -197,6 +200,8 @@ type CartItem = {
   produtoId?: string
   /** Preço unitário do catálogo quando o item entrou (base para detectar mudança de cadastro). */
   catalogUnitPrice?: number
+  /** Aparelho individualizado (IMEI + garantia). Quantidade fixa em 1. */
+  device?: LinhaAparelho
 }
 
 type Product = PdvCatalogProduct
@@ -403,6 +408,12 @@ export function PdvClassic({
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  // OMNI-APARELHOS-ENDTOEND-001: venda de aparelho individualizado no PDV Clássico.
+  const aparelhosHabilitado = useAparelhosVendaHabilitado()
+  const aparelhosHabilitadoRef = useRef(aparelhosHabilitado)
+  aparelhosHabilitadoRef.current = aparelhosHabilitado
+  const [aparelhoDialog, setAparelhoDialog] = useState<{ open: boolean; produtoId: string | null; consulta?: string }>({ open: false, produtoId: null })
+  const [docsAparelhoPedido, setDocsAparelhoPedido] = useState<string | null>(null)
   const [emitirNota, setEmitirNota] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
@@ -902,6 +913,15 @@ export function PdvClassic({
 
   const addToCart = (product: Product, presetQty?: number) => {
     if (blockWeightSale(product, products.find((p) => p.id === product.id))) return false
+    // Modelo de aparelho por IMEI: nunca entra como item genérico — escolher a unidade.
+    if (product.serializedDevice ?? products.find((p) => p.id === product.id)?.serializedDevice) {
+      if (!aparelhosHabilitado) {
+        toast({ variant: "destructive", title: "Aparelho por IMEI", description: "Venda de aparelhos individualizados não está liberada para este usuário ou loja." })
+        return false
+      }
+      setAparelhoDialog({ open: true, produtoId: product.dbId ?? products.find((p) => p.id === product.id)?.dbId ?? null })
+      return true
+    }
     const baseQty = presetQty ?? 1
     const controlledStock = hasControlledPdvStock(product.stock, product.category)
     if (controlledStock && product.stock <= 0) {
@@ -1106,6 +1126,12 @@ export function PdvClassic({
         commitScan(found)
         return
       }
+      // IMEI bipado (15 dígitos com DV válido): abre a unidade exata em vez de "produto não encontrado".
+      if (aparelhosHabilitadoRef.current && validateImei(query).ok) {
+        setBipeCode("")
+        setAparelhoDialog({ open: true, produtoId: null, consulta: query })
+        return
+      }
 
       // Fallback local fuzzy: se único, adiciona; se múltiplos, abre F3 pré-filtrado.
       const localMatches = filterPdvCatalogBySearch(products, query)
@@ -1188,6 +1214,10 @@ export function PdvClassic({
   const updateQuantity = (lineId: string, delta: number) => {
     const current = cart.find((item) => item.lineId === lineId)
     if (!current) return
+    if (current.device) {
+      if (delta < 0 && current.quantity + delta <= 0) removeFromCart(lineId)
+      return // aparelho individualizado: sempre 1 unidade
+    }
     if (blockWeightSale(current, getCartStockProduct(current))) return
     const step = current.vendaPorPeso ? 0.05 : 1
     const newQty = current.quantity + delta * step
@@ -1206,6 +1236,8 @@ export function PdvClassic({
   }
 
   const removeFromCart = (lineId: string) => {
+    const removida = cart.find((item) => item.lineId === lineId)
+    if (removida?.device && lojaKey) liberarReservaAparelho(lojaKey, removida.device)
     setCart(cart.filter((item) => item.lineId !== lineId))
   }
 
@@ -2231,6 +2263,42 @@ export function PdvClassic({
         hotkeyLabel="F5"
       />
 
+      {aparelhosHabilitado && lojaKey && (
+        <VendaAparelhoDialog
+          open={aparelhoDialog.open}
+          onOpenChange={(v) => {
+            setAparelhoDialog((d) => ({ ...d, open: v }))
+            if (!v) queueMicrotask(() => shellBipeRef.current?.focus())
+          }}
+          storeId={lojaKey}
+          produtoId={aparelhoDialog.produtoId}
+          consultaInicial={aparelhoDialog.consulta}
+          cliente={selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name } : null}
+          jaNoCarrinho={cart.flatMap((item) => (item.device ? [item.device.deviceSale.aparelhoId] : []))}
+          onConfirm={(linha) => {
+            const produto = products.find((p) => p.dbId === linha.produtoId)
+            const lineId = newPdvLineId(produto?.id ?? linha.produtoId)
+            setCart((prev) => [
+              ...prev,
+              {
+                lineId,
+                inventoryId: produto?.id ?? linha.produtoId,
+                name: linha.name,
+                price: linha.price,
+                quantity: 1,
+                produtoId: linha.produtoId,
+                catalogUnitPrice: produto?.price,
+                complementos: [],
+                lineDetail: `IMEI ${linha.aparelho.imei1 || linha.aparelho.serial} · 90 d legais${linha.deviceSale.contratualDias > 0 ? ` + ${linha.deviceSale.contratualDias} d contratuais` : ""}`,
+                device: linha,
+              },
+            ])
+            setSelectedCartLineId(lineId)
+          }}
+        />
+      )}
+      {lojaKey && <DocumentosAparelhoDialog open={!!docsAparelhoPedido && !postSalePrintOpen} onOpenChange={(v) => !v && setDocsAparelhoPedido(null)} storeId={lojaKey} pedidoId={docsAparelhoPedido} />}
+
       <PdvClientePicker
         open={customerSearchEnabled && aPrazoClientePickerOpen}
         storeId={lojaKey}
@@ -2326,7 +2394,17 @@ export function PdvClassic({
               ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
               ...(item.accessorySelection ? { accessorySelection: item.accessorySelection } : {}),
               ...(item.produtoId ? { produtoId: item.produtoId } : {}),
+              ...(item.device ? { produtoId: item.device.produtoId, deviceSale: item.device.deviceSale } : {}),
             }))
+          // Aparelho: garantia e documentos exigem o cliente da venda como titular.
+          if (cart.some((item) => item.device) && (!selectedCustomer || !resolveCreditAttribution({
+            usedCredit: payments.some((p) => p.type === "credito_vale"),
+            meta,
+            selectedCustomer: selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf } : null,
+          }).belongsToSelectedCustomer)) {
+            toast({ variant: "destructive", title: "Cliente obrigatório para aparelho", description: "Identifique o cliente da venda (F4) e não use crédito de terceiro para pagar o aparelho." })
+            return false
+          }
           // Capturar dados de impressão ANTES de limpar o cart
           // N5-B1 R2 (P2-02): resolução compartilhada do crédito/vale (audit
           // GAP-P2-02). O servidor debita ClienteCredito pelo customerCpf da
@@ -2506,6 +2584,7 @@ export function PdvClassic({
             }
           }
           setLastSaleTotal(total)
+          if (cart.some((item) => item.device)) setDocsAparelhoPedido(result.saleId)
           // CONFIRMED: venda concluída — limpa carrinho e conclui pós-venda.
           setCart([])
           setDiscountReais(0)

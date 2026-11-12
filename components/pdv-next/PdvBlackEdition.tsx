@@ -1,5 +1,6 @@
 "use client"
 
+import { APARELHO_FORA_DO_FLUXO, isAparelhoSerializado } from "@/components/aparelhos/bloqueio-layout"
 import {
   Suspense,
   useCallback,
@@ -347,6 +348,11 @@ export function PdvBlackEdition() {
   // ── Adicionar produto ──────────────────────────────────────────────────────
   const addProduct = useCallback(
     (product: PdvCatalogProduct, qty?: number) => {
+      // OMNI-APARELHOS-ENDTOEND-001: este layout não vende unidade por IMEI — bloqueio explícito.
+      if (isAparelhoSerializado(product)) {
+        toast({ variant: "destructive", ...APARELHO_FORA_DO_FLUXO })
+        return
+      }
       const effectiveQty = qty ?? 1
       const code = String(product.barcode || product.codigo || product.sku || product.id)
       const unit = product.vendaPorPeso ? "KG" : "UN"
@@ -372,7 +378,7 @@ export function PdvBlackEdition() {
       setBipeCode("")
       bipeRef.current?.focus()
     },
-    []
+    [toast]
   )
 
   // ── Bipe: Enter (prefixo canônico parsePdvScanPrefix) ───────────────────────

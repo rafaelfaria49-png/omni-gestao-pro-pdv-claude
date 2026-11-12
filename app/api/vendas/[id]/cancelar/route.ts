@@ -1,3 +1,4 @@
+import { AparelhoCancelamentoBloqueadoError, cancelarAparelhosDaVendaTx } from "@/lib/aparelhos/sale-reversal"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/cancelar
@@ -324,6 +325,11 @@ export async function POST(
         },
       })
 
+      // 1b. Aparelho por IMEI (OMNI-APARELHOS-ENDTOEND-001): garantia cancelada e a unidade
+      // volta a disponível — casa com o estorno de +1 do produto logo abaixo. Vendas sem
+      // aparelho não consultam as tabelas de aparelhos.
+      await cancelarAparelhosDaVendaTx(tx, { storeId, vendaId: venda.id, pedidoId, operador: operadorLedger, payload: venda.payload })
+
       // Resolução de produto (id|sku|barcode) com cache por inventoryId.
       const resolveCache = new Map<string, string | null>()
       const resolveProdutoId = async (rawInvId: string): Promise<string | null> => {
@@ -513,6 +519,9 @@ export async function POST(
       },
     })
   } catch (e) {
+    if (e instanceof AparelhoCancelamentoBloqueadoError) {
+      return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: 409 })
+    }
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[vendas/cancelar]", msg)
     return NextResponse.json(

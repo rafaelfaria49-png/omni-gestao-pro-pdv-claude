@@ -1,3 +1,4 @@
+import { isSerializedDeviceProduct } from "@/lib/aparelhos/serialized-product"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -78,6 +79,8 @@ type InvPayload = {
   fiscal?: ProdutoFiscal
   /** Configuração saneada de acessórios; metadata bruto nunca é exposto ao PDV. */
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /** Modelo de aparelho por IMEI: o PDV abre a seleção da unidade (venda exige unidade). */
+  serializedDevice?: true
 }
 
 function rowToItem(row: Produto): InvPayload {
@@ -108,6 +111,7 @@ function rowToItem(row: Produto): InvPayload {
     category: typeof (row as unknown as { category?: unknown }).category === "string" ? (row as unknown as { category: string }).category : "",
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
     ...(accessoryConfig ? { accessoryConfig } : {}),
+    ...(isSerializedDeviceProduct(row.metadata) ? { serializedDevice: true as const } : {}),
   }
 }
 

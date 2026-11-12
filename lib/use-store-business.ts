@@ -28,7 +28,7 @@ export function useStoreBusiness() {
     resource: (key: BusinessResourceKey) => resolveBusinessResource(
       capabilities, key, profile, ready && (permissions?.hubs.cadastros ?? false) &&
         (key === "service.technical" ? permissions?.hubs.operacoes === true :
-          key === "catalog.deviceCompatibility" || key === "pdv.accessoryModelColor" ? permissions?.modules?.deviceCatalog === true : true),
+          key === "catalog.deviceCompatibility" || key === "pdv.accessoryModelColor" || key === "catalog.serializedDevices" ? permissions?.modules?.deviceCatalog === true : true),
     ),
   }
 }
