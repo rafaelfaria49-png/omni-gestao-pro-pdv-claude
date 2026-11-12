@@ -33,6 +33,7 @@ import {
 } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { registrarRecebimentoCrSeCaixaAberto } from "@/lib/caixa/recebimento-cr-caixa"
+import { mapearNomesAmbiguos } from "@/lib/contas-receber-cliente-match"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -197,6 +198,7 @@ export async function GET(req: Request) {
       const numero = typeof parcelaObj?.numero === "number" ? parcelaObj.numero : null
       const total = typeof parcelaObj?.total === "number" ? parcelaObj.total : null
       const parcelaLabel = numero && total ? `${numero}/${total}` : null
+      const clienteIdRaw = pl && typeof pl.clienteId === "string" ? pl.clienteId.trim() : ""
       return {
         id: (t.localKey?.trim() || t.id) as string,
         descricao: t.descricao,
@@ -205,12 +207,18 @@ export async function GET(req: Request) {
         vencimento: t.vencimento,
         status: t.status,
         parcela: parcelaLabel,
+        /** `Cliente.id` gravado pela origem (`payload.clienteId`) — identidade segura p/ agrupar. */
+        ...(clienteIdRaw ? { clienteId: clienteIdRaw } : {}),
       }
     })
 
+    // Nomes com 2+ cadastros na loja: o HUB não junta títulos só pelo nome nesses casos.
+    const clientesLoja = await prisma.cliente.findMany({ where: { storeId }, select: { id: true, name: true } })
+    const nomesAmbiguos = Array.from(mapearNomesAmbiguos(clientesLoja))
     return NextResponse.json({
       ok: true,
       rows,
+      nomesAmbiguos,
       summary: buildContaReceberSummary(titulos),
       audit: buildContaReceberAuditTrail(titulos),
       metadata: { source: "server", storeId, generatedAt: new Date().toISOString() },

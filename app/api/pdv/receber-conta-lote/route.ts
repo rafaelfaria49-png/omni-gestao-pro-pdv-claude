@@ -1,4 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { momentoDaOperacao } from "@/lib/financeiro/recibo-recebimento"
 /**
  * POST /api/pdv/receber-conta-lote
  *
@@ -168,12 +169,22 @@ export async function POST(request: Request) {
       }
     }
 
+    // Hora do LEDGER: no replay, a da gravação original (não a do retry).
+    let recebidoEm = new Date().toISOString()
+    if (outcome.jaRegistrado && outcome.itens[0]) {
+      const t = await prisma.contaReceberTitulo.findFirst({ where: { storeId, localKey: outcome.itens[0].localKey } })
+      recebidoEm = momentoDaOperacao(t?.payload, parsed.data.idempotencyKey) ?? recebidoEm
+    }
+
     return NextResponse.json({
       ok: true,
       /** true = lote já registrado antes (retry); nada foi gravado de novo. */
       jaRegistrado: outcome.jaRegistrado,
       totalRecebido: outcome.totalRecebido,
       sessaoId: outcome.sessaoId,
+      /** Identidade da operação (carimbada como `loteId` no histórico) e hora do servidor. */
+      operacaoId: parsed.data.idempotencyKey.trim(),
+      recebidoEm,
       itens: outcome.itens,
     })
   } catch (e) {

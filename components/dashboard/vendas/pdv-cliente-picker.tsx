@@ -29,7 +29,16 @@ export function PdvClientePicker({
   onSelect: (cliente: PdvClienteResult) => void
   onClose: () => void
 }) {
-  const { query, setQuery, results, loading, clear } = usePdvCliente(storeId)
+  const {
+    query,
+    setQuery,
+    results,
+    loading,
+    error: searchError,
+    searched,
+    clear,
+    retry: retrySearch,
+  } = usePdvCliente(storeId)
   const [selectedIdx, setSelectedIdx] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -108,7 +117,8 @@ export function PdvClientePicker({
     } else if (e.key === "Enter") {
       e.preventDefault()
       if (results[selectedIdx]) onSelect(results[selectedIdx]!)
-      else if (query.trim()) abrirCadastro()
+      // Só oferece cadastro quando a busca respondeu "nenhum" — erro HTTP não é ausência.
+      else if (query.trim() && searched && !searchError && !loading) abrirCadastro()
     } else if (e.key === "Escape") {
       onClose()
     }
@@ -194,6 +204,18 @@ export function PdvClientePicker({
                   <p className="text-sm text-muted-foreground">Digite para buscar um cliente.</p>
                 </div>
               ) : loading && results.length === 0 ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Buscando…
+                </div>
+              ) : searchError ? (
+                <div role="alert" className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+                  <p className="text-sm text-destructive">{searchError}</p>
+                  <Button size="sm" variant="outline" className="h-9 rounded-lg" onClick={retrySearch}>
+                    Tentar de novo
+                  </Button>
+                </div>
+              ) : !searched ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Buscando…

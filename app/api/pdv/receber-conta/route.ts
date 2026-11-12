@@ -31,6 +31,7 @@ import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { logAuditoriaFinanceira, extractAuditoriaActor } from "@/lib/financeiro/services/auditoria-actor"
 import { PAY_EPS } from "@/lib/financeiro/contracts/valores"
+import { momentoDaOperacao } from "@/lib/financeiro/recibo-recebimento"
 import type { Prisma } from "@/generated/prisma"
 
 export const runtime = "nodejs"
@@ -220,6 +221,10 @@ export async function POST(request: Request) {
             localKey: ref.localKey,
             valorPago: parsed.data.valor!,
             observacao,
+            // Forma e identidade da operação no LEDGER do título: base da 2ª via do
+            // comprovante (sem elas, a reimpressão não saberia a forma nem a operação).
+            formaPagamento: forma,
+            loteId: parsed.data.idempotencyKey?.trim() || undefined,
             userLabel,
             tituloSnapshot: atual,
             db: tx,
@@ -229,6 +234,8 @@ export async function POST(request: Request) {
             id: ref.id,
             localKey: ref.localKey,
             observacao,
+            formaPagamento: forma,
+            loteId: parsed.data.idempotencyKey?.trim() || undefined,
             userLabel,
             tituloSnapshot: atual,
             db: tx,
@@ -301,6 +308,11 @@ export async function POST(request: Request) {
       valorRecebido: valorMov,
       /** true = operação já registrada antes (retry); nada foi gravado de novo. */
       jaRegistrado: replay,
+      /** Identidade da operação (carimbada no histórico) — usada no comprovante. */
+      operacaoId: parsed.data.idempotencyKey?.trim() || null,
+      // Hora do LEDGER (no replay, a da gravação original — não a do retry).
+      recebidoEm: momentoDaOperacao(titulo.payload, parsed.data.idempotencyKey) ?? new Date().toISOString(),
+      formaPagamento: forma,
       titulo: {
         id: titulo.id,
         localKey: titulo.localKey,

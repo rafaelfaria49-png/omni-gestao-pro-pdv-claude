@@ -15,6 +15,20 @@ export async function dismissFirstAccessWizardIfPresent(page: Page): Promise<voi
   }
 }
 
+/**
+ * O PDV pede, por computador, o terminal em que vai operar (`TerminalSelector`). Contexto
+ * novo do Playwright = computador novo: escolhe o primeiro terminal livre pelo fluxo real
+ * ("Usar" → lock no servidor). Não pula a proteção ("Continuar sem terminal").
+ */
+export async function selecionarTerminalSeSolicitado(page: Page): Promise<void> {
+  const titulo = page.getByText("Selecionar Terminal", { exact: true })
+  const busca = page.getByPlaceholder(/Código \/ Bipe|Buscar produto|Digite produto|código/i)
+  await expect(titulo.or(busca).first()).toBeVisible({ timeout: 45_000 })
+  if (!(await titulo.isVisible().catch(() => false))) return
+  await page.getByRole("button", { name: "Usar", exact: true }).first().click()
+  await expect(titulo).toHaveCount(0, { timeout: 20_000 })
+}
+
 /** Abre o caixa com saldo 0 e fecha o comprovante quando aparecer (PDV exige caixa aberto para várias ações). */
 export async function ensureCaixaAberto(page: Page): Promise<void> {
   const fechado = page.getByText("Caixa Fechado", { exact: false })

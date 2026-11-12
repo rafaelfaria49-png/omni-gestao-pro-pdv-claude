@@ -112,6 +112,8 @@ export type RecebimentoLoteErrorCode =
   | "saldo_divergente"
   | "titulo_alterado"
   | "movimentacao_financeira_falhou"
+  /** Financeiro HUB: títulos de clientes distintos (ou homônimos) num comprovante só. */
+  | "cliente_divergente"
 
 /**
  * Recusa do lote. É LANÇADA (não devolvida) para abortar a transação inteira; a rota a

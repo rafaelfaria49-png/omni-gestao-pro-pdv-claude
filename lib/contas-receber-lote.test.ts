@@ -357,7 +357,10 @@ describe("bloqueio de homônimos na fiação e regras do modal", () => {
   })
 
   it("14. recibo não é emitido para título bloqueado por ambiguidade", () => {
-    expect(src).toContain("tryPrintRecibo = useCallback(")
+    // F9-PRINT-001: o cupom só nasce de uma operação CONFIRMADA (`LoteResultado`) e o
+    // bloqueio de homônimo acontece ANTES da baixa (`callLiquidar`/`postRecebimento`).
+    expect(src).toContain("const imprimirComprovante = useCallback(")
+    expect(src).toContain("async (res: LoteResultado) => {")
     expect(src).toMatch(/if\s*\(\s*selectedCliente\s*&&\s*!tituloPertenceAoCliente/)
   })
 
