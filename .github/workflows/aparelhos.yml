@@ -61,6 +61,7 @@ jobs:
         run: >-
           node node_modules/vitest/vitest.mjs run
           lib/aparelhos lib/store-business-capabilities.test.ts
+          components/aparelhos
           lib/ops-upsert-venda.test.ts lib/ops-upsert-venda-fractional.test.ts lib/ops-upsert-venda-lines-integrity.test.ts
           lib/ops-upsert-venda-safety.test.ts lib/ops-upsert-venda-produto-identidade.test.ts
           lib/vendas/pending-sync-classification.test.ts --maxWorkers=2

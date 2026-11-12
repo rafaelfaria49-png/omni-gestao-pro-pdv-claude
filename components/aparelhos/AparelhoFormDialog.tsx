@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Camera, Loader2, Trash2 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -10,6 +10,7 @@ import { APARELHO_CONDICOES, APARELHO_CONDICAO_LABEL } from "@/lib/aparelhos/lif
 import { ACESSORIOS_ITENS, type Acessorios, type Checklist } from "@/lib/aparelhos/checklist"
 import { validateImei } from "@/lib/aparelhos/imei"
 import { rotuloPrazo } from "@/lib/aparelhos/warranty"
+import { useReiniciarAoAbrir } from "./use-reiniciar-ao-abrir"
 import { listFornecedores } from "@/app/actions/cadastros"
 import { ApiError, apiAparelhos, reduzirFoto, type AparelhoDTO, type AparelhoPermissions, type PoliticaAparelhos } from "./api"
 import { ChecklistEditor, FieldLabel, ImeiInput, brl, inputCls } from "./parts"
@@ -202,8 +203,8 @@ export function AparelhoFormDialog({ open, onOpenChange, mode, storeId, perms, p
   const editing = mode.kind === "editar"
   const origem = mode.kind === "novo" ? mode.origem ?? "cadastro_manual" : undefined
 
-  useEffect(() => {
-    if (!open) return
+  // Só ao abrir: um recarregamento do resumo (nova identidade de `politica`) não zera o que foi digitado.
+  useReiniciarAoAbrir(open, () => {
     setLiberar(false); setConferenciaFonte(""); setFornecedorId("")
     if (mode.kind === "editar") {
       const a = mode.aparelho
@@ -221,7 +222,7 @@ export function AparelhoFormDialog({ open, onOpenChange, mode, storeId, perms, p
     if (origem === "fornecedor" || origem === "lote") {
       listFornecedores(storeId).then((l) => setFornecedores(l.map((f) => ({ id: f.id, name: f.nome })))).catch(() => setFornecedores([]))
     }
-  }, [open, mode, politica, storeId, origem])
+  })
 
   const set = (p: Partial<AparelhoDraft>) => setD((cur) => ({ ...cur, ...p }))
 

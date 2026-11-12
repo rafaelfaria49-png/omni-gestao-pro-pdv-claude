@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Loader2, Printer } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -12,6 +12,7 @@ import { formatImei } from "@/lib/aparelhos/imei"
 import { abrirDocumento, apiAparelhos, type AparelhoPermissions, type PoliticaAparelhos } from "./api"
 import { AparelhoCampos, draftParaPayload, draftVazio, validarDraft, type AparelhoDraft } from "./AparelhoFormDialog"
 import { FieldLabel, brl, inputCls } from "./parts"
+import { useReiniciarAoAbrir } from "./use-reiniciar-ao-abrir"
 
 const PASSOS = ["Vendedor", "Aparelho", "Valor e origem", "Revisão"] as const
 const FORMAS = [["pix", "Pix"], ["dinheiro", "Dinheiro"], ["transferencia", "Transferência"], ["credito_loja", "Crédito na loja"], ["abatimento_venda", "Abatimento em venda"], ["outro", "Outro"]] as const
@@ -42,11 +43,11 @@ export function CompraClienteDialog({ open, onOpenChange, storeId, perms, politi
   const [saving, setSaving] = useState(false)
   const [feito, setFeito] = useState<{ id: string; protocolo: string } | null>(null)
 
-  useEffect(() => {
-    if (!open) return
+  // Só ao abrir: o `onDone()` recarrega o resumo e a política volta com nova identidade.
+  useReiniciarAoAbrir(open, () => {
     setPasso(0); setNome(""); setDoc(""); setTelefone(""); setD(draftVazio(politica)); setValor(""); setForma("pix"); setPago(false)
     setDocTipo("declaracao_procedencia"); setDocNumero(""); setObs(""); setFeito(null)
-  }, [open, politica])
+  })
 
   const valorNum = Number(valor.replace(/\./g, "").replace(",", ".")) || 0
 

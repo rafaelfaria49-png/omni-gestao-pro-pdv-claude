@@ -16,6 +16,7 @@ import {
   abrirDocumento, apiAparelhos, ApiError, type AparelhoDTO, type AquisicaoItem, type Detalhe, type GarantiaItem, type HistoricoItem, type Lista, type Resumo,
 } from "./api"
 import { AparelhoFormDialog } from "./AparelhoFormDialog"
+import { useReiniciarAoAbrir } from "./use-reiniciar-ao-abrir"
 import { AparelhoFichaDialog } from "./AparelhoFichaDialog"
 import { CompraClienteDialog } from "./CompraClienteDialog"
 import { CondicaoPill, EmptyState, FieldLabel, Pill, StatusPill, brl, dataBr, dataHoraBr, inputCls, origemLabel } from "./parts"
@@ -463,11 +464,11 @@ function PoliticaDialog({ open, onOpenChange, storeId, resumo, onSaved }: { open
   const [aprov, setAprov] = useState(true)
   const [conf, setConf] = useState(true)
   const [saving, setSaving] = useState(false)
-  useEffect(() => {
-    if (!open) return
+  // Só ao abrir: recarregar o resumo com o diálogo aberto não descarta a edição em curso.
+  useReiniciarAoAbrir(open, () => {
     setPresets(p.presetsContratuaisDias.join(", ")); setPadrao(p.contratualPadraoDias); setMax(p.contratualMaxDias); setCond(p.condicoesTermo)
     setAprov(p.aquisicaoExigeAprovacao); setConf(p.liberacaoExigeConferencia)
-  }, [open, p])
+  })
   async function salvar() {
     setSaving(true)
     try {
