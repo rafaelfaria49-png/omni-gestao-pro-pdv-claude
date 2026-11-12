@@ -3,7 +3,8 @@
  * contador de emissões: NUNCA cria venda, garantia ou movimento de estoque.
  */
 import { prisma } from "@/lib/prisma"
-import { fail, registrarEmissaoDocumento, type AparelhoCtx, type Fail } from "./service"
+import { fail, registrarEmissaoDocumento, titulosDasAquisicoes, type AparelhoCtx, type Fail } from "./service"
+import { situacaoPagamento } from "./financeiro"
 import {
   pagamentosDoPayload, renderComprovanteVenda, renderProtocoloAquisicao, renderTermoEntrega, renderTermoGarantia,
   type DocFormato, type DocTipo, type GarantiaSnapshot,
@@ -58,7 +59,8 @@ export async function documentoDaAquisicao(ctx: AparelhoCtx, aquisicaoId: string
     loja: { nome: aq.store.name, cnpj: aq.store.cnpj, telefone: aq.store.phone },
     vendedor: { nome: aq.cliente?.name || aq.vendedorNome || aq.fornecedor?.name || "", documentoMascarado: aq.vendedorDocMascarado },
     documentoOrigem: `${origemLabel[aq.documentoOrigemTipo] ?? aq.documentoOrigemTipo}${aq.documentoOrigemNumero ? ` nº ${aq.documentoOrigemNumero}` : ""}`,
-    valorTotal: aq.valorTotal, formaPagamento: aq.formaPagamento, pagamentoStatus: aq.pagamentoStatus,
+    valorTotal: aq.valorTotal, formaPagamento: aq.formaPagamento,
+    pagamentoStatus: situacaoPagamento(aq, (await titulosDasAquisicoes(db, ctx.storeId, [aq.id])).get(aq.id)),
     aparelhos: aq.aparelhos.map((u) => {
       const r = resumoChecklist(sanitizeChecklist(u.checklist))
       return {

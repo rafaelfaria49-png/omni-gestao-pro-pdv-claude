@@ -49,8 +49,21 @@ export async function resolveAparelhoApi(
       ),
     }
   }
+  // Base sem a migration de aparelhos (ex.: código publicado antes do apply): falha explícita, nunca 500.
+  if (!(await tabelasAparelhosInstaladas())) {
+    return { ok: false, response: NextResponse.json({ ok: false, code: "APARELHOS_NAO_INSTALADO", error: "Aparelhos por IMEI ainda não foi instalado no banco desta implantação. Procure o administrador." }, { status: 503 }) }
+  }
   const perms = aparelhoPermissionsForRole(session.user.role, { platform: isPlatformSession(session) })
   return { ok: true, ctx: { storeId, actorId: String(session.user.id), actorLabel: getOperatorLabelFromSession(session), perms } }
+}
+
+let instalado = false
+/** Só memoriza o positivo: depois do apply da migration passa a valer sem reiniciar. */
+async function tabelasAparelhosInstaladas(): Promise<boolean> {
+  if (instalado) return true
+  const r = await prisma.$queryRaw<Array<{ t: string | null }>>`SELECT to_regclass('public.aparelhos_fisicos')::text AS t`
+  instalado = !!r[0]?.t
+  return instalado
 }
 
 export function failResponse(f: Fail): NextResponse {

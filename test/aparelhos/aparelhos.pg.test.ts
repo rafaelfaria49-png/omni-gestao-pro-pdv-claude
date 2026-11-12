@@ -476,3 +476,99 @@ describe("Regressões da 2ª rodada da revisão", () => {
     expect(av.dataEntrega.toISOString().slice(0, 10)).toBe(hoje)
   })
 })
+
+describe("Financeiro da compra de cliente (GOAL 002 — contrato canônico Contas a Pagar)", () => {
+  const GERENTE_A2 = ctx(LOJA_A, "GERENTE", "gerente-a2")
+  const compraFin = (valorTotal: number, over: Record<string, unknown> = {}) => ({
+    tipo: "compra_cliente", vendedorNome: "Carla Vendedora", vendedorDocumento: "529.982.247-25",
+    documentoOrigemTipo: "declaracao_procedencia", formaPagamento: "pix", valorTotal,
+    aparelhos: [device({ custoAquisicao: 0, despesas: 0, precoVenda: 2600 })], ...over,
+  })
+  const titulosDe = (aqId: string) => db.contaPagarTitulo.findMany({ where: { storeId: LOJA_A, localKey: `pagar:manual:${LOJA_A}:aparelho-aquisicao-${aqId}` } })
+
+  it("aprovação cria UM título pendente na mesma transação; replay e aprovações concorrentes não duplicam", async () => {
+    const aq = ok(await svc.criarAquisicao(VENDEDOR_A, compraFin(1800, { pagamentoStatus: "pago" }), D))
+    // Cliente não decide situação de pagamento: "pago" enviado é ignorado; sem obrigação antes da aprovação.
+    expect((await db.aparelhoAquisicao.findUniqueOrThrow({ where: { id: aq.aquisicao.id } })).pagamentoStatus).toBe("pendente")
+    expect(await titulosDe(aq.aquisicao.id)).toHaveLength(0)
+    const movAntes = await db.movimentacaoFinanceira.count({ where: { storeId: LOJA_A } })
+    const [r1, r2] = await Promise.all([
+      svc.decidirAquisicao(GERENTE_A, aq.aquisicao.id, { decisao: "aprovar" }, D),
+      svc.decidirAquisicao(GERENTE_A2, aq.aquisicao.id, { decisao: "aprovar" }, D),
+    ])
+    expect([r1.ok, r2.ok]).toEqual([true, true]) // um aprova, o outro é replay idempotente
+    ok(await svc.decidirAquisicao(ADMIN_A, aq.aquisicao.id, { decisao: "aprovar" }, D))
+    const t = await titulosDe(aq.aquisicao.id)
+    expect(t).toHaveLength(1)
+    expect([t[0]!.status, t[0]!.valor, t[0]!.numeroDocumento]).toEqual(["pendente", 1800, expect.stringMatching(/^AQ-\d{4}-\d{4}$/)])
+    expect((t[0]!.payload as { metadata?: { aparelhoAquisicaoId?: string } }).metadata?.aparelhoAquisicaoId).toBe(aq.aquisicao.id)
+    // Sem movimento de dinheiro inventado: nenhuma saída financeira nasce da aprovação.
+    expect(await db.movimentacaoFinanceira.count({ where: { storeId: LOJA_A } })).toBe(movAntes)
+    const lista = ok(await svc.listarAquisicoes(GERENTE_A, {}, D))
+    expect(lista.itens.find((i) => i.id === aq.aquisicao.id)?.pagamentoStatus).toBe("a_pagar")
+  })
+
+  it("pagamento efetivo só pelo fluxo canônico de Contas a Pagar; a situação exibida acompanha o título", async () => {
+    const { liquidarContaPagar } = await import("@/lib/financeiro/services/contas-pagar-service")
+    const aq = ok(await svc.criarAquisicao(VENDEDOR_A, compraFin(950), D))
+    ok(await svc.decidirAquisicao(GERENTE_A, aq.aquisicao.id, { decisao: "aprovar" }, D))
+    const lk = `pagar:manual:${LOJA_A}:aparelho-aquisicao-${aq.aquisicao.id}`
+    expect(await liquidarContaPagar({ storeId: LOJA_B, localKey: lk })).toMatchObject({ ok: false, reason: "not_found" }) // outra loja não enxerga
+    expect(await liquidarContaPagar({ storeId: LOJA_A, localKey: lk, userLabel: "Financeiro QA" })).toMatchObject({ ok: true })
+    expect(await liquidarContaPagar({ storeId: LOJA_A, localKey: lk })).toMatchObject({ ok: true }) // idempotente
+    const t = await titulosDe(aq.aquisicao.id)
+    expect([t.length, t[0]!.status]).toEqual([1, "pago"])
+    const hist = (t[0]!.payload as { historico?: Array<{ tipo: string }> }).historico ?? []
+    expect(hist.filter((h) => h.tipo === "liquidacao")).toHaveLength(1)
+    const lista = ok(await svc.listarAquisicoes(GERENTE_A, {}, D))
+    expect(lista.itens.find((i) => i.id === aq.aquisicao.id)?.pagamentoStatus).toBe("pago")
+  })
+
+  it("recusada e pendente não geram obrigação; crédito na loja e abatimento são recusados sem efeito", async () => {
+    const recusada = ok(await svc.criarAquisicao(VENDEDOR_A, compraFin(700), D))
+    ok(await svc.decidirAquisicao(GERENTE_A, recusada.aquisicao.id, { decisao: "recusar", motivo: "Sem procedência" }, D))
+    expect(await titulosDe(recusada.aquisicao.id)).toHaveLength(0)
+    expect(await svc.decidirAquisicao(GERENTE_A, recusada.aquisicao.id, { decisao: "aprovar" }, D)).toMatchObject({ ok: false, code: "AQUISICAO_DECIDIDA" })
+    const pendente = ok(await svc.criarAquisicao(VENDEDOR_A, compraFin(650), D))
+    expect(await titulosDe(pendente.aquisicao.id)).toHaveLength(0)
+    expect(ok(await svc.listarAquisicoes(GERENTE_A, {}, D)).itens.find((i) => i.id === pendente.aquisicao.id)?.pagamentoStatus).toBe("aguardando_aprovacao")
+    const antes = await db.aparelhoAquisicao.count({ where: { storeId: LOJA_A } })
+    for (const forma of ["credito_loja", "abatimento_venda"]) {
+      expect(await svc.criarAquisicao(VENDEDOR_A, compraFin(400, { formaPagamento: forma }), D)).toMatchObject({ ok: false, code: "PAGAMENTO_NAO_INTEGRADO" })
+    }
+    expect(await svc.criarAquisicao(VENDEDOR_A, compraFin(-1), D)).toMatchObject({ ok: false })
+    expect(await db.aparelhoAquisicao.count({ where: { storeId: LOJA_A } })).toBe(antes)
+  })
+
+  it("falha na criação do título desfaz a aprovação inteira (atomicidade)", async () => {
+    const aq = ok(await svc.criarAquisicao(VENDEDOR_A, compraFin(1200), D))
+    const lk = `pagar:manual:${LOJA_A}:aparelho-aquisicao-${aq.aquisicao.id}`
+    // Título com a mesma chave em OUTRA loja não colide (chave é por loja); força falha com CHECK temporário.
+    await db.$executeRawUnsafe(`ALTER TABLE "contas_pagar_titulos" ADD CONSTRAINT "qa_falha_titulo" CHECK ("localKey" <> '${lk.replace(/'/g, "''")}') NOT VALID`)
+    try {
+      expect((await svc.decidirAquisicao(GERENTE_A, aq.aquisicao.id, { decisao: "aprovar" }, D)).ok).toBe(false)
+    } catch { /* erro bruto também é falha aceitável */ } finally {
+      await db.$executeRawUnsafe(`ALTER TABLE "contas_pagar_titulos" DROP CONSTRAINT "qa_falha_titulo"`)
+    }
+    const depois = await db.aparelhoAquisicao.findUniqueOrThrow({ where: { id: aq.aquisicao.id }, include: { aparelhos: true } })
+    expect([depois.status, depois.aparelhos[0]!.propriedade]).toEqual(["aguardando_aprovacao", "aguardando_aquisicao"])
+    expect(await titulosDe(aq.aquisicao.id)).toHaveLength(0)
+  })
+})
+
+describe("Venda mista e compatibilidade (GOAL 002)", () => {
+  it("aparelho + capinha + película numa venda: cada linha baixa uma vez e só o aparelho gera garantia", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Mista" })
+    const mk = (name: string, sku: string) => db.produto.create({ data: { storeId: LOJA_A, name, sku: `${sku}-${sufixo}`, price: 50, stock: 5 } })
+    const capa = await mk("Capinha QA", "CAPA"), pelicula = await mk("Película QA", "PEL")
+    const base = saleFor(u)
+    const acess = [capa, pelicula].map((p) => ({ inventoryId: p.id, produtoId: p.id, name: p.name, quantity: 1, unitPrice: 50, lineTotal: 50 }))
+    const sale = { ...base, total: u.precoVenda + 100, paymentBreakdown: { pix: u.precoVenda + 100 }, lines: [...base.lines!, ...acess] } as SalePayload
+    await vender(LOJA_A, sale)
+    await vender(LOJA_A, sale) // retry do mesmo pedido
+    expect((await db.produto.findUniqueOrThrow({ where: { id: capa.id } })).stock).toBe(4)
+    expect((await db.produto.findUniqueOrThrow({ where: { id: pelicula.id } })).stock).toBe(4)
+    expect(await db.aparelhoVenda.count({ where: { aparelhoId: u.id } })).toBe(1)
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("vendido")
+  })
+})

@@ -7,6 +7,7 @@
  * é CSS inválido (Chromium descarta e pagina em Letter).
  */
 import { formatDateKeyBr, rotuloPrazo } from "./warranty"
+import { SITUACAO_PAGAMENTO_LABEL, type SituacaoPagamentoAquisicao } from "./financeiro"
 
 export type DocTipo = "termo_garantia" | "comprovante_venda" | "termo_entrega" | "protocolo_aquisicao"
 export type DocFormato = "a4" | "80mm"
@@ -212,7 +213,7 @@ ${pendente ? `<div class="rascunho">${a.status === "recusada" ? "AQUISIÇÃO REC
 <table><tr><th>Operação</th><td>${esc(TIPO_AQ[a.tipo] ?? a.tipo)} — ${formatDateKeyBr(a.dataKey)}</td></tr>
 <tr><th>Vendedor</th><td>${esc(a.vendedor.nome)}${a.vendedor.documentoMascarado ? ` — ${esc(a.vendedor.documentoMascarado)}` : ""}</td></tr>
 <tr><th>Origem</th><td>${esc(a.documentoOrigem)}</td></tr>
-<tr><th>Valor</th><td>${brl(a.valorTotal)} — ${esc(FORMA[a.formaPagamento] ?? a.formaPagamento)} (${a.pagamentoStatus === "pago" ? "pago" : "pagamento pendente"})</td></tr></table>
+<tr><th>Valor</th><td>${brl(a.valorTotal)} — ${esc(FORMA[a.formaPagamento] ?? a.formaPagamento)} (${esc(SITUACAO_PAGAMENTO_LABEL[a.pagamentoStatus as SituacaoPagamentoAquisicao] ?? "pagamento pendente")})</td></tr></table>
 <h2>Aparelhos</h2>
 ${a.aparelhos.map((x) => `<table><tr><th>${esc(x.codigoInterno)}</th><td>${esc(x.descricao)} — ${esc(x.condicao)}</td></tr>
 ${x.imei1 ? `<tr><th>IMEI 1</th><td>${esc(x.imei1)}</td></tr>` : ""}${x.imei2 ? `<tr><th>IMEI 2</th><td>${esc(x.imei2)}</td></tr>` : ""}${x.serial ? `<tr><th>Série</th><td>${esc(x.serial)}</td></tr>` : ""}

@@ -15,7 +15,8 @@ import { FieldLabel, brl, inputCls } from "./parts"
 import { useReiniciarAoAbrir } from "./use-reiniciar-ao-abrir"
 
 const PASSOS = ["Vendedor", "Aparelho", "Valor e origem", "Revisão"] as const
-const FORMAS = [["pix", "Pix"], ["dinheiro", "Dinheiro"], ["transferencia", "Transferência"], ["credito_loja", "Crédito na loja"], ["abatimento_venda", "Abatimento em venda"], ["outro", "Outro"]] as const
+// Crédito na loja / abatimento em venda: sem contrato canônico de liquidação → fora da lista (o servidor também recusa).
+const FORMAS = [["pix", "Pix"], ["dinheiro", "Dinheiro"], ["transferencia", "Transferência"], ["outro", "Outro"]] as const
 const DOCS = [["declaracao_procedencia", "Declaração de procedência (assinada no protocolo)"], ["nota_fiscal", "Nota fiscal de compra original"], ["recibo", "Recibo"], ["outro", "Outro documento"]] as const
 
 function cpfValido(doc: string): boolean {
@@ -36,7 +37,6 @@ export function CompraClienteDialog({ open, onOpenChange, storeId, perms, politi
   const [d, setD] = useState<AparelhoDraft>(() => draftVazio(politica))
   const [valor, setValor] = useState("")
   const [forma, setForma] = useState("pix")
-  const [pago, setPago] = useState(false)
   const [docTipo, setDocTipo] = useState("declaracao_procedencia")
   const [docNumero, setDocNumero] = useState("")
   const [obs, setObs] = useState("")
@@ -45,7 +45,7 @@ export function CompraClienteDialog({ open, onOpenChange, storeId, perms, politi
 
   // Só ao abrir: o `onDone()` recarrega o resumo e a política volta com nova identidade.
   useReiniciarAoAbrir(open, () => {
-    setPasso(0); setNome(""); setDoc(""); setTelefone(""); setD(draftVazio(politica)); setValor(""); setForma("pix"); setPago(false)
+    setPasso(0); setNome(""); setDoc(""); setTelefone(""); setD(draftVazio(politica)); setValor(""); setForma("pix")
     setDocTipo("declaracao_procedencia"); setDocNumero(""); setObs(""); setFeito(null)
   })
 
@@ -79,7 +79,7 @@ export function CompraClienteDialog({ open, onOpenChange, storeId, perms, politi
         method: "POST",
         body: {
           tipo: "compra_cliente", vendedorNome: nome, vendedorDocumento: doc, documentoOrigemTipo: docTipo, documentoOrigemNumero: docNumero,
-          formaPagamento: forma, pagamentoStatus: pago ? "pago" : "pendente", valorTotal: valorNum,
+          formaPagamento: forma, valorTotal: valorNum,
           observacoes: [obs, telefone && `Telefone do vendedor: ${telefone}`].filter(Boolean).join("\n"), aparelhos: [payload],
         },
       })
@@ -126,9 +126,9 @@ export function CompraClienteDialog({ open, onOpenChange, storeId, perms, politi
             <AparelhoCampos d={d} set={(p) => setD((c) => ({ ...c, ...p }))} perms={perms} politica={politica} mostrarCusto={false} idPrefix="cc" />
           ) : passo === 2 ? (
             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="min-w-0 space-y-1.5"><FieldLabel htmlFor="cc-valor" required>Valor pago ao cliente</FieldLabel><input id="cc-valor" inputMode="decimal" className={inputCls} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" /></div>
+              <div className="min-w-0 space-y-1.5"><FieldLabel htmlFor="cc-valor" required>Valor combinado com o cliente</FieldLabel><input id="cc-valor" inputMode="decimal" className={inputCls} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" /></div>
               <div className="min-w-0 space-y-1.5"><FieldLabel htmlFor="cc-forma" required>Forma de pagamento</FieldLabel><select id="cc-forma" className={inputCls} value={forma} onChange={(e) => setForma(e.target.value)}>{FORMAS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
-              <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-primary" checked={pago} onChange={(e) => setPago(e.target.checked)} />Pagamento já realizado</label>
+              <p className="text-xs text-muted-foreground sm:col-span-2">O pagamento é feito no Financeiro, em Contas a Pagar: a aprovação da compra gera o título, e só a baixa lá registra a saída do dinheiro.</p>
               <p className="text-xs text-muted-foreground sm:col-span-2">Este registro não lança pagamento no Financeiro nem no caixa. Faça a saída pelo fluxo financeiro da loja.</p>
               <div className="min-w-0 space-y-1.5 sm:col-span-2"><FieldLabel htmlFor="cc-doc-tipo" required>Documento de origem</FieldLabel><select id="cc-doc-tipo" className={inputCls} value={docTipo} onChange={(e) => setDocTipo(e.target.value)}>{DOCS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
               {docTipo !== "declaracao_procedencia" && <div className="min-w-0 space-y-1.5 sm:col-span-2"><FieldLabel htmlFor="cc-doc-num" required>Número do documento</FieldLabel><input id="cc-doc-num" className={inputCls} value={docNumero} onChange={(e) => setDocNumero(e.target.value)} /></div>}
@@ -140,7 +140,7 @@ export function CompraClienteDialog({ open, onOpenChange, storeId, perms, politi
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Aparelho</dt><dd>{[d.marca, d.modelo, d.armazenamento, d.cor].filter(Boolean).join(" ")} · {APARELHO_CONDICAO_LABEL[d.condicao as AparelhoCondicao]}</dd></div>
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">IMEI</dt><dd className="font-mono">{d.imei1 ? formatImei(d.imei1) : d.serial}</dd></div>
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Conferência</dt><dd>{r.aprovados} aprovados · {r.falhas} com falha · {r.naoTestados} não testados</dd></div>
-              <div className="min-w-0"><dt className="text-xs text-muted-foreground">Valor</dt><dd className="font-semibold">{brl(valorNum)} · {FORMAS.find((f) => f[0] === forma)?.[1]} · {pago ? "pago" : "pendente"}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-muted-foreground">Valor</dt><dd className="font-semibold">{brl(valorNum)} · {FORMAS.find((f) => f[0] === forma)?.[1]} · a pagar no Financeiro após a aprovação</dd></div>
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Origem</dt><dd>{DOCS.find((x) => x[0] === docTipo)?.[1]}{docNumero && ` nº ${docNumero}`}</dd></div>
             </dl>
           )}

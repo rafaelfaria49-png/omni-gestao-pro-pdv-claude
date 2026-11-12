@@ -23,6 +23,9 @@ import { resumoChecklist, sanitizeAcessorios, sanitizeChecklist } from "./checkl
 import { getPoliticaTx, nextSequenceTx, politicaFromRow, type PoliticaAparelhos } from "./policy"
 import { maskDocumento, sha256Json } from "./sale-hook-shared"
 import { dateKeyToDb, localDateKey, validateContratualDias } from "./warranty"
+import {
+  FORMAS_PAGAMENTO_AQUISICAO, FORMAS_PAGAMENTO_NAO_INTEGRADAS, contaPagarLocalKeyDaAquisicao, registrarObrigacaoAquisicaoTx, situacaoPagamento,
+} from "./financeiro"
 
 export type AparelhoCtx = { storeId: string; actorId: string; actorLabel: string; perms: AparelhoPermissions }
 export type Fail = { ok: false; status: number; code: string; message: string; field?: string }
@@ -569,7 +572,6 @@ export async function cancelarReserva(ctx: AparelhoCtx, id: string, raw: unknown
 // ─── Aquisições ──────────────────────────────────────────────────────────────
 
 const TIPOS_AQUISICAO = ["compra_cliente", "fornecedor", "lote", "negociacao"] as const
-const FORMAS_PAGAMENTO = ["dinheiro", "pix", "transferencia", "credito_loja", "abatimento_venda", "outro"] as const
 const DOC_ORIGEM = ["declaracao_procedencia", "nota_fiscal", "recibo", "outro"] as const
 
 export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = prisma) {
@@ -584,7 +586,8 @@ export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = pr
   const documentoOrigemTipo = str(r.documentoOrigemTipo, 40)
   const documentoOrigemNumero = str(r.documentoOrigemNumero, 80)
   const formaPagamento = str(r.formaPagamento, 30)
-  const pagamentoStatus = r.pagamentoStatus === "pago" ? "pago" : "pendente"
+  // Situação de pagamento NÃO vem do cliente: só o Financeiro (Contas a Pagar) liquida.
+  const pagamentoStatus = "pendente"
   const valorTotal = num(r.valorTotal)
   const observacoes = str(r.observacoes, 1000)
   const itens = Array.isArray(r.aparelhos) ? r.aparelhos.slice(0, 50) : []
@@ -601,7 +604,10 @@ export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = pr
   if (documentoOrigemTipo !== "declaracao_procedencia" && !documentoOrigemNumero) {
     return fail(400, "ORIGEM_SEM_DOCUMENTO", "Informe o número do documento de origem.", "documentoOrigemNumero")
   }
-  if (!(FORMAS_PAGAMENTO as readonly string[]).includes(formaPagamento)) return fail(400, "VALIDACAO", "Selecione a forma de pagamento.", "formaPagamento")
+  if ((FORMAS_PAGAMENTO_NAO_INTEGRADAS as readonly string[]).includes(formaPagamento)) {
+    return fail(422, "PAGAMENTO_NAO_INTEGRADO", "Crédito na loja e abatimento em venda ainda não estão integrados ao Financeiro. Use Pix, dinheiro, transferência ou outro — o pagamento é feito em Contas a Pagar.", "formaPagamento")
+  }
+  if (!(FORMAS_PAGAMENTO_AQUISICAO as readonly string[]).includes(formaPagamento)) return fail(400, "VALIDACAO", "Selecione a forma de pagamento.", "formaPagamento")
   if (valorTotal === null || valorTotal < 0) return fail(400, "VALIDACAO", "Informe o valor da compra.", "valorTotal")
   if (itens.length === 0) return fail(400, "VALIDACAO", "Inclua ao menos um aparelho.")
   if (pessoaFisica && itens.length !== 1) return fail(400, "VALIDACAO", "Compra de cliente registra um aparelho por protocolo.")
@@ -726,13 +732,18 @@ export async function decidirAquisicao(ctx: AparelhoCtx, id: string, raw: unknow
     }
     if (decisao === "aprovar") {
       await tx.aparelhoAquisicao.update({ where: { id }, data: { status: "confirmada", aprovadaPor: ctx.actorLabel, aprovadaEm: new Date() } })
+      // Obrigação financeira na MESMA transação (Contas a Pagar, pendente). Pagar é no Financeiro.
+      const obrigacao = await registrarObrigacaoAquisicaoTx(tx, {
+        storeId: ctx.storeId, operador: ctx.actorLabel,
+        aquisicao: { id: aq.id, protocolo: aq.protocolo, tipo: aq.tipo, valorTotal: aq.valorTotal, formaPagamento: aq.formaPagamento, vendedorNome: aq.vendedorNome, fornecedorId: aq.fornecedorId },
+      })
       for (const u of aq.aparelhos) {
         if (u.status === "baixado") continue
         await tx.aparelhoFisico.update({ where: { id: u.id }, data: { propriedade: "loja", version: { increment: 1 } } })
         const encerradas = await tx.aparelhoVenda.updateMany({ where: { storeId: ctx.storeId, aparelhoId: u.id, status: "ativa" }, data: { status: "recomprada" } })
         await eventoTx(tx, ctx, u.id, "aquisicao_confirmada", u.status, u.status, { protocolo: aq.protocolo, valor: u.custoAquisicao, ...(encerradas.count ? { garantiaAnteriorEncerrada: true } : {}) })
       }
-      return { ok: true as const, aquisicao: { id, status: "confirmada" } }
+      return { ok: true as const, aquisicao: { id, status: "confirmada" }, contaPagar: obrigacao }
     }
     await tx.aparelhoAquisicao.update({ where: { id }, data: { status: "recusada", motivoRecusa: motivo, aprovadaPor: ctx.actorLabel, aprovadaEm: new Date() } })
     for (const u of aq.aparelhos) {
@@ -961,9 +972,22 @@ export async function detalheAparelho(ctx: AparelhoCtx, id: string, db: Db = pri
     eventos: u.eventos.map((e) => ({ id: e.id, tipo: e.tipo, deStatus: e.deStatus, paraStatus: e.paraStatus, dados: ctx.perms.verCusto ? e.dados : redactDados(e.dados), operador: e.operador, createdAt: e.createdAt })),
     fotos: u.fotos,
     vendas: u.vendas.map((v) => ({ ...v, cliente: v.cliente?.name ?? "" })),
-    aquisicao: u.aquisicao ? { ...u.aquisicao, valorTotal: ctx.perms.verCusto ? u.aquisicao.valorTotal : null, fornecedor: u.aquisicao.fornecedor?.name ?? "" } : null,
+    aquisicao: u.aquisicao ? {
+      ...u.aquisicao, valorTotal: ctx.perms.verCusto ? u.aquisicao.valorTotal : null, fornecedor: u.aquisicao.fornecedor?.name ?? "",
+      pagamentoStatus: situacaoPagamento(u.aquisicao, (await titulosDasAquisicoes(db, ctx.storeId, [u.aquisicao.id])).get(u.aquisicao.id)),
+    } : null,
     ordensServico: os,
   }
+}
+
+/** Título a pagar de cada aquisição (chave determinística), para exibir a situação real do pagamento. */
+export async function titulosDasAquisicoes(db: Db, storeId: string, ids: string[]): Promise<Map<string, { status: string }>> {
+  const out = new Map<string, { status: string }>()
+  if (ids.length === 0) return out
+  const byKey = new Map(ids.map((id) => [contaPagarLocalKeyDaAquisicao(storeId, id), id]))
+  const rows = await db.contaPagarTitulo.findMany({ where: { storeId, localKey: { in: [...byKey.keys()] } }, select: { localKey: true, status: true } })
+  for (const r of rows) { const id = r.localKey ? byKey.get(r.localKey) : undefined; if (id) out.set(id, { status: r.status }) }
+  return out
 }
 
 function redactDados(d: unknown): unknown {
@@ -983,6 +1007,7 @@ export async function listarAquisicoes(ctx: AparelhoCtx, f: { status?: string; p
       include: { aparelhos: { select: { id: true, codigoInterno: true, marca: true, modelo: true, armazenamento: true, cor: true, imei1: true, status: true } }, fornecedor: { select: { name: true } }, cliente: { select: { name: true } } },
     }),
   ])
+  const titulos = await titulosDasAquisicoes(db, ctx.storeId, rows.map((a) => a.id))
   return {
     ok: true as const,
     total,
@@ -992,7 +1017,7 @@ export async function listarAquisicoes(ctx: AparelhoCtx, f: { status?: string; p
       vendedorDocMascarado: a.vendedorDocMascarado,
       documentoOrigemTipo: a.documentoOrigemTipo, documentoOrigemNumero: a.documentoOrigemNumero,
       valorTotal: ctx.perms.verCusto || a.createdBy === ctx.actorId ? a.valorTotal : null,
-      formaPagamento: a.formaPagamento, pagamentoStatus: a.pagamentoStatus,
+      formaPagamento: a.formaPagamento, pagamentoStatus: situacaoPagamento(a, titulos.get(a.id)),
       criadoPorMim: a.createdBy === ctx.actorId,
       aprovadaPor: a.aprovadaPor, aprovadaEm: a.aprovadaEm, motivoRecusa: a.motivoRecusa, createdAt: a.createdAt,
       aparelhos: a.aparelhos.map((u) => ({ ...u, imei1: ctx.perms.dadosSensiveis ? u.imei1 : maskImei(u.imei1) })),

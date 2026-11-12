@@ -17,6 +17,7 @@ import {
 } from "./api"
 import { AparelhoFormDialog } from "./AparelhoFormDialog"
 import { useReiniciarAoAbrir } from "./use-reiniciar-ao-abrir"
+import { SITUACAO_PAGAMENTO_LABEL, type SituacaoPagamentoAquisicao } from "@/lib/aparelhos/financeiro"
 import { AparelhoFichaDialog } from "./AparelhoFichaDialog"
 import { CompraClienteDialog } from "./CompraClienteDialog"
 import { CondicaoPill, EmptyState, FieldLabel, Pill, StatusPill, brl, dataBr, dataHoraBr, inputCls, origemLabel } from "./parts"
@@ -315,7 +316,7 @@ function Compras({ storeId, reload, perms, onCompra, onFicha, onChanged }: { sto
     setBusy(id)
     try {
       await apiAparelhos(storeId, `/aquisicoes/${id}`, { method: "POST", body: { decisao, motivo } })
-      toast.success(decisao === "aprovar" ? "Compra aprovada. Confira o IMEI e libere o aparelho para venda." : "Compra recusada.")
+      toast.success(decisao === "aprovar" ? "Compra aprovada. O valor foi lançado em Contas a Pagar (pague pelo Financeiro). Confira o IMEI e libere o aparelho para venda." : "Compra recusada.")
       setRecusa(null); onChanged()
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
@@ -338,7 +339,7 @@ function Compras({ storeId, reload, perms, onCompra, onFicha, onChanged }: { sto
                 <div className="min-w-0 space-y-1">
                   <p className="flex min-w-0 flex-wrap items-center gap-2"><span className="font-mono text-sm font-semibold">{a.protocolo}</span><Pill tone={st.tone}>{st.label}</Pill></p>
                   <p className="text-sm text-foreground">{a.vendedor} {a.vendedorDocMascarado && <span className="text-muted-foreground">· {a.vendedorDocMascarado}</span>}</p>
-                  <p className="text-xs text-muted-foreground">{dataHoraBr(a.createdAt)} · {a.valorTotal !== null ? brl(a.valorTotal) : "valor restrito"} · {a.pagamentoStatus === "pago" ? "pago" : "pagamento pendente"}{a.aprovadaPor ? ` · decidido por ${a.aprovadaPor}` : ""}{a.motivoRecusa ? ` · ${a.motivoRecusa}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">{dataHoraBr(a.createdAt)} · {a.valorTotal !== null ? brl(a.valorTotal) : "valor restrito"} · {SITUACAO_PAGAMENTO_LABEL[a.pagamentoStatus as SituacaoPagamentoAquisicao] ?? "pagamento pendente"}{a.aprovadaPor ? ` · decidido por ${a.aprovadaPor}` : ""}{a.motivoRecusa ? ` · ${a.motivoRecusa}` : ""}</p>
                   <ul className="pt-1 text-sm">{a.aparelhos.map((u) => (
                     <li key={u.id}><button type="button" className="text-left text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring" onClick={() => onFicha(u.id)}>{u.codigoInterno} · {[u.marca, u.modelo, u.armazenamento].filter(Boolean).join(" ")}</button> <span className="font-mono text-xs text-muted-foreground">{u.imei1}</span></li>
                   ))}</ul>
