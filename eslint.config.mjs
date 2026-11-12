@@ -14,6 +14,8 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "prisma/migrations/**",
+      // Cliente Windows (Electron): pacote separado, validado por tsc estrito + testes próprios.
+      "apps/desktop/**",
     ],
   },
   ...nextCoreWebVitals,
