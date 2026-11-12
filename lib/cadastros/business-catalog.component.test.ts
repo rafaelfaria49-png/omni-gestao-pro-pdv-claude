@@ -26,7 +26,7 @@ vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
   resource: (key: Parameters<typeof resolveBusinessResource>[1]) => resolveBusinessResource(h.capabilities, key, undefined, h.permitted),
 }) }))
-vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted } }) }))
+vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted && h.deviceCatalog } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-a" }) }))
 vi.mock("@/components/configuracoes-v3/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -260,6 +260,8 @@ describe("Editor oficial de configuração", () => {
     expect(row.textContent).toContain("Ativação manual")
     expect(row.textContent).not.toContain("Sugestão do ramo")
     expect(row.textContent).toMatch(/Desligado por padrão em todos os ramos/)
+    // A explicação é descrição, não nome: o nome acessível continua curto.
+    expect(screen.getByRole("checkbox", { name: /^Aparelhos por IMEI \(compra, venda e garantia\)\s*Ativação manual$/, description: /Desligado por padrão em todos os ramos/ })).toBe(box)
   })
   it("ligar aparelhos por IMEI grava só esse override explícito da unidade", async () => {
     h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
@@ -284,9 +286,12 @@ describe("Editor oficial de configuração", () => {
   it("sem liberação do catálogo de aparelhos a opção de IMEI não é oferecida", () => {
     h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
     h.deviceCatalog = false
-    h.permitted = false
     render(React.createElement(BusinessResourcesCard))
     expect(screen.queryByRole("checkbox", { name: /Aparelhos por IMEI/ })).toBeNull()
+    // Controle positivo: o formulário renderizou e só os recursos de aparelho saíram.
+    expect(screen.getByRole("checkbox", { name: /Produtos por peso/ })).toBeTruthy()
+    expect(screen.getByRole("checkbox", { name: /Assistência técnica/ })).toBeTruthy()
+    expect(screen.queryByRole("checkbox", { name: /Acessórios para aparelhos/ })).toBeNull()
   })
   it("escolha não salva de IMEI na loja A não vaza para a loja B", () => {
     const ui = render(React.createElement(BusinessResourcesCard))

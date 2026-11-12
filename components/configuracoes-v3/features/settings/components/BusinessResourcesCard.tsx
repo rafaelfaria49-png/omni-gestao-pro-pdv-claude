@@ -102,11 +102,13 @@ function BusinessResourcesForm() {
             return <label key={item.key} className="flex cursor-pointer items-start gap-3 py-3">
               <input type="checkbox" checked={state.requested} disabled={disabled}
                 onChange={(event) => toggle(item.key, event.target.checked)}
+                aria-describedby={state.source === "manual" ? `business-resource-${item.key}-hint` : undefined}
                 className="mt-1 h-4 w-4 shrink-0 accent-primary" />
               <span className="min-w-0 text-sm"><span className="font-medium">{item.label}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{state.source === "explicit" ? "Escolha explícita" : state.source === "manual" ? "Ativação manual" : "Sugestão do ramo"}</span>
-                {state.source === "manual" && <span className="mt-1 block text-xs text-muted-foreground">
-                  Desligado por padrão em todos os ramos. Ligue somente nesta unidade, quando a loja for vender aparelhos.
+                {/* Fora do nome acessível da caixa; lido como descrição via aria-describedby. */}
+                {state.source === "manual" && <span id={`business-resource-${item.key}-hint`} aria-hidden="true" className="mt-1 block text-xs text-muted-foreground">
+                  Desligado por padrão em todos os ramos. Ative por unidade, apenas se a loja vender aparelhos.
                 </span>}
                 {item.stage === "preparation" && <span className="mt-1 block text-xs text-muted-foreground">
                   Preparação de cadastro. {item.key === "catalog.weight" ? "Venda fracionada e baixa em kg/g ainda indisponíveis; produtos por peso ficam bloqueados para venda." : "Estoque por combinação e venda de variações ainda indisponíveis."}
