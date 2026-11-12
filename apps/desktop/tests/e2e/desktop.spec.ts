@@ -246,26 +246,43 @@ test("atalhos do PDV chegam à página; F5 não recarrega; acorde do desktop abr
   await expect.poll(() => statusVisible(app)).toBe(false)
 })
 
-test("logout limpa Cache Storage do SW e cookie de sessão, preservando o resto", async () => {
+test("logout: cookie de A não ressuscita, B entra normalmente, caches de dados somem e vendas pendentes ficam", async () => {
   const page = await appPage(app)
   await page.click("#enter")
   await expect(page.locator("#page")).toHaveText("dashboard")
-  expect(await page.evaluate(() => (window as unknown as { __fillCache: () => Promise<number> }).__fillCache())).toBe(1)
+  expect(await page.evaluate(() => (window as unknown as { __fillCache: () => Promise<number> }).__fillCache())).toBe(3)
   await page.evaluate(() => localStorage.setItem("pdv-pendentes", "venda-offline-1"))
+  // Documento do usuário A aberto (cupom).
+  const popupPromise = app.waitForEvent("window")
+  await page.evaluate(() => (window as unknown as { __printPopup: () => string }).__printPopup())
+  await popupPromise
 
-  const cookieNames = () =>
+  const sessionCookie = () =>
     app.evaluate(async ({ session }, origin) => {
       const ses = session.fromPartition("persist:omnigestao-development")
-      return (await ses.cookies.get({ url: origin })).map((c) => c.name).sort()
+      return (await ses.cookies.get({ url: origin })).filter((c) => c.name !== "pref").map((c) => `${c.name}=${c.value}`)
     }, FIXTURE_ORIGIN)
-  expect(await cookieNames()).toEqual(["authjs.session-token", "pref"])
+  expect(await sessionCookie()).toEqual(["authjs.session-token=fake-jwt"])
 
   await page.click("#to-login")
   await expect(page.locator("#page")).toHaveText("login")
-  await expect.poll(cookieNames).toEqual(["pref"])
-  await expect.poll(() => page.evaluate(async () => (await caches.keys()).length)).toBe(0)
-  // Vendas pendentes do PDV (localStorage) nunca são apagadas pelo desktop.
+  await expect.poll(sessionCookie).toEqual([])
+  await expect
+    .poll(() => page.evaluate(async () => (await caches.keys()).sort()))
+    .toEqual(["workbox-precache-v2-http://127.0.0.1/"])
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
   expect(await page.evaluate(() => localStorage.getItem("pdv-pendentes"))).toBe("venda-offline-1")
+  expect(await app.evaluate(({ session }, origin) => session.fromPartition("persist:omnigestao-development").cookies.get({ url: origin }).then((c) => c.map((x) => x.name)), FIXTURE_ORIGIN)).toContain("pref")
+
+  // Corrida: resposta atrasada regrava o cookie do usuário A → a guarda remove.
+  await page.evaluate(() => fetch("/api/late"))
+  await page.waitForTimeout(500)
+  expect(await sessionCookie()).toEqual([])
+
+  // Usuário B envia o login (POST) → guarda desarma e o cookie de B permanece.
+  await page.evaluate(() => fetch("/api/login", { method: "POST" }))
+  await page.waitForTimeout(500)
+  expect(await sessionCookie()).toEqual(["authjs.session-token=user-B"])
 })
 
 test("download da mesma origem salva; câmera pede consentimento; serial negado", async () => {

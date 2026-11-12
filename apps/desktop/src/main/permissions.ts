@@ -1,8 +1,13 @@
 import { dialog, type BrowserWindow, type Session } from "electron"
 import { isSameAppOrigin } from "../shared/url-policy"
 
-/** Permissões concedidas sem pergunta à origem do app (mesmo comportamento do Chrome). */
-const SILENT_ALLOW = new Set(["clipboard-sanitized-write", "fullscreen"])
+/**
+ * Permissões concedidas sem pergunta à origem do app. Tela cheia só em Produção: em QA a barra
+ * de título é o que identifica o ambiente e não pode sumir.
+ */
+function silentAllow(production: boolean) {
+  return new Set(production ? ["clipboard-sanitized-write", "fullscreen"] : ["clipboard-sanitized-write"])
+}
 
 type MediaKind = "video" | "audio"
 
@@ -15,7 +20,9 @@ export function installPermissionPolicy(
   session: Session,
   appOrigin: string,
   getParent: () => BrowserWindow | null,
-): void {
+  production: boolean,
+): { reset: () => void } {
+  const SILENT_ALLOW = silentAllow(production)
   const granted = new Set<MediaKind>()
   const denied = new Set<MediaKind>()
 
@@ -78,4 +85,12 @@ export function installPermissionPolicy(
     event.preventDefault()
     callback()
   })
+
+  // Troca de usuário: a câmera/microfone liberados pelo anterior não passam para o próximo.
+  return {
+    reset: () => {
+      granted.clear()
+      denied.clear()
+    },
+  }
 }

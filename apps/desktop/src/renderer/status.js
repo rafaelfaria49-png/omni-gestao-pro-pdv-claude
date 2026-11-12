@@ -10,7 +10,7 @@
     offline: {
       title: "Sem conexão com o servidor",
       message:
-        "O computador está sem internet ou o servidor não respondeu. Vendas já confirmadas continuam salvas no servidor. O programa tenta de novo sozinho quando a rede voltar.",
+        "O computador está sem internet ou o servidor não respondeu. Vendas feitas sem conexão e ainda não enviadas ficam guardadas neste computador e são enviadas quando o PDV abrir de novo com internet — não desinstale nem limpe o programa agora. O programa tenta conectar sozinho.",
     },
     "server-error": {
       title: "O servidor respondeu com erro",

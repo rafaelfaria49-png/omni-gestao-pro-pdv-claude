@@ -12,9 +12,12 @@ describe("validateOriginForChannel", () => {
 
   it("QA nunca se passa por produção", () => {
     expect(() => validateOriginForChannel("qa", PRODUCTION_ORIGIN)).toThrow(/Produção/)
-    expect(validateOriginForChannel("qa", "https://omni-gestao-pro-git-abc-team.vercel.app")).toBe(
-      "https://omni-gestao-pro-git-abc-team.vercel.app",
-    )
+    const preview = "https://omni-gestao-ianimio1i-rafaelfaria49-4373s-projects.vercel.app"
+    expect(validateOriginForChannel("qa", preview)).toBe(preview)
+    // Preview de outro projeto/time na Vercel não é QA autorizado.
+    expect(() => validateOriginForChannel("qa", "https://omni-gestao-pro-git-abc-team.vercel.app")).toThrow()
+    expect(() => validateOriginForChannel("qa", "https://evil-rafaelfaria49-4373s-projects.vercel.app")).toThrow()
+    expect(() => validateOriginForChannel("qa", "https://omni-gestao--rafaelfaria49-4373s-projects.vercel.app.evil.com")).toThrow()
     expect(() => validateOriginForChannel("qa", "http://x.vercel.app")).toThrow(/https/)
     expect(() => validateOriginForChannel("qa", "https://evil.com")).toThrow()
     expect(() => validateOriginForChannel("qa", "https://vercel.app.evil.com")).toThrow()
@@ -58,6 +61,8 @@ describe("validateBuildConfig", () => {
 describe("windowTitle", () => {
   it("QA aparece identificado no título", () => {
     expect(windowTitle({ channel: "production", origin: PRODUCTION_ORIGIN })).toBe("OmniGestão Pro")
-    expect(windowTitle({ channel: "qa", origin: "https://x-git-y.vercel.app" })).toBe("OmniGestão Pro — QA (x-git-y.vercel.app)")
+    expect(windowTitle({ channel: "qa", origin: "https://omni-gestao-x-rafaelfaria49-4373s-projects.vercel.app" })).toBe(
+      "OmniGestão Pro — QA (omni-gestao-x-rafaelfaria49-4373s-projects.vercel.app)",
+    )
   })
 })

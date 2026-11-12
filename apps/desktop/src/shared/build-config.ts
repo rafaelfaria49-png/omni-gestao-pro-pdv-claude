@@ -23,6 +23,10 @@ export const PRODUCTION_ORIGIN = "https://omni-gestao-pro.vercel.app"
 /** Domínio legado: nunca pode ser carregado por nenhum canal. */
 export const FORBIDDEN_HOSTS = new Set(["omni-gestao-pi.vercel.app"])
 
+/** Previews de QA autorizados: só os deste projeto/time na Vercel. */
+export const QA_HOST_PREFIX = "omni-gestao-"
+export const QA_HOST_SUFFIX = "-rafaelfaria49-4373s-projects.vercel.app"
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"])
 
 export class BuildConfigError extends Error {}
@@ -62,8 +66,13 @@ export function validateOriginForChannel(channel: DesktopChannel, rawOrigin: unk
       if (url.origin === PRODUCTION_ORIGIN) {
         throw new BuildConfigError("canal qa não pode apontar para a origem de Produção")
       }
-      if (!url.hostname.endsWith(".vercel.app") || url.port !== "") {
-        throw new BuildConfigError("canal qa só aceita um preview https *.vercel.app")
+      if (
+        !url.hostname.startsWith(QA_HOST_PREFIX) ||
+        !url.hostname.endsWith(QA_HOST_SUFFIX) ||
+        url.hostname.length <= QA_HOST_PREFIX.length + QA_HOST_SUFFIX.length ||
+        url.port !== ""
+      ) {
+        throw new BuildConfigError(`canal qa só aceita preview ${QA_HOST_PREFIX}*${QA_HOST_SUFFIX}`)
       }
       return url.origin
     }

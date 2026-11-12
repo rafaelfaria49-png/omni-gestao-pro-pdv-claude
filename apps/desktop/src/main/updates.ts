@@ -31,7 +31,7 @@ export async function checkDesktopUpdate(config: DesktopBuildConfig, currentVers
       available: true,
       version: manifest.version,
       manifest,
-      message: `Versão ${manifest.version} disponível. Instale quando o caixa estiver livre — o programa não reinicia sozinho.`,
+      message: `Versão ${manifest.version} disponível${manifest.signed ? "" : " (NÃO assinada — só QA)"}. Instale quando o caixa estiver livre — o programa não reinicia sozinho. Confira o SHA-256 do instalador: ${manifest.sha256}`,
     }
   } catch (err) {
     return { available: false, message: `Não foi possível verificar atualização: ${(err as Error).message}` }

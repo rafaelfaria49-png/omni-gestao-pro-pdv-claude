@@ -10,7 +10,8 @@ Electron (Windows) ──HTTPS──> OmniGestão Pro na nuvem (Vercel) ──> 
 - Uma origem HTTPS fixada **no empacotamento** (`build-config.json` dentro do asar). Não há tela,
   argumento ou variável de ambiente que troque o servidor em tempo de execução.
 - Canais: `production` (só `https://omni-gestao-pro.vercel.app`), `qa` (só preview
-  `https://*.vercel.app`, nunca a origem de Produção; título e tela mostram "QA"),
+  `https://omni-gestao-*-rafaelfaria49-4373s-projects.vercel.app`, nunca a origem de Produção;
+  título, tela de status e selo âmbar na barra de tarefas mostram "QA"; tela cheia negada),
   `development` (só loopback; nunca vira instalador). O domínio legado `omni-gestao-pi` é recusado.
 - Perfis separados: Produção em `%AppData%\OmniGestão Pro`, QA em `%AppData%\OmniGestão Pro QA`.
 
@@ -43,16 +44,23 @@ node tests/packaged/smoke.mjs "<OmniGestaoPro.exe>"   # smoke do EXE real (só Q
 | Tela local | servida por `omni-app://` só na sessão dela; IPC aceito só desse frame (3 ações fixas) |
 | TLS | nenhum handler de certificado: erro de certificado bloqueia e é explicado |
 | Fuses | RunAsNode OFF · NODE_OPTIONS OFF · `--inspect` OFF · cookies criptografados · asar com verificação de integridade · só carrega do asar · file:// sem privilégios extras |
-| Depuração | Produção sai com código 1 se receber `--remote-debugging-port/pipe` ou `--inspect` |
+| Depuração | Produção sai com código 1 se receber `--remote-debugging-port/pipe` ou `--inspect`. Pacotes de QA aceitam porta de depuração e `OMNI_DESKTOP_TEST_USER_DATA` (smoke/E2E) — não usar QA com dados reais |
 | CSP | a do próprio site vale para a página remota; a tela local tem CSP estrita (`default-src 'none'`) |
 
 ## Logout e privacidade entre usuários
 
-Ao chegar em `/login` vindo de outra tela (logout ou sessão expirada) o desktop limpa o
-Cache Storage do Service Worker (o SW guarda GET `/api/*` por 24 h e serviria dados do usuário A
-ao B offline), o cache HTTP e o cookie `authjs.session-token` (defesa contra a corrida de
-logout conhecida). **Não** limpa localStorage/IndexedDB: lá ficam vendas do PDV pendentes de
-sincronização. A revogação definitiva no servidor continua dependendo da correção web (PR #345).
+Ao chegar em `/login` vindo de outra tela (logout ou sessão expirada) o desktop:
+
+1. remove o cookie `authjs.session-token` e **arma uma guarda**: se uma resposta atrasada regravar
+   o cookie (corrida conhecida, #342/#345), ele é removido de novo; a guarda desarma no primeiro
+   POST da tela de login (o próximo usuário entrando), então o cookie do novo usuário não é tocado;
+2. fecha janelas de documento abertas pelo usuário anterior e zera câmera/microfone liberados;
+3. apaga do Cache Storage os caches com dados (`apis`, `pages`, `pages-rsc*`, `next-data`…),
+   mantendo só o precache estático do PWA; limpa o cache HTTP.
+
+**Não** limpa localStorage/IndexedDB: lá ficam vendas do PDV pendentes de sincronização. Depois de
+uma troca de usuário, o catálogo offline do PDV precisa de uma abertura online para ser recarregado.
+A revogação definitiva no servidor continua dependendo da correção web (PR #345).
 
 ## Teclado
 
@@ -70,7 +78,9 @@ como o navegador.
 ## Offline (V1)
 
 O desktop não cria fila própria nem reenvia operações. Sem rede: mostra a tela "Sem conexão",
-tenta só **navegar** de novo quando a rede volta e preserva o que o PWA/PDV já guarda localmente.
+sonda o servidor (HEAD) com espera crescente de 5 s a 60 s e só então **navega** de novo.
+Vendas pendentes em localStorage/IndexedDB são preservadas; os caches de dados do SW são apagados
+na troca de usuário (ver acima).
 Funcionamento totalmente offline não é prometido nesta versão.
 
 ## Atualizações
@@ -78,7 +88,9 @@ Funcionamento totalmente offline não é prometido nesta versão.
 - Sistema web: atualiza sozinho a cada deploy, como no navegador.
 - Executável: novo instalador. A V1 só **avisa** (manifesto opcional na mesma origem, canal
   próprio, sha256, assinatura obrigatória em Produção). Não baixa, não instala e nunca reinicia
-  sozinho. Sem manifesto configurado, a verificação fica desligada e o "Sobre" diz isso.
+  sozinho. O "Sobre" mostra o SHA-256 publicado para o operador conferir o instalador baixado
+  (o desktop não baixa o arquivo, então não o verifica sozinho). Sem manifesto configurado, a
+  verificação fica desligada e o "Sobre" diz isso.
 
 ## Instalador
 

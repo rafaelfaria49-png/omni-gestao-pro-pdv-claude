@@ -4,7 +4,7 @@
  * Cliente desktop do sistema web: abre UMA origem HTTPS fixada no build, sem Node.js, sem preload
  * e sem IPC para a página remota. Banco, Prisma, segredos e regras de negócio ficam na nuvem.
  */
-import { app, BrowserWindow, Menu, dialog, WebContentsView, ipcMain, net, session as electronSession, type Session } from "electron"
+import { app, BrowserWindow, Menu, dialog, nativeImage, WebContentsView, ipcMain, net, session as electronSession, type Session } from "electron"
 import { appendFileSync, mkdirSync } from "node:fs"
 import path from "node:path"
 import { channelLabel, windowTitle, type DesktopBuildConfig } from "../shared/build-config"
@@ -15,7 +15,7 @@ import { loadBuildConfig } from "./config-loader"
 import { guardWebContents, openExternalSafely, remoteWebPreferences, type NavigationContext } from "./navigation"
 import { handleLocalScheme, registerLocalScheme, STATUS_URL } from "./local-protocol"
 import { installPermissionPolicy } from "./permissions"
-import { purgeSessionPrivacy } from "./privacy"
+import { LogoutGuard } from "./privacy"
 import { handleSquirrelEvent } from "./squirrel"
 import { checkDesktopUpdate, type UpdateStatus } from "./updates"
 
@@ -60,6 +60,9 @@ function run(config: DesktopBuildConfig) {
   let mainLoadFailed = false
   let firstLoadMs: number | null = null
   let offlinePoll: NodeJS.Timeout | null = null
+  let offlineDelayMs = 5000
+  let logoutGuard: LogoutGuard | null = null
+  let permissionPolicy: { reset: () => void } | null = null
   let updateStatus: UpdateStatus | null = null
 
   function currentState(): StatusState {
@@ -86,6 +89,7 @@ function run(config: DesktopBuildConfig) {
 
   function showStatus(kind: StatusKind, detail?: string) {
     if (!win || !statusView) return
+    const changed = !statusVisible || statusKind !== kind
     statusKind = kind
     statusDetail = detail
     if (!statusVisible) {
@@ -94,7 +98,8 @@ function run(config: DesktopBuildConfig) {
       layoutStatus()
     }
     statusView.webContents.send(STATUS_CHANNEL.state, currentState())
-    statusView.webContents.focus()
+    // Foco só na mudança de estado: as novas tentativas em segundo plano não roubam o teclado.
+    if (changed && win.isFocused()) statusView.webContents.focus()
     log(`status ${kind}${detail ? ` (${detail})` : ""}`)
     if (kind === "offline") startOfflinePoll()
     else stopOfflinePoll()
@@ -108,15 +113,42 @@ function run(config: DesktopBuildConfig) {
     win.webContents.focus()
   }
 
+  /**
+   * Sem rede: sonda o servidor em segundo plano (HEAD, sessão padrão sem cookies) com espera
+   * crescente de 5 s a 60 s e só recarrega quando ele responde. A volta da rede é apenas uma
+   * nova NAVEGAÇÃO (GET) — nenhuma operação é reenviada pelo desktop.
+   */
   function startOfflinePoll() {
     if (offlinePoll) return
-    // Volta da rede = só uma nova NAVEGAÇÃO (GET). Nenhuma operação é reenviada pelo desktop.
-    offlinePoll = setInterval(() => {
-      if (net.isOnline()) retryLoad()
-    }, 5000)
+    const tick = async () => {
+      offlinePoll = null
+      if (!statusVisible || statusKind !== "offline") return
+      let reachable = false
+      if (net.isOnline()) {
+        try {
+          const res = await net.fetch(new URL("/login", config.origin).toString(), {
+            method: "HEAD",
+            cache: "no-store",
+            redirect: "manual",
+          })
+          reachable = res.status > 0
+        } catch {
+          reachable = false
+        }
+      }
+      if (!statusVisible || statusKind !== "offline") return
+      if (reachable) {
+        offlineDelayMs = 5000
+        retryLoad()
+        return
+      }
+      offlineDelayMs = Math.min(offlineDelayMs * 2, 60_000)
+      offlinePoll = setTimeout(() => void tick(), offlineDelayMs)
+    }
+    offlinePoll = setTimeout(() => void tick(), offlineDelayMs)
   }
   function stopOfflinePoll() {
-    if (offlinePoll) clearInterval(offlinePoll)
+    if (offlinePoll) clearTimeout(offlinePoll)
     offlinePoll = null
   }
 
@@ -157,7 +189,8 @@ function run(config: DesktopBuildConfig) {
   function wireSession(ses: Session) {
     const ua = ses.getUserAgent().replace(/\s(Electron|omnigestao-desktop|OmniGest\S*)\/\S+/gi, "")
     ses.setUserAgent(`${ua} OmniGestaoDesktop/${app.getVersion()}`)
-    installPermissionPolicy(ses, config.origin, () => win)
+    permissionPolicy = installPermissionPolicy(ses, config.origin, () => win, config.channel === "production")
+    logoutGuard = new LogoutGuard(ses, config.origin, log)
 
     ses.on("will-download", (event, item, wc) => {
       const itemUrl = item.getURL()
@@ -196,6 +229,13 @@ function run(config: DesktopBuildConfig) {
       webPreferences: remoteWebPreferences(ctx),
     })
     win.removeMenu()
+    if (config.channel !== "production") {
+      // Marca permanente de QA na barra de tarefas (o ícone é o mesmo de Produção).
+      const size = 16
+      const px = Buffer.alloc(size * size * 4)
+      for (let i = 0; i < size * size; i++) px.set([0x0b, 0x9e, 0xf5, 0xff], i * 4) // BGRA âmbar
+      win.setOverlayIcon(nativeImage.createFromBitmap(px, { width: size, height: size }), `Ambiente de ${channelLabel(config.channel)}`)
+    }
     win.on("page-title-updated", (e) => e.preventDefault())
     win.on("resize", layoutStatus)
     win.on("closed", () => {
@@ -298,10 +338,15 @@ function run(config: DesktopBuildConfig) {
     const previous = lastAppUrl
     lastAppUrl = url
     if (isLoginPath(url, config.origin) && previous && !isLoginPath(previous, config.origin)) {
-      const ses = electronSession.fromPartition(partition)
-      void purgeSessionPrivacy(ses, config.origin)
-        .then((done) => log(`privacy-purge ${done.join(",")}`))
-        .catch((err) => log(`privacy-purge-failed ${(err as Error).message}`))
+      // Troca de usuário: documentos abertos pelo anterior fecham e permissões voltam a perguntar.
+      for (const child of win?.getChildWindows() ?? []) child.destroy()
+      permissionPolicy?.reset()
+      if (win && logoutGuard) {
+        void logoutGuard
+          .engage(win.webContents)
+          .then((done) => log(`privacy-purge ${done.join(",")}`))
+          .catch((err) => log(`privacy-purge-failed ${(err as Error).message}`))
+      }
     }
   }
 

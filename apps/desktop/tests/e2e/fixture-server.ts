@@ -31,6 +31,8 @@ const DASHBOARD = page(
   window.__fillCache = async () => {
     const c = await caches.open("apis")
     await c.put("/api/clientes", new Response('{"usuario":"A"}'))
+    await (await caches.open("pages-rsc")).put("/dashboard", new Response("rsc do usuario A"))
+    await (await caches.open("workbox-precache-v2-http://127.0.0.1/")).put("/_next/static/app.js", new Response("js"))
     return (await caches.keys()).length
   }
 </script>
@@ -60,6 +62,17 @@ export function startFixtureServer(): Promise<http.Server> {
         "content-disposition": 'attachment; filename="relatorio.csv"',
       })
       res.end("a;b\n1;2\n")
+      return
+    }
+    if (url.pathname === "/api/late") {
+      // Resposta "atrasada" do usuário anterior que regrava o cookie (corrida #342).
+      res.writeHead(200, { "content-type": "application/json", "set-cookie": "authjs.session-token=stale-A; Path=/; HttpOnly" })
+      res.end("{}")
+      return
+    }
+    if (url.pathname === "/api/login" && req.method === "POST") {
+      res.writeHead(200, { "content-type": "application/json", "set-cookie": "authjs.session-token=user-B; Path=/; HttpOnly" })
+      res.end("{}")
       return
     }
     if (url.pathname === "/boom") {
