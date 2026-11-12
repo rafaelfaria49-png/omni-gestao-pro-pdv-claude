@@ -3826,7 +3826,7 @@ model AparelhoVenda {
   cliente       Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   /// GAR-AAAA-NNNN por loja — referência única do termo.
   numeroGarantia String   @map("numeroGarantia")
-  /// ativa | devolvida | cancelada
+  /// ativa | devolvida | cancelada | recomprada (loja recomprou a unidade: garantia anterior encerrada)
   status        String    @default("ativa") @map("status")
   precoVenda    Float     @map("precoVenda")
   dataVenda     DateTime  @map("dataVenda")

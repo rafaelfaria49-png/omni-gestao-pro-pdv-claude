@@ -68,36 +68,23 @@ export type GarantiaItem = {
 
 export type HistoricoItem = { id: string; tipo: string; deStatus: string | null; paraStatus: string | null; operador: string; createdAt: string; dados: unknown; aparelho: { id: string; codigoInterno: string; marca: string; modelo: string; armazenamento: string } }
 
-/** Abre o documento (HTML do servidor) numa janela própria para imprimir/salvar em PDF. */
+/**
+ * Abre o documento numa janela própria navegando direto para a URL do servidor: a resposta
+ * traz CSP restritiva (sem herdar o contexto do app). Erros aparecem na própria janela.
+ */
 export async function abrirDocumento(storeId: string, params: Record<string, string>, canal: "hub" | "venda" = "hub"): Promise<void> {
   const q = new URLSearchParams({ ...params, storeId, ...(canal === "venda" ? { canal: "venda" } : {}) })
-  const w = window.open("", "_blank")
+  const w = window.open(`/api/aparelhos/documentos?${q.toString()}`, "_blank")
   if (!w) throw new ApiError("O navegador bloqueou a janela de impressão. Permita pop-ups para este site.", "POPUP", 0)
-  w.document.write("<p style='font-family:system-ui;padding:16px'>Gerando documento…</p>")
-  const res = await fetch(`/api/aparelhos/documentos?${q.toString()}`, { headers: { "x-assistec-loja-id": storeId }, cache: "no-store", credentials: "same-origin" })
-  if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as { error?: string } | null
-    w.close()
-    throw new ApiError(data?.error ?? "Documento indisponível.", undefined, res.status)
-  }
-  const html = await res.text()
-  w.document.open()
-  w.document.write(html)
-  w.document.close()
 }
 
 export async function abrirPrevia(storeId: string, body: Record<string, unknown>): Promise<void> {
-  const w = window.open("", "_blank")
-  if (!w) throw new ApiError("O navegador bloqueou a janela da prévia. Permita pop-ups para este site.", "POPUP", 0)
-  try {
-    const r = await apiAparelhos<{ ok: true; html: string }>(storeId, "/documentos", { method: "POST", body })
-    w.document.open()
-    w.document.write(r.html)
-    w.document.close()
-  } catch (e) {
-    w.close()
-    throw e
+  const params: Record<string, string> = { previa: "1" }
+  for (const [k, v] of Object.entries(body)) {
+    if (v === undefined || v === null || v === "") continue
+    params[k] = typeof v === "object" ? JSON.stringify(v) : String(v)
   }
+  await abrirDocumento(storeId, params, "venda")
 }
 
 /** Reduz a foto no navegador (máx. 1280 px, JPEG ~0,8) para caber no limite de 400 KB. */

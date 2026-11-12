@@ -28,14 +28,17 @@ export async function documentoDaVenda(ctx: AparelhoCtx, aparelhoVendaId: string
   if (tipo === "protocolo_aquisicao") return fail(400, "VALIDACAO", "Tipo inválido para venda.")
   const av = await db.aparelhoVenda.findFirst({
     where: { id: aparelhoVendaId, storeId: ctx.storeId },
-    select: { id: true, snapshot: true, snapshotHash: true, venda: { select: { payload: true, status: true } } },
+    select: { id: true, status: true, snapshot: true, snapshotHash: true, venda: { select: { payload: true, status: true } } },
   })
   if (!av) return fail(404, "NAO_ENCONTRADO", "Garantia não encontrada nesta loja.")
   const snap = av.snapshot as unknown as GarantiaSnapshot
+  // Reimpressão histórica continua possível, mas nunca parece válida depois de cancelada/recomprada.
+  const aviso = av.status === "ativa" ? false
+    : `SEM EFEITO — garantia ${av.status === "cancelada" ? "cancelada com a venda" : av.status === "recomprada" ? "encerrada: a loja recomprou o aparelho" : av.status}. Segunda via apenas para consulta.`
   const html =
-    tipo === "termo_garantia" ? renderTermoGarantia(snap, formato)
-      : tipo === "termo_entrega" ? renderTermoEntrega(snap, formato)
-        : renderComprovanteVenda(snap, pagamentosDoPayload(av.venda.payload), formato)
+    tipo === "termo_garantia" ? renderTermoGarantia(snap, formato, aviso)
+      : tipo === "termo_entrega" ? renderTermoEntrega(snap, formato, aviso)
+        : renderComprovanteVenda(snap, pagamentosDoPayload(av.venda.payload), formato, aviso)
   const reg = await registrarEmissaoDocumento(ctx, { tipo, formato, aparelhoVendaId: av.id, conteudoHash: av.snapshotHash }, db)
   return { ok: true, html, emissoes: reg.emissoes }
 }
@@ -47,6 +50,8 @@ export async function documentoDaAquisicao(ctx: AparelhoCtx, aquisicaoId: string
     include: { aparelhos: true, cliente: { select: { name: true } }, fornecedor: { select: { name: true } }, store: { select: { name: true, cnpj: true, phone: true } } },
   })
   if (!aq) return fail(404, "NAO_ENCONTRADO", "Aquisição não encontrada nesta loja.")
+  // Protocolo traz IMEI completo e o nome do vendedor: só quem registrou ou quem aprova.
+  if (!ctx.perms.aprovarAquisicao && aq.createdBy !== ctx.actorId) return fail(403, "SEM_PERMISSAO", "Protocolo disponível para quem registrou a compra ou para o gerente.")
   const origemLabel: Record<string, string> = { declaracao_procedencia: "Declaração de procedência", nota_fiscal: "Nota fiscal", recibo: "Recibo", outro: "Outro documento" }
   const doc = {
     protocolo: aq.protocolo, tipo: aq.tipo, status: aq.status, dataKey: localDateKey(aq.createdAt),
@@ -77,9 +82,13 @@ export async function previaTermo(ctx: AparelhoCtx, raw: unknown, db: Db = prism
   const r = (raw ?? {}) as Record<string, unknown>
   const aparelhoId = typeof r.aparelhoId === "string" ? r.aparelhoId : ""
   const tipo = r.tipo === "comprovante_venda" || r.tipo === "termo_entrega" ? r.tipo : "termo_garantia"
+  const num = (v: unknown) => (typeof v === "string" && v.trim() ? Number(v) : v)
+  r.contratualDias = num(r.contratualDias)
+  if (typeof r.acessoriosEntregues === "string") { try { r.acessoriosEntregues = JSON.parse(r.acessoriosEntregues) } catch { r.acessoriosEntregues = undefined } }
   const formato = parseFormato(r.formato) ?? "a4"
-  const unit = await db.aparelhoFisico.findFirst({ where: { id: aparelhoId, storeId: ctx.storeId } })
-  if (!unit) return fail(404, "NAO_ENCONTRADO", "Aparelho não encontrado nesta loja.")
+  // Prévia só de unidade vendável (não serve para ler IMEI de qualquer aparelho da loja).
+  const unit = await db.aparelhoFisico.findFirst({ where: { id: aparelhoId, storeId: ctx.storeId, status: { in: ["disponivel", "reservado"] } } })
+  if (!unit) return fail(404, "NAO_ENCONTRADO", "Aparelho não disponível para venda nesta loja.")
   const politica = await db.$transaction((tx) => getPoliticaTx(tx, ctx.storeId))
   const contratual = validateContratualDias(r.contratualDias, politica.contratualMaxDias)
   if (!contratual.ok) return fail(400, contratual.code, contratual.message)

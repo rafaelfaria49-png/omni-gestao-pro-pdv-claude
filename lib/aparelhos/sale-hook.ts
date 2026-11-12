@@ -10,7 +10,9 @@
 import type { Prisma } from "@/generated/prisma"
 // Import estático só NESTE sentido: `ops-upsert-venda` carrega este módulo por import dinâmico.
 import { InvalidSaleLinesError } from "@/lib/ops-upsert-venda"
-import { calcularGarantia, dateKeyToDb, isDateKey, localDateKey, validateContratualDias, GARANTIA_LEGAL_DIAS } from "./warranty"
+import { addDaysKey, calcularGarantia, dateKeyToDb, isDateKey, localDateKey, validateContratualDias, GARANTIA_LEGAL_DIAS } from "./warranty"
+import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { isSerializedDeviceProduct } from "./serialized-product"
 import { sanitizeAcessorios } from "./checklist"
 import { getPoliticaTx, nextSequenceTx } from "./policy"
 import { buildGarantiaSnapshot } from "./snapshot"
@@ -39,7 +41,7 @@ export function parseDeviceSaleLine(raw: unknown): DeviceSaleLineV1 | null {
     contratualDias: typeof r.contratualDias === "number" ? r.contratualDias : Number.NaN,
     ...(typeof r.dataEntrega === "string" ? { dataEntrega: r.dataEntrega } : {}),
     ...(typeof r.reservaToken === "string" && r.reservaToken.trim() ? { reservaToken: r.reservaToken.trim().slice(0, 128) } : {}),
-    acessoriosEntregues: sanitizeAcessorios(r.acessoriosEntregues),
+    ...(r.acessoriosEntregues && typeof r.acessoriosEntregues === "object" ? { acessoriosEntregues: sanitizeAcessorios(r.acessoriosEntregues) } : {}),
     ...(typeof r.observacoes === "string" ? { observacoes: r.observacoes.slice(0, 500) } : {}),
   }
 }
@@ -84,6 +86,10 @@ export function assertDeviceSaleLinesShape(lines: SaleLineLike[], clienteId: str
     }
     if (!line.produtoId) {
       throw new DeviceSaleError("APARELHO_LINHA_INVALIDA", `Linha ${index + 1}: aparelho sem produto vinculado.`)
+    }
+    // Linha virtual (avulso/serviço/OS) não baixa estoque: nunca pode carregar uma unidade física.
+    if (!line.inventoryId || isVirtualSaleLine(line.inventoryId)) {
+      throw new DeviceSaleError("APARELHO_LINHA_INVALIDA", `Linha ${index + 1}: aparelho precisa ser item de produto do catálogo.`)
     }
     if (seen.has(ds.aparelhoId)) {
       throw new DeviceSaleError("APARELHO_DUPLICADO_NA_VENDA", "O mesmo aparelho aparece duas vezes nesta venda.")
@@ -131,7 +137,13 @@ export async function applyDeviceSaleLinesTx(
   if (!cliente) {
     throw new DeviceSaleError("APARELHO_CLIENTE_OBRIGATORIO", "Venda de aparelho exige cliente cadastrado nesta loja.")
   }
-  const dataVendaKey = localDateKey(ctx.at)
+  // Relógio do servidor é a autoridade da garantia: terminal adiantado/atrasado não muda o prazo.
+  const agora = new Date()
+  if (Math.abs(ctx.at.getTime() - agora.getTime()) > 36 * 3_600_000) {
+    throw new DeviceSaleError("APARELHO_DATA_VENDA", "Data/hora do terminal fora do padrão. Acerte o relógio antes de vender aparelho.")
+  }
+  const dataVendaKey = localDateKey(agora)
+  const entregaMax = addDaysKey(dataVendaKey, 30)
   const results: Array<{ aparelhoId: string; aparelhoVendaId: string; numeroGarantia: string }> = []
 
   for (const line of deviceLines) {
@@ -165,12 +177,16 @@ export async function applyDeviceSaleLinesTx(
     const contratual = validateContratualDias(ds.contratualDias, politica.contratualMaxDias)
     if (!contratual.ok) throw new DeviceSaleError(contratual.code, contratual.message)
     const dataEntrega = ds.dataEntrega ?? dataVendaKey
-    if (!isDateKey(dataEntrega) || dataEntrega < dataVendaKey) {
-      throw new DeviceSaleError("APARELHO_DATA_ENTREGA", "Data de entrega inválida (não pode ser anterior à venda).")
+    if (!isDateKey(dataEntrega) || dataEntrega < dataVendaKey || dataEntrega > entregaMax) {
+      throw new DeviceSaleError("APARELHO_DATA_ENTREGA", "Data de entrega inválida (entre hoje e 30 dias).")
     }
     const garantia = calcularGarantia(dataEntrega, contratual.dias)
 
     const unit = await tx.aparelhoFisico.findUniqueOrThrow({ where: { id: locked.id } })
+    const produto = await tx.produto.findFirst({ where: { id: unit.produtoId, storeId: ctx.storeId }, select: { metadata: true } })
+    if (!produto || !isSerializedDeviceProduct(produto.metadata)) {
+      throw new DeviceSaleError("APARELHO_PRODUTO_DIVERGENTE", "Produto do aparelho não é um modelo por IMEI.")
+    }
     const ano = Number(dataVendaKey.slice(0, 4))
     const seq = await nextSequenceTx(tx, ctx.storeId, "GAR", ano)
     const numeroGarantia = `GAR-${ano}-${String(seq).padStart(5, "0")}`

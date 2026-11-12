@@ -92,7 +92,21 @@ async function abrirPdvComCaixa(page: Page) {
 }
 
 async function semRolagemHorizontal(page: Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+  const r = await page.evaluate(() => {
+    const vw = window.innerWidth
+    const culpados = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .filter((el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.right > vw + 1 && getComputedStyle(el).position !== "fixed" })
+      .slice(0, 6).map((el) => `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 80)} right=${Math.round(el.getBoundingClientRect().right)}`)
+    return { ok: document.documentElement.scrollWidth <= vw + 1, scrollWidth: document.documentElement.scrollWidth, vw, culpados }
+  })
+  expect(r, JSON.stringify(r)).toMatchObject({ ok: true })
+}
+
+async function fecharComprovante(page: Page) {
+  const c = page.getByRole("dialog", { name: /^(Impressão não enviada|Comprovante enviado|Comprovante não fiscal|Cupom \/ Recibo Não Fiscal)$/ })
+  if (await c.waitFor({ state: "visible", timeout: 15_000 }).then(() => true, () => false)) {
+    await c.getByRole("button", { name: /^(Agora não|Fechar)$/ }).first().click()
+  }
 }
 
 test("01 HUB — cadastra com IMEI, confere, libera e mostra indicadores reais", async ({ browser }) => {
@@ -253,6 +267,7 @@ test("03 Venda Completa — cliente obrigatório, unidade pelo IMEI, garantia 6 
   await modal.getByRole("button", { name: /^PIX$/i }).click()
   await modal.getByRole("button", { name: "Confirmar Pagamento", exact: true }).click()
   await page.getByRole("alertdialog").getByRole("button", { name: "Sim, finalizar" }).click()
+  await fecharComprovante(page)
 
   const docs = page.getByRole("dialog", { name: "Documentos do aparelho" })
   await expect(docs).toBeVisible({ timeout: 60_000 })
@@ -318,6 +333,7 @@ test("04 PDV Clássico — IMEI bipado abre a unidade; sem cliente bloqueia; com
   await modal.getByRole("button", { name: /^PIX$/i }).click()
   await modal.getByRole("button", { name: "Confirmar Pagamento", exact: true }).click()
   await page.getByRole("alertdialog").getByRole("button", { name: "Sim, finalizar" }).click()
+  await fecharComprovante(page)
   await expect(page.getByRole("dialog", { name: "Documentos do aparelho" })).toBeVisible({ timeout: 60_000 })
   await page.screenshot({ path: shot("14-pdv-classico-documentos.png") })
 

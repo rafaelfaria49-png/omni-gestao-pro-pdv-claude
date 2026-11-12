@@ -308,7 +308,7 @@ CREATE UNIQUE INDEX "aparelhos_vendas_uma_ativa_por_aparelho"
 -- Garantia legal nunca inferior a 90 dias (CDC art. 26, II); contratual nunca negativa.
 ALTER TABLE "aparelhos_vendas" ADD CONSTRAINT "aparelhos_vendas_legal_minimo_ck" CHECK ("legalDias" >= 90);
 ALTER TABLE "aparelhos_vendas" ADD CONSTRAINT "aparelhos_vendas_contratual_ck" CHECK ("contratualDias" >= 0);
-ALTER TABLE "aparelhos_vendas" ADD CONSTRAINT "aparelhos_vendas_status_ck" CHECK ("status" IN ('ativa','devolvida','cancelada'));
+ALTER TABLE "aparelhos_vendas" ADD CONSTRAINT "aparelhos_vendas_status_ck" CHECK ("status" IN ('ativa','devolvida','cancelada','recomprada'));
 
 ALTER TABLE "aparelhos_fisicos" ADD CONSTRAINT "aparelhos_fisicos_status_ck" CHECK ("status" IN (
   'aguardando_conferencia','em_avaliacao','disponivel','reservado','em_revisao','vendido','devolvido','bloqueado','baixado'));

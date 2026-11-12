@@ -2297,7 +2297,7 @@ export function PdvClassic({
           }}
         />
       )}
-      {lojaKey && <DocumentosAparelhoDialog open={!!docsAparelhoPedido} onOpenChange={(v) => !v && setDocsAparelhoPedido(null)} storeId={lojaKey} pedidoId={docsAparelhoPedido} />}
+      {lojaKey && <DocumentosAparelhoDialog open={!!docsAparelhoPedido && !postSalePrintOpen} onOpenChange={(v) => !v && setDocsAparelhoPedido(null)} storeId={lojaKey} pedidoId={docsAparelhoPedido} />}
 
       <PdvClientePicker
         open={customerSearchEnabled && aPrazoClientePickerOpen}

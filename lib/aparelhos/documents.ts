@@ -67,11 +67,12 @@ function descricaoAparelho(a: GarantiaSnapshot["aparelho"]): string {
   return [a.marca, a.modelo, a.variante, a.armazenamento, a.memoriaRam ? `${a.memoriaRam} RAM` : "", a.cor].filter(Boolean).join(" · ")
 }
 
-function rascunhoBanner(rascunho: boolean): string {
+function rascunhoBanner(rascunho: boolean | string): string {
+  if (typeof rascunho === "string") return rascunho ? `<div class="rascunho" role="note">${esc(rascunho)}</div>` : ""
   return rascunho ? `<div class="rascunho" role="note">RASCUNHO — prévia sem validade. A venda ainda não foi confirmada.</div>` : ""
 }
 
-function shell(title: string, body: string, formato: DocFormato, rascunho: boolean): string {
+function shell(title: string, body: string, formato: DocFormato, rascunho: boolean | string): string {
   const a4 = formato === "a4"
   const css = a4
     ? `@page { size: A4; margin: 14mm 14mm 16mm; }
@@ -151,7 +152,7 @@ function blocoCobertura(s: GarantiaSnapshot): string {
 </div>`
 }
 
-export function renderTermoGarantia(s: GarantiaSnapshot, formato: DocFormato, rascunho = false): string {
+export function renderTermoGarantia(s: GarantiaSnapshot, formato: DocFormato, rascunho: boolean | string = false): string {
   const body = `<h1>Termo de garantia ${esc(s.numeroGarantia)}</h1>
 ${cabecalhoLoja(s.loja)}
 <h2>Cliente</h2>
@@ -172,7 +173,7 @@ ${s.observacoes ? `<p class="muted">Observações: ${esc(s.observacoes)}</p>` : 
   return shell(`Garantia ${s.numeroGarantia}`, body, formato, rascunho)
 }
 
-export function renderComprovanteVenda(s: GarantiaSnapshot, pagamentos: PagamentoResumo, formato: DocFormato, rascunho = false): string {
+export function renderComprovanteVenda(s: GarantiaSnapshot, pagamentos: PagamentoResumo, formato: DocFormato, rascunho: boolean | string = false): string {
   const body = `<h1>Comprovante de venda</h1>
 ${cabecalhoLoja(s.loja)}
 <p><b>${esc(s.venda.pedidoId)}</b> — ${formatDateKeyBr(s.venda.dataVenda)}</p>
@@ -190,7 +191,7 @@ ${formato === "80mm" ? `<p class="muted">Termo completo em A4: ${esc(s.numeroGar
   return shell(`Comprovante ${s.venda.pedidoId}`, body, formato, rascunho)
 }
 
-export function renderTermoEntrega(s: GarantiaSnapshot, formato: DocFormato, rascunho = false): string {
+export function renderTermoEntrega(s: GarantiaSnapshot, formato: DocFormato, rascunho: boolean | string = false): string {
   const body = `<h1>Termo de entrega e recebimento</h1>
 ${cabecalhoLoja(s.loja)}
 <p>Eu, <b>${esc(s.cliente.nome)}</b>${s.cliente.documentoMascarado ? `, ${esc(s.cliente.documentoMascarado)}` : ""}, declaro que recebi em ${formatDateKeyBr(s.garantia.dataEntrega)} o aparelho abaixo, referente à venda ${esc(s.venda.pedidoId)}, e que conferi o estado e os acessórios descritos.</p>
@@ -225,6 +226,11 @@ ${a.observacoes ? `<p class="muted">Observações: ${esc(a.observacoes)}</p>` : 
 }
 
 const PAG_LABEL: Record<string, string> = { dinheiro: "Dinheiro", pix: "Pix", cartaoDebito: "Cartão de débito", cartaoCredito: "Cartão de crédito", carne: "Carnê", aPrazo: "A prazo", creditoVale: "Crédito/vale" }
+
+/** Página de erro para o popup de impressão (a resposta é navegada, não lida por fetch). */
+export function errorPage(message: string): string {
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><title>Documento indisponível</title></head><body style="font-family:system-ui,sans-serif;padding:24px"><p>${esc(message)}</p><button type="button" onclick="window.close()">Fechar</button></body></html>`
+}
 
 export function pagamentosDoPayload(payload: unknown): PagamentoResumo {
   const pb = payload && typeof payload === "object" ? (payload as Record<string, unknown>).paymentBreakdown : null

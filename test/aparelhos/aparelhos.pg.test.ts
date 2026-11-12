@@ -367,3 +367,83 @@ describe("Garantias e documentos (25–37)", () => {
     for (const r of rows) expect(r.stock).toBe(Number(r.unidades))
   })
 })
+
+describe("Regressões da revisão independente", () => {
+  it("P1-1/P2-4: recompra recusada restaura; aprovada encerra a garantia anterior e a unidade revende", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Recompra" })
+    await vender(LOJA_A, saleFor(u))
+    const compra = (over: Record<string, unknown> = {}) => ({
+      tipo: "compra_cliente", vendedorNome: "Cliente Revende", vendedorDocumento: "529.982.247-25", documentoOrigemTipo: "declaracao_procedencia",
+      formaPagamento: "pix", pagamentoStatus: "pago", valorTotal: 900, aparelhos: [device({ imei1: u.imei1, condicao: "usado", custoAquisicao: 0, despesas: 0, precoVenda: 1800 })], ...over,
+    })
+    const recusada = ok(await svc.criarAquisicao(VENDEDOR_A, compra(), D))
+    ok(await svc.decidirAquisicao(GERENTE_A, recusada.aquisicao.id, { decisao: "recusar", motivo: "Sem nota" }, D))
+    let x = await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })
+    expect([x.status, x.propriedade]).toEqual(["vendido", "loja"])
+    expect(await db.aparelhoIdentificador.count({ where: { aparelhoId: u.id } })).toBeGreaterThan(0)
+    expect((await db.aparelhoVenda.findFirstOrThrow({ where: { aparelhoId: u.id } })).status).toBe("ativa")
+
+    const aprovada = ok(await svc.criarAquisicao(VENDEDOR_A, compra(), D))
+    x = await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })
+    expect(x.produtoId).not.toBe(u.produtoId) // modelo informado na recompra (iPhone 14) re-resolve o produto comercial
+    ok(await svc.decidirAquisicao(GERENTE_A, aprovada.aquisicao.id, { decisao: "aprovar" }, D))
+    expect((await db.aparelhoVenda.findFirstOrThrow({ where: { aparelhoId: u.id, pedidoId: { not: "" } }, orderBy: { createdAt: "asc" } })).status).toBe("recomprada")
+    ok(await svc.registrarConferenciaRestricao(GERENTE_A, u.id, { resultado: "sem_restricao", fonte: "QA" }, D))
+    ok(await svc.liberarParaVenda(GERENTE_A, u.id, D))
+    const revenda = await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })
+    await vender(LOJA_A, saleFor(revenda))
+    expect(await db.aparelhoVenda.count({ where: { aparelhoId: u.id, status: "ativa" } })).toBe(1)
+  })
+  it("P1-2: cancelamento devolve a unidade à venda e cancela a garantia; devolução/correção ficam bloqueadas", async () => {
+    const { cancelarAparelhosDaVendaTx, operacaoTocaAparelho, linhasAparelhoDoPayload } = await import("@/lib/aparelhos/sale-reversal")
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Cancela" })
+    const sale = saleFor(u)
+    await vender(LOJA_A, sale)
+    const venda = await db.venda.findFirstOrThrow({ where: { pedidoId: sale.id } })
+    expect(linhasAparelhoDoPayload(venda.payload)).toHaveLength(1)
+    expect(operacaoTocaAparelho(venda.payload, [u.produtoId])).toBe(true)
+    expect(operacaoTocaAparelho(venda.payload, ["outro"])).toBe(false)
+    const n = await db.$transaction((tx) => cancelarAparelhosDaVendaTx(tx, { storeId: LOJA_A, vendaId: venda.id, pedidoId: sale.id!, operador: "QA", payload: venda.payload }))
+    expect(n).toBe(1)
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("disponivel")
+    expect((await db.aparelhoVenda.findFirstOrThrow({ where: { vendaId: venda.id } })).status).toBe("cancelada")
+    const comum = await db.venda.findFirstOrThrow({ where: { pedidoId: `VDA-COMUM-${sufixo}` } })
+    expect(await db.$transaction((tx) => cancelarAparelhosDaVendaTx(tx, { storeId: LOJA_A, vendaId: comum.id, pedidoId: comum.pedidoId, operador: "QA", payload: comum.payload }))).toBe(0)
+  })
+  it("P1-3: vendedor cadastra mas não libera nem autolibera; técnico idem", async () => {
+    expect(await svc.cadastrarAparelho(VENDEDOR_A, device({ liberarParaVenda: true }), D)).toMatchObject({ ok: false, code: "SEGREGACAO_FUNCOES" })
+    const r = ok(await svc.cadastrarAparelho(ctx(LOJA_A, "TECNICO", "tec-a"), device(), D))
+    ok(await svc.registrarConferenciaRestricao(ctx(LOJA_A, "TECNICO", "tec-a"), r.aparelho.id, { resultado: "sem_restricao", fonte: "QA" }, D))
+    expect(await svc.liberarParaVenda(VENDEDOR_A, r.aparelho.id, D)).toMatchObject({ ok: false, code: "SEGREGACAO_FUNCOES" })
+    expect(await svc.liberarParaVenda(ctx(LOJA_A, "TECNICO", "tec-a"), r.aparelho.id, D)).toMatchObject({ ok: false, code: "SEGREGACAO_FUNCOES" })
+    ok(await svc.liberarParaVenda(GERENTE_A, r.aparelho.id, D))
+  })
+  it("P1-4: técnico edita unidade com custo sem tocar no custo", async () => {
+    const r = ok(await svc.cadastrarAparelho(ADMIN_A, device({ custoAquisicao: 1500 }), D))
+    const u = await db.aparelhoFisico.findUniqueOrThrow({ where: { id: r.aparelho.id } })
+    ok(await svc.atualizarAparelho(ctx(LOJA_A, "TECNICO", "tec-a"), u.id, { custoAquisicao: 0, despesas: 0, checklist: { tela: "PASS" }, version: u.version }, D))
+    const depois = await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })
+    expect([depois.custoAquisicao, depois.custoTotal]).toEqual([u.custoAquisicao, u.custoTotal])
+  })
+  it("P2-1: unidade em linha virtual (avulso) é recusada sem efeito", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Virtual" })
+    const sale = saleFor(u)
+    sale.lines![0]!.inventoryId = "__avulso__x"
+    expect(await erroDe(vender(LOJA_A, sale))).toBe("APARELHO_LINHA_INVALIDA")
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("disponivel")
+  })
+  it("P2-2: relógio do terminal fora do padrão e entrega além de 30 dias são recusados", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Relogio" })
+    expect(await erroDe(vender(LOJA_A, { ...saleFor(u), at: new Date(Date.now() - 5 * 86_400_000).toISOString() }))).toBe("APARELHO_DATA_VENDA")
+    expect(await erroDe(vender(LOJA_A, saleFor(u, { dataEntrega: addDaysKey(localDateKey(new Date()), 45) })))).toBe("APARELHO_DATA_ENTREGA")
+  })
+  it("P3: prévia só de unidade vendável; protocolo só para quem registrou ou aprova", async () => {
+    const vendido = await db.aparelhoFisico.findFirstOrThrow({ where: { storeId: LOJA_A, status: "vendido" } })
+    expect(await previaTermo(CAIXA_A, { aparelhoId: vendido.id, contratualDias: 0 }, D)).toMatchObject({ ok: false, status: 404 })
+    const { documentoDaAquisicao } = await import("@/lib/aparelhos/documents-service")
+    const aq = await db.aparelhoAquisicao.findFirstOrThrow({ where: { storeId: LOJA_A, createdBy: "gerente-a" } })
+    expect(await documentoDaAquisicao(VENDEDOR_A, aq.id, "a4", D)).toMatchObject({ ok: false, status: 403 })
+    ok(await documentoDaAquisicao(GERENTE_A, aq.id, "a4", D))
+    expect(ok(await svc.listarAparelhos(ADMIN_A, { page: Number("abc") }, D)).page).toBe(1)
+  })
+})

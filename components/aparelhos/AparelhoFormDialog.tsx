@@ -210,7 +210,7 @@ export function AparelhoFormDialog({ open, onOpenChange, mode, storeId, perms, p
       const s = (n: number | null | undefined) => (n === null || n === undefined || n === 0 ? "" : String(n).replace(".", ","))
       setD({
         marca: a.marca, modelo: a.modelo, variante: a.variante, armazenamento: a.armazenamento, memoriaRam: a.memoriaRam, cor: a.cor, condicao: a.condicao,
-        imei1: a.identificadoresMascarados ? "" : a.imei1 ?? "", imei2: a.identificadoresMascarados ? "" : a.imei2 ?? "", serial: a.identificadoresMascarados ? "" : a.serial ?? "", ean: "",
+        imei1: a.identificadoresMascarados ? "" : a.imei1 ?? "", imei2: a.identificadoresMascarados ? "" : a.imei2 ?? "", serial: a.identificadoresMascarados ? "" : a.serial ?? "", ean: a.ean ?? "",
         custoAquisicao: s(a.custoAquisicao), despesas: s(a.despesas), precoSugerido: s(a.precoSugerido), precoVenda: s(a.precoVenda),
         garantiaContratualDias: a.garantiaContratualDias, acessorios: (a.acessorios ?? {}) as Acessorios, estadoFisico: a.estadoFisico,
         checklist: (a.checklist ?? {}) as Checklist, bateriaSaude: a.bateriaSaude === null ? "" : String(a.bateriaSaude), bateriaFonte: a.bateriaFonte ?? "", observacoes: a.observacoes, fotos: [],
@@ -237,6 +237,7 @@ export function AparelhoFormDialog({ open, onOpenChange, mode, storeId, perms, p
       if (mode.kind === "editar") {
         const body: Record<string, unknown> = { ...payload, version: mode.aparelho.version }
         if (mode.aparelho.identificadoresMascarados) { delete body.imei1; delete body.imei2; delete body.serial }
+        if (!perms.definirCusto) { delete body.custoAquisicao; delete body.despesas }
         delete body.fotos
         await apiAparelhos(storeId, `/${mode.aparelho.id}`, { method: "PATCH", body })
         if (d.fotos.length) await apiAparelhos(storeId, `/${mode.aparelho.id}/acao`, { method: "POST", body: { acao: "fotos", fotos: d.fotos } })
@@ -288,7 +289,10 @@ export function AparelhoFormDialog({ open, onOpenChange, mode, storeId, perms, p
           )}
           {editing && mode.aparelho.identificadoresMascarados && <p className="mb-4 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">IMEI e série ficam ocultos para o seu perfil e não serão alterados.</p>}
           <AparelhoCampos d={d} set={set} perms={perms} politica={politica} />
-          {!editing && (
+          {!editing && !perms.alterarStatus && (
+            <p className="mt-6 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">O aparelho fica aguardando conferência. A liberação para venda é feita por um gerente ou pelo proprietário.</p>
+          )}
+          {!editing && perms.alterarStatus && (
             <section className="mt-6 min-w-0 space-y-3 rounded-xl border border-border p-4">
               <label className="flex cursor-pointer items-start gap-3">
                 <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={liberar} onChange={(e) => setLiberar(e.target.checked)} />

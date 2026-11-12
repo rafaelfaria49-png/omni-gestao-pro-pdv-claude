@@ -48,7 +48,7 @@ export function VendaAparelhoDialog({ open, onOpenChange, storeId, produtoId, cl
   consultaInicial?: string
 }) {
   const [q, setQ] = useState("")
-  const [busca, setBusca] = useState<VendaBusca | null>(null)
+  const [busca, setBusca] = useState<(VendaBusca & { consulta: string }) | null>(null)
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [sel, setSel] = useState<AparelhoDTO | null>(null)
@@ -80,7 +80,7 @@ export function VendaAparelhoDialog({ open, onOpenChange, storeId, produtoId, cl
     const t = setTimeout(() => {
       setLoading(true)
       apiAparelhos<VendaBusca>(storeId, `/venda?q=${encodeURIComponent(q.trim())}`, { signal: ctrl.signal })
-        .then((r) => { setBusca(r); setErro(null) })
+        .then((r) => { setBusca({ ...r, consulta: q.trim() }); setErro(null) })
         .catch((e: Error) => { if (e.name !== "AbortError") setErro(e.message) })
         .finally(() => setLoading(false))
     }, q ? 250 : 0)
@@ -91,7 +91,7 @@ export function VendaAparelhoDialog({ open, onOpenChange, storeId, produtoId, cl
   const politica = busca?.politica
 
   useEffect(() => {
-    if (!autoSelecionar.current || loading || !busca) return
+    if (!autoSelecionar.current || loading || !busca || busca.consulta !== q.trim()) return
     autoSelecionar.current = false
     if (itens.length === 1) escolher(itens[0]!)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,8 +106,14 @@ export function VendaAparelhoDialog({ open, onOpenChange, storeId, produtoId, cl
 
   // Leitor de código de barras: Enter com IMEI completo seleciona a unidade exata.
   function onEnter() {
-    const d = normalizeImei(q)
-    const exato = itens.find((a) => a.imei1 === d || a.imei2 === d || a.imei1?.endsWith(d.slice(-5)) && itens.length === 1)
+    const consulta = q.trim()
+    if (!busca || busca.consulta !== consulta || loading) {
+      // Leitor bipou mais rápido que a busca: decide quando a resposta desta consulta chegar.
+      autoSelecionar.current = true
+      return
+    }
+    const d = normalizeImei(consulta)
+    const exato = d.length === 15 ? itens.find((a) => a.imei1 === d || a.imei2 === d) : undefined
     if (exato) escolher(exato)
     else if (itens.length === 1) escolher(itens[0]!)
   }

@@ -22,7 +22,7 @@ import {
 import { resumoChecklist, sanitizeAcessorios, sanitizeChecklist } from "./checklist"
 import { getPoliticaTx, nextSequenceTx, politicaFromRow, type PoliticaAparelhos } from "./policy"
 import { maskDocumento, sha256Json } from "./sale-hook-shared"
-import { localDateKey, validateContratualDias } from "./warranty"
+import { dateKeyToDb, localDateKey, validateContratualDias } from "./warranty"
 
 export type AparelhoCtx = { storeId: string; actorId: string; actorLabel: string; perms: AparelhoPermissions }
 export type Fail = { ok: false; status: number; code: string; message: string; field?: string }
@@ -372,6 +372,9 @@ export async function cadastrarAparelho(ctx: AparelhoCtx, raw: unknown, db: Db =
   const origem = (ORIGENS_DIRETAS as readonly string[]).includes(String(r.origem)) ? (r.origem as AparelhoOrigem) : "cadastro_manual"
   const fornecedorId = str(r.fornecedorId, 64) || null
   const liberar = r.liberarParaVenda === true
+  if (liberar && !ctx.perms.alterarStatus) {
+    return fail(403, "SEGREGACAO_FUNCOES", "Somente gerente ou proprietário libera aparelho para venda. Cadastre e peça a liberação.")
+  }
   return runAparelhoTx(async (tx) => {
     let fornecedorNome = ""
     if (fornecedorId) {
@@ -401,7 +404,8 @@ async function liberarTx(tx: Prisma.TransactionClient, ctx: AparelhoCtx, unit: A
 }
 
 export async function liberarParaVenda(ctx: AparelhoCtx, id: string, db: Db = prisma) {
-  if (!ctx.perms.alterarStatus && !ctx.perms.cadastrar) return fail(403, "SEM_PERMISSAO", "Sem permissão para liberar aparelhos.")
+  // Segregação: quem cadastra (vendedor/técnico) não libera o próprio aparelho para venda.
+  if (!ctx.perms.alterarStatus) return fail(403, "SEGREGACAO_FUNCOES", "Somente gerente ou proprietário libera aparelho para venda.")
   return runAparelhoTx(async (tx) => {
     const unit = await lockUnitTx(tx, ctx.storeId, id)
     if (unit.status === "disponivel") return { ok: true as const, aparelho: { id: unit.id, status: unit.status }, replay: true }
@@ -470,6 +474,7 @@ export async function atualizarAparelho(ctx: AparelhoCtx, id: string, raw: unkno
     const parsed = parseAparelhoInput(merged, { exigeIdentificador: true })
     if (!parsed.ok) throw new AparelhoFailError(parsed)
     const i = parsed.input
+    if (!ctx.perms.definirCusto) { i.custoAquisicao = unit.custoAquisicao; i.despesas = unit.despesas }
     const custoMuda = i.custoAquisicao !== unit.custoAquisicao || i.despesas !== unit.despesas
     if (custoMuda && !ctx.perms.definirCusto) stop(403, "SEM_PERMISSAO", "Sem permissão para alterar o custo.")
     const precoMuda = i.precoVenda !== unit.precoVenda
@@ -524,7 +529,7 @@ export async function reservarAparelho(ctx: AparelhoCtx, id: string, raw: unknow
   if (!ctx.perms.reservar) return fail(403, "SEM_PERMISSAO", "Sem permissão para reservar aparelhos.")
   const r = (raw ?? {}) as Record<string, unknown>
   const token = str(r.token, 128)
-  const minutos = Math.min(Math.max(Number(r.minutos) || 30, 5), 24 * 60)
+  const minutos = Math.min(Math.max(Number(r.minutos) || 30, 5), 120)
   if (!token) return fail(400, "VALIDACAO", "Token de reserva obrigatório.")
   return runAparelhoTx(async (tx) => {
     const unit = await lockUnitTx(tx, ctx.storeId, id)
@@ -655,9 +660,19 @@ export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = pr
         if (!["vendido", "baixado", "devolvido"].includes(unit.status)) {
           stop(409, "IMEI_DUPLICADO", `Este aparelho já está no estoque da loja (${unit.codigoInterno}, ${unit.status}).`, "imei1")
         }
+        const anterior = {
+          status: unit.status, propriedade: unit.propriedade, origem: unit.origem, aquisicaoId: unit.aquisicaoId, produtoId: unit.produtoId,
+          marca: unit.marca, modelo: unit.modelo, armazenamento: unit.armazenamento, cor: unit.cor, condicao: unit.condicao,
+          custoAquisicao: unit.custoAquisicao, despesas: unit.despesas, custoTotal: unit.custoTotal, precoVenda: unit.precoVenda,
+        }
+        // Fora do saldo (vendido/baixado/devolvido): trocar de produto não mexe em estoque.
+        const produtoId = await resolveProdutoModeloTx(tx, ctx.storeId, { ...item, produtoId: undefined })
+        await syncIdentificadoresTx(tx, ctx.storeId, unit.id, item)
         const updated = await tx.aparelhoFisico.update({
           where: { id: unit.id },
           data: {
+            produtoId, marca: item.marca, modelo: item.modelo, variante: item.variante, armazenamento: item.armazenamento, memoriaRam: item.memoriaRam, cor: item.cor,
+            imei1: item.imei1, imei2: item.imei2, serial: item.serial,
             status: "em_avaliacao", propriedade: tipo === "negociacao" ? "negociacao" : "aguardando_aquisicao", origem: tipo, aquisicaoId: aq.id,
             custoAquisicao: item.custoAquisicao, despesas: item.despesas, custoTotal: Math.round((item.custoAquisicao + item.despesas) * 100) / 100,
             precoVenda: item.precoVenda, precoSugerido: item.precoSugerido, condicao: item.condicao,
@@ -667,7 +682,7 @@ export async function criarAquisicao(ctx: AparelhoCtx, raw: unknown, db: Db = pr
             version: { increment: 1 },
           },
         })
-        await eventoTx(tx, ctx, unit.id, "reaquisicao", unit.status, "em_avaliacao", { aquisicaoId: aq.id, protocolo })
+        await eventoTx(tx, ctx, unit.id, "reaquisicao", unit.status, "em_avaliacao", { aquisicaoId: aq.id, protocolo, anterior })
         unidades.push({ id: updated.id, codigoInterno: updated.codigoInterno })
         continue
       }
@@ -709,12 +724,22 @@ export async function decidirAquisicao(ctx: AparelhoCtx, id: string, raw: unknow
       for (const u of aq.aparelhos) {
         if (u.status === "baixado") continue
         await tx.aparelhoFisico.update({ where: { id: u.id }, data: { propriedade: "loja", version: { increment: 1 } } })
-        await eventoTx(tx, ctx, u.id, "aquisicao_confirmada", u.status, u.status, { protocolo: aq.protocolo, valor: u.custoAquisicao })
+        const encerradas = await tx.aparelhoVenda.updateMany({ where: { storeId: ctx.storeId, aparelhoId: u.id, status: "ativa" }, data: { status: "recomprada" } })
+        await eventoTx(tx, ctx, u.id, "aquisicao_confirmada", u.status, u.status, { protocolo: aq.protocolo, valor: u.custoAquisicao, ...(encerradas.count ? { garantiaAnteriorEncerrada: true } : {}) })
       }
       return { ok: true as const, aquisicao: { id, status: "confirmada" } }
     }
     await tx.aparelhoAquisicao.update({ where: { id }, data: { status: "recusada", motivoRecusa: motivo, aprovadaPor: ctx.actorLabel, aprovadaEm: new Date() } })
     for (const u of aq.aparelhos) {
+      const reaq = await tx.aparelhoEvento.findFirst({ where: { storeId: ctx.storeId, aparelhoId: u.id, tipo: "reaquisicao" }, orderBy: { createdAt: "desc" }, select: { dados: true } })
+      const anterior = (reaq?.dados as { aquisicaoId?: string; anterior?: Record<string, unknown> } | null)
+      if (anterior?.aquisicaoId === aq.id && anterior.anterior) {
+        // Recompra recusada: a unidade volta exatamente como estava (venda/garantia anteriores intactas).
+        const a = anterior.anterior as Record<string, never>
+        await tx.aparelhoFisico.update({ where: { id: u.id }, data: { ...a, version: { increment: 1 } } })
+        await eventoTx(tx, ctx, u.id, "aquisicao_recusada", u.status, String(a.status), { protocolo: aq.protocolo, motivo, recompra: true })
+        continue
+      }
       // Aparelho do vendedor nunca foi da loja: sai do fluxo e libera o IMEI para nova tentativa.
       await tx.aparelhoFisico.update({ where: { id: u.id }, data: { status: "baixado", aquisicaoId: aq.id, version: { increment: 1 } } })
       await tx.aparelhoIdentificador.deleteMany({ where: { storeId: ctx.storeId, aparelhoId: u.id } })
@@ -785,6 +810,7 @@ export function aparelhoDto(u: AparelhoFisico & { _vendas?: number }, perms: Apa
     imei1: perms.dadosSensiveis ? u.imei1 : maskImei(u.imei1),
     imei2: perms.dadosSensiveis ? u.imei2 : maskImei(u.imei2),
     serial: perms.dadosSensiveis ? u.serial : maskSerial(u.serial),
+    ean: u.ean,
     identificadoresMascarados: !perms.dadosSensiveis,
     status: u.status,
     propriedade: u.propriedade,
@@ -816,8 +842,8 @@ export type AparelhoDTO = ReturnType<typeof aparelhoDto>
 
 export async function listarAparelhos(ctx: AparelhoCtx, f: AparelhoListaFiltro, db: Db = prisma) {
   if (!ctx.perms.consultar) return fail(403, "SEM_PERMISSAO", "Sem permissão para consultar aparelhos.")
-  const pageSize = Math.min(Math.max(Math.floor(f.pageSize ?? 10), 1), 100)
-  const page = Math.max(Math.floor(f.page ?? 1), 1)
+  const pageSize = Math.min(Math.max(Math.floor(Number(f.pageSize) || 10), 1), 100)
+  const page = Math.max(Math.floor(Number(f.page) || 1), 1)
   const where: Prisma.AparelhoFisicoWhereInput = { storeId: ctx.storeId }
   if (f.somenteVendaveis) where.status = { in: ["disponivel", "reservado"] }
   else if (f.status && isAparelhoStatus(f.status)) where.status = f.status
@@ -935,14 +961,14 @@ export async function detalheAparelho(ctx: AparelhoCtx, id: string, db: Db = pri
 
 function redactDados(d: unknown): unknown {
   if (!d || typeof d !== "object" || Array.isArray(d)) return d
-  const { valor: _v, custo: _c, ...rest } = d as Record<string, unknown>
+  const { valor: _v, custo: _c, anterior: _a, ...rest } = d as Record<string, unknown>
   return rest
 }
 
 export async function listarAquisicoes(ctx: AparelhoCtx, f: { status?: string; page?: number }, db: Db = prisma) {
   if (!ctx.perms.consultar) return fail(403, "SEM_PERMISSAO", "Sem permissão.")
   const where: Prisma.AparelhoAquisicaoWhereInput = { storeId: ctx.storeId, ...(f.status ? { status: f.status } : {}) }
-  const page = Math.max(1, Math.floor(f.page ?? 1))
+  const page = Math.max(1, Math.floor(Number(f.page) || 1))
   const [total, rows] = await Promise.all([
     db.aparelhoAquisicao.count({ where }),
     db.aparelhoAquisicao.findMany({
@@ -970,7 +996,7 @@ export async function listarAquisicoes(ctx: AparelhoCtx, f: { status?: string; p
 export async function listarGarantias(ctx: AparelhoCtx, f: { q?: string; vigentes?: boolean; page?: number }, db: Db = prisma) {
   if (!ctx.perms.consultar) return fail(403, "SEM_PERMISSAO", "Sem permissão.")
   const q = (f.q ?? "").trim()
-  const hoje = new Date()
+  const hoje = dateKeyToDb(localDateKey(new Date()))
   const where: Prisma.AparelhoVendaWhereInput = {
     storeId: ctx.storeId,
     ...(f.vigentes ? { status: "ativa", coberturaFim: { gte: hoje } } : {}),
@@ -983,7 +1009,7 @@ export async function listarGarantias(ctx: AparelhoCtx, f: { q?: string; vigente
         ] }
       : {}),
   }
-  const page = Math.max(1, Math.floor(f.page ?? 1))
+  const page = Math.max(1, Math.floor(Number(f.page) || 1))
   const [total, rows] = await Promise.all([
     db.aparelhoVenda.count({ where }),
     db.aparelhoVenda.findMany({
@@ -1001,7 +1027,7 @@ export async function listarGarantias(ctx: AparelhoCtx, f: { q?: string; vigente
 
 export async function historicoLoja(ctx: AparelhoCtx, f: { q?: string; page?: number }, db: Db = prisma) {
   if (!ctx.perms.consultar) return fail(403, "SEM_PERMISSAO", "Sem permissão.")
-  const page = Math.max(1, Math.floor(f.page ?? 1))
+  const page = Math.max(1, Math.floor(Number(f.page) || 1))
   const q = (f.q ?? "").trim()
   const digits = normalizeImei(q)
   const where: Prisma.AparelhoEventoWhereInput = {

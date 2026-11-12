@@ -613,6 +613,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     (product: PdvCatalogProduct) => {
       // Modelo de aparelho por IMEI: escolher a unidade física (nunca entra como item genérico).
       if (product.serializedDevice) {
+        if (!aparelhosHabilitado) {
+          toast({ title: "Aparelho por IMEI", description: "Venda de aparelhos individualizados não está liberada para este usuário ou loja.", variant: "destructive" })
+          return
+        }
         setAparelhoDialog({ open: true, produtoId: product.dbId ?? null })
         setProductQuery("")
         setShowProductDropdown(false)
@@ -656,7 +660,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       setProductQuery("")
       setShowProductDropdown(false)
     },
-    [pdvParams.garantiaPadraoDias, toast, accessoryModelColorEnabled],
+    [pdvParams.garantiaPadraoDias, toast, accessoryModelColorEnabled, aparelhosHabilitado],
   )
 
   function updateQtyDirect(lineId: string, rawQty: number) {
@@ -2291,7 +2295,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           }}
         />
       )}
-      <DocumentosAparelhoDialog open={!!docsAparelhoPedido} onOpenChange={(v) => !v && setDocsAparelhoPedido(null)} storeId={storeId} pedidoId={docsAparelhoPedido} />
+      <DocumentosAparelhoDialog open={!!docsAparelhoPedido && !cupomOpen} onOpenChange={(v) => !v && setDocsAparelhoPedido(null)} storeId={storeId} pedidoId={docsAparelhoPedido} />
 
       {/* ── Cupom não fiscal ── */}
       {cupomData && (

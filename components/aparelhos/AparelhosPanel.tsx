@@ -264,7 +264,7 @@ function ListaAparelhos({ storeId, reload, perms, onFicha, onNovo, compacta = fa
                     <td className="px-3 py-2.5 font-mono text-xs tabular-nums">{a.imei1 || a.serial || "—"}</td>
                     <td className="px-3 py-2.5"><CondicaoPill condicao={a.condicao} /></td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{origemLabel(a.origem)}</td>
-                    <td className="px-3 py-2.5 text-xs">{a.garantiaContratualDias > 0 ? `90 d + ${rotuloPrazo(a.garantiaContratualDias)}` : "90 d legais"}</td>
+                    <td className="px-3 py-2.5 text-xs">{a.garantiaContratualDias > 0 ? `Legal + ${rotuloPrazo(a.garantiaContratualDias)}` : "Só a legal (90 d)"}</td>
                     {perms.verCusto && <td className="px-3 py-2.5 text-right tabular-nums">{brl(a.custoTotal)}</td>}
                     <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{brl(a.precoVenda)}</td>
                     <td className="px-3 py-2.5"><StatusPill status={a.status} /></td>
@@ -422,7 +422,7 @@ function Historico({ storeId, reload, onFicha }: { storeId: string; reload: numb
   useEffect(() => {
     apiAparelhos<{ total: number; itens: HistoricoItem[] }>(storeId, `/historico?page=${page}${dq ? `&q=${encodeURIComponent(dq)}` : ""}`).then(setData).catch((e) => toast.error(e.message))
   }, [storeId, dq, page, reload])
-  const label = useMemo(() => ({ cadastro: "Cadastro", liberacao: "Liberado para venda", venda: "Venda", reserva: "Reserva", reserva_cancelada: "Reserva cancelada", conferencia_restricao: "Conferência de IMEI", bloqueio: "Bloqueio", status: "Situação alterada", edicao: "Edição", alteracao_preco: "Preço alterado", aquisicao_confirmada: "Aquisição confirmada", aquisicao_recusada: "Aquisição recusada", reaquisicao: "Recompra", fotos: "Fotos" } as Record<string, string>), [])
+  const label = useMemo(() => ({ cadastro: "Cadastro", liberacao: "Liberado para venda", venda: "Venda", venda_cancelada: "Venda cancelada", reserva: "Reserva", reserva_cancelada: "Reserva cancelada", conferencia_restricao: "Conferência de IMEI", bloqueio: "Bloqueio", status: "Situação alterada", edicao: "Edição", alteracao_preco: "Preço alterado", aquisicao_confirmada: "Aquisição confirmada", aquisicao_recusada: "Aquisição recusada", reaquisicao: "Recompra", fotos: "Fotos" } as Record<string, string>), [])
   return (
     <div className="min-w-0 space-y-3">
       <div className="relative min-w-0">

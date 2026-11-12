@@ -17,6 +17,7 @@ const EVENTO_LABEL: Record<string, string> = {
   conferencia_restricao: "Conferência de restrição", edicao: "Dados editados", alteracao_preco: "Preço alterado",
   fotos: "Fotos adicionadas", reserva: "Reservado", reserva_cancelada: "Reserva cancelada", venda: "Vendido",
   aquisicao_confirmada: "Aquisição confirmada", aquisicao_recusada: "Aquisição recusada", reaquisicao: "Recomprado",
+  venda_cancelada: "Venda cancelada",
 }
 
 function resumoEvento(tipo: string, dados: unknown): string {
@@ -63,7 +64,7 @@ export function AparelhoFichaDialog({ open, onOpenChange, aparelhoId, storeId, p
   const checklist = a ? sanitizeChecklist(a.checklist) : {}
   const resumo = resumoChecklist(checklist)
   const vendavel = a?.status === "disponivel" || a?.status === "reservado"
-  const podeLiberar = a && ["aguardando_conferencia", "em_avaliacao", "em_revisao", "devolvido"].includes(a.status) && a.propriedade === "loja"
+  const podeLiberar = a && perms.alterarStatus && ["aguardando_conferencia", "em_avaliacao", "em_revisao", "devolvido"].includes(a.status) && a.propriedade === "loja"
   const transicoes = a ? transicoesManuais(a.status).filter((s) => s !== "disponivel") : []
 
   return (
@@ -157,6 +158,7 @@ export function AparelhoFichaDialog({ open, onOpenChange, aparelhoId, storeId, p
                     </div>
                   )}
                   {podeLiberar && <Button className="w-full justify-start" disabled={busy} onClick={() => void acao({ acao: "liberar" }, "Aparelho disponível para venda.")}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Liberar para venda</Button>}
+                  {!perms.alterarStatus && ["aguardando_conferencia", "em_avaliacao"].includes(a.status) && <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">A liberação para venda é feita por um gerente ou pelo proprietário.</p>}
                   {a.propriedade !== "loja" && <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Aquisição aguardando aprovação: não entra no estoque comercial até ser confirmada.</p>}
                   {perms.alterarStatus && transicoes.length > 0 && !mudanca && (
                     <Button variant="outline" className="w-full justify-start" onClick={() => setMudanca({ para: transicoes[0]!, motivo: "" })}><Wrench className="mr-2 h-4 w-4" />Mudar situação</Button>

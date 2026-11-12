@@ -110,13 +110,14 @@ describe("Permissões (42–43)", () => {
 
 describe("Linha de venda de aparelho (19)", () => {
   it("exige cliente, quantidade 1 e unidade não repetida", () => {
-    const line = { produtoId: "p1", quantity: 1, deviceSale: { version: 1, aparelhoId: "a1", contratualDias: 90 } }
+    const line = { produtoId: "p1", inventoryId: "SKU-P1", quantity: 1, deviceSale: { version: 1, aparelhoId: "a1", contratualDias: 90 } }
     expect(() => assertDeviceSaleLinesShape([line], null)).toThrow(/cliente/i)
     expect(() => assertDeviceSaleLinesShape([{ ...line, quantity: 2 }], "c1")).toThrow(/quantidade 1/)
     expect(() => assertDeviceSaleLinesShape([line, line], "c1")).toThrow(/duas vezes/)
     expect(assertDeviceSaleLinesShape([line], "c1")).toHaveLength(1)
     expect(assertDeviceSaleLinesShape([{ produtoId: "p2", quantity: 3 }], null)).toHaveLength(0) // 20: venda comum sem cliente
     expect(parseDeviceSaleLine({ version: 2, aparelhoId: "a" })).toBeNull()
+    expect(() => assertDeviceSaleLinesShape([{ ...line, inventoryId: "__avulso__1" }], "c1")).toThrow(/item de produto/)
   })
   it("reconhece produto serializado só pelo metadado versionado", () => {
     expect(isSerializedDeviceProduct({ serializedDevice: { version: 1, key: "X" } })).toBe(true)
@@ -152,6 +153,9 @@ describe("Documentos (33–35)", () => {
     expect(html).not.toMatch(/size:\s*80mm\s+auto/)
     expect(html).toMatch(/size: 80mm 200mm/)
     expect(html).toContain("sem valor fiscal")
+  })
+  it("garantia cancelada/recomprada reimprime com aviso de sem efeito", () => {
+    expect(renderTermoGarantia(snap, "a4", "SEM EFEITO — garantia cancelada com a venda.")).toContain("SEM EFEITO")
   })
   it("prévia é marcada como RASCUNHO", () => {
     expect(renderTermoGarantia({ ...snap, numeroGarantia: "RASCUNHO" }, "a4", true)).toContain("RASCUNHO — prévia sem validade")
