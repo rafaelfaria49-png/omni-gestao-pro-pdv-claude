@@ -271,7 +271,7 @@ export function AparelhoFormDialog({ open, onOpenChange, mode, storeId, perms, p
 
   return (
     <Dialog open={open} onOpenChange={(v) => !saving && onOpenChange(v)}>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 p-0 sm:max-w-4xl">
+      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0! p-0! sm:max-w-4xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle>{editing ? `Editar ${mode.aparelho.codigoInterno}` : origem === "fornecedor" || origem === "lote" ? "Entrada por fornecedor / lote" : "Cadastrar aparelho"}</DialogTitle>
           <DialogDescription>{editing ? "Alterações ficam registradas no histórico do aparelho." : "Uma unidade física, identificada pelo IMEI ou número de série."}</DialogDescription>

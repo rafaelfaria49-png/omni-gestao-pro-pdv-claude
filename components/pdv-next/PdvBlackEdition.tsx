@@ -378,7 +378,7 @@ export function PdvBlackEdition() {
       setBipeCode("")
       bipeRef.current?.focus()
     },
-    []
+    [toast]
   )
 
   // ── Bipe: Enter (prefixo canônico parsePdvScanPrefix) ───────────────────────

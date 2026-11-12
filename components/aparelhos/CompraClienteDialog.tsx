@@ -92,7 +92,7 @@ export function CompraClienteDialog({ open, onOpenChange, storeId, perms, politi
 
   return (
     <Dialog open={open} onOpenChange={(v) => !saving && onOpenChange(v)}>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 p-0 sm:max-w-4xl">
+      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0! p-0! sm:max-w-4xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle>Comprar aparelho de cliente</DialogTitle>
           <DialogDescription>O aparelho só entra no estoque depois da aprovação e da liberação para venda.</DialogDescription>

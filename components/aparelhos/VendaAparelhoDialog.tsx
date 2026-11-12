@@ -140,7 +140,7 @@ export function VendaAparelhoDialog({ open, onOpenChange, storeId, produtoId, cl
 
   return (
     <Dialog open={open} onOpenChange={(v) => !reservando && onOpenChange(v)}>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 p-0 sm:max-w-4xl" onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus() }}>
+      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0! p-0! sm:max-w-4xl" onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus() }}>
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2"><Smartphone className="h-5 w-5 text-primary" aria-hidden />Adicionar aparelho</DialogTitle>
           <DialogDescription>Escolha a unidade pelo IMEI. Ela fica reservada para este atendimento por 30 minutos.</DialogDescription>

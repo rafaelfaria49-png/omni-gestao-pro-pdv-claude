@@ -68,7 +68,7 @@ export function AparelhoFichaDialog({ open, onOpenChange, aparelhoId, storeId, p
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 p-0 sm:max-w-4xl">
+      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0! p-0! sm:max-w-4xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle className="flex min-w-0 flex-wrap items-center gap-2">
             {a ? <>{[a.marca, a.modelo, a.variante].filter(Boolean).join(" ")}<span className="font-mono text-sm font-normal text-muted-foreground">{a.codigoInterno}</span></> : "Aparelho"}
