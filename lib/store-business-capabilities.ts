@@ -26,6 +26,8 @@ export const BUSINESS_RESOURCES = [
   { key: "service.technical", label: "Assistência técnica", stage: "operational" },
   { key: "catalog.deviceCompatibility", label: "Compatibilidade com aparelhos", stage: "operational" },
   { key: "pdv.accessoryModelColor", label: "Acessórios para aparelhos", stage: "operational" },
+  // OMNI-APARELHOS-ENDTOEND-001: nunca sugerido por ramo/legado — só liga por escolha explícita da loja.
+  { key: "catalog.serializedDevices", label: "Aparelhos por IMEI (compra, venda e garantia)", stage: "operational" },
   { key: "catalog.weight", label: "Produtos por peso", stage: "preparation" },
   { key: "catalog.variants", label: "Grade comercial de cor e tamanho", stage: "preparation" },
 ] as const
@@ -77,8 +79,10 @@ export function resolveBusinessResource(
     ? (key === "catalog.deviceCompatibility" || key === "pdv.accessoryModelColor" ||
         (key === "service.technical" && legacyBusinessBranch(legacyProfile) === "assistencia"))
     : PRESETS[branch].includes(key)
+  // Recurso novo sem sugestão automática: ativação explícita por loja (rollout controlado).
+  const suggestedFinal = key === "catalog.serializedDevices" ? false : suggested
   const explicit = explicitCapabilityEnabled(capabilities?.overrides?.[key])
-  const requested = explicit ?? suggested
+  const requested = explicit ?? suggestedFinal
   return {
     requested,
     enabled: requested && permitted,

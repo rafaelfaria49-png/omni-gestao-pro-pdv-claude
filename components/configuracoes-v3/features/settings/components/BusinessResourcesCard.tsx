@@ -97,7 +97,7 @@ function BusinessResourcesForm() {
         </select>
         <div className="mt-5 divide-y divide-border">
           {BUSINESS_RESOURCES.filter((item) => item.key === "service.technical" ? permissions?.hubs.operacoes :
-            ["catalog.deviceCompatibility", "pdv.accessoryModelColor"].includes(item.key) ? permissions?.modules?.deviceCatalog : true).map((item) => {
+            ["catalog.deviceCompatibility", "pdv.accessoryModelColor", "catalog.serializedDevices"].includes(item.key) ? permissions?.modules?.deviceCatalog : true).map((item) => {
             const state = resolveBusinessResource(draft, item.key, legacyProfile)
             return <label key={item.key} className="flex cursor-pointer items-start gap-3 py-3">
               <input type="checkbox" checked={state.requested} disabled={disabled}
