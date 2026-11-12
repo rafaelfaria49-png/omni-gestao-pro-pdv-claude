@@ -19,7 +19,9 @@ let proc: ReturnType<ElectronApplication["process"]> | undefined
 
 async function launch(): Promise<ElectronApplication> {
   const a = await electron.launch({
-    args: ["."],
+    // Câmera/microfone falsos do Chromium: o pedido de permissão acontece mesmo em máquina sem
+    // câmera (CI). Não usa --use-fake-ui-for-media-stream: a decisão continua com o app.
+    args: [".", "--use-fake-device-for-media-stream"],
     cwd: root,
     env: { ...process.env, OMNI_DESKTOP_TEST_USER_DATA: userData },
   })
