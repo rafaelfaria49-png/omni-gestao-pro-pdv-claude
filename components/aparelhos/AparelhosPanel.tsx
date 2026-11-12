@@ -236,7 +236,8 @@ function ListaAparelhos({ storeId, reload, perms, onFicha, onNovo, compacta = fa
         </EmptyState>
       ) : (
         <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
-          <div className="min-w-0 overflow-x-auto">
+          {/* relative: o sr-only (absolute) do cabeçalho não escapa do recorte e não alarga a página no celular. */}
+          <div className="relative min-w-0 overflow-x-auto">
             <table className="w-full min-w-[56rem] text-sm">
               <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                 <tr>

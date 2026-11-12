@@ -208,7 +208,7 @@ export function AparelhoFichaDialog({ open, onOpenChange, aparelhoId, storeId, p
                     <p className="text-xs text-muted-foreground">Referência apenas: aparelho de cliente em assistência não entra no estoque.</p>
                   </section>
                 )}
-                <p className="text-xs text-muted-foreground">Política de garantia v{politica.versao || "padrão"}.</p>
+                <p className="text-xs text-muted-foreground">Política de garantia {politica.versao ? `versão ${politica.versao}` : "padrão"}.</p>
               </aside>
             </div>
           )}

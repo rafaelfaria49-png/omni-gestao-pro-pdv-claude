@@ -168,7 +168,7 @@ ${blocoCobertura(s)}
 <h2>Condições</h2>
 <ol>${s.condicoes.map((c) => `<li>${esc(c)}</li>`).join("")}</ol>
 ${s.observacoes ? `<p class="muted">Observações: ${esc(s.observacoes)}</p>` : ""}
-<p class="muted">Documento comercial, sem valor fiscal. Termo ${esc(s.versao)} · política v${s.politicaVersao}. Guarde este termo junto com o comprovante da venda.</p>
+<p class="muted">Documento comercial, sem valor fiscal. Termo ${esc(s.versao)} · política ${s.politicaVersao ? `versão ${s.politicaVersao}` : "padrão"}. Guarde este termo junto com o comprovante da venda.</p>
 <div class="sign"><div>${esc(s.cliente.nome)}<br />Cliente</div><div>${esc(s.venda.operador || s.loja.nome)}<br />Responsável pela loja</div></div>`
   return shell(`Garantia ${s.numeroGarantia}`, body, formato, rascunho)
 }

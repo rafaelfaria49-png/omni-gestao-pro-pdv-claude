@@ -152,7 +152,7 @@ export function CoberturaRegua({ dataEntrega, contratualDias, compact = false }:
     <figure className="min-w-0" aria-label={`Cobertura até ${formatDateKeyBr(g.coberturaFim)}`}>
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
         {contratualDias > 0 && <div className="h-full bg-primary" style={{ width: `${pc}%` }} />}
-        <div className="h-full flex-1 bg-[color:var(--success)]" />
+        <div className="h-full flex-1 bg-[color:var(--info)]" />
       </div>
       <figcaption className={cn("mt-2 grid gap-x-4 gap-y-1 text-xs", compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3")}>
         <span className="min-w-0 text-muted-foreground">Entrega <b className="font-semibold text-foreground">{formatDateKeyBr(g.dataEntrega)}</b></span>
@@ -161,7 +161,7 @@ export function CoberturaRegua({ dataEntrega, contratualDias, compact = false }:
           Contratual {contratualDias > 0 ? <b className="font-semibold text-foreground">{rotuloPrazo(contratualDias)}{contratualDias % 30 !== 0 || contratualDias > 90 ? ` (${contratualDias} d)` : ""}</b> : <b className="font-semibold text-foreground">sem adicional</b>}
         </span>
         <span className="min-w-0 text-muted-foreground">
-          <span aria-hidden className="mr-1 inline-block h-2 w-2 rounded-full bg-[color:var(--success)] align-middle" />
+          <span aria-hidden className="mr-1 inline-block h-2 w-2 rounded-full bg-[color:var(--info)] align-middle" />
           Legal <b className="font-semibold text-foreground">90 dias</b> — até <b className="font-semibold text-foreground">{formatDateKeyBr(g.coberturaFim)}</b>
         </span>
       </figcaption>

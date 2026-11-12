@@ -92,6 +92,9 @@ async function abrirPdvComCaixa(page: Page) {
 }
 
 async function semRolagemHorizontal(page: Page) {
+  // Mede depois da carga (dados e fontes): a largura final é o que o usuário vê.
+  await page.waitForLoadState("networkidle").catch(() => {})
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), { timeout: 15_000 }).toBe(true).catch(() => {})
   const r = await page.evaluate(() => {
     const vw = window.innerWidth
     const culpados = Array.from(document.querySelectorAll<HTMLElement>("body *"))
@@ -105,8 +108,10 @@ async function semRolagemHorizontal(page: Page) {
 async function fecharComprovante(page: Page) {
   const c = page.getByRole("dialog", { name: /^(Impressão não enviada|Comprovante enviado|Comprovante não fiscal|Cupom \/ Recibo Não Fiscal)$/ })
   if (await c.waitFor({ state: "visible", timeout: 15_000 }).then(() => true, () => false)) {
-    await c.getByRole("button", { name: /^(Agora não|Fechar)$/ }).first().click()
+    // O handler automático do PDV pode fechar primeiro: clique tolerante + espera o diálogo sumir.
+    await c.getByRole("button", { name: /^(Agora não|Fechar)$/ }).first().click({ timeout: 5_000 }).catch(() => {})
   }
+  await expect(c).toHaveCount(0, { timeout: 15_000 })
 }
 
 test("01 HUB — cadastra com IMEI, confere, libera e mostra indicadores reais", async ({ browser }) => {
