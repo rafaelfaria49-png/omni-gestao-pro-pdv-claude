@@ -88,6 +88,14 @@ do proprietário). IMEI completo só para gerente/proprietário na lista
   `AparelhoVenda.aparelhoId` (transição `vendido → devolvido` já prevista).
 - **Recompra** de aparelho vendido pela própria loja: reaproveita a mesma unidade; na aprovação a
   garantia anterior vira `recomprada`; se a compra for recusada, a unidade volta como estava.
+- **Cancelamento bloqueado** (`APARELHO_CANCELAMENTO_BLOQUEADO`, 409) quando a unidade já mudou depois
+  da venda (recompra em andamento/aprovada, revisão, etc.) — evita +1 de estoque sem unidade.
+- **Venda pendente de aparelho**: reenvio até 36 h depois é aceito (entrega de "ontem" vira "hoje",
+  nunca pior ao cliente); depois disso é recusada (`APARELHO_DATA_VENDA`) e precisa ser refeita online.
+- **Gerente** pode cadastrar diretamente um usado e liberá-lo (é aprovador). Segregação estrita para
+  o gerente só existe no fluxo "Comprar de cliente". Decisão de produto; revisar com o proprietário.
+- **Cancelamento devolve a unidade a `disponivel`**; se o cliente já levou o aparelho, mova para
+  "Em revisão" antes de revender. Alternativa (ir direto para revisão) é decisão de produto.
 - **Ajuste manual, inventário e OS** ainda podem mexer no saldo de um modelo serializado fora deste
   módulo; a invariante de estoque só é garantida pelos fluxos de aparelhos.
 - **Impressora física 80 mm**: preview validado no navegador; papel/térmica não testados.
