@@ -188,6 +188,8 @@ export interface InventoryItem {
   atributos?: ProdutoAtributoDef[]
   /** Configuração saneada e opcional projetada por `/api/ops/inventory`. */
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /** Modelo de aparelho por IMEI — venda exige escolher a unidade física. */
+  serializedDevice?: boolean
 }
 
 export interface CaixaState {
@@ -621,6 +623,8 @@ interface OperationsContextType {
         custoUnitario?: number | null
         /** Seleção de modelo/cor do acessório (dado passivo, ver SaleLineRecord). */
         accessorySelection?: AccessorySelectionV1
+        /** Aparelho individualizado (unidade + garantia) — ver SaleLineRecord. */
+        deviceSale?: SaleLineRecord["deviceSale"]
         serviceId?: string
         serviceCategory?: string
         warrantyDays?: number

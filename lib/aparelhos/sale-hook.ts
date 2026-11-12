@@ -15,18 +15,8 @@ import { sanitizeAcessorios } from "./checklist"
 import { getPoliticaTx, nextSequenceTx } from "./policy"
 import { buildGarantiaSnapshot } from "./snapshot"
 
-export type DeviceSaleLineV1 = {
-  version: 1
-  aparelhoId: string
-  /** Prazo contratual ADICIONAL escolhido (dias). A legal (90) é sempre aplicada pelo servidor. */
-  contratualDias: number
-  /** YYYY-MM-DD da entrega efetiva (default: data da venda). */
-  dataEntrega?: string
-  /** Token da reserva feita por este caixa (aceita unidade `reservado` com o mesmo token). */
-  reservaToken?: string
-  acessoriosEntregues?: Record<string, boolean>
-  observacoes?: string
-}
+import type { DeviceSaleLineV1 } from "./device-sale-line"
+export type { DeviceSaleLineV1 }
 
 export class DeviceSaleError extends InvalidSaleLinesError {
   readonly deviceCode: string

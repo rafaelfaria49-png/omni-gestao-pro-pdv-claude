@@ -1,5 +1,6 @@
 "use client"
 
+import { APARELHO_FORA_DO_FLUXO, isAparelhoSerializado } from "@/components/aparelhos/bloqueio-layout"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Barcode,
@@ -1754,6 +1755,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct, priceOverride?: number, qtyToAdd: number = 1) => {
+    // OMNI-APARELHOS-ENDTOEND-001: este layout não vende unidade por IMEI — bloqueio explícito.
+    if (isAparelhoSerializado(item)) {
+      toast({ variant: "destructive", ...APARELHO_FORA_DO_FLUXO })
+      return
+    }
     const svcMeta = servicoMetaById.get(item.id)
     // Atalhos entram com o preço atual do catálogo; override só existe ao editar a linha.
     const effectivePrice = priceOverride !== undefined ? priceOverride : item.price

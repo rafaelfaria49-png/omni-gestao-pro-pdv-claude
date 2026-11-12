@@ -24,6 +24,7 @@
  * Ref.: GOAL_PDV_ORPHAN_CLEANUP · docs/audits/AUDITORIA_OPERACIONAL_PDV_REAL_v01.md (P3-01).
  */
 
+import { APARELHO_FORA_DO_FLUXO, isAparelhoSerializado } from "@/components/aparelhos/bloqueio-layout"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft,
@@ -378,6 +379,11 @@ export function PdvVendaCompletaEnterprise({
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
     (product: PdvCatalogProduct) => {
+      // OMNI-APARELHOS-ENDTOEND-001: este layout não vende unidade por IMEI — bloqueio explícito.
+      if (isAparelhoSerializado(product)) {
+        toast({ variant: "destructive", ...APARELHO_FORA_DO_FLUXO })
+        return
+      }
       const isService = product.category === "Servicos"
       if (!isService && product.stock <= 0) {
         toast({
