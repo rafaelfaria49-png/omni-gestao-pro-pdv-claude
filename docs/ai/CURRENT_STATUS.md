@@ -56,6 +56,14 @@
 
 ---
 
+## Aparelhos por IMEI — cadastro, compra, venda e garantia (`OMNI-APARELHOS-CADASTRO-COMPRAS-VENDAS-GARANTIAS-ENDTOEND-001`) · 12/11/2026
+
+- **Real (PG + API), em PR, sem merge**: Cadastros HUB → Aparelhos (visão geral, lista, compras de cliente, garantias, histórico); venda na Venda Completa e no PDV Clássico pelo motor canônico (`upsertVendaInTransaction` + gancho `lib/aparelhos/sale-hook.ts`); documentos A4/80 mm por snapshot.
+- **Desligado por padrão**: capacidade `catalog.serializedDevices` só por escolha explícita da loja; exige módulo `deviceCatalog`.
+- **Migration aditiva `20261110120000_aparelhos_fisicos_serializados` NÃO aplicada em Production** (merge na `main` dispararia `migrate deploy` se o guard de autoridade liberar).
+- **Não integrado (fail-closed ou só registro)**: devolução/correção de itens de aparelho (F8), lançamento financeiro da compra de cliente, consulta oficial de restrição de IMEI, impressão física.
+- Detalhes e pontos que exigem validação jurídica: `docs/modules/APARELHOS.md`.
+
 ## Contador HUB — DASHBOARD INTERNO HONESTO · 21/08/2026
 
 ```

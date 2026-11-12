@@ -67,7 +67,10 @@ libera — o merge na `main` aplicaria esta migration. O merge é decisão human
 
 `lib/aparelhos/permissions.ts`: proprietário (admin) tudo + política; gerente aprova compras de
 OUTROS e vê custo; vendedor cadastra/compra/vende sem custo; caixa vende/reimprime sem custo e sem
-Cadastros; técnico cadastra/avalia sem vender. IMEI completo só para gerente/proprietário na lista
+Cadastros; técnico cadastra/avalia sem vender. **Segregação**: só gerente/proprietário libera
+aparelho para venda (quem cadastra ou registra a compra não libera sozinho); gerente não aprova a
+própria compra quando a política exige aprovação (desligar essa opção remove a segregação — decisão
+do proprietário). IMEI completo só para gerente/proprietário na lista
 (documentos impressos trazem o IMEI completo, que identifica o bem do cliente).
 
 ## Bloqueios conhecidos (não fingidos)
@@ -77,8 +80,16 @@ Cadastros; técnico cadastra/avalia sem vender. IMEI completo só para gerente/p
   separada (`lib/financeiro`).
 - **Consulta oficial de restrição de IMEI**: sem integração autorizada. Só conferência manual
   registrada (fonte, data, operador). O sistema nunca afirma "limpo" sem registro.
-- **Devolução (F8)**: não integrada; o F8 em andamento poderá recuperar a unidade exata por
+- **Cancelamento de venda**: integrado. Na mesma transação do cancelamento, a garantia vira
+  `cancelada` e a unidade volta a `disponivel` (casa com o estorno de +1 do produto). Se o aparelho
+  precisar de avaliação, mude para "Em revisão" (retira do saldo pelo ledger).
+- **Devolução (F8) e correção de itens**: NÃO integradas → fail-closed para vendas com aparelho
+  (`APARELHO_DEVOLUCAO_NAO_INTEGRADA`, nada é gravado). O F8 poderá recuperar a unidade exata por
   `AparelhoVenda.aparelhoId` (transição `vendido → devolvido` já prevista).
+- **Recompra** de aparelho vendido pela própria loja: reaproveita a mesma unidade; na aprovação a
+  garantia anterior vira `recomprada`; se a compra for recusada, a unidade volta como estava.
+- **Ajuste manual, inventário e OS** ainda podem mexer no saldo de um modelo serializado fora deste
+  módulo; a invariante de estoque só é garantida pelos fluxos de aparelhos.
 - **Impressora física 80 mm**: preview validado no navegador; papel/térmica não testados.
 
 ## Testes
