@@ -57,6 +57,8 @@ const PASS_ENV = ["PATH", "Path", "PATHEXT", "SystemRoot", "SYSTEMROOT", "windir
   "APPDATA", "LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)", "ProgramData", "COMSPEC", "NUMBER_OF_PROCESSORS",
   "PROCESSOR_ARCHITECTURE", "OS", "USERNAME", "HOMEDRIVE", "HOMEPATH", "PLAYWRIGHT_BROWSERS_PATH"]
 const baseEnv = Object.fromEntries(PASS_ENV.filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]))
+// Única flag de produto repassada: liga a revogação de sessão no servidor (PR de auth separada).
+if (process.env.AUTH_SESSION_REVOCATION === "on") baseEnv.AUTH_SESSION_REVOCATION = "on"
 const env = { ...baseEnv, NODE_OPTIONS: "--max-old-space-size=4096", DATABASE_URL: database, DIRECT_URL: database, MIGRATION_AUTHORITY_ENABLED: "false", VERCEL: "0", VERCEL_ENV: "development" }
 function run(args, extraEnv = {}, cwd = process.cwd()) {
   const r = spawnSync(process.execPath, args, { env: { ...env, ...extraEnv }, stdio: "inherit", cwd })
@@ -140,6 +142,7 @@ try {
     DESKTOP_QA_SERVER_PID: String(server.pid),
     DESKTOP_QA_DATABASE_URL: database,
     QA_PASSWORD_ADMIN_A: passwords.adminA,
+    DESKTOP_QA_SERVER_REVOCATION: process.env.AUTH_SESSION_REVOCATION === "on" ? "on" : "off",
     QA_PASSWORD_OPERADOR_B: passwords.operadorB,
   }, "apps/desktop")
   status = "PASS"

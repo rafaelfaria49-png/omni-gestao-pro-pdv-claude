@@ -16,6 +16,27 @@ const root = path.resolve(__dirname, "..", "..")
 const out = path.join(root, "test-results", "real-stack")
 mkdirSync(out, { recursive: true })
 const PARTITION = "persist:omnigestao-development"
+const SERVER_REVOCATION = process.env.DESKTOP_QA_SERVER_REVOCATION === "on"
+
+/** Login de A em OUTRO "dispositivo" (cliente HTTP à parte, mesmo fluxo de credenciais do NextAuth). */
+async function apiLogin(email: string, password: string): Promise<string> {
+  const csrfRes = await fetch(ORIGIN + "/api/auth/csrf")
+  const csrfCookie = (csrfRes.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ")
+  const { csrfToken } = (await csrfRes.json()) as { csrfToken: string }
+  const res = await fetch(ORIGIN + "/api/auth/callback/credentials", {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie: csrfCookie },
+    body: new URLSearchParams({ csrfToken, email, password, callbackUrl: ORIGIN + "/dashboard" }).toString(),
+  })
+  const token = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).find((c) => c.startsWith("authjs.session-token="))
+  if (!token) throw new Error("login do segundo dispositivo falhou")
+  return token
+}
+async function sessionWithCookie(cookie: string): Promise<string | null> {
+  const r = await fetch(ORIGIN + "/api/auth/session", { headers: { cookie } })
+  return ((await r.json().catch(() => null)) as { user?: { email?: string } } | null)?.user?.email ?? null
+}
 // Qualquer um destes textos visível/armazenado para B = vazamento de A.
 const MARK_A = ["QA-A-7731", "privado-a@desktop-qa.invalid", "11988887731", "QA_ADMIN_A", "qa_admin_a@desktop-qa.invalid", "Produto QA-A"]
 const evidence: Record<string, unknown> = {}
@@ -285,6 +306,9 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
   })
 
   const tokenA = (await sessionCookies(app)).find((c) => c.name === "authjs.session-token")?.value ?? ""
+  // A também está logada em outro dispositivo: o logout do desktop não pode derrubar essa sessão.
+  const outroDispositivoA = await apiLogin("qa_admin_a@desktop-qa.invalid", PASS_A)
+  expect(await sessionWithCookie(outroDispositivoA)).toBe("qa_admin_a@desktop-qa.invalid")
   const fpAntes = await localFootprint(page, MARK_A)
   note("A.footprintAntesLogout", fpAntes)
   // Controle positivo: sem dado de A guardado antes do logout, o "zero depois" não provaria nada.
@@ -303,6 +327,24 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     const replay = await fetch(ORIGIN + "/api/auth/session", { headers: { cookie: "authjs.session-token=" + tokenA } })
     const replayUser = ((await replay.json().catch(() => null)) as { user?: { email?: string } } | null)?.user?.email ?? null
     note("logout.tokenAntigoAindaValidoNoServidor", replayUser === "qa_admin_a@desktop-qa.invalid")
+    note("logout.revogacaoNoServidor", SERVER_REVOCATION ? "on" : "off")
+    const outro = await sessionWithCookie(outroDispositivoA)
+    note("logout.outroDispositivoDeAContinuaAtivo", outro === "qa_admin_a@desktop-qa.invalid")
+    expect(outro).toBe("qa_admin_a@desktop-qa.invalid")
+    if (SERVER_REVOCATION) {
+      // Token de A reapresentado de fora: recusado.
+      expect(replayUser).toBeNull()
+      // Cookie de A "ressuscitado" no próprio app (corrida #342): o servidor recusa.
+      await app.evaluate(async ({ session }, [partition, origin, value]) => {
+        await session.fromPartition(partition).cookies.set({ url: origin, name: "authjs.session-token", value, path: "/", httpOnly: true })
+      }, [PARTITION, ORIGIN, tokenA] as const)
+      const ressuscitado = await serverSession(page)
+      note("logout.cookieRessuscitadoNoApp", ressuscitado)
+      expect(ressuscitado).toBeNull()
+      await app.evaluate(async ({ session }, [partition, origin]) => {
+        await session.fromPartition(partition).cookies.remove(origin, "authjs.session-token")
+      }, [PARTITION, ORIGIN] as const)
+    }
     await shot(page, "B-00-login-apos-logout")
   })
 
