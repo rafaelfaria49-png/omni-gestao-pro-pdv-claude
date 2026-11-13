@@ -15,7 +15,7 @@ import { loadBuildConfig } from "./config-loader"
 import { guardWebContents, openExternalSafely, remoteWebPreferences, type NavigationContext } from "./navigation"
 import { handleLocalScheme, registerLocalScheme, STATUS_URL } from "./local-protocol"
 import { installPermissionPolicy } from "./permissions"
-import { LogoutGuard } from "./privacy"
+import { isAuthSessionCookie, LogoutGuard } from "./privacy"
 import { handleSquirrelEvent } from "./squirrel"
 import { checkDesktopUpdate, type UpdateStatus } from "./updates"
 
@@ -347,9 +347,17 @@ function run(config: DesktopBuildConfig) {
         if (!win || win.isDestroyed() || !logoutGuard) return
         if (!lastAppUrl || !isLoginPath(lastAppUrl, config.origin)) return
         if (logoutGuard.loginSubmits !== submitsAtLaunch) return
-        void logoutGuard
-          .purgeCaches(win.webContents)
-          .then((done) => log(`privacy-purge-abertura ${done.join(",")}`))
+        const ses = electronSession.fromPartition(partition)
+        void ses.cookies
+          .get({ url: config.origin })
+          .then((cookies) => {
+            // Cookie de sessão presente = alguém logado (abertura lenta ou offline): não mexe no cache.
+            if (!win || cookies.some((c) => isAuthSessionCookie(c.name))) return null
+            return logoutGuard!.purgeCaches(win.webContents)
+          })
+          .then((done) => {
+            if (done) log(`privacy-purge-abertura ${done.join(",")}`)
+          })
           .catch(() => log("privacy-purge-abertura-falhou"))
       }, 3000)
     }

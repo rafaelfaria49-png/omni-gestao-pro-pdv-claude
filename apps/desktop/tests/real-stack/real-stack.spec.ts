@@ -375,7 +375,7 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     expect((await sessionCookies(app)).map((c) => c.name)).toContain("authjs.session-token")
   })
 
-  await step("sessão expirada leva ao login e limpa a pegada", async () => {
+  await test.step("sessão expirada leva ao login e limpa a pegada", async () => {
     await gotoAndSettle(page, "/dashboard/relatorios")
     await app.evaluate(async ({ session }, [partition, origin]) => {
       const ses = session.fromPartition(partition)
@@ -383,15 +383,26 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     }, [PARTITION, ORIGIN] as const)
     await gotoAndSettle(page, "/dashboard/caixa/historico")
     note("expirada.url", page.url().replace(ORIGIN, ""))
-    note("expirada.footprint", await localFootprint(page, MARK_A))
+    const fpExp = await localFootprint(page, MARK_A)
+    note("expirada.footprint", fpExp)
+    expect(page.url()).toContain("/login")
+    expect(fpExp.hits).toEqual([])
   })
 
-  await step("abrir o app sem sessão (JWT expirou com o app fechado) limpa os caches de dados", async () => {
+  await test.step("abrir o app sem sessão (JWT expirou com o app fechado) limpa os caches de dados", async () => {
+    // Controle positivo: dado privado de A gravado no cache de dados do SW, sem sessão, app fechado.
+    await page.evaluate(async () => {
+      await (await caches.open("apis")).put("/api/clientes?qa=seed", new Response('{"nome":"Cliente Privado QA-A-7731"}', { headers: { "content-type": "application/json" } }))
+    })
+    expect((await localFootprint(page, MARK_A)).hits.length).toBeGreaterThan(0)
+    expect((await sessionCookies(app)).map((c) => c.name)).not.toContain("authjs.session-token")
     await app.close()
     app = await launch()
     page = await appPage(app)
     await page.waitForURL(/\/login/, { timeout: 60_000 })
     await page.waitForTimeout(5000)
-    note("abertura.footprint", await localFootprint(page, MARK_A))
+    const fpAbertura = await localFootprint(page, MARK_A)
+    note("abertura.footprint", fpAbertura)
+    expect(fpAbertura.hits).toEqual([])
   })
 })

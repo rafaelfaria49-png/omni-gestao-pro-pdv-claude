@@ -115,6 +115,14 @@ export class LogoutGuard {
         if (isLoginSubmit(details.method, p, details.requestHeaders)) {
           this.armed = false
           this.log(`logout-guard desarmada (envio de login ${p})`)
+          // Senha errada não cria sessão: sem cookie novo em 10 s, a guarda volta a valer.
+          setTimeout(() => {
+            void this.session.cookies.get({ url: this.appOrigin }).then((cs) => {
+              if (this.armed || cs.some((c) => isAuthSessionCookie(c.name))) return
+              this.armed = true
+              this.log("logout-guard rearmada (login sem sessão nova)")
+            })
+          }, 10_000).unref?.()
           // Segunda passada: respostas do usuário anterior que o SW gravou depois da primeira.
           const page = this.page
           if (page && !page.isDestroyed()) {
