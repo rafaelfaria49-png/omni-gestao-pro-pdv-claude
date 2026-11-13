@@ -47,9 +47,9 @@ const DASHBOARD = page(
 export function startFixtureServer(): Promise<http.Server> {
   const server = http.createServer((req, res): void => {
     const url = new URL(req.url ?? "/", FIXTURE_ORIGIN)
-    if (url.pathname === "/login") {
+    if (url.pathname === "/login" && req.method !== "POST") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
-      res.end(page("login", `<a id="enter" href="/dashboard">entrar</a>`))
+      res.end(page("login", `<a id="enter" href="/dashboard" onclick="event.preventDefault(); fetch('/login', { method: 'POST', headers: { 'next-action': 'login' } }).then(() => { location.href = '/dashboard' })">entrar</a>`))
       return
     }
     if (url.pathname === "/dashboard") {
@@ -74,7 +74,13 @@ export function startFixtureServer(): Promise<http.Server> {
       res.end("{}")
       return
     }
-    if (url.pathname === "/api/login" && req.method === "POST") {
+    if (url.pathname === "/_vercel/insights/view" && req.method === "POST") {
+      // Vercel Analytics faz POST em toda página, inclusive no /login: não pode desarmar a guarda.
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end("{}")
+      return
+    }
+    if (url.pathname === "/login" && req.method === "POST") {
       res.writeHead(200, { "content-type": "application/json", "set-cookie": "authjs.session-token=user-B; Path=/; HttpOnly" })
       res.end("{}")
       return

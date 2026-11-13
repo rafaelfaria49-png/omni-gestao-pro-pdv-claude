@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { classifyLoadFailure, hasForbiddenDebugSwitch, parseSquirrelEvent } from "../../src/shared/startup"
 import { compareSemver, isUpdateAvailable, parseUpdateManifest } from "../../src/shared/update-manifest"
-import { isAuthSessionCookie, SHARED_SAFE_CACHE, STATIC_ASSET_CONTENT_TYPE } from "../../src/main/privacy"
+import { isAuthSessionCookie, isLoginSubmit, keepStaticEntry, SHARED_SAFE_CACHE, STATIC_ASSET_CONTENT_TYPE } from "../../src/main/privacy"
 
 describe("Squirrel", () => {
   it("lê o evento do segundo argumento", () => {
@@ -84,12 +84,30 @@ describe("limpeza de caches na troca de usuário", () => {
     }
   })
   it("dentro de um cache estático só sobrevive conteúdo estático", () => {
-    for (const ok of ["application/javascript; charset=utf-8", "text/javascript", "text/css", "font/woff2", "image/png", "image/svg+xml", "application/wasm"]) {
+    for (const ok of ["application/javascript; charset=utf-8", "text/javascript", "text/css", "font/woff2", "image/png", "application/wasm"]) {
       expect(STATIC_ASSET_CONTENT_TYPE.test(ok)).toBe(true)
     }
     // HTML com usuário logado servido no lugar de um .js inexistente (provado na QA real).
-    for (const bad of ["text/html; charset=utf-8", "application/json", "text/x-component", "text/plain", ""]) {
+    for (const bad of ["text/html; charset=utf-8", "application/json", "text/x-component", "text/plain", "image/svg+xml", ""]) {
       expect(STATIC_ASSET_CONTENT_TYPE.test(bad)).toBe(false)
     }
+  })
+})
+
+describe("o que fica no cache estático e o que desarma a guarda", () => {
+  it("só arquivo do build com tipo estático fica", () => {
+    expect(keepStaticEntry("/_next/static/chunks/app.js", "application/javascript")).toBe(true)
+    expect(keepStaticEntry("/_vercel/insights/script.js", "text/html")).toBe(false)
+    expect(keepStaticEntry("/_vercel/insights/script.js", "application/javascript")).toBe(false)
+    expect(keepStaticEntry("/_next/image", "image/webp")).toBe(false) // foto de produto/usuário
+    expect(keepStaticEntry("/_next/static/media/logo.svg", "image/svg+xml")).toBe(false)
+  })
+  it("só o envio de login desarma; analytics e APIs não", () => {
+    expect(isLoginSubmit("POST", "/login", { "Next-Action": "abc" })).toBe(true)
+    expect(isLoginSubmit("POST", "/api/auth/callback/credentials", {})).toBe(true)
+    expect(isLoginSubmit("POST", "/_vercel/insights/view", {})).toBe(false)
+    expect(isLoginSubmit("POST", "/login", {})).toBe(false)
+    expect(isLoginSubmit("POST", "/api/ops/venda-persist/v2", { "next-action": "x" })).toBe(false)
+    expect(isLoginSubmit("GET", "/login", { "next-action": "x" })).toBe(false)
   })
 })

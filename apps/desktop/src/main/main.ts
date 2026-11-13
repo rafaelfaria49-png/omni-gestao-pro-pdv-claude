@@ -337,7 +337,25 @@ function run(config: DesktopBuildConfig) {
     if (!isSameAppOrigin(url, config.origin)) return
     const previous = lastAppUrl
     lastAppUrl = url
-    if (isLoginPath(url, config.origin) && previous && !isLoginPath(previous, config.origin)) {
+    if (isLoginPath(url, config.origin) && previous === null) {
+      // Abertura do app no /login. Com o Service Worker, o /login aparece primeiro mesmo para quem
+      // tem sessão válida (o redirecionamento ao painel vem depois) — então NADA de cookie aqui.
+      // Se, passado um instante, o app continua no /login e ninguém enviou login, a sessão anterior
+      // não existe mais (ex.: JWT expirou com o app fechado): limpa só os caches de dados.
+      const submitsAtLaunch = logoutGuard?.loginSubmits ?? 0
+      setTimeout(() => {
+        if (!win || win.isDestroyed() || !logoutGuard) return
+        if (!lastAppUrl || !isLoginPath(lastAppUrl, config.origin)) return
+        if (logoutGuard.loginSubmits !== submitsAtLaunch) return
+        void logoutGuard
+          .purgeCaches(win.webContents)
+          .then((done) => log(`privacy-purge-abertura ${done.join(",")}`))
+          .catch(() => log("privacy-purge-abertura-falhou"))
+      }, 3000)
+    }
+    // /login vindo de outra tela do app: logout ou sessão expirada durante o uso.
+    const enteringLogin = isLoginPath(url, config.origin) && previous !== null && !isLoginPath(previous, config.origin)
+    if (enteringLogin) {
       // Troca de usuário: documentos abertos pelo anterior fecham e permissões voltam a perguntar.
       for (const child of win?.getChildWindows() ?? []) child.destroy()
       permissionPolicy?.reset()
@@ -397,23 +415,23 @@ function run(config: DesktopBuildConfig) {
 
 // ---- inicialização -------------------------------------------------------------------------
 
+let config: DesktopBuildConfig | null = null
+let configError: string | null = null
+try {
+  config = loadBuildConfig()
+} catch (err) {
+  configError = (err as Error).message
+}
+// Perfil próprio por canal ANTES de qualquer outra coisa (inclusive eventos do instalador):
+// QA nunca cria nem compartilha cookies/cache/vendas pendentes no perfil de Produção.
+if (config && config.channel !== "production") {
+  const testProfile = process.env.OMNI_DESKTOP_TEST_USER_DATA // testes automatizados
+  app.setPath("userData", testProfile || path.join(app.getPath("appData"), `OmniGestão Pro ${channelLabel(config.channel)}`))
+}
 const squirrelEvent = parseSquirrelEvent(process.argv)
 if (!handleSquirrelEvent(squirrelEvent, () => app.quit())) {
-  let config: DesktopBuildConfig | null = null
-  try {
-    config = loadBuildConfig()
-  } catch (err) {
-    fatal((err as Error).message)
-  }
+  if (!config) fatal(configError ?? "configuração ausente")
   if (config) {
-    // Perfil próprio por canal: QA nunca compartilha cookies/cache/vendas pendentes com Produção.
-    if (config.channel !== "production") {
-      const testProfile = process.env.OMNI_DESKTOP_TEST_USER_DATA // testes automatizados
-      app.setPath(
-        "userData",
-        testProfile || path.join(app.getPath("appData"), `OmniGestão Pro ${channelLabel(config.channel)}`),
-      )
-    }
     const debugForbidden =
       hasForbiddenDebugSwitch(process.argv, config.channel) ||
       (config.channel === "production" &&

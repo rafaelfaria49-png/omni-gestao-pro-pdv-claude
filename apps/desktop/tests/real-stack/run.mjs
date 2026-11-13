@@ -52,7 +52,12 @@ const out = path.resolve("apps/desktop/test-results/real-stack")
 await mkdir(out, { recursive: true })
 const port = Number(process.env.DESKTOP_QA_PORT ?? 3005)
 const origin = `http://localhost:${port}` // localhost (não 127.0.0.1): o signout do NextAuth canoniza para localhost
-const env = { ...process.env, DATABASE_URL: database, DIRECT_URL: database, MIGRATION_AUTHORITY_ENABLED: "false" }
+// Allowlist: nenhuma chave de provedor (Stripe, OpenAI, WhatsApp…) do shell chega à stack isolada.
+const PASS_ENV = ["PATH", "Path", "PATHEXT", "SystemRoot", "SYSTEMROOT", "windir", "TEMP", "TMP", "USERPROFILE", "HOME",
+  "APPDATA", "LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)", "ProgramData", "COMSPEC", "NUMBER_OF_PROCESSORS",
+  "PROCESSOR_ARCHITECTURE", "OS", "USERNAME", "HOMEDRIVE", "HOMEPATH", "PLAYWRIGHT_BROWSERS_PATH"]
+const baseEnv = Object.fromEntries(PASS_ENV.filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]))
+const env = { ...baseEnv, NODE_OPTIONS: "--max-old-space-size=4096", DATABASE_URL: database, DIRECT_URL: database, MIGRATION_AUTHORITY_ENABLED: "false", VERCEL: "0", VERCEL_ENV: "development" }
 function run(args, extraEnv = {}, cwd = process.cwd()) {
   const r = spawnSync(process.execPath, args, { env: { ...env, ...extraEnv }, stdio: "inherit", cwd })
   if (r.error || r.status !== 0) throw new Error("DESKTOP_QA_STEP_FAILED " + args.slice(0, 2).join(" "))

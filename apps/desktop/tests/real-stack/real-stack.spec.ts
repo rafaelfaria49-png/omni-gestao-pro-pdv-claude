@@ -214,11 +214,13 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     await shot(page, "A-01-painel")
   })
 
-  await step("cadastros, relatórios e histórico da loja A", async () => {
+  await test.step("cadastros, relatórios e histórico da loja A", async () => {
     await gotoAndSettle(page, "/dashboard/cadastros-v2")
     await page.getByRole("button", { name: "Clientes", exact: true }).or(page.getByRole("tab", { name: "Clientes", exact: true })).first().click().catch(() => {})
     await page.waitForTimeout(2000)
-    note("A.cadastrosMostraClienteA", (await pageText(page)).includes("QA-A-7731"))
+    const viuA = (await pageText(page)).includes("QA-A-7731")
+    note("A.cadastrosMostraClienteA", viuA)
+    expect(viuA).toBe(true) // controle positivo: A precisa ter visto o próprio dado privado
     await shot(page, "A-02-cadastros")
     await gotoAndSettle(page, "/dashboard/relatorios")
     await shot(page, "A-03-relatorios")
@@ -283,7 +285,10 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
   })
 
   const tokenA = (await sessionCookies(app)).find((c) => c.name === "authjs.session-token")?.value ?? ""
-  note("A.footprintAntesLogout", await localFootprint(page, MARK_A))
+  const fpAntes = await localFootprint(page, MARK_A)
+  note("A.footprintAntesLogout", fpAntes)
+  // Controle positivo: sem dado de A guardado antes do logout, o "zero depois" não provaria nada.
+  expect(fpAntes.hits.length).toBeGreaterThan(0)
 
   await test.step("logout real pela tela (Configurações → Segurança)", async () => {
     await logoutUI(page)
@@ -322,7 +327,9 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     await gotoAndSettle(page, "/dashboard/cadastros-v2")
     await page.getByRole("button", { name: "Clientes", exact: true }).or(page.getByRole("tab", { name: "Clientes", exact: true })).first().click().catch(() => {})
     await page.waitForTimeout(2000)
-    note("B.cadastrosMostraClienteA", (await pageText(page)).includes("QA-A-7731"))
+    const bViuA = (await pageText(page)).includes("QA-A-7731")
+    note("B.cadastrosMostraClienteA", bViuA)
+    expect(bViuA).toBe(false)
     await shot(page, "B-02-cadastros")
     const forced = await page.evaluate(async () => {
       const r = await fetch("/api/clientes", { headers: { "x-assistec-loja-id": "qa-loja-a" }, cache: "no-store" })
@@ -338,7 +345,9 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     await page.waitForTimeout(2000)
     await shot(page, "B-03-venda-completa")
     note("B.vendaCompletaTexto", (await pageText(page)).replace(/s+/g, " ").slice(0, 400))
-    note("B.vendaCompletaMostraProdutoA", (await pageText(page)).includes("Produto QA-A"))
+    const bViuProdA = (await pageText(page)).includes("Produto QA-A")
+    note("B.vendaCompletaMostraProdutoA", bViuProdA)
+    expect(bViuProdA).toBe(false)
   })
 
   await test.step("pegada local depois de B usar o sistema", async () => {
@@ -347,10 +356,11 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     note("B.footprint", fp)
     const reqs = await app.evaluate(() => (globalThis as unknown as { __reqLojaA: string[] }).__reqLojaA)
     note("B.requisicoesComLojaA", reqs)
+    expect(reqs).toEqual([])
     expect(fp.hits).toEqual([])
   })
 
-  await step("fechar e reabrir mantém B logado", async () => {
+  await test.step("fechar e reabrir mantém B logado", async () => {
     await app.close()
     app = await launch()
     page = await appPage(app)
@@ -358,7 +368,11 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     await page.waitForURL(/\/dashboard|\/login/, { timeout: 60_000 })
     await page.waitForTimeout(2000)
     note("reabrir.url", page.url().replace(ORIGIN, ""))
-    note("reabrir.sessao", await serverSession(page))
+    await page.waitForTimeout(4000) // passa da janela de 3 s da limpeza de abertura
+    const sess = await serverSession(page)
+    note("reabrir.sessao", sess)
+    expect(sess).toBe("qa_operador_b@desktop-qa.invalid")
+    expect((await sessionCookies(app)).map((c) => c.name)).toContain("authjs.session-token")
   })
 
   await step("sessão expirada leva ao login e limpa a pegada", async () => {
@@ -370,5 +384,14 @@ test("QA real: A (multiloja) → logout → B no mesmo computador, sem vazamento
     await gotoAndSettle(page, "/dashboard/caixa/historico")
     note("expirada.url", page.url().replace(ORIGIN, ""))
     note("expirada.footprint", await localFootprint(page, MARK_A))
+  })
+
+  await step("abrir o app sem sessão (JWT expirou com o app fechado) limpa os caches de dados", async () => {
+    await app.close()
+    app = await launch()
+    page = await appPage(app)
+    await page.waitForURL(/\/login/, { timeout: 60_000 })
+    await page.waitForTimeout(5000)
+    note("abertura.footprint", await localFootprint(page, MARK_A))
   })
 })

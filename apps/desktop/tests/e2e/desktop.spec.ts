@@ -285,8 +285,14 @@ test("logout: cookie de A não ressuscita, B entra normalmente, caches de dados 
   await page.waitForTimeout(500)
   expect(await sessionCookie()).toEqual([])
 
-  // Usuário B envia o login (POST) → guarda desarma e o cookie de B permanece.
-  await page.evaluate(() => fetch("/api/login", { method: "POST" }))
+  // POST de analytics na tela de login NÃO desarma: resposta atrasada de A continua sendo desfeita.
+  await page.evaluate(() => fetch("/_vercel/insights/view", { method: "POST", body: "{}" }))
+  await page.evaluate(() => fetch("/api/late"))
+  await page.waitForTimeout(500)
+  expect(await sessionCookie()).toEqual([])
+
+  // Usuário B envia o login (Server Action: POST /login com next-action) → desarma; cookie de B fica.
+  await page.evaluate(() => fetch("/login", { method: "POST", headers: { "next-action": "qa" } }))
   await page.waitForTimeout(500)
   expect(await sessionCookie()).toEqual(["authjs.session-token=user-B"])
 })
