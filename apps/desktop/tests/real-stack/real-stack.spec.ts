@@ -2,7 +2,7 @@
  * OmniGestão Desktop × stack REAL local (NextAuth real, next start com SW, PostgreSQL descartável).
  * Disparado só por tests/real-stack/run.mjs. Senhas chegam pelo ambiente, nunca são impressas.
  */
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test"
+import { _electron as electron, expect, request, test, type ElectronApplication, type Page } from "@playwright/test"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
@@ -20,18 +20,19 @@ const SERVER_REVOCATION = process.env.DESKTOP_QA_SERVER_REVOCATION === "on"
 
 /** Login de A em OUTRO "dispositivo" (cliente HTTP à parte, mesmo fluxo de credenciais do NextAuth). */
 async function apiLogin(email: string, password: string): Promise<string> {
-  const csrfRes = await fetch(ORIGIN + "/api/auth/csrf")
-  const csrfCookie = (csrfRes.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ")
-  const { csrfToken } = (await csrfRes.json()) as { csrfToken: string }
-  const res = await fetch(ORIGIN + "/api/auth/callback/credentials", {
-    method: "POST",
-    redirect: "manual",
-    headers: { "content-type": "application/x-www-form-urlencoded", cookie: csrfCookie },
-    body: new URLSearchParams({ csrfToken, email, password, callbackUrl: ORIGIN + "/dashboard" }).toString(),
-  })
-  const token = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).find((c) => c.startsWith("authjs.session-token="))
-  if (!token) throw new Error("login do segundo dispositivo falhou")
-  return token
+  const ctx = await request.newContext({ baseURL: ORIGIN })
+  try {
+    const { csrfToken } = (await (await ctx.get("/api/auth/csrf")).json()) as { csrfToken: string }
+    await ctx.post("/api/auth/callback/credentials", {
+      form: { csrfToken, email, password, callbackUrl: ORIGIN + "/dashboard" },
+      maxRedirects: 0,
+    })
+    const c = (await ctx.storageState()).cookies.find((x) => x.name === "authjs.session-token")
+    if (!c) throw new Error("login do segundo dispositivo falhou (sem cookie de sessão)")
+    return `authjs.session-token=${c.value}`
+  } finally {
+    await ctx.dispose()
+  }
 }
 async function sessionWithCookie(cookie: string): Promise<string | null> {
   const r = await fetch(ORIGIN + "/api/auth/session", { headers: { cookie } })
