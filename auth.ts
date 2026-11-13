@@ -22,10 +22,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!isSessionRevocationEnabled()) return
       const sid = "token" in message ? message.token?.sid : undefined
       if (typeof sid !== "string") return
-      try {
-        await sessionStore.revoke(sid, "logout")
-      } catch {
-        console.error("[auth] session_revoke_failed")
+      // Uma nova tentativa; se ainda falhar, registra o prefixo do sid para acompanhamento.
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await sessionStore.revoke(sid, "logout")
+          return
+        } catch {
+          if (attempt === 2) console.error("[auth] session_revoke_failed sid=" + sid.slice(0, 8))
+        }
       }
     },
   },
@@ -44,7 +48,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Revogação por sessão no servidor: token de sessão encerrada (logout), expirada ou alheia
       // não vale mais, mesmo que o cookie volte por resposta atrasada ou cópia.
       if (isSessionRevocationEnabled()) {
-        const session = await resolveAdminSession(sessionStore, { sid: token.sid, userId: current.id, isSignIn: Boolean(user) })
+        const session = await resolveAdminSession(sessionStore, { sid: token.sid, jti: token.jti, userId: current.id, isSignIn: Boolean(user) })
         if (!session.ok) return null
         token.sid = session.sid
       }
