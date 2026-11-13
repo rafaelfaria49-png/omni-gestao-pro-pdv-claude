@@ -43,6 +43,12 @@ try {
   check("abre na origem fixa em /login", new URL(app.url()).pathname.startsWith("/login"), app.url())
   check("origem QA não é Produção", origin !== "https://omni-gestao-pro.vercel.app", origin)
   check("tempo até a tela de login", openMs < 15000, `${openMs} ms`)
+  // A URL /login sozinha não prova nada: uma página de erro da hospedagem (ex.: 402) também fica em /login.
+  const doc = await app.evaluate(async () => {
+    const r = await fetch(location.href, { cache: "no-store", redirect: "manual" })
+    return { status: r.status, form: !!document.querySelector("#email") && !!document.querySelector("#password") }
+  })
+  check("servidor respondeu 200 com o formulário real de login", doc.status === 200 && doc.form, `HTTP ${doc.status}, formulário=${doc.form}`)
 
   const status = pages().find((p) => p.url() === "omni-app://status/status.html")
   check("tela de status carregou do pacote (omni-app://)", !!status)
