@@ -31,6 +31,8 @@ export default defineConfig({
       "generated/**",
       "components/pdv-github-original/**",
       "e2e/**",
+      // Cliente Windows: tem vitest/tsconfig próprios (apps/desktop/package.json).
+      "apps/desktop/**",
     ],
   },
 })

@@ -1,0 +1,42 @@
+name: Desktop Windows (Electron)
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/desktop-windows.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Baixar binário do Electron (checksum verificado pelo pacote)
+        run: node node_modules/electron/install.js
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:e2e
+      - name: Empacotar (canal production, sem instalar e sem assinar)
+        run: |
+          node scripts/write-build-config.mjs --channel production
+          npx electron-forge package
+      - name: Conferir fuses do executável
+        run: >
+          node -e "const f=require('@electron/fuses');f.getCurrentFuseWire('out/OmniGestaoPro-win32-x64/OmniGestaoPro.exe').then(w=>{const o=f.FuseV1Options;const want={RunAsNode:48,EnableNodeOptionsEnvironmentVariable:48,EnableNodeCliInspectArguments:48,EnableCookieEncryption:49,EnableEmbeddedAsarIntegrityValidation:49,OnlyLoadAppFromAsar:49,GrantFileProtocolExtraPrivileges:48};for(const [k,v] of Object.entries(want)){if(w[o[k]]!==v){console.error('fuse',k,w[o[k]]);process.exit(1)}}console.log('fuses ok')})"

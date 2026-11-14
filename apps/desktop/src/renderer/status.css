@@ -1,0 +1,145 @@
+/* Tela local de status do OmniGestão Desktop.
+   Paleta derivada do ícone oficial (public/omni-gestao-pro-icon.svg). */
+:root {
+  --surface: #f5f9fc;
+  --ink: #0c2a3e;
+  --ink-soft: #46606f;
+  --brand: #0369a1;
+  --brand-deep: #0c4a6e;
+  --brand-glow: #38bdf8;
+  --line: #d6e4ee;
+  --warn-bg: #fef3c7;
+  --warn-ink: #78350f;
+  --danger: #b42318;
+  --focus: #0ea5e9;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #071c2a;
+    --ink: #e0f2fe;
+    --ink-soft: #94b4c6;
+    --brand: #38bdf8;
+    --brand-deep: #7dd3fc;
+    --brand-glow: #0ea5e9;
+    --line: #17384d;
+    --warn-bg: #3b2a06;
+    --warn-ink: #fde68a;
+    --danger: #fda29b;
+    --focus: #7dd3fc;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.channel-strip {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel {
+  align-self: center;
+  justify-self: center;
+  width: min(440px, calc(100vw - 32px));
+  padding: 8px 0 24px;
+}
+
+.mark { display: block; border-radius: 14px; }
+
+.progress {
+  height: 3px;
+  margin: 28px 0 22px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  width: 36%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-deep), var(--brand-glow));
+  border-radius: 2px;
+  animation: slide 1.4s ease-in-out infinite;
+}
+body:not([data-kind="loading"]) .progress span { animation: none; width: 100%; background: var(--line); }
+body[data-kind="offline"] .progress span,
+body[data-kind="server-error"] .progress span,
+body[data-kind="certificate"] .progress span,
+body[data-kind="fatal"] .progress span { background: var(--danger); }
+
+@keyframes slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(280%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress span { animation: none; width: 100%; opacity: 0.6; }
+}
+
+h1 {
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+
+p { margin: 0 0 8px; color: var(--ink-soft); max-width: 60ch; }
+
+.detail {
+  font-size: 13px;
+  border-left: 3px solid var(--line);
+  padding-left: 10px;
+  margin-top: 12px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+
+button {
+  font: inherit;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+button.primary { background: var(--brand); color: #fff; }
+button.secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+button:hover { filter: brightness(1.06); }
+button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+@media (prefers-color-scheme: dark) {
+  button.primary { color: #052235; }
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--ink-soft);
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
