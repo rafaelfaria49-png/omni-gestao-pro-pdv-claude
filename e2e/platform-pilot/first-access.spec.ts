@@ -28,7 +28,8 @@ async function login(page: Page, email: string, password: string) {
 async function logout(page: Page) {
   await page.goto("/dashboard/configuracoes?sec=seguranca")
   await page.getByRole("button", { name: "Encerrar sessão", exact: true }).click()
-  await expect(page).toHaveURL(/\/login/)
+  // `/login/sair` confirma o logout no servidor e só então segue para `/login` (SEC-342).
+  await page.waitForURL((url) => url.pathname === "/login")
   expect(!!(await (await page.request.get("/api/auth/session")).json())?.user).toBe(false)
 }
 const wizard = (page: Page) => page.getByRole("dialog").filter({ has: page.getByTestId("first-access-store") })
