@@ -17,6 +17,7 @@ import type { PrismaClient } from "@/generated/prisma"
 import {
   MANUAL_MODEL_KEY_PREFIX,
   aliasesFromJson,
+  buildLojaCatalogoIndex,
   catalogKey,
   cleanCatalogText,
   findGlobalDuplicate,
@@ -211,7 +212,10 @@ async function findLojaDuplicate(db: Db, storeId: string, brandKey: string, name
 }
 
 function duplicateFromLoja(row: ModeloRow): LojaCatalogoFailure {
-  const m = toModelo(row)
+  return duplicateFromModelo(toModelo(row))
+}
+
+function duplicateFromModelo(m: LojaModelo): LojaCatalogoFailure {
   const aguardando = m.lancamento === "aguardando_lancamento"
   return {
     ok: false,
@@ -265,6 +269,11 @@ export async function createLojaModelo(
   try {
     const dup = await findLojaDuplicate(db, storeId, brandKey, nameKey)
     if (dup) return duplicateFromLoja(dup)
+    // COMPAT-BUSCA-MODELOS-NATURAL-001: o mesmo aparelho escrito de outro jeito nesta loja
+    // ("Apple" + "iPhone 7" × "iPhone" + "7") também é duplicata — oferece usar o existente.
+    const equivalente = findGlobalDuplicate(buildLojaCatalogoIndex(await listLojaModelos(db, storeId)), { brand, name, manufacturer })
+    const modeloEquivalente = equivalente ? (await getLojaModelosByKeys(db, storeId, [equivalente.modelKey]))[0] : undefined
+    if (modeloEquivalente) return duplicateFromModelo(modeloEquivalente)
     // A busca lê no máximo MAX_MODELOS_POR_LOJA modelos: acima disso o novo sumiria em silêncio.
     if ((await db.catalogoAparelhoLojaModelo.count({ where: { storeId } })) >= MAX_MODELOS_POR_LOJA) {
       return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${MAX_MODELOS_POR_LOJA} modelos cadastrados por loja atingido.` }

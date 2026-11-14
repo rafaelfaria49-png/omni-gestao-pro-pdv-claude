@@ -26,7 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { cn } from "@/lib/utils"
 import {
   COMPATIBILITY_STATUSES,
@@ -36,6 +35,8 @@ import {
   type CompatibilityType,
 } from "@/lib/catalogo-aparelhos/produto-metadata"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
+import { MostrarMaisModelos } from "@/components/dashboard/catalogo/mostrar-mais-modelos"
+import { useBuscaModelos } from "@/components/dashboard/catalogo/use-busca-modelos"
 import { resolverModelos, type ModeloResolvido } from "@/lib/catalogo-aparelhos/loja-catalogo-client"
 import { catalogKey } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import {
@@ -89,8 +90,6 @@ export function ProdutoCompatibilidadeAparelhos({
   lojaHeader: string
 }) {
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<DeviceSearchResult[]>([])
-  const [searching, setSearching] = useState(false)
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement | null>(null)
   // CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — cadastro inline, filtro e nomes legíveis.
@@ -121,37 +120,10 @@ export function ProdutoCompatibilidadeAparelhos({
     }
   }, [pendentesKey, lojaHeader])
 
-  // Busca com debounce contra a API read-only do catálogo.
-  useEffect(() => {
-    const q = query.trim()
-    if (q.length < 2) {
-      setResults([])
-      setSearching(false)
-      return
-    }
-    setSearching(true)
-    const t = window.setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/catalogo/aparelhos/search?q=${encodeURIComponent(q)}`, {
-          credentials: "include",
-          headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader },
-          cache: "no-store",
-        })
-        if (!res.ok) {
-          setResults([])
-          return
-        }
-        const data = (await res.json().catch(() => null)) as { results?: DeviceSearchResult[] } | null
-        setResults(Array.isArray(data?.results) ? data.results : [])
-        setOpen(true)
-      } catch {
-        setResults([])
-      } finally {
-        setSearching(false)
-      }
-    }, 250)
-    return () => window.clearTimeout(t)
-  }, [query, lojaHeader])
+  // Busca com debounce contra a API read-only do catálogo — paginada (COMPAT-BUSCA-MODELOS-NATURAL-001).
+  const busca = useBuscaModelos({ query, lojaHeader })
+  const { results, limpar: limparBusca } = busca
+  const searching = busca.loading
 
   // Fecha a lista ao clicar fora.
   useEffect(() => {
@@ -165,7 +137,7 @@ export function ProdutoCompatibilidadeAparelhos({
 
   const addModel = (r: DeviceSearchResult) => {
     setQuery("")
-    setResults([])
+    limparBusca()
     setOpen(false)
     if (value.models.some((m) => m.modelKey === r.modelKey)) return
     const nextAliases = Array.from(new Set([...value.aliases, r.canonicalName, ...r.aliases].filter(Boolean)))
@@ -178,7 +150,7 @@ export function ProdutoCompatibilidadeAparelhos({
 
   const addEscolhido = (m: ModeloAparelhoEscolhido) => {
     setQuery("")
-    setResults([])
+    limparBusca()
     setOpen(false)
     if (value.models.some((x) => x.modelKey === m.modelKey)) return
     onChange({
@@ -226,7 +198,10 @@ export function ProdutoCompatibilidadeAparelhos({
           <Input
             id="compat-busca"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setOpen(true)
+            }}
             onFocus={() => results.length > 0 && setOpen(true)}
             placeholder="Ex.: A05, Samsung A05, iPhone 13 Pro Max"
             autoComplete="off"
@@ -276,6 +251,14 @@ export function ProdutoCompatibilidadeAparelhos({
                   </span>
                 </button>
               ))}
+              {!searching && busca.hasMore && (
+                <MostrarMaisModelos
+                  mostrados={results.length}
+                  total={busca.total}
+                  loading={busca.loadingMore}
+                  onMostrarMais={() => void busca.carregarMais()}
+                />
+              )}
             </div>
           )}
         </div>

@@ -145,6 +145,9 @@ export interface LojaModeloInput {
   notes: string
 }
 
+/** Ao menos uma letra (qualquer alfabeto, já sem acento) ou dígito. */
+const TEM_LETRA_OU_NUMERO = /[\p{L}\p{N}]/u
+
 /** Valida e saneia o input de criação/edição de modelo manual. */
 export function sanitizeLojaModeloInput(
   raw: unknown,
@@ -155,7 +158,11 @@ export function sanitizeLojaModeloInput(
   const name = cleanCatalogText(input.name, LOJA_MODELO_LIMITS.name)
   if (!brand) errors.brand = "Informe a marca do aparelho."
   if (!name) errors.name = "Informe o nome do modelo."
-  if (name && catalogKey(name).length < 2) errors.name = "Nome do modelo muito curto."
+  // COMPAT-BUSCA-MODELOS-NATURAL-001: nomes de um caractere são legítimos ("7", "8", "X" na marca
+  // iPhone). Continua barrado o nome sem letra nem número ("-", ".", "…").
+  if (name && !TEM_LETRA_OU_NUMERO.test(catalogKey(name))) {
+    errors.name = "O nome do modelo precisa ter letra ou número (ex.: 7, X, A56)."
+  }
 
   const rawAliases = Array.isArray(input.aliases)
     ? input.aliases
@@ -323,10 +330,55 @@ export function searchDeviceModelsComLoja(
   query: string,
   options: SearchDeviceOptions = {},
 ): DeviceSearchResult[] {
-  const limit = options.limit ?? 20
+  return searchDeviceModelsComLojaPagina(globalIndex, lojaIndex, query, options).results
+}
+
+/** Página da busca combinada: `hasMore`/`nextOffset` alimentam o "Mostrar mais" (nada é cortado em silêncio). */
+export interface DeviceSearchPage {
+  results: DeviceSearchResult[]
+  /** Total de modelos que casam com a busca (já sem ocultos/duplicados). */
+  total: number
+  hasMore: boolean
+  /** Offset da próxima página; `null` quando não há mais. */
+  nextOffset: number | null
+}
+
+/**
+ * COMPAT-BUSCA-MODELOS-NATURAL-001 — mesma busca de `searchDeviceModelsComLoja`, paginada por
+ * `offset`/`limit`. A lista completa é ordenada UMA vez (índice em memória) e só a página volta ao
+ * cliente: o operador vê os primeiros 20 e pede mais sem perder nem repetir modelos.
+ */
+export function searchDeviceModelsComLojaPagina(
+  globalIndex: CatalogoIndex,
+  lojaIndex: CatalogoIndex | null,
+  query: string,
+  options: SearchDeviceOptions = {},
+): DeviceSearchPage {
+  const limit = Math.max(1, Math.floor(options.limit ?? 20))
+  const offset = Math.max(0, Math.floor(options.offset ?? 0))
+  const semPagina: SearchDeviceOptions = { ...options }
+  delete semPagina.offset
+  delete semPagina.limit
+  const todos = buscarTodosComLoja(globalIndex, lojaIndex, query, semPagina)
+  const results = todos.slice(offset, offset + limit)
+  const fim = offset + results.length
+  const hasMore = fim < todos.length
+  return { results, total: todos.length, hasMore, nextOffset: hasMore ? fim : null }
+}
+
+function buscarTodosComLoja(
+  globalIndex: CatalogoIndex,
+  lojaIndex: CatalogoIndex | null,
+  query: string,
+  options: SearchDeviceOptions,
+): DeviceSearchResult[] {
   if (!lojaIndex || lojaIndex.models.length === 0) {
-    return searchDeviceModels(globalIndex, query, { ...options, limit }).map((r) => ({ ...r, source: "global" as const }))
+    return searchDeviceModels(globalIndex, query, { ...options, limit: globalIndex.models.length || 1 }).map((r) => ({
+      ...r,
+      source: "global" as const,
+    }))
   }
+  const limit = lojaIndex.models.length
   // Marca oculta na loja vale só para o catálogo global: modelo cadastrado pela loja sempre aparece
   // (inclusive quando achado pelo nome/alias do global equivalente).
   const { marcasOcultas, ...semOcultas } = options
@@ -370,7 +422,6 @@ export function searchDeviceModelsComLoja(
     .sort((a, b) => MATCH_RANK[a.r.matchType] - MATCH_RANK[b.r.matchType] || a.i - b.i)
     .map(({ r }) => r)
     .filter((r) => (vistos.has(r.modelKey) ? false : (vistos.add(r.modelKey), true)))
-    .slice(0, limit)
 }
 
 // ---------------------------------------------------------------------------

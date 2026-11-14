@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
-import { buildLojaCatalogoIndex, searchDeviceModelsComLoja } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import { buildLojaCatalogoIndex, searchDeviceModelsComLojaPagina } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import { listLojaModelos } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import { resolveCatalogoLojaRead } from "@/lib/catalogo-aparelhos/loja-catalogo-api"
 import { marcasOcultasParaLoja } from "@/lib/compat/compat-marcas"
@@ -23,6 +23,8 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 const MAX_LIMIT = 30
+/** Teto defensivo do offset (o catálogo inteiro tem poucos milhares de modelos). */
+const MAX_OFFSET = 10_000
 
 export async function GET(req: Request) {
   const gate = await resolveCatalogoLojaRead(req)
@@ -33,9 +35,12 @@ export async function GET(req: Request) {
   const brand = (url.searchParams.get("brand") ?? "").trim() || undefined
   const limitRaw = parseInt(url.searchParams.get("limit") ?? "", 10)
   const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), MAX_LIMIT) : 20
+  // COMPAT-BUSCA-MODELOS-NATURAL-001: paginação ("Mostrar mais") — nada é cortado em silêncio.
+  const offsetRaw = parseInt(url.searchParams.get("offset") ?? "", 10)
+  const offset = Number.isFinite(offsetRaw) ? Math.min(Math.max(offsetRaw, 0), MAX_OFFSET) : 0
 
   if (q.length < 2) {
-    return NextResponse.json({ query: q, results: [] })
+    return NextResponse.json({ query: q, results: [], total: 0, hasMore: false, nextOffset: null })
   }
 
   try {
@@ -43,8 +48,8 @@ export async function GET(req: Request) {
     const lojaIndex = gate.storeId ? buildLojaCatalogoIndex(await listLojaModelos(prisma, gate.storeId)) : null
     // Marcas ocultas nesta loja (padrão: só as prioritárias aparecem). Modelos da loja nunca são ocultados.
     const marcasOcultas = await marcasOcultasParaLoja(gate.storeId)
-    const results = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand, marcasOcultas })
-    return NextResponse.json({ query: q, results })
+    const page = searchDeviceModelsComLojaPagina(index, lojaIndex, q, { limit, offset, brand, marcasOcultas })
+    return NextResponse.json({ query: q, ...page })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/catalogo/aparelhos/search]", msg)

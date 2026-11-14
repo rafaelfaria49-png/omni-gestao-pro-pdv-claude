@@ -65,8 +65,88 @@ describe("revisão independente", () => {
 
   it("P3-1: recusa o modelo além do limite que a busca consegue ler (sem gravar)", async () => {
     const create = vi.fn()
-    const full = { catalogoAparelhoLojaModelo: { findFirst: vi.fn(async () => null), count: vi.fn(async () => 2000), create } } as never
+    const full = { catalogoAparelhoLojaModelo: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []), count: vi.fn(async () => 2000), create } } as never
     expect(await createLojaModelo(full, global, "loja", "u", { brand: "M", name: "G47" })).toMatchObject({ ok: false, code: "LIMIT", status: 409 })
     expect(create).not.toHaveBeenCalled()
+  })
+})
+
+describe("COMPAT-BUSCA-MODELOS-NATURAL-001 — nome de um caractere e reaproveitamento", () => {
+  const row = (p: Record<string, unknown>) => ({
+    id: "row-1",
+    storeId: "loja",
+    modelKey: "manual_iphone7",
+    brand: "Apple",
+    manufacturer: "Apple",
+    line: "",
+    lancamento: "lancado",
+    name: "iPhone 7",
+    brandKey: "APPLE",
+    nameKey: "IPHONE 7",
+    aliases: [],
+    notes: "",
+    active: true,
+    version: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...p,
+  })
+  const vazio = () => ({
+    catalogoAparelhoLojaModelo: {
+      findFirst: vi.fn(async () => null),
+      findMany: vi.fn(async () => []),
+      count: vi.fn(async () => 0),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => row({ ...data, id: "novo" })),
+    },
+  })
+
+  it('"iPhone" + "7" (fabricante Apple) é cadastro válido quando nada equivalente existe', async () => {
+    const db = vazio()
+    const r = await createLojaModelo(db as never, global, "loja", "u", { manufacturer: "Apple", brand: "iPhone", name: "7" })
+    expect(r).toMatchObject({ ok: true })
+    expect(db.catalogoAparelhoLojaModelo.create).toHaveBeenCalledTimes(1)
+    expect(db.catalogoAparelhoLojaModelo.create.mock.calls[0][0].data).toMatchObject({ brand: "iPhone", name: "7", nameKey: "7" })
+  })
+
+  it("no catálogo global: devolve DUPLICATE com o modelo existente (sem gravar)", async () => {
+    const g = buildCatalogoIndex({
+      models: parseDeviceModels(
+        ["model_key,brand,commercial_line,canonical_name,short_name,status", "apple_iphone_7,Apple,iPhone,Apple iPhone 7,7,ativo"].join("\n"),
+      ),
+      aliases: [],
+    })
+    const db = vazio()
+    const r = await createLojaModelo(db as never, g, "loja", "u", { manufacturer: "Apple", brand: "iPhone", name: "7" })
+    expect(r).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: "apple_iphone_7", source: "global", active: true } })
+    expect(db.catalogoAparelhoLojaModelo.create).not.toHaveBeenCalled()
+  })
+
+  it('na loja, escrito de outro jeito ("Apple" + "iPhone 7"): oferece usar o existente', async () => {
+    const existente = row({})
+    const db = vazio()
+    db.catalogoAparelhoLojaModelo.findMany = vi.fn(async () => [existente]) as never
+    const r = await createLojaModelo(db as never, global, "loja", "u", { manufacturer: "Apple", brand: "iPhone", name: "7" })
+    expect(r).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: "manual_iphone7", source: "loja", active: true } })
+    expect(db.catalogoAparelhoLojaModelo.create).not.toHaveBeenCalled()
+  })
+
+  it("duplicidade exata na mesma marca continua bloqueada", async () => {
+    const db = vazio()
+    db.catalogoAparelhoLojaModelo.findFirst = vi.fn(async () => row({ brand: "iPhone", name: "7", brandKey: "IPHONE", nameKey: "7" })) as never
+    expect(await createLojaModelo(db as never, global, "loja", "u", { brand: "iPhone", name: "7" })).toMatchObject({ ok: false, code: "DUPLICATE" })
+    expect(db.catalogoAparelhoLojaModelo.create).not.toHaveBeenCalled()
+  })
+
+  it("nome sem letra nem número segue inválido, antes de tocar o banco", async () => {
+    const untouched = { catalogoAparelhoLojaModelo: { findFirst: vi.fn(), create: vi.fn() } }
+    for (const name of ["-", ".", "…", "  "]) {
+      expect(await createLojaModelo(untouched as never, global, "loja", "u", { brand: "iPhone", name }), name).toMatchObject({ ok: false, code: "INVALID" })
+    }
+    expect(await createLojaModelo(untouched as never, global, "loja", "u", { brand: "", name: "7" })).toMatchObject({
+      ok: false,
+      code: "INVALID",
+      errors: { brand: expect.any(String) },
+    })
+    expect(untouched.catalogoAparelhoLojaModelo.findFirst).not.toHaveBeenCalled()
   })
 })

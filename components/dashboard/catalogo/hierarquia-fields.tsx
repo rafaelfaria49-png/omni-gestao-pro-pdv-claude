@@ -5,10 +5,14 @@
  * Fabricante › Marca comercial › Linha › Modelo, com sugestões do catálogo (sem digitação
  * inconsistente), prévia do nome padronizado e aviso de modelos PARECIDOS já existentes
  * (aviso, não bloqueio: "A56" e "A56 5G" são aparelhos diferentes; duplicata exata o servidor recusa).
+ *
+ * COMPAT-BUSCA-MODELOS-NATURAL-001: nome de um caractere ("7", "X") é válido; quando o nome
+ * padronizado já existe EXATAMENTE (ex.: iPhone + 7 → Apple iPhone 7), oferece usar o existente.
  */
 
 import { useEffect, useId, useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
@@ -31,6 +35,7 @@ export function HierarquiaFields({
   errors,
   autoFocus = false,
   excludeModelKey,
+  onUsarExistente,
 }: {
   value: HierarquiaValue
   onChange: (v: HierarquiaValue) => void
@@ -39,6 +44,8 @@ export function HierarquiaFields({
   autoFocus?: boolean
   /** Na edição: não avisar o próprio modelo como "parecido". */
   excludeModelKey?: string
+  /** Oferece "Usar modelo existente" quando o nome padronizado já existe (evita duplicar). */
+  onUsarExistente?: (modelo: DeviceSearchResult) => void
 }) {
   const uid = useId()
   const [sugestoes, setSugestoes] = useState(arvoreCache)
@@ -71,7 +78,7 @@ export function HierarquiaFields({
   // Aviso de parecidos: busca o nome padronizado no catálogo (global + loja).
   useEffect(() => {
     const q = nomeFinal.trim()
-    if (q.length < 3 || value.name.trim().length < 2) {
+    if (q.length < 3 || value.name.trim().length < 1) {
       setParecidos([])
       return
     }
@@ -99,6 +106,8 @@ export function HierarquiaFields({
   }, [nomeFinal, value.name, lojaHeader, excludeModelKey])
 
   const set = (patch: Partial<HierarquiaValue>) => onChange({ ...value, ...patch })
+  // Casamento EXATO com o nome padronizado = o mesmo aparelho (não só parecido).
+  const existentes = parecidos.filter((p) => p.matchType === "exact")
 
   return (
     <div className="space-y-3 min-w-0">
@@ -164,7 +173,7 @@ export function HierarquiaFields({
             value={value.name}
             maxLength={LOJA_MODELO_LIMITS.name}
             onChange={(e) => set({ name: e.target.value })}
-            placeholder="Ex.: A7 Pro, A56 5G"
+            placeholder="Ex.: 7, X, A7 Pro, A56 5G"
             autoComplete="off"
             aria-invalid={!!errors?.name}
           />
@@ -184,6 +193,20 @@ export function HierarquiaFields({
               </span>
             ))}
           </p>
+        </div>
+      )}
+
+      {onUsarExistente && existentes.length > 0 && (
+        <div className="space-y-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground min-w-0" role="status">
+          <p className="font-medium">Este modelo já existe — use o cadastro existente em vez de duplicar:</p>
+          <div className="flex flex-wrap gap-2">
+            {existentes.map((p) => (
+              <Button key={p.modelKey} type="button" size="sm" variant="outline" onClick={() => onUsarExistente(p)}>
+                Usar modelo existente: {p.canonicalName}
+                {p.source === "loja" ? " (cadastro da loja)" : ""}
+              </Button>
+            ))}
+          </div>
         </div>
       )}
 
