@@ -142,7 +142,7 @@ test("ZG47: cadastro manual, compatibilidades por loja e venda no PDV", async ({
     await abrirModelos(page)
     const painel = page.getByRole("region", { name: "Modelos cadastrados pela loja" })
     await painel.getByRole("button", { name: "Cadastrar novo modelo" }).click()
-    const dialog = await cadastrarModelo(page, { marca: "marca sintetica e2e", nome: "g47" })
+    const dialog = await cadastrarModelo(page, { marca: "marca sintetica e2e", nome: "zg47" })
     await expect(dialog.getByRole("alert")).toContainText("já está cadastrado nesta loja")
     await dialog.getByRole("button", { name: "Cancelar" }).click()
     await painel.getByRole("button", { name: "Cadastrar novo modelo" }).click()
