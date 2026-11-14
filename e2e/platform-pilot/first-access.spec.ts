@@ -159,7 +159,7 @@ test("jornada integral: provisionar → senha obrigatória → assistente → pr
     await client.setViewportSize({ width: 390, height: 844 })
     await client.goto("/dashboard")
     await client.getByRole("button", { name: "Abrir menu de navegação" }).click()
-    await expect(client.getByRole("dialog", { name: "Navegação" })).not.toContainText(/IA Mestre|Master Console|WhatsApp HUB|Catálogo de Aparelhos/)
+    await expect(client.getByRole("dialog", { name: "Navegação" })).not.toContainText(/IA Mestre|Master Console|WhatsApp HUB|Catálogo de Aparelhos|\bCompat\b/)
   } finally { temporary = ""; await clientContext.close() }
 })
 

@@ -18,14 +18,14 @@ export type CatalogoClientError = {
 
 export type CatalogoClientResult<T> = ({ ok: true } & T) | CatalogoClientError
 
-function headers(lojaHeader: string | null | undefined, json = false): Record<string, string> {
+export function headers(lojaHeader: string | null | undefined, json = false): Record<string, string> {
   return {
     ...(json ? { "Content-Type": "application/json" } : {}),
     ...(lojaHeader ? { [ASSISTEC_LOJA_HEADER]: lojaHeader } : {}),
   }
 }
 
-async function call<T>(input: string, init: RequestInit): Promise<CatalogoClientResult<T>> {
+export async function call<T>(input: string, init: RequestInit): Promise<CatalogoClientResult<T>> {
   try {
     const res = await fetch(input, { credentials: "include", cache: "no-store", ...init })
     const data = (await res.json().catch(() => null)) as Record<string, unknown> | null
@@ -49,7 +49,7 @@ async function call<T>(input: string, init: RequestInit): Promise<CatalogoClient
 
 export function criarModeloLoja(
   lojaHeader: string | null | undefined,
-  input: { brand: string; name: string; aliases?: string[]; notes?: string },
+  input: { brand: string; name: string; manufacturer?: string; line?: string; aliases?: string[]; notes?: string },
 ) {
   return call<{ modelo: LojaModelo }>("/api/catalogo/aparelhos/modelos", {
     method: "POST",
@@ -61,7 +61,16 @@ export function criarModeloLoja(
 export function atualizarModeloLoja(
   lojaHeader: string | null | undefined,
   id: string,
-  patch: { version: number; brand?: string; name?: string; aliases?: string[]; notes?: string; active?: boolean },
+  patch: {
+    version: number
+    brand?: string
+    manufacturer?: string
+    line?: string
+    name?: string
+    aliases?: string[]
+    notes?: string
+    active?: boolean
+  },
 ) {
   return call<{ modelo: LojaModelo }>(`/api/catalogo/aparelhos/modelos/${encodeURIComponent(id)}`, {
     method: "PATCH",

@@ -87,6 +87,10 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
     label: "Confirmado fornecedor",
     className: "border-success/40 bg-success/10 text-success",
   },
+  confirmado_loja: {
+    label: "Confirmada pela loja",
+    className: "border-success/40 bg-success/10 text-success",
+  },
   provavel_mercado: {
     label: "Provável mercado",
     className: "border-warning/40 bg-warning/10 text-warning",
@@ -118,7 +122,11 @@ function StatusBadge({ status }: { status: string }) {
 
 // --- Componente principal ---
 
-export function BuscadorPeliculas() {
+/**
+ * `embedded` (COMPAT-PROFISSIONAL-001): dentro do Compat HUB o cabeçalho e a gestão de modelos
+ * ficam no HUB (aba "Modelos"); aqui sobra só a consulta de películas, sem duplicar navegação.
+ */
+export function BuscadorPeliculas({ embedded = false }: { embedded?: boolean } = {}) {
   const [query, setQuery] = useState("")
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -177,7 +185,7 @@ export function BuscadorPeliculas() {
   return (
     <div className="mx-auto w-full max-w-4xl min-w-0 space-y-4">
       {/* Cabeçalho */}
-      <div className="min-w-0">
+      <div className={cn("min-w-0", embedded && "hidden")}>
         <div className="flex items-center gap-2">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
             <ScanSearch className="h-4 w-4" />
@@ -254,7 +262,7 @@ export function BuscadorPeliculas() {
       </div>
 
       {/* Gestão do catálogo DA LOJA (cadastro manual de lançamentos). */}
-      <ModelosDaLojaPanel lojaHeader={lojaHeader} onChanged={refresh} />
+      {!embedded && <ModelosDaLojaPanel lojaHeader={lojaHeader} onChanged={refresh} />}
 
       <CadastrarModeloAparelhoDialog
         open={cadastroOpen}

@@ -1,8 +1,12 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { ACESSORIO_CORES_PADRAO } from "@/lib/acessorios/cores"
-import type { ProdutoAcessoriosFormValue } from "@/lib/acessorios/form"
-import type { ProdutoAcessorioTipo } from "@/lib/acessorios/types"
+import { withModoCaptura, type ProdutoAcessoriosFormValue } from "@/lib/acessorios/form"
+import type { AcessorioModoCaptura, ProdutoAcessorioTipo } from "@/lib/acessorios/types"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { carregarCores, carregarOrganizacao } from "@/lib/compat/compat-client"
+import type { CorEfetiva } from "@/lib/compat/cores-loja"
 
 type Props = {
   value: ProdutoAcessoriosFormValue
@@ -15,14 +19,77 @@ const TIPOS: Array<{ value: ProdutoAcessorioTipo; label: string }> = [
   { value: "acessorio_generico", label: "Acessório genérico" },
 ]
 
+const MODOS: Array<{ value: AcessorioModoCaptura; label: string }> = [
+  { value: "obrigatorio", label: "Obrigatório — o PDV não adiciona sem informar" },
+  { value: "opcional", label: "Opcional — pergunta, mas dá para pular" },
+  { value: "desativado", label: "Desativado — não pergunta" },
+]
+
+function modoAtual(value: ProdutoAcessoriosFormValue, campo: "modelo" | "cor"): AcessorioModoCaptura {
+  const explicito = campo === "modelo" ? value.modoModelo : value.modoCor
+  if (explicito) return explicito
+  return (campo === "modelo" ? value.exigeModelo : value.exigeCor) ? "obrigatorio" : "desativado"
+}
+
+/**
+ * Configuração de acessórios do produto. COMPAT-PROFISSIONAL-001: modelo e cor viram
+ * obrigatório / opcional / desativado (produtos antigos abrem com o equivalente dos booleanos)
+ * e as cores próprias da loja podem ser escolhidas por produto. O estoque continua único no
+ * produto — modelo/cor informados na venda são histórico, não saldo.
+ */
 export function ProdutoAcessoriosConfig({ value, onChange }: Props) {
   const patch = (next: Partial<ProdutoAcessoriosFormValue>) => onChange({ ...value, ...next })
+  const { lojaAtivaId } = useLojaAtiva()
+  const lojaHeader = (lojaAtivaId ?? "").trim() || null
+  const [coresLoja, setCoresLoja] = useState<CorEfetiva[]>([])
+
+  useEffect(() => {
+    if (!lojaHeader || !value.enabled) return
+    let vivo = true
+    void carregarCores(lojaHeader).then((r) => {
+      if (vivo && r.ok) setCoresLoja(r.cores.filter((c) => c.origem === "loja" && c.ativo))
+    })
+    return () => {
+      vivo = false
+    }
+  }, [lojaHeader, value.enabled])
+
   const toggleCor = (key: ProdutoAcessoriosFormValue["coresPermitidas"][number], checked: boolean) => {
     const selected = new Set(value.coresPermitidas)
     if (checked) selected.add(key)
     else selected.delete(key)
     patch({ coresPermitidas: ACESSORIO_CORES_PADRAO.filter((cor) => selected.has(cor.key)).map((cor) => cor.key) })
   }
+
+  const toggleCorLoja = (id: string, checked: boolean) => {
+    const atual = value.coresLoja ?? coresLoja.map((c) => c.id)
+    const next = checked ? [...new Set([...atual, id])] : atual.filter((x) => x !== id)
+    patch({ coresLoja: next })
+  }
+
+  // Padrão da loja (Compat › Preferências), carregado antes: ativar a configuração é síncrono.
+  const [padraoLoja, setPadraoLoja] = useState<{ modelo: AcessorioModoCaptura; cor: AcessorioModoCaptura } | null>(null)
+  useEffect(() => {
+    if (!lojaHeader || value.enabled) return
+    let vivo = true
+    void carregarOrganizacao(lojaHeader).then((r) => {
+      if (vivo && r.ok) setPadraoLoja({ modelo: r.preferencias.modoModeloPadrao, cor: r.preferencias.modoCorPadrao })
+    })
+    return () => {
+      vivo = false
+    }
+  }, [lojaHeader, value.enabled])
+
+  // Ao ativar a configuração pela 1ª vez, sugere o padrão da loja.
+  const ativar = (checked: boolean) => {
+    if (!checked || value.modoModelo || value.modoCor || !padraoLoja) {
+      patch({ enabled: checked })
+      return
+    }
+    onChange(withModoCaptura(withModoCaptura({ ...value, enabled: true }, "modelo", padraoLoja.modelo), "cor", padraoLoja.cor))
+  }
+
+  const modoCor = modoAtual(value, "cor")
 
   return (
     <section className="rounded-xl border border-border bg-muted/20 p-4" aria-label="Configuração de acessórios">
@@ -31,12 +98,12 @@ export function ProdutoAcessoriosConfig({ value, onChange }: Props) {
           type="checkbox"
           className="mt-1 h-4 w-4 accent-primary"
           checked={value.enabled}
-          onChange={(event) => patch({ enabled: event.target.checked })}
+          onChange={(event) => ativar(event.target.checked)}
         />
         <span>
           <span className="block text-sm font-semibold text-foreground">Configuração de acessórios</span>
           <span className="block text-xs text-muted-foreground">
-            Ative apenas para produtos que futuramente solicitarão modelo e/ou cor no PDV.
+            Para capinhas, películas e acessórios que pedem modelo e/ou cor no PDV. O estoque continua único neste produto.
           </span>
         </span>
       </label>
@@ -54,43 +121,70 @@ export function ProdutoAcessoriosConfig({ value, onChange }: Props) {
             </select>
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <BooleanField
-              label="Exige modelo do aparelho"
-              checked={value.exigeModelo}
-              onChange={(checked) => patch({ exigeModelo: checked })}
-            />
-            <BooleanField
-              label="Exige cor"
-              checked={value.exigeCor}
-              onChange={(checked) => patch({ exigeCor: checked })}
-            />
-            <BooleanField
-              label="Usar cores padrão"
-              checked={value.usaCoresPadrao}
-              onChange={(checked) => patch({ usaCoresPadrao: checked })}
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(["modelo", "cor"] as const).map((campo) => (
+              <label key={campo} className="block min-w-0 space-y-1 text-sm text-foreground">
+                <span className="font-medium">{campo === "modelo" ? "Modelo do aparelho na venda" : "Cor na venda"}</span>
+                <select
+                  aria-label={campo === "modelo" ? "Modelo do aparelho na venda" : "Cor na venda"}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={modoAtual(value, campo)}
+                  onChange={(event) => onChange(withModoCaptura(value, campo, event.target.value as AcessorioModoCaptura))}
+                >
+                  {MODOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </label>
+            ))}
           </div>
 
-          {value.usaCoresPadrao ? (
-            <p className="text-xs text-muted-foreground">As 18 cores canônicas estarão permitidas.</p>
-          ) : (
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium text-foreground">Cores permitidas</legend>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {ACESSORIO_CORES_PADRAO.map((cor) => (
-                  <label key={cor.key} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
-                      checked={value.coresPermitidas.includes(cor.key)}
-                      onChange={(event) => toggleCor(cor.key, event.target.checked)}
-                    />
-                    {cor.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+          {modoCor !== "desativado" && (
+            <>
+              <BooleanField
+                label="Usar cores padrão"
+                checked={value.usaCoresPadrao}
+                onChange={(checked) => patch({ usaCoresPadrao: checked })}
+              />
+              {value.usaCoresPadrao ? (
+                <p className="text-xs text-muted-foreground">
+                  As cores padrão ativas da loja{coresLoja.length ? " e as cores próprias" : ""} estarão disponíveis.
+                </p>
+              ) : (
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium text-foreground">Cores permitidas</legend>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                    {ACESSORIO_CORES_PADRAO.map((cor) => (
+                      <label key={cor.key} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={value.coresPermitidas.includes(cor.key)}
+                          onChange={(event) => toggleCor(cor.key, event.target.checked)}
+                        />
+                        {cor.label}
+                      </label>
+                    ))}
+                  </div>
+                  {coresLoja.length > 0 && (
+                    <>
+                      <p className="pt-1 text-xs font-medium text-muted-foreground">Cores da loja</p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                        {coresLoja.map((cor) => (
+                          <label key={cor.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-primary"
+                              checked={(value.coresLoja ?? coresLoja.map((c) => c.id)).includes(cor.id)}
+                              onChange={(event) => toggleCorLoja(cor.id, event.target.checked)}
+                            />
+                            {cor.label}
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </fieldset>
+              )}
+            </>
           )}
         </div>
       ) : null}

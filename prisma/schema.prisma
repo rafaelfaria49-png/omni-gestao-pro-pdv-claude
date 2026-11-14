@@ -145,6 +145,12 @@ model Store {
   // ─── Catálogo de aparelhos por loja (CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — aditivo) ──
   catalogoAparelhosModelos CatalogoAparelhoLojaModelo[]
   catalogoAparelhosCompat  CatalogoAparelhoLojaCompat[]
+  // ─── Compat profissional (COMPAT-PROFISSIONAL-001 — aditivo; só relações inversas) ──
+  compatPaineis            CompatPainel[]
+  compatFileiras           CompatFileira[]
+  compatLocalizacoes       CompatLocalizacao[]
+  compatCores              CompatCorLoja[]
+  compatPreferencias       CompatPreferenciasLoja?
   // ─── Aparelhos físicos serializados (OMNI-APARELHOS-ENDTOEND-001 — aditivo; só relações inversas) ──
   aparelhosFisicos         AparelhoFisico[]
   aparelhosAquisicoes      AparelhoAquisicao[]
@@ -3589,6 +3595,11 @@ model CatalogoAparelhoLojaModelo {
   modelKey  String   @unique @map("modelKey")
   brand     String   @map("brand")
   name      String   @map("name")
+  /// COMPAT-PROFISSIONAL-001 — fabricante (ex.: Xiaomi para a marca comercial Redmi/POCO).
+  /// "" em registros antigos: o fabricante é derivado da marca na leitura.
+  manufacturer String @default("") @map("manufacturer")
+  /// COMPAT-PROFISSIONAL-001 — linha comercial (ex.: "A", "Note", "G"). Opcional.
+  line      String   @default("") @map("line")
   /// Marca normalizada (sem acento, maiúscula) — chave de duplicidade.
   brandKey  String   @map("brandKey")
   /// Nome normalizado (sem acento, maiúscula) — chave de duplicidade.
@@ -3623,6 +3634,11 @@ model CatalogoAparelhoLojaCompat {
   acao      String   @map("acao")
   status    String   @default("precisa_testar") @map("status")
   notes     String   @default("") @map("notes")
+  /// COMPAT-PROFISSIONAL-001 — origem informada da relação (ex.: "teste no balcão", "fornecedor X").
+  origem    String   @default("") @map("origem")
+  /// COMPAT-PROFISSIONAL-001 — quem confirmou fisicamente (status `confirmado_loja`).
+  confirmedBy String   @default("") @map("confirmedBy")
+  confirmedAt DateTime? @map("confirmedAt")
   createdBy String   @default("") @map("createdBy")
   updatedBy String   @default("") @map("updatedBy")
   createdAt DateTime @default(now()) @map("createdAt")
@@ -3632,6 +3648,129 @@ model CatalogoAparelhoLojaCompat {
   @@index([storeId, categoria, modelKeyA])
   @@index([storeId, categoria, modelKeyB])
   @@map("catalogo_aparelhos_loja_compat")
+}
+
+// ─── Compat profissional (COMPAT-PROFISSIONAL-001) ──────────────────────────────
+// ADITIVO. Organização física de capinhas (painéis → fileiras → localização), cores e
+// preferências POR LOJA. Nenhuma tabela aqui guarda estoque: o saldo continua 100% em
+// `Produto.stock` (ledger oficial). Localização é endereço físico, nunca quantidade.
+
+/// Painel físico da loja (ex.: "Painel 1", "Painel A"). Renomear não quebra vínculos (FK por id).
+model CompatPainel {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  nome      String   @map("nome")
+  /// Nome normalizado — impede "Painel 1" e "painel  1" na mesma loja.
+  nomeKey   String   @map("nomeKey")
+  descricao String   @default("") @map("descricao")
+  ordem     Int      @default(0) @map("ordem")
+  ativo     Boolean  @default(true) @map("ativo")
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  fileiras     CompatFileira[]
+  localizacoes CompatLocalizacao[]
+
+  @@unique([storeId, nomeKey])
+  @@index([storeId, ordem])
+  @@map("compat_paineis")
+}
+
+/// Fileira de um painel (ex.: "Fileira 1 — iPhone / Samsung").
+model CompatFileira {
+  id        String       @id @default(cuid())
+  storeId   String       @map("storeId")
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  painelId  String       @map("painelId")
+  painel    CompatPainel @relation(fields: [painelId], references: [id], onDelete: Restrict)
+  nome      String       @map("nome")
+  nomeKey   String       @map("nomeKey")
+  descricao String       @default("") @map("descricao")
+  ordem     Int          @default(0) @map("ordem")
+  ativo     Boolean      @default(true) @map("ativo")
+  version   Int          @default(1) @map("version")
+  createdBy String       @default("") @map("createdBy")
+  updatedBy String       @default("") @map("updatedBy")
+  createdAt DateTime     @default(now()) @map("createdAt")
+  updatedAt DateTime     @updatedAt @map("updatedAt")
+
+  localizacoes CompatLocalizacao[]
+
+  @@unique([painelId, nomeKey])
+  @@index([storeId, painelId, ordem])
+  @@map("compat_fileiras")
+}
+
+/// Onde fica a capinha de um modelo (e, opcionalmente, de um produto específico).
+/// `modelKey` = modelo do catálogo (global ou manual da loja); `produtoId` = produto específico
+/// (ex.: "Capinha carteira"). Pelo menos um dos dois é obrigatório (CHECK na migration).
+model CompatLocalizacao {
+  id        String         @id @default(cuid())
+  storeId   String         @map("storeId")
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  modelKey  String         @default("") @map("modelKey")
+  produtoId String?        @map("produtoId")
+  painelId  String         @map("painelId")
+  painel    CompatPainel   @relation(fields: [painelId], references: [id], onDelete: Restrict)
+  fileiraId String?        @map("fileiraId")
+  fileira   CompatFileira? @relation(fields: [fileiraId], references: [id], onDelete: Restrict)
+  /// Posição individual (só quando a loja habilitou posições). "" = sem posição.
+  posicao   String         @default("") @map("posicao")
+  principal Boolean        @default(false) @map("principal")
+  notes     String         @default("") @map("notes")
+  createdBy String         @default("") @map("createdBy")
+  updatedBy String         @default("") @map("updatedBy")
+  createdAt DateTime       @default(now()) @map("createdAt")
+  updatedAt DateTime       @updatedAt @map("updatedAt")
+
+  @@index([storeId, modelKey])
+  @@index([storeId, produtoId])
+  @@index([painelId])
+  @@index([fileiraId])
+  @@map("compat_localizacoes")
+}
+
+/// Cor da loja: `baseKey` = cor da paleta padrão (ativar/desativar na loja) ou NULL = cor própria.
+model CompatCorLoja {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  baseKey   String?  @map("baseKey")
+  label     String   @map("label")
+  /// Rótulo normalizado — impede "Azul Bebê" e "azul bebe" na mesma loja.
+  labelKey  String   @map("labelKey")
+  ativo     Boolean  @default(true) @map("ativo")
+  ordem     Int      @default(0) @map("ordem")
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, labelKey])
+  @@unique([storeId, baseKey])
+  @@map("compat_cores_loja")
+}
+
+/// Preferências do Compat por loja (uma linha por loja; ausente = padrões).
+model CompatPreferenciasLoja {
+  storeId             String   @id @map("storeId")
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /// Controle de posições individuais dentro da fileira. Desligado por padrão.
+  posicoesHabilitadas Boolean  @default(false) @map("posicoesHabilitadas")
+  /// Padrão sugerido para produtos novos: obrigatorio | opcional | desativado.
+  modoModeloPadrao    String   @default("opcional") @map("modoModeloPadrao")
+  modoCorPadrao       String   @default("opcional") @map("modoCorPadrao")
+  version             Int      @default(1) @map("version")
+  updatedBy           String   @default("") @map("updatedBy")
+  createdAt           DateTime @default(now()) @map("createdAt")
+  updatedAt           DateTime @updatedAt @map("updatedAt")
+
+  @@map("compat_preferencias_loja")
 }
 
 // ─── Aparelhos físicos serializados (OMNI-APARELHOS-CADASTRO-COMPRAS-VENDAS-GARANTIAS-ENDTOEND-001) ──

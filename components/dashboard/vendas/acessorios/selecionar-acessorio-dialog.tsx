@@ -32,13 +32,45 @@ import {
   type AccessoryCartLineSnapshot,
 } from "@/lib/acessorios/cart-line"
 import { buildAccessoryLineDescription } from "@/lib/acessorios/line-description"
-import { sanitizeProdutoAcessoriosMetadata } from "@/lib/acessorios/metadata"
+import { modoCorEfetivo, modoModeloEfetivo, sanitizeProdutoAcessoriosMetadata } from "@/lib/acessorios/metadata"
+import { opcoesDeCorParaProduto, type CorLoja } from "@/lib/compat/cores-loja"
+import { carregarCores, consultarCapinha } from "@/lib/compat/compat-client"
+import { rotuloLocalizacao } from "@/lib/compat/organizacao"
 import type { AcessorioColorKey } from "@/lib/acessorios/cores"
 import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { CadastrarModeloAparelhoDialog } from "@/components/dashboard/catalogo/cadastrar-modelo-aparelho-dialog"
+
+// COMPAT-PROFISSIONAL-001 — cores da loja e "onde está" com cache curto em memória: o PDV
+// não pode esperar rede a cada item. Falha de rede = segue só com a paleta padrão (nunca bloqueia).
+const CACHE_MS = 60_000
+const coresCache = new Map<string, { at: number; linhas: CorLoja[] }>()
+const localCache = new Map<string, { at: number; texto: string | null }>()
+
+async function coresDaLoja(loja: string | null): Promise<CorLoja[]> {
+  if (!loja) return []
+  const hit = coresCache.get(loja)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.linhas
+  const r = await carregarCores(loja)
+  const linhas = r.ok ? r.linhas : []
+  coresCache.set(loja, { at: Date.now(), linhas })
+  return linhas
+}
+
+async function ondeEstaCapinha(loja: string | null, modelKey: string): Promise<string | null> {
+  if (!loja) return null
+  const k = `${loja}|${modelKey}`
+  const hit = localCache.get(k)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.texto
+  const r = await consultarCapinha(loja, modelKey)
+  const texto = r.ok
+    ? (r.localizacoes.slice(0, 2).map((l) => (l.alvo === "compativel" ? `${rotuloLocalizacao(l)} (via ${l.viaModelo})` : rotuloLocalizacao(l))).join(" · ") || null)
+    : null
+  localCache.set(k, { at: Date.now(), texto })
+  return texto
+}
 
 const TIPO_LABELS: Record<ProdutoAcessoriosMetadataV1["tipo"], string> = {
   capinha: "Capinha",
@@ -116,9 +148,20 @@ export function SelecionarAcessorioDialog({
     () => sanitizeProdutoAcessoriosMetadata(product?.accessoryConfig),
     [product?.accessoryConfig],
   )
-  const exigeModelo = !!config?.exigeModelo
-  const exigeCor = !!config?.exigeCor
-  const colorOptions = useMemo(() => resolveAccessoryColorOptions(config), [config])
+  // COMPAT-PROFISSIONAL-001: modo obrigatório / opcional / desativado (antigos: pelos booleanos).
+  const modoModelo = modoModeloEfetivo(config)
+  const modoCor = modoCorEfetivo(config)
+  const exigeModelo = modoModelo === "obrigatorio"
+  const exigeCor = modoCor === "obrigatorio"
+  const mostraModelo = modoModelo !== "desativado"
+  const mostraCor = modoCor !== "desativado"
+  const [coresLinhas, setCoresLinhas] = useState<CorLoja[]>([])
+  const colorOptions = useMemo(
+    () => opcoesDeCorParaProduto(resolveAccessoryColorOptions(config), coresLinhas, config?.coresLoja),
+    [config, coresLinhas],
+  )
+  const [corLojaId, setCorLojaId] = useState<string | null>(null)
+  const [ondeEsta, setOndeEsta] = useState<string | null>(null)
 
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<DeviceSearchResult[]>([])
@@ -149,6 +192,8 @@ export function SelecionarAcessorioDialog({
     setConfirmErrors(empty.confirmErrors)
     setBusy(empty.busy)
     setCadastroOpen(false)
+    setCorLojaId(null)
+    setOndeEsta(null)
   }, [])
 
   const closeAndReset = useCallback(() => {
@@ -160,10 +205,30 @@ export function SelecionarAcessorioDialog({
     resetTemporaryState()
   }, [open, product?.id, resetTemporaryState])
 
+  useEffect(() => {
+    if (!open || !mostraCor) return
+    let vivo = true
+    void coresDaLoja(lojaHeader).then((linhas) => vivo && setCoresLinhas(linhas))
+    return () => {
+      vivo = false
+    }
+  }, [open, mostraCor, lojaHeader])
+
+  // Capinha: ao escolher o modelo, mostra onde ela fica (painel/fileira), se cadastrado.
+  useEffect(() => {
+    setOndeEsta(null)
+    if (!open || !modelo || config?.tipo !== "capinha") return
+    let vivo = true
+    void ondeEstaCapinha(lojaHeader, modelo.modelKey).then((t) => vivo && setOndeEsta(t))
+    return () => {
+      vivo = false
+    }
+  }, [open, modelo, config?.tipo, lojaHeader])
+
   // Busca na base única com debounce + cancelamento da requisição anterior:
   // resposta antiga abortada nunca sobrescreve o resultado da busca mais nova.
   useEffect(() => {
-    if (!open || !exigeModelo) return
+    if (!open || !mostraModelo) return
     const q = query.trim()
     if (q.length < 2) {
       setResults([])
@@ -203,7 +268,7 @@ export function SelecionarAcessorioDialog({
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [query, open, exigeModelo, lojaHeader])
+  }, [query, open, mostraModelo, lojaHeader])
 
   const selectionCandidate = useMemo(
     () => ({
@@ -216,16 +281,19 @@ export function SelecionarAcessorioDialog({
           }
         : {}),
       ...(colorKey ? { colorKey } : {}),
-      ...(colorKey === "outra" && customColor.trim()
-        ? { customColorLabel: customColor.trim() }
-        : {}),
+      // Cor própria da loja viaja como "outra" + rótulo (contrato já aceito e congelado na venda).
+      ...(colorKey === "outra" && corLojaId
+        ? { customColorLabel: colorOptions.find((c) => c.id === corLojaId)?.label ?? customColor.trim() }
+        : colorKey === "outra" && customColor.trim()
+          ? { customColorLabel: customColor.trim() }
+          : {}),
     }),
-    [modelo, colorKey, customColor],
+    [modelo, colorKey, customColor, corLojaId, colorOptions],
   )
 
   const missingModelo = exigeModelo && !modelo
   const missingCor = exigeCor && !colorKey
-  const missingCustom = colorKey === "outra" && !customColor.trim()
+  const missingCustom = colorKey === "outra" && !corLojaId && !customColor.trim()
   const canConfirm = !missingModelo && !missingCor && !missingCustom && !busy
 
   const previewDescription = product
@@ -254,7 +322,8 @@ export function SelecionarAcessorioDialog({
       const built = buildAccessoryCartLine({
         inventoryId: product.id,
         productName: product.name,
-        config,
+        // Cor própria da loja = "outra" + rótulo; a restrição de paleta do produto não se aplica a ela.
+        config: corLojaId && config ? { ...config, coresPermitidas: null } : config,
         selection: selectionCandidate,
       })
       if (!built.ok) {
@@ -294,9 +363,12 @@ export function SelecionarAcessorioDialog({
         </DialogHeader>
 
         <div className="space-y-4 min-w-0">
-          {exigeModelo && (
+          {mostraModelo && (
             <div className="space-y-2 min-w-0">
-              <Label htmlFor="acessorio-modelo-busca">Modelo do aparelho</Label>
+              <Label htmlFor="acessorio-modelo-busca">
+                Modelo do aparelho
+                {!exigeModelo && <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>}
+              </Label>
               {modelo ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <Badge variant="secondary" className="gap-1 py-1 pl-2.5 pr-1 min-w-0">
@@ -326,6 +398,13 @@ export function SelecionarAcessorioDialog({
                     ref={searchInputRef}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Venda rápida: com tudo opcional, Enter no campo vazio adiciona direto.
+                      if (e.key === "Enter" && !query.trim() && canConfirm) {
+                        e.preventDefault()
+                        handleConfirm()
+                      }
+                    }}
                     placeholder="Ex.: A06, Samsung A06, iPhone 13"
                     autoComplete="off"
                     autoFocus
@@ -389,25 +468,39 @@ export function SelecionarAcessorioDialog({
                   )}
                 </div>
               )}
+              {ondeEsta && (
+                <p className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-foreground">
+                  Onde está: <span className="font-medium">{ondeEsta}</span>
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Seleciona o aparelho desta venda — não confirma compatibilidade da peça.
               </p>
             </div>
           )}
 
-          {exigeCor && (
+          {mostraCor && (
             <div className="space-y-2 min-w-0">
-              <Label>Cor</Label>
+              <Label>
+                Cor{!exigeCor && <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>}
+              </Label>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Cor do acessório">
                 {colorOptions.map((cor) => {
-                  const selected = colorKey === cor.key
+                  const selected = cor.origem === "loja" ? corLojaId === cor.id : colorKey === cor.key && !corLojaId
                   return (
                     <button
-                      key={cor.key}
+                      key={cor.id}
                       type="button"
                       aria-pressed={selected}
                       onClick={() => {
-                        setColorKey(cor.key)
+                        // Clicar de novo na cor escolhida desmarca (útil quando a cor é opcional).
+                        if (selected && !exigeCor) {
+                          setColorKey(null)
+                          setCorLojaId(null)
+                        } else {
+                          setColorKey(cor.key)
+                          setCorLojaId(cor.origem === "loja" ? cor.id : null)
+                        }
                         setConfirmErrors([])
                       }}
                       className={cn(
@@ -422,7 +515,7 @@ export function SelecionarAcessorioDialog({
                   )
                 })}
               </div>
-              {colorKey === "outra" && (
+              {colorKey === "outra" && !corLojaId && (
                 <div className="space-y-1.5">
                   <Label htmlFor="acessorio-cor-outra">Qual cor?</Label>
                   <Input
@@ -447,6 +540,7 @@ export function SelecionarAcessorioDialog({
             <p className="truncate text-sm font-medium">{previewDescription}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               O estoque continua único no produto principal.
+              {!exigeModelo && !exigeCor ? " Modelo e cor são opcionais: dá para adicionar direto." : ""}
             </p>
           </div>
 

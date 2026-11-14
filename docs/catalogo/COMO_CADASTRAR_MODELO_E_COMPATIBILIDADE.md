@@ -68,3 +68,36 @@ Ao bipar uma película ou capinha que pede o modelo, pesquise o aparelho do clie
 cadastrados pela loja aparecem com a etiqueta **"cadastro da loja"**. Se não existir, use
 **Cadastrar novo modelo** ali mesmo — o carrinho, o preço e o estoque não mudam por isso.
 Escolher o modelo registra *qual aparelho* foi atendido; não prova que a peça encaixa.
+
+## 6. Compat (menu lateral **Compat**) — películas, capinhas, painéis e cores
+
+A tela **Compat** tem três áreas:
+
+- **Compatibilidade de Películas** — *Consultar* (busca por modelo/apelido) e *Vínculos*
+  (escolha o modelo principal, adicione vários modelos de uma vez, mude o status ou remova;
+  relações do catálogo padrão podem ser escondidas só na sua loja).
+- **Compatibilidade de Capinhas** — *Consultar* (capinhas que servem, **onde estão** no painel e
+  o estoque), *Vínculos* (mesmo funcionamento, mas independente da película) e *Painéis e
+  fileiras* (crie "Painel 1", "Painel A", fileiras como "iPhone / Samsung", reordene, desative).
+- **Catálogo e ajustes** — *Modelos* (Fabricante › Marca comercial › Linha › Modelo, com nome
+  padronizado e aviso de modelos parecidos), *Cores*, *Preferências* e *Relatórios*.
+
+Status de um vínculo: **Pendente** (precisa testar), **Provável**, **Confirmada pela loja** e
+**Não recomendado**. "Confirmada" só é gravada quando você marca que **testou fisicamente** — fica
+registrado quem confirmou e quando. Nada é confirmado automaticamente por nome ou anúncio.
+
+### Dois jeitos de controlar capinhas (podem coexistir)
+
+- **Simplificado:** um produto "Capinha transparente" com estoque total. Na ficha, em
+  *Configuração de acessórios*, escolha para **Modelo do aparelho na venda** e **Cor na venda**:
+  *Obrigatório*, *Opcional* (pergunta, mas dá para pular com Enter) ou *Desativado*. O que for
+  informado na venda vira histórico/relatório — o estoque continua um só.
+- **Detalhado:** um produto por modelo/tipo/cor, vinculado ao aparelho em *Compatibilidade com
+  aparelhos* (tipo capinha), com estoque, código e preço próprios.
+
+**Atenção:** estoque geral positivo de uma capinha genérica não garante que exista uma para o
+modelo do cliente — confira no painel indicado em "Onde está".
+
+Excluir painel/fileira só é possível sem capinhas vinculadas; com vínculo, **desative**.
+Renomear não perde nenhum vínculo. Posições individuais ("Pos. 3") ficam desligadas até você
+ligar em *Preferências*.
