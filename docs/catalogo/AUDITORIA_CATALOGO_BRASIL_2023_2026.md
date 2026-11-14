@@ -29,7 +29,12 @@ as 9 linhas mescladas apontam para o aparelho real (`replaced_by`).
 | Infinix | Infinix | 41 | 41 | 32 |
 | Secundárias (ocultas por padrão) | Google, Nothing, CMF, OnePlus, OPPO, HONOR, TECNO, vivo, Nokia, HMD, ASUS, Huawei, Sony, TCL, LG | 85 | 85 | 71 |
 
-## Matriz de auditoria — marcas prioritárias
+**Matriz final gerada dos seeds** (marca × ano, iPhones desde o 6 e as 9 linhas fora da busca):
+`docs/ai-execution/_evidence/COMPAT-CATALOGO-BRASIL-2023-2026-002/MATRIZ_FINAL_COBERTURA.md`. O ano das linhas que já
+existiam foi preenchido por `scripts/catalogo/preencher-ano-existentes.mjs` (139 linhas; só `release_year`/`sources`;
+idempotente); lançamentos de data ambígua ficaram sem ano de propósito.
+
+## Matriz de auditoria — marcas prioritárias (pesquisa)
 
 "Existentes" = lançamentos do ano que **já estavam** no catálogo (por nome). "Adicionados" = linhas novas.
 "Pendentes" = nomes citados mas **sem confirmação oficial suficiente** até 14/11/2026 (não cadastrados).

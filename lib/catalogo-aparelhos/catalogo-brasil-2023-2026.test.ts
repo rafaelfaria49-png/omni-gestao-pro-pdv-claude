@@ -164,6 +164,20 @@ describe("visibilidade de marcas por loja", () => {
   })
 })
 
+describe("ano de lançamento no seed", () => {
+  it("todo iPhone tem ano (≥ 2014) e a linha mesclada tem o ano do aparelho real", () => {
+    const iphones = index.models.filter((m) => m.brand === "Apple" && /iPhone/.test(m.canonicalName))
+    for (const m of iphones) {
+      expect(Number(m.releaseYear), m.modelKey).toBeGreaterThanOrEqual(2014)
+      if (m.replacedBy) expect(m.releaseYear, m.modelKey).toBe(index.modelByKey.get(m.replacedBy)?.releaseYear)
+    }
+  })
+
+  it("ano é sempre 4 dígitos entre 2007 e 2026 quando presente", () => {
+    for (const m of index.models) if (m.releaseYear) expect(m.releaseYear, m.modelKey).toMatch(/^20(0[7-9]|1\d|2[0-6])$/)
+  })
+})
+
 describe("cadastro manual × catálogo global", () => {
   it("G47 cadastrado à mão pela loja: a busca mostra só o da loja (sem duplicar; chave manual preservada)", () => {
     const g47 = modeloLoja({ brand: "Motorola", name: "G47", modelKey: "manual_rafacell_g47" })
