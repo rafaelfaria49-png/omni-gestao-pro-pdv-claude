@@ -252,6 +252,25 @@ function checkGlobal(
   }
 }
 
+/**
+ * COMPAT-BUSCA-MODELOS-NATURAL-001 — o mesmo aparelho escrito de outro jeito nesta loja
+ * ("Apple" + "iPhone 7" × "iPhone" + "7") também é duplicata: oferece usar o existente. Vale para
+ * desativados e "aguardando lançamento" (a mensagem orienta reativar/confirmar). Usado na criação
+ * e na edição (que exclui o próprio registro).
+ */
+async function checkLojaEquivalente(
+  db: Db,
+  storeId: string,
+  input: { brand: string; name: string; manufacturer?: string },
+  exceptModelKey?: string,
+): Promise<LojaCatalogoFailure | null> {
+  const todosDaLoja = (await listLojaModelos(db, storeId, { includeInactive: true })).filter((m) => m.modelKey !== exceptModelKey)
+  const comoAtivos = todosDaLoja.map((m) => ({ ...m, active: true, lancamento: "lancado" as const }))
+  const equivalente = findGlobalDuplicate(buildLojaCatalogoIndex(comoAtivos), input)
+  const modelo = equivalente ? todosDaLoja.find((m) => m.modelKey === equivalente.modelKey) : undefined
+  return modelo ? duplicateFromModelo(modelo) : null
+}
+
 export async function createLojaModelo(
   db: Db,
   globalIndex: CatalogoIndex,
@@ -269,14 +288,8 @@ export async function createLojaModelo(
   try {
     const dup = await findLojaDuplicate(db, storeId, brandKey, nameKey)
     if (dup) return duplicateFromLoja(dup)
-    // COMPAT-BUSCA-MODELOS-NATURAL-001: o mesmo aparelho escrito de outro jeito nesta loja
-    // ("Apple" + "iPhone 7" × "iPhone" + "7") também é duplicata — oferece usar o existente.
-    // Vale também para desativados e "aguardando lançamento" (a mensagem orienta reativar/confirmar).
-    const todosDaLoja = await listLojaModelos(db, storeId, { includeInactive: true })
-    const comoAtivos = todosDaLoja.map((m) => ({ ...m, active: true, lancamento: "lancado" as const }))
-    const equivalente = findGlobalDuplicate(buildLojaCatalogoIndex(comoAtivos), { brand, name, manufacturer })
-    const modeloEquivalente = equivalente ? todosDaLoja.find((m) => m.modelKey === equivalente.modelKey) : undefined
-    if (modeloEquivalente) return duplicateFromModelo(modeloEquivalente)
+    const equivalente = await checkLojaEquivalente(db, storeId, { brand, name, manufacturer })
+    if (equivalente) return equivalente
     // A busca lê no máximo MAX_MODELOS_POR_LOJA modelos: acima disso o novo sumiria em silêncio.
     if ((await db.catalogoAparelhoLojaModelo.count({ where: { storeId } })) >= MAX_MODELOS_POR_LOJA) {
       return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${MAX_MODELOS_POR_LOJA} modelos cadastrados por loja atingido.` }
@@ -358,11 +371,17 @@ export async function updateLojaModelo(
       const v = parsed.value
       const brandKey = catalogKey(v.brand)
       const nameKey = catalogKey(v.name)
-      if (brandKey !== current.brandKey || nameKey !== current.nameKey) {
+      const mudouIdentidade =
+        brandKey !== current.brandKey ||
+        nameKey !== current.nameKey ||
+        catalogKey(v.manufacturer) !== catalogKey(current.manufacturer ?? "")
+      if (mudouIdentidade) {
         const globalDup = checkGlobal(globalIndex, v)
         if (globalDup) return globalDup
         const dup = await findLojaDuplicate(db, storeId, brandKey, nameKey, id)
         if (dup) return duplicateFromLoja(dup)
+        const equivalente = await checkLojaEquivalente(db, storeId, v, current.modelKey)
+        if (equivalente) return equivalente
       }
       Object.assign(data, {
         brand: v.brand,

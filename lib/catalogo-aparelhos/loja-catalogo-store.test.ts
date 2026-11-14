@@ -143,6 +143,25 @@ describe("COMPAT-BUSCA-MODELOS-NATURAL-001 — nome de um caractere e reaproveit
     expect(db.catalogoAparelhoLojaModelo.create).not.toHaveBeenCalled()
   })
 
+  it("revisão R3 (P2): editar para o mesmo aparelho escrito de outro jeito também é bloqueado", async () => {
+    const outro = row({ id: "row-apple5", modelKey: "manual_apple5", brand: "Apple", name: "iPhone 5", brandKey: "APPLE", nameKey: "IPHONE 5" })
+    const atual = row({ id: "row-5s", modelKey: "manual_5s", brand: "iPhone", name: "5s", brandKey: "IPHONE", nameKey: "5S" })
+    const updateMany = vi.fn(async () => ({ count: 1 }))
+    const db = {
+      catalogoAparelhoLojaModelo: {
+        findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => (where.id === "row-5s" ? atual : null)),
+        findMany: vi.fn(async () => [outro, atual]),
+        updateMany,
+      },
+    }
+    const r = await updateLojaModelo(db as never, global, "loja", "u", "row-5s", { version: 1, name: "5" })
+    expect(r).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: "manual_apple5", source: "loja" } })
+    expect(updateMany).not.toHaveBeenCalled()
+    // editar sem mudar a identidade (só observação) segue livre — e não se acusa como duplicata de si mesmo
+    const ok = await updateLojaModelo(db as never, global, "loja", "u", "row-5s", { version: 1, notes: "conferido" })
+    expect(ok.ok).toBe(true)
+  })
+
   it("duplicidade exata na mesma marca continua bloqueada", async () => {
     const db = vazio()
     db.catalogoAparelhoLojaModelo.findFirst = vi.fn(async () => row({ brand: "iPhone", name: "7", brandKey: "IPHONE", nameKey: "7" })) as never
