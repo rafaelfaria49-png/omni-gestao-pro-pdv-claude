@@ -121,7 +121,7 @@ describe("Compat — ModeloPicker paginado", () => {
 
 describe("PDV — Configurar acessório", () => {
   it("seleciona o iPhone 7 (2ª página) e a cor; a linha vai ao carrinho sem chamar estoque", async () => {
-    const onConfirm = vi.fn(() => true)
+    const onConfirm = vi.fn((_line: unknown) => true)
     render(
       React.createElement(SelecionarAcessorioDialog, {
         open: true,
@@ -194,6 +194,18 @@ describe("Cadastrar novo modelo — nome de um caractere e reaproveitamento", ()
     fireEvent.click(usar)
     expect(onCreated).toHaveBeenCalledWith({ modelKey: "apple_iphone_7", brand: "Apple", canonicalName: "Apple iPhone 7" }, null)
     expect(h.criar).not.toHaveBeenCalled()
+  })
+
+  it("revisão R1 (P2): trocar o nome some na hora com o atalho da consulta anterior", async () => {
+    const onCreated = abrir()
+    fireEvent.change(screen.getByLabelText("Marca comercial"), { target: { value: "iPhone" } })
+    fireEvent.change(screen.getByLabelText("Nome comercial do modelo"), { target: { value: "7" } })
+    await screen.findByRole("button", { name: /Usar modelo existente: Apple iPhone 7$/ }, { timeout: 3000 })
+    // nova consulta nunca responde (pendente): o atalho antigo não pode continuar clicável
+    fetchMock.mockImplementation(() => new Promise(() => {}))
+    fireEvent.change(screen.getByLabelText("Nome comercial do modelo"), { target: { value: "7 Plus" } })
+    expect(screen.queryByRole("button", { name: /Usar modelo existente/ })).toBeNull()
+    expect(onCreated).not.toHaveBeenCalled()
   })
 })
 

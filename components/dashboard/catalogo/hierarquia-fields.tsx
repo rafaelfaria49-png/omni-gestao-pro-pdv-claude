@@ -49,7 +49,9 @@ export function HierarquiaFields({
 }) {
   const uid = useId()
   const [sugestoes, setSugestoes] = useState(arvoreCache)
-  const [parecidos, setParecidos] = useState<DeviceSearchResult[]>([])
+  // Resultado amarrado à consulta (nome padronizado + loja) que o produziu: trocar o nome invalida
+  // na hora o atalho "Usar modelo existente" — nunca seleciona o aparelho da digitação anterior.
+  const [consulta, setConsulta] = useState<{ chave: string; itens: DeviceSearchResult[] }>({ chave: "", itens: [] })
 
   useEffect(() => {
     if (arvoreCache) return
@@ -76,10 +78,12 @@ export function HierarquiaFields({
   const nomeFinal = nomePadronizado(value.brand, value.name)
 
   // Aviso de parecidos: busca o nome padronizado no catálogo (global + loja).
+  const chaveAtual = `${nomeFinal.trim()}|${lojaHeader ?? ""}`
   useEffect(() => {
     const q = nomeFinal.trim()
+    const chave = `${q}|${lojaHeader ?? ""}`
     if (q.length < 3 || value.name.trim().length < 1) {
-      setParecidos([])
+      setConsulta({ chave: "", itens: [] })
       return
     }
     const controller = new AbortController()
@@ -93,7 +97,7 @@ export function HierarquiaFields({
         })
         const data = (await res.json().catch(() => null)) as { results?: DeviceSearchResult[] } | null
         if (!controller.signal.aborted) {
-          setParecidos((data?.results ?? []).filter((r) => r.modelKey !== excludeModelKey).slice(0, 3))
+          setConsulta({ chave, itens: (data?.results ?? []).filter((r) => r.modelKey !== excludeModelKey).slice(0, 3) })
         }
       } catch {
         /* aviso opcional: falha silenciosa não bloqueia o cadastro */
@@ -106,6 +110,7 @@ export function HierarquiaFields({
   }, [nomeFinal, value.name, lojaHeader, excludeModelKey])
 
   const set = (patch: Partial<HierarquiaValue>) => onChange({ ...value, ...patch })
+  const parecidos = consulta.chave === chaveAtual ? consulta.itens : []
   // Casamento EXATO com o nome padronizado = o mesmo aparelho (não só parecido).
   const existentes = parecidos.filter((p) => p.matchType === "exact")
 

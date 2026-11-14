@@ -14,7 +14,14 @@
  *  - Não importa banco nem `fs` (testável); o acesso a dados vive em `loja-catalogo-store.ts`.
  */
 
-import { buildCatalogoIndex, normalizeDeviceQuery, searchDeviceModels } from "./catalogo-aparelhos"
+import {
+  buildCatalogoIndex,
+  compareTokens,
+  normalizeDeviceQuery,
+  searchDeviceModels,
+  tokensModeloNatural,
+  type ModeloToken,
+} from "./catalogo-aparelhos"
 import { chaveNomeSemFabricante, fabricanteDaMarca, hierarquiaDoModeloGlobal } from "./hierarquia"
 import type { PeliculaGrupo, PeliculaGrupoMember } from "./peliculas"
 import type {
@@ -373,10 +380,13 @@ function buscarTodosComLoja(
   options: SearchDeviceOptions,
 ): DeviceSearchResult[] {
   if (!lojaIndex || lojaIndex.models.length === 0) {
-    return searchDeviceModels(globalIndex, query, { ...options, limit: globalIndex.models.length || 1 }).map((r) => ({
-      ...r,
-      source: "global" as const,
-    }))
+    return ordenarNatural(
+      searchDeviceModels(globalIndex, query, { ...options, limit: globalIndex.models.length || 1 }).map((r) => ({
+        ...r,
+        source: "global" as const,
+      })),
+      null,
+    )
   }
   const limit = lojaIndex.models.length
   // Marca oculta na loja vale só para o catálogo global: modelo cadastrado pela loja sempre aparece
@@ -415,13 +425,40 @@ function buscarTodosComLoja(
       reviewFlags: ["cadastro_manual_loja"],
     }
   })
-  // Manuais primeiro no empate: o operador acabou de cadastrar e espera encontrá-los.
+  // Manuais primeiro no empate EXATO de modelo: o operador acabou de cadastrar e espera encontrá-los.
+  // A deduplicação mantém a primeira ocorrência de cada chave (a de melhor casamento).
   const vistos = new Set<string>()
-  return [...manuais, ...globaisOuManual]
-    .map((r, i) => ({ r, i }))
-    .sort((a, b) => MATCH_RANK[a.r.matchType] - MATCH_RANK[b.r.matchType] || a.i - b.i)
+  return ordenarNatural([...manuais, ...globaisOuManual], lojaIndex).filter((r) =>
+    vistos.has(r.modelKey) ? false : (vistos.add(r.modelKey), true),
+  )
+}
+
+/**
+ * Chave de ordem natural comparável entre catálogo global e cadastro da loja: fabricante + nome sem o
+ * fabricante ("Apple iPhone 7" global ≡ "iPhone" + "7" da loja → APPLE · [IPHONE, 7]).
+ */
+function chaveOrdemNatural(r: DeviceSearchResult, lojaIndex: CatalogoIndex | null): { fab: string; tokens: ModeloToken[] } {
+  const manual = r.source === "loja" ? lojaIndex?.modelByKey.get(r.modelKey) : undefined
+  const fab = catalogKey((manual?.manufacturer ?? "").trim() || fabricanteDaMarca(r.brand))
+  return { fab, tokens: tokensModeloNatural(chaveNomeSemFabricante(fab, r.canonicalName || r.modelKey)) }
+}
+
+/**
+ * COMPAT-BUSCA-MODELOS-NATURAL-001 — ordem final da busca (global e loja juntos, ANTES de paginar):
+ * tipo de casamento → fabricante → modelo em ordem natural → cadastro da loja primeiro → ordem original.
+ */
+export function ordenarNatural<T extends DeviceSearchResult>(lista: readonly T[], lojaIndex: CatalogoIndex | null): T[] {
+  return lista
+    .map((r, i) => ({ r, i, k: chaveOrdemNatural(r, lojaIndex) }))
+    .sort(
+      (a, b) =>
+        MATCH_RANK[a.r.matchType] - MATCH_RANK[b.r.matchType] ||
+        (a.k.fab === b.k.fab ? 0 : a.k.fab < b.k.fab ? -1 : 1) ||
+        compareTokens(a.k.tokens, b.k.tokens) ||
+        (a.r.source === "loja" ? 0 : 1) - (b.r.source === "loja" ? 0 : 1) ||
+        a.i - b.i,
+    )
     .map(({ r }) => r)
-    .filter((r) => (vistos.has(r.modelKey) ? false : (vistos.add(r.modelKey), true)))
 }
 
 // ---------------------------------------------------------------------------

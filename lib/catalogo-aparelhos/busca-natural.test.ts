@@ -16,6 +16,7 @@ import {
 import {
   buildLojaCatalogoIndex,
   searchDeviceModelsComLoja,
+  ordenarNatural,
   searchDeviceModelsComLojaPagina,
   type LojaModelo,
 } from "./loja-catalogo"
@@ -60,6 +61,9 @@ describe("ordem natural de modelos", () => {
     expect(tokensModeloNatural("XR", "iPhone")).toEqual([10, "R"])
     // fora do iPhone, "X" é só uma letra (ex.: Redmi Note X, POCO X6)
     expect(tokensModeloNatural("X6", "POCO")).toEqual(["X", 6])
+    // nome completo (cadastro da loja): "iPhone XR" também é a 10ª geração
+    expect(tokensModeloNatural("iPhone XR")).toEqual(["IPHONE", 10, "R"])
+    expect(tokensModeloNatural("iPhone X")).toEqual(["IPHONE", 10])
   })
 
   it("compara por marca → linha → nome natural", () => {
@@ -130,11 +134,37 @@ describe("outras linhas em ordem natural", () => {
   })
 
   it.each(["Galaxy A", "Galaxy S", "Moto G", "Redmi", "POCO", "iPhone"])("%s: lista crescente pela ordem natural dentro do tipo de casamento", (q) => {
-    const r = searchDeviceModelsComLoja(index, null, q, { limit: 1000 })
+    const r = searchDeviceModels(index, q, { limit: 1000 })
     for (let i = 1; i < r.length; i++) {
       if (r[i - 1].matchType !== r[i].matchType) continue
       expect(compareModelosNatural(r[i - 1], r[i]), `${r[i - 1].canonicalName} × ${r[i].canonicalName}`).toBeLessThanOrEqual(0)
     }
+    // a ordem final da API (global + loja) é estável sobre si mesma
+    const final = searchDeviceModelsComLoja(index, null, q, { limit: 1000 })
+    expect(ordenarNatural(final, null).map((x) => x.modelKey)).toEqual(final.map((x) => x.modelKey))
+  })
+
+  it("revisão R1 (P2): modelos da loja entram na ordem natural, não todos antes do catálogo global", () => {
+    const loja = buildLojaCatalogoIndex([
+      modeloLoja({ brand: "iPhone", manufacturer: "Apple", name: "16 Teste Loja", modelKey: "manual_16_teste" }),
+      modeloLoja({ brand: "iPhone", manufacturer: "Apple", name: "7", modelKey: "manual_7" }),
+    ])
+    const r = searchDeviceModelsComLoja(index, loja, "iPhone", { limit: 1000 }).map((x) => x.modelKey)
+    expect(r.indexOf("apple_iphone_6")).toBeLessThan(r.indexOf("manual_7"))
+    expect(r.indexOf("manual_7")).toBeLessThan(r.indexOf("apple_iphone_7_plus"))
+    expect(r.indexOf("apple_iphone_16")).toBeLessThan(r.indexOf("manual_16_teste"))
+    expect(r.indexOf("manual_16_teste")).toBeLessThan(r.indexOf("apple_iphone_17"))
+  })
+
+  it("revisão R1 (P2): 25 cadastros da loja casando com 'iPhone' não empurram o iPhone 7 para fora da 1ª página", () => {
+    const loja = buildLojaCatalogoIndex(
+      Array.from({ length: 25 }, (_, i) =>
+        modeloLoja({ brand: "iPhone", manufacturer: "Apple", name: `Fold ${String.fromCharCode(65 + i)}`, modelKey: `manual_fold_${i}` }),
+      ),
+    )
+    const p1 = searchDeviceModelsComLojaPagina(index, loja, "iPhone", { limit: 20 })
+    expect(p1.results.map((x) => x.modelKey)).toContain("apple_iphone_7")
+    expect(p1.hasMore).toBe(true)
   })
 })
 

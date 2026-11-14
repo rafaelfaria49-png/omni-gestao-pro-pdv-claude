@@ -130,6 +130,19 @@ describe("COMPAT-BUSCA-MODELOS-NATURAL-001 — nome de um caractere e reaproveit
     expect(db.catalogoAparelhoLojaModelo.create).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ["desativado", { active: false }, /desativado/],
+    ["aguardando lançamento", { lancamento: "aguardando_lancamento" }, /aguardando lançamento/],
+  ])("revisão R1 (P2): equivalente %s na loja também bloqueia (orienta reativar/confirmar)", async (_n, estado, msg) => {
+    const existente = row({ modelKey: "manual_futuro", name: "iPhone Futuro QA", nameKey: "IPHONE FUTURO QA", ...estado })
+    const db = vazio()
+    db.catalogoAparelhoLojaModelo.findMany = vi.fn(async () => [existente]) as never
+    const r = await createLojaModelo(db as never, global, "loja", "u", { manufacturer: "Apple", brand: "iPhone", name: "Futuro QA" })
+    expect(r).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: "manual_futuro", source: "loja", active: false } })
+    expect(r.ok ? "" : (r as { message: string }).message).toMatch(msg)
+    expect(db.catalogoAparelhoLojaModelo.create).not.toHaveBeenCalled()
+  })
+
   it("duplicidade exata na mesma marca continua bloqueada", async () => {
     const db = vazio()
     db.catalogoAparelhoLojaModelo.findFirst = vi.fn(async () => row({ brand: "iPhone", name: "7", brandKey: "IPHONE", nameKey: "7" })) as never

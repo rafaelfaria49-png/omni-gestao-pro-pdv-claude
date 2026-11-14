@@ -370,20 +370,18 @@ export function searchDeviceModels(
 
 type ModeloToken = number | string
 
-/** Algarismos romanos de geração usados como nome de modelo (iPhone X = 10ª geração). */
-const GERACAO_ROMANA_IPHONE = /^X[RS]?(?: |$)/
+export type { ModeloToken }
 
 /**
  * Quebra o nome do modelo em números e palavras: "6s Plus" → [6, "S", "PLUS"]; "S21 FE" → ["S", 21, "FE"].
- * No iPhone, "X"/"XR"/"XS" viram a 10ª geração (entre o 8 e o 11), como o operador espera.
+ * No iPhone, "X"/"XR"/"XS" viram a 10ª geração (entre o 8 e o 11), como o operador espera — tanto no
+ * nome curto da linha iPhone ("XR") quanto no nome completo ("iPhone XR", cadastro da loja).
  */
 export function tokensModeloNatural(nome: string, linha = ""): ModeloToken[] {
   let n = normalizeDeviceQuery(nome)
+  if (normalizeDeviceQuery(linha) === "IPHONE") n = n.replace(/^X(?=[RS]?(?: |$))/, "10")
+  n = n.replace(/^IPHONE X(?=[RS]?(?: |$))/, "IPHONE 10")
   const tokens: ModeloToken[] = []
-  if (normalizeDeviceQuery(linha) === "IPHONE" && GERACAO_ROMANA_IPHONE.test(n)) {
-    tokens.push(10)
-    n = n.slice(1)
-  }
   for (const parte of n.split(/(\d+)/)) {
     if (!parte) continue
     if (/^\d+$/.test(parte)) {
@@ -395,7 +393,7 @@ export function tokensModeloNatural(nome: string, linha = ""): ModeloToken[] {
   return tokens
 }
 
-function compareTokens(a: readonly ModeloToken[], b: readonly ModeloToken[]): number {
+export function compareTokens(a: readonly ModeloToken[], b: readonly ModeloToken[]): number {
   const n = Math.min(a.length, b.length)
   for (let i = 0; i < n; i++) {
     const x = a[i]

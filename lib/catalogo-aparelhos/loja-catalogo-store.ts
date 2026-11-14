@@ -271,8 +271,11 @@ export async function createLojaModelo(
     if (dup) return duplicateFromLoja(dup)
     // COMPAT-BUSCA-MODELOS-NATURAL-001: o mesmo aparelho escrito de outro jeito nesta loja
     // ("Apple" + "iPhone 7" × "iPhone" + "7") também é duplicata — oferece usar o existente.
-    const equivalente = findGlobalDuplicate(buildLojaCatalogoIndex(await listLojaModelos(db, storeId)), { brand, name, manufacturer })
-    const modeloEquivalente = equivalente ? (await getLojaModelosByKeys(db, storeId, [equivalente.modelKey]))[0] : undefined
+    // Vale também para desativados e "aguardando lançamento" (a mensagem orienta reativar/confirmar).
+    const todosDaLoja = await listLojaModelos(db, storeId, { includeInactive: true })
+    const comoAtivos = todosDaLoja.map((m) => ({ ...m, active: true, lancamento: "lancado" as const }))
+    const equivalente = findGlobalDuplicate(buildLojaCatalogoIndex(comoAtivos), { brand, name, manufacturer })
+    const modeloEquivalente = equivalente ? todosDaLoja.find((m) => m.modelKey === equivalente.modelKey) : undefined
     if (modeloEquivalente) return duplicateFromModelo(modeloEquivalente)
     // A busca lê no máximo MAX_MODELOS_POR_LOJA modelos: acima disso o novo sumiria em silêncio.
     if ((await db.catalogoAparelhoLojaModelo.count({ where: { storeId } })) >= MAX_MODELOS_POR_LOJA) {
