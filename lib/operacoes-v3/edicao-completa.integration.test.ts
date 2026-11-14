@@ -143,6 +143,19 @@ describe.skipIf(!ativo)("edição completa — PostgreSQL QA isolado", () => {
     }
     expect((await prisma.cliente.findUniqueOrThrow({ where: { id: f.cliente.id } })).name).toBe(f.cliente.name);
   }, 60000);
+  it("correção de nome não sobrescreve contato mais recente que o snapshot da OS", async () => {
+    const f = await fixture();
+    await prisma.cliente.update({ where: { id: f.cliente.id }, data: { phone: "11911112222" } });
+    const c = await carregarEdicaoCompletaOSV3(loja, f.id);
+    c.dados.cliente.nome = "Nome sintético corrigido";
+    const r = { versao: c.versao, operacaoId: randomUUID(), motivo: "Corrigir apenas nome preservando contato já atualizado" };
+    const p = await revisarEdicaoCompletaOSV3(loja, f.id, c.dados, r);
+    sessao.token = await createPinAuthorizationToken({ userId: "qa-edicao-operador", storeId: loja, supervisorId, ...p.scope }, resolvePinAuthorizationSecret()!);
+    await salvarEdicaoCompletaOSV3(loja, f.id, c.dados, r);
+    const cliente = await prisma.cliente.findUniqueOrThrow({ where: { id: f.cliente.id } });
+    expect(cliente.name).toBe("Nome sintético corrigido");
+    expect(cliente.phone).toBe("11911112222");
+  }, 60000);
   it("falha de auditoria reverte título, cliente e OS na mesma transação", async () => {
     const f = await fixture(), { d, r } = await preparar(f);
     // Falha depois da gravação financeira, dentro da transação real PostgreSQL.

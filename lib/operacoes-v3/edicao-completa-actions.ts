@@ -154,7 +154,14 @@ export async function salvarEdicaoCompletaOSV3(storeId: string, osId: string, en
     // CPF/nome do cadastro e snapshot da OS são corrigidos juntos. A unique de
     // documentKey impede associar o CPF de outro cliente a este cadastro.
     if (p.antes.cliente.id === d.cliente.id && serializarEdicaoV3(p.antes.cliente) !== serializarEdicaoV3(d.cliente)) {
-      await tx.cliente.update({ where: { id: c.cliente.id, updatedAt: c.cliente.updatedAt }, data: { name: d.cliente.nome.trim(), document: d.cliente.documento.trim(), documentKey: toStrongDocumentKey(d.cliente.documento), phone: d.cliente.telefone || null, email: d.cliente.email || null } });
+      // O snapshot da OS pode ser mais antigo que o cadastro. Só os campos que
+      // o operador alterou podem substituir o cadastro atual.
+      const clientePatch: Prisma.ClienteUpdateInput = {};
+      if (p.antes.cliente.nome !== d.cliente.nome) clientePatch.name = d.cliente.nome.trim();
+      if (p.antes.cliente.documento !== d.cliente.documento) { clientePatch.document = d.cliente.documento.trim(); clientePatch.documentKey = toStrongDocumentKey(d.cliente.documento); }
+      if (p.antes.cliente.telefone !== d.cliente.telefone) clientePatch.phone = d.cliente.telefone || null;
+      if (p.antes.cliente.email !== d.cliente.email) clientePatch.email = d.cliente.email || null;
+      await tx.cliente.update({ where: { id: c.cliente.id, updatedAt: c.cliente.updatedAt }, data: clientePatch });
       if (c.titulo && !p.mudouFinanceiro && p.antes.cliente.nome !== d.cliente.nome) {
         const payloadTitulo = { ...objetoEdicao(c.titulo.payload), cliente: d.cliente.nome, clienteNome: d.cliente.nome };
         await tx.contaReceberTitulo.update({ where: { id: c.titulo.id }, data: { cliente: d.cliente.nome, payload: json(payloadTitulo) } });
