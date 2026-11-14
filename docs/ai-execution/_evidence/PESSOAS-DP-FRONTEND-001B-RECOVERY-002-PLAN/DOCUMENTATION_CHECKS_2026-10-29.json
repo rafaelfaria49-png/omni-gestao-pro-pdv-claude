@@ -1,0 +1,124 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "plan_rev": 10,
+  "status": "BLOCKED",
+  "measured_at": "2026-10-29T13:51:11.752Z",
+  "main_base": "aaab27505a03903d9fb8333baef5b52424821093",
+  "source_head": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+  "source_tree_clean": true,
+  "source_pushed_by_normal_fast_forward": true,
+  "blocked_2_commit": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+  "archive_transport_commit": "0917a253febb0c0f43ca480037d0bc9ffb38b7e7",
+  "reconciliation_commit": "8f57f0433ea4773e75aced9bd376b23d5011a225",
+  "source_and_reconciliation_ledger_identical": true,
+  "ledger_sha256": "7ddff39011b28d6fa34568988ba9e59bbc0e619fe51b73f3188ea0fc8983745c",
+  "ledger_lines": 7,
+  "events_for_this_goal": [
+    {
+      "result": "BLOCKED",
+      "attempt": 1,
+      "previous_attempts": []
+    },
+    {
+      "result": "BLOCKED",
+      "attempt": 2,
+      "previous_attempts": []
+    }
+  ],
+  "duplicated_events": false,
+  "next_attempt": "3/3",
+  "attempt_3_started": false,
+  "archives": [
+    {
+      "path": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md",
+      "blob": "95807306788d58ec842dd992edf2df2ab9932622",
+      "sha256": "b8f51cdd9446a52eae07cb8b3f9aed030917c3ab015c9921c8d7558e4224f41b",
+      "worktree_sha256": "5a3200a07795cdcb71347d8462d94f4350732cabb16fd30f92df19ec025f9f1b",
+      "unchanged_in_source_transport_reconciliation_head": true
+    },
+    {
+      "path": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-r9-a2.md",
+      "blob": "b86c8a26afcf4be481f74fb5c0c088696877db5f",
+      "sha256": "c8807aae37811c8ba451e53b9a11c6bb4a124c9921998d559e97ef96d204bc5c",
+      "worktree_sha256": "c8807aae37811c8ba451e53b9a11c6bb4a124c9921998d559e97ef96d204bc5c",
+      "unchanged_in_source_transport_reconciliation_head": true
+    }
+  ],
+  "previous_closed_artifacts_preserved": 12,
+  "acceptance_table_unchanged": true,
+  "allowlist_unchanged": true,
+  "allowlist_entries": 45,
+  "auth_and_qa_authorizations_preserved": true,
+  "conditional_review_waiver_preserved": true,
+  "runner_and_core_unchanged": true,
+  "source_auth_evidence": {
+    "total": 39,
+    "passed": 39,
+    "failed": 0,
+    "rerun_in_this_mission": false
+  },
+  "active_marker_absent_in_source_and_documental_worktrees": true,
+  "infrastructure_ready": false,
+  "disk_cleanup_status": "PENDING_HUMAN_AUTHORIZATION",
+  "commands": [
+    {
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "scripts/track.mjs",
+        "registry"
+      ],
+      "exit": 0,
+      "stdout": "AEP/1.0-R2 · registry\n  state.json de contador: PAUSED · current_goal null · next_goal null\n  state.json de fiscal: RUNNING · current_goal FISCAL-025B-OFFLINE-ARCHIVE-FOUNDATION-001 · next_goal FISCAL-PILOT-HOMOLOGATION-RETRY-RECONCILIATION-025\n  state.json de ops-v4-datas-ui-promocao: PAUSED · current_goal null · next_goal null\n  state.json de ops-v4-financeiro-retirada-garantia: PAUSED · current_goal null · next_goal null\n  state.json de ops-v4-fluxo-curto: PAUSED · current_goal null · next_goal null\n  state.json de pdv: PAUSED · current_goal null · next_goal null\n  state.json de pdv-parity-suite-n5-a-foundation-001: PAUSED · current_goal null · next_goal null\n  state.json de pdv-parity-suite-n5-b1-core-gaps-001: BLOCKED · current_goal null · next_goal null\n  state.json de pdv-scan-inline-feedback-autofocus-006: PAUSED · current_goal null · next_goal null\n  state.json de pdv-scan-unregistered-action-settings-007: PAUSED · current_goal null · next_goal null\n  state.json de pessoas: BLOCKED · current_goal null · next_goal null\nregenerado: docs/execution-tracks/REGISTRY.md\nregenerado: docs/ai-execution/GATES.md\ntrilhas: contador, fiscal, pdv, pdv-parity-suite-n5-a-foundation-001, pdv-parity-suite-n5-b1-core-gaps-001, pdv-scan-inline-feedback-autofocus-006, pdv-scan-unregistered-action-settings-007, ops-v4-fluxo-curto, pessoas, ops-v4-financeiro-retirada-garantia, ops-v4-datas-ui-promocao\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "scripts/track.mjs",
+        "verify",
+        "--all"
+      ],
+      "exit": 0,
+      "stdout": "AEP/1.0-R2 · verify --all\n  [OK]   contador — state.json bate com o estado derivado; ledger append-only.\n  [OK]   fiscal — state.json bate com o estado derivado; ledger append-only.\n  [OK]   ops-v4-datas-ui-promocao — state.json bate com o estado derivado; ledger append-only.\n  [OK]   ops-v4-financeiro-retirada-garantia — state.json bate com o estado derivado; ledger append-only.\n  [OK]   ops-v4-fluxo-curto — state.json bate com o estado derivado; ledger append-only.\n  [OK]   pdv — state.json bate com o estado derivado; ledger append-only.\n  [OK]   pdv-parity-suite-n5-a-foundation-001 — state.json bate com o estado derivado; ledger append-only.\n  [OK]   pdv-parity-suite-n5-b1-core-gaps-001 — state.json bate com o estado derivado; ledger append-only.\n  [OK]   pdv-scan-inline-feedback-autofocus-006 — state.json bate com o estado derivado; ledger append-only.\n  [OK]   pdv-scan-unregistered-action-settings-007 — state.json bate com o estado derivado; ledger append-only.\n  [OK]   pessoas — state.json bate com o estado derivado; ledger append-only.\n  [OK]   REGISTRY.md idêntico ao gerado.\n  [OK]   GATES.md idêntico ao gerado a partir de protocol.json.\n\nverify: sem divergências.\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "warning: in the working copy of 'docs/ai-execution/GATES.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/REGISTRY.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/contador/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/fiscal/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/ops-v4-datas-ui-promocao/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/ops-v4-financeiro-retirada-garantia/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/ops-v4-fluxo-curto/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/pdv-parity-suite-n5-a-foundation-001/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/pdv-parity-suite-n5-b1-core-gaps-001/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/pdv-scan-inline-feedback-autofocus-006/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/pdv-scan-unregistered-action-settings-007/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/pdv/state.json', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/pessoas/TRACK.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/execution-tracks/pessoas/state.json', LF will be replaced by CRLF the next time Git touches it\n"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--cached",
+        "--check"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "changed_files": [
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/DOCUMENTATION_CHECKS_2026-10-29.json",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/HISTORY_MANIFEST_2026-10-29.json",
+    "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/PREFLIGHT_FINAL_2026-10-29.json",
+    "docs/execution-tracks/REGISTRY.md",
+    "docs/execution-tracks/pessoas/LEDGER.jsonl",
+    "docs/execution-tracks/pessoas/TRACK.md",
+    "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-r9-a2.md",
+    "docs/execution-tracks/pessoas/_closed/reports/RECONCILE-BLOCKED-efd34ae4f0f5.json",
+    "docs/execution-tracks/pessoas/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md",
+    "docs/execution-tracks/pessoas/state.json"
+  ],
+  "product_typecheck_build_runner_qa_close": "NOT_RUN_DOCUMENTATION_ONLY_AND_EXPLICIT_MISSION_BOUNDARY",
+  "current_status_changelog_master_context": "UNCHANGED_NO_FUNCTIONAL_MODULE_STATE_CHANGE",
+  "next_gate": "HUMAN_AUTHORIZE_EXACT_CACHE_PATHS_THEN_REMEASURE_DISK",
+  "human_merge_required": true,
+  "automatic_merge": false
+}
