@@ -22,6 +22,7 @@ import {
 } from "@/lib/vendas/sale-identity-contracts"
 import { StockIdempotency, type StockDriftFailureDetails } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
+import { corPadraoDesativadaNaVenda } from "@/lib/compat/venda-cores-guard"
 
 /** Re-exportado para as rotas traduzirem o erro de negócio em HTTP 409. */
 export { FractionalQuantityError }
@@ -818,6 +819,19 @@ export async function upsertVendaInTransaction(
       Number(pb?.creditoVale ?? 0)
     if (!Number.isFinite(somaPagamentos) || Math.abs(somaPagamentos - rawTotal) > 0.02) {
       throw new SalePaymentsMismatchError(rawTotal, somaPagamentos)
+    }
+    // COMPAT-PROFISSIONAL-001: cor padrão desativada pela loja não entra em venda NOVA
+    // (feita depois da desativação). Antes de qualquer efeito; replay nunca chega aqui.
+    const corRecusada = await corPadraoDesativadaNaVenda(
+      tx as unknown as Parameters<typeof corPadraoDesativadaNaVenda>[0],
+      lojaId,
+      lines,
+      at,
+    )
+    if (corRecusada) {
+      throw new InvalidSaleLinesError(
+        `A cor "${corRecusada}" está desativada nesta loja. Escolha outra cor no item e finalize de novo.`,
+      )
     }
   }
 

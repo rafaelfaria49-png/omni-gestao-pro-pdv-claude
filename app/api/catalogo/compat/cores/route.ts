@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import {
-  readJsonBody,
-  requireCatalogoLojaWrite,
-  resolveCatalogoLojaRead,
-} from "@/lib/catalogo-aparelhos/loja-catalogo-api"
-import { compatResultResponse, compatServerError } from "@/lib/compat/compat-api"
+import { readJsonBody, requireCatalogoLojaWrite } from "@/lib/catalogo-aparelhos/loja-catalogo-api"
+import { compatResultResponse, compatServerError, resolveCompatPdvRead } from "@/lib/compat/compat-api"
 import { createCorLoja, listCoresLoja, setCorPadraoAtiva, updateCorLoja } from "@/lib/compat/compat-store"
 import { coresEfetivas } from "@/lib/compat/cores-loja"
 
@@ -23,7 +19,8 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
-  const gate = await resolveCatalogoLojaRead(req)
+  // PDV inteiro (inclusive CAIXA) lê as cores da loja; escrita continua só com Cadastros + catálogo.
+  const gate = await resolveCompatPdvRead(req)
   if (!gate.ok) return gate.response
   try {
     const linhas = gate.storeId ? await listCoresLoja(prisma, gate.storeId) : []

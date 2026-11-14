@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react"
 import { ACESSORIO_CORES_PADRAO } from "@/lib/acessorios/cores"
 import { withModoCaptura, type ProdutoAcessoriosFormValue } from "@/lib/acessorios/form"
+import { isAcessorioModoCaptura } from "@/lib/acessorios/metadata"
 import type { AcessorioModoCaptura, ProdutoAcessorioTipo } from "@/lib/acessorios/types"
-import { useLojaAtiva } from "@/lib/loja-ativa"
 import { carregarCores, carregarOrganizacao } from "@/lib/compat/compat-client"
 import type { CorEfetiva } from "@/lib/compat/cores-loja"
 
 type Props = {
+  /** Loja do produto (header explícito). Sem loja: só paleta padrão, sem preferências da loja. */
+  lojaHeader?: string | null
   value: ProdutoAcessoriosFormValue
   onChange: (value: ProdutoAcessoriosFormValue) => void
 }
@@ -37,17 +39,19 @@ function modoAtual(value: ProdutoAcessoriosFormValue, campo: "modelo" | "cor"): 
  * e as cores próprias da loja podem ser escolhidas por produto. O estoque continua único no
  * produto — modelo/cor informados na venda são histórico, não saldo.
  */
-export function ProdutoAcessoriosConfig({ value, onChange }: Props) {
+// Recebe a loja por prop (não usa o provider de loja ativa): o formulário roda também em
+// harness isolado, sem sessão NextAuth.
+export function ProdutoAcessoriosConfig({ lojaHeader: lojaProp, value, onChange }: Props) {
   const patch = (next: Partial<ProdutoAcessoriosFormValue>) => onChange({ ...value, ...next })
-  const { lojaAtivaId } = useLojaAtiva()
-  const lojaHeader = (lojaAtivaId ?? "").trim() || null
+  const lojaHeader = (lojaProp ?? "").trim() || null
   const [coresLoja, setCoresLoja] = useState<CorEfetiva[]>([])
 
   useEffect(() => {
     if (!lojaHeader || !value.enabled) return
     let vivo = true
     void carregarCores(lojaHeader).then((r) => {
-      if (vivo && r.ok) setCoresLoja(r.cores.filter((c) => c.origem === "loja" && c.ativo))
+      // Resposta sem a lista (servidor antigo/harness) = sem cores próprias, nunca quebra o formulário.
+      if (vivo && r.ok && Array.isArray(r.cores)) setCoresLoja(r.cores.filter((c) => c.origem === "loja" && c.ativo))
     })
     return () => {
       vivo = false
@@ -73,7 +77,9 @@ export function ProdutoAcessoriosConfig({ value, onChange }: Props) {
     if (!lojaHeader || value.enabled) return
     let vivo = true
     void carregarOrganizacao(lojaHeader).then((r) => {
-      if (vivo && r.ok) setPadraoLoja({ modelo: r.preferencias.modoModeloPadrao, cor: r.preferencias.modoCorPadrao })
+      if (vivo && r.ok && isAcessorioModoCaptura(r.preferencias?.modoModeloPadrao) && isAcessorioModoCaptura(r.preferencias?.modoCorPadrao)) {
+        setPadraoLoja({ modelo: r.preferencias.modoModeloPadrao, cor: r.preferencias.modoCorPadrao })
+      }
     })
     return () => {
       vivo = false

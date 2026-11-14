@@ -51,12 +51,14 @@ const localCache = new Map<string, { at: number; texto: string | null }>()
 
 async function coresDaLoja(loja: string | null): Promise<CorLoja[]> {
   if (!loja) return []
-  const hit = coresCache.get(loja)
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.linhas
+  // Sempre busca de novo: cor desativada some na próxima abertura (o servidor também recusa).
+  // O cache só cobre falha de rede, para o PDV seguir com a última lista conhecida.
   const r = await carregarCores(loja)
-  const linhas = r.ok ? r.linhas : []
-  coresCache.set(loja, { at: Date.now(), linhas })
-  return linhas
+  if (r.ok && Array.isArray(r.linhas)) {
+    coresCache.set(loja, { at: Date.now(), linhas: r.linhas })
+    return r.linhas
+  }
+  return coresCache.get(loja)?.linhas ?? []
 }
 
 async function ondeEstaCapinha(loja: string | null, modelKey: string): Promise<string | null> {
@@ -65,7 +67,7 @@ async function ondeEstaCapinha(loja: string | null, modelKey: string): Promise<s
   const hit = localCache.get(k)
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.texto
   const r = await consultarCapinha(loja, modelKey)
-  const texto = r.ok
+  const texto = r.ok && Array.isArray(r.localizacoes)
     ? (r.localizacoes.slice(0, 2).map((l) => (l.alvo === "compativel" ? `${rotuloLocalizacao(l)} (via ${l.viaModelo})` : rotuloLocalizacao(l))).join(" · ") || null)
     : null
   localCache.set(k, { at: Date.now(), texto })
@@ -156,6 +158,8 @@ export function SelecionarAcessorioDialog({
   const mostraModelo = modoModelo !== "desativado"
   const mostraCor = modoCor !== "desativado"
   const [coresLinhas, setCoresLinhas] = useState<CorLoja[]>([])
+  // Até conhecer as cores da loja, não oferece a paleta crua (evita mostrar cor desativada).
+  const [coresProntas, setCoresProntas] = useState(false)
   const colorOptions = useMemo(
     () => opcoesDeCorParaProduto(resolveAccessoryColorOptions(config), coresLinhas, config?.coresLoja),
     [config, coresLinhas],
@@ -194,6 +198,7 @@ export function SelecionarAcessorioDialog({
     setCadastroOpen(false)
     setCorLojaId(null)
     setOndeEsta(null)
+    setCoresProntas(false)
   }, [])
 
   const closeAndReset = useCallback(() => {
@@ -208,7 +213,19 @@ export function SelecionarAcessorioDialog({
   useEffect(() => {
     if (!open || !mostraCor) return
     let vivo = true
-    void coresDaLoja(lojaHeader).then((linhas) => vivo && setCoresLinhas(linhas))
+    // Aberturas seguintes: mostra na hora a última lista conhecida e atualiza em seguida.
+    const cache = lojaHeader ? coresCache.get(lojaHeader) : undefined
+    if (cache) {
+      setCoresLinhas(cache.linhas)
+      setCoresProntas(true)
+    } else if (!lojaHeader) {
+      setCoresProntas(true)
+    }
+    void coresDaLoja(lojaHeader).then((linhas) => {
+      if (!vivo) return
+      setCoresLinhas(linhas)
+      setCoresProntas(true)
+    })
     return () => {
       vivo = false
     }
@@ -484,8 +501,9 @@ export function SelecionarAcessorioDialog({
               <Label>
                 Cor{!exigeCor && <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>}
               </Label>
+              {!coresProntas && <p className="text-xs text-muted-foreground">Carregando cores da loja…</p>}
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Cor do acessório">
-                {colorOptions.map((cor) => {
+                {(coresProntas ? colorOptions : []).map((cor) => {
                   const selected = cor.origem === "loja" ? corLojaId === cor.id : colorKey === cor.key && !corLojaId
                   return (
                     <button

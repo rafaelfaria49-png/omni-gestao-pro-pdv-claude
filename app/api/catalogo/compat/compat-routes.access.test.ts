@@ -165,6 +165,16 @@ describe("leitura do Compat", () => {
     expect((await own.json()).cores.length).toBe(18)
   })
 
+  it("PDV (cores): CAIXA sem deviceCatalog lê as cores da própria loja, mas não grava nem lê outra loja", async () => {
+    h.session = storeUser("CAIXA", ["home", "pdv", "sales", "cash"], [LOJA_A])
+    const own = await coresGET(req("/api/catalogo/compat/cores"))
+    expect(own.status).toBe(200)
+    expect(h.store.listCoresLoja.mock.calls[0][1]).toBe(LOJA_A)
+    expect((await coresGET(req("/api/catalogo/compat/cores", "GET", undefined, LOJA_B))).status).toBe(403)
+    expect((await coresPOST(req("/api/catalogo/compat/cores", "POST", { label: "X" }))).status).toBe(403)
+    expect(h.store.createCorLoja).not.toHaveBeenCalled()
+  })
+
   it("relatório exige o módulo de Relatórios", async () => {
     h.session = storeUser("GERENTE", MODS.filter((m) => m !== "reports"))
     expect((await relGET(req("/api/catalogo/compat/relatorio?dias=30"))).status).toBe(403)

@@ -37,6 +37,7 @@ import {
 } from "./compat-store"
 import { coresEfetivas } from "./cores-loja"
 import { montarRelatorioCapinhas } from "./capinhas"
+import { corPadraoDesativadaNaVenda } from "./venda-cores-guard"
 
 const TEST_URL = process.env.COMPAT_TEST_DATABASE_URL ?? ""
 if (TEST_URL && !/^postgresql:\/\/[^@]+@127\.0\.0\.1:\d+\/compat_[a-z0-9_]+$/.test(TEST_URL)) {
@@ -262,6 +263,21 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     expect(efetivas.find((x) => x.id === c.value.id)).toMatchObject({ label: "Azul bebê claro", ativo: false })
     expect(await listCoresLoja(db, B)).toEqual([])
     expect(await updateCorLoja(db, B, "u-b", c.value.id, { version: 3, ativo: true })).toMatchObject({ ok: false, code: "NOT_FOUND" })
+  })
+
+  it("venda nova com cor padrão desativada na loja é recusada; antes da desativação e outra loja, não", async () => {
+    const linha = (colorKey: string) => [{ accessorySelection: { version: 1, colorKey } }]
+    const row = await db.compatCorLoja.findFirstOrThrow({ where: { storeId: A, baseKey: "fume" } })
+    expect(row.ativo).toBe(false)
+    const depois = new Date(row.updatedAt.getTime() + 60_000)
+    const antes = new Date(row.updatedAt.getTime() - 60_000)
+    expect(await corPadraoDesativadaNaVenda(db, A, linha("fume"), depois)).toBe("Fumê")
+    expect(await corPadraoDesativadaNaVenda(db, A, linha("fume"), antes)).toBeNull()
+    expect(await corPadraoDesativadaNaVenda(db, B, linha("fume"), depois)).toBeNull()
+    expect(await corPadraoDesativadaNaVenda(db, A, linha("preto"), depois)).toBeNull()
+    // reativar libera de novo
+    expect((await setCorPadraoAtiva(db, A, "u-a", "fume", true)).ok).toBe(true)
+    expect(await corPadraoDesativadaNaVenda(db, A, linha("fume"), new Date(Date.now() + 60_000))).toBeNull()
   })
 
   it("preferências: conflito de versão não sobrescreve", async () => {

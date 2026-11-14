@@ -2,6 +2,9 @@ import "server-only"
 import { NextResponse } from "next/server"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { auth } from "@/auth"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
+import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import type { CompatFailure, CompatResult } from "./compat-store"
 
 /**
@@ -19,6 +22,22 @@ export async function requireCompatGestaoRead(
   const gate = await requireCadastrosHubApi(req, "read")
   if (!gate.ok) return { ok: false, response: gate.response }
   return { ok: true, storeId: gate.storeId }
+}
+
+/**
+ * Leitura usada pelo PDV (cores da loja): quem opera PDV, catálogo ou serviço na loja — inclusive
+ * CAIXA, que não tem o módulo `deviceCatalog`. Sem isso o caixa veria cores desativadas que o
+ * servidor da venda recusa. Loja só é usada se a sessão puder acessá-la; sem loja, paleta padrão.
+ */
+export async function resolveCompatPdvRead(
+  req: Request,
+): Promise<{ ok: true; storeId: string | null } | { ok: false; response: NextResponse }> {
+  const denied = await requireModuleApi(req, "sharedCatalog")
+  if (denied) return { ok: false, response: denied }
+  const session = await auth()
+  if (!session?.user) return { ok: false, response: NextResponse.json({ error: "Não autenticado" }, { status: 401 }) }
+  const storeId = storeIdFromAssistecRequestForRead(req)
+  return { ok: true, storeId: storeId && canAccessStore(session, storeId) ? storeId : null }
 }
 
 export function compatFailureResponse(f: CompatFailure): NextResponse {

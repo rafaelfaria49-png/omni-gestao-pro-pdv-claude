@@ -323,3 +323,78 @@ describe("upsertVendaInTransaction — saneamento de accessorySelection (004B)",
     expect(lastPayload()?.lines?.[0]?.accessorySelection).toEqual({ version: 1, colorKey: "preto", colorLabel: "Preto" })
   })
 })
+
+/**
+ * COMPAT-PROFISSIONAL-001 — cor padrão desativada pela loja é recusada no SERVIDOR em venda nova
+ * (feita depois da desativação). Histórico, reenvio e venda offline anterior seguem aceitos.
+ */
+describe("upsertVendaInTransaction — cor padrão desativada pela loja", () => {
+  const DESATIVADA_EM = new Date("2026-11-14T12:00:00Z")
+  function comCorDesativada(products: FakeProduct[]) {
+    const fake = makeFakeTx(products)
+    const inativas: Array<{ storeId: string; baseKey: string; updatedAt: Date }> = []
+    // Como o banco: a venda gravada é encontrada de novo pelo `pedidoId` (caminho de replay real).
+    const gravadas = new Map<string, any>()
+    const create = fake.tx.venda.create
+    fake.tx.venda.create = async (args: any) => {
+      const row = await create(args)
+      gravadas.set(row.pedidoId, { ...row, itens: [] })
+      return row
+    }
+    fake.tx.venda.findUnique = async ({ where }: any) => gravadas.get(where.pedidoId) ?? null
+    fake.tx.compatCorLoja = {
+      findMany: async ({ where }: any) =>
+        inativas.filter((c) => c.storeId === where.storeId && where.ativo === false && where.baseKey.in.includes(c.baseKey)),
+    }
+    return { ...fake, desativar: (baseKey: string, storeId = STORE) => inativas.push({ storeId, baseKey, updatedAt: DESATIVADA_EM }) }
+  }
+  const venda = (id: string, at: string, colorKey: string, extra: Record<string, unknown> = {}): SalePayload => ({
+    id,
+    at,
+    total: 25,
+    paymentBreakdown: { dinheiro: 25 },
+    lines: [
+      { inventoryId: "prod-1", name: "Capinha", quantity: 1, unitPrice: 25, lineTotal: 25, accessorySelection: { version: 1, colorKey, ...extra } },
+    ],
+  } as SalePayload)
+
+  it("recusa venda ao vivo feita depois da desativação, antes de qualquer efeito", async () => {
+    const { tx, byId, ledger, lastPayload, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    await expect(
+      upsertVendaInTransaction(tx, STORE, venda("PED-C1", "2026-11-14T13:00:00Z", "fume"), undefined, { enforceStock: true }),
+    ).rejects.toThrow(/Fumê.*desativada/)
+    expect(lastPayload()).toBeUndefined()
+    expect(byId.get("prod-1")!.stock).toBe(5)
+    expect(ledger).toHaveLength(0)
+  })
+
+  it("aceita venda feita ANTES da desativação (fila offline) e cor de outra loja", async () => {
+    const { tx, byId, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    desativar("preto", "outra-loja")
+    await upsertVendaInTransaction(tx, STORE, venda("PED-C2", "2026-11-14T11:59:00Z", "fume"), undefined, { enforceStock: true })
+    await upsertVendaInTransaction(tx, STORE, venda("PED-C3", "2026-11-14T13:00:00Z", "preto"), undefined, { enforceStock: true })
+    expect(byId.get("prod-1")!.stock).toBe(3)
+  })
+
+  it("reenvio de venda já gravada não é revalidado (histórico intacto)", async () => {
+    const { tx, byId, ledger, desativar } = comCorDesativada([produto({ stock: 5 })])
+    const v = venda("PED-C4", "2026-11-14T13:00:00Z", "fume")
+    await upsertVendaInTransaction(tx, STORE, v, undefined, { enforceStock: true })
+    desativar("fume")
+    await expect(upsertVendaInTransaction(tx, STORE, v, undefined, { enforceStock: true })).resolves.toMatchObject({ replayed: true })
+    expect(byId.get("prod-1")!.stock).toBe(4)
+    expect(ledger).toHaveLength(1)
+  })
+
+  it("'Outra' (texto livre / cor própria da loja) não é afetada", async () => {
+    const { tx, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    await expect(
+      upsertVendaInTransaction(tx, STORE, venda("PED-C5", "2026-11-14T13:00:00Z", "outra", { customColorLabel: "Fumê" }), undefined, {
+        enforceStock: true,
+      }),
+    ).resolves.toMatchObject({ replayed: false })
+  })
+})
