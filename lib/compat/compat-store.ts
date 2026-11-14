@@ -485,7 +485,9 @@ export async function addLocalizacao(
   raw: unknown,
 ): Promise<CompatResult<{ id: string; existente: boolean }>> {
   const b = body(raw)
-  const modelKey = typeof b.modelKey === "string" ? b.modelKey.trim().slice(0, 160) : ""
+  const modelKeyBruto = typeof b.modelKey === "string" ? b.modelKey.trim().slice(0, 160) : ""
+  // Linha mesclada grava no aparelho canônico (COMPAT-CATALOGO-BRASIL-2023-2026-002).
+  const modelKey = modelKeyBruto && !isManualModelKey(modelKeyBruto) ? globalIndex.canonicalKeyOf(modelKeyBruto) : modelKeyBruto
   const produtoId = typeof b.produtoId === "string" && b.produtoId.trim() ? b.produtoId.trim().slice(0, 64) : null
   const painelId = typeof b.painelId === "string" ? b.painelId : ""
   const fileiraId = typeof b.fileiraId === "string" && b.fileiraId ? b.fileiraId : null
@@ -520,15 +522,18 @@ export async function addLocalizacao(
     }
 
     const alvo = { storeId, modelKey, produtoId }
+    // Grupo = modelo canônico + chaves mescladas nele (localizações antigas continuam no mesmo grupo).
+    const grupo = grupoLocalizacao(globalIndex, modelKey, produtoId)
+    const doGrupo = { storeId, modelKey: { in: grupo.modelKeys }, produtoId }
     const igual = await db.compatLocalizacao.findFirst({
-      where: { ...alvo, painelId, fileiraId, posicao },
+      where: { ...doGrupo, painelId, fileiraId, posicao },
       select: { id: true },
     })
     if (igual) {
-      if (principal) await marcarPrincipal(db, storeId, igual.id, alvo)
+      if (principal) await marcarPrincipal(db, storeId, igual.id, grupo)
       return { ok: true, value: { id: igual.id, existente: true } }
     }
-    const total = await db.compatLocalizacao.count({ where: alvo })
+    const total = await db.compatLocalizacao.count({ where: doGrupo })
     if (total >= COMPAT_LIMITS.localizacoesPorAlvo) {
       return {
         ok: false,
@@ -550,22 +555,44 @@ export async function addLocalizacao(
       if (errorCode(e) !== "P2002") throw e
       const vencedora = await db.compatLocalizacao.findFirst({ where: { ...alvo, painelId, fileiraId, posicao }, select: { id: true } })
       if (!vencedora) throw e
-      if (principal) await marcarPrincipal(db, storeId, vencedora.id, alvo, true)
+      if (principal) await marcarPrincipal(db, storeId, vencedora.id, grupo, true)
       return { ok: true, value: { id: vencedora.id, existente: true } }
     }
     // Pedido explícito insiste; "primeira nasce principal" cede se outra já virou principal ao mesmo tempo.
-    if (nascePrincipal) await marcarPrincipal(db, storeId, created.id, alvo, principal)
+    if (nascePrincipal) await marcarPrincipal(db, storeId, created.id, grupo, principal)
     return { ok: true, value: { id: created.id, existente: false } }
   } catch (e) {
     return failureFrom(e, "Localização duplicada.")
   }
 }
 
+/**
+ * Chave do advisory lock da troca de principal: um grupo = loja + modelo + produto. Lojas distintas
+ * nunca disputam a mesma chave (só colisão de hash de 32 bits, que no máximo serializa por instantes).
+ */
+interface GrupoLocalizacao {
+  /** Chave canônica (usada no lock). */
+  modelKey: string
+  /** Todas as chaves gravadas que pertencem ao grupo (canônica + mescladas). */
+  modelKeys: string[]
+  produtoId: string | null
+}
+
+function grupoLocalizacao(globalIndex: CatalogoIndex | undefined, modelKey: string, produtoId: string | null): GrupoLocalizacao {
+  if (!modelKey || isManualModelKey(modelKey) || !globalIndex) return { modelKey, modelKeys: [modelKey], produtoId }
+  const canon = globalIndex.canonicalKeyOf(modelKey)
+  return { modelKey: canon, modelKeys: globalIndex.equivalentKeysOf(canon), produtoId }
+}
+
+export function chaveLockPrincipal(storeId: string, modelKey: string, produtoId: string | null): string {
+  return `compat-principal:${storeId}:${modelKey}:${produtoId ?? ""}`
+}
+
 async function marcarPrincipal(
   db: CompatDb,
   storeId: string,
   id: string,
-  alvo: { modelKey: string; produtoId: string | null },
+  alvo: GrupoLocalizacao,
   insistir = true,
 ) {
   // Unicidade garantida no banco (`compat_localizacoes_principal_key`, parcial em principal=true).
@@ -573,12 +600,12 @@ async function marcarPrincipal(
   // explícito tenta de novo (a nova passada desmarca a vencedora); automático aceita a vencedora.
   // O lock por grupo (loja + modelo + produto) serializa as trocas simultâneas: sem ele, duas
   // transações desmarcam/marcam linhas em ordens opostas e o PostgreSQL aborta uma por deadlock (40P01).
-  const lockKey = `compat-principal:${storeId}:${alvo.modelKey}:${alvo.produtoId ?? ""}`
+  const lockKey = chaveLockPrincipal(storeId, alvo.modelKey, alvo.produtoId)
   const tentar = () =>
     db.$transaction([
       db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock`,
       db.compatLocalizacao.updateMany({
-        where: { storeId, modelKey: alvo.modelKey, produtoId: alvo.produtoId, principal: true, NOT: { id } },
+        where: { storeId, modelKey: { in: alvo.modelKeys }, produtoId: alvo.produtoId, principal: true, NOT: { id } },
         data: { principal: false },
       }),
       db.compatLocalizacao.updateMany({ where: { id, storeId }, data: { principal: true } }),
@@ -599,11 +626,13 @@ export async function setLocalizacaoPrincipal(
   db: CompatDb,
   storeId: string,
   id: string,
+  /** Catálogo global: une localizações gravadas com chave mesclada ao grupo do canônico. */
+  globalIndex?: CatalogoIndex,
 ): Promise<CompatResult<{ id: string }>> {
   try {
     const row = await db.compatLocalizacao.findFirst({ where: { id, storeId }, select: { modelKey: true, produtoId: true } })
     if (!row) return notFound("Localização não encontrada nesta loja.")
-    await marcarPrincipal(db, storeId, id, row)
+    await marcarPrincipal(db, storeId, id, grupoLocalizacao(globalIndex, row.modelKey, row.produtoId))
     return { ok: true, value: { id } }
   } catch (e) {
     return failureFrom(e, "Conflito ao marcar principal.")

@@ -445,21 +445,39 @@ export async function setLojaCompatDecisao(
     const where = {
       storeId_categoria_modelKeyA_modelKeyB: { storeId, categoria, modelKeyA: pair.modelKeyA, modelKeyB: pair.modelKeyB },
     }
+    // Mesmo par com chaves mescladas (decisões gravadas antes da mescla do catálogo).
+    const eqA = isManualModelKey(pair.modelKeyA) ? [pair.modelKeyA] : globalIndex.equivalentKeysOf(pair.modelKeyA)
+    const eqB = isManualModelKey(pair.modelKeyB) ? [pair.modelKeyB] : globalIndex.equivalentKeysOf(pair.modelKeyB)
+    const equivalentes = {
+      storeId,
+      categoria,
+      OR: [
+        { modelKeyA: { in: eqA }, modelKeyB: { in: eqB } },
+        { modelKeyA: { in: eqB }, modelKeyB: { in: eqA } },
+      ],
+    }
     if (decisao === "restaurar") {
       // Restaurar também desfaz decisões antigas gravadas com a chave mesclada do mesmo aparelho.
-      const eqA = isManualModelKey(pair.modelKeyA) ? [pair.modelKeyA] : globalIndex.equivalentKeysOf(pair.modelKeyA)
-      const eqB = isManualModelKey(pair.modelKeyB) ? [pair.modelKeyB] : globalIndex.equivalentKeysOf(pair.modelKeyB)
-      await db.catalogoAparelhoLojaCompat.deleteMany({
-        where: {
-          storeId,
-          categoria,
-          OR: [
-            { modelKeyA: { in: eqA }, modelKeyB: { in: eqB } },
-            { modelKeyA: { in: eqB }, modelKeyB: { in: eqA } },
-          ],
-        },
-      })
+      await db.catalogoAparelhoLojaCompat.deleteMany({ where: equivalentes })
     } else {
+      // Primeira gravação no canônico de um vínculo antigo: o que o pedido não informa (observação,
+      // origem, status/confirmação) vem da decisão antiga — a linha canônica passa a prevalecer.
+      const antiga =
+        eqA.length > 1 || eqB.length > 1
+          ? await db.catalogoAparelhoLojaCompat.findFirst({
+              where: { ...equivalentes, NOT: { modelKeyA: pair.modelKeyA, modelKeyB: pair.modelKeyB } },
+              orderBy: { updatedAt: "desc" },
+            })
+          : null
+      const herdado = antiga
+        ? {
+            ...(body.status === undefined
+              ? { status: normalizeLojaCompatStatus(antiga.status), confirmedBy: antiga.confirmedBy ?? "", confirmedAt: antiga.confirmedAt }
+              : {}),
+            ...(body.notes === undefined ? { notes: antiga.notes } : {}),
+            ...(body.origem === undefined ? { origem: antiga.origem ?? "" } : {}),
+          }
+        : {}
       const upsert = () => db.catalogoAparelhoLojaCompat.upsert({
         where,
         create: {
@@ -471,6 +489,7 @@ export async function setLojaCompatDecisao(
           notes,
           origem,
           ...confirmacao,
+          ...herdado,
           createdBy: actorId,
           updatedBy: actorId,
         },

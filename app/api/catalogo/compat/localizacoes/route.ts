@@ -80,7 +80,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, error: "Informe { id, principal: true }." }, { status: 400 })
   }
   try {
-    return compatResultResponse(await setLocalizacaoPrincipal(prisma, gate.storeId, b.id))
+    return compatResultResponse(await setLocalizacaoPrincipal(prisma, gate.storeId, b.id, loadCatalogoIndex()))
   } catch (e) {
     return compatServerError("localizacoes PATCH", e, "Falha ao gravar localização")
   }

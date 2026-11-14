@@ -29,7 +29,7 @@ vi.mock("@/lib/prisma", async () => {
 import { prisma } from "@/lib/prisma"
 import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
 import { setLojaCompatDecisao } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
-import { createFileira, createPainel } from "@/lib/compat/compat-store"
+import { addLocalizacao, createFileira, createPainel, setLocalizacaoPrincipal } from "@/lib/compat/compat-store"
 import { GET as consultaGET } from "./consulta/route"
 import { GET as vinculosGET } from "./vinculos/route"
 import { GET as peliculasGET } from "../peliculas/search/route"
@@ -44,6 +44,8 @@ describe.skipIf(!TEST_URL)("chaves mescladas — rotas reais em PostgreSQL desca
   const A = `${run}-a`
   const B = `${run}-b`
   const global = loadCatalogoIndex()
+  let painelId = ""
+  let fileiraId = ""
   const get = async (handler: (r: Request) => Promise<Response>, url: string, loja = A) => {
     const res = await handler(new Request(`http://local${url}`, { headers: { "x-assistec-loja-id": loja } }))
     return { status: res.status, body: (await res.json()) as Record<string, unknown> & { [k: string]: any } }
@@ -80,6 +82,8 @@ describe.skipIf(!TEST_URL)("chaves mescladas — rotas reais em PostgreSQL desca
     if (!painel.ok) throw new Error("painel")
     const fileira = await createFileira(prisma, A, "u", { painelId: painel.value.id, nome: "Fileira M" })
     if (!fileira.ok) throw new Error("fileira")
+    painelId = painel.value.id
+    fileiraId = fileira.value.id
     await prisma.compatLocalizacao.create({
       data: { storeId: A, modelKey: AIR_ANTIGO, painelId: painel.value.id, fileiraId: fileira.value.id, posicao: "", principal: true, createdBy: "u", updatedBy: "u" },
     })
@@ -148,6 +152,39 @@ describe.skipIf(!TEST_URL)("chaves mescladas — rotas reais em PostgreSQL desca
     expect(depois.body.results[0].suprimidosPelaLoja).toEqual([])
   })
 
+  it("localização: chave antiga e canônica são um grupo só (endereço, principal, nova grava no canônico)", async () => {
+    // mesmo endereço pela chave canônica = a localização antiga (não duplica)
+    const mesma = await addLocalizacao(prisma, global, A, "u", { modelKey: AIR, painelId, fileiraId })
+    expect(mesma).toMatchObject({ ok: true, value: { existente: true } })
+    // outro endereço: grava no canônico e não nasce principal (o grupo já tem uma)
+    const p2 = await createPainel(prisma, A, "u", { nome: "Painel M2" })
+    if (!p2.ok) throw new Error("p2")
+    const nova = await addLocalizacao(prisma, global, A, "u", { modelKey: AIR_ANTIGO, painelId: p2.value.id })
+    if (!nova.ok) throw new Error("nova")
+    const linha = await prisma.compatLocalizacao.findUnique({ where: { id: nova.value.id } })
+    expect(linha).toMatchObject({ modelKey: AIR, principal: false })
+    const principais = () => prisma.compatLocalizacao.count({ where: { storeId: A, modelKey: { in: [AIR, AIR_ANTIGO] }, principal: true } })
+    expect(await principais()).toBe(1)
+    // tornar principal a nova desmarca a antiga
+    expect(await setLocalizacaoPrincipal(prisma, A, nova.value.id, global)).toMatchObject({ ok: true })
+    expect(await principais()).toBe(1)
+    expect((await prisma.compatLocalizacao.findUnique({ where: { id: nova.value.id } }))?.principal).toBe(true)
+  })
+
+  it("editar só o status de um vínculo antigo preserva observação e origem", async () => {
+    await prisma.catalogoAparelhoLojaCompat.create({
+      data: { storeId: A, categoria: "capinha", modelKeyA: "apple_iphone_7_preto", modelKeyB: "apple_iphone_8", acao: "adicionar", status: "precisa_testar", notes: "legado", origem: "balcão", createdBy: "u", updatedBy: "u" },
+    })
+    const r = await setLojaCompatDecisao(prisma, global, A, "u", {
+      categoria: "capinha", modelKey: "apple_iphone_7", otherModelKey: "apple_iphone_8", decisao: "adicionar", status: "nao_recomendado",
+    })
+    expect(r.ok).toBe(true)
+    const cap = await get(vinculosGET, `/api/catalogo/compat/vinculos?categoria=capinha&modelKey=apple_iphone_7`)
+    expect(cap.body.vinculos.map((v: { modelKey: string; status: string; notes: string; origem: string }) => [v.modelKey, v.status, v.notes, v.origem])).toEqual([
+      ["apple_iphone_8", "nao_recomendado", "legado", "balcão"],
+    ])
+  })
+
   it("nova decisão em chave mesclada é gravada no canônico; a canônica prevalece sobre a antiga", async () => {
     const r = await setLojaCompatDecisao(prisma, global, A, "u", {
       categoria: "capinha", modelKey: AIR_ANTIGO, otherModelKey: P16, decisao: "adicionar", notes: "novo",
@@ -156,6 +193,6 @@ describe.skipIf(!TEST_URL)("chaves mescladas — rotas reais em PostgreSQL desca
     const cap = await get(vinculosGET, `/api/catalogo/compat/vinculos?categoria=capinha&modelKey=${AIR}`)
     expect(cap.body.vinculos.map((v: { modelKey: string; notes: string }) => [v.modelKey, v.notes])).toEqual([[P16, "novo"]])
     // linha antiga preservada (não é apagada por uma nova decisão)
-    expect(await prisma.catalogoAparelhoLojaCompat.count({ where: { storeId: A, categoria: "capinha" } })).toBe(2)
+    expect(await prisma.catalogoAparelhoLojaCompat.count({ where: { storeId: A, categoria: "capinha", modelKeyA: P16, modelKeyB: { in: [AIR, AIR_ANTIGO] } } })).toBe(2)
   })
 })

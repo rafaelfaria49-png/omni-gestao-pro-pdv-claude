@@ -19,6 +19,7 @@ import {
 } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import {
   addLocalizacao,
+  chaveLockPrincipal,
   createCorLoja,
   createFileira,
   createPainel,
@@ -271,6 +272,42 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
       expect(r.every((x) => x.ok)).toBe(true)
       expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
     }
+  })
+
+  it("lock do principal: mesma chave na mesma transação; só o grupo da própria loja espera", async () => {
+    const pB = await createPainel(db, B, "u-b", { nome: "Painel lock B" })
+    if (!pB.ok) throw new Error("painel B")
+    const locB = await addLocalizacao(db, global, B, "u-b", { modelKey: A05S, painelId: pB.value.id, posicao: "1" })
+    if (!locB.ok) throw new Error("loc B")
+    const idsA = (await db.compatLocalizacao.findMany({ where: { storeId: A, modelKey: A05S }, select: { id: true } })).map((r) => r.id)
+    const estado = (p: Promise<unknown>) => Promise.race([p.then(() => "ok"), new Promise((r) => setTimeout(() => r("esperando"), 400))])
+
+    let soltar!: () => void
+    const liberado = new Promise<void>((r) => (soltar = r))
+    let travado!: () => void
+    const segurando = new Promise<void>((r) => (travado = r))
+    // Outra transação segura o lock do grupo (loja A, A05S, sem produto) com a MESMA chave da função.
+    const dono = db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${chaveLockPrincipal(A, A05S, null)}))::text AS lock`
+      travado()
+      await liberado
+    }, { timeout: 20000 })
+    await segurando
+
+    // Loja B, mesmo modelo: não espera.
+    expect(await estado(setLocalizacaoPrincipal(db, B, locB.value.id))).toBe("ok")
+    // Loja A, outro grupo (A05): não espera.
+    const locA05 = await db.compatLocalizacao.findFirst({ where: { storeId: A, modelKey: A05 }, select: { id: true } })
+    expect(await estado(setLocalizacaoPrincipal(db, A, locA05!.id))).toBe("ok")
+    // Loja A, mesmo grupo: espera o lock.
+    const mesmoGrupo = setLocalizacaoPrincipal(db, A, idsA[0])
+    expect(await estado(mesmoGrupo)).toBe("esperando")
+    soltar()
+    await dono
+    expect(await mesmoGrupo).toMatchObject({ ok: true })
+    // Lock de transação: nada sobra depois do commit.
+    const sobra = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory'`
+    expect(sobra[0].n).toBe(0)
   })
 
   // ── Cores ──────────────────────────────────────────────────────────────────

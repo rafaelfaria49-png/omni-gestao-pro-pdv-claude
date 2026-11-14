@@ -193,6 +193,26 @@ describe("cadastro manual × catálogo global", () => {
       "manual_rafacell_g47",
     ])
     expect(searchDeviceModelsComLoja(index, loja, "Moto G37", { marcasOcultas: ocultas })).toEqual([])
+    // limite pequeno: globais descartados (ocultos) não ocupam vaga do manual
+    for (const limit of [1, 6, 20]) {
+      expect(searchDeviceModelsComLoja(index, loja, "Moto G", { marcasOcultas: ocultas, limit }).map((x) => x.modelKey), String(limit)).toEqual([
+        "manual_rafacell_g47",
+      ])
+    }
+    // sem ocultar: resultado cheio, sem duplicata, respeitando o limite
+    const cheio = searchDeviceModelsComLoja(index, loja, "Moto G", { limit: 20 })
+    expect(cheio).toHaveLength(20)
+    expect(new Set(cheio.map((x) => x.modelKey)).size).toBe(20)
+  })
+
+  it("manual legado com nome da linha mesclada ('iPhone 17 Air') cobre o canônico 'iPhone Air'", () => {
+    const air = modeloLoja({ brand: "Apple", name: "17 Air", modelKey: "manual_loja_17_air" })
+    const loja = buildLojaCatalogoIndex([air])
+    for (const q of ["iPhone 17 Air", "iPhone Air"]) {
+      const chaves = searchDeviceModelsComLoja(index, loja, q, {}).map((x) => x.modelKey)
+      expect(chaves, q).toContain("manual_loja_17_air")
+      expect(chaves, q).not.toContain("apple_iphone_air")
+    }
   })
 
   it("chave mesclada: equivalentes e decisões antigas trazidas para o canônico (a canônica prevalece)", () => {

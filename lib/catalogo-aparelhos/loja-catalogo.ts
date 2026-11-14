@@ -305,7 +305,9 @@ export function globaisCobertosPelaLoja(
   const keys = new Map<string, DeviceModel>()
   for (const m of lojaIndex.models) {
     const g = findGlobalDuplicate(globalIndex, { brand: m.brand, name: m.shortName, manufacturer: m.manufacturer })
-    if (g && !keys.has(g.modelKey)) keys.set(g.modelKey, m)
+    // Pelo canônico: manual legado "iPhone 17 Air" cobre o "iPhone Air" que a busca devolve.
+    const canon = g ? globalIndex.canonicalKeyOf(g.modelKey) : ""
+    if (canon && !keys.has(canon)) keys.set(canon, m)
   }
   cobertosCache.set(lojaIndex, { global: globalIndex, keys })
   return keys
@@ -329,15 +331,12 @@ export function searchDeviceModelsComLoja(
   // (inclusive quando achado pelo nome/alias do global equivalente).
   const { marcasOcultas, ...semOcultas } = options
   const globaisCobertos = globaisCobertosPelaLoja(globalIndex, lojaIndex)
-  const visiveis = searchDeviceModels(globalIndex, query, { ...options, limit })
-  // Global de marca oculta só entra quando a loja o cadastrou à mão (vira o manual logo abaixo).
-  const cobertosOcultos =
-    marcasOcultas && marcasOcultas.size > 0 && globaisCobertos.size > 0
-      ? searchDeviceModels(globalIndex, query, { ...semOcultas, limit }).filter(
-          (r) => globaisCobertos.has(r.modelKey) && !visiveis.some((v) => v.modelKey === r.modelKey),
-        )
-      : []
-  const globais = [...visiveis, ...cobertosOcultos].map((r) => ({ ...r, source: "global" as const }))
+  // Sem corte aqui: ocultação, cobertura e deduplicação vêm antes do limite final (senão um global
+  // descartado ocuparia vaga e esconderia resultado válido). Global de marca oculta só entra quando a
+  // loja o cadastrou à mão (vira o manual logo abaixo).
+  const globais = searchDeviceModels(globalIndex, query, { ...semOcultas, limit: globalIndex.models.length })
+    .filter((r) => globaisCobertos.has(r.modelKey) || !marcasOcultas?.has(normalizeDeviceQuery(r.brand)))
+    .map((r) => ({ ...r, source: "global" as const }))
   const manuais = searchDeviceModels(lojaIndex, query, { ...semOcultas, limit }).map((r) => ({
     ...r,
     source: "loja" as const,
