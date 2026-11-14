@@ -242,7 +242,9 @@ export function findGlobalDuplicate(
   const semFab = chaveNomeSemFabricante(fabKey, lojaModeloCanonicalName(input))
   for (const model of index.models) {
     if (catalogKey(model.brand) !== brandKey) {
-      if (fabKey && catalogKey(hierarquiaDoModeloGlobal(model).fabricante) === fabKey) {
+      // Fabricante GRAVADO no modelo vale (cadastro da loja "Asus" + "ROG"); só deriva da marca se vazio.
+      const fabDoModelo = (model.manufacturer ?? "").trim() || hierarquiaDoModeloGlobal(model).fabricante
+      if (fabKey && catalogKey(fabDoModelo) === fabKey) {
         if (chaveNomeSemFabricante(fabKey, model.canonicalName) === semFab) return model
       }
       continue

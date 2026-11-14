@@ -186,6 +186,36 @@ describe("COMPAT-BUSCA-MODELOS-NATURAL-001 — nome de um caractere e reaproveit
     expect(updateMany).toHaveBeenCalledTimes(4)
   })
 
+  it("revisão R5 (P2): fabricante gravado vale nos dois sentidos (Asus + ROG × Asus + 'ROG Phone QA99')", async () => {
+    const rog = row({ id: "row-rog", modelKey: "manual_rog", brand: "ROG", manufacturer: "Asus", name: "Phone QA99", brandKey: "ROG", nameKey: "PHONE QA99" })
+    const asus = row({ id: "row-asus", modelKey: "manual_asus", brand: "Asus", manufacturer: "Asus", name: "ROG Phone QA99", brandKey: "ASUS", nameKey: "ROG PHONE QA99" })
+    for (const [existente, input, esperado] of [
+      [rog, { brand: "Asus", manufacturer: "Asus", name: "ROG Phone QA99" }, "manual_rog"],
+      [asus, { brand: "ROG", manufacturer: "Asus", name: "Phone QA99" }, "manual_asus"],
+    ] as const) {
+      const db = vazio()
+      db.catalogoAparelhoLojaModelo.findMany = vi.fn(async () => [existente]) as never
+      expect(await createLojaModelo(db as never, global, "loja", "u", input), esperado).toMatchObject({
+        ok: false, code: "DUPLICATE", existing: { modelKey: esperado },
+      })
+      expect(db.catalogoAparelhoLojaModelo.create).not.toHaveBeenCalled()
+    }
+    // edição: renomear outro registro Asus para "ROG Phone QA99" também é bloqueado
+    const outro = row({ id: "row-outro", modelKey: "manual_outro", brand: "Asus", manufacturer: "Asus", name: "Zen QA", brandKey: "ASUS", nameKey: "ZEN QA" })
+    const updateMany = vi.fn(async () => ({ count: 1 }))
+    const db = {
+      catalogoAparelhoLojaModelo: {
+        findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => (where.id === "row-outro" ? outro : null)),
+        findMany: vi.fn(async () => [rog, outro]),
+        updateMany,
+      },
+    }
+    expect(await updateLojaModelo(db as never, global, "loja", "u", "row-outro", { version: 1, name: "ROG Phone QA99" })).toMatchObject({
+      ok: false, code: "DUPLICATE", existing: { modelKey: "manual_rog" },
+    })
+    expect(updateMany).not.toHaveBeenCalled()
+  })
+
   it("duplicidade exata na mesma marca continua bloqueada", async () => {
     const db = vazio()
     db.catalogoAparelhoLojaModelo.findFirst = vi.fn(async () => row({ brand: "iPhone", name: "7", brandKey: "IPHONE", nameKey: "7" })) as never
