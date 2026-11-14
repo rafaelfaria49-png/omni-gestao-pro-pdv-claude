@@ -220,6 +220,7 @@ export function BuscadorPeliculas({ embedded = false }: { embedded?: boolean } =
     try {
       const prox = await buscarPaginaPeliculas(query.trim(), atual.nextOffset, lojaHeader, controller.signal)
       if (controller.signal.aborted) return
+      setError("")
       setData((prev) => {
         if (prev !== atual) return prev
         const vistos = new Set(prev.results.map((r) => r.model.modelKey))

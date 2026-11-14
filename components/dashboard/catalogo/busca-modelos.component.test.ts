@@ -107,6 +107,21 @@ describe("Compat — ModeloPicker paginado", () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ modelKey: "apple_iphone_7" }))
   })
 
+  it('revisão R2 (P3): falha no "Mostrar mais" seguida de nova tentativa bem-sucedida limpa o aviso', async () => {
+    render(React.createElement(ModeloPicker, { lojaHeader: "loja-a", label: "Modelo", onSelect: vi.fn() }))
+    fireEvent.change(screen.getByRole("combobox", { name: "Modelo" }), { target: { value: "iPhone" } })
+    const lista = await screen.findByRole("listbox")
+    await waitFor(() => expect(nomes(lista)).toHaveLength(3))
+    const ok = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementationOnce(async () => new Response("{}", { status: 500 }))
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar mais" }))
+    expect(await screen.findByText("Falha ao buscar modelos.")).not.toBeNull()
+    fetchMock.mockImplementation(ok)
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar mais" }))
+    await waitFor(() => expect(nomes(lista)).toHaveLength(5))
+    expect(screen.queryByText("Falha ao buscar modelos.")).toBeNull()
+  })
+
   it("busca nova volta para a primeira página (não mistura com a anterior)", async () => {
     render(React.createElement(ModeloPicker, { lojaHeader: "loja-a", label: "Modelo", onSelect: vi.fn() }))
     const input = screen.getByRole("combobox", { name: "Modelo" })

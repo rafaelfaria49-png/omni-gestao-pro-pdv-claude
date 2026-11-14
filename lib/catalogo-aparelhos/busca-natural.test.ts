@@ -156,6 +156,40 @@ describe("outras linhas em ordem natural", () => {
     expect(r.indexOf("manual_16_teste")).toBeLessThan(r.indexOf("apple_iphone_17"))
   })
 
+  it("revisão R2 (P2): cadastro legado que cobre o global ordena no lugar dele (Motorola + G47)", () => {
+    const loja = buildLojaCatalogoIndex([
+      modeloLoja({ brand: "Motorola", manufacturer: "Motorola", name: "G47", modelKey: "manual_legado_g47" }),
+    ])
+    const r = todasAsPaginas("Moto G", 20, loja)
+    expect(r).toContain("manual_legado_g47")
+    expect(r).not.toContain("motorola_moto_g47")
+    expect(r.indexOf("motorola_moto_g7")).toBeLessThan(r.indexOf("manual_legado_g47"))
+    expect(r.indexOf("manual_legado_g47")).toBeLessThan(r.indexOf("motorola_moto_g77"))
+  })
+
+  it("revisão R2 (P2): 21 cadastros legados 'Apple' + '11', '12 Mini'… não tiram o iPhone 7 da 1ª página", () => {
+    const nomes = ["11", "11 Pro", "11 Pro Max", "12", "12 Mini", "12 Pro", "12 Pro Max", "13", "13 Mini", "13 Pro", "13 Pro Max",
+      "14", "14 Plus", "14 Pro", "14 Pro Max", "15", "15 Plus", "15 Pro", "15 Pro Max", "16", "16 Plus"]
+    const loja = buildLojaCatalogoIndex(nomes.map((n, i) => modeloLoja({ brand: "Apple", manufacturer: "Apple", name: n, modelKey: `manual_legado_${i}` })))
+    const p1 = searchDeviceModelsComLojaPagina(index, loja, "iPhone", { limit: 20 }).results.map((x) => x.modelKey)
+    expect(p1).toContain("apple_iphone_7")
+    expect(p1.indexOf("apple_iphone_7")).toBeLessThan(p1.indexOf("apple_iphone_7_plus"))
+  })
+
+  it("revisão R2 (P2): cadastro sem equivalente global com marca = fabricante entra na família ('Apple' + '19 QA')", () => {
+    const loja = buildLojaCatalogoIndex([
+      modeloLoja({ brand: "Apple", manufacturer: "Apple", name: "19 QA", modelKey: "manual_19_qa" }),
+      modeloLoja({ brand: "Samsung", manufacturer: "Samsung", name: "S99 QA", modelKey: "manual_s99_qa" }),
+    ])
+    // "Apple" + "19 QA" ordena como iPhone 19: depois do 18 Pro Max, nunca antes do iPhone 6
+    const ap = searchDeviceModelsComLoja(index, loja, "Apple", { limit: 1000 }).map((x) => x.modelKey)
+    expect(ap).toContain("manual_19_qa")
+    expect(ap.indexOf("apple_iphone_6")).toBeLessThan(ap.indexOf("manual_19_qa"))
+    expect(ap.indexOf("apple_iphone_18_pro_max")).toBeLessThan(ap.indexOf("manual_19_qa"))
+    const sam = searchDeviceModelsComLoja(index, loja, "Samsung", { limit: 1000 }).map((x) => x.modelKey)
+    expect(sam.indexOf("samsung_galaxy_s26")).toBeLessThan(sam.indexOf("manual_s99_qa"))
+  })
+
   it("revisão R1 (P2): 25 cadastros da loja casando com 'iPhone' não empurram o iPhone 7 para fora da 1ª página", () => {
     const loja = buildLojaCatalogoIndex(
       Array.from({ length: 25 }, (_, i) =>

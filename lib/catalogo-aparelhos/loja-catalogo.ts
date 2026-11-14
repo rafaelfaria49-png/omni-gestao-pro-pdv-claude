@@ -427,8 +427,13 @@ function buscarTodosComLoja(
   })
   // Manuais primeiro no empate EXATO de modelo: o operador acabou de cadastrar e espera encontrá-los.
   // A deduplicação mantém a primeira ocorrência de cada chave (a de melhor casamento).
+  const globalDoManual = new Map<string, DeviceModel>()
+  for (const [globalKey, manual] of globaisCobertos) {
+    const g = globalIndex.modelByKey.get(globalKey)
+    if (g && !globalDoManual.has(manual.modelKey)) globalDoManual.set(manual.modelKey, g)
+  }
   const vistos = new Set<string>()
-  return ordenarNatural([...manuais, ...globaisOuManual], lojaIndex).filter((r) =>
+  return ordenarNatural([...manuais, ...globaisOuManual], lojaIndex, globalDoManual).filter((r) =>
     vistos.has(r.modelKey) ? false : (vistos.add(r.modelKey), true),
   )
 }
@@ -437,19 +442,49 @@ function buscarTodosComLoja(
  * Chave de ordem natural comparável entre catálogo global e cadastro da loja: fabricante + nome sem o
  * fabricante ("Apple iPhone 7" global ≡ "iPhone" + "7" da loja → APPLE · [IPHONE, 7]).
  */
-function chaveOrdemNatural(r: DeviceSearchResult, lojaIndex: CatalogoIndex | null): { fab: string; tokens: ModeloToken[] } {
+function chaveOrdemNatural(
+  r: DeviceSearchResult,
+  lojaIndex: CatalogoIndex | null,
+  globalDoManual: ReadonlyMap<string, DeviceModel>,
+): { fab: string; tokens: ModeloToken[] } {
+  // Cadastro da loja que cobre um aparelho do catálogo global ordena EXATAMENTE como ele
+  // (legado "Motorola" + "G47" fica no lugar do Moto G47; "Apple" + "11" no do iPhone 11).
+  const global = r.source === "loja" ? globalDoManual.get(r.modelKey) : undefined
+  if (global) {
+    const fab = catalogKey(fabricanteDaMarca(global.brand))
+    return { fab, tokens: tokensModeloNatural(chaveNomeSemFabricante(fab, global.canonicalName)) }
+  }
   const manual = r.source === "loja" ? lojaIndex?.modelByKey.get(r.modelKey) : undefined
   const fab = catalogKey((manual?.manufacturer ?? "").trim() || fabricanteDaMarca(r.brand))
-  return { fab, tokens: tokensModeloNatural(chaveNomeSemFabricante(fab, r.canonicalName || r.modelKey)) }
+  return { fab, tokens: tokensModeloNatural(familiaPadrao(fab, chaveNomeSemFabricante(fab, r.canonicalName || r.modelKey))) }
+}
+
+/**
+ * Cadastro da loja sem equivalente global e com a MARCA = fabricante ("Apple" + "Fold QA"): devolve a
+ * família comercial quando o nome tem a cara dela, para não cair antes de todos os aparelhos da linha.
+ */
+const FAMILIA_POR_FABRICANTE: ReadonlyArray<{ fab: string; familia: string; padrao: RegExp }> = [
+  { fab: "APPLE", familia: "IPHONE", padrao: /^(\d|X[RS]?(?: |$)|SE(?: |$)|AIR(?: |$))/ },
+  { fab: "SAMSUNG", familia: "GALAXY", padrao: /^[ASMZ]\d/ },
+  { fab: "MOTOROLA", familia: "MOTO", padrao: /^[GE]\d/ },
+]
+function familiaPadrao(fab: string, nomeSemFab: string): string {
+  const f = FAMILIA_POR_FABRICANTE.find((x) => x.fab === fab)
+  if (!f || nomeSemFab.startsWith(f.familia + " ") || !f.padrao.test(nomeSemFab)) return nomeSemFab
+  return `${f.familia} ${nomeSemFab}`
 }
 
 /**
  * COMPAT-BUSCA-MODELOS-NATURAL-001 — ordem final da busca (global e loja juntos, ANTES de paginar):
  * tipo de casamento → fabricante → modelo em ordem natural → cadastro da loja primeiro → ordem original.
  */
-export function ordenarNatural<T extends DeviceSearchResult>(lista: readonly T[], lojaIndex: CatalogoIndex | null): T[] {
+export function ordenarNatural<T extends DeviceSearchResult>(
+  lista: readonly T[],
+  lojaIndex: CatalogoIndex | null,
+  globalDoManual: ReadonlyMap<string, DeviceModel> = new Map(),
+): T[] {
   return lista
-    .map((r, i) => ({ r, i, k: chaveOrdemNatural(r, lojaIndex) }))
+    .map((r, i) => ({ r, i, k: chaveOrdemNatural(r, lojaIndex, globalDoManual) }))
     .sort(
       (a, b) =>
         MATCH_RANK[a.r.matchType] - MATCH_RANK[b.r.matchType] ||

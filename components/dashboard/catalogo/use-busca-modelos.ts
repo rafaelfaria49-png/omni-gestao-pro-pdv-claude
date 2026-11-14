@@ -123,6 +123,8 @@ export function useBuscaModelos({
       })
       setTotal(p.total)
       setNextOffset(p.hasMore ? p.nextOffset : null)
+      // Nova tentativa deu certo: some o aviso da falha anterior.
+      setError("")
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return
       if (minha === geracao.current) setError(errorMessage)
