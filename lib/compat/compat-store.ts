@@ -537,11 +537,22 @@ export async function addLocalizacao(
     }
     // A primeira localização de um alvo já nasce principal.
     const nascePrincipal = principal || total === 0
-    const created = await db.compatLocalizacao.create({
-      data: { ...alvo, painelId, fileiraId, posicao, notes, principal: false, createdBy: actorId, updatedBy: actorId },
-      select: { id: true },
-    })
-    if (nascePrincipal) await marcarPrincipal(db, storeId, created.id, alvo)
+    let created: { id: string }
+    try {
+      created = await db.compatLocalizacao.create({
+        data: { ...alvo, painelId, fileiraId, posicao, notes, principal: false, createdBy: actorId, updatedBy: actorId },
+        select: { id: true },
+      })
+    } catch (e) {
+      // Corrida: outra requisição gravou o MESMO endereço (índice único `compat_localizacoes_endereco_key`).
+      if (errorCode(e) !== "P2002") throw e
+      const vencedora = await db.compatLocalizacao.findFirst({ where: { ...alvo, painelId, fileiraId, posicao }, select: { id: true } })
+      if (!vencedora) throw e
+      if (principal) await marcarPrincipal(db, storeId, vencedora.id, alvo, true)
+      return { ok: true, value: { id: vencedora.id, existente: true } }
+    }
+    // Pedido explícito insiste; "primeira nasce principal" cede se outra já virou principal ao mesmo tempo.
+    if (nascePrincipal) await marcarPrincipal(db, storeId, created.id, alvo, principal)
     return { ok: true, value: { id: created.id, existente: false } }
   } catch (e) {
     return failureFrom(e, "Localização duplicada.")
@@ -553,14 +564,29 @@ async function marcarPrincipal(
   storeId: string,
   id: string,
   alvo: { modelKey: string; produtoId: string | null },
+  insistir = true,
 ) {
-  await db.$transaction([
-    db.compatLocalizacao.updateMany({
-      where: { storeId, modelKey: alvo.modelKey, produtoId: alvo.produtoId, principal: true, NOT: { id } },
-      data: { principal: false },
-    }),
-    db.compatLocalizacao.updateMany({ where: { id, storeId }, data: { principal: true } }),
-  ])
+  // Unicidade garantida no banco (`compat_localizacoes_principal_key`, parcial em principal=true).
+  // Corrida: entre desmarcar e marcar, outra transação pode ter marcado a dela → P2002. Pedido
+  // explícito tenta de novo (a nova passada desmarca a vencedora); automático aceita a vencedora.
+  const tentar = () =>
+    db.$transaction([
+      db.compatLocalizacao.updateMany({
+        where: { storeId, modelKey: alvo.modelKey, produtoId: alvo.produtoId, principal: true, NOT: { id } },
+        data: { principal: false },
+      }),
+      db.compatLocalizacao.updateMany({ where: { id, storeId }, data: { principal: true } }),
+    ])
+  for (let i = 0; i < 3; i++) {
+    try {
+      await tentar()
+      return
+    } catch (e) {
+      if (errorCode(e) !== "P2002") throw e
+      if (!insistir) return
+    }
+  }
+  throw Object.assign(new Error("principal: concorrência persistente"), { code: "P2002" })
 }
 
 export async function setLocalizacaoPrincipal(
@@ -711,15 +737,20 @@ export async function setCorPadraoAtiva(
 // Produtos de capinha da loja (somente leitura)
 // ---------------------------------------------------------------------------
 
-/** Produtos ATIVOS da loja classificados como capinha (geral ou detalhado). */
+/**
+ * Produtos da loja classificados como capinha (geral ou detalhado). Por padrão só ATIVOS
+ * (disponibilidade); `incluirInativos` para apuração histórica (relatório): desativar um produto
+ * não apaga as vendas dele do período.
+ */
 export async function listProdutosCapinha(
   db: Pick<PrismaClient, "produto">,
   storeId: string,
+  opts: { incluirInativos?: boolean } = {},
 ): Promise<ProdutoCapinhaInfo[]> {
   const rows = await db.produto.findMany({
     where: {
       storeId,
-      active: true,
+      ...(opts.incluirInativos ? {} : { active: true }),
       OR: [
         { metadata: { path: ["acessorios", "tipo"], equals: "capinha" } },
         { metadata: { path: ["catalogoAparelhos", "compatibilityTypes"], array_contains: ["capinha"] } },
@@ -730,4 +761,32 @@ export async function listProdutosCapinha(
     take: 3000,
   })
   return rows.map(classificarProdutoCapinha).filter((p): p is ProdutoCapinhaInfo => p !== null)
+}
+
+/**
+ * Devoluções canônicas das vendas informadas (por `pedidoId`), escopadas pela loja:
+ * `pedidoId` → (`inventoryId` → quantidade devolvida somada). Somente leitura.
+ */
+export async function listDevolucoesPorVenda(
+  db: Pick<PrismaClient, "devolucaoVenda">,
+  storeId: string,
+  pedidoIds: readonly string[],
+): Promise<Map<string, Map<string, number>>> {
+  const out = new Map<string, Map<string, number>>()
+  const pedidos = [...new Set(pedidoIds.filter(Boolean))]
+  for (let i = 0; i < pedidos.length; i += 1000) {
+    const rows = await db.devolucaoVenda.findMany({
+      where: { storeId, vendaLocalId: { in: pedidos.slice(i, i + 1000) } },
+      select: { vendaLocalId: true, itens: { select: { inventoryId: true, quantidade: true } } },
+    })
+    for (const d of rows) {
+      const porItem = out.get(d.vendaLocalId) ?? new Map<string, number>()
+      for (const it of d.itens) {
+        const k = (it.inventoryId ?? "").trim()
+        if (k) porItem.set(k, (porItem.get(k) ?? 0) + Math.max(0, it.quantidade))
+      }
+      out.set(d.vendaLocalId, porItem)
+    }
+  }
+  return out
 }

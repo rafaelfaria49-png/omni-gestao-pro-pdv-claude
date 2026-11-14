@@ -66,9 +66,17 @@ export function classificarProdutoCapinha(p: {
 // ---------------------------------------------------------------------------
 
 export interface VendaParaRelatorio {
+  /** Chave de negócio (`Venda.pedidoId`), usada para casar as devoluções canônicas. */
+  pedidoId?: string | null
   status?: string | null
   payload?: unknown
 }
+
+/**
+ * Devoluções canônicas (`DevolucaoVenda` + itens), por `pedidoId` da venda de origem:
+ * `inventoryId` (o mesmo da linha da venda) → quantidade devolvida somada.
+ */
+export type DevolucoesPorVenda = ReadonlyMap<string, ReadonlyMap<string, number>>
 
 export interface ItemContagem {
   chave: string
@@ -121,6 +129,7 @@ function ordenar<T extends ItemContagem>(map: Map<string, T>): T[] {
 export function montarRelatorioCapinhas(
   vendas: readonly VendaParaRelatorio[],
   produtos: readonly ProdutoCapinhaInfo[],
+  devolucoes: DevolucoesPorVenda = new Map(),
 ): RelatorioCapinhas {
   const porId = new Map(produtos.map((p) => [p.id, p]))
   const porSku = new Map(produtos.filter((p) => p.sku).map((p) => [p.sku as string, p]))
@@ -134,9 +143,13 @@ export function montarRelatorioCapinhas(
   let consideradas = 0
 
   for (const venda of vendas) {
-    if (str(venda.status) === "cancelada") continue
+    const status = str(venda.status)
+    // Cancelada não conta; devolvida por inteiro também não (mesmo sem itens de devolução gravados).
+    if (status === "cancelada" || status === "devolvida") continue
     const lines = asRecord(venda.payload)?.lines
     if (!Array.isArray(lines)) continue
+    // Saldo devolvido desta venda, consumido linha a linha (não desconta duas vezes).
+    const restante = new Map(devolucoes.get(str(venda.pedidoId)) ?? [])
     let contou = false
     for (const raw of lines) {
       const line = asRecord(raw)
@@ -144,7 +157,17 @@ export function montarRelatorioCapinhas(
       const produto =
         porId.get(str(line.produtoId)) ?? porId.get(str(line.inventoryId)) ?? porSku.get(str(line.inventoryId))
       if (!produto) continue
-      const qtd = Math.max(0, num(line.quantity) - num(line.qtyReturned))
+      const vendida = num(line.quantity)
+      let devolvidaCanon = 0
+      for (const chave of [str(line.inventoryId), str(line.produtoId)]) {
+        const saldo = chave ? (restante.get(chave) ?? 0) : 0
+        if (saldo <= 0) continue
+        const usa = Math.min(saldo, vendida - devolvidaCanon)
+        devolvidaCanon += usa
+        restante.set(chave, saldo - usa)
+      }
+      // Payload legado (`qtyReturned`) e devolução canônica descrevem a MESMA devolução: usa o maior.
+      const qtd = Math.max(0, vendida - Math.max(num(line.qtyReturned), devolvidaCanon))
       if (qtd <= 0) continue
       contou = true
       total += qtd

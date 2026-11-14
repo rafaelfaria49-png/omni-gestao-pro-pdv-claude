@@ -820,12 +820,13 @@ export async function upsertVendaInTransaction(
     if (!Number.isFinite(somaPagamentos) || Math.abs(somaPagamentos - rawTotal) > 0.02) {
       throw new SalePaymentsMismatchError(rawTotal, somaPagamentos)
     }
-    // COMPAT-PROFISSIONAL-001: cor padrão desativada pela loja não entra em venda NOVA
-    // (feita depois da desativação). Antes de qualquer efeito; replay nunca chega aqui.
+    // COMPAT-PROFISSIONAL-001: cor padrão desativada pela loja não entra em venda NOVA finalizada
+    // ao vivo. Venda registrada offline / sincronizada da fila segue aceita. Antes de qualquer
+    // efeito; replay nunca chega aqui.
     const corRecusada = await corPadraoDesativadaNaVenda(
       tx as unknown as Parameters<typeof corPadraoDesativadaNaVenda>[0],
       lojaId,
-      lines,
+      { lines, registeredOffline: (sale as { registeredOffline?: unknown }).registeredOffline },
       at,
     )
     if (corRecusada) {

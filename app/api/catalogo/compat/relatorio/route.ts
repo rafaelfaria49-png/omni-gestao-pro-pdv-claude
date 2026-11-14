@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { compatServerError, requireCompatGestaoRead } from "@/lib/compat/compat-api"
-import { listProdutosCapinha } from "@/lib/compat/compat-store"
+import { listDevolucoesPorVenda, listProdutosCapinha } from "@/lib/compat/compat-store"
 import { montarRelatorioCapinhas } from "@/lib/compat/capinhas"
 
 /**
@@ -30,19 +30,23 @@ export async function GET(req: Request) {
   const dias = Number.isFinite(diasRaw) ? Math.min(Math.max(diasRaw, 1), 92) : 30
   const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000)
   try {
-    const produtos = await listProdutosCapinha(prisma, gate.storeId)
+    // Histórico inclui produtos desativados depois; estoque/disponibilidade usa só os ativos.
+    const produtos = await listProdutosCapinha(prisma, gate.storeId, { incluirInativos: true })
+    const ativos = produtos.filter((p) => p.active)
     const vendas = produtos.length
       ? await prisma.venda.findMany({
           where: { storeId: gate.storeId, at: { gte: desde } },
-          select: { status: true, payload: true },
+          select: { pedidoId: true, status: true, payload: true },
           orderBy: { at: "desc" },
           take: MAX_VENDAS,
         })
       : []
-    const relatorio = montarRelatorioCapinhas(vendas, produtos)
+    // Devoluções canônicas (DevolucaoVenda + itens) das vendas do período, escopadas pela loja.
+    const devolucoes = await listDevolucoesPorVenda(prisma, gate.storeId, vendas.map((v) => v.pedidoId))
+    const relatorio = montarRelatorioCapinhas(vendas, produtos, devolucoes)
     const movimentacoes = produtos.length
       ? await prisma.movimentacaoEstoque.findMany({
-          where: { storeId: gate.storeId, produtoId: { in: produtos.map((p) => p.id).slice(0, 1000) } },
+          where: { storeId: gate.storeId, produtoId: { in: ativos.map((p) => p.id).slice(0, 1000) } },
           select: {
             id: true,
             produtoId: true,
@@ -65,10 +69,10 @@ export async function GET(req: Request) {
       truncado: vendas.length >= MAX_VENDAS,
       relatorio,
       estoque: {
-        geral: produtos
+        geral: ativos
           .filter((p) => p.controle === "geral")
           .map((p) => ({ id: p.id, name: p.name, stock: p.stock })),
-        detalhado: produtos
+        detalhado: ativos
           .filter((p) => p.controle === "detalhado")
           .map((p) => ({ id: p.id, name: p.name, stock: p.stock, modelos: p.deviceModelKeys.length })),
       },

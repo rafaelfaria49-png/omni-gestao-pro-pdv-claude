@@ -26,6 +26,7 @@ import {
   listCoresLoja,
   listLocalizacoes,
   listOrganizacao,
+  listDevolucoesPorVenda,
   listProdutosCapinha,
   moverLocal,
   removeLocalizacao,
@@ -89,6 +90,8 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     await db.compatPreferenciasLoja.deleteMany({ where: lojas })
     await db.catalogoAparelhoLojaCompat.deleteMany({ where: lojas })
     await db.catalogoAparelhoLojaModelo.deleteMany({ where: lojas })
+    await db.devolucaoVenda.deleteMany({ where: lojas })
+    await db.venda.deleteMany({ where: lojas })
     await db.produto.deleteMany({ where: lojas })
     await db.store.deleteMany({ where: { id: { in: [A, B] } } })
     await db.$disconnect()
@@ -246,6 +249,25 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     expect(depois.stock).toBe(antes.stock)
   })
 
+  it("concorrência: mesmo endereço em paralelo grava 1 linha; primeiras em paralelo deixam 1 principal", async () => {
+    const iguais = await Promise.all(
+      Array.from({ length: 6 }, () => addLocalizacao(db, global, A, "u-a", { modelKey: A05, painelId: p2, posicao: "9" })),
+    )
+    expect(iguais.every((r) => r.ok)).toBe(true)
+    expect(new Set(iguais.map((r) => (r.ok ? r.value.id : ""))).size).toBe(1)
+    expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05, posicao: "9" } })).toBe(1)
+
+    const distintas = await Promise.all(
+      ["1", "2", "3", "4", "5"].map((posicao) => addLocalizacao(db, global, A, "u-a", { modelKey: A05S, painelId: p2, posicao })),
+    )
+    expect(distintas.every((r) => r.ok)).toBe(true)
+    expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
+    // pedidos explícitos simultâneos de principal: continua 1
+    const ids = (await db.compatLocalizacao.findMany({ where: { storeId: A, modelKey: A05S }, select: { id: true } })).map((r) => r.id)
+    await Promise.all(ids.map((id) => setLocalizacaoPrincipal(db, A, id)))
+    expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
+  })
+
   // ── Cores ──────────────────────────────────────────────────────────────────
 
   it("cores: cadastra, impede duplicata por grafia e nome da paleta, renomeia, desativa e isola", async () => {
@@ -266,7 +288,7 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
   })
 
   it("venda nova com cor padrão desativada na loja é recusada; antes da desativação e outra loja, não", async () => {
-    const linha = (colorKey: string) => [{ accessorySelection: { version: 1, colorKey } }]
+    const linha = (colorKey: string) => ({ lines: [{ accessorySelection: { version: 1, colorKey } }] })
     const row = await db.compatCorLoja.findFirstOrThrow({ where: { storeId: A, baseKey: "fume" } })
     expect(row.ativo).toBe(false)
     const depois = new Date(row.updatedAt.getTime() + 60_000)
@@ -302,6 +324,27 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
       lista,
     )
     expect(r).toMatchObject({ totalVendido: 2, semModelo: 2, porModelo: [] })
+  })
+
+  it("relatório: devoluções canônicas lidas por loja; produto desativado segue no histórico", async () => {
+    const pedido = `${run}-VDA-1`
+    await db.venda.create({
+      data: { storeId: A, pedidoId: pedido, total: 90, status: "parcialmente_devolvida",
+        payload: { lines: [{ inventoryId: `${run}-T`, produtoId: `${run}-gen`, quantity: 3 }] } },
+    })
+    await db.devolucaoVenda.create({
+      data: { storeId: A, localId: `${run}-DEV-1`, vendaLocalId: pedido, tipo: "somente_estoque",
+        itens: { create: [{ inventoryId: `${run}-T`, quantidade: 2 }] } },
+    })
+    const dev = await listDevolucoesPorVenda(db, A, [pedido])
+    expect(dev.get(pedido)?.get(`${run}-T`)).toBe(2)
+    expect((await listDevolucoesPorVenda(db, B, [pedido])).size).toBe(0)
+    await db.produto.update({ where: { id: `${run}-gen` }, data: { active: false } })
+    expect((await listProdutosCapinha(db, A)).some((p) => p.id === `${run}-gen`)).toBe(false)
+    const historico = await listProdutosCapinha(db, A, { incluirInativos: true })
+    const vendas = await db.venda.findMany({ where: { storeId: A, pedidoId: pedido }, select: { pedidoId: true, status: true, payload: true } })
+    expect(montarRelatorioCapinhas(vendas, historico, dev).totalVendido).toBe(1)
+    await db.produto.update({ where: { id: `${run}-gen` }, data: { active: true } })
   })
 
   it("CHECK do banco: localização sem modelo e sem produto é recusada", async () => {

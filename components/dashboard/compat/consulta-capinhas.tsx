@@ -8,7 +8,7 @@
  * nunca é apresentado como disponibilidade do modelo.
  */
 
-import { useCallback, useEffect, useId, useState } from "react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { AlertTriangle, Boxes, Link2, Loader2, MapPin, Package, Plus, Star, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -43,11 +43,16 @@ export function ConsultaCapinhas({
   const [prefs, setPrefs] = useState<CompatPreferencias | null>(null)
   const [formAberto, setFormAberto] = useState(false)
 
+  // Só a resposta da consulta mais recente preenche a tela (troca rápida de modelo).
+  const reqRef = useRef(0)
   const load = useCallback(async () => {
+    const meu = ++reqRef.current
     if (!modelo) return
     setLoading(true)
     const r = await consultarCapinha(lojaHeader, modelo.modelKey)
+    if (meu !== reqRef.current) return
     setLoading(false)
+    if (r.ok && r.modelo.modelKey !== modelo.modelKey) return
     if (!r.ok) {
       setErro(r.error)
       setDados(null)
@@ -78,6 +83,7 @@ export function ConsultaCapinhas({
         label="Buscar aparelho para capinha"
         placeholder="Digite o modelo do cliente: A06, Redmi 13C, iPhone 13…"
         onSelect={(m) => {
+          setDados(null)
           setModelo(m)
           setFormAberto(false)
         }}

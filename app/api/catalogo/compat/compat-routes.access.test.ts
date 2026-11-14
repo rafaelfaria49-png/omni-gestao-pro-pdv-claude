@@ -38,7 +38,7 @@ vi.mock("@/lib/compat/compat-store", () => {
   const names = [
     "createPainel", "createFileira", "updateLocal", "deleteLocal", "moverLocal", "listOrganizacao", "getPreferencias",
     "setPreferencias", "listCoresLoja", "createCorLoja", "updateCorLoja", "setCorPadraoAtiva", "addLocalizacao",
-    "listLocalizacoes", "removeLocalizacao", "setLocalizacaoPrincipal", "listProdutosCapinha",
+    "listLocalizacoes", "removeLocalizacao", "setLocalizacaoPrincipal", "listProdutosCapinha", "listDevolucoesPorVenda",
   ]
   return Object.fromEntries(names.map((n) => [n, (...a: unknown[]) => h.store[n](...a)]))
 })
@@ -85,6 +85,7 @@ beforeEach(() => {
   h.store.listCoresLoja = vi.fn(async () => [])
   h.store.listLocalizacoes = vi.fn(async () => [])
   h.store.listProdutosCapinha = vi.fn(async () => [])
+  h.store.listDevolucoesPorVenda = vi.fn(async () => new Map())
   h.decide.mockResolvedValue({ ok: true, value: { decisao: "adicionar", modelKeyA: "a", modelKeyB: "b" } })
   h.overrides.mockResolvedValue([])
 })

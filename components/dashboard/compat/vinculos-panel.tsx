@@ -8,7 +8,7 @@
  * fisicamente (registrado com quem/quando). Nada é inferido de nome ou anúncio.
  */
 
-import { useCallback, useEffect, useId, useState } from "react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { Link2, Loader2, ShieldCheck, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -71,11 +71,17 @@ export function VinculosPanel({
     if (modeloInicial) setPrincipal(modeloInicial)
   }, [modeloInicial])
 
+  // Só a resposta da consulta MAIS RECENTE (do modelo/categoria atuais) pode preencher a tela:
+  // resposta atrasada de outro modelo faria a edição gravar no par errado.
+  const reqRef = useRef(0)
   const load = useCallback(async () => {
+    const meu = ++reqRef.current
     if (!principal) return
     setLoading(true)
     const r = await carregarVinculos(lojaHeader, categoria, principal.modelKey)
+    if (meu !== reqRef.current) return
     setLoading(false)
+    if (r.ok && r.modelo.modelKey !== principal.modelKey) return
     if (!r.ok) {
       setErro(r.error)
       return
@@ -93,6 +99,14 @@ export function VinculosPanel({
     setNovos([])
     void load()
   }, [load])
+
+  // Trocar o principal invalida qualquer resposta em voo.
+  useEffect(() => {
+    if (!principal) {
+      reqRef.current++
+      setLoading(false)
+    }
+  }, [principal])
 
   const gravar = async (
     input: { otherModelKeys: string[]; decisao: "adicionar" | "suprimir" | "restaurar"; status?: LojaCompatStatus; origem?: string; confirmacaoFisica?: boolean },
@@ -278,7 +292,7 @@ export function VinculosPanel({
                     aria-label={`Status de ${v.canonicalName}`}
                     className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                     value={v.status}
-                    disabled={salvando}
+                    disabled={salvando || loading}
                     onChange={(e) => {
                       const novo = e.target.value as LojaCompatStatus
                       if (novo === "confirmado_loja") setConfirmarPara(v)
@@ -295,7 +309,7 @@ export function VinculosPanel({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    disabled={salvando}
+                    disabled={salvando || loading}
                     aria-label={`Remover vínculo com ${v.canonicalName}`}
                     onClick={() => void gravar({ otherModelKeys: [v.modelKey], decisao: "restaurar" })}
                   >
@@ -331,7 +345,7 @@ export function VinculosPanel({
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={salvando}
+                        disabled={salvando || loading}
                         onClick={() =>
                           void gravar({ otherModelKeys: [g.modelKey], decisao: escondido ? "restaurar" : "suprimir" })
                         }

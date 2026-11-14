@@ -166,3 +166,10 @@ ALTER TABLE "compat_preferencias_loja" ADD CONSTRAINT "compat_preferencias_loja_
   CHECK ("modoModeloPadrao" IN ('obrigatorio', 'opcional', 'desativado') AND "modoCorPadrao" IN ('obrigatorio', 'opcional', 'desativado'));
 ALTER TABLE "compat_cores_loja" ADD CONSTRAINT "compat_cores_loja_label_check"
   CHECK (length(btrim("label")) > 0 AND length("labelKey") > 0);
+
+-- Concorrência (revisão independente): um endereço por alvo e uma única localização principal por alvo.
+-- Expressões tratam NULL como "sem produto"/"sem fileira" (NULL não colide em índice único comum).
+CREATE UNIQUE INDEX "compat_localizacoes_endereco_key" ON "compat_localizacoes"
+  ("storeId", "modelKey", COALESCE("produtoId", ''), "painelId", COALESCE("fileiraId", ''), "posicao");
+CREATE UNIQUE INDEX "compat_localizacoes_principal_key" ON "compat_localizacoes"
+  ("storeId", "modelKey", COALESCE("produtoId", '')) WHERE "principal";
