@@ -421,7 +421,8 @@ export function canonicalizarOverrides<T extends Pick<LojaCompatOverride, "model
   overrides: readonly T[],
   canonicalKeyOf: (modelKey: string) => string,
 ): T[] {
-  // Mesmo par gravado com a chave antiga E com a canônica: vale a canônica (decisão mais recente da loja).
+  // Mesmo par gravado com a chave antiga E com a canônica: vale a canônica. Entre antigas, vale a primeira
+  // recebida — `listLojaCompatOverrides` entrega da mais recente para a mais antiga.
   const porPar = new Map<string, { o: T; jaCanonica: boolean }>()
   for (const o of overrides) {
     const pair = orderedPair(canonicalKeyOf(o.modelKeyA), canonicalKeyOf(o.modelKeyB))

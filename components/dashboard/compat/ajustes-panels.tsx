@@ -282,12 +282,12 @@ export function MarcasCatalogo({
   const [dados, setDados] = useState<{ version: number; marcas: MarcaDTO[] } | null>(null)
   const [erro, setErro] = useState("")
   const [busy, setBusy] = useState(false)
-  // Loja vigente: resposta (leitura ou gravação) que chega depois da troca de loja é descartada.
-  const lojaAtual = useRef(lojaHeader)
+  // Geração da seleção de loja: resposta de gravação de uma seleção anterior (inclusive A→B→A) é descartada.
+  const geracao = useRef(0)
 
   useEffect(() => {
     let vigente = true
-    lojaAtual.current = lojaHeader
+    geracao.current += 1
     setDados(null)
     setErro("")
     setBusy(false)
@@ -303,10 +303,10 @@ export function MarcasCatalogo({
 
   const alternar = async (m: MarcaDTO) => {
     if (!dados) return
-    const loja = lojaHeader
+    const gen = geracao.current
     setBusy(true)
-    const r = await salvarMarcas(loja, version, { [m.key]: !m.visivel })
-    if (lojaAtual.current !== loja) return
+    const r = await salvarMarcas(lojaHeader, version, { [m.key]: !m.visivel })
+    if (geracao.current !== gen) return
     setBusy(false)
     if (r.ok) {
       setDados({ version: r.version, marcas: r.marcas })

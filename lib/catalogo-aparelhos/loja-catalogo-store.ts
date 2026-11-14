@@ -175,6 +175,9 @@ export async function listLojaCompatOverrides(
   try {
     const rows = await db.catalogoAparelhoLojaCompat.findMany({
       where: { storeId, categoria, OR: [{ modelKeyA: { in: keys } }, { modelKeyB: { in: keys } }] },
+      // Ordem determinística: entre decisões antigas equivalentes, vale a mais recente (mesma regra
+      // usada ao herdar campos na primeira gravação canônica).
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       take: MAX_OVERRIDES_POR_CONSULTA,
     })
     return rows.map((r) => ({
@@ -466,7 +469,7 @@ export async function setLojaCompatDecisao(
         eqA.length > 1 || eqB.length > 1
           ? await db.catalogoAparelhoLojaCompat.findFirst({
               where: { ...equivalentes, NOT: { modelKeyA: pair.modelKeyA, modelKeyB: pair.modelKeyB } },
-              orderBy: { updatedAt: "desc" },
+              orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
             })
           : null
       const herdado = antiga

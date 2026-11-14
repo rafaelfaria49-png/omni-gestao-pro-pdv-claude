@@ -75,6 +75,30 @@ describe("Marcas do catálogo — troca de loja no meio da gravação", () => {
     expect(sony.hasAttribute("disabled")).toBe(false)
   })
 
+  it("A→B→A: gravação da primeira passagem por A não sobrescreve a carga nova de A", async () => {
+    let cargaA = 0
+    h.carregar.mockImplementation(async (loja: string) => {
+      if (loja === "B") return { ok: true, version: 8, marcas: [marca("SONY", false)] }
+      cargaA++
+      return cargaA === 1
+        ? { ok: true, version: 1, marcas: [marca("GOOGLE", false)] }
+        : { ok: true, version: 3, marcas: [marca("GOOGLE", false)] }
+    })
+    const gravacaoAntiga = adiada<unknown>()
+    h.salvar.mockReturnValue(gravacaoAntiga.promise)
+    const onSaved = vi.fn()
+    const { rerender } = render(React.createElement(MarcasCatalogo, { lojaHeader: "A", version: 1, onSaved }))
+    fireEvent.click(await screen.findByRole("switch", { name: "Mostrar GOOGLE nas buscas" }))
+    rerender(React.createElement(MarcasCatalogo, { lojaHeader: "B", version: 8, onSaved }))
+    await screen.findByRole("switch", { name: "Mostrar SONY nas buscas" })
+    rerender(React.createElement(MarcasCatalogo, { lojaHeader: "A", version: 3, onSaved }))
+    await waitFor(() => expect(cargaA).toBe(2))
+    const google = await screen.findByRole("switch", { name: "Mostrar GOOGLE nas buscas" })
+    await act(async () => gravacaoAntiga.resolve({ ok: true, version: 2, marcas: [marca("GOOGLE", true)] }))
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(google.getAttribute("aria-checked")).toBe("false")
+  })
+
   it("gravação na mesma loja atualiza a versão compartilhada", async () => {
     h.carregar.mockResolvedValue({ ok: true, version: 1, marcas: [marca("GOOGLE", false)] })
     h.salvar.mockResolvedValue({ ok: true, version: 2, marcas: [marca("GOOGLE", true)] })

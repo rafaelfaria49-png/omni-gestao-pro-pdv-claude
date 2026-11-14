@@ -32,6 +32,7 @@ import { setLojaCompatDecisao } from "@/lib/catalogo-aparelhos/loja-catalogo-sto
 import { addLocalizacao, createFileira, createPainel, setLocalizacaoPrincipal } from "@/lib/compat/compat-store"
 import { GET as consultaGET } from "./consulta/route"
 import { GET as vinculosGET } from "./vinculos/route"
+import { GET as localizacoesGET } from "./localizacoes/route"
 import { GET as peliculasGET } from "../peliculas/search/route"
 
 const MODS = ["home", "pdv", "sales", "cash", "catalog", "stock", "service", "deviceCatalog", "reports"]
@@ -150,6 +151,38 @@ describe.skipIf(!TEST_URL)("chaves mescladas — rotas reais em PostgreSQL desca
     const depois = await get(peliculasGET, `/api/catalogo/peliculas/search?modelKey=apple_iphone_7`)
     expect(membros(depois.body)).toContain("apple_iphone_8")
     expect(depois.body.results[0].suprimidosPelaLoja).toEqual([])
+  })
+
+  it("vínculos antigos convergentes: leitura e herança escolhem a mesma decisão (a mais recente)", async () => {
+    const base = { storeId: A, categoria: "pelicula_tela", acao: "adicionar", origem: "", createdBy: "u", updatedBy: "u" }
+    await prisma.catalogoAparelhoLojaCompat.createMany({
+      data: [
+        { ...base, modelKeyA: "apple_iphone_7_branco", modelKeyB: "apple_iphone_8", status: "precisa_testar", notes: "velha", updatedAt: new Date("2026-01-01T00:00:00Z") },
+        { ...base, modelKeyA: "apple_iphone_7_preto", modelKeyB: "apple_iphone_8_branco", status: "confirmado_loja", confirmedBy: "u-teste", confirmedAt: new Date("2026-06-01T00:00:00Z"), notes: "recente", updatedAt: new Date("2026-06-01T00:00:00Z") },
+      ],
+    })
+    const lido = async () =>
+      (await get(vinculosGET, `/api/catalogo/compat/vinculos?categoria=pelicula_tela&modelKey=apple_iphone_7`)).body.vinculos.map(
+        (v: { modelKey: string; status: string; notes: string }) => [v.modelKey, v.status, v.notes],
+      )
+    expect(await lido()).toEqual([["apple_iphone_8", "confirmado_loja", "recente"]])
+    // editar só a observação não troca o status exibido
+    const r = await setLojaCompatDecisao(prisma, global, A, "u", {
+      categoria: "pelicula_tela", modelKey: "apple_iphone_7", otherModelKey: "apple_iphone_8", decisao: "adicionar", notes: "editada",
+    })
+    expect(r.ok).toBe(true)
+    expect(await lido()).toEqual([["apple_iphone_8", "confirmado_loja", "editada"]])
+  })
+
+  it("GET de localizações pela chave canônica lista também as gravadas com a chave antiga", async () => {
+    const { status, body } = await get(localizacoesGET, `/api/catalogo/compat/localizacoes?modelKey=${AIR}`)
+    expect(status).toBe(200)
+    const chaves = body.localizacoes.map((l: { modelKey: string }) => l.modelKey)
+    expect(chaves.length).toBeGreaterThan(0)
+    expect(new Set(chaves)).toEqual(new Set([AIR]))
+    const antigas = await prisma.compatLocalizacao.count({ where: { storeId: A, modelKey: AIR_ANTIGO } })
+    expect(antigas).toBeGreaterThan(0)
+    expect(chaves).toHaveLength(await prisma.compatLocalizacao.count({ where: { storeId: A, modelKey: { in: [AIR, AIR_ANTIGO] } } }))
   })
 
   it("localização: chave antiga e canônica são um grupo só (endereço, principal, nova grava no canônico)", async () => {

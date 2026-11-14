@@ -31,12 +31,15 @@ export async function GET(req: Request) {
   const produtoId = (url.searchParams.get("produtoId") ?? "").trim()
   const painelId = (url.searchParams.get("painelId") ?? "").trim()
   try {
-    const locs = await listLocalizacoes(prisma, gate.storeId, {
-      modelKeys: modelKey ? [modelKey] : [],
-      produtoIds: produtoId ? [produtoId] : [],
-      painelId: painelId || undefined,
-    })
     const index = loadCatalogoIndex()
+    // Chave mesclada e canônica são o mesmo aparelho: lista as duas e apresenta pelo canônico.
+    const locs = (
+      await listLocalizacoes(prisma, gate.storeId, {
+        modelKeys: modelKey ? index.equivalentKeysOf(modelKey) : [],
+        produtoIds: produtoId ? [produtoId] : [],
+        painelId: painelId || undefined,
+      })
+    ).map((l) => (l.modelKey ? { ...l, modelKey: index.canonicalKeyOf(l.modelKey) } : l))
     const modelos = await resolverModelosCompat(index, gate.storeId, locs.map((l) => l.modelKey).filter(Boolean))
     const produtoIds = [...new Set(locs.map((l) => l.produtoId).filter((v): v is string => !!v))]
     const produtos = produtoIds.length
