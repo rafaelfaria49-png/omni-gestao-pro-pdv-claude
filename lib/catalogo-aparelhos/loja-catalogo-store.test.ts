@@ -162,6 +162,30 @@ describe("COMPAT-BUSCA-MODELOS-NATURAL-001 — nome de um caractere e reaproveit
     expect(ok.ok).toBe(true)
   })
 
+  it("revisão R4 (P2): legado com fabricante vazio coberto pelo global continua editável (só observação)", async () => {
+    const g = buildCatalogoIndex({
+      models: parseDeviceModels(
+        ["model_key,brand,commercial_line,canonical_name,short_name,status", "motorola_moto_g47,Motorola,Moto G,Motorola Moto G47,G47,ativo"].join("\n"),
+      ),
+      aliases: [],
+    })
+    const legado = row({ id: "row-g47", modelKey: "manual_g47", brand: "Motorola", manufacturer: "", name: "G47", brandKey: "MOTOROLA", nameKey: "G47" })
+    const updateMany = vi.fn(async () => ({ count: 1 }))
+    const db = {
+      catalogoAparelhoLojaModelo: {
+        findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => (where.id === "row-g47" ? legado : null)),
+        findMany: vi.fn(async () => [legado]),
+        updateMany,
+      },
+    }
+    for (const patch of [{ notes: "conferido" }, { aliases: ["MotoG47"] }, { lancamento: "lancado" }]) {
+      expect(await updateLojaModelo(db as never, g, "loja", "u", "row-g47", { version: 1, ...patch }), JSON.stringify(patch)).toMatchObject({ ok: true })
+    }
+    // trocar de fato o fabricante continua passando pelas checagens
+    expect(await updateLojaModelo(db as never, g, "loja", "u", "row-g47", { version: 1, manufacturer: "Motorola" })).toMatchObject({ ok: true })
+    expect(updateMany).toHaveBeenCalledTimes(4)
+  })
+
   it("duplicidade exata na mesma marca continua bloqueada", async () => {
     const db = vazio()
     db.catalogoAparelhoLojaModelo.findFirst = vi.fn(async () => row({ brand: "iPhone", name: "7", brandKey: "IPHONE", nameKey: "7" })) as never

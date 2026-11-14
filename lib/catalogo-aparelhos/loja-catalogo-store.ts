@@ -33,6 +33,7 @@ import {
   type LojaModelo,
   type LojaModeloInputErrors,
 } from "./loja-catalogo"
+import { fabricanteDaMarca } from "./hierarquia"
 import type { CatalogoIndex } from "./types"
 
 type Db = Pick<PrismaClient, "catalogoAparelhoLojaModelo" | "catalogoAparelhoLojaCompat">
@@ -374,7 +375,8 @@ export async function updateLojaModelo(
       const mudouIdentidade =
         brandKey !== current.brandKey ||
         nameKey !== current.nameKey ||
-        catalogKey(v.manufacturer) !== catalogKey(current.manufacturer ?? "")
+        // Fabricante EFETIVO: legado com fabricante vazio deriva da marca (não é mudança de identidade).
+        catalogKey(v.manufacturer) !== catalogKey((current.manufacturer ?? "").trim() || fabricanteDaMarca(current.brand))
       if (mudouIdentidade) {
         const globalDup = checkGlobal(globalIndex, v)
         if (globalDup) return globalDup
