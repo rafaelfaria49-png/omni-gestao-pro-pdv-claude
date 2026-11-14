@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 import { Loader2, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -79,6 +79,7 @@ export function SupervisorGateDialog({
   storeId?: string
 }) {
   const [pin, setPin] = useState("")
+  const pinId = useId()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -139,8 +140,9 @@ export function SupervisorGateDialog({
         <div className="space-y-3 pt-1">
           {children}
           <div className="space-y-1.5">
-            <Label className="text-sm">Senha do supervisor</Label>
+            <Label htmlFor={pinId} className="text-sm">Senha do supervisor</Label>
             <Input
+              id={pinId}
               type="password"
               inputMode="numeric"
               autoComplete="off"
