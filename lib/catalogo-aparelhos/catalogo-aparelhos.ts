@@ -178,6 +178,22 @@ export function buildCatalogoIndex(input: {
     return atual
   }
 
+  // Inverso da mescla: canônico → todas as chaves gravadas que apontam para ele (inclusive ele mesmo).
+  // Vínculos, produtos e decisões antigos ficam gravados com a chave mesclada e continuam valendo.
+  const equivalentes = new Map<string, string[]>()
+  for (const m of modelByKey.values()) {
+    if (!m.replacedBy?.trim()) continue
+    const canon = canonicalKeyOf(m.modelKey)
+    if (canon === m.modelKey) continue
+    const arr = equivalentes.get(canon) ?? [canon]
+    arr.push(m.modelKey)
+    equivalentes.set(canon, arr)
+  }
+  const equivalentKeysOf = (modelKey: string): string[] => {
+    const canon = canonicalKeyOf(modelKey)
+    return equivalentes.get(canon)?.slice() ?? (canon ? [canon] : [])
+  }
+
   return {
     models: input.models,
     aliases: input.aliases,
@@ -186,6 +202,7 @@ export function buildCatalogoIndex(input: {
     aliasesByModelKey,
     normalizedAliasBrands,
     canonicalKeyOf,
+    equivalentKeysOf,
   }
 }
 

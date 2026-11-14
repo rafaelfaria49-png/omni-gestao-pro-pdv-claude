@@ -133,4 +133,6 @@ export interface CatalogoIndex {
   normalizedAliasBrands: Map<string, Set<string>>
   /** Chave canônica de qualquer chave (segue `replacedBy`; chave sem mescla = ela mesma). */
   canonicalKeyOf: (modelKey: string) => string
+  /** Canônico + chaves mescladas nele (para ler vínculos/produtos/decisões gravados com a chave antiga). */
+  equivalentKeysOf: (modelKey: string) => string[]
 }

@@ -289,17 +289,23 @@ export function buildLojaCatalogoIndex(modelos: readonly LojaModelo[]): Catalogo
 
 const MATCH_RANK = { exact: 0, prefix: 1, contains: 2 } as const
 
-const cobertosCache = new WeakMap<CatalogoIndex, { global: CatalogoIndex; keys: Set<string> }>()
+const cobertosCache = new WeakMap<CatalogoIndex, { global: CatalogoIndex; keys: Map<string, DeviceModel> }>()
 
-/** Chaves globais equivalentes a modelos manuais (ativos) da loja — mesma regra da duplicidade. */
-export function globaisCobertosPelaLoja(globalIndex: CatalogoIndex, lojaIndex: CatalogoIndex | null): Set<string> {
-  if (!lojaIndex) return new Set()
+/**
+ * Chave global → modelo manual (ativo) da loja que já representa esse aparelho — mesma regra da
+ * duplicidade. Usado para trocar o resultado global pelo cadastro da loja, preservando o casamento.
+ */
+export function globaisCobertosPelaLoja(
+  globalIndex: CatalogoIndex,
+  lojaIndex: CatalogoIndex | null,
+): Map<string, DeviceModel> {
+  if (!lojaIndex) return new Map()
   const hit = cobertosCache.get(lojaIndex)
   if (hit && hit.global === globalIndex) return hit.keys
-  const keys = new Set<string>()
+  const keys = new Map<string, DeviceModel>()
   for (const m of lojaIndex.models) {
     const g = findGlobalDuplicate(globalIndex, { brand: m.brand, name: m.shortName, manufacturer: m.manufacturer })
-    if (g) keys.add(g.modelKey)
+    if (g && !keys.has(g.modelKey)) keys.set(g.modelKey, m)
   }
   cobertosCache.set(lojaIndex, { global: globalIndex, keys })
   return keys
@@ -316,13 +322,22 @@ export function searchDeviceModelsComLoja(
   options: SearchDeviceOptions = {},
 ): DeviceSearchResult[] {
   const limit = options.limit ?? 20
-  const globais = searchDeviceModels(globalIndex, query, { ...options, limit }).map((r) => ({
-    ...r,
-    source: "global" as const,
-  }))
-  if (!lojaIndex || lojaIndex.models.length === 0) return globais
-  // Marca oculta na loja vale só para o catálogo global: modelo cadastrado pela loja sempre aparece.
-  const { marcasOcultas: _ocultas, ...semOcultas } = options
+  if (!lojaIndex || lojaIndex.models.length === 0) {
+    return searchDeviceModels(globalIndex, query, { ...options, limit }).map((r) => ({ ...r, source: "global" as const }))
+  }
+  // Marca oculta na loja vale só para o catálogo global: modelo cadastrado pela loja sempre aparece
+  // (inclusive quando achado pelo nome/alias do global equivalente).
+  const { marcasOcultas, ...semOcultas } = options
+  const globaisCobertos = globaisCobertosPelaLoja(globalIndex, lojaIndex)
+  const visiveis = searchDeviceModels(globalIndex, query, { ...options, limit })
+  // Global de marca oculta só entra quando a loja o cadastrou à mão (vira o manual logo abaixo).
+  const cobertosOcultos =
+    marcasOcultas && marcasOcultas.size > 0 && globaisCobertos.size > 0
+      ? searchDeviceModels(globalIndex, query, { ...semOcultas, limit }).filter(
+          (r) => globaisCobertos.has(r.modelKey) && !visiveis.some((v) => v.modelKey === r.modelKey),
+        )
+      : []
+  const globais = [...visiveis, ...cobertosOcultos].map((r) => ({ ...r, source: "global" as const }))
   const manuais = searchDeviceModels(lojaIndex, query, { ...semOcultas, limit }).map((r) => ({
     ...r,
     source: "loja" as const,
@@ -330,13 +345,32 @@ export function searchDeviceModelsComLoja(
   }))
   // COMPAT-CATALOGO-BRASIL-2023-2026-002: quando o catálogo global passa a ter um aparelho que a
   // loja já cadastrou à mão (ex.: G47), a busca DESTA loja mostra só o cadastro dela — os produtos e
-  // vendas vinculados à chave manual continuam valendo e não aparece duplicata.
-  const globaisCobertos = globaisCobertosPelaLoja(globalIndex, lojaIndex)
+  // vendas vinculados à chave manual continuam valendo e não aparece duplicata. O casamento do
+  // global (ex.: "Moto G47", alias "MotoG47") é preservado: o resultado vira o cadastro da loja.
+  const globaisOuManual = globais.map((g) => {
+    const manual = globaisCobertos.get(g.modelKey)
+    if (!manual) return g
+    return {
+      ...g,
+      modelKey: manual.modelKey,
+      brand: manual.brand,
+      canonicalName: manual.canonicalName,
+      shortName: manual.shortName,
+      commercialLine: manual.commercialLine,
+      aliases: (lojaIndex.aliasesByModelKey.get(manual.modelKey) ?? []).map((a) => a.alias).slice(0, 6),
+      confidence: manual.confidence,
+      status: manual.status,
+      source: "loja" as const,
+      reviewFlags: ["cadastro_manual_loja"],
+    }
+  })
   // Manuais primeiro no empate: o operador acabou de cadastrar e espera encontrá-los.
-  return [...manuais, ...globais.filter((g) => !globaisCobertos.has(g.modelKey))]
+  const vistos = new Set<string>()
+  return [...manuais, ...globaisOuManual]
     .map((r, i) => ({ r, i }))
     .sort((a, b) => MATCH_RANK[a.r.matchType] - MATCH_RANK[b.r.matchType] || a.i - b.i)
     .map(({ r }) => r)
+    .filter((r) => (vistos.has(r.modelKey) ? false : (vistos.add(r.modelKey), true)))
     .slice(0, limit)
 }
 
@@ -378,6 +412,28 @@ export interface PeliculaGruposComLoja {
   grupos: PeliculaGrupo[]
   /** Modelos removidos POR ESTA LOJA de grupos globais (para exibir/restaurar). */
   suprimidos: PeliculaGrupoMember[]
+}
+
+/**
+ * COMPAT-CATALOGO-BRASIL-2023-2026-002 — decisões gravadas com chave MESCLADA (ex.: "iPhone 7 Branco")
+ * passam a valer para o aparelho canônico. Ligação que vira o próprio modelo (A≡B) é descartada.
+ */
+export function canonicalizarOverrides<T extends Pick<LojaCompatOverride, "modelKeyA" | "modelKeyB">>(
+  overrides: readonly T[],
+  canonicalKeyOf: (modelKey: string) => string,
+): T[] {
+  // Mesmo par gravado com a chave antiga E com a canônica: vale a canônica (decisão mais recente da loja).
+  const porPar = new Map<string, { o: T; jaCanonica: boolean }>()
+  for (const o of overrides) {
+    const pair = orderedPair(canonicalKeyOf(o.modelKeyA), canonicalKeyOf(o.modelKeyB))
+    if (!pair) continue
+    const jaCanonica = pair.modelKeyA === o.modelKeyA && pair.modelKeyB === o.modelKeyB
+    const id = `${(o as { categoria?: string }).categoria ?? ""}|${pair.modelKeyA}|${pair.modelKeyB}`
+    const atual = porPar.get(id)
+    if (atual && (atual.jaCanonica || !jaCanonica)) continue
+    porPar.set(id, { o: jaCanonica ? o : { ...o, ...pair }, jaCanonica })
+  }
+  return [...porPar.values()].map((x) => x.o)
 }
 
 /**

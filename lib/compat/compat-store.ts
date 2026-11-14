@@ -39,6 +39,7 @@ export type CompatDb = Pick<
   | "catalogoAparelhoLojaModelo"
   | "produto"
   | "$transaction"
+  | "$queryRaw"
 >
 
 export type CompatFailure =
@@ -570,8 +571,12 @@ async function marcarPrincipal(
   // Unicidade garantida no banco (`compat_localizacoes_principal_key`, parcial em principal=true).
   // Corrida: entre desmarcar e marcar, outra transação pode ter marcado a dela → P2002. Pedido
   // explícito tenta de novo (a nova passada desmarca a vencedora); automático aceita a vencedora.
+  // O lock por grupo (loja + modelo + produto) serializa as trocas simultâneas: sem ele, duas
+  // transações desmarcam/marcam linhas em ordens opostas e o PostgreSQL aborta uma por deadlock (40P01).
+  const lockKey = `compat-principal:${storeId}:${alvo.modelKey}:${alvo.produtoId ?? ""}`
   const tentar = () =>
     db.$transaction([
+      db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock`,
       db.compatLocalizacao.updateMany({
         where: { storeId, modelKey: alvo.modelKey, produtoId: alvo.produtoId, principal: true, NOT: { id } },
         data: { principal: false },

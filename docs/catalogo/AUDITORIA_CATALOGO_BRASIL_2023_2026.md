@@ -88,6 +88,16 @@ presumida**; o mesmo vale para Moto G Max × G87.
 - **Galaxy A37/A57, S24 FE, S25 FE:** confirmados (status `novo` → `ativo`).
 - **LG (11 linhas, marca descontinuada):** nível secundário — oculta por padrão, reativável por loja.
 
+**O que a loja gravou com chave mesclada continua valendo (nada é regravado):** produtos com
+`deviceModelKeys` antigas, vínculos/supressões de película e capinha e localizações são lidos pela chave
+canônica (consulta de capinha, vínculos, busca de películas). Decisão nova vai para a chave canônica; quando
+o mesmo par existe nas duas formas, vale a canônica; "restaurar" desfaz também a decisão antiga.
+
+**Cadastro manual da loja × global novo (ex.: G47):** a busca da loja troca o resultado global pelo
+cadastro dela, preservando o casamento por nome/alias ("Moto G47", "MotoG47") — inclusive com a marca oculta.
+"Aguardando lançamento" só existe na gestão de modelos; nos fluxos operacionais (PDV, produto, películas) o
+modelo criado é selecionado na hora e por isso é sempre gravado como lançado.
+
 ## Modelos futuros
 
 Nenhum modelo especulativo foi criado. **Galaxy S27** não tem anúncio oficial verificado (só aparece em linha do

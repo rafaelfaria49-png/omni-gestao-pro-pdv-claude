@@ -4,6 +4,7 @@ import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
 import {
   AVISO_CATEGORIAS_INDEPENDENTES,
   buildCapinhaGrupos,
+  canonicalizarOverrides,
   isManualModelKey,
 } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import { listLojaCompatOverrides } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
@@ -34,11 +35,20 @@ export async function GET(req: Request) {
   const gate = await resolveCatalogoLojaRead(req)
   if (!gate.ok) return gate.response
   const storeId = gate.storeId
-  const modelKey = (new URL(req.url).searchParams.get("modelKey") ?? "").trim().slice(0, 160)
-  if (!modelKey) return NextResponse.json({ ok: false, error: "Informe o modelo." }, { status: 400 })
+  const modelKeyBruto = (new URL(req.url).searchParams.get("modelKey") ?? "").trim().slice(0, 160)
+  if (!modelKeyBruto) return NextResponse.json({ ok: false, error: "Informe o modelo." }, { status: 400 })
   try {
     const index = loadCatalogoIndex()
-    const overridesBrutos = storeId ? await listLojaCompatOverrides(prisma, storeId, "capinha", [modelKey]) : []
+    // Linha mesclada (ex.: "iPhone 17 Air") abre o aparelho canônico; o que foi gravado com a chave
+    // antiga (produto, decisão, localização) continua valendo — nada é regravado.
+    const modelKey = index.canonicalKeyOf(modelKeyBruto)
+    const canon = index.canonicalKeyOf
+    const overridesBrutos = storeId
+      ? canonicalizarOverrides(
+          await listLojaCompatOverrides(prisma, storeId, "capinha", index.equivalentKeysOf(modelKey)),
+          canon,
+        )
+      : []
     const keys = [modelKey, ...overridesBrutos.flatMap((o) => [o.modelKeyA, o.modelKeyB])]
     const resolvidos = await resolverModelosCompat(index, storeId, keys)
     const modelo = resolvidos.get(modelKey)
@@ -67,10 +77,10 @@ export async function GET(req: Request) {
     const produtos = await listProdutosCapinha(prisma, storeId)
     const chavesRelevantes = new Set([modelKey, ...compativeis.map((c) => c.modelKey)])
     const detalhados = produtos
-      .filter((p) => p.controle === "detalhado" && p.deviceModelKeys.some((k) => chavesRelevantes.has(k)))
+      .filter((p) => p.controle === "detalhado" && p.deviceModelKeys.some((k) => chavesRelevantes.has(canon(k))))
       .map((p) => {
-        const direto = p.deviceModelKeys.includes(modelKey)
-        const via = direto ? null : p.deviceModelKeys.find((k) => chavesRelevantes.has(k)) ?? null
+        const direto = p.deviceModelKeys.some((k) => canon(k) === modelKey)
+        const via = direto ? null : p.deviceModelKeys.map(canon).find((k) => chavesRelevantes.has(k)) ?? null
         return {
           id: p.id,
           name: p.name,
@@ -88,11 +98,12 @@ export async function GET(req: Request) {
       .map((p) => ({ id: p.id, name: p.name, sku: p.sku, stockGeral: p.stock, pedeModeloNaVenda: p.pedeModeloNaVenda }))
 
     const locs = await listLocalizacoes(prisma, storeId, {
-      modelKeys: [...chavesRelevantes],
+      modelKeys: [...chavesRelevantes].flatMap((k) => index.equivalentKeysOf(k)),
       produtoIds: detalhados.map((d) => d.id),
     })
     const localizacoes = locs
       .filter((l) => l.painelAtivo && l.fileiraAtiva)
+      .map((l) => ({ ...l, modelKey: l.modelKey ? canon(l.modelKey) : l.modelKey }))
       .map((l) => ({
         ...l,
         alvo: l.produtoId ? "produto" : l.modelKey === modelKey ? "modelo" : "compativel",

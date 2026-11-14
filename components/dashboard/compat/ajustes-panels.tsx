@@ -4,7 +4,7 @@
  * COMPAT-PROFISSIONAL-001 — Cores, Preferências e Relatórios do Compat (por loja).
  */
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertTriangle, BarChart3, Check, Loader2, Palette, Pencil, Plus, Power, Settings2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -269,7 +269,7 @@ export function PreferenciasPanel({ lojaHeader }: { lojaHeader: string | null })
  * COMPAT-CATALOGO-BRASIL-2023-2026-002 — marcas visíveis nas buscas desta loja.
  * Ocultar só tira a marca da busca: modelos, produtos vinculados e vendas antigas não mudam.
  */
-function MarcasCatalogo({
+export function MarcasCatalogo({
   lojaHeader,
   version,
   onSaved,
@@ -282,9 +282,15 @@ function MarcasCatalogo({
   const [dados, setDados] = useState<{ version: number; marcas: MarcaDTO[] } | null>(null)
   const [erro, setErro] = useState("")
   const [busy, setBusy] = useState(false)
+  // Loja vigente: resposta (leitura ou gravação) que chega depois da troca de loja é descartada.
+  const lojaAtual = useRef(lojaHeader)
 
   useEffect(() => {
     let vigente = true
+    lojaAtual.current = lojaHeader
+    setDados(null)
+    setErro("")
+    setBusy(false)
     void carregarMarcas(lojaHeader).then((r) => {
       if (!vigente) return
       if (r.ok) setDados({ version: r.version, marcas: r.marcas })
@@ -297,8 +303,10 @@ function MarcasCatalogo({
 
   const alternar = async (m: MarcaDTO) => {
     if (!dados) return
+    const loja = lojaHeader
     setBusy(true)
-    const r = await salvarMarcas(lojaHeader, version, { [m.key]: !m.visivel })
+    const r = await salvarMarcas(loja, version, { [m.key]: !m.visivel })
+    if (lojaAtual.current !== loja) return
     setBusy(false)
     if (r.ok) {
       setDados({ version: r.version, marcas: r.marcas })

@@ -192,6 +192,7 @@ export function ModelosDaLojaPanel({
         open={cadastroOpen}
         onOpenChange={setCadastroOpen}
         lojaHeader={lojaHeader}
+        permitirAguardando
         onCreated={() => changed()}
       />
       <EditarModeloDialog

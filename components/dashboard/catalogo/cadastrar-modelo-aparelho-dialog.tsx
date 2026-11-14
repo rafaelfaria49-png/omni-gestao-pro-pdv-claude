@@ -42,6 +42,7 @@ export function CadastrarModeloAparelhoDialog({
   onOpenChange,
   lojaHeader,
   initialName = "",
+  permitirAguardando = false,
   onCreated,
 }: {
   open: boolean
@@ -49,6 +50,11 @@ export function CadastrarModeloAparelhoDialog({
   lojaHeader: string | null | undefined
   /** Texto pesquisado (pré-preenche o nome; a marca nunca é presumida). */
   initialName?: string
+  /**
+   * Só a gestão de modelos registra aparelho "aguardando lançamento". Nos fluxos operacionais (PDV,
+   * produto, películas) o modelo criado é selecionado na hora — então precisa estar lançado.
+   */
+  permitirAguardando?: boolean
   onCreated: (modelo: ModeloAparelhoEscolhido, created: LojaModelo | null) => void
 }) {
   const uid = useId()
@@ -87,7 +93,7 @@ export function CadastrarModeloAparelhoDialog({
       name,
       manufacturer: hier.manufacturer,
       line: hier.line,
-      lancamento: aguardando ? "aguardando_lancamento" : "lancado",
+      lancamento: permitirAguardando && aguardando ? "aguardando_lancamento" : "lancado",
       aliases: aliases
         .split(/[,;\n]/)
         .map((a) => a.trim())
@@ -149,20 +155,22 @@ export function CadastrarModeloAparelhoDialog({
             />
           </div>
 
-          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-primary"
-              checked={aguardando}
-              onChange={(e) => setAguardando(e.target.checked)}
-            />
-            <span>
-              Aguardando lançamento oficial
-              <span className="block text-xs text-muted-foreground">
-                Fica só nesta lista de modelos, fora das buscas do PDV e do cadastro, até você confirmar o lançamento.
+          {permitirAguardando && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-primary"
+                checked={aguardando}
+                onChange={(e) => setAguardando(e.target.checked)}
+              />
+              <span>
+                Aguardando lançamento oficial
+                <span className="block text-xs text-muted-foreground">
+                  Fica só nesta lista de modelos, fora das buscas do PDV e do cadastro, até você confirmar o lançamento.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          )}
 
           <p className="text-xs text-muted-foreground">
             Origem: cadastro manual da loja. Cadastrar o modelo não confirma compatibilidade de película ou capinha.

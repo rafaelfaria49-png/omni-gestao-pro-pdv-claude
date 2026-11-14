@@ -265,8 +265,12 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
     // pedidos explícitos simultâneos de principal: continua 1
     const ids = (await db.compatLocalizacao.findMany({ where: { storeId: A, modelKey: A05S }, select: { id: true } })).map((r) => r.id)
-    await Promise.all(ids.map((id) => setLocalizacaoPrincipal(db, A, id)))
-    expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
+    // várias rodadas: trocas simultâneas não podem abortar por deadlock nem deixar 0/2 principais
+    for (let rodada = 0; rodada < 8; rodada++) {
+      const r = await Promise.all(ids.map((id) => setLocalizacaoPrincipal(db, A, id)))
+      expect(r.every((x) => x.ok)).toBe(true)
+      expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
+    }
   })
 
   // ── Cores ──────────────────────────────────────────────────────────────────
@@ -366,6 +370,10 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     if (!r.ok) return
     const modelos = await listLojaModelos(db, A)
     expect(modelos.some((m) => m.modelKey === r.value.modelKey)).toBe(true)
+    // duplicado aguardando não vira "usar este" no fluxo operacional
+    expect(
+      await createLojaModelo(db, global, A, "u-a", { brand: "Samsung", name: "Galaxy S27 Sintético" }),
+    ).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: r.value.modelKey, active: false } })
     expect(buildLojaCatalogoIndex(modelos).modelByKey.has(r.value.modelKey)).toBe(false)
     const conf = await updateLojaModelo(db, global, A, "u-a", r.value.id, { version: 1, lancamento: "lancado" })
     expect(conf).toMatchObject({ ok: true, value: { lancamento: "lancado" } })

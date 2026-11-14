@@ -209,14 +209,24 @@ async function findLojaDuplicate(db: Db, storeId: string, brandKey: string, name
 
 function duplicateFromLoja(row: ModeloRow): LojaCatalogoFailure {
   const m = toModelo(row)
+  const aguardando = m.lancamento === "aguardando_lancamento"
   return {
     ok: false,
     code: "DUPLICATE",
     status: 409,
-    message: m.active
-      ? "Este modelo já está cadastrado nesta loja para a mesma marca."
-      : "Este modelo já existe nesta loja (desativado). Reative-o em vez de cadastrar de novo.",
-    existing: { modelKey: m.modelKey, brand: m.brand, canonicalName: lojaModeloCanonicalName(m), source: "loja", active: m.active },
+    message: !m.active
+      ? "Este modelo já existe nesta loja (desativado). Reative-o em vez de cadastrar de novo."
+      : aguardando
+        ? "Este modelo já está cadastrado nesta loja, aguardando lançamento. Confirme o lançamento na lista de modelos."
+        : "Este modelo já está cadastrado nesta loja para a mesma marca.",
+    // "active" aqui = pode ser usado já. Aguardando lançamento não entra em fluxo operacional.
+    existing: {
+      modelKey: m.modelKey,
+      brand: m.brand,
+      canonicalName: lojaModeloCanonicalName(m),
+      source: "loja",
+      active: m.active && !aguardando,
+    },
   }
 }
 
@@ -400,7 +410,9 @@ export async function setLojaCompatDecisao(
   if (categoria === "capinha" && decisao === "suprimir") {
     return { ok: false, code: "INVALID", status: 400, message: "Para capinha, remova o vínculo em vez de suprimir." }
   }
-  const pair = orderedPair(String(body.modelKey ?? ""), String(body.otherModelKey ?? ""))
+  // Linha mesclada grava no aparelho canônico (COMPAT-CATALOGO-BRASIL-2023-2026-002).
+  const canon = (k: string) => (isManualModelKey(k) ? k : globalIndex.canonicalKeyOf(k))
+  const pair = orderedPair(canon(String(body.modelKey ?? "").trim()), canon(String(body.otherModelKey ?? "").trim()))
   if (!pair || pair.modelKeyA.length > 160 || pair.modelKeyB.length > 160) {
     return { ok: false, code: "INVALID", status: 400, message: "Informe dois modelos diferentes." }
   }
@@ -434,7 +446,19 @@ export async function setLojaCompatDecisao(
       storeId_categoria_modelKeyA_modelKeyB: { storeId, categoria, modelKeyA: pair.modelKeyA, modelKeyB: pair.modelKeyB },
     }
     if (decisao === "restaurar") {
-      await db.catalogoAparelhoLojaCompat.deleteMany({ where: { storeId, categoria, ...pair } })
+      // Restaurar também desfaz decisões antigas gravadas com a chave mesclada do mesmo aparelho.
+      const eqA = isManualModelKey(pair.modelKeyA) ? [pair.modelKeyA] : globalIndex.equivalentKeysOf(pair.modelKeyA)
+      const eqB = isManualModelKey(pair.modelKeyB) ? [pair.modelKeyB] : globalIndex.equivalentKeysOf(pair.modelKeyB)
+      await db.catalogoAparelhoLojaCompat.deleteMany({
+        where: {
+          storeId,
+          categoria,
+          OR: [
+            { modelKeyA: { in: eqA }, modelKeyB: { in: eqB } },
+            { modelKeyA: { in: eqB }, modelKeyB: { in: eqA } },
+          ],
+        },
+      })
     } else {
       const upsert = () => db.catalogoAparelhoLojaCompat.upsert({
         where,

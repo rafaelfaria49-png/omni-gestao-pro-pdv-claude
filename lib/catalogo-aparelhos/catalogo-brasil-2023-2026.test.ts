@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import { loadCatalogoIndex } from "./catalogo-loader"
 import { buildCatalogoIndex, modeloOperacional, normalizeDeviceQuery, searchDeviceModels } from "./catalogo-aparelhos"
 import { getPeliculasPorModelo } from "./peliculas"
-import { buildLojaCatalogoIndex, globaisCobertosPelaLoja, searchDeviceModelsComLoja, type LojaModelo } from "./loja-catalogo"
+import { buildLojaCatalogoIndex, canonicalizarOverrides, globaisCobertosPelaLoja, searchDeviceModelsComLoja, type LojaModelo } from "./loja-catalogo"
 import { listarMarcasDoCatalogo, marcasOcultasDaLoja, sanitizeMarcasConfig } from "./marcas"
 
 const index = loadCatalogoIndex()
@@ -174,6 +174,46 @@ describe("cadastro manual × catálogo global", () => {
     expect(r.map((x) => x.modelKey)).not.toContain("motorola_moto_g47")
     // outra loja (sem o cadastro manual) vê o global
     expect(searchDeviceModelsComLoja(index, null, "G47", {}).map((x) => x.modelKey)).toContain("motorola_moto_g47")
+  })
+
+  it("G47 manual: nomes e aliases do global ('Moto G47', 'MotoG47') levam ao cadastro da loja, uma vez só", () => {
+    const g47 = modeloLoja({ brand: "Motorola", name: "G47", modelKey: "manual_rafacell_g47" })
+    const loja = buildLojaCatalogoIndex([g47])
+    for (const q of ["Moto G47", "Motorola Moto G47", "MotoG47", "G47"]) {
+      const r = searchDeviceModelsComLoja(index, loja, q, {})
+      const chaves = r.map((x) => x.modelKey)
+      expect(chaves, q).toContain("manual_rafacell_g47")
+      expect(chaves, q).not.toContain("motorola_moto_g47")
+      expect(chaves.filter((k) => k === "manual_rafacell_g47"), q).toHaveLength(1)
+      expect(r.find((x) => x.modelKey === "manual_rafacell_g47")?.source, q).toBe("loja")
+    }
+    // com Motorola oculta na loja, o cadastro manual continua achável pelo nome do global
+    const ocultas = new Set(["MOTOROLA"])
+    expect(searchDeviceModelsComLoja(index, loja, "Moto G47", { marcasOcultas: ocultas }).map((x) => x.modelKey)).toEqual([
+      "manual_rafacell_g47",
+    ])
+    expect(searchDeviceModelsComLoja(index, loja, "Moto G37", { marcasOcultas: ocultas })).toEqual([])
+  })
+
+  it("chave mesclada: equivalentes e decisões antigas trazidas para o canônico (a canônica prevalece)", () => {
+    expect(index.equivalentKeysOf("apple_iphone_air").sort()).toEqual(["apple_iphone_17_air", "apple_iphone_air"])
+    expect(index.equivalentKeysOf("apple_iphone_17_air").sort()).toEqual(["apple_iphone_17_air", "apple_iphone_air"])
+    expect(index.equivalentKeysOf("apple_iphone_7").sort()).toEqual(["apple_iphone_7", "apple_iphone_7_branco", "apple_iphone_7_preto"])
+    expect(index.equivalentKeysOf("samsung_galaxy_a06")).toEqual(["samsung_galaxy_a06"])
+    const base = { categoria: "capinha", acao: "adicionar", notes: "" }
+    const r = canonicalizarOverrides(
+      [
+        { ...base, modelKeyA: "apple_iphone_16_pro", modelKeyB: "apple_iphone_17_air", notes: "antigo" },
+        { ...base, modelKeyA: "apple_iphone_16_pro", modelKeyB: "apple_iphone_air", notes: "novo" },
+        { ...base, categoria: "pelicula_tela", modelKeyA: "apple_iphone_7_branco", modelKeyB: "apple_iphone_8_branco" },
+        { ...base, modelKeyA: "apple_iphone_7", modelKeyB: "apple_iphone_7_preto" },
+      ],
+      index.canonicalKeyOf,
+    )
+    expect(r.map((o) => [o.categoria, o.modelKeyA, o.modelKeyB, o.notes])).toEqual([
+      ["capinha", "apple_iphone_16_pro", "apple_iphone_air", "novo"],
+      ["pelicula_tela", "apple_iphone_7", "apple_iphone_8", ""],
+    ])
   })
 
   it("modelo manual 'aguardando lançamento' fica fora da busca", () => {
