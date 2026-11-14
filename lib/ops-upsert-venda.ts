@@ -324,6 +324,11 @@ export function isPrismaUniqueConstraintError(error: unknown): boolean {
 
 export type UpsertVendaOptions = {
   /**
+   * COMPAT-PROFISSIONAL-001 — a requisição é a FINALIZAÇÃO ao vivo no PDV (não reenvio da fila).
+   * Só então cor padrão desativada pela loja é recusada. Ausente = reenvio/legado: aceita.
+   */
+  finalizacaoAoVivo?: boolean
+  /**
    * Quando `true`, a baixa de estoque bloqueia qualquer decremento que deixaria o saldo
    * negativo, falhando com `InsufficientStockError`. Usado no fluxo PDV ao vivo
    * (`/api/ops/venda-persist`). O replay legado (`/api/ops/sync-legacy-vendas`) mantém
@@ -826,8 +831,11 @@ export async function upsertVendaInTransaction(
     const corRecusada = await corPadraoDesativadaNaVenda(
       tx as unknown as Parameters<typeof corPadraoDesativadaNaVenda>[0],
       lojaId,
-      { lines, registeredOffline: (sale as { registeredOffline?: unknown }).registeredOffline },
-      at,
+      {
+        lines,
+        registeredOffline: (sale as { registeredOffline?: unknown }).registeredOffline,
+        finalizacaoAoVivo: options?.finalizacaoAoVivo === true,
+      },
     )
     if (corRecusada) {
       throw new InvalidSaleLinesError(

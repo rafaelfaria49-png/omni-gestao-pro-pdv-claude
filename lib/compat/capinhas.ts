@@ -148,8 +148,24 @@ export function montarRelatorioCapinhas(
     if (status === "cancelada" || status === "devolvida") continue
     const lines = asRecord(venda.payload)?.lines
     if (!Array.isArray(lines)) continue
-    // Saldo devolvido desta venda, consumido linha a linha (não desconta duas vezes).
-    const restante = new Map(devolucoes.get(str(venda.pedidoId)) ?? [])
+    // Devolução por item da venda: payload (`qtyReturned`, atribuído à linha) e canônica
+    // (`DevolucaoVenda`, só por item) descrevem a MESMA devolução. Reconcilia por item ANTES de
+    // distribuir: total devolvido = maior dos dois; o que o payload já atribuiu fica na linha dele
+    // e só o EXCEDENTE canônico é distribuído entre as linhas do item (nunca desconta duas vezes).
+    const canon = devolucoes.get(str(venda.pedidoId)) ?? new Map<string, number>()
+    const chaveItem = (l: Record<string, unknown>) => str(l.inventoryId) || str(l.produtoId)
+    const payloadPorItem = new Map<string, number>()
+    for (const raw of lines) {
+      const l = asRecord(raw)
+      if (!l) continue
+      const k = chaveItem(l)
+      if (k) payloadPorItem.set(k, (payloadPorItem.get(k) ?? 0) + Math.max(0, num(l.qtyReturned)))
+    }
+    const excedente = new Map<string, number>()
+    for (const [k, pago] of payloadPorItem) {
+      const canonico = canon.get(k) ?? 0
+      if (canonico > pago) excedente.set(k, canonico - pago)
+    }
     let contou = false
     for (const raw of lines) {
       const line = asRecord(raw)
@@ -158,16 +174,12 @@ export function montarRelatorioCapinhas(
         porId.get(str(line.produtoId)) ?? porId.get(str(line.inventoryId)) ?? porSku.get(str(line.inventoryId))
       if (!produto) continue
       const vendida = num(line.quantity)
-      let devolvidaCanon = 0
-      for (const chave of [str(line.inventoryId), str(line.produtoId)]) {
-        const saldo = chave ? (restante.get(chave) ?? 0) : 0
-        if (saldo <= 0) continue
-        const usa = Math.min(saldo, vendida - devolvidaCanon)
-        devolvidaCanon += usa
-        restante.set(chave, saldo - usa)
-      }
-      // Payload legado (`qtyReturned`) e devolução canônica descrevem a MESMA devolução: usa o maior.
-      const qtd = Math.max(0, vendida - Math.max(num(line.qtyReturned), devolvidaCanon))
+      const k = chaveItem(line)
+      const doPayload = Math.min(vendida, Math.max(0, num(line.qtyReturned)))
+      const saldo = excedente.get(k) ?? 0
+      const extra = Math.min(saldo, vendida - doPayload)
+      if (extra > 0) excedente.set(k, saldo - extra)
+      const qtd = Math.max(0, vendida - doPayload - extra)
       if (qtd <= 0) continue
       contou = true
       total += qtd

@@ -74,12 +74,17 @@ export function VinculosPanel({
   // Só a resposta da consulta MAIS RECENTE (do modelo/categoria atuais) pode preencher a tela:
   // resposta atrasada de outro modelo faria a edição gravar no par errado.
   const reqRef = useRef(0)
+  // Modelo selecionado AGORA: recarga disparada por uma gravação antiga não pode trazer outro par.
+  const atualRef = useRef(principal)
+  useEffect(() => {
+    atualRef.current = principal
+  }, [principal])
   const load = useCallback(async () => {
     const meu = ++reqRef.current
     if (!principal) return
     setLoading(true)
     const r = await carregarVinculos(lojaHeader, categoria, principal.modelKey)
-    if (meu !== reqRef.current) return
+    if (meu !== reqRef.current || atualRef.current?.modelKey !== principal.modelKey) return
     setLoading(false)
     if (r.ok && r.modelo.modelKey !== principal.modelKey) return
     if (!r.ok) {
@@ -91,6 +96,11 @@ export function VinculosPanel({
     setVinculos(r.vinculos)
     setGlobais(r.globais)
   }, [principal, lojaHeader, categoria])
+
+  const loadRef = useRef(load)
+  useEffect(() => {
+    loadRef.current = load
+  }, [load])
 
   useEffect(() => {
     setVinculos([])
@@ -121,7 +131,8 @@ export function VinculosPanel({
     }
     setErro("")
     setAviso(r.falhas > 0 ? `${r.gravados} gravado(s); ${r.falhas} não puderam ser gravados.` : "")
-    await load()
+    // Recarrega a seleção ATUAL (se o operador trocou de modelo durante a gravação, não a antiga).
+    await loadRef.current()
     return true
   }
 

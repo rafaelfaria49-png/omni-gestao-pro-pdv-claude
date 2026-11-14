@@ -1938,14 +1938,15 @@ export function OperationsProvider({
   // travado) vira "sem resposta" — resultado DESCONHECIDO com a mesma identidade — em vez
   // de prender a finalização e o Reenviar (que se juntava à mesma promessa pendurada).
   const postV1Sale = useCallback(
-    async (lojaId: string, sale: SaleRecord, retroactive: boolean): Promise<TimedTextResponse> => {
+    async (lojaId: string, sale: SaleRecord, retroactive: boolean, source: SaleAttemptSource = "auto"): Promise<TimedTextResponse> => {
       return fetchTextWithTimeout(
         vendaPersistUrl(lojaId),
         {
           method: "POST",
           credentials: "include",
           headers: persistHeaders(lojaId),
-          body: JSON.stringify(retroactive ? { sale, allowClosedOriginalSession: true } : { sale }),
+          // `tentativa`: o servidor distingue finalização ao vivo de reenvio da fila (COMPAT-PROFISSIONAL-001).
+          body: JSON.stringify({ sale, tentativa: source, ...(retroactive ? { allowClosedOriginalSession: true } : {}) }),
         },
         SALE_PERSIST_TIMEOUT_MS,
       )
@@ -1954,7 +1955,7 @@ export function OperationsProvider({
   )
 
   const postV2Sale = useCallback(
-    async (lojaId: string, sale: SaleRecord, retroactive: boolean): Promise<TimedTextResponse> => {
+    async (lojaId: string, sale: SaleRecord, retroactive: boolean, source: SaleAttemptSource = "auto"): Promise<TimedTextResponse> => {
       return fetchTextWithTimeout(
         vendaPersistV2Url(lojaId),
         {
@@ -1964,6 +1965,7 @@ export function OperationsProvider({
           body: JSON.stringify({
             sale,
             clientSaleId: sale.clientSaleId,
+            tentativa: source,
             ...(retroactive ? { allowClosedOriginalSession: true } : {}),
           }),
         },
@@ -2109,7 +2111,9 @@ export function OperationsProvider({
       const offlineAtSend = typeof navigator !== "undefined" && navigator.onLine === false
       setSalePhase(phaseKey, "enviando")
       try {
-        const res = useV2 ? await postV2Sale(lojaId, sale, retroactive) : await postV1Sale(lojaId, sale, retroactive)
+        const res = useV2
+          ? await postV2Sale(lojaId, sale, retroactive, source)
+          : await postV1Sale(lojaId, sale, retroactive, source)
         noteServerReachability(true)
         if (!res.ok && useV2) {
           const parsed = parseSalePersistError(res.text)
@@ -2119,7 +2123,7 @@ export function OperationsProvider({
             resolvePendingSyncErrorCode({ httpStatus: res.status, message: parsed.message })
           if (shouldFallbackV2ToV1({ httpStatus: res.status, code })) {
             const converted = convertPendingV2ToV1(sale)
-            const v1 = await postV1Sale(lojaId, converted, retroactive)
+            const v1 = await postV1Sale(lojaId, converted, retroactive, source)
             noteServerReachability(true)
             return await settlePersistResponse(v1, converted, lojaId, source)
           }

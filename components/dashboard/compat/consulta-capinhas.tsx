@@ -45,12 +45,16 @@ export function ConsultaCapinhas({
 
   // Só a resposta da consulta mais recente preenche a tela (troca rápida de modelo).
   const reqRef = useRef(0)
+  const atualRef = useRef(modelo)
+  useEffect(() => {
+    atualRef.current = modelo
+  }, [modelo])
   const load = useCallback(async () => {
     const meu = ++reqRef.current
     if (!modelo) return
     setLoading(true)
     const r = await consultarCapinha(lojaHeader, modelo.modelKey)
-    if (meu !== reqRef.current) return
+    if (meu !== reqRef.current || atualRef.current?.modelKey !== modelo.modelKey) return
     setLoading(false)
     if (r.ok && r.modelo.modelKey !== modelo.modelKey) return
     if (!r.ok) {
@@ -61,6 +65,12 @@ export function ConsultaCapinhas({
     setErro("")
     setDados(r)
   }, [modelo, lojaHeader])
+
+  // Recargas pós-gravação usam sempre a seleção ATUAL.
+  const loadRef = useRef(load)
+  useEffect(() => {
+    loadRef.current = load
+  }, [load])
 
   useEffect(() => {
     void load()
@@ -143,7 +153,7 @@ export function ConsultaCapinhas({
                   ]}
                   onSaved={() => {
                     setFormAberto(false)
-                    void load()
+                    void loadRef.current()
                   }}
                 />
               )}
@@ -173,7 +183,7 @@ export function ConsultaCapinhas({
                           size="sm"
                           variant="ghost"
                           aria-label="Tornar principal"
-                          onClick={() => void tornarPrincipal(lojaHeader, l.id).then(() => load())}
+                          onClick={() => void tornarPrincipal(lojaHeader, l.id).then(() => loadRef.current())}
                         >
                           <Star className="h-4 w-4" />
                         </Button>
@@ -184,7 +194,7 @@ export function ConsultaCapinhas({
                           size="sm"
                           variant="ghost"
                           aria-label={`Remover localização ${rotuloLocalizacao(l)}`}
-                          onClick={() => void removerLocalizacao(lojaHeader, l.id).then(() => load())}
+                          onClick={() => void removerLocalizacao(lojaHeader, l.id).then(() => loadRef.current())}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

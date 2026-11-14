@@ -113,6 +113,8 @@ export async function POST(req: Request) {
 
   const allowClosedOriginalSession =
     bodyObj.allowClosedOriginalSession === true || bodyObj.retroactiveClosedSession === true
+  // COMPAT-PROFISSIONAL-001: o PDV marca só a tentativa de finalização (nunca o reenvio da fila).
+  const finalizacaoAoVivo = (body as { tentativa?: unknown }).tentativa === "finalize"
 
   const denied = await apiGuardEnterpriseOrOps(
     lojaId,
@@ -135,6 +137,7 @@ export async function POST(req: Request) {
         enforceStock: true,
         requireCaixaSession: true,
         allowClosedOriginalSession,
+        finalizacaoAoVivo,
       },
     })
     // Automação definitiva nasce SOMENTE do create durável (CORREÇÃO-01):

@@ -136,6 +136,41 @@ describe("capinhas: classificação e relatório", () => {
     expect(r.semCor).toBe(2)
   })
 
+  it("desconta devoluções CANÔNICAS (DevolucaoVenda); venda devolvida inteira não conta", () => {
+    const vendas = [
+      { pedidoId: "VDA-1", status: "parcialmente_devolvida", payload: { lines: [
+        { inventoryId: "CAP-T", produtoId: "gen", quantity: 3 },
+        { inventoryId: "det", produtoId: "det", quantity: 2, qtyReturned: 1 },
+      ] } },
+      { pedidoId: "VDA-2", status: "devolvida", payload: { lines: [{ produtoId: "gen", inventoryId: "gen", quantity: 4 }] } },
+    ]
+    const devolucoes = new Map([["VDA-1", new Map([["CAP-T", 2], ["det", 1]])]])
+    const r = montarRelatorioCapinhas(vendas, [generica, detalhada], devolucoes)
+    // gen: 3 − 2 (canônica) = 1; det: 2 − 1 (payload e canônica são a MESMA devolução) = 1; VDA-2 fora
+    expect(r.porProduto.map((p) => [p.chave, p.quantidade]).sort()).toEqual([["det", 1], ["gen", 1]])
+    expect(r.totalVendido).toBe(2)
+  })
+
+  it("duas linhas do mesmo item: devolução no payload de uma + canônica igual não descontam 2×", () => {
+    const vendas = [
+      { pedidoId: "VDA-9", status: "parcialmente_devolvida", payload: { lines: [
+        { inventoryId: "CAP-T", produtoId: "gen", quantity: 1 },
+        { inventoryId: "CAP-T", produtoId: "gen", quantity: 1, qtyReturned: 1 },
+      ] } },
+    ]
+    expect(montarRelatorioCapinhas(vendas, [generica], new Map([["VDA-9", new Map([["CAP-T", 1]])]])).totalVendido).toBe(1)
+    // canônica maior que o payload: só o excedente é distribuído
+    expect(montarRelatorioCapinhas(vendas, [generica], new Map([["VDA-9", new Map([["CAP-T", 2]])]])).totalVendido).toBe(0)
+    // devolução maior que o vendido não fica negativa
+    expect(montarRelatorioCapinhas(vendas, [generica], new Map([["VDA-9", new Map([["CAP-T", 9]])]])).totalVendido).toBe(0)
+  })
+
+  it("produto desativado depois continua no histórico de vendas", () => {
+    const inativa = { ...generica, active: false }
+    const r = montarRelatorioCapinhas([{ status: "concluida", payload: { lines: [{ produtoId: "gen", quantity: 2 }] } }], [inativa])
+    expect(r.totalVendido).toBe(2)
+  })
+
   it("nunca inventa quantidade por modelo para venda sem modelo", () => {
     const r = montarRelatorioCapinhas([{ status: "concluida", payload: { lines: [{ produtoId: "gen", quantity: 3 }] } }], [generica])
     expect(r.porModelo).toEqual([])

@@ -24,8 +24,7 @@ describe.skipIf(!URL_OLD)("guard de cor sem a tabela — transação real", () =
         const cor = await corPadraoDesativadaNaVenda(
           tx as unknown as Parameters<typeof corPadraoDesativadaNaVenda>[0],
           "loja-qualquer",
-          { lines: [{ accessorySelection: { version: 1, colorKey: "fume" } }] },
-          new Date(),
+          { lines: [{ accessorySelection: { version: 1, colorKey: "fume" } }], finalizacaoAoVivo: true },
         )
         // Próxima consulta na MESMA transação: falharia com "current transaction is aborted".
         const lojas = await tx.store.count()

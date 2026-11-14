@@ -287,19 +287,17 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     expect(await updateCorLoja(db, B, "u-b", c.value.id, { version: 3, ativo: true })).toMatchObject({ ok: false, code: "NOT_FOUND" })
   })
 
-  it("venda nova com cor padrão desativada na loja é recusada; antes da desativação e outra loja, não", async () => {
-    const linha = (colorKey: string) => ({ lines: [{ accessorySelection: { version: 1, colorKey } }] })
+  it("finalização ao vivo com cor padrão desativada na loja é recusada; reenvio, outra loja e reativada, não", async () => {
+    const venda = (colorKey: string, finalizacaoAoVivo = true) => ({ lines: [{ accessorySelection: { version: 1, colorKey } }], finalizacaoAoVivo })
     const row = await db.compatCorLoja.findFirstOrThrow({ where: { storeId: A, baseKey: "fume" } })
     expect(row.ativo).toBe(false)
-    const depois = new Date(row.updatedAt.getTime() + 60_000)
-    const antes = new Date(row.updatedAt.getTime() - 60_000)
-    expect(await corPadraoDesativadaNaVenda(db, A, linha("fume"), depois)).toBe("Fumê")
-    expect(await corPadraoDesativadaNaVenda(db, A, linha("fume"), antes)).toBeNull()
-    expect(await corPadraoDesativadaNaVenda(db, B, linha("fume"), depois)).toBeNull()
-    expect(await corPadraoDesativadaNaVenda(db, A, linha("preto"), depois)).toBeNull()
+    expect(await corPadraoDesativadaNaVenda(db, A, venda("fume"))).toBe("Fumê")
+    expect(await corPadraoDesativadaNaVenda(db, A, venda("fume", false))).toBeNull()
+    expect(await corPadraoDesativadaNaVenda(db, B, venda("fume"))).toBeNull()
+    expect(await corPadraoDesativadaNaVenda(db, A, venda("preto"))).toBeNull()
     // reativar libera de novo
     expect((await setCorPadraoAtiva(db, A, "u-a", "fume", true)).ok).toBe(true)
-    expect(await corPadraoDesativadaNaVenda(db, A, linha("fume"), new Date(Date.now() + 60_000))).toBeNull()
+    expect(await corPadraoDesativadaNaVenda(db, A, venda("fume"))).toBeNull()
   })
 
   it("preferências: conflito de versão não sobrescreve", async () => {
