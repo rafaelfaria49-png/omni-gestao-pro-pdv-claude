@@ -22,6 +22,7 @@ import {
   findGlobalDuplicate,
   isManualModelKey,
   lojaModeloCanonicalName,
+  normalizeLancamento,
   normalizeLojaCompatStatus,
   orderedPair,
   sanitizeLojaModeloInput,
@@ -91,6 +92,7 @@ type ModeloRow = {
   brand: string
   manufacturer?: string | null
   line?: string | null
+  lancamento?: string | null
   name: string
   aliases: unknown
   notes: string
@@ -108,6 +110,7 @@ function toModelo(r: ModeloRow): LojaModelo {
     brand: r.brand,
     manufacturer: r.manufacturer ?? "",
     line: r.line ?? "",
+    lancamento: normalizeLancamento(r.lancamento),
     name: r.name,
     aliases: aliasesFromJson(r.aliases),
     notes: r.notes,
@@ -241,7 +244,7 @@ export async function createLojaModelo(
 ): Promise<LojaCatalogoResult<LojaModelo>> {
   const parsed = sanitizeLojaModeloInput(raw)
   if (!parsed.ok) return { ok: false, code: "INVALID", status: 400, message: "Dados do modelo inválidos.", errors: parsed.errors }
-  const { brand, manufacturer, line, name, aliases, notes } = parsed.value
+  const { brand, manufacturer, line, lancamento, name, aliases, notes } = parsed.value
   const globalDup = checkGlobal(globalIndex, { brand, name, manufacturer })
   if (globalDup) return globalDup
   const brandKey = catalogKey(brand)
@@ -260,6 +263,7 @@ export async function createLojaModelo(
         brand,
         manufacturer,
         line,
+        lancamento,
         name,
         brandKey,
         nameKey,
@@ -320,6 +324,7 @@ export async function updateLojaModelo(
         brand: "brand" in body ? body.brand : current.brand,
         manufacturer: "manufacturer" in body ? body.manufacturer : current.manufacturer,
         line: "line" in body ? body.line : current.line,
+        lancamento: "lancamento" in body ? body.lancamento : current.lancamento,
         name: "name" in body ? body.name : current.name,
         aliases: "aliases" in body ? body.aliases : aliasesFromJson(current.aliases),
         notes: "notes" in body ? body.notes : current.notes,
@@ -338,6 +343,7 @@ export async function updateLojaModelo(
         brand: v.brand,
         manufacturer: v.manufacturer,
         line: v.line,
+        lancamento: v.lancamento,
         name: v.name,
         brandKey,
         nameKey,

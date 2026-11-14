@@ -8,6 +8,7 @@
 import { catalogKey, cleanCatalogText } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import type { AcessorioModoCaptura } from "@/lib/acessorios/types"
 import { ACESSORIO_MODOS_CAPTURA } from "@/lib/acessorios/types"
+import { sanitizeMarcasConfig } from "@/lib/catalogo-aparelhos/marcas"
 
 export const COMPAT_LIMITS = Object.freeze({
   nome: 40,
@@ -87,6 +88,8 @@ export interface CompatPreferencias {
   posicoesHabilitadas: boolean
   modoModeloPadrao: AcessorioModoCaptura
   modoCorPadrao: AcessorioModoCaptura
+  /** COMPAT-CATALOGO-BRASIL-2023-2026-002 — marca → visível/oculta na busca (ausente = padrão). */
+  marcasConfig: Record<string, boolean>
   version: number
 }
 
@@ -95,6 +98,7 @@ export const COMPAT_PREFERENCIAS_PADRAO: Readonly<CompatPreferencias> = Object.f
   posicoesHabilitadas: false,
   modoModeloPadrao: "opcional",
   modoCorPadrao: "opcional",
+  marcasConfig: {},
   version: 0,
 })
 
@@ -112,6 +116,11 @@ export function mergePreferencias(atual: CompatPreferencias, raw: unknown): Comp
       typeof input.posicoesHabilitadas === "boolean" ? input.posicoesHabilitadas : atual.posicoesHabilitadas,
     modoModeloPadrao: modo(input.modoModeloPadrao, atual.modoModeloPadrao),
     modoCorPadrao: modo(input.modoCorPadrao, atual.modoCorPadrao),
+    // `marcas` é PATCH parcial (só as marcas enviadas mudam); `marcasConfig` (linha do banco) substitui.
+    marcasConfig:
+      input.marcasConfig !== undefined
+        ? sanitizeMarcasConfig(input.marcasConfig)
+        : { ...atual.marcasConfig, ...sanitizeMarcasConfig(input.marcas) },
     version: atual.version,
   }
 }

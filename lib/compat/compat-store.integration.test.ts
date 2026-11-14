@@ -9,10 +9,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { PrismaClient } from "@/generated/prisma"
 import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
-import { buildCapinhaGrupos } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import { buildCapinhaGrupos, buildLojaCatalogoIndex } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import {
   createLojaModelo,
   listLojaCompatOverrides,
+  listLojaModelos,
   setLojaCompatDecisao,
   updateLojaModelo,
 } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
@@ -343,6 +344,35 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     const vendas = await db.venda.findMany({ where: { storeId: A, pedidoId: pedido }, select: { pedidoId: true, status: true, payload: true } })
     expect(montarRelatorioCapinhas(vendas, historico, dev).totalVendido).toBe(1)
     await db.produto.update({ where: { id: `${run}-gen` }, data: { active: true } })
+  })
+
+  it("marcas por loja: PATCH parcial persiste, isola entre lojas e não toca o resto das preferências", async () => {
+    const antes = await getPreferencias(db, A)
+    const r1 = await setPreferencias(db, A, "u-a", { version: antes.version, marcas: { Google: true, Motorola: false } })
+    expect(r1).toMatchObject({ ok: true, value: { marcasConfig: { GOOGLE: true, MOTOROLA: false }, modoModeloPadrao: antes.modoModeloPadrao } })
+    if (!r1.ok) return
+    const r2 = await setPreferencias(db, A, "u-a", { version: r1.value.version, marcas: { motorola: true } })
+    expect(r2.ok && r2.value.marcasConfig).toEqual({ GOOGLE: true, MOTOROLA: true })
+    expect((await getPreferencias(db, B)).marcasConfig).toEqual({})
+    // banco recusa tipo inválido
+    await expect(
+      db.$executeRawUnsafe(`UPDATE compat_preferencias_loja SET "marcasConfig" = '[]'::jsonb WHERE "storeId" = $1`, A),
+    ).rejects.toThrow()
+  })
+
+  it("modelo manual 'aguardando lançamento': persiste, sai da busca, volta ao confirmar; CHECK no banco", async () => {
+    const r = await createLojaModelo(db, global, A, "u-a", { brand: "Samsung", name: "Galaxy S27 Sintético", lancamento: "aguardando_lancamento" })
+    expect(r).toMatchObject({ ok: true, value: { lancamento: "aguardando_lancamento" } })
+    if (!r.ok) return
+    const modelos = await listLojaModelos(db, A)
+    expect(modelos.some((m) => m.modelKey === r.value.modelKey)).toBe(true)
+    expect(buildLojaCatalogoIndex(modelos).modelByKey.has(r.value.modelKey)).toBe(false)
+    const conf = await updateLojaModelo(db, global, A, "u-a", r.value.id, { version: 1, lancamento: "lancado" })
+    expect(conf).toMatchObject({ ok: true, value: { lancamento: "lancado" } })
+    expect(buildLojaCatalogoIndex(await listLojaModelos(db, A)).modelByKey.has(r.value.modelKey)).toBe(true)
+    await expect(
+      db.$executeRawUnsafe(`UPDATE catalogo_aparelhos_loja_modelos SET "lancamento" = 'talvez' WHERE id = $1`, r.value.id),
+    ).rejects.toThrow()
   })
 
   it("CHECK do banco: localização sem modelo e sem produto é recusada", async () => {

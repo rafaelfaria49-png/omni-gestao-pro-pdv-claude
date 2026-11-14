@@ -52,6 +52,11 @@ export interface LojaModelo {
   manufacturer: string
   /** Linha comercial (ex.: "A", "Note"). Opcional. */
   line: string
+  /**
+   * COMPAT-CATALOGO-BRASIL-2023-2026-002 — "aguardando_lancamento" = registro administrativo de
+   * aparelho ainda não lançado oficialmente: aparece na gestão, mas NÃO nas buscas operacionais.
+   */
+  lancamento: LojaModeloLancamento
   name: string
   aliases: string[]
   notes: string
@@ -123,10 +128,18 @@ export function isManualModelKey(modelKey: string): boolean {
 
 export type LojaModeloInputErrors = Partial<Record<"brand" | "manufacturer" | "line" | "name" | "aliases" | "notes", string>>
 
+export const LOJA_MODELO_LANCAMENTOS = ["lancado", "aguardando_lancamento"] as const
+export type LojaModeloLancamento = (typeof LOJA_MODELO_LANCAMENTOS)[number]
+
+export function normalizeLancamento(v: unknown): LojaModeloLancamento {
+  return v === "aguardando_lancamento" ? "aguardando_lancamento" : "lancado"
+}
+
 export interface LojaModeloInput {
   brand: string
   manufacturer: string
   line: string
+  lancamento: LojaModeloLancamento
   name: string
   aliases: string[]
   notes: string
@@ -167,7 +180,8 @@ export function sanitizeLojaModeloInput(
   const line = cleanCatalogText(input.line, LOJA_MODELO_LIMITS.line)
 
   if (Object.keys(errors).length > 0) return { ok: false, errors }
-  return { ok: true, value: { brand, manufacturer, line, name, aliases, notes } }
+  const lancamento = normalizeLancamento(input.lancamento)
+  return { ok: true, value: { brand, manufacturer, line, lancamento, name, aliases, notes } }
 }
 
 /** Nome exibido/gravado na venda: "Marca Modelo" (sem repetir a marca). */
@@ -239,7 +253,8 @@ export function buildLojaCatalogoIndex(modelos: readonly LojaModelo[]): Catalogo
   const models: DeviceModel[] = []
   const aliases: DeviceAlias[] = []
   for (const m of modelos) {
-    if (!m.active) continue
+    // Inativo ou aguardando lançamento: fora da busca (continua resolvível por chave/gestão).
+    if (!m.active || m.lancamento === "aguardando_lancamento") continue
     models.push({
       modelKey: m.modelKey,
       brand: m.brand,
@@ -250,6 +265,7 @@ export function buildLojaCatalogoIndex(modelos: readonly LojaModelo[]): Catalogo
       networkVariant: "",
       yearHint: "",
       sourceOrigin: "manual_loja",
+      manufacturer: m.manufacturer ?? "",
       status: "ativo",
       confidence: "",
       notes: m.notes,
@@ -273,6 +289,22 @@ export function buildLojaCatalogoIndex(modelos: readonly LojaModelo[]): Catalogo
 
 const MATCH_RANK = { exact: 0, prefix: 1, contains: 2 } as const
 
+const cobertosCache = new WeakMap<CatalogoIndex, { global: CatalogoIndex; keys: Set<string> }>()
+
+/** Chaves globais equivalentes a modelos manuais (ativos) da loja — mesma regra da duplicidade. */
+export function globaisCobertosPelaLoja(globalIndex: CatalogoIndex, lojaIndex: CatalogoIndex | null): Set<string> {
+  if (!lojaIndex) return new Set()
+  const hit = cobertosCache.get(lojaIndex)
+  if (hit && hit.global === globalIndex) return hit.keys
+  const keys = new Set<string>()
+  for (const m of lojaIndex.models) {
+    const g = findGlobalDuplicate(globalIndex, { brand: m.brand, name: m.shortName, manufacturer: m.manufacturer })
+    if (g) keys.add(g.modelKey)
+  }
+  cobertosCache.set(lojaIndex, { global: globalIndex, keys })
+  return keys
+}
+
 /**
  * Busca no catálogo global E nos modelos manuais da loja. Os manuais são marcados com
  * `source: "loja"` e a flag `cadastro_manual_loja`; o ranking (tipo de match) é preservado.
@@ -289,13 +321,19 @@ export function searchDeviceModelsComLoja(
     source: "global" as const,
   }))
   if (!lojaIndex || lojaIndex.models.length === 0) return globais
-  const manuais = searchDeviceModels(lojaIndex, query, { ...options, limit }).map((r) => ({
+  // Marca oculta na loja vale só para o catálogo global: modelo cadastrado pela loja sempre aparece.
+  const { marcasOcultas: _ocultas, ...semOcultas } = options
+  const manuais = searchDeviceModels(lojaIndex, query, { ...semOcultas, limit }).map((r) => ({
     ...r,
     source: "loja" as const,
     reviewFlags: [...r.reviewFlags, "cadastro_manual_loja"],
   }))
+  // COMPAT-CATALOGO-BRASIL-2023-2026-002: quando o catálogo global passa a ter um aparelho que a
+  // loja já cadastrou à mão (ex.: G47), a busca DESTA loja mostra só o cadastro dela — os produtos e
+  // vendas vinculados à chave manual continuam valendo e não aparece duplicata.
+  const globaisCobertos = globaisCobertosPelaLoja(globalIndex, lojaIndex)
   // Manuais primeiro no empate: o operador acabou de cadastrar e espera encontrá-los.
-  return [...manuais, ...globais]
+  return [...manuais, ...globais.filter((g) => !globaisCobertos.has(g.modelKey))]
     .map((r, i) => ({ r, i }))
     .sort((a, b) => MATCH_RANK[a.r.matchType] - MATCH_RANK[b.r.matchType] || a.i - b.i)
     .map(({ r }) => r)

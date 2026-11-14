@@ -17,6 +17,7 @@ import {
   listLojaModelos,
 } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import { resolveCatalogoLojaRead } from "@/lib/catalogo-aparelhos/loja-catalogo-api"
+import { marcasOcultasParaLoja } from "@/lib/compat/compat-marcas"
 import type { CatalogoIndex, DeviceModel } from "@/lib/catalogo-aparelhos/types"
 
 /**
@@ -184,7 +185,8 @@ export async function GET(req: Request) {
       })
     }
 
-    const matches = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand })
+    const marcasOcultas = await marcasOcultasParaLoja(storeId)
+    const matches = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand, marcasOcultas })
     const results = await withPeliculaGroups(
       index,
       storeId,

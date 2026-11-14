@@ -140,6 +140,7 @@ export async function setPreferencias(
       posicoesHabilitadas: next.posicoesHabilitadas,
       modoModeloPadrao: next.modoModeloPadrao,
       modoCorPadrao: next.modoCorPadrao,
+      marcasConfig: next.marcasConfig,
       updatedBy: actorId,
     }
     if (version === 0) {

@@ -81,7 +81,7 @@ describe("painéis e fileiras", () => {
 
   it("preferências: PATCH parcial ignora valores inválidos", () => {
     const p = mergePreferencias({ ...COMPAT_PREFERENCIAS_PADRAO, version: 2 }, { posicoesHabilitadas: true, modoCorPadrao: "xyz" })
-    expect(p).toEqual({ posicoesHabilitadas: true, modoModeloPadrao: "opcional", modoCorPadrao: "opcional", version: 2 })
+    expect(p).toEqual({ posicoesHabilitadas: true, modoModeloPadrao: "opcional", modoCorPadrao: "opcional", marcasConfig: {}, version: 2 })
   })
 })
 

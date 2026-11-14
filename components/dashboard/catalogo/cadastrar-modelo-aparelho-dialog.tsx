@@ -56,6 +56,8 @@ export function CadastrarModeloAparelhoDialog({
   const { brand, name } = hier
   const [aliases, setAliases] = useState("")
   const [notes, setNotes] = useState("")
+  // COMPAT-CATALOGO-BRASIL-2023-2026-002: registro de aparelho ainda não lançado oficialmente.
+  const [aguardando, setAguardando] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<CatalogoClientError | null>(null)
   // Resposta que chega depois de o diálogo fechar (ex.: PDV trocou de produto) é ignorada.
@@ -69,6 +71,7 @@ export function CadastrarModeloAparelhoDialog({
     setHier({ manufacturer: "", brand: "", line: "", name: initialName.trim().slice(0, LOJA_MODELO_LIMITS.name) })
     setAliases("")
     setNotes("")
+    setAguardando(false)
     setFailure(null)
     setBusy(false)
   }, [open, initialName])
@@ -84,6 +87,7 @@ export function CadastrarModeloAparelhoDialog({
       name,
       manufacturer: hier.manufacturer,
       line: hier.line,
+      lancamento: aguardando ? "aguardando_lancamento" : "lancado",
       aliases: aliases
         .split(/[,;\n]/)
         .map((a) => a.trim())
@@ -144,6 +148,21 @@ export function CadastrarModeloAparelhoDialog({
               placeholder="Ex.: lançamento de novembro, conferido na caixa."
             />
           </div>
+
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-primary"
+              checked={aguardando}
+              onChange={(e) => setAguardando(e.target.checked)}
+            />
+            <span>
+              Aguardando lançamento oficial
+              <span className="block text-xs text-muted-foreground">
+                Fica só nesta lista de modelos, fora das buscas do PDV e do cadastro, até você confirmar o lançamento.
+              </span>
+            </span>
+          </label>
 
           <p className="text-xs text-muted-foreground">
             Origem: cadastro manual da loja. Cadastrar o modelo não confirma compatibilidade de película ou capinha.
