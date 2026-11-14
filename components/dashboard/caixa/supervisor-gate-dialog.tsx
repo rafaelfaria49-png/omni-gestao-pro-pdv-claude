@@ -13,6 +13,31 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+/**
+ * Mensagem da recusa de `POST /api/auth/admin` (GOAL OMNI-CAIXA-SUPERVISOR-PIN-PROD-DIAGNOSTICO-001).
+ *
+ * Antes, TODA resposta não-ok que não fosse 429 virava "Senha inválida." — sessão expirada,
+ * unidade não selecionada, sem permissão e servidor indisponível pareciam PIN errado, e o
+ * operador repetia o PIN (gastando o orçamento de tentativas) sem nunca resolver.
+ *
+ * Só `invalid_pin` diz "senha inválida". As demais não revelam nada sensível: o servidor já
+ * devolve o mesmo código para "loja não é sua" e "loja não existe" (sem enumeração), e
+ * nenhuma mensagem diz se um supervisor existe.
+ */
+export function mensagemRecusaSupervisor(status: number, error?: string): string {
+  if (status === 429 || error === "rate_limited") return "Muitas tentativas. Aguarde e tente de novo."
+  if (error === "invalid_pin") return "Senha inválida."
+  if (status === 401) return "Sua sessão expirou. Entre novamente no sistema e tente de novo."
+  if (error === "store_required") return "Selecione a unidade ativa e tente de novo."
+  if (status === 403) {
+    return error === "store_forbidden"
+      ? "Seu usuário não tem acesso a esta unidade."
+      : "Seu usuário não tem permissão para esta ação."
+  }
+  if (status >= 500) return "Validação do supervisor indisponível no momento. Tente novamente em instantes."
+  return "Não foi possível validar a senha. Tente novamente."
+}
+
 /** Supervisor que co-assinou a autorização — devolvido por `POST /api/auth/admin`. */
 export type SupervisorAutorizador = { id: string; name: string }
 
@@ -106,7 +131,9 @@ export function SupervisorGateDialog({
         }),
       })
       if (!r.ok) {
-        setErr(r.status === 429 ? "Muitas tentativas. Aguarde e tente de novo." : "Senha inválida.")
+        const j = (await r.json().catch(() => null)) as { error?: unknown } | null
+        setErr(mensagemRecusaSupervisor(r.status, typeof j?.error === "string" ? j.error : undefined))
+        if (r.status === 401) setPin("")
         return
       }
       // O endpoint responde { ok, admin: { id, name } }. Resposta sem `admin` ainda é
