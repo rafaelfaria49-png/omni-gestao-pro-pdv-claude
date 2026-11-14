@@ -2244,6 +2244,8 @@ model AdminUser {
   updatedAt DateTime @updatedAt
 
   adminUserStores AdminUserStore[]
+  /** Sessões de login (revogação por sessão no servidor). */
+  adminSessions AdminSession[]
   dpAcessos DpAcesso[]
   dpPessoas DpPessoaUsuario[]
   dpAuditorias DpAuditoria[]
@@ -2269,6 +2271,25 @@ model AdminUser {
   currentPeriodEnd     DateTime?
 
   @@map("admin_users")
+}
+
+/**
+ * Sessão de login do painel. O JWT carrega só o `id` (sid); o servidor recusa o token quando a
+ * sessão foi revogada (logout), expirou ou não existe. Revoga uma sessão sem afetar outras.
+ * Ver lib/auth/admin-session.ts.
+ */
+model AdminSession {
+  id            String    @id
+  userId        String
+  user          AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
 }
 
 // =================================================================================

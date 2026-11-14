@@ -39,6 +39,8 @@ declare module "next-auth/jwt" {
     accessScope?: string | null
     mustChangePassword?: boolean
     sessionVersion?: number
+    /** Id opaco da sessão em `admin_sessions` (revogação no servidor). */
+    sid?: string
     storeModules?: Record<string, import("@/lib/auth/access-policy").AccessModule[]>
   }
 }
