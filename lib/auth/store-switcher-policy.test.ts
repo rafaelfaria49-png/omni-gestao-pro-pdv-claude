@@ -3,7 +3,7 @@ import type { Session } from "next-auth"
 import { getPermissionsFromSession } from "./enterprise-permissions"
 import {
   canUseStoreSwitcher,
-  countPendingSalesInOpsBlob,
+  countPendingSyncInOpsBlob,
   isStoreSwitchBlockedPath,
   switchableStores,
 } from "./store-switcher-policy"
@@ -76,7 +76,7 @@ describe("switchableStores", () => {
 
 describe("isStoreSwitchBlockedPath", () => {
   it("bloqueia telas do PDV (carrinho aberto) e libera o resto", () => {
-    for (const p of ["/dashboard/pdv", "/dashboard/pdv/", "/dashboard/pdv-next", "/dashboard/vendas", "/dashboard/vendas/mesas", "/dashboard/vendas/venda-completa?x=1"]) {
+    for (const p of ["/dashboard/pdv", "/dashboard/pdv/", "/dashboard/pdv-next", "/dashboard/vendas", "/dashboard/vendas/mesas", "/dashboard/vendas/venda-completa?x=1", "/dashboard/pdv-github-original"]) {
       expect(isStoreSwitchBlockedPath(p)).toBe(true)
     }
     for (const p of ["/dashboard", "/dashboard/estoque", "/dashboard/vendas-hub", "/dashboard/caixa/historico", "", null]) {
@@ -85,14 +85,18 @@ describe("isStoreSwitchBlockedPath", () => {
   })
 })
 
-describe("countPendingSalesInOpsBlob", () => {
+describe("countPendingSyncInOpsBlob", () => {
+  it("soma vendas, devoluções e operações de caixa pendentes", () => {
+    const raw = JSON.stringify({ sales: [{ syncPending: true }], devolucoes: [{ syncPending: true }, { syncPending: false }], pendingCaixaOperations: [{ syncPending: true }, { syncPending: true }] })
+    expect(countPendingSyncInOpsBlob(raw)).toBe(4)
+  })
   it("conta só vendas com syncPending=true", () => {
     const raw = JSON.stringify({ sales: [{ id: "1", syncPending: true }, { id: "2", syncPending: false }, { id: "3" }, null, { id: "4", syncPending: true }] })
-    expect(countPendingSalesInOpsBlob(raw)).toBe(2)
+    expect(countPendingSyncInOpsBlob(raw)).toBe(2)
   })
   it("sem blob ou sem vendas: zero; blob ilegível: trata como pendência (pede confirmação)", () => {
-    expect(countPendingSalesInOpsBlob(null)).toBe(0)
-    expect(countPendingSalesInOpsBlob(JSON.stringify({}))).toBe(0)
-    expect(countPendingSalesInOpsBlob("{quebrado")).toBe(1)
+    expect(countPendingSyncInOpsBlob(null)).toBe(0)
+    expect(countPendingSyncInOpsBlob(JSON.stringify({}))).toBe(0)
+    expect(countPendingSyncInOpsBlob("{quebrado")).toBe(1)
   })
 })

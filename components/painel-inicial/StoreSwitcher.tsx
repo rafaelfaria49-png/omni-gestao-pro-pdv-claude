@@ -8,7 +8,7 @@
  * sondagem com rollback e refresh de sessão. Sem chamadas novas à API além de um `router.refresh()`
  * por troca, para o servidor reavaliar a página com a loja nova.
  */
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Check, ChevronsUpDown, Store } from "lucide-react"
@@ -33,7 +33,7 @@ import {
 import { opsKeyForLoja, useLojaAtiva } from "@/lib/loja-ativa"
 import {
   canUseStoreSwitcher,
-  countPendingSalesInOpsBlob,
+  countPendingSyncInOpsBlob,
   isStoreSwitchBlockedPath,
   switchableStores,
 } from "@/lib/auth/store-switcher-policy"
@@ -48,7 +48,7 @@ function storeLabel(loja: { id: string; nomeFantasia?: string } | null | undefin
 function readPendingCount(storeId: string | null): number {
   if (!storeId || typeof window === "undefined") return 0
   try {
-    return countPendingSalesInOpsBlob(window.localStorage.getItem(opsKeyForLoja(storeId)))
+    return countPendingSyncInOpsBlob(window.localStorage.getItem(opsKeyForLoja(storeId)))
   } catch {
     return 0
   }
@@ -69,28 +69,26 @@ export function StoreSwitcher({
   const pathname = usePathname()
   const router = useRouter()
   const [confirm, setConfirm] = useState<{ target: string; pending: number } | null>(null)
-  const requestedRef = useRef<string | null>(null)
 
   const options = useMemo(() => switchableStores(session ?? null, lojas), [session, lojas])
   const enabled = storesLoaded && canUseStoreSwitcher(session ?? null, lojas)
   const blocked = isStoreSwitchBlockedPath(pathname)
-
-  // A troca pode ser barrada (rascunho da V4 → Cancelar) ou revertida (unidade indisponível).
-  // Só reavalia a página no servidor quando a loja pedida virou de fato a ativa.
-  useEffect(() => {
-    if (!requestedRef.current || lojaAtivaId !== requestedRef.current) return
-    requestedRef.current = null
-    router.refresh()
-    onSwitched?.()
-  }, [lojaAtivaId, router, onSwitched])
 
   if (!enabled) return <>{fallback}</>
 
   const doSwitch = (target: string) => {
     // Só lojas da lista autorizada; `setLojaAtivaId` revalida com `canAccessStore`.
     if (!options.some((l) => l.id === target) || target === lojaAtivaId) return
-    requestedRef.current = target
-    setLojaAtivaId(target)
+    // O servidor só reavalia a página DEPOIS que a sondagem confirma a loja nova. Troca revertida
+    // (unidade indisponível), barrada pela guarda da V4 ou superada não dispara refresh: a página
+    // nunca chega a renderizar dados da loja que não ficou ativa.
+    setLojaAtivaId(target, {
+      onSettled: (ok) => {
+        if (!ok) return
+        router.refresh()
+        onSwitched?.()
+      },
+    })
   }
 
   const request = (target: string) => {
@@ -142,15 +140,18 @@ export function StoreSwitcher({
           })}
         </DropdownMenuContent>
       </DropdownMenu>
+      {/* No toque o `title` não aparece: o motivo do bloqueio fica escrito no menu do celular. */}
+      {blocked && variant === "sheet" ? <p className="mt-1 text-[11px] text-muted-foreground">{BLOCKED_HINT}</p> : null}
 
       <AlertDialog open={confirm !== null} onOpenChange={(open) => { if (!open) setConfirm(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Vendas ainda não sincronizadas</AlertDialogTitle>
+            <AlertDialogTitle>Operações ainda não sincronizadas</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirm?.pending === 1 ? "1 venda" : `${confirm?.pending ?? 0} vendas`} de {current} ainda não
-              {confirm?.pending === 1 ? " foi enviada" : " foram enviadas"} ao servidor. Elas continuam guardadas neste
-              aparelho e são enviadas quando você voltar para {current}.
+              {confirm?.pending === 1 ? "1 operação" : `${confirm?.pending ?? 0} operações`} de {current} (vendas,
+              devoluções ou caixa) ainda não {confirm?.pending === 1 ? "foi enviada" : "foram enviadas"} ao servidor.
+              {confirm?.pending === 1 ? " Ela continua guardada" : " Elas continuam guardadas"} neste aparelho e
+              {confirm?.pending === 1 ? " é enviada" : " são enviadas"} quando você voltar para {current}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

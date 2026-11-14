@@ -40,20 +40,25 @@ export function canUseStoreSwitcher(session: Session | null, lojas: readonly { i
 }
 
 /** Telas do PDV: trocar de loja remonta o workspace e descartaria o carrinho aberto. */
-const BLOCKED_PATHS = ["/dashboard/pdv", "/dashboard/pdv-next", "/dashboard/vendas"]
+const BLOCKED_PATHS = ["/dashboard/pdv", "/dashboard/pdv-next", "/dashboard/pdv-github-original", "/dashboard/vendas"]
 
 export function isStoreSwitchBlockedPath(pathname: string | null | undefined): boolean {
   const path = (pathname || "").split("?")[0].replace(/\/+$/, "")
   return BLOCKED_PATHS.some((p) => path === p || path.startsWith(`${p}/`))
 }
 
-/** Quantas vendas locais da loja ainda não sincronizaram (lê o blob de `opsKeyForLoja`). */
-export function countPendingSalesInOpsBlob(raw: string | null | undefined): number {
+const isPending = (x: unknown) => !!x && typeof x === "object" && (x as { syncPending?: unknown }).syncPending === true
+
+/**
+ * Quantas operações locais da loja ainda não sincronizaram (lê o blob de `opsKeyForLoja`): vendas,
+ * devoluções e operações de caixa — as três filas que só são enviadas com a loja ativa.
+ */
+export function countPendingSyncInOpsBlob(raw: string | null | undefined): number {
   if (!raw) return 0
   try {
-    const parsed = JSON.parse(raw) as { sales?: unknown }
-    if (!Array.isArray(parsed?.sales)) return 0
-    return parsed.sales.filter((s) => !!s && typeof s === "object" && (s as { syncPending?: unknown }).syncPending === true).length
+    const parsed = JSON.parse(raw) as { sales?: unknown; devolucoes?: unknown; pendingCaixaOperations?: unknown }
+    const count = (list: unknown) => (Array.isArray(list) ? list.filter(isPending).length : 0)
+    return count(parsed?.sales) + count(parsed?.devolucoes) + count(parsed?.pendingCaixaOperations)
   } catch {
     // Blob ilegível: não dá para afirmar que está vazio — trata como pendência para pedir confirmação.
     return 1
