@@ -10,6 +10,7 @@ import { SupervisorGateDialog } from "@/components/dashboard/caixa/supervisor-ga
 import { carregarEditorOSV3, revisarEditorOSV3, salvarEditorOSV3, type revisarEdicaoCompletaOSV3 } from "@/lib/operacoes-v3/edicao-completa-actions";
 import { totalEdicaoCompletaV3, type EdicaoCompletaV3, type RevisaoEdicaoV3 } from "@/lib/operacoes-v3/edicao-completa-model";
 import { GARANTIA_CATALOGO_V3 } from "@/lib/operacoes-v3/garantia-textos";
+import { useClienteSearchV4 } from "@/components/operacoes-v4-preview/use-clientes-v4";
 
 type Previa = Awaited<ReturnType<typeof revisarEdicaoCompletaOSV3>>;
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -38,6 +39,7 @@ export function EdicaoCompletaOSDialog({ open, storeId, osId, onClose, onSaved }
   const [gate, setGate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const clientes = useClienteSearchV4(open ? storeId : null);
   const emVoo = useRef(false);
   const alvo = useRef(`${storeId}:${osId}:${open}`);
   alvo.current = `${storeId}:${osId}:${open}`;
@@ -82,7 +84,7 @@ export function EdicaoCompletaOSDialog({ open, storeId, osId, onClose, onSaved }
         {erro && <p role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{erro}</p>}
         {!dados ? <p role="status">{erro ? "Feche e reabra para carregar novamente." : "Carregando os dados persistidos…"}</p> : <>
           <fieldset disabled={busy || !!previa} className="space-y-5 disabled:opacity-80">
-            <section className="space-y-3"><h3 className="font-semibold">Cliente / CPF</h3><p className="text-xs text-muted-foreground">A correção atualiza também o cadastro vinculado. Documentos emitidos preservam seus dados originais.</p><div className="grid gap-3 sm:grid-cols-2">
+            <section className="space-y-3"><h3 className="font-semibold">Cliente / CPF</h3><Label htmlFor="edicao-busca-cliente">Vincular outro cliente existente</Label><Input id="edicao-busca-cliente" placeholder="Buscar por nome, CPF ou telefone" value={clientes.query} onChange={(e) => clientes.setQuery(e.target.value)} autoComplete="off" />{clientes.query.trim() && <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">{clientes.loading && <p role="status" className="text-sm">Buscando clientes…</p>}{clientes.error && <p role="alert" className="text-sm text-destructive">{clientes.error}</p>}{clientes.clientes.map((c) => <Button key={c.id} type="button" variant="ghost" className="w-full justify-start whitespace-normal text-left" onClick={() => { atualizar({ ...dados, cliente: { id: c.id, nome: c.nome, documento: c.documento, telefone: c.telefone, email: c.email } }); clientes.setQuery(""); }}>{c.nome} · {c.documento || "Sem documento"}</Button>)}</div>}<p className="text-xs text-muted-foreground">A correção atualiza também o cadastro vinculado. Documentos emitidos preservam seus dados originais.</p><div className="grid gap-3 sm:grid-cols-2">
               <Campo label="Nome do cliente" value={dados.cliente.nome} onChange={(nome) => atualizar({ ...dados, cliente: { ...dados.cliente, nome } })} />
               <Campo label="CPF / CNPJ" value={dados.cliente.documento} onChange={(documento) => atualizar({ ...dados, cliente: { ...dados.cliente, documento } })} />
               <Campo label="Telefone" value={dados.cliente.telefone} onChange={(telefone) => atualizar({ ...dados, cliente: { ...dados.cliente, telefone } })} />

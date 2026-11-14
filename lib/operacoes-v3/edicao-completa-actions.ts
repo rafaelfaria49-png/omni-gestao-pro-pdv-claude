@@ -23,7 +23,7 @@ import { objetoEdicao, planejarEdicaoFinanceiraV3, reconciliarEdicaoFinanceiraV3
 import { gravarCoberturasGarantiaV3 } from "./garantia-servicos-model";
 import { adicionarVersaoTermoGarantiaV3, lerVersoesTermoGarantiaV3 } from "./garantia-termos-model";
 import { lerEntregaV3 } from "./pos-venda-model";
-import { hojeNaLojaV3 } from "./datas-operacionais-model";
+import { diaNaLojaV3, hojeNaLojaV3 } from "./datas-operacionais-model";
 import { versionarDocumentosEdicaoOSV3 } from "./edicao-documentos-model";
 import { lerProvaEntradaV3 } from "./prova-entrada-model";
 
@@ -63,13 +63,18 @@ function recursoEdicao(storeId: string, osId: string, d: EdicaoCompletaV3, r: Re
 
 async function conferirAlteracoes(tx: Prisma.TransactionClient, storeId: string, row: OSTravadaV3, titulo: ContaReceberTitulo | null, d: EdicaoCompletaV3, permissions: { financeiro: { edit: boolean }; operacoes: { garantia: boolean } }) {
   const antes = semearEdicaoCompletaV3(row.payload, titulo);
-  if (antes.cliente.id !== d.cliente.id) throw new Error("A troca de cliente exige selecionar um cadastro válido pelo atendimento. Corrija os dados do cliente vinculado nesta edição.");
+  const mudouCliente = antes.cliente.id !== d.cliente.id;
+  if (mudouCliente) {
+    const alvo = await tx.cliente.findFirst({ where: { id: d.cliente.id, storeId, active: true }, select: { id: true, name: true, document: true, phone: true, email: true } });
+    const esperado = alvo ? { id: alvo.id, nome: alvo.name, documento: alvo.document || "", telefone: alvo.phone || "", email: alvo.email || "" } : null;
+    if (!esperado || serializarEdicaoV3(esperado) !== serializarEdicaoV3(d.cliente)) throw new Error("O cadastro selecionado mudou ou não pertence à loja. Busque o cliente novamente; para corrigir seus dados, use o cadastro de clientes.");
+  }
   const orcamento = orcamentoEditadoCompletoV3(row.payload, d, new Date().toISOString());
   const anterior = row.valorTotal;
   const total = computeTotaisV3(orcamento).total;
   if (!Number.isFinite(total) || total < 0) throw new Error("Total inválido.");
   const mudouPagamento = serializarEdicaoV3(antes.pagamento) !== serializarEdicaoV3(d.pagamento);
-  const mudouFinanceiro = Math.round(anterior * 100) !== Math.round(total * 100) || mudouPagamento;
+  const mudouFinanceiro = Math.round(anterior * 100) !== Math.round(total * 100) || mudouPagamento || mudouCliente && !!titulo;
   const mudouGarantia = serializarEdicaoV3(antes.garantias) !== serializarEdicaoV3(d.garantias);
   for (const g of d.garantias) {
     const anterior = antes.garantias.find((a) => a.linhaId === g.linhaId);
@@ -90,12 +95,12 @@ async function conferirAlteracoes(tx: Prisma.TransactionClient, storeId: string,
     if (titulo && d.pagamento.vencimento !== antes.pagamento.vencimento && Array.isArray(objetoEdicao(titulo.payload).parcelas) && (objetoEdicao(titulo.payload).parcelas as unknown[]).length > 1) throw new Error("Cobrança parcelada: renegocie os vencimentos das parcelas no Financeiro. A correção de preço preserva os vencimentos atuais.");
     // Serializable: fechamento ou lançamento concorrente invalida a transação.
     const dia = hojeNaLojaV3();
-    const datas = [dia, titulo?.createdAt.toISOString().slice(0, 10)].filter((v): v is string => !!v);
+    const datas = [dia, titulo ? diaNaLojaV3(titulo.createdAt.toISOString()) : null].filter((v): v is string => !!v);
     const fechados = await tx.fechamentoFinanceiro.count({ where: { storeId, status: "fechado", OR: datas.flatMap((d) => [{ tipo: "diario", dataReferencia: d }, { tipo: "mensal", dataReferencia: `${d.slice(0, 7)}-01` }]) } });
     const refs = [row.id, titulo?.id].filter((v): v is string => !!v);
     const movimentos = await tx.movimentacaoFinanceira.count({ where: { storeId, referenciaId: { in: refs } } });
     const caixa = await tx.caixaOperacao.count({ where: { storeId, OR: refs.flatMap((id) => [{ payload: { path: ["ordemServicoId"], equals: id } }, { payload: { path: ["tituloId"], equals: id } }, { payload: { path: ["referenciaId"], equals: id } }]) } });
-    planejarEdicaoFinanceiraV3(titulo, anterior, total, mudouPagamento, movimentos + caixa > 0, fechados > 0);
+    planejarEdicaoFinanceiraV3(titulo, anterior, total, mudouPagamento || mudouCliente, movimentos + caixa > 0, fechados > 0);
     const original = row.payload.orcamento as OrcamentoV3 | undefined;
     if (original && Math.round(computeTotaisV3(original).total * 100) !== Math.round(anterior * 100)) throw new Error("Total da OS diverge do orçamento. Reconcilie a cobrança no Financeiro antes de editar.");
     if (!titulo && (row.payload.faturamentoPendente || row.payload.aPrazoV3 || Number(objetoEdicao(row.payload.pagamentoV3).recebido) > 0)) throw new Error("Cobrança original ausente. Reconcilie no Financeiro.");
@@ -148,7 +153,7 @@ export async function salvarEdicaoCompletaOSV3(storeId: string, osId: string, en
     const contexto = { agora, operadorId: guard.session.user.id, supervisorId: supervisor.id, operacaoId: r.operacaoId, motivo: r.motivo };
     // CPF/nome do cadastro e snapshot da OS são corrigidos juntos. A unique de
     // documentKey impede associar o CPF de outro cliente a este cadastro.
-    if (serializarEdicaoV3(p.antes.cliente) !== serializarEdicaoV3(d.cliente)) {
+    if (p.antes.cliente.id === d.cliente.id && serializarEdicaoV3(p.antes.cliente) !== serializarEdicaoV3(d.cliente)) {
       await tx.cliente.update({ where: { id: c.cliente.id, updatedAt: c.cliente.updatedAt }, data: { name: d.cliente.nome.trim(), document: d.cliente.documento.trim(), documentKey: toStrongDocumentKey(d.cliente.documento), phone: d.cliente.telefone || null, email: d.cliente.email || null } });
       if (c.titulo && !p.mudouFinanceiro && p.antes.cliente.nome !== d.cliente.nome) {
         const payloadTitulo = { ...objetoEdicao(c.titulo.payload), cliente: d.cliente.nome, clienteNome: d.cliente.nome };
@@ -159,6 +164,7 @@ export async function salvarEdicaoCompletaOSV3(storeId: string, osId: string, en
     const abertura = objetoEdicao(c.row.payload.aberturaV3);
     let next = {
       ...c.row.payload,
+      clienteId: d.cliente.id,
       cliente: { ...c.row.payload.cliente, ...d.cliente },
       equipamento: { ...c.row.payload.equipamento, ...d.equipamento, defeitoRelatado: d.problema },
       observacaoCliente: d.observacaoCliente,
@@ -195,7 +201,7 @@ export async function salvarEdicaoCompletaOSV3(storeId: string, osId: string, en
     if (entregue && relevante) next.aditivosEdicaoOSV3 = [...(Array.isArray(next.aditivosEdicaoOSV3) ? next.aditivosEdicaoOSV3 : []), { ...registro, numero: (Array.isArray(next.aditivosEdicaoOSV3) ? next.aditivosEdicaoOSV3.length : 0) + 1 }];
     next.timeline = [...c.row.payload.timeline, { id: r.operacaoId, tipo: "orcamento_aprovado_revisado", autor: guard.session.user.name || guard.session.user.id, autorTipo: "usuario", criadoEm: agora, conteudo: `OS corrigida com autorização de ${supervisor.name}. Motivo: ${r.motivo}${entregue && relevante ? " Aditivo registrado." : ""}`, metadata: { ...contexto, alteracoes: p.alteracoes, origem: "edicao_completa" } }];
     await tx.logsAuditoria.create({ data: { action: "OS_EDICAO_COMPLETA", userLabel: guard.session.user.id, detail: `OS ${osId}: ${r.motivo}`, metadata: serializarEdicaoV3({ storeId, osId, ...registro }), source: "operacoes-v3-v4" } });
-    await tx.ordemServico.update({ where: { id: osId, storeId }, data: { payload: json(next), valorTotal: p.total, equipamento: [d.equipamento.tipo, d.equipamento.marca, d.equipamento.modelo].filter(Boolean).join(" "), defeito: d.problema } });
+    await tx.ordemServico.update({ where: { id: osId, storeId }, data: { payload: json(next), clienteId: d.cliente.id, valorTotal: p.total, equipamento: [d.equipamento.tipo, d.equipamento.marca, d.equipamento.modelo].filter(Boolean).join(" "), defeito: d.problema } });
     return next;
   }, { ...TX_PAYLOAD_OS_V3, isolationLevel: "Serializable" });
   revalidatePath("/dashboard/operacoes-v3");

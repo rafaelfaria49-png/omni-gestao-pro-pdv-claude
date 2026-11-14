@@ -125,6 +125,24 @@ describe.skipIf(!ativo)("edição completa — PostgreSQL QA isolado", () => {
     expect(salva.cliente.documento).toBe("52998224725");
     expect((await prisma.cliente.findUniqueOrThrow({ where: { id: f.cliente.id } })).documentKey).toBe("52998224725");
   }, 60000);
+  it.each([0, 100])("troca de cliente com recebido %s preserva cadastros e protege recebimentos", async (recebido) => {
+    const f = await fixture("aprovado", recebido);
+    const outro = await prisma.cliente.create({ data: { storeId: loja, name: "Outro cliente sintético" } });
+    const c = await carregarEdicaoCompletaOSV3(loja, f.id);
+    c.dados.cliente = { id: outro.id, nome: outro.name, documento: "", telefone: "", email: "" };
+    const r = { versao: c.versao, operacaoId: randomUUID(), motivo: "Corrigir vínculo sintético de cliente da OS" };
+    if (recebido) {
+      await expect(revisarEdicaoCompletaOSV3(loja, f.id, c.dados, r)).rejects.toThrow(/ajuste\/compensação/);
+      expect((await prisma.ordemServico.findUniqueOrThrow({ where: { id: f.id } })).clienteId).toBe(f.cliente.id);
+    } else {
+      const p = await revisarEdicaoCompletaOSV3(loja, f.id, c.dados, r);
+      sessao.token = await createPinAuthorizationToken({ userId: "qa-edicao-operador", storeId: loja, supervisorId, ...p.scope }, resolvePinAuthorizationSecret()!);
+      await salvarEdicaoCompletaOSV3(loja, f.id, c.dados, r);
+      expect((await prisma.ordemServico.findUniqueOrThrow({ where: { id: f.id } })).clienteId).toBe(outro.id);
+      expect((await prisma.contaReceberTitulo.findUniqueOrThrow({ where: { id: f.titulo.id } })).payload).toMatchObject({ clienteId: outro.id });
+    }
+    expect((await prisma.cliente.findUniqueOrThrow({ where: { id: f.cliente.id } })).name).toBe(f.cliente.name);
+  }, 60000);
   it("falha de auditoria reverte título, cliente e OS na mesma transação", async () => {
     const f = await fixture(), { d, r } = await preparar(f);
     // Falha depois da gravação financeira, dentro da transação real PostgreSQL.
