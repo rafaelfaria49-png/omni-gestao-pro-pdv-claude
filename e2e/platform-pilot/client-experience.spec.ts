@@ -176,7 +176,7 @@ test("cliente padaria: navegação, estoque e cadastro pela ficha canônica", as
   const palette = page.getByRole("dialog")
   await expect(palette.getByText("Estoque", { exact: true })).toBeVisible()
   await expect(palette.getByText("Novo Produto", { exact: true })).toBeVisible()
-  await expect(palette).not.toContainText(/Nova OS|IA Mestre|Catálogo de Aparelhos|Marketplace/)
+  await expect(palette).not.toContainText(/Nova OS|IA Mestre|Catálogo de Aparelhos|\bCompat\b|Marketplace/)
   await page.keyboard.press("Escape")
 
   await sidebar(page).locator('a[href="/dashboard/estoque"]').click()
@@ -402,7 +402,7 @@ test("visual: cliente em 1440/1024/390/320 sem overflow, com teclado e menu móv
   await page.getByRole("button", { name: "Abrir menu de navegação" }).click()
   const nav = page.getByRole("dialog", { name: "Navegação" })
   await expect(nav.getByRole("link", { name: "Estoque", exact: true })).toBeVisible()
-  await expect(nav).not.toContainText(/IA Mestre|Catálogo de Aparelhos|Operações|Marketplace/)
+  await expect(nav).not.toContainText(/IA Mestre|Catálogo de Aparelhos|\bCompat\b|Operações|Marketplace/)
   await page.keyboard.press("Escape")
   await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto("/dashboard/estoque")
   await page.getByPlaceholder("Buscar em produtos…").focus()

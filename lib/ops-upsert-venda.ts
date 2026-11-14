@@ -22,6 +22,7 @@ import {
 } from "@/lib/vendas/sale-identity-contracts"
 import { StockIdempotency, type StockDriftFailureDetails } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
+import { corPadraoDesativadaNaVenda } from "@/lib/compat/venda-cores-guard"
 
 /** Re-exportado para as rotas traduzirem o erro de negócio em HTTP 409. */
 export { FractionalQuantityError }
@@ -322,6 +323,11 @@ export function isPrismaUniqueConstraintError(error: unknown): boolean {
 }
 
 export type UpsertVendaOptions = {
+  /**
+   * COMPAT-PROFISSIONAL-001 — a requisição é a FINALIZAÇÃO ao vivo no PDV (não reenvio da fila).
+   * Só então cor padrão desativada pela loja é recusada. Ausente = reenvio/legado: aceita.
+   */
+  finalizacaoAoVivo?: boolean
   /**
    * Quando `true`, a baixa de estoque bloqueia qualquer decremento que deixaria o saldo
    * negativo, falhando com `InsufficientStockError`. Usado no fluxo PDV ao vivo
@@ -818,6 +824,23 @@ export async function upsertVendaInTransaction(
       Number(pb?.creditoVale ?? 0)
     if (!Number.isFinite(somaPagamentos) || Math.abs(somaPagamentos - rawTotal) > 0.02) {
       throw new SalePaymentsMismatchError(rawTotal, somaPagamentos)
+    }
+    // COMPAT-PROFISSIONAL-001: cor padrão desativada pela loja não entra em venda NOVA finalizada
+    // ao vivo. Venda registrada offline / sincronizada da fila segue aceita. Antes de qualquer
+    // efeito; replay nunca chega aqui.
+    const corRecusada = await corPadraoDesativadaNaVenda(
+      tx as unknown as Parameters<typeof corPadraoDesativadaNaVenda>[0],
+      lojaId,
+      {
+        lines,
+        registeredOffline: (sale as { registeredOffline?: unknown }).registeredOffline,
+        finalizacaoAoVivo: options?.finalizacaoAoVivo === true,
+      },
+    )
+    if (corRecusada) {
+      throw new InvalidSaleLinesError(
+        `A cor "${corRecusada}" está desativada nesta loja. Escolha outra cor no item e finalize de novo.`,
+      )
     }
   }
 

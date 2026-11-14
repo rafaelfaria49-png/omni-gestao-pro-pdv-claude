@@ -27,7 +27,20 @@ const card = (page: Page, modelKey: string) => page.locator(`[data-testid="catal
 
 async function abrirCatalogo(page: Page) {
   await page.goto("/dashboard/catalogo-aparelhos")
-  await expect(page.getByRole("heading", { name: "Catálogo de Aparelhos" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Compat", exact: true })).toBeVisible()
+}
+
+/** COMPAT-PROFISSIONAL-001: a consulta de películas e a gestão de modelos ficam em abas do HUB. */
+async function abrirPeliculas(page: Page) {
+  await page.getByRole("navigation", { name: "Áreas do Compat" }).getByRole("button", { name: /Compatibilidade de Películas/ }).click()
+  await page.getByRole("tab", { name: "Consultar" }).click()
+  await expect(busca(page)).toBeVisible()
+}
+
+async function abrirModelos(page: Page) {
+  await page.getByRole("navigation", { name: "Áreas do Compat" }).getByRole("button", { name: /Catálogo e ajustes/ }).click()
+  await page.getByRole("tab", { name: "Modelos" }).click()
+  await expect(page.getByRole("region", { name: "Modelos cadastrados pela loja" })).toBeVisible()
 }
 
 async function pesquisar(page: Page, q: string) {
@@ -39,7 +52,7 @@ async function pesquisar(page: Page, q: string) {
 async function cadastrarModelo(page: Page, opts: { marca: string; nome?: string; apelidos?: string }) {
   const dialog = page.getByRole("dialog", { name: "Cadastrar novo modelo" })
   await expect(dialog).toBeVisible()
-  await dialog.getByLabel("Marca do aparelho").fill(opts.marca)
+  await dialog.getByLabel("Marca comercial").fill(opts.marca)
   if (opts.nome !== undefined) await dialog.getByLabel("Nome comercial do modelo").fill(opts.nome)
   if (opts.apelidos) await dialog.getByLabel("Apelidos (opcional)").fill(opts.apelidos)
   await dialog.getByRole("button", { name: "Cadastrar modelo" }).click()
@@ -112,6 +125,7 @@ test("G47: cadastro manual, compatibilidades por loja e venda no PDV", async ({ 
   })
 
   await test.step("4. editar apelido; buscar pelo apelido", async () => {
+    await abrirModelos(page)
     const painel = page.getByRole("region", { name: "Modelos cadastrados pela loja" })
     await painel.getByRole("button", { name: "Editar G47" }).click()
     const dialog = page.getByRole("dialog", { name: "Editar modelo da loja" })
@@ -119,11 +133,13 @@ test("G47: cadastro manual, compatibilidades por loja e venda no PDV", async ({ 
     await dialog.getByRole("button", { name: "Salvar alterações" }).click()
     await expect(dialog).toHaveCount(0)
     await expect.poll(async () => (await modeloDb("MARCA SINTETICA E2E", "G47"))?.aliases).toEqual(["XG47E2E"])
+    await abrirPeliculas(page)
     await pesquisar(page, "XG47E2E")
     await expect(card(page, g47Key)).toBeVisible()
   })
 
   await test.step("5–6. duplicidade na mesma marca recusada; mesmo nome em outra marca aceito", async () => {
+    await abrirModelos(page)
     const painel = page.getByRole("region", { name: "Modelos cadastrados pela loja" })
     await painel.getByRole("button", { name: "Cadastrar novo modelo" }).click()
     const dialog = await cadastrarModelo(page, { marca: "marca sintetica e2e", nome: "g47" })
@@ -135,6 +151,7 @@ test("G47: cadastro manual, compatibilidades por loja e venda no PDV", async ({ 
   })
 
   await test.step("7/11–12. película equivalente manual + supressão de relação global, só nesta loja", async () => {
+    await abrirPeliculas(page)
     await pesquisar(page, "G47")
     await card(page, g47Key).getByRole("button", { name: "Adicionar película equivalente" }).click()
     const dialog = page.getByRole("dialog", { name: "Adicionar película equivalente" })
@@ -191,7 +208,7 @@ test("G47: cadastro manual, compatibilidades por loja e venda no PDV", async ({ 
     await expect(vinculados).toContainText(`${MARCA} G48 E2E`)
     await modal.getByRole("checkbox", { name: /Configuração de acessórios/ }).check()
     await modal.getByRole("combobox", { name: /^Tipo/ }).selectOption("pelicula")
-    await modal.getByRole("checkbox", { name: "Exige modelo do aparelho" }).check()
+    await modal.getByRole("combobox", { name: "Modelo do aparelho na venda" }).selectOption("obrigatorio")
     await saveProductAndConfirm(page)
 
     g48Key = (await modeloDb("MARCA SINTETICA E2E", "G48 E2E"))!.modelKey
@@ -229,7 +246,7 @@ test("G47: cadastro manual, compatibilidades por loja e venda no PDV", async ({ 
     await modal.locator("button").filter({ hasText: G47 }).filter({ hasText: "cadastro da loja" }).first().click()
     await modal.getByRole("checkbox", { name: /Configuração de acessórios/ }).check()
     await modal.getByRole("combobox", { name: /^Tipo/ }).selectOption("capinha")
-    await modal.getByRole("checkbox", { name: "Exige modelo do aparelho" }).check()
+    await modal.getByRole("combobox", { name: "Modelo do aparelho na venda" }).selectOption("obrigatorio")
     await saveProductAndConfirm(page)
     expect((await metadataOf(CAP.sku)).meta.catalogoAparelhos.deviceModelKeys).toEqual([g47Key])
 
@@ -308,7 +325,7 @@ test("G47: cadastro manual, compatibilidades por loja e venda no PDV", async ({ 
     await modal.getByRole("checkbox", { name: "É um acessório para aparelhos" }).check()
     await modal.getByRole("checkbox", { name: /Configuração de acessórios/ }).check()
     await modal.getByRole("combobox", { name: /^Tipo/ }).selectOption("pelicula")
-    await modal.getByRole("checkbox", { name: "Exige modelo do aparelho" }).check()
+    await modal.getByRole("combobox", { name: "Modelo do aparelho na venda" }).selectOption("obrigatorio")
     await saveProductAndConfirm(page)
     const produtoB = await db.produto.findFirstOrThrow({ where: { storeId: B, sku: PEL_B.sku } })
 
@@ -377,10 +394,12 @@ test("G47: cadastro manual, compatibilidades por loja e venda no PDV", async ({ 
 
   await test.step("20. desativar G47: some da busca; venda e vínculos preservados", async () => {
     await abrirCatalogo(page)
+    await abrirModelos(page)
     const painel = page.getByRole("region", { name: "Modelos cadastrados pela loja" })
     const linha = painel.locator("li").filter({ hasText: G47 })
     await linha.getByRole("button", { name: "Desativar" }).click()
     await expect(linha.getByText("desativado")).toBeVisible()
+    await abrirPeliculas(page)
     await pesquisar(page, "G47")
     await expect(card(page, g47B)).toHaveCount(0)
     expect(await db.catalogoAparelhoLojaModelo.findFirst({ where: { storeId: B, modelKey: g47B } })).toMatchObject({ active: false })

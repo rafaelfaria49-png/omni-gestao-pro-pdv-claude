@@ -106,9 +106,10 @@ export const hubsNavItems: DashboardNavItem[] = [
   },
   {
     to: "/dashboard/catalogo-aparelhos",
-    label: "Catálogo de Aparelhos",
+    // COMPAT-PROFISSIONAL-001 — HUB Compat (películas + capinhas). Rota mantida.
+    label: "Compat",
     icon: ScanSearch,
-    badge: "Consulta",
+    badge: "Películas · Capinhas",
     visible: (p) => p.hubs.cadastros,
   },
   { to: "/dashboard/vendas-hub", label: "Vendas HUB", icon: ShoppingCart, visible: (p) => p.hubs.vendas },

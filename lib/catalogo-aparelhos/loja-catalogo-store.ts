@@ -54,14 +54,14 @@ export type LojaCatalogoResult<T> = { ok: true; value: T } | LojaCatalogoFailure
 const MAX_MODELOS_POR_LOJA = 2000
 const MAX_OVERRIDES_POR_CONSULTA = 2000
 
-function errorCode(e: unknown): string {
+export function errorCode(e: unknown): string {
   // PrismaClientInitializationError expõe o código em `errorCode` (P1001/P1002), não em `code`.
   const err = e as { code?: string; errorCode?: string }
   return err?.code ?? err?.errorCode ?? ""
 }
 
 /** Tabela/coluna ausente (migration não aplicada) ou banco indisponível. */
-function isUnavailable(e: unknown): boolean {
+export function isUnavailable(e: unknown): boolean {
   const code = errorCode(e)
   return (
     code === "P2021" || code === "P2022" || code === "P1001" || code === "P1002" || code === "P2024" ||
@@ -89,6 +89,8 @@ type ModeloRow = {
   storeId: string
   modelKey: string
   brand: string
+  manufacturer?: string | null
+  line?: string | null
   name: string
   aliases: unknown
   notes: string
@@ -104,6 +106,8 @@ function toModelo(r: ModeloRow): LojaModelo {
     storeId: r.storeId,
     modelKey: r.modelKey,
     brand: r.brand,
+    manufacturer: r.manufacturer ?? "",
+    line: r.line ?? "",
     name: r.name,
     aliases: aliasesFromJson(r.aliases),
     notes: r.notes,
@@ -177,6 +181,9 @@ export async function listLojaCompatOverrides(
       acao: r.acao as LojaCompatAcao,
       status: normalizeLojaCompatStatus(r.status),
       notes: r.notes,
+      origem: r.origem ?? "",
+      confirmedBy: r.confirmedBy ?? "",
+      confirmedAt: r.confirmedAt ? r.confirmedAt.toISOString() : null,
     }))
   } catch (e) {
     if (isUnavailable(e)) {
@@ -210,7 +217,10 @@ function duplicateFromLoja(row: ModeloRow): LojaCatalogoFailure {
   }
 }
 
-function checkGlobal(globalIndex: CatalogoIndex, input: { brand: string; name: string }): LojaCatalogoFailure | null {
+function checkGlobal(
+  globalIndex: CatalogoIndex,
+  input: { brand: string; name: string; manufacturer?: string },
+): LojaCatalogoFailure | null {
   const g = findGlobalDuplicate(globalIndex, input)
   if (!g) return null
   return {
@@ -231,8 +241,8 @@ export async function createLojaModelo(
 ): Promise<LojaCatalogoResult<LojaModelo>> {
   const parsed = sanitizeLojaModeloInput(raw)
   if (!parsed.ok) return { ok: false, code: "INVALID", status: 400, message: "Dados do modelo inválidos.", errors: parsed.errors }
-  const { brand, name, aliases, notes } = parsed.value
-  const globalDup = checkGlobal(globalIndex, { brand, name })
+  const { brand, manufacturer, line, name, aliases, notes } = parsed.value
+  const globalDup = checkGlobal(globalIndex, { brand, name, manufacturer })
   if (globalDup) return globalDup
   const brandKey = catalogKey(brand)
   const nameKey = catalogKey(name)
@@ -248,6 +258,8 @@ export async function createLojaModelo(
         storeId,
         modelKey: `${MANUAL_MODEL_KEY_PREFIX}${randomUUID().replace(/-/g, "")}`,
         brand,
+        manufacturer,
+        line,
         name,
         brandKey,
         nameKey,
@@ -295,13 +307,19 @@ export async function updateLojaModelo(
     if (typeof body.active === "boolean") data.active = body.active
     // Reativar não pode reintroduzir duplicata de um modelo que entrou depois no catálogo global.
     if (body.active === true && !current.active) {
-      const globalDup = checkGlobal(globalIndex, { brand: String(body.brand ?? current.brand), name: String(body.name ?? current.name) })
+      const globalDup = checkGlobal(globalIndex, {
+        brand: String(body.brand ?? current.brand),
+        name: String(body.name ?? current.name),
+        manufacturer: String(body.manufacturer ?? current.manufacturer ?? ""),
+      })
       if (globalDup) return globalDup
     }
 
     if (!onlyActive) {
       const parsed = sanitizeLojaModeloInput({
         brand: "brand" in body ? body.brand : current.brand,
+        manufacturer: "manufacturer" in body ? body.manufacturer : current.manufacturer,
+        line: "line" in body ? body.line : current.line,
         name: "name" in body ? body.name : current.name,
         aliases: "aliases" in body ? body.aliases : aliasesFromJson(current.aliases),
         notes: "notes" in body ? body.notes : current.notes,
@@ -316,7 +334,16 @@ export async function updateLojaModelo(
         const dup = await findLojaDuplicate(db, storeId, brandKey, nameKey, id)
         if (dup) return duplicateFromLoja(dup)
       }
-      Object.assign(data, { brand: v.brand, name: v.name, brandKey, nameKey, aliases: v.aliases, notes: v.notes })
+      Object.assign(data, {
+        brand: v.brand,
+        manufacturer: v.manufacturer,
+        line: v.line,
+        name: v.name,
+        brandKey,
+        nameKey,
+        aliases: v.aliases,
+        notes: v.notes,
+      })
     }
 
     const res = await db.catalogoAparelhoLojaModelo.updateMany({ where: { id, storeId, version }, data })
@@ -355,19 +382,40 @@ export async function setLojaCompatDecisao(
 ): Promise<LojaCatalogoResult<{ decisao: LojaCompatDecisao; modelKeyA: string; modelKeyB: string }>> {
   const body = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
   const categoria = body.categoria === undefined ? "pelicula_tela" : body.categoria
-  if (categoria !== "pelicula_tela") {
+  // COMPAT-PROFISSIONAL-001: capinha passa a ser aceita, SEMPRE independente de película.
+  if (categoria !== "pelicula_tela" && categoria !== "capinha") {
     return { ok: false, code: "INVALID", status: 400, message: "Categoria não suportada para relação entre modelos." }
   }
   const decisao = body.decisao
   if (decisao !== "adicionar" && decisao !== "suprimir" && decisao !== "restaurar") {
     return { ok: false, code: "INVALID", status: 400, message: "Decisão inválida." }
   }
+  // Não há base global de capinha: "suprimir" não tem o que esconder.
+  if (categoria === "capinha" && decisao === "suprimir") {
+    return { ok: false, code: "INVALID", status: 400, message: "Para capinha, remova o vínculo em vez de suprimir." }
+  }
   const pair = orderedPair(String(body.modelKey ?? ""), String(body.otherModelKey ?? ""))
   if (!pair || pair.modelKeyA.length > 160 || pair.modelKeyB.length > 160) {
     return { ok: false, code: "INVALID", status: 400, message: "Informe dois modelos diferentes." }
   }
   const status = normalizeLojaCompatStatus(body.status)
+  // Confirmação física exige ato explícito do operador; nunca é inferida de nome/anúncio.
+  if (body.status === "confirmado_loja" && body.confirmacaoFisica !== true) {
+    return {
+      ok: false,
+      code: "INVALID",
+      status: 400,
+      message: "Para marcar como confirmada, confirme que o encaixe foi testado fisicamente.",
+    }
+  }
   const notes = cleanCatalogText(body.notes, 300)
+  const origem = cleanCatalogText(body.origem, 120)
+  const confirmacao =
+    body.status === undefined
+      ? {}
+      : status === "confirmado_loja"
+        ? { confirmedBy: actorId, confirmedAt: new Date() }
+        : { confirmedBy: "", confirmedAt: null }
 
   try {
     const keys = [pair.modelKeyA, pair.modelKeyB]
@@ -384,12 +432,24 @@ export async function setLojaCompatDecisao(
     } else {
       const upsert = () => db.catalogoAparelhoLojaCompat.upsert({
         where,
-        create: { storeId, categoria, ...pair, acao: decisao, status, notes, createdBy: actorId, updatedBy: actorId },
+        create: {
+          storeId,
+          categoria,
+          ...pair,
+          acao: decisao,
+          status,
+          notes,
+          origem,
+          ...confirmacao,
+          createdBy: actorId,
+          updatedBy: actorId,
+        },
         // Repetir a decisão sem status/observação não apaga o que já foi informado.
         update: {
           acao: decisao,
-          ...(body.status !== undefined ? { status } : {}),
+          ...(body.status !== undefined ? { status, ...confirmacao } : {}),
           ...(body.notes !== undefined ? { notes } : {}),
+          ...(body.origem !== undefined ? { origem } : {}),
           updatedBy: actorId,
         },
       })
