@@ -49,7 +49,15 @@ export async function call<T>(input: string, init: RequestInit): Promise<Catalog
 
 export function criarModeloLoja(
   lojaHeader: string | null | undefined,
-  input: { brand: string; name: string; manufacturer?: string; line?: string; aliases?: string[]; notes?: string },
+  input: {
+    brand: string
+    name: string
+    manufacturer?: string
+    line?: string
+    lancamento?: "lancado" | "aguardando_lancamento"
+    aliases?: string[]
+    notes?: string
+  },
 ) {
   return call<{ modelo: LojaModelo }>("/api/catalogo/aparelhos/modelos", {
     method: "POST",
@@ -66,6 +74,7 @@ export function atualizarModeloLoja(
     brand?: string
     manufacturer?: string
     line?: string
+    lancamento?: "lancado" | "aguardando_lancamento"
     name?: string
     aliases?: string[]
     notes?: string

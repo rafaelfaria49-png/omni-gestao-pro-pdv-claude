@@ -9,15 +9,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { PrismaClient } from "@/generated/prisma"
 import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
-import { buildCapinhaGrupos } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import { buildCapinhaGrupos, buildLojaCatalogoIndex } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import {
   createLojaModelo,
   listLojaCompatOverrides,
+  listLojaModelos,
   setLojaCompatDecisao,
   updateLojaModelo,
 } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import {
   addLocalizacao,
+  chaveLockPrincipal,
   createCorLoja,
   createFileira,
   createPainel,
@@ -264,8 +266,48 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
     // pedidos explícitos simultâneos de principal: continua 1
     const ids = (await db.compatLocalizacao.findMany({ where: { storeId: A, modelKey: A05S }, select: { id: true } })).map((r) => r.id)
-    await Promise.all(ids.map((id) => setLocalizacaoPrincipal(db, A, id)))
-    expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
+    // várias rodadas: trocas simultâneas não podem abortar por deadlock nem deixar 0/2 principais
+    for (let rodada = 0; rodada < 8; rodada++) {
+      const r = await Promise.all(ids.map((id) => setLocalizacaoPrincipal(db, A, id)))
+      expect(r.every((x) => x.ok)).toBe(true)
+      expect(await db.compatLocalizacao.count({ where: { storeId: A, modelKey: A05S, produtoId: null, principal: true } })).toBe(1)
+    }
+  })
+
+  it("lock do principal: mesma chave na mesma transação; só o grupo da própria loja espera", async () => {
+    const pB = await createPainel(db, B, "u-b", { nome: "Painel lock B" })
+    if (!pB.ok) throw new Error("painel B")
+    const locB = await addLocalizacao(db, global, B, "u-b", { modelKey: A05S, painelId: pB.value.id, posicao: "1" })
+    if (!locB.ok) throw new Error("loc B")
+    const idsA = (await db.compatLocalizacao.findMany({ where: { storeId: A, modelKey: A05S }, select: { id: true } })).map((r) => r.id)
+    const estado = (p: Promise<unknown>) => Promise.race([p.then(() => "ok"), new Promise((r) => setTimeout(() => r("esperando"), 400))])
+
+    let soltar!: () => void
+    const liberado = new Promise<void>((r) => (soltar = r))
+    let travado!: () => void
+    const segurando = new Promise<void>((r) => (travado = r))
+    // Outra transação segura o lock do grupo (loja A, A05S, sem produto) com a MESMA chave da função.
+    const dono = db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${chaveLockPrincipal(A, A05S, null)}))::text AS lock`
+      travado()
+      await liberado
+    }, { timeout: 20000 })
+    await segurando
+
+    // Loja B, mesmo modelo: não espera.
+    expect(await estado(setLocalizacaoPrincipal(db, B, locB.value.id))).toBe("ok")
+    // Loja A, outro grupo (A05): não espera.
+    const locA05 = await db.compatLocalizacao.findFirst({ where: { storeId: A, modelKey: A05 }, select: { id: true } })
+    expect(await estado(setLocalizacaoPrincipal(db, A, locA05!.id))).toBe("ok")
+    // Loja A, mesmo grupo: espera o lock.
+    const mesmoGrupo = setLocalizacaoPrincipal(db, A, idsA[0])
+    expect(await estado(mesmoGrupo)).toBe("esperando")
+    soltar()
+    await dono
+    expect(await mesmoGrupo).toMatchObject({ ok: true })
+    // Lock de transação: nada sobra depois do commit.
+    const sobra = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory'`
+    expect(sobra[0].n).toBe(0)
   })
 
   // ── Cores ──────────────────────────────────────────────────────────────────
@@ -343,6 +385,39 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     const vendas = await db.venda.findMany({ where: { storeId: A, pedidoId: pedido }, select: { pedidoId: true, status: true, payload: true } })
     expect(montarRelatorioCapinhas(vendas, historico, dev).totalVendido).toBe(1)
     await db.produto.update({ where: { id: `${run}-gen` }, data: { active: true } })
+  })
+
+  it("marcas por loja: PATCH parcial persiste, isola entre lojas e não toca o resto das preferências", async () => {
+    const antes = await getPreferencias(db, A)
+    const r1 = await setPreferencias(db, A, "u-a", { version: antes.version, marcas: { Google: true, Motorola: false } })
+    expect(r1).toMatchObject({ ok: true, value: { marcasConfig: { GOOGLE: true, MOTOROLA: false }, modoModeloPadrao: antes.modoModeloPadrao } })
+    if (!r1.ok) return
+    const r2 = await setPreferencias(db, A, "u-a", { version: r1.value.version, marcas: { motorola: true } })
+    expect(r2.ok && r2.value.marcasConfig).toEqual({ GOOGLE: true, MOTOROLA: true })
+    expect((await getPreferencias(db, B)).marcasConfig).toEqual({})
+    // banco recusa tipo inválido
+    await expect(
+      db.$executeRawUnsafe(`UPDATE compat_preferencias_loja SET "marcasConfig" = '[]'::jsonb WHERE "storeId" = $1`, A),
+    ).rejects.toThrow()
+  })
+
+  it("modelo manual 'aguardando lançamento': persiste, sai da busca, volta ao confirmar; CHECK no banco", async () => {
+    const r = await createLojaModelo(db, global, A, "u-a", { brand: "Samsung", name: "Galaxy S27 Sintético", lancamento: "aguardando_lancamento" })
+    expect(r).toMatchObject({ ok: true, value: { lancamento: "aguardando_lancamento" } })
+    if (!r.ok) return
+    const modelos = await listLojaModelos(db, A)
+    expect(modelos.some((m) => m.modelKey === r.value.modelKey)).toBe(true)
+    // duplicado aguardando não vira "usar este" no fluxo operacional
+    expect(
+      await createLojaModelo(db, global, A, "u-a", { brand: "Samsung", name: "Galaxy S27 Sintético" }),
+    ).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: r.value.modelKey, active: false } })
+    expect(buildLojaCatalogoIndex(modelos).modelByKey.has(r.value.modelKey)).toBe(false)
+    const conf = await updateLojaModelo(db, global, A, "u-a", r.value.id, { version: 1, lancamento: "lancado" })
+    expect(conf).toMatchObject({ ok: true, value: { lancamento: "lancado" } })
+    expect(buildLojaCatalogoIndex(await listLojaModelos(db, A)).modelByKey.has(r.value.modelKey)).toBe(true)
+    await expect(
+      db.$executeRawUnsafe(`UPDATE catalogo_aparelhos_loja_modelos SET "lancamento" = 'talvez' WHERE id = $1`, r.value.id),
+    ).rejects.toThrow()
   })
 
   it("CHECK do banco: localização sem modelo e sem produto é recusada", async () => {

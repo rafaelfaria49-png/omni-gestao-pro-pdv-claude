@@ -243,3 +243,20 @@ export const carregarHierarquia = (loja: Loja) =>
     loja,
     "/api/catalogo/compat/hierarquia",
   )
+
+// ── Marcas do catálogo (COMPAT-CATALOGO-BRASIL-2023-2026-002) ───────────────
+
+export interface MarcaDTO {
+  key: string
+  nome: string
+  nivel: "prioritaria" | "secundaria"
+  padraoVisivel: boolean
+  modelos: number
+  visivel: boolean
+}
+
+export const carregarMarcas = (loja: Loja) =>
+  get<{ version: number; marcas: MarcaDTO[] }>(loja, "/api/catalogo/compat/marcas")
+
+export const salvarMarcas = (loja: Loja, version: number, marcas: Record<string, boolean>) =>
+  send<{ version: number; marcas: MarcaDTO[] }>(loja, "/api/catalogo/compat/marcas", "PATCH", { version, marcas })

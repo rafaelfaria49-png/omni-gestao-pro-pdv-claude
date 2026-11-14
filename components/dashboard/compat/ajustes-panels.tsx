@@ -4,7 +4,7 @@
  * COMPAT-PROFISSIONAL-001 — Cores, Preferências e Relatórios do Compat (por loja).
  */
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertTriangle, BarChart3, Check, Loader2, Palette, Pencil, Plus, Power, Settings2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,9 @@ import {
   carregarRelatorio,
   criarCor,
   salvarPreferencias,
+  carregarMarcas,
+  salvarMarcas,
+  type MarcaDTO,
   type RelatorioDTO,
 } from "@/lib/compat/compat-client"
 
@@ -252,7 +255,108 @@ export function PreferenciasPanel({ lojaHeader }: { lojaHeader: string | null })
           </div>
         </div>
       ))}
+
+      <MarcasCatalogo
+        lojaHeader={lojaHeader}
+        version={prefs.version}
+        onSaved={(version) => setPrefs((p) => (p ? { ...p, version } : p))}
+      />
     </section>
+  )
+}
+
+/**
+ * COMPAT-CATALOGO-BRASIL-2023-2026-002 — marcas visíveis nas buscas desta loja.
+ * Ocultar só tira a marca da busca: modelos, produtos vinculados e vendas antigas não mudam.
+ */
+export function MarcasCatalogo({
+  lojaHeader,
+  version,
+  onSaved,
+}: {
+  lojaHeader: string
+  /** Versão ATUAL da linha de preferências (compartilhada com o restante do painel). */
+  version: number
+  onSaved: (version: number) => void
+}) {
+  const [dados, setDados] = useState<{ version: number; marcas: MarcaDTO[] } | null>(null)
+  const [erro, setErro] = useState("")
+  const [busy, setBusy] = useState(false)
+  // Geração da seleção de loja: resposta de gravação de uma seleção anterior (inclusive A→B→A) é descartada.
+  const geracao = useRef(0)
+
+  useEffect(() => {
+    let vigente = true
+    geracao.current += 1
+    setDados(null)
+    setErro("")
+    setBusy(false)
+    void carregarMarcas(lojaHeader).then((r) => {
+      if (!vigente) return
+      if (r.ok) setDados({ version: r.version, marcas: r.marcas })
+      else setErro(r.error)
+    })
+    return () => {
+      vigente = false
+    }
+  }, [lojaHeader])
+
+  const alternar = async (m: MarcaDTO) => {
+    if (!dados) return
+    const gen = geracao.current
+    setBusy(true)
+    const r = await salvarMarcas(lojaHeader, version, { [m.key]: !m.visivel })
+    if (geracao.current !== gen) return
+    setBusy(false)
+    if (r.ok) {
+      setDados({ version: r.version, marcas: r.marcas })
+      onSaved(r.version)
+      setErro("")
+    } else setErro(r.error)
+  }
+
+  const grupo = (nivel: MarcaDTO["nivel"]) => (dados?.marcas ?? []).filter((m) => m.nivel === nivel)
+
+  return (
+    <div className="min-w-0 space-y-3 rounded-xl border border-border bg-card p-4" aria-label="Marcas do catálogo">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">Marcas do catálogo</p>
+        <p className="text-xs text-muted-foreground">
+          Marcas desligadas não aparecem nas buscas desta loja (PDV, cadastro e Compat). Nada é apagado: produtos e
+          vendas antigas continuam com o modelo. Modelos cadastrados pela própria loja sempre aparecem.
+        </p>
+      </div>
+      {erro && <p role="alert" className="text-sm text-destructive">{erro}</p>}
+      {!dados && !erro && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      {(["prioritaria", "secundaria"] as const).map((nivel) =>
+        grupo(nivel).length === 0 ? null : (
+          <div key={nivel} className="min-w-0 space-y-1.5">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {nivel === "prioritaria" ? "Principais (ligadas por padrão)" : "Opcionais (desligadas por padrão)"}
+            </p>
+            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              {grupo(nivel).map((m) => (
+                <label
+                  key={m.key}
+                  className="flex min-w-0 cursor-pointer items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-foreground">{m.nome}</span>
+                    <span className="block text-xs text-muted-foreground">{m.modelos} modelos</span>
+                  </span>
+                  <Switch
+                    aria-label={`Mostrar ${m.nome} nas buscas`}
+                    checked={m.visivel}
+                    disabled={busy}
+                    onCheckedChange={() => void alternar(m)}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        ),
+      )}
+    </div>
   )
 }
 

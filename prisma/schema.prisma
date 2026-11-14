@@ -3600,6 +3600,9 @@ model CatalogoAparelhoLojaModelo {
   manufacturer String @default("") @map("manufacturer")
   /// COMPAT-PROFISSIONAL-001 — linha comercial (ex.: "A", "Note", "G"). Opcional.
   line      String   @default("") @map("line")
+  /// COMPAT-CATALOGO-BRASIL-2023-2026-002 — "lancado" | "aguardando_lancamento" (oculto das buscas
+  /// operacionais até a loja confirmar o lançamento oficial). Registros antigos = "lancado".
+  lancamento String  @default("lancado") @map("lancamento")
   /// Marca normalizada (sem acento, maiúscula) — chave de duplicidade.
   brandKey  String   @map("brandKey")
   /// Nome normalizado (sem acento, maiúscula) — chave de duplicidade.
@@ -3765,6 +3768,9 @@ model CompatPreferenciasLoja {
   /// Padrão sugerido para produtos novos: obrigatorio | opcional | desativado.
   modoModeloPadrao    String   @default("opcional") @map("modoModeloPadrao")
   modoCorPadrao       String   @default("opcional") @map("modoCorPadrao")
+  /// COMPAT-CATALOGO-BRASIL-2023-2026-002 — marca → visível na busca (true/false). {} = padrão
+  /// (prioritárias visíveis, demais ocultas). Ocultar nunca apaga modelo, produto ou venda.
+  marcasConfig        Json     @default("{}") @map("marcasConfig") @db.JsonB
   version             Int      @default(1) @map("version")
   updatedBy           String   @default("") @map("updatedBy")
   createdAt           DateTime @default(now()) @map("createdAt")
