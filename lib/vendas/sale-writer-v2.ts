@@ -72,6 +72,8 @@ export async function persistSaleV2(input: PersistSaleV2Input): Promise<UpsertVe
     requireCaixaSession: options?.requireCaixaSession ?? true,
     allowClosedOriginalSession: options?.allowClosedOriginalSession === true,
     ...(options?.historicalRecovery === true ? { historicalRecovery: true } : {}),
+    // COMPAT-PROFISSIONAL-001: sinal de finalização ao vivo (guard de cor desativada).
+    ...(options?.finalizacaoAoVivo === true ? { finalizacaoAoVivo: true } : {}),
     v2: {
       clientSaleId,
       allocate: (tx) => allocateSaleNumberForWriter(tx, storeId),
