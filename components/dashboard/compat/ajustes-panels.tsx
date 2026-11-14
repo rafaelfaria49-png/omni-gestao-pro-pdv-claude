@@ -175,7 +175,15 @@ export function PreferenciasPanel({ lojaHeader }: { lojaHeader: string | null })
 
   useEffect(() => {
     if (!lojaHeader) return
-    void carregarOrganizacao(lojaHeader).then((r) => (r.ok ? setPrefs(r.preferencias) : setErro(r.error)))
+    let vigente = true
+    void carregarOrganizacao(lojaHeader).then((r) => {
+      if (!vigente) return
+      if (r.ok) setPrefs(r.preferencias)
+      else setErro(r.error)
+    })
+    return () => {
+      vigente = false
+    }
   }, [lojaHeader])
 
   const salvar = async (patch: Partial<CompatPreferencias>) => {
@@ -289,14 +297,20 @@ export function RelatorioPanel({ lojaHeader }: { lojaHeader: string | null }) {
 
   useEffect(() => {
     if (!lojaHeader) return
+    // Trocar o período descarta a resposta do período anterior (chegar por último não sobrescreve).
+    let vigente = true
     setLoading(true)
     void carregarRelatorio(lojaHeader, dias).then((r) => {
+      if (!vigente) return
       setLoading(false)
       if (r.ok) {
         setDados(r)
         setErro("")
       } else setErro(r.error)
     })
+    return () => {
+      vigente = false
+    }
   }, [lojaHeader, dias])
 
   if (!lojaHeader) return <Vazio>Selecione uma loja.</Vazio>

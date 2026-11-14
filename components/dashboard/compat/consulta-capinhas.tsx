@@ -78,12 +78,16 @@ export function ConsultaCapinhas({
 
   useEffect(() => {
     if (!lojaHeader) return
+    let vigente = true
     void carregarOrganizacao(lojaHeader).then((r) => {
-      if (r.ok) {
+      if (vigente && r.ok) {
         setPaineis(r.paineis)
         setPrefs(r.preferencias)
       }
     })
+    return () => {
+      vigente = false
+    }
   }, [lojaHeader])
 
   return (
