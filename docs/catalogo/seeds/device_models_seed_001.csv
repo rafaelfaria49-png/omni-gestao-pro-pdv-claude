@@ -49,7 +49,7 @@ apple_iphone_xr,Apple,iPhone,Apple iPhone XR,XR,XR,,,base_peliculas;planilha_cap
 apple_iphone_xs,Apple,iPhone,Apple iPhone XS,XS,XS,,,base_peliculas;planilha_capinhas,legado,alta,,,2018,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
 apple_iphone_xs_max,Apple,iPhone,Apple iPhone XS Max,XS Max,XS Max,,,base_peliculas;planilha_capinhas,legado,alta,,,2018,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
 infinix_hot_play,Infinix,Infinix Hot,Infinix Hot Play,Hot Play,Hot Play,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.,,,,,
-infinix_smart_7,Infinix,Infinix Smart,Infinix Smart 7,Smart 7,Smart 7,,,base_peliculas;planilha_capinhas,ativo,alta,,,2023,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
+infinix_smart_7,Infinix,Infinix Smart,Infinix Smart 7,Smart 7,Smart 7,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 lg_k10_2017,LG,LG K,LG K10 2017,K10 2017,K10 2017,,2017,base_peliculas;planilha_capinhas,legado,alta,,,,secundaria,,
 lg_k10_power,LG,LG K,LG K10 Power,K10 Power,K10 Power,,,base_peliculas;planilha_capinhas,legado,alta,,,,secundaria,,
 lg_k11,LG,LG K,LG K11,K11,K11,,,base_peliculas;planilha_capinhas,legado,alta,,,,secundaria,,
@@ -115,7 +115,7 @@ motorola_moto_g40,Motorola,Moto G,Motorola Moto G40,G40,G40,,,base_peliculas,rev
 motorola_moto_g40_fusion,Motorola,Moto G,Motorola Moto G40 Fusion,G40 Fusion,,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 motorola_moto_g41,Motorola,Moto G,Motorola Moto G41,G41,G41,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 motorola_moto_g42,Motorola,Moto G,Motorola Moto G42,G42,G42,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
-motorola_moto_g45,Motorola,Moto G,Motorola Moto G45,G45,G45,,,base_peliculas;planilha_capinhas,ativo,alta,,,2023,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
+motorola_moto_g45,Motorola,Moto G,Motorola Moto G45,G45,G45,,,base_peliculas;planilha_capinhas,ativo,alta,,,2024,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
 motorola_moto_g5,Motorola,Moto G,Motorola Moto G5,G5,G5,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 motorola_moto_g5_plus,Motorola,Moto G,Motorola Moto G5 Plus,G5 Plus,,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 motorola_moto_g50,Motorola,Moto G,Motorola Moto G50,G50,G50,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
@@ -207,7 +207,7 @@ realme_c61,Realme,Realme C,Realme C61,C61,C61,,,base_peliculas;planilha_capinhas
 realme_c63,Realme,Realme C,Realme C63,C63,C63,,,base_peliculas;planilha_capinhas,ativo,alta,,,2024,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
 realme_c63_5g,Realme,Realme C,Realme C63 5G,C63 5G,C63 5G,5G,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 realme_c65,Realme,Realme C,Realme C65,C65,C65,,,base_peliculas;planilha_capinhas,ativo,alta,,,2024,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
-realme_c67,Realme,Realme C,Realme C67,C67,C67,,,base_peliculas;planilha_capinhas,ativo,alta,,,2023,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)
+realme_c67,Realme,Realme C,Realme C67,C67,C67,,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 realme_c67_5g,Realme,Realme C,Realme C67 5G,C67 5G,C67 5G,5G,,base_peliculas;planilha_capinhas,ativo,alta,,,,,,
 realme_c71,Realme,Realme C,Realme C71,C71,C71,,,base_peliculas;planilha_capinhas,novo,alta,,,,,,
 realme_c73,Realme,Realme C,Realme C73,C73,C73,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.,,2025,,,Ano: lançamento global de conhecimento público (sem reconsulta individual nesta rodada)

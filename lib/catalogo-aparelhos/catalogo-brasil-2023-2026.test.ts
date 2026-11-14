@@ -173,6 +173,22 @@ describe("ano de lançamento no seed", () => {
     }
   })
 
+  it("anos exatos de referência (inclui correções da revisão) e casos ambíguos sem ano", () => {
+    const ano = (k: string) => index.modelByKey.get(k)?.releaseYear ?? ""
+    const esperado: Record<string, string> = {
+      apple_iphone_6: "2014", apple_iphone_6_plus: "2014", apple_iphone_7: "2016", apple_iphone_x: "2017",
+      apple_iphone_xr: "2018", apple_iphone_11: "2019", apple_iphone_se_2020: "2020", apple_iphone_13_mini: "2021",
+      apple_iphone_14_plus: "2022", apple_iphone_15_pro_max: "2023", apple_iphone_16e: "2025", apple_iphone_17: "2025",
+      apple_iphone_air: "2025", apple_iphone_17e: "2026", apple_iphone_18_pro: "2026",
+      motorola_moto_g45: "2024", motorola_moto_g84: "2023", motorola_moto_g75: "2024", motorola_edge_40: "2023",
+      samsung_galaxy_s23_fe: "2023", samsung_galaxy_a06: "2024", samsung_galaxy_s25_ultra: "2025", samsung_galaxy_s26_ultra: "2026",
+      redmi_note_13_4g: "2024", poco_x7_pro: "2025", realme_note_60: "2024", infinix_hot_40: "2023",
+    }
+    for (const [k, y] of Object.entries(esperado)) expect(ano(k), k).toBe(y)
+    // ambíguos: deixados sem ano de propósito
+    for (const k of ["realme_c67", "infinix_smart_7", "motorola_moto_g05", "redmi_note_14"]) expect(ano(k), k).toBe("")
+  })
+
   it("ano é sempre 4 dígitos entre 2007 e 2026 quando presente", () => {
     for (const m of index.models) if (m.releaseYear) expect(m.releaseYear, m.modelKey).toMatch(/^20(0[7-9]|1\d|2[0-6])$/)
   })

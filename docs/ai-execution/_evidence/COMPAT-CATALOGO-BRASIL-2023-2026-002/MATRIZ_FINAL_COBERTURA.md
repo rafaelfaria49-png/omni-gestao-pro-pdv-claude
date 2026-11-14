@@ -1,6 +1,6 @@
 # Matriz final de cobertura — COMPAT-CATALOGO-BRASIL-2023-2026-002
 
-Gerada dos seeds versionados (`docs/catalogo/seeds/device_models_seed_001.csv`) contra `origin/main`.
+Gerada dos seeds versionados (`docs/catalogo/seeds/device_models_seed_001.csv`) contra `origin/main` por `gerar-matriz-cobertura.ts` (nesta pasta).
 Total de linhas: **693** · pesquisáveis: **684** · fora da busca: **9**.
 
 ## 1. Linhas fora da busca (todas intencionais)
@@ -27,15 +27,17 @@ Célula: modelos pesquisáveis com esse ano de lançamento no seed (+ quantos en
 |---|---|---|---|---|---|---|---|
 | Apple | 4 (+0) | 4 (+0) | 5 (+0) | 4 (+3) | 17 | 3 | 0 |
 | Samsung | 20 (+6) | 18 (+8) | 26 (+17) | 13 (+8) | 77 | 39 | 86 |
-| Motorola | 13 (+4) | 16 (+8) | 15 (+11) | 13 (+12) | 57 | 35 | 81 |
+| Motorola | 12 (+4) | 17 (+8) | 15 (+11) | 13 (+12) | 57 | 35 | 81 |
 | Xiaomi | 5 (+5) | 4 (+4) | 5 (+5) | 0 (+0) | 14 | 14 | 5 |
 | Redmi | 11 (+3) | 11 (+5) | 8 (+5) | 6 (+6) | 36 | 19 | 48 |
 | POCO | 5 (+1) | 9 (+6) | 10 (+7) | 5 (+5) | 29 | 19 | 22 |
-| Realme | 7 (+3) | 17 (+11) | 11 (+9) | 2 (+2) | 37 | 25 | 16 |
-| Infinix | 12 (+8) | 11 (+11) | 9 (+9) | 4 (+4) | 36 | 32 | 5 |
-| Secundárias (ocultas por padrão) | 15 | 38 | 18 | 0 | 71 | 71 | 11 |
+| Realme | 6 (+3) | 17 (+11) | 11 (+9) | 2 (+2) | 36 | 25 | 17 |
+| Infinix | 11 (+8) | 11 (+11) | 9 (+9) | 4 (+4) | 35 | 32 | 6 |
+| Secundárias (ocultas por padrão) | 15 | 38 | 18 | 0 | 71 | 71 | 14 |
 
-"Sem ano no seed": linhas antigas (majoritariamente anteriores a 2023) ou de lançamento escalonado/ambíguo (anúncio em dezembro com venda em janeiro; linha Pro China → global), deixadas sem ano de propósito por `scripts/catalogo/preencher-ano-existentes.mjs`. Pendências não cadastradas: `docs/catalogo/AUDITORIA_CATALOGO_BRASIL_2023_2026.md`.
+Secundárias sem ano: LG 11, Tecno 3 (total de secundárias pesquisáveis: 85).
+
+"Sem ano no seed": linhas antigas (majoritariamente anteriores a 2023) ou de lançamento escalonado/ambíguo (anúncio em dezembro com venda em janeiro; linha Pro China → global; variante 4G × 5G em anos diferentes), deixadas sem ano de propósito por `scripts/catalogo/preencher-ano-existentes.mjs`. Pendências não cadastradas: `docs/catalogo/AUDITORIA_CATALOGO_BRASIL_2023_2026.md`.
 
 ## 3. iPhones desde o iPhone 6
 

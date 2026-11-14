@@ -3,7 +3,9 @@
 -- 20261107120000_catalogo_aparelhos_loja. Colunas com DEFAULT constante (sem reescrita no PG >= 11).
 -- Não altera nem lê estoque, vendas, financeiro ou fiscal. NÃO aplicar em produção sem autorização.
 -- Idempotente: reexecutar (ex.: após aplicação parcial manual) não falha nem duplica nada.
--- CHECKs entram NOT VALID e são validados em seguida (lock exclusivo só pelo instante do catálogo).
+-- Locks: ALTER TABLE pega ACCESS EXCLUSIVE e o mantém até o fim da transação do deploy — inclusive durante
+-- a varredura do VALIDATE. As duas tabelas são pequenas (linhas por loja); a varredura é curta. O par
+-- NOT VALID + VALIDATE só reduziria o bloqueio se rodasse em transações separadas, o que aqui não ocorre.
 -- Reversão: docs/catalogo/rollout/rollback_20261114120000_compat_catalogo_marcas_lancamento.sql
 
 -- AlterTable

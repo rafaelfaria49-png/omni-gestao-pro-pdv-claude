@@ -1,8 +1,9 @@
 // COMPAT-CATALOGO-BRASIL-2023-2026-002 — preenche `release_year` de linhas que JÁ EXISTIAM no catálogo
 // (antes desta trilha), para a matriz de cobertura 2023–2026 sair dos próprios seeds.
 //
-// Regras: só grava ano em linha com `release_year` vazio; nunca muda model_key, nome, status ou aliases;
-// idempotente (rodar de novo não altera nada). Só entram anos de lançamento GLOBAL de conhecimento público
+// Regras: só grava ano em linha com `release_year` vazio — ou em linha cujo ano FOI gravado por este script
+// (fonte = FONTE), para corrigir/retirar um ano do mapa; ano de outra origem nunca é tocado. Nunca muda
+// model_key, nome, status ou aliases; idempotente (rodar de novo não altera nada). Só entram anos de lançamento GLOBAL de conhecimento público
 // sem ambiguidade; anúncio em dezembro com venda em janeiro e linhas "Pro" de lançamento escalonado
 // (China → global) ficam SEM ano de propósito e aparecem como "sem ano" na matriz.
 // Uso: node scripts/catalogo/preencher-ano-existentes.mjs [--check]
@@ -46,8 +47,9 @@ const ANOS = {
   samsung_galaxy_s26_plus: "2026", samsung_galaxy_s26_ultra: "2026",
   // Motorola
   motorola_moto_g13: "2023", motorola_moto_g14: "2023", motorola_moto_g23: "2023", motorola_moto_g54: "2023",
-  motorola_moto_g73: "2023", motorola_moto_g84: "2023", motorola_moto_g45: "2023", motorola_moto_e13: "2023",
+  motorola_moto_g73: "2023", motorola_moto_g84: "2023", motorola_moto_e13: "2023",
   motorola_edge_40: "2023",
+  motorola_moto_g45: "2024", // ago/2024 (não 2023)
   motorola_moto_g04: "2024", motorola_moto_g24: "2024", motorola_moto_g24_power: "2024", motorola_moto_g64: "2024",
   motorola_moto_g55: "2024", motorola_moto_g75: "2024", motorola_moto_e14: "2024", motorola_edge_50_neo: "2024",
   motorola_moto_g56: "2025", motorola_moto_g86: "2025", motorola_moto_g86_power: "2025", motorola_edge_60_neo: "2025",
@@ -61,11 +63,13 @@ const ANOS = {
   poco_x6: "2024", poco_x6_pro: "2024", poco_c75: "2024",
   poco_x7: "2025", poco_x7_pro: "2025", poco_c71: "2025",
   // realme (marca gravada como "Realme")
-  realme_c51: "2023", realme_c53: "2023", realme_c55: "2023", realme_c67: "2023",
+  realme_c51: "2023", realme_c53: "2023", realme_c55: "2023",
+  // realme_c67: SEM ano — a linha é a 4G (jan/2024); a C67 5G é de dez/2023.
   realme_c61: "2024", realme_c63: "2024", realme_c65: "2024", realme_note_50: "2024", realme_note_60: "2024", realme_c75: "2024",
   realme_c73: "2025", realme_note_70: "2025",
   // Infinix
-  infinix_hot_30: "2023", infinix_smart_7: "2023", infinix_smart_8: "2023", infinix_hot_40: "2023",
+  // infinix_smart_7: SEM ano — dez/2022 em alguns mercados, jan/2023 em outros.
+  infinix_hot_30: "2023", infinix_smart_8: "2023", infinix_hot_40: "2023",
 }
 
 function parseLine(line) {
@@ -101,17 +105,30 @@ const faltando = Object.keys(ANOS).filter((k) => !chaves.has(k))
 if (faltando.length) throw new Error(`model_key inexistente: ${faltando.join(", ")}`)
 
 let preenchidos = 0
+let corrigidos = 0
+let retirados = 0
 const saida = [lines[0]]
 for (const l of lines.slice(1)) {
   const cells = parseLine(l)
   const ano = ANOS[cells[iKey]]
-  if (!ano || (cells[iAno] ?? "").trim()) { saida.push(l); continue } // linha intocada, byte a byte
+  const atual = (cells[iAno] ?? "").trim()
+  const nossa = (cells[iFonte] ?? "").trim() === FONTE
   while (cells.length < header.length) cells.push("")
-  cells[iAno] = ano
-  if (!(cells[iFonte] ?? "").trim()) cells[iFonte] = FONTE
+  if (!atual && ano) {
+    cells[iAno] = ano
+    if (!(cells[iFonte] ?? "").trim()) cells[iFonte] = FONTE
+    preenchidos++
+  } else if (atual && nossa && ano && atual !== ano) {
+    cells[iAno] = ano // ano gravado por este script e corrigido no mapa
+    corrigidos++
+  } else if (atual && nossa && !ano) {
+    cells[iAno] = "" // ano gravado por este script e retirado do mapa (ambíguo)
+    cells[iFonte] = ""
+    retirados++
+  } else { saida.push(l); continue } // linha intocada, byte a byte
   saida.push(toLine(cells))
-  preenchidos++
 }
+preenchidos += corrigidos + retirados
 const nl = original.includes("\r\n") ? "\r\n" : "\n"
 const novo = saida.join(nl) + nl
 if (process.argv.includes("--check")) {
@@ -119,4 +136,4 @@ if (process.argv.includes("--check")) {
   process.exit(preenchidos ? 1 : 0)
 }
 if (novo !== original) writeFileSync(FILE, novo)
-console.log(`release_year preenchido em ${preenchidos} linha(s); ${Object.keys(ANOS).length} chaves mapeadas.`)
+console.log(`release_year: ${preenchidos - corrigidos - retirados} preenchido(s), ${corrigidos} corrigido(s), ${retirados} retirado(s); ${Object.keys(ANOS).length} chaves mapeadas.`)

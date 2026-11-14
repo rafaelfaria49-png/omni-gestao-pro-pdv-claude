@@ -21,8 +21,16 @@ cd "$WT"
 git show origin/main:prisma/schema.prisma > "$TMP/prisma/schema.prisma"
 npx prisma migrate diff --from-empty --to-schema-datamodel "$TMP/prisma/schema.prisma" --script > "$TMP/baseline.sql" 2>"$TMP/baseline.err" || { log "FALHA baseline"; cat "$TMP/baseline.err"; exit 1; }
 "${PSQL[@]}" -d "$DB" -f "$TMP/baseline.sql" >/dev/null || { log "FALHA aplicando baseline"; exit 1; }
-# CHECKs/índices de expressão da 20261113 (fora do schema.prisma) — mesmos da migration
-"${PSQL[@]}" -d "$DB" -f "$WT/prisma/migrations/20261113120000_compat_profissional/migration.sql" >/dev/null 2>"$TMP/m13.err" || true
+# Objetos da 20261113 que o schema.prisma não descreve (CHECKs e índices únicos de expressão):
+# só a seção "fora do modelo Prisma" da própria migration, aplicada à parte; erro aborta o ensaio.
+M13="$WT/prisma/migrations/20261113120000_compat_profissional/migration.sql"
+sed -n '/^-- Integridade de domínio (fora do modelo Prisma)/,$p' "$M13" > "$TMP/m13-extra.sql"
+[ -s "$TMP/m13-extra.sql" ] || { log "FALHA: seção fora do Prisma não encontrada na 20261113"; exit 1; }
+"${PSQL[@]}" -d "$DB" -f "$TMP/m13-extra.sql" >/dev/null || { log "FALHA aplicando objetos da 20261113 fora do Prisma"; exit 1; }
+NCHK="$("${PSQL[@]}" -d "$DB" -c "SELECT count(*) FROM pg_constraint WHERE conname IN ('compat_localizacoes_alvo_check','compat_preferencias_loja_modos_check','compat_cores_loja_label_check')")"
+NIDX="$("${PSQL[@]}" -d "$DB" -c "SELECT count(*) FROM pg_indexes WHERE indexname IN ('compat_localizacoes_endereco_key','compat_localizacoes_principal_key')")"
+EXTRA="$NCHK CHECKs + $NIDX índices de expressão"
+[ "$NCHK" = "3" ] && [ "$NIDX" = "2" ] || { log "FALHA: objetos da 20261113 incompletos ($EXTRA)"; exit 1; }
 "${PSQL[@]}" -d "$DB" -c "CREATE TABLE IF NOT EXISTS _prisma_migrations (id varchar(36) PRIMARY KEY, checksum varchar(64) NOT NULL, finished_at timestamptz, migration_name varchar(255) NOT NULL, logs text, rolled_back_at timestamptz, started_at timestamptz NOT NULL DEFAULT now(), applied_steps_count integer NOT NULL DEFAULT 0)"
 N=0
 for d in $(git ls-tree --name-only origin/main prisma/migrations/ | grep -v migration_lock); do
@@ -30,7 +38,7 @@ for d in $(git ls-tree --name-only origin/main prisma/migrations/ | grep -v migr
   "${PSQL[@]}" -d "$DB" -c "INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES (md5(random()::text), '$sum', now(), '$n', 1)"; N=$((N+1))
 done
 cp "$WT/prisma/schema.prisma" "$TMP/prisma/schema.prisma"
-log "1. baseline do schema da main + $N migrations da main registradas como aplicadas (última: $(git ls-tree --name-only origin/main prisma/migrations/ | grep -v lock | tail -1 | xargs basename))"
+log "1. baseline do schema da main + $N migrations da main registradas como aplicadas (última: $(git ls-tree --name-only origin/main prisma/migrations/ | grep -v lock | tail -1 | xargs basename)); objetos fora do Prisma da 20261113: $EXTRA"
 
 # 2) dados pré-existentes
 "${PSQL[@]}" -d "$DB" <<'SQL'
@@ -72,8 +80,10 @@ log "5. drift banco × schema.prisma: exit $? ($(head -1 "$TMP/diff.log"))"
 # 6) dados novos usando as colunas + rollback
 "${PSQL[@]}" -d "$DB" -c "UPDATE catalogo_aparelhos_loja_modelos SET lancamento='aguardando_lancamento' WHERE id IN ('m2','m4'); UPDATE compat_preferencias_loja SET \"marcasConfig\"='{\"GOOGLE\": true}' WHERE \"storeId\"='mig-a';"
 cd "$TMP"
-"${PSQL[@]}" -d "$DB" -c "\copy (SELECT id, \"storeId\", \"modelKey\", lancamento FROM catalogo_aparelhos_loja_modelos WHERE lancamento <> 'lancado') TO rb_lancamento.csv CSV HEADER"
-"${PSQL[@]}" -d "$DB" -c "\copy (SELECT \"storeId\", \"marcasConfig\"::text FROM compat_preferencias_loja WHERE \"marcasConfig\" <> '{}'::jsonb) TO rb_marcas.csv CSV HEADER"
+grep '^--@backup ' "$WT/docs/catalogo/rollout/rollback_${MIG}.sql" | sed 's/^--@backup //' | tr -d '' > "$TMP/plano-backup.sql"
+[ "$(wc -l < "$TMP/plano-backup.sql")" = "2" ] || { log "FALHA: plano sem os 2 comandos de backup"; exit 1; }
+"${PSQL[@]}" -d "$DB" -f "$TMP/plano-backup.sql" || { log "FALHA: backup do plano (passo 0) não rodou"; exit 1; }
+[ -s "$TMP/rb_lancamento.csv" ] && [ -s "$TMP/rb_marcas.csv" ] || { log "FALHA: backup do plano não gerou os arquivos"; exit 1; }
 NOVAS="$("${PSQL[@]}" -d "$DB" -c "SELECT md5(string_agg(x, '|' ORDER BY x)) FROM (SELECT id||'='||lancamento x FROM catalogo_aparelhos_loja_modelos UNION ALL SELECT \"storeId\"||'='||\"marcasConfig\"::text FROM compat_preferencias_loja) t")"
 cd "$WT"
 log "6. backup (passo 0 do plano): $(($(wc -l < "$TMP/rb_lancamento.csv")-1)) modelo(s) aguardando + $(($(wc -l < "$TMP/rb_marcas.csv")-1)) loja(s) com marcas · checksum colunas novas $NOVAS"
@@ -88,14 +98,8 @@ DATABASE_URL="$URL" DIRECT_URL="$URL" npx prisma migrate deploy --schema "$TMP/p
 FINAL="$(snap | tr '\n' ' ')"
 [ "$ANTES" = "$FINAL" ] && log "   dados existentes após reaplicar: IGUAIS" || log "   após reaplicar: DIVERGIU"
 cd "$TMP"
-"${PSQL[@]}" -d "$DB" <<'SQL'
-CREATE TEMP TABLE rb_l (id text, "storeId" text, "modelKey" text, lancamento text);
-\copy rb_l FROM 'rb_lancamento.csv' CSV HEADER
-UPDATE catalogo_aparelhos_loja_modelos m SET lancamento = r.lancamento FROM rb_l r WHERE m.id = r.id;
-CREATE TEMP TABLE rb_m ("storeId" text, marcas text);
-\copy rb_m FROM 'rb_marcas.csv' CSV HEADER
-UPDATE compat_preferencias_loja p SET "marcasConfig" = r.marcas::jsonb FROM rb_m r WHERE p."storeId" = r."storeId";
-SQL
+grep '^--@restaurar ' "$WT/docs/catalogo/rollout/rollback_${MIG}.sql" | sed 's/^--@restaurar //' | tr -d '' > "$TMP/plano-restaurar.sql"
+"${PSQL[@]}" -d "$DB" -f "$TMP/plano-restaurar.sql" || { log "FALHA: restauração do plano (passo 2) não rodou"; exit 1; }
 RESTAURADO="$("${PSQL[@]}" -d "$DB" -c "SELECT md5(string_agg(x, '|' ORDER BY x)) FROM (SELECT id||'='||lancamento x FROM catalogo_aparelhos_loja_modelos UNION ALL SELECT \"storeId\"||'='||\"marcasConfig\"::text FROM compat_preferencias_loja) t")"
 cd "$WT"
 [ "$NOVAS" = "$RESTAURADO" ] && log "   restauração do backup (passo 2 do plano): colunas novas IGUAIS ao pré-rollback" || log "   restauração: DIVERGIU ($RESTAURADO)"
