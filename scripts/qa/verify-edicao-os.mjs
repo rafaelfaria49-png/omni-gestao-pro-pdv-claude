@@ -39,12 +39,12 @@ try {
   let dialog = await abrirV4("QA-OS-PRAZO-330");
   await expect(dialog.getByLabel("Preço de venda do serviço 1", { exact: true })).toHaveValue("330");
   await dialog.getByLabel("Preço de venda do serviço 1", { exact: true }).fill("400");
-  await page.screenshot({ path: ".vercel/edicao-os-desktop.png", animations: "disabled", timeout: 8000 }).catch(() => console.warn("Screenshot desktop indisponível; fluxo funcional continua."));
+  if (process.env.QA_CAPTURE_SCREENSHOTS === "1") await page.screenshot({ path: ".vercel/edicao-os-desktop.png", animations: "disabled", timeout: 8000 }).catch(() => console.warn("Screenshot desktop indisponível; fluxo funcional continua."));
   await salvar(dialog, "QA navegador: corrigir preço a prazo de 330 para 400");
   dialog = await abrirV4("QA-OS-PRAZO-330");
   await expect(dialog.getByLabel("Preço de venda do serviço 1", { exact: true })).toHaveValue("400");
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: ".vercel/edicao-os-mobile.png", animations: "disabled", timeout: 8000 }).catch(() => console.warn("Screenshot mobile indisponível; dimensões serão verificadas."));
+  if (process.env.QA_CAPTURE_SCREENSHOTS === "1") await page.screenshot({ path: ".vercel/edicao-os-mobile.png", animations: "disabled", timeout: 8000 }).catch(() => console.warn("Screenshot mobile indisponível; dimensões serão verificadas."));
   const bounds = await dialog.boundingBox();
   if (!bounds || bounds.width > 390 || bounds.x < 0) throw new Error("Dialog fora do viewport mobile.");
   await dialog.getByLabel("Preço de venda do serviço 1", { exact: true }).fill("330");
@@ -61,11 +61,11 @@ try {
   await page.getByRole("button", { name: /Editar OS/ }).click({ timeout: 60000 });
   dialog = page.getByRole("dialog", { name: /Editar OS QA-OS-ABERTA/ });
   await expect(dialog.getByLabel("Nome do cliente", { exact: true })).toHaveValue("Cliente sintético · QA-OS-ABERTA", { timeout: 60000 });
-  await page.screenshot({ path: ".vercel/edicao-os-v3.png", animations: "disabled", timeout: 8000 }).catch(() => console.warn("Screenshot V3 indisponível."));
+  if (process.env.QA_CAPTURE_SCREENSHOTS === "1") await page.screenshot({ path: ".vercel/edicao-os-v3.png", animations: "disabled", timeout: 8000 }).catch(() => console.warn("Screenshot V3 indisponível."));
   if (errors.length) throw new Error(`Erros no navegador: ${errors.join("; ")}`);
   console.log("PASS: login real, formulário V3/V4, prévia, PIN real, correção 330→400→330, bloqueio parcial, desktop e mobile, sem pageerror.");
 } catch (e) {
-  await page.screenshot({ path: ".vercel/edicao-os-falha.png" }).catch(() => {});
-  console.error((await page.locator("body").innerText()).slice(-2200));
+  console.error("Falha funcional:", e.message);
+  console.error((await page.locator("body").innerText({ timeout: 2000 }).catch(() => "Página indisponível")).slice(-2200));
   throw e;
 } finally { await browser.close(); }
