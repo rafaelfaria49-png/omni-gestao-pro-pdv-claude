@@ -49,6 +49,7 @@ export function SupervisorGateDialog({
   confirmLabel = "Autorizar",
   closeOnAuthorized = true,
   scope,
+  storeId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -74,6 +75,8 @@ export function SupervisorGateDialog({
    * liberar a Venda B. Sem `scope`, o token nasce genérico (fluxo legado).
    */
   scope?: { action: string; resource?: string }
+  /** Loja explícita do formulário revisado; não depende do cookie de outra aba. */
+  storeId?: string
 }) {
   const [pin, setPin] = useState("")
   const [busy, setBusy] = useState(false)
@@ -99,7 +102,7 @@ export function SupervisorGateDialog({
       const r = await fetch("/api/auth/admin", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(storeId ? { "x-assistec-loja-id": storeId } : {}) },
         body: JSON.stringify({
           pin: value,
           ...(scope ? { action: scope.action, resource: scope.resource } : {}),
