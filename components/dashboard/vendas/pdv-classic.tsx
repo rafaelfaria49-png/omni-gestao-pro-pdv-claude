@@ -133,6 +133,8 @@ import {
 } from "@/lib/pdv-produtos-a-cadastrar"
 import { PdvPostSaleDialog } from "./pdv-post-sale-dialog"
 import { PdvAutoPrintFeedback } from "./pdv-auto-print-feedback"
+import { PdvDirectPrintFeedback, type DirectPrintRequest } from "./pdv-direct-print-feedback"
+import { useDirectPrintAvailability } from "@/lib/printing/direct/use-direct-print"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { VendaEsperaModal } from "./venda-espera-modal"
@@ -494,6 +496,9 @@ export function PdvClassic({
   const [postSalePrintOpen, setPostSalePrintOpen] = useState(false)
   const [postSalePrintInput, setPostSalePrintInput] = useState<PdvReceiptInput | null>(null)
   const [autoPrintInput, setAutoPrintInput] = useState<PdvReceiptInput | null>(null)
+  /** OMNI-PRINT-004C: impressão direta (agente local) de venda CONFIRMADA; desligada por padrão. */
+  const [directPrintRequest, setDirectPrintRequest] = useState<DirectPrintRequest | null>(null)
+  const [directPrintInput, setDirectPrintInput] = useState<PdvReceiptInput | null>(null)
 
   useEffect(() => {
     const id = (lojaAtivaId || "").trim()
@@ -1850,6 +1855,11 @@ export function PdvClassic({
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = useHeldSales(lojaKey, terminalIdForHold, "classic")
+  const directPrint = useDirectPrintAvailability(lojaKey, readSelectedTerminal(lojaKey)?.id ?? null, impressaoConfig.impressaoDireta)
+  // Troca de loja: um aviso de impressão nunca sobrevive ao contexto em que nasceu.
+  useEffect(() => {
+    setDirectPrintRequest(null)
+  }, [lojaKey])
 
   function handleHoldSale() {
     if (!heldSalesEnabled) return
@@ -2558,7 +2568,19 @@ export function PdvClassic({
             /* fila é auxiliar — não interrompe o pós-venda */
           }
           const _hadItems = cart.length > 0
-          if (impressaoConfig.imprimirAutomatico && _hadItems) {
+          if (_hadItems && directPrint.available && directPrint.terminalId && result.serverId) {
+            // OMNI-PRINT-004C: venda CONFIRMADA (serverId do servidor) + terminal vinculado → agente local.
+            // Sem window.print/diálogo; o navegador só abre por escolha explícita (registrada) no aviso.
+            setDirectPrintInput(_printInput)
+            setDirectPrintRequest({
+              storeId: lojaKey,
+              saleId: result.serverId,
+              terminalId: directPrint.terminalId,
+              numeroVenda: _printInput.numeroVenda ?? result.saleId,
+              mode: impressaoConfig.imprimirAutomatico ? "auto" : "manual",
+              copies: impressaoConfig.viasCupom,
+            })
+          } else if (impressaoConfig.imprimirAutomatico && _hadItems) {
             setAutoPrintInput(_printInput)
           } else if (_hadItems) {
             setPostSalePrintInput(_printInput)
@@ -2746,6 +2768,21 @@ export function PdvClassic({
         impressaoConfig={impressaoConfig}
         logoUrl={storeLogoUrl}
         onDismiss={() => setAutoPrintInput(null)}
+      />
+
+      <PdvDirectPrintFeedback
+        request={directPrintRequest}
+        onDismiss={() => setDirectPrintRequest(null)}
+        onUnsupported={() => {
+          // Venda fora do contrato da impressão direta (KG/fracionada, limites, pagamento): exatamente o fluxo anterior.
+          setDirectPrintRequest(null)
+          if (!directPrintInput) return
+          if (impressaoConfig.imprimirAutomatico) setAutoPrintInput(directPrintInput)
+          else {
+            setPostSalePrintInput(directPrintInput)
+            setPostSalePrintOpen(true)
+          }
+        }}
       />
 
       {/* Lote 4: dialog `operationType` + painel `cashHistory` REMOVIDOS.

@@ -1,0 +1,86 @@
+name: Omni Print D03 — retenção segura
+on:
+  pull_request:
+    paths:
+      - "lib/printing/direct/**"
+      - "tools/print-d03/**"
+      - "tools/print-004c-e2e/**"
+      - "tools/print-d02/**"
+      - "tools/omni-print-agent/**"
+      - "docs/print-004c-e2e/**"
+      - ".github/workflows/omni-print-d03.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-agent:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated
+    steps:
+      - uses: actions/checkout@v4
+      - name: Iniciar evidências exclusivas desta execução
+        run: node tools/print-d03/evidence.mjs --reset
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - name: Diário, protocolo e host PowerShell real sem impressora
+        run: node tools/print-d03/verify.mjs unit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omni-print-d03-windows
+          path: docs/print-004c-e2e/evidence/d03/
+  software:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PRINT_LAB_DIR: /tmp/omni-print-d03-pg
+      PRINT_LAB_PORT: "55483"
+      PRINT_LAB_BASE_REF: "ce9228c57617f72e9c350cc0232f973fb57a0eaa"
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Iniciar evidências exclusivas desta execução
+        run: node tools/print-d03/evidence.mjs --reset
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - name: PostgreSQL 17 descartável
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gpg
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --retry 3 -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc | grep -q B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+          echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-17
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+      - name: Inicializar laboratório exclusivo
+        run: |
+          node tools/print-004c-e2e/pg-lab.mjs init
+          node tools/print-004c-e2e/pg-lab.mjs start
+      - run: npx playwright install --with-deps chromium
+      - name: Bateria D03, D01-A1, D02, agentes, PDV, typecheck, lint e build
+        run: node tools/print-d03/verify.mjs
+      - name: Mutações de invariantes críticos
+        run: node tools/print-d03/mutation.mjs
+      - name: Consolidar somente evidências executadas
+        if: always()
+        run: node tools/print-d03/evidence.mjs
+      - name: Encerrar somente o laboratório desta execução
+        if: always()
+        run: node tools/print-004c-e2e/pg-lab.mjs stop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omni-print-d03-evidence
+          path: docs/print-004c-e2e/evidence/d03/

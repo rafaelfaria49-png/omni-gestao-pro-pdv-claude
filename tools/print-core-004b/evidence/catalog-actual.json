@@ -1,0 +1,2966 @@
+{
+  "columns": [
+    {
+      "table_name": "print_attempts",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "document_id",
+      "ordinal_position": 3,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "job_id",
+      "ordinal_position": 4,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "copy_id",
+      "ordinal_position": 5,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "number",
+      "ordinal_position": 6,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "lease_epoch",
+      "ordinal_position": 7,
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "destination_id",
+      "ordinal_position": 8,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "result",
+      "ordinal_position": 9,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "external_ref",
+      "ordinal_position": 10,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "started_at",
+      "ordinal_position": 11,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_attempts",
+      "column_name": "finished_at",
+      "ordinal_position": 12,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "binding_id",
+      "ordinal_position": 3,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "version",
+      "ordinal_position": 4,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "terminal_id",
+      "ordinal_position": 5,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "installation_id",
+      "ordinal_position": 6,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "destination_id",
+      "ordinal_position": 7,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "transport_destination_ref",
+      "ordinal_position": 8,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "profile_id",
+      "ordinal_position": 9,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "profile_version",
+      "ordinal_position": 10,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "profile_hash",
+      "ordinal_position": 11,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "profile",
+      "ordinal_position": 12,
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "state",
+      "ordinal_position": 13,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "family",
+      "ordinal_position": 14,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "configured_by_id",
+      "ordinal_position": 15,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "revoked_at",
+      "ordinal_position": 16,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "revoked_by_id",
+      "ordinal_position": 17,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_bindings",
+      "column_name": "created_at",
+      "ordinal_position": 18,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "document_id",
+      "ordinal_position": 3,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "job_id",
+      "ordinal_position": 4,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "ordinal",
+      "ordinal_position": 5,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "state",
+      "ordinal_position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": "'REGISTERED'::text"
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "payload_hash",
+      "ordinal_position": 7,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "payload_size",
+      "ordinal_position": 8,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "payload_cipher",
+      "ordinal_position": 9,
+      "data_type": "bytea",
+      "udt_name": "bytea",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "payload_key_ref",
+      "ordinal_position": 10,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "payload_expires_at",
+      "ordinal_position": 11,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "payload_purged_at",
+      "ordinal_position": 12,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "send_key",
+      "ordinal_position": 13,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "lease_owner",
+      "ordinal_position": 14,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "lease_until",
+      "ordinal_position": 15,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "lease_epoch",
+      "ordinal_position": 16,
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "retry_suppressed_by_job_id",
+      "ordinal_position": 17,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_copies",
+      "column_name": "created_at",
+      "ordinal_position": 18,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "principal_id",
+      "ordinal_position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "session_version",
+      "ordinal_position": 4,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "created_at",
+      "ordinal_position": 5,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "expires_at",
+      "ordinal_position": 6,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "revoked_at",
+      "ordinal_position": 7,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_delegations",
+      "column_name": "revocation_reason",
+      "ordinal_position": 8,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "identity_hash",
+      "ordinal_position": 2,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "serialization_mode",
+      "ordinal_position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "gate_epoch",
+      "ordinal_position": 4,
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "held_attempt_id",
+      "ordinal_position": 5,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "held_store_id",
+      "ordinal_position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "blocked_at",
+      "ordinal_position": 7,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "release_event_id",
+      "ordinal_position": 8,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_destinations",
+      "column_name": "created_at",
+      "ordinal_position": 9,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "document_kind",
+      "ordinal_position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "sale_id",
+      "ordinal_position": 4,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "synthetic_key",
+      "ordinal_position": 5,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "family",
+      "ordinal_position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "initial_state",
+      "ordinal_position": 7,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": "'OPEN'::text"
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "initial_intent_id",
+      "ordinal_position": 8,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "closed_by_intent_id",
+      "ordinal_position": 9,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "active_reprint_intent_id",
+      "ordinal_position": 10,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "active_reprint_until",
+      "ordinal_position": 11,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "risk_revision",
+      "ordinal_position": 12,
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "retired_at",
+      "ordinal_position": 13,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_documents",
+      "column_name": "created_at",
+      "ordinal_position": 14,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "scope_kind",
+      "ordinal_position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "document_id",
+      "ordinal_position": 4,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "binding_version_id",
+      "ordinal_position": 5,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "delegation_id",
+      "ordinal_position": 6,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "job_id",
+      "ordinal_position": 7,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "copy_id",
+      "ordinal_position": 8,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "attempt_id",
+      "ordinal_position": 9,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "destination_id",
+      "ordinal_position": 10,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "event_type",
+      "ordinal_position": 11,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "proof_kind",
+      "ordinal_position": 12,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "evidence_hash",
+      "ordinal_position": 13,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "evidence_key",
+      "ordinal_position": 14,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "actor_kind",
+      "ordinal_position": 15,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "actor_user_id",
+      "ordinal_position": 16,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "details",
+      "ordinal_position": 17,
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "details_purged_at",
+      "ordinal_position": 18,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_events",
+      "column_name": "created_at",
+      "ordinal_position": 19,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_installations",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_installations",
+      "column_name": "identity_hash",
+      "ordinal_position": 2,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_installations",
+      "column_name": "proof_mode",
+      "ordinal_position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_installations",
+      "column_name": "revocation_epoch",
+      "ordinal_position": 4,
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "print_installations",
+      "column_name": "revoked_at",
+      "ordinal_position": 5,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_installations",
+      "column_name": "revoked_by_id",
+      "ordinal_position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_installations",
+      "column_name": "created_at",
+      "ordinal_position": 7,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "document_id",
+      "ordinal_position": 3,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "intent_id",
+      "ordinal_position": 4,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "kind",
+      "ordinal_position": 5,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "execution_mode",
+      "ordinal_position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "principal_id",
+      "ordinal_position": 7,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "delegation_id",
+      "ordinal_position": 8,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "terminal_id",
+      "ordinal_position": 9,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "delivery_mode",
+      "ordinal_position": 10,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "binding_version_id",
+      "ordinal_position": 11,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "browser_context_id",
+      "ordinal_position": 12,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "copies",
+      "ordinal_position": 13,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "document_version",
+      "ordinal_position": 14,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "canonical_version",
+      "ordinal_position": 15,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "snapshot_hash",
+      "ordinal_position": 16,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "snapshot_cipher",
+      "ordinal_position": 17,
+      "data_type": "bytea",
+      "udt_name": "bytea",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "snapshot_key_ref",
+      "ordinal_position": 18,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "snapshot_purged_at",
+      "ordinal_position": 19,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "payload_manifest_hash",
+      "ordinal_position": 20,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "renderer_version",
+      "ordinal_position": 21,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "profile_id",
+      "ordinal_position": 22,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "profile_version",
+      "ordinal_position": 23,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "previous_job_id",
+      "ordinal_position": 24,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "reason_code",
+      "ordinal_position": 25,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "confirmed_risk_revision",
+      "ordinal_position": 26,
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "confirmed_exposure_hash",
+      "ordinal_position": 27,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "risk_confirmed_at",
+      "ordinal_position": 28,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "authorization_expires_at",
+      "ordinal_position": 29,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "content_expires_at",
+      "ordinal_position": 30,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_jobs",
+      "column_name": "created_at",
+      "ordinal_position": 31,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "id",
+      "ordinal_position": 1,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "store_id",
+      "ordinal_position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "document_id",
+      "ordinal_position": 3,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "principal_id",
+      "ordinal_position": 4,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "delegation_id",
+      "ordinal_position": 5,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "intent_id",
+      "ordinal_position": 6,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "command",
+      "ordinal_position": 7,
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "command_hash",
+      "ordinal_position": 8,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "canonical_version",
+      "ordinal_position": 9,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "risk_revision",
+      "ordinal_position": 10,
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "risk_set_hash",
+      "ordinal_position": 11,
+      "data_type": "character",
+      "udt_name": "bpchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "risk_confirmed_at",
+      "ordinal_position": 12,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "issued_at",
+      "ordinal_position": 13,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "expires_at",
+      "ordinal_position": 14,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "revoked_at",
+      "ordinal_position": 15,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "job_id",
+      "ordinal_position": 16,
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "consumed_at",
+      "ordinal_position": 17,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "print_requests",
+      "column_name": "command_purged_at",
+      "ordinal_position": 18,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "print_attempts",
+      "name": "p004_attempt_commit",
+      "kind": "t",
+      "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "p004_fk_26",
+      "kind": "f",
+      "definition": "FOREIGN KEY (copy_id, job_id, document_id, store_id) REFERENCES print_copies(id, job_id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "p004_fk_27",
+      "kind": "f",
+      "definition": "FOREIGN KEY (destination_id) REFERENCES print_destinations(id)"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "print_attempts_finish_ck",
+      "kind": "c",
+      "definition": "CHECK ((((result = 'STARTED'::text) AND (finished_at IS NULL)) OR (result = 'UNKNOWN'::text) OR ((result <> ALL (ARRAY['STARTED'::text, 'UNKNOWN'::text])) AND (finished_at IS NOT NULL))))"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "print_attempts_number_ck",
+      "kind": "c",
+      "definition": "CHECK (((number > 0) AND (lease_epoch >= 0)))"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "print_attempts_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "print_attempts_result_ck",
+      "kind": "c",
+      "definition": "CHECK ((result = ANY (ARRAY['STARTED'::text, 'PRE_SEND_FAILED'::text, 'UNKNOWN'::text, 'TRANSPORT_ACCEPTED'::text, 'SPOOLER_ACCEPTED'::text, 'BROWSER_AVAILABLE'::text])))"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "print_attempts_u1",
+      "kind": "u",
+      "definition": "UNIQUE (copy_id, number)"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "print_attempts_u2",
+      "kind": "u",
+      "definition": "UNIQUE (id, store_id)"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "print_attempts_u3",
+      "kind": "u",
+      "definition": "UNIQUE (id, copy_id, job_id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_fk_04",
+      "kind": "f",
+      "definition": "FOREIGN KEY (store_id) REFERENCES stores(id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_fk_05",
+      "kind": "f",
+      "definition": "FOREIGN KEY (terminal_id, store_id) REFERENCES pdv_terminais(id, \"storeId\")"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_fk_06",
+      "kind": "f",
+      "definition": "FOREIGN KEY (installation_id) REFERENCES print_installations(id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_fk_07",
+      "kind": "f",
+      "definition": "FOREIGN KEY (destination_id) REFERENCES print_destinations(id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_fk_08",
+      "kind": "f",
+      "definition": "FOREIGN KEY (configured_by_id) REFERENCES admin_users(id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_fk_09",
+      "kind": "f",
+      "definition": "FOREIGN KEY (revoked_by_id) REFERENCES admin_users(id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_family_ck",
+      "kind": "c",
+      "definition": "CHECK ((family = ANY (ARRAY['SALE_RECEIPT'::text, 'SYNTHETIC_TEST'::text])))"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_profile_ck",
+      "kind": "c",
+      "definition": "CHECK ((jsonb_typeof(profile) = 'object'::text))"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_profile_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((profile_hash IS NULL) OR ((profile_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_revocation_ck",
+      "kind": "c",
+      "definition": "CHECK ((((state = 'REVOKED'::text) = ((revoked_at IS NOT NULL) AND (revoked_by_id IS NOT NULL))) AND ((revoked_at IS NULL) = (revoked_by_id IS NULL))))"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_state_ck",
+      "kind": "c",
+      "definition": "CHECK ((state = ANY (ARRAY['PENDING'::text, 'ACTIVE'::text, 'REVOKED'::text])))"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_u1",
+      "kind": "u",
+      "definition": "UNIQUE (binding_id, version)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_u2",
+      "kind": "u",
+      "definition": "UNIQUE (id, store_id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_u3",
+      "kind": "u",
+      "definition": "UNIQUE (id, store_id, terminal_id)"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "print_bindings_version_ck",
+      "kind": "c",
+      "definition": "CHECK (((version > 0) AND (profile_version > 0)))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "p004_copy_commit",
+      "kind": "t",
+      "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "p004_fk_24",
+      "kind": "f",
+      "definition": "FOREIGN KEY (job_id, document_id, store_id) REFERENCES print_jobs(id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "p004_fk_25",
+      "kind": "f",
+      "definition": "FOREIGN KEY (retry_suppressed_by_job_id, document_id, store_id) REFERENCES print_jobs(id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_expiry_ck",
+      "kind": "c",
+      "definition": "CHECK ((payload_expires_at > created_at))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_lease_ck",
+      "kind": "c",
+      "definition": "CHECK (((lease_epoch >= 0) AND ((lease_owner IS NULL) = (lease_until IS NULL))))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_ordinal_ck",
+      "kind": "c",
+      "definition": "CHECK ((ordinal > 0))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_payload_ck",
+      "kind": "c",
+      "definition": "CHECK ((((payload_cipher IS NOT NULL) AND (payload_key_ref IS NOT NULL) AND (payload_purged_at IS NULL)) OR ((payload_cipher IS NULL) AND (payload_key_ref IS NULL) AND (payload_purged_at IS NOT NULL))))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_payload_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((payload_hash IS NULL) OR ((payload_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_size_ck",
+      "kind": "c",
+      "definition": "CHECK ((payload_size >= 0))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_state_ck",
+      "kind": "c",
+      "definition": "CHECK ((state = ANY (ARRAY['REGISTERED'::text, 'READY'::text, 'SENDING'::text, 'TRANSPORT_ACCEPTED'::text, 'SPOOLER_ACCEPTED'::text, 'PRE_SEND_FAILED'::text, 'UNKNOWN'::text, 'EXPIRED'::text, 'CANCELLED'::text, 'BROWSER_AVAILABLE'::text])))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_substitute_ck",
+      "kind": "c",
+      "definition": "CHECK (((retry_suppressed_by_job_id IS NULL) OR (retry_suppressed_by_job_id <> job_id)))"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_u1",
+      "kind": "u",
+      "definition": "UNIQUE (job_id, ordinal)"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_u2",
+      "kind": "u",
+      "definition": "UNIQUE (send_key)"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "print_copies_u3",
+      "kind": "u",
+      "definition": "UNIQUE (id, job_id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "p004_fk_10",
+      "kind": "f",
+      "definition": "FOREIGN KEY (store_id) REFERENCES stores(id)"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "p004_fk_11",
+      "kind": "f",
+      "definition": "FOREIGN KEY (principal_id) REFERENCES admin_users(id)"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "print_delegations_expiry_ck",
+      "kind": "c",
+      "definition": "CHECK ((expires_at > created_at))"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "print_delegations_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "print_delegations_revocation_ck",
+      "kind": "c",
+      "definition": "CHECK (((revoked_at IS NULL) = (revocation_reason IS NULL)))"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "print_delegations_u1",
+      "kind": "u",
+      "definition": "UNIQUE (id, store_id, principal_id)"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "print_delegations_u2",
+      "kind": "u",
+      "definition": "UNIQUE (id, store_id)"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "print_delegations_version_ck",
+      "kind": "c",
+      "definition": "CHECK ((session_version >= 0))"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "p004_fk_02",
+      "kind": "f",
+      "definition": "FOREIGN KEY (held_attempt_id, held_store_id) REFERENCES print_attempts(id, store_id)"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "p004_fk_03",
+      "kind": "f",
+      "definition": "FOREIGN KEY (release_event_id) REFERENCES print_events(id)"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "print_destinations_blocked_ck",
+      "kind": "c",
+      "definition": "CHECK (((held_attempt_id IS NULL) OR (blocked_at IS NOT NULL)))"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "print_destinations_epoch_ck",
+      "kind": "c",
+      "definition": "CHECK ((gate_epoch >= 0))"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "print_destinations_holder_ck",
+      "kind": "c",
+      "definition": "CHECK (((held_attempt_id IS NULL) = (held_store_id IS NULL)))"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "print_destinations_identity_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((identity_hash IS NULL) OR ((identity_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "print_destinations_mode_ck",
+      "kind": "c",
+      "definition": "CHECK ((serialization_mode = ANY (ARRAY['SYNTHETIC'::text, 'UNVERIFIED'::text])))"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "print_destinations_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "print_destinations_u1",
+      "kind": "u",
+      "definition": "UNIQUE (identity_hash)"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "p004_fk_12",
+      "kind": "f",
+      "definition": "FOREIGN KEY (store_id) REFERENCES stores(id)"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "p004_fk_13",
+      "kind": "f",
+      "definition": "FOREIGN KEY (sale_id, store_id) REFERENCES vendas(id, \"storeId\")"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_active_ck",
+      "kind": "c",
+      "definition": "CHECK (((active_reprint_intent_id IS NULL) = (active_reprint_until IS NULL)))"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_initial_ck",
+      "kind": "c",
+      "definition": "CHECK (((initial_state = ANY (ARRAY['OPEN'::text, 'INITIAL_REGISTERED'::text, 'HISTORICAL_CLOSED'::text])) AND (((initial_state = 'OPEN'::text) AND (closed_by_intent_id IS NULL)) OR ((initial_state <> 'OPEN'::text) AND (closed_by_intent_id IS NOT NULL)))))"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_refs_ck",
+      "kind": "c",
+      "definition": "CHECK ((((document_kind = 'SALE'::text) AND (sale_id IS NOT NULL) AND (synthetic_key IS NULL) AND (family = 'SALE_RECEIPT'::text)) OR ((document_kind = 'SYNTHETIC'::text) AND (sale_id IS NULL) AND (synthetic_key IS NOT NULL) AND (family = 'SYNTHETIC_TEST'::text))))"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_risk_ck",
+      "kind": "c",
+      "definition": "CHECK ((risk_revision >= 0))"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_synthetic_ck",
+      "kind": "c",
+      "definition": "CHECK (((document_kind <> 'SYNTHETIC'::text) OR ((initial_state = 'OPEN'::text) AND (initial_intent_id IS NULL) AND (closed_by_intent_id IS NULL))))"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_u1",
+      "kind": "u",
+      "definition": "UNIQUE (id, store_id)"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_u2",
+      "kind": "u",
+      "definition": "UNIQUE (store_id, sale_id, family)"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "print_documents_u3",
+      "kind": "u",
+      "definition": "UNIQUE (store_id, synthetic_key)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_28",
+      "kind": "f",
+      "definition": "FOREIGN KEY (store_id) REFERENCES stores(id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_29",
+      "kind": "f",
+      "definition": "FOREIGN KEY (document_id, store_id) REFERENCES print_documents(id, store_id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_30",
+      "kind": "f",
+      "definition": "FOREIGN KEY (binding_version_id, store_id) REFERENCES print_bindings(id, store_id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_31",
+      "kind": "f",
+      "definition": "FOREIGN KEY (delegation_id, store_id) REFERENCES print_delegations(id, store_id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_32",
+      "kind": "f",
+      "definition": "FOREIGN KEY (job_id, document_id, store_id) REFERENCES print_jobs(id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_33",
+      "kind": "f",
+      "definition": "FOREIGN KEY (copy_id, job_id, document_id, store_id) REFERENCES print_copies(id, job_id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_34",
+      "kind": "f",
+      "definition": "FOREIGN KEY (attempt_id, copy_id, job_id, document_id, store_id) REFERENCES print_attempts(id, copy_id, job_id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_35",
+      "kind": "f",
+      "definition": "FOREIGN KEY (destination_id) REFERENCES print_destinations(id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_fk_36",
+      "kind": "f",
+      "definition": "FOREIGN KEY (actor_user_id) REFERENCES admin_users(id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_actor_ck",
+      "kind": "c",
+      "definition": "CHECK ((((actor_kind = 'USER'::text) AND (actor_user_id IS NOT NULL)) OR ((actor_kind = ANY (ARRAY['SYSTEM'::text, 'SYNTHETIC_EXECUTOR'::text])) AND (actor_user_id IS NULL))))"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_chain_ck",
+      "kind": "c",
+      "definition": "CHECK ((((job_id IS NULL) OR (document_id IS NOT NULL)) AND ((copy_id IS NULL) OR (job_id IS NOT NULL)) AND ((attempt_id IS NULL) OR (copy_id IS NOT NULL)) AND ((destination_id IS NULL) OR (attempt_id IS NOT NULL))))"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_details_ck",
+      "kind": "c",
+      "definition": "CHECK ((((details IS NULL) OR (jsonb_typeof(details) = 'object'::text)) AND ((details_purged_at IS NULL) OR (details IS NULL))))"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_evidence_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((evidence_hash IS NULL) OR ((evidence_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_proof_ck",
+      "kind": "c",
+      "definition": "CHECK ((((proof_kind = 'NONE'::text) AND (evidence_hash IS NULL) AND (evidence_key IS NULL)) OR ((proof_kind = ANY (ARRAY['SYNTHETIC_NO_EFFECT'::text, 'SYNTHETIC_EGRESS_CLOSED'::text, 'SYNTHETIC_ATOMIC_QUEUE'::text, 'SYNTHETIC_TRANSPORT_ACCEPTED'::text, 'SYNTHETIC_SPOOLER_ACCEPTED'::text, 'SYNTHETIC_BROWSER_AVAILABLE'::text])) AND (attempt_id IS NOT NULL) AND (evidence_hash IS NOT NULL) AND (evidence_key IS NOT NULL) AND (actor_kind = 'SYNTHETIC_EXECUTOR'::text))))"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_scope_ck",
+      "kind": "c",
+      "definition": "CHECK ((((scope_kind = 'DOCUMENT'::text) AND (document_id IS NOT NULL) AND (binding_version_id IS NULL) AND (delegation_id IS NULL)) OR ((scope_kind = 'BINDING'::text) AND (binding_version_id IS NOT NULL) AND (document_id IS NULL) AND (delegation_id IS NULL) AND (job_id IS NULL) AND (copy_id IS NULL) AND (attempt_id IS NULL) AND (destination_id IS NULL)) OR ((scope_kind = 'DELEGATION'::text) AND (delegation_id IS NOT NULL) AND (document_id IS NULL) AND (binding_version_id IS NULL) AND (job_id IS NULL) AND (copy_id IS NULL) AND (attempt_id IS NULL) AND (destination_id IS NULL))))"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_type_ck",
+      "kind": "c",
+      "definition": "CHECK ((event_type ~ '^[A-Z][A-Z0-9_]{0,79}$'::text))"
+    },
+    {
+      "table_name": "print_events",
+      "name": "print_events_u2",
+      "kind": "u",
+      "definition": "UNIQUE (attempt_id, evidence_key)"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "p004_fk_01",
+      "kind": "f",
+      "definition": "FOREIGN KEY (revoked_by_id) REFERENCES admin_users(id)"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "print_installations_epoch_ck",
+      "kind": "c",
+      "definition": "CHECK ((revocation_epoch >= 0))"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "print_installations_identity_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((identity_hash IS NULL) OR ((identity_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "print_installations_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "print_installations_proof_ck",
+      "kind": "c",
+      "definition": "CHECK ((proof_mode = ANY (ARRAY['SYNTHETIC'::text, 'UNVERIFIED'::text])))"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "print_installations_revoked_ck",
+      "kind": "c",
+      "definition": "CHECK (((revoked_at IS NULL) = (revoked_by_id IS NULL)))"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "print_installations_u1",
+      "kind": "u",
+      "definition": "UNIQUE (identity_hash)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_fk_14",
+      "kind": "f",
+      "definition": "FOREIGN KEY (store_id) REFERENCES stores(id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_fk_15",
+      "kind": "f",
+      "definition": "FOREIGN KEY (document_id, store_id) REFERENCES print_documents(id, store_id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_fk_16",
+      "kind": "f",
+      "definition": "FOREIGN KEY (delegation_id, store_id, principal_id) REFERENCES print_delegations(id, store_id, principal_id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_fk_17",
+      "kind": "f",
+      "definition": "FOREIGN KEY (terminal_id, store_id) REFERENCES pdv_terminais(id, \"storeId\")"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_fk_18",
+      "kind": "f",
+      "definition": "FOREIGN KEY (binding_version_id, store_id, terminal_id) REFERENCES print_bindings(id, store_id, terminal_id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_fk_19",
+      "kind": "f",
+      "definition": "FOREIGN KEY (previous_job_id, document_id, store_id) REFERENCES print_jobs(id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_job_commit",
+      "kind": "t",
+      "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_confirmed_exposure_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((confirmed_exposure_hash IS NULL) OR ((confirmed_exposure_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_copies_ck",
+      "kind": "c",
+      "definition": "CHECK ((copies > 0))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_document_version_hex",
+      "kind": "c",
+      "definition": "CHECK (((document_version IS NULL) OR ((document_version)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_expiry_ck",
+      "kind": "c",
+      "definition": "CHECK (((authorization_expires_at > created_at) AND (content_expires_at >= authorization_expires_at)))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_kind_ck",
+      "kind": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['INITIAL'::text, 'REPRINT'::text, 'TEST'::text])))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_not_self_ck",
+      "kind": "c",
+      "definition": "CHECK (((previous_job_id IS NULL) OR (previous_job_id <> id)))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_payload_manifest_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((payload_manifest_hash IS NULL) OR ((payload_manifest_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_reason_ck",
+      "kind": "c",
+      "definition": "CHECK ((((kind = 'REPRINT'::text) AND (reason_code IS NOT NULL) AND (reason_code = ANY (ARRAY['CUSTOMER_REQUEST'::text, 'ILLEGIBLE'::text, 'LOST'::text, 'UNCERTAIN_RESULT'::text, 'EXPLICIT_FALLBACK'::text, 'UPDATED_DOCUMENT'::text]))) OR ((kind <> 'REPRINT'::text) AND (reason_code IS NULL) AND (previous_job_id IS NULL))))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_snapshot_ck",
+      "kind": "c",
+      "definition": "CHECK ((((snapshot_cipher IS NOT NULL) AND (snapshot_key_ref IS NOT NULL) AND (snapshot_purged_at IS NULL)) OR ((snapshot_cipher IS NULL) AND (snapshot_key_ref IS NULL) AND (snapshot_purged_at IS NOT NULL))))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_snapshot_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((snapshot_hash IS NULL) OR ((snapshot_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_synthetic_only_ck",
+      "kind": "c",
+      "definition": "CHECK ((execution_mode = 'SYNTHETIC_ONLY'::text))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_target_ck",
+      "kind": "c",
+      "definition": "CHECK ((((delivery_mode = 'THERMAL_BOUND'::text) AND (binding_version_id IS NOT NULL) AND (browser_context_id IS NULL)) OR ((delivery_mode = 'BROWSER_A4'::text) AND (binding_version_id IS NULL) AND (browser_context_id IS NOT NULL) AND (copies = 1))))"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_u1",
+      "kind": "u",
+      "definition": "UNIQUE (intent_id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_u3",
+      "kind": "u",
+      "definition": "UNIQUE (id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "print_jobs_versions_ck",
+      "kind": "c",
+      "definition": "CHECK (((canonical_version = 1) AND (profile_version > 0) AND (confirmed_risk_revision >= 0)))"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "p004_fk_20",
+      "kind": "f",
+      "definition": "FOREIGN KEY (store_id) REFERENCES stores(id)"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "p004_fk_21",
+      "kind": "f",
+      "definition": "FOREIGN KEY (document_id, store_id) REFERENCES print_documents(id, store_id)"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "p004_fk_22",
+      "kind": "f",
+      "definition": "FOREIGN KEY (delegation_id, store_id, principal_id) REFERENCES print_delegations(id, store_id, principal_id)"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "p004_fk_23",
+      "kind": "f",
+      "definition": "FOREIGN KEY (job_id, document_id, store_id) REFERENCES print_jobs(id, document_id, store_id)"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "print_requests_canonical_ck",
+      "kind": "c",
+      "definition": "CHECK (((canonical_version = 1) AND (risk_revision >= 0)))"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "print_requests_command_ck",
+      "kind": "c",
+      "definition": "CHECK ((((command IS NOT NULL) AND (command_purged_at IS NULL) AND (jsonb_typeof(command) = 'object'::text)) OR ((command IS NULL) AND (command_purged_at IS NOT NULL))))"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "print_requests_command_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((command_hash IS NULL) OR ((command_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "print_requests_consumed_ck",
+      "kind": "c",
+      "definition": "CHECK (((job_id IS NULL) = (consumed_at IS NULL)))"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "print_requests_expiry_ck",
+      "kind": "c",
+      "definition": "CHECK ((expires_at > issued_at))"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "print_requests_pkey",
+      "kind": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "print_requests_risk_set_hash_hex",
+      "kind": "c",
+      "definition": "CHECK (((risk_set_hash IS NULL) OR ((risk_set_hash)::text ~ '^[0-9a-f]{64}$'::text)))"
+    }
+  ],
+  "indexes": [
+    {
+      "schemaname": "public",
+      "tablename": "pdv_terminais",
+      "indexname": "p004_term_id_store_uq",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX p004_term_id_store_uq ON public.pdv_terminais USING btree (id, \"storeId\")"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_attempts",
+      "indexname": "p004_attempt_effect_uq",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX p004_attempt_effect_uq ON public.print_attempts USING btree (copy_id) WHERE (result = ANY (ARRAY['STARTED'::text, 'UNKNOWN'::text, 'TRANSPORT_ACCEPTED'::text, 'SPOOLER_ACCEPTED'::text, 'BROWSER_AVAILABLE'::text]))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_attempts",
+      "indexname": "print_attempts_i1",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_attempts_i1 ON public.print_attempts USING btree (store_id, copy_id, started_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_attempts",
+      "indexname": "print_attempts_i2",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_attempts_i2 ON public.print_attempts USING btree (destination_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_attempts",
+      "indexname": "print_attempts_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_attempts_pkey ON public.print_attempts USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_attempts",
+      "indexname": "print_attempts_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_attempts_u1 ON public.print_attempts USING btree (copy_id, number)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_attempts",
+      "indexname": "print_attempts_u2",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_attempts_u2 ON public.print_attempts USING btree (id, store_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_attempts",
+      "indexname": "print_attempts_u3",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_attempts_u3 ON public.print_attempts USING btree (id, copy_id, job_id, document_id, store_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "p004_binding_active_uq",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX p004_binding_active_uq ON public.print_bindings USING btree (store_id, terminal_id, family) WHERE (state = 'ACTIVE'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "print_bindings_i1",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_bindings_i1 ON public.print_bindings USING btree (store_id, terminal_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "print_bindings_i2",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_bindings_i2 ON public.print_bindings USING btree (installation_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "print_bindings_i3",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_bindings_i3 ON public.print_bindings USING btree (destination_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "print_bindings_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_bindings_pkey ON public.print_bindings USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "print_bindings_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_bindings_u1 ON public.print_bindings USING btree (binding_id, version)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "print_bindings_u2",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_bindings_u2 ON public.print_bindings USING btree (id, store_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_bindings",
+      "indexname": "print_bindings_u3",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_bindings_u3 ON public.print_bindings USING btree (id, store_id, terminal_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_copies",
+      "indexname": "p004_copy_ready_idx",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX p004_copy_ready_idx ON public.print_copies USING btree (store_id, created_at, id) WHERE ((state = 'READY'::text) AND (retry_suppressed_by_job_id IS NULL))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_copies",
+      "indexname": "print_copies_i1",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_copies_i1 ON public.print_copies USING btree (store_id, document_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_copies",
+      "indexname": "print_copies_i2",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_copies_i2 ON public.print_copies USING btree (lease_until)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_copies",
+      "indexname": "print_copies_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_copies_pkey ON public.print_copies USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_copies",
+      "indexname": "print_copies_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_copies_u1 ON public.print_copies USING btree (job_id, ordinal)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_copies",
+      "indexname": "print_copies_u2",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_copies_u2 ON public.print_copies USING btree (send_key)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_copies",
+      "indexname": "print_copies_u3",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_copies_u3 ON public.print_copies USING btree (id, job_id, document_id, store_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_delegations",
+      "indexname": "print_delegations_i1",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_delegations_i1 ON public.print_delegations USING btree (principal_id, session_version)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_delegations",
+      "indexname": "print_delegations_i2",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_delegations_i2 ON public.print_delegations USING btree (store_id, expires_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_delegations",
+      "indexname": "print_delegations_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_delegations_pkey ON public.print_delegations USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_delegations",
+      "indexname": "print_delegations_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_delegations_u1 ON public.print_delegations USING btree (id, store_id, principal_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_delegations",
+      "indexname": "print_delegations_u2",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_delegations_u2 ON public.print_delegations USING btree (id, store_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_destinations",
+      "indexname": "print_destinations_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_destinations_pkey ON public.print_destinations USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_destinations",
+      "indexname": "print_destinations_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_destinations_u1 ON public.print_destinations USING btree (identity_hash)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_documents",
+      "indexname": "print_documents_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_documents_pkey ON public.print_documents USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_documents",
+      "indexname": "print_documents_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_documents_u1 ON public.print_documents USING btree (id, store_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_documents",
+      "indexname": "print_documents_u2",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_documents_u2 ON public.print_documents USING btree (store_id, sale_id, family)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_documents",
+      "indexname": "print_documents_u3",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_documents_u3 ON public.print_documents USING btree (store_id, synthetic_key)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_events",
+      "indexname": "print_events_i1",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_events_i1 ON public.print_events USING btree (store_id, document_id, created_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_events",
+      "indexname": "print_events_i2",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_events_i2 ON public.print_events USING btree (attempt_id, created_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_events",
+      "indexname": "print_events_i3",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_events_i3 ON public.print_events USING btree (binding_version_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_events",
+      "indexname": "print_events_i4",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_events_i4 ON public.print_events USING btree (delegation_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_events",
+      "indexname": "print_events_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_events_pkey ON public.print_events USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_events",
+      "indexname": "print_events_u2",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_events_u2 ON public.print_events USING btree (attempt_id, evidence_key)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_installations",
+      "indexname": "print_installations_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_installations_pkey ON public.print_installations USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_installations",
+      "indexname": "print_installations_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_installations_u1 ON public.print_installations USING btree (identity_hash)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "p004_job_initial_uq",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX p004_job_initial_uq ON public.print_jobs USING btree (document_id) WHERE (kind = 'INITIAL'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "p004_job_test_uq",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX p004_job_test_uq ON public.print_jobs USING btree (document_id) WHERE (kind = 'TEST'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "print_jobs_i1",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_jobs_i1 ON public.print_jobs USING btree (store_id, document_id, created_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "print_jobs_i2",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_jobs_i2 ON public.print_jobs USING btree (delegation_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "print_jobs_i3",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_jobs_i3 ON public.print_jobs USING btree (store_id, created_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "print_jobs_i4",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_jobs_i4 ON public.print_jobs USING btree (store_id, terminal_id, created_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "print_jobs_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_jobs_pkey ON public.print_jobs USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "print_jobs_u1",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_jobs_u1 ON public.print_jobs USING btree (intent_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_jobs",
+      "indexname": "print_jobs_u3",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_jobs_u3 ON public.print_jobs USING btree (id, document_id, store_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_requests",
+      "indexname": "print_requests_i1",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_requests_i1 ON public.print_requests USING btree (store_id, intent_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_requests",
+      "indexname": "print_requests_i2",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_requests_i2 ON public.print_requests USING btree (expires_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_requests",
+      "indexname": "print_requests_i3",
+      "tablespace": null,
+      "indexdef": "CREATE INDEX print_requests_i3 ON public.print_requests USING btree (principal_id, issued_at)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "print_requests",
+      "indexname": "print_requests_pkey",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX print_requests_pkey ON public.print_requests USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vendas",
+      "indexname": "p004_vendas_id_store_uq",
+      "tablespace": null,
+      "indexdef": "CREATE UNIQUE INDEX p004_vendas_id_store_uq ON public.vendas USING btree (id, \"storeId\")"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "p004_bump_risk",
+      "prosecdef": false,
+      "proconfig": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.p004_bump_risk()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE doc_key uuid;\nBEGIN\n IF TG_TABLE_SCHEMA <> 'public' THEN RAISE EXCEPTION 'p004 schema mismatch'; END IF;\n doc_key := NEW.document_id;\n UPDATE \"public\".\"print_documents\" SET risk_revision = risk_revision + 1 WHERE id = doc_key AND store_id = NEW.store_id;\n RETURN NULL;\nEND $function$\n"
+    },
+    {
+      "proname": "p004_commit_guard",
+      "prosecdef": false,
+      "proconfig": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.p004_commit_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE job_key uuid; j \"public\".\"print_jobs\"%ROWTYPE; d \"public\".\"print_documents\"%ROWTYPE; c \"public\".\"print_copies\"%ROWTYPE; a \"public\".\"print_attempts\"%ROWTYPE; total_copies bigint; max_ordinal integer;\nBEGIN\n IF TG_TABLE_SCHEMA <> 'public' THEN RAISE EXCEPTION 'p004 schema mismatch'; END IF;\n IF TG_TABLE_NAME = 'print_jobs' THEN job_key := NEW.id; ELSE job_key := NEW.job_id; END IF;\n SELECT * INTO j FROM \"public\".\"print_jobs\" WHERE id = job_key;\n IF NOT FOUND THEN RETURN NULL; END IF;\n SELECT count(*),max(ordinal) INTO total_copies,max_ordinal FROM \"public\".\"print_copies\" WHERE job_id = job_key;\n IF total_copies <> j.copies OR max_ordinal <> j.copies THEN RAISE EXCEPTION 'p004 complete copy set required'; END IF;\n SELECT * INTO d FROM \"public\".\"print_documents\" WHERE id = j.document_id;\n IF j.kind = 'INITIAL' AND (d.initial_state <> 'INITIAL_REGISTERED' OR d.closed_by_intent_id IS DISTINCT FROM j.intent_id) THEN\n  RAISE EXCEPTION 'p004 initial slot must close in same transaction';\n END IF;\n IF j.kind = 'REPRINT' AND d.initial_state = 'OPEN' THEN\n  RAISE EXCEPTION 'p004 historical reprint must close initial slot';\n END IF;\n FOR c IN SELECT * FROM \"public\".\"print_copies\" WHERE job_id = j.id LOOP\n  SELECT * INTO a FROM \"public\".\"print_attempts\" WHERE copy_id = c.id ORDER BY number DESC LIMIT 1;\n  IF c.state IN ('SENDING','UNKNOWN','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE') THEN\n   IF a.id IS NULL OR a.result <> (CASE c.state WHEN 'SENDING' THEN 'STARTED' ELSE c.state END) THEN\n    RAISE EXCEPTION 'p004 copy requires matching durable attempt';\n   END IF;\n  END IF;\n  IF a.id IS NOT NULL AND a.result IN ('STARTED','UNKNOWN','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE') THEN\n   IF c.state <> (CASE a.result WHEN 'STARTED' THEN 'SENDING' ELSE a.result END) THEN\n    RAISE EXCEPTION 'p004 attempt/copy evidence mismatch';\n   END IF;\n   IF a.destination_id IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM \"public\".\"print_destinations\" WHERE id = a.destination_id AND held_attempt_id = a.id AND held_store_id = a.store_id\n   ) AND NOT EXISTS (\n    SELECT 1 FROM \"public\".\"print_events\" WHERE attempt_id = a.id AND destination_id = a.destination_id\n     AND proof_kind IN ('SYNTHETIC_NO_EFFECT','SYNTHETIC_EGRESS_CLOSED','SYNTHETIC_ATOMIC_QUEUE')\n   ) THEN RAISE EXCEPTION 'p004 destination cannot forget potential egress';\n   END IF;\n  END IF;\n END LOOP;\n RETURN NULL;\nEND $function$\n"
+    },
+    {
+      "proname": "p004_delete_guard",
+      "prosecdef": false,
+      "proconfig": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.p004_delete_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nBEGIN\n IF TG_TABLE_NAME = 'print_requests' THEN\n  IF OLD.expires_at < clock_timestamp() THEN RETURN OLD; END IF;\n END IF;\n RAISE EXCEPTION 'p004 ledger deletion requires separate approved retirement/retention scope';\nEND $function$\n"
+    },
+    {
+      "proname": "p004_immutable",
+      "prosecdef": false,
+      "proconfig": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.p004_immutable()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE allowed text[] := string_to_array(TG_ARGV[0], ',');\nBEGIN\n IF TG_TABLE_SCHEMA <> 'public' THEN RAISE EXCEPTION 'p004 schema mismatch'; END IF;\n IF (to_jsonb(NEW) - allowed) IS DISTINCT FROM (to_jsonb(OLD) - allowed) THEN\n  RAISE EXCEPTION 'p004 immutable snapshot/identity: %', TG_TABLE_NAME;\n END IF;\n RETURN NEW;\nEND $function$\n"
+    },
+    {
+      "proname": "p004_insert_guard",
+      "prosecdef": false,
+      "proconfig": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.p004_insert_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE d \"public\".\"print_documents\"%ROWTYPE; j \"public\".\"print_jobs\"%ROWTYPE; b \"public\".\"print_bindings\"%ROWTYPE; c \"public\".\"print_copies\"%ROWTYPE;\nBEGIN\n IF TG_TABLE_SCHEMA <> 'public' THEN RAISE EXCEPTION 'p004 schema mismatch'; END IF;\n IF TG_TABLE_NAME = 'print_bindings' THEN\n  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.binding_id::text, 4004));\n  IF EXISTS (SELECT 1 FROM \"public\".\"print_bindings\" WHERE binding_id = NEW.binding_id AND\n    (store_id <> NEW.store_id OR terminal_id <> NEW.terminal_id OR family <> NEW.family)) OR\n    NEW.version <> COALESCE((SELECT max(version) FROM \"public\".\"print_bindings\" WHERE binding_id = NEW.binding_id),0) + 1 THEN\n   RAISE EXCEPTION 'p004 binding version/group mismatch';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_destinations' THEN\n  IF NEW.held_attempt_id IS NOT NULL OR NEW.held_store_id IS NOT NULL OR NEW.release_event_id IS NOT NULL OR NEW.blocked_at IS NOT NULL OR NEW.gate_epoch <> 0 THEN\n   RAISE EXCEPTION 'p004 destination starts without fabricated egress';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_documents' THEN\n  IF NEW.initial_state <> 'OPEN' OR NEW.initial_intent_id IS NOT NULL OR NEW.closed_by_intent_id IS NOT NULL OR\n    NEW.active_reprint_intent_id IS NOT NULL OR NEW.risk_revision <> 0 OR NEW.retired_at IS NOT NULL THEN\n   RAISE EXCEPTION 'p004 document starts without fabricated history';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_jobs' THEN\n  SELECT * INTO d FROM \"public\".\"print_documents\" WHERE id = NEW.document_id AND store_id = NEW.store_id;\n  IF NOT FOUND OR d.retired_at IS NOT NULL OR\n    (d.document_kind = 'SALE' AND NEW.kind NOT IN ('INITIAL','REPRINT')) OR\n    (d.document_kind = 'SYNTHETIC' AND NEW.kind <> 'TEST') OR\n    (NEW.kind = 'INITIAL' AND (d.initial_state <> 'OPEN' OR d.initial_intent_id IS DISTINCT FROM NEW.intent_id)) THEN\n   RAISE EXCEPTION 'p004 document/initial slot incompatible';\n  END IF;\n  IF NEW.snapshot_cipher IS NULL OR NEW.snapshot_key_ref IS NULL OR NEW.snapshot_purged_at IS NOT NULL THEN\n   RAISE EXCEPTION 'p004 no fabricated expired job';\n  END IF;\n  IF NOT EXISTS (SELECT 1 FROM \"public\".\"print_delegations\" g JOIN \"public\".\"admin_users\" u ON u.id = g.principal_id\n    WHERE g.id = NEW.delegation_id AND g.store_id = NEW.store_id AND g.principal_id = NEW.principal_id\n    AND g.revoked_at IS NULL AND g.expires_at > clock_timestamp()\n    AND u.active AND NOT u.\"mustChangePassword\" AND u.\"sessionVersion\" = g.session_version) THEN\n   RAISE EXCEPTION 'p004 delegation inactive';\n  END IF;\n  IF NEW.delivery_mode = 'THERMAL_BOUND' THEN\n   SELECT * INTO b FROM \"public\".\"print_bindings\" WHERE id = NEW.binding_version_id AND store_id = NEW.store_id AND terminal_id = NEW.terminal_id;\n   IF NOT FOUND OR b.state <> 'ACTIVE' OR b.family <> d.family OR b.profile_id <> NEW.profile_id OR b.profile_version <> NEW.profile_version THEN\n    RAISE EXCEPTION 'p004 binding/profile mismatch';\n   END IF;\n  ELSIF NEW.profile_id <> 'A4' THEN RAISE EXCEPTION 'p004 A4 logical profile required';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_requests' THEN\n  IF NEW.command IS NULL OR NEW.command_purged_at IS NOT NULL OR NEW.job_id IS NOT NULL OR NEW.consumed_at IS NOT NULL THEN\n   RAISE EXCEPTION 'p004 request must be issued before consumption';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_copies' THEN\n  SELECT * INTO j FROM \"public\".\"print_jobs\" WHERE id = NEW.job_id;\n  IF NEW.ordinal > j.copies OR NEW.state <> 'REGISTERED' OR NEW.payload_cipher IS NULL OR\n    NEW.payload_purged_at IS NOT NULL OR NEW.payload_expires_at > j.content_expires_at OR\n    NEW.lease_owner IS NOT NULL OR NEW.lease_until IS NOT NULL OR NEW.lease_epoch <> 0 THEN\n   RAISE EXCEPTION 'p004 copy must be sealed once';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_attempts' THEN\n  SELECT * INTO c FROM \"public\".\"print_copies\" WHERE id = NEW.copy_id;\n  SELECT * INTO j FROM \"public\".\"print_jobs\" WHERE id = NEW.job_id;\n  IF NEW.result <> 'STARTED' OR NEW.lease_epoch <> c.lease_epoch OR\n    c.state <> 'READY' OR c.lease_owner IS NULL OR c.lease_until <= clock_timestamp() OR c.retry_suppressed_by_job_id IS NOT NULL OR\n    (j.delivery_mode = 'THERMAL_BOUND' AND NEW.destination_id IS DISTINCT FROM (SELECT destination_id FROM \"public\".\"print_bindings\" WHERE id = j.binding_version_id)) OR\n    (j.delivery_mode = 'BROWSER_A4' AND NEW.destination_id IS NOT NULL) OR\n    (j.delivery_mode = 'THERMAL_BOUND' AND NOT EXISTS (\n     SELECT 1 FROM \"public\".\"print_bindings\" candidate_binding JOIN \"public\".\"print_installations\" i ON i.id = candidate_binding.installation_id\n     JOIN \"public\".\"print_destinations\" q ON q.id = candidate_binding.destination_id WHERE candidate_binding.id = j.binding_version_id\n     AND candidate_binding.state = 'ACTIVE' AND i.revoked_at IS NULL AND i.proof_mode = 'SYNTHETIC' AND q.serialization_mode = 'SYNTHETIC'\n    )) THEN\n   RAISE EXCEPTION 'p004 invalid attempt start';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_events' AND NEW.proof_kind <> 'NONE' THEN\n  IF NOT EXISTS (SELECT 1 FROM \"public\".\"print_jobs\" WHERE id = NEW.job_id AND execution_mode = 'SYNTHETIC_ONLY') OR\n    NEW.destination_id IS DISTINCT FROM (SELECT destination_id FROM \"public\".\"print_attempts\" WHERE id = NEW.attempt_id) THEN\n   RAISE EXCEPTION 'p004 proof must identify synthetic attempt/destination';\n  END IF;\n END IF;\n RETURN NEW;\nEND $function$\n"
+    },
+    {
+      "proname": "p004_lifecycle",
+      "prosecdef": false,
+      "proconfig": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.p004_lifecycle()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\nDECLARE e \"public\".\"print_events\"%ROWTYPE; a \"public\".\"print_attempts\"%ROWTYPE; j \"public\".\"print_jobs\"%ROWTYPE;\n        d \"public\".\"print_documents\"%ROWTYPE; b \"public\".\"print_bindings\"%ROWTYPE;\nBEGIN\n IF TG_TABLE_SCHEMA <> 'public' THEN RAISE EXCEPTION 'p004 schema mismatch'; END IF;\n IF TG_TABLE_NAME = 'print_installations' THEN\n  IF NEW.revocation_epoch < OLD.revocation_epoch OR\n    (OLD.revoked_at IS NOT NULL AND (NEW.revoked_at IS DISTINCT FROM OLD.revoked_at OR NEW.revoked_by_id IS DISTINCT FROM OLD.revoked_by_id)) THEN\n   RAISE EXCEPTION 'p004 installation revocation is monotonic';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_bindings' THEN\n  IF NOT (NEW.state = OLD.state OR\n   (OLD.state = 'PENDING' AND NEW.state IN ('ACTIVE','REVOKED')) OR\n   (OLD.state = 'ACTIVE' AND NEW.state = 'REVOKED')) THEN\n   RAISE EXCEPTION 'p004 binding cannot reactivate';\n  END IF;\n  IF OLD.revoked_at IS NOT NULL AND (NEW.revoked_at IS DISTINCT FROM OLD.revoked_at OR NEW.revoked_by_id IS DISTINCT FROM OLD.revoked_by_id) THEN\n   RAISE EXCEPTION 'p004 binding revocation immutable';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_delegations' THEN\n  IF OLD.revoked_at IS NOT NULL AND (NEW.revoked_at IS DISTINCT FROM OLD.revoked_at OR NEW.revocation_reason IS DISTINCT FROM OLD.revocation_reason) THEN\n   RAISE EXCEPTION 'p004 delegation cannot reactivate';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_documents' THEN\n  IF NEW.risk_revision < OLD.risk_revision OR\n    (OLD.initial_intent_id IS NOT NULL AND NEW.initial_intent_id IS DISTINCT FROM OLD.initial_intent_id) OR\n    (OLD.initial_state <> 'OPEN' AND (NEW.initial_state <> OLD.initial_state OR NEW.closed_by_intent_id IS DISTINCT FROM OLD.closed_by_intent_id)) OR\n    (OLD.retired_at IS NOT NULL AND NEW.retired_at IS DISTINCT FROM OLD.retired_at) THEN\n   RAISE EXCEPTION 'p004 document slot/risk/retirement cannot regress';\n  END IF;\n  IF OLD.initial_state = 'OPEN' AND NEW.initial_state <> 'OPEN' THEN\n   SELECT * INTO j FROM \"public\".\"print_jobs\" WHERE intent_id = NEW.closed_by_intent_id AND document_id = NEW.id AND store_id = NEW.store_id;\n   IF NOT FOUND OR (NEW.initial_state = 'INITIAL_REGISTERED' AND (j.kind <> 'INITIAL' OR j.intent_id IS DISTINCT FROM NEW.initial_intent_id))\n     OR (NEW.initial_state = 'HISTORICAL_CLOSED' AND j.kind <> 'REPRINT') THEN\n    RAISE EXCEPTION 'p004 slot closure requires real matching job';\n   END IF;\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_jobs' THEN\n  IF (NEW.snapshot_cipher IS DISTINCT FROM OLD.snapshot_cipher AND NEW.snapshot_cipher IS NOT NULL) OR\n     (OLD.snapshot_cipher IS NULL AND NEW.snapshot_purged_at IS DISTINCT FROM OLD.snapshot_purged_at) OR\n     (NEW.snapshot_cipher IS NOT NULL AND NEW.snapshot_key_ref IS DISTINCT FROM OLD.snapshot_key_ref) OR\n     NEW.confirmed_risk_revision < OLD.confirmed_risk_revision THEN\n   RAISE EXCEPTION 'p004 snapshot may only be purged; risk cannot regress';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_requests' THEN\n  IF (OLD.job_id IS NOT NULL AND (NEW.job_id IS DISTINCT FROM OLD.job_id OR NEW.consumed_at IS DISTINCT FROM OLD.consumed_at)) OR\n     (OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at) OR\n     (NEW.command IS DISTINCT FROM OLD.command AND NEW.command IS NOT NULL) OR\n     (OLD.command IS NULL AND NEW.command_purged_at IS DISTINCT FROM OLD.command_purged_at) THEN\n   RAISE EXCEPTION 'p004 receipt/grant cannot be reused or reconstructed';\n  END IF;\n  IF NEW.job_id IS NOT NULL THEN\n   SELECT * INTO j FROM \"public\".\"print_jobs\" WHERE id = NEW.job_id AND document_id = NEW.document_id AND store_id = NEW.store_id;\n   IF NOT FOUND OR j.intent_id <> NEW.intent_id THEN RAISE EXCEPTION 'p004 receipt intent mismatch'; END IF;\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_copies' THEN\n  IF (NEW.payload_cipher IS DISTINCT FROM OLD.payload_cipher AND NEW.payload_cipher IS NOT NULL) OR\n    (OLD.payload_cipher IS NULL AND NEW.payload_purged_at IS DISTINCT FROM OLD.payload_purged_at) OR\n    (NEW.payload_cipher IS NOT NULL AND NEW.payload_key_ref IS DISTINCT FROM OLD.payload_key_ref) OR\n    NEW.lease_epoch < OLD.lease_epoch OR\n    (OLD.retry_suppressed_by_job_id IS NOT NULL AND NEW.retry_suppressed_by_job_id IS DISTINCT FROM OLD.retry_suppressed_by_job_id) THEN\n   RAISE EXCEPTION 'p004 copy content/fencing/suppression cannot regress';\n  END IF;\n  IF (NEW.lease_owner IS DISTINCT FROM OLD.lease_owner OR NEW.lease_until IS DISTINCT FROM OLD.lease_until) AND NEW.lease_epoch <= OLD.lease_epoch THEN\n   RAISE EXCEPTION 'p004 lease change requires new epoch';\n  END IF;\n  IF NEW.state <> OLD.state AND NOT (\n    (OLD.state = 'REGISTERED' AND NEW.state IN ('READY','CANCELLED','EXPIRED','PRE_SEND_FAILED')) OR\n    (OLD.state = 'READY' AND NEW.state IN ('SENDING','CANCELLED','EXPIRED','PRE_SEND_FAILED')) OR\n    (OLD.state = 'SENDING' AND NEW.state IN ('TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','PRE_SEND_FAILED','UNKNOWN','BROWSER_AVAILABLE')) OR\n    (OLD.state = 'UNKNOWN' AND NEW.state IN ('TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','PRE_SEND_FAILED','BROWSER_AVAILABLE')) OR\n    (OLD.state = 'TRANSPORT_ACCEPTED' AND NEW.state = 'SPOOLER_ACCEPTED') OR\n    (OLD.state = 'PRE_SEND_FAILED' AND NEW.state IN ('READY','CANCELLED','EXPIRED'))) THEN\n   RAISE EXCEPTION 'p004 illegal copy transition';\n  END IF;\n  IF NEW.state = 'READY' AND NEW.retry_suppressed_by_job_id IS NOT NULL THEN\n   RAISE EXCEPTION 'p004 retry suppressed by additional intent';\n  END IF;\n  IF NEW.state = 'SENDING' AND OLD.state <> 'SENDING' THEN\n   SELECT * INTO j FROM \"public\".\"print_jobs\" WHERE id = NEW.job_id;\n   IF NEW.payload_cipher IS NULL OR NEW.payload_expires_at <= clock_timestamp() OR\n     j.authorization_expires_at <= clock_timestamp() OR NEW.retry_suppressed_by_job_id IS NOT NULL THEN\n    RAISE EXCEPTION 'p004 copy cannot start';\n   END IF;\n  END IF;\n  IF OLD.state IN ('SENDING','UNKNOWN') AND NEW.state = 'PRE_SEND_FAILED' THEN\n   SELECT * INTO a FROM \"public\".\"print_attempts\" WHERE copy_id = NEW.id ORDER BY number DESC LIMIT 1;\n   IF NOT FOUND OR a.result <> 'PRE_SEND_FAILED' OR NOT EXISTS (\n    SELECT 1 FROM \"public\".\"print_events\" WHERE attempt_id = a.id AND proof_kind = 'SYNTHETIC_NO_EFFECT') THEN\n    RAISE EXCEPTION 'p004 no pre-effect proof';\n   END IF;\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_attempts' THEN\n  IF NEW.result <> OLD.result AND NOT (\n    (OLD.result = 'STARTED' AND NEW.result IN ('PRE_SEND_FAILED','UNKNOWN','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE')) OR\n    (OLD.result = 'UNKNOWN' AND NEW.result IN ('PRE_SEND_FAILED','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE')) OR\n    (OLD.result = 'TRANSPORT_ACCEPTED' AND NEW.result = 'SPOOLER_ACCEPTED')) THEN\n   RAISE EXCEPTION 'p004 illegal attempt transition';\n  END IF;\n  IF OLD.external_ref IS NOT NULL AND NEW.external_ref IS DISTINCT FROM OLD.external_ref THEN\n   RAISE EXCEPTION 'p004 external reference immutable';\n  END IF;\n  IF NEW.result IN ('PRE_SEND_FAILED','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE') AND NOT EXISTS (\n   SELECT 1 FROM \"public\".\"print_events\" WHERE attempt_id = NEW.id AND proof_kind =\n    CASE NEW.result WHEN 'PRE_SEND_FAILED' THEN 'SYNTHETIC_NO_EFFECT'\n     WHEN 'TRANSPORT_ACCEPTED' THEN 'SYNTHETIC_TRANSPORT_ACCEPTED'\n     WHEN 'SPOOLER_ACCEPTED' THEN 'SYNTHETIC_SPOOLER_ACCEPTED'\n     ELSE 'SYNTHETIC_BROWSER_AVAILABLE' END) THEN\n   RAISE EXCEPTION 'p004 result requires correlated synthetic evidence';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_events' THEN\n  IF (NEW.details IS DISTINCT FROM OLD.details AND NEW.details IS NOT NULL) OR\n    (OLD.details_purged_at IS NOT NULL AND NEW.details_purged_at IS DISTINCT FROM OLD.details_purged_at) THEN\n   RAISE EXCEPTION 'p004 event is append-only except one-way detail purge';\n  END IF;\n ELSIF TG_TABLE_NAME = 'print_destinations' THEN\n  IF NEW.gate_epoch < OLD.gate_epoch OR\n   ((NEW.held_attempt_id IS DISTINCT FROM OLD.held_attempt_id OR NEW.release_event_id IS DISTINCT FROM OLD.release_event_id) AND NEW.gate_epoch <= OLD.gate_epoch) THEN\n   RAISE EXCEPTION 'p004 gate requires increasing epoch';\n  END IF;\n  IF OLD.held_attempt_id IS NOT NULL AND NEW.held_attempt_id IS DISTINCT FROM OLD.held_attempt_id THEN\n   IF NEW.held_attempt_id IS NOT NULL OR NEW.release_event_id IS NULL OR NEW.release_event_id IS NOT DISTINCT FROM OLD.release_event_id THEN\n    RAISE EXCEPTION 'p004 cannot replace active egress without release proof';\n   END IF;\n   SELECT * INTO e FROM \"public\".\"print_events\" WHERE id = NEW.release_event_id;\n   IF NOT FOUND OR e.destination_id IS DISTINCT FROM OLD.id OR e.attempt_id IS DISTINCT FROM OLD.held_attempt_id OR\n     e.store_id IS DISTINCT FROM OLD.held_store_id OR OLD.serialization_mode <> 'SYNTHETIC' OR\n     e.proof_kind NOT IN ('SYNTHETIC_NO_EFFECT','SYNTHETIC_EGRESS_CLOSED','SYNTHETIC_ATOMIC_QUEUE') THEN\n    RAISE EXCEPTION 'p004 release proof missing; real adapter release not supported';\n   END IF;\n  END IF;\n  IF NEW.held_attempt_id IS NOT NULL AND NEW.held_attempt_id IS DISTINCT FROM OLD.held_attempt_id THEN\n   SELECT * INTO a FROM \"public\".\"print_attempts\" WHERE id = NEW.held_attempt_id AND store_id = NEW.held_store_id;\n   IF NOT FOUND OR a.destination_id IS DISTINCT FROM NEW.id OR a.result <> 'STARTED' THEN\n    RAISE EXCEPTION 'p004 destination holder mismatch';\n   END IF;\n  END IF;\n END IF;\n RETURN NEW;\nEND $function$\n"
+    }
+  ],
+  "triggers": [
+    {
+      "table_name": "print_attempts",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_attempts FOR EACH ROW EXECUTE FUNCTION p004_immutable('result,external_ref,finished_at')"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_attempts FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "p004_attempt_commit",
+      "enabled": "O",
+      "tgdeferrable": true,
+      "tginitdeferred": true,
+      "definition": "CREATE CONSTRAINT TRIGGER p004_attempt_commit AFTER INSERT OR UPDATE ON public.print_attempts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION p004_commit_guard()"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "p004_attempt_risk_insert",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_attempt_risk_insert AFTER INSERT ON public.print_attempts FOR EACH ROW EXECUTE FUNCTION p004_bump_risk()"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "p004_attempt_risk_update",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_attempt_risk_update AFTER UPDATE ON public.print_attempts FOR EACH ROW WHEN ((old.result IS DISTINCT FROM new.result)) EXECUTE FUNCTION p004_bump_risk()"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_attempts FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_attempts",
+      "name": "p004_insert",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert BEFORE INSERT ON public.print_attempts FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_bindings FOR EACH ROW EXECUTE FUNCTION p004_immutable('state,revoked_at,revoked_by_id')"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_bindings FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_bindings FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_bindings",
+      "name": "p004_insert_binding",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert_binding BEFORE INSERT ON public.print_bindings FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_copies FOR EACH ROW EXECUTE FUNCTION p004_immutable('state,payload_cipher,payload_key_ref,payload_purged_at,lease_owner,lease_until,lease_epoch,retry_suppressed_by_job_id')"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_copies FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "p004_copy_commit",
+      "enabled": "O",
+      "tgdeferrable": true,
+      "tginitdeferred": true,
+      "definition": "CREATE CONSTRAINT TRIGGER p004_copy_commit AFTER INSERT OR UPDATE ON public.print_copies DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION p004_commit_guard()"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "p004_copy_risk",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_copy_risk AFTER UPDATE ON public.print_copies FOR EACH ROW WHEN ((old.state IS DISTINCT FROM new.state)) EXECUTE FUNCTION p004_bump_risk()"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_copies FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_copies",
+      "name": "p004_insert",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert BEFORE INSERT ON public.print_copies FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_delegations FOR EACH ROW EXECUTE FUNCTION p004_immutable('revoked_at,revocation_reason')"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_delegations FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_delegations",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_delegations FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_destinations FOR EACH ROW EXECUTE FUNCTION p004_immutable('gate_epoch,held_attempt_id,held_store_id,blocked_at,release_event_id')"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_destinations FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_destinations FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_destinations",
+      "name": "p004_insert_destination",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert_destination BEFORE INSERT ON public.print_destinations FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_documents FOR EACH ROW EXECUTE FUNCTION p004_immutable('initial_state,initial_intent_id,closed_by_intent_id,active_reprint_intent_id,active_reprint_until,risk_revision,retired_at')"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_documents FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_documents FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_documents",
+      "name": "p004_insert_document",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert_document BEFORE INSERT ON public.print_documents FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    },
+    {
+      "table_name": "print_events",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_events FOR EACH ROW EXECUTE FUNCTION p004_immutable('details,details_purged_at')"
+    },
+    {
+      "table_name": "print_events",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_events FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_events FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_events",
+      "name": "p004_insert",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert BEFORE INSERT ON public.print_events FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_installations FOR EACH ROW EXECUTE FUNCTION p004_immutable('revocation_epoch,revoked_at,revoked_by_id')"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_installations FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_installations",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_installations FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_jobs FOR EACH ROW EXECUTE FUNCTION p004_immutable('snapshot_cipher,snapshot_key_ref,snapshot_purged_at,confirmed_risk_revision,confirmed_exposure_hash,risk_confirmed_at')"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_jobs FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_jobs FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_insert",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert BEFORE INSERT ON public.print_jobs FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_job_commit",
+      "enabled": "O",
+      "tgdeferrable": true,
+      "tginitdeferred": true,
+      "definition": "CREATE CONSTRAINT TRIGGER p004_job_commit AFTER INSERT OR UPDATE ON public.print_jobs DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION p004_commit_guard()"
+    },
+    {
+      "table_name": "print_jobs",
+      "name": "p004_job_risk",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_job_risk AFTER INSERT ON public.print_jobs FOR EACH ROW EXECUTE FUNCTION p004_bump_risk()"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "a_p004_immutable",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER a_p004_immutable BEFORE UPDATE ON public.print_requests FOR EACH ROW EXECUTE FUNCTION p004_immutable('command,command_purged_at,revoked_at,job_id,consumed_at')"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "b_p004_lifecycle",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER b_p004_lifecycle BEFORE UPDATE ON public.print_requests FOR EACH ROW EXECUTE FUNCTION p004_lifecycle()"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "p004_delete",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_delete BEFORE DELETE ON public.print_requests FOR EACH ROW EXECUTE FUNCTION p004_delete_guard()"
+    },
+    {
+      "table_name": "print_requests",
+      "name": "p004_insert",
+      "enabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "definition": "CREATE TRIGGER p004_insert BEFORE INSERT ON public.print_requests FOR EACH ROW EXECUTE FUNCTION p004_insert_guard()"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "incremental": false },
+  "include": ["../../lib/printing/direct/**/*.ts", "../../app/api/print/**/*.ts", "../../tools/print-004c-e2e/*.ts", "../../tools/omni-print-agent/*.ts",
+    "../../components/dashboard/vendas/pdv-direct-print-feedback.tsx", "../../components/dashboard/vendas/pdv-classic.tsx",
+    "../../components/configuracoes-v3/features/settings/sections/ImpressaoDiretaAgenteCard.tsx", "../../components/configuracoes-v3/features/settings/sections/PdvSection.tsx",
+    "../../e2e/specs/print-direct-004c.spec.ts", "../../e2e/fixtures/print-direct.ts", "../../lib/print-core-synthetic/*.ts", "../../tools/print-core-004b/gate-b-run.ts",
+    "../../next-env.d.ts", "../../types/**/*.d.ts"]
+}

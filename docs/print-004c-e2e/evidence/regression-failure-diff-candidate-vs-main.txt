@@ -1,0 +1,2 @@
+112a113
+>  FAIL  lib/pdv/parity-finalize-guards.test.ts > F-04 — single entry e guards de borda por superfície > assistencia: um ponto de finalize, guard unresolved antes, FAILED e PENDING honestos

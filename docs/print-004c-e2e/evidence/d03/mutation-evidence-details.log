@@ -1,0 +1,49 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d03-mutation
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 4263ms
+     × R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved 4082ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  18:17:17
+   Duration  4.92s (transform 355ms, setup 0ms, import 473ms, tests 4.26s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved
+AssertionError: expected [ { …(4) }, { …(4) } ] to deeply equal [ { …(4) }, { …(4) }, { …(4) } ]
+
+- Expected
++ Received
+
+@@ -1,20 +1,8 @@
+  [
+    {
+      "details": {
+-       "evidenceHash": "694b383fe159c07803199e82d9b8ef8a18528184ad3165f0c4f1168509f1fd98",
+-       "evidenceKey": "UNKNOWN:false",
+-       "physicalPrintConfirmed": false,
+-       "reason": "TIMEOUT_AFTER_SUBMIT",
+-       "spoolJobId": null,
+-     },
+-     "evidence_hash": null,
+-     "evidence_key": null,
+-     "id": "aea7852c-a6ca-4d1c-ad1c-ab08cb6e1f41",
+-   },
+-   {
+-     "details": {
+        "evidenceHash": "90b9bf76d261ecd19e419bef366fc8d4e094409b0690ed54bfae149c16e785da",
+        "evidenceKey": "SPOOLER_ACCEPTED:false",
+        "physicalPrintConfirmed": false,
+        "reason": null,
+        "spoolJobId": "123",
+
+ ❯ tools/print-d03/retention.pg.test.ts:155:193
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

@@ -1,0 +1,19 @@
+diff --git a/qualified-R01-R02.sql b/qualified.sql
+index 1562ce6..c26ce27 100644
+--- a/qualified-R01-R02.sql
++++ b/qualified.sql
+@@ -623,12 +623,12 @@ BEGIN
+  FOR c IN SELECT * FROM "public"."print_copies" WHERE job_id = j.id LOOP
+   SELECT * INTO a FROM "public"."print_attempts" WHERE copy_id = c.id ORDER BY number DESC LIMIT 1;
+   IF c.state IN ('SENDING','UNKNOWN','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE') THEN
+-   IF a.id IS NULL OR a.result <> CASE c.state WHEN 'SENDING' THEN 'STARTED' ELSE c.state END THEN
++   IF a.id IS NULL OR a.result <> (CASE c.state WHEN 'SENDING' THEN 'STARTED' ELSE c.state END) THEN
+     RAISE EXCEPTION 'p004 copy requires matching durable attempt';
+    END IF;
+   END IF;
+   IF a.id IS NOT NULL AND a.result IN ('STARTED','UNKNOWN','TRANSPORT_ACCEPTED','SPOOLER_ACCEPTED','BROWSER_AVAILABLE') THEN
+-   IF c.state <> CASE a.result WHEN 'STARTED' THEN 'SENDING' ELSE a.result END THEN
++   IF c.state <> (CASE a.result WHEN 'STARTED' THEN 'SENDING' ELSE a.result END) THEN
+     RAISE EXCEPTION 'p004 attempt/copy evidence mismatch';
+    END IF;
+    IF a.destination_id IS NOT NULL AND NOT EXISTS (

@@ -1,0 +1,35 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d03-mutation
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 4830ms
+     × R11 busy document is skipped without waiting, timeout rolls back and next run resumes 4589ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  18:17:33
+   Duration  5.50s (transform 311ms, setup 0ms, import 430ms, tests 4.83s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R11 busy document is skipped without waiting, timeout rolls back and next run resumes
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tools/print-d03/retention.pg.test.ts:229:58
+    227|     const lock = db.transaction(async sql => { await sql.query("SELECT…
+    228|     await acquired
+    229|     try { const r = await run(); expect(r.busyDocuments).toBe(1); expe…
+       |                                                          ^
+    230|     let timeout = false
+    231|     const slow = clockDb(db, future(), async (sql, q, v) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

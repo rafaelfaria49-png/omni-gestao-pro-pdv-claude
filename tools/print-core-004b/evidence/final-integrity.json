@@ -1,0 +1,104 @@
+{
+  "goal": "OMNI-PRINT-PERSISTENCIA-004B-CORE-SYNTHETIC",
+  "base": "35a3971c31f62e6e802b7dd8763be81475334780",
+  "branch": "work/omni-print-persistencia-004b-synthetic",
+  "remoteMainReadOnly": "35a3971c31f62e6e802b7dd8763be81475334780",
+  "remoteMainObservedOn": "2026-10-30",
+  "fetchOrIntegrationExecuted": false,
+  "schemaHash": "AEA08DA0E8DB34AF5BFC73D90148A01BCF5BD3EEBED06E7A5835453AAC5E56ED",
+  "originalSqlHash": "4F05F943112DF35AFE986CA8BC1B4CFCF15FC53B0AFA23328C5E9A786F2FD97F",
+  "finalSqlHash": "E55A0340E266681556CA238E2D59019DE10E9439FEECAEB8AFF3CCE92DE8D6DD",
+  "originalInputsUnchanged": true,
+  "existingWorktreesPreserved": 114,
+  "trackedOriginalWipsUnchanged": 7,
+  "unrelatedReflogsUnchanged": true,
+  "stashesUnchanged": true,
+  "globalRefsDigestUnchanged": false,
+  "refsObservation": "Digest differs after excluding own branch. A Codex internal checkpoint ref was written in interval; original per-ref list unavailable, so cause is not asserted as proven. No manual update of unrelated refs was issued. See ref-metadata-observation.json.",
+  "allowedChangesOnly": [
+    "prisma/schema.prisma",
+    "prisma/migrations/20261030_print_core_synthetic_local/migration.sql",
+    "lib/print-core-synthetic/",
+    "tools/print-core-004b/"
+  ],
+  "focusedChecks": {
+    "node": "v24.19.0",
+    "typescript": "5.7.3",
+    "typecheck": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
+    "isolatedCoreBuild": {
+      "status": "PASS",
+      "sha256": "95B291E69724E123879CA06D1F99612E8CF616D1EFD9B5BECD0DCC78C30D5428",
+      "externalImports": [
+        {
+          "path": "node:crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "require-call",
+          "external": true
+        }
+      ]
+    },
+    "sqlReproducibility": {
+      "status": "PASS",
+      "original": "4F05F943112DF35AFE986CA8BC1B4CFCF15FC53B0AFA23328C5E9A786F2FD97F",
+      "final": "E55A0340E266681556CA238E2D59019DE10E9439FEECAEB8AFF3CCE92DE8D6DD"
+    },
+    "fullApplicationBuild": {
+      "status": "BLOCKED_NOT_RUN",
+      "command": "npm run build -> node scripts/vercel-build.mjs",
+      "inspected": [
+        {
+          "file": "scripts/vercel-build.mjs",
+          "sha256": "6460B591F477F31CD72B5F2E5713FBB20F828C14F7819CB544B311B081CDAC86"
+        },
+        {
+          "file": "next.config.mjs",
+          "sha256": "29ECCA3AFE9AD5592B6283F4E27187A766BA2FF45159A0279F6D0AC9393E5F26"
+        }
+      ],
+      "reasons": [
+        "Build wrapper invokes npx for Prisma generation and Next. Implicit downloads are prohibited.",
+        "Isolated worktree has no node_modules and no generated/prisma. Shared dependency/cache outputs must not be mutated.",
+        "Next PWA emits public/* outside the laboratory allowlist. Application build/config changes are not authorized."
+      ],
+      "remoteMigrationsExecuted": false,
+      "dependenciesInstalled": false,
+      "focusedCoreBundleIsNotApplicationBuild": true
+    },
+    "materializedPrismaValidate": {
+      "status": "FAIL",
+      "message": "node.exe failed; status=null; spawnSync C:\\Users\\rafae\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe ETIMEDOUT"
+    }
+  },
+  "priorPrismaValidate": {
+    "status": "PASS_EXECUTED_IDENTICAL_SCHEMA",
+    "schemaHash": "AEA08DA0E8DB34AF5BFC73D90148A01BCF5BD3EEBED06E7A5835453AAC5E56ED",
+    "proof": [
+      "validate.log",
+      "final-prisma-validate.log",
+      "gate-a-cli-reuse.json"
+    ]
+  },
+  "lastExtraPrismaValidation": {
+    "status": "FAIL",
+    "message": "node.exe failed; status=null; spawnSync C:\\Users\\rafae\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe ETIMEDOUT"
+  },
+  "clusterStopped": true,
+  "realTransportCalls": 0,
+  "commercialMutationsByPrintCore": 0,
+  "productionWrites": 0,
+  "runtimeStatementIdentities": 795,
+  "runtimeCommercialDmlStatements": 0,
+  "commit": null,
+  "push": false,
+  "merge": false,
+  "deploy": false
+}

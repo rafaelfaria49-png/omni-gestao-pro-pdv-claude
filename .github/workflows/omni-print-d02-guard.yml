@@ -1,0 +1,28 @@
+name: Omni Print D02 — guarda das migrations
+# Nenhuma migration de impressão pode chegar a prisma/migrations (onde o build de Production a aplicaria) antes da
+# aplicação manual registrada em tools/print-d02/APLICACAO.json. Ver docs/print-004c-e2e/RUNBOOK_D02.md.
+on:
+  pull_request:
+    paths:
+      - "prisma/migrations/**"
+      - "tools/print-d02/**"
+      - "tools/print-004c-e2e/candidate-migrations/**"
+      - "tools/print-004c-e2e/d02-rehearsal.pg.test.ts"
+      - ".gitattributes"
+      - ".github/workflows/omni-print-d02-guard.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - name: Recorte idêntico ao gerador
+        run: node tools/print-d02/generate.mjs --check
+      - name: Guarda do build e recorte ensaiado
+        run: node node_modules/vitest/vitest.mjs run tools/print-d02/d02-guard.test.ts

@@ -72,6 +72,8 @@ const withPWA = withPWAInit({
         // Sync do catálogo do PDV (PDV-CADASTROS-SYNC-AUTOMATICO-001): versão e snapshot nunca do
         // cache — rede lenta devolveria catálogo velho. A carga inicial do PDV segue cacheável.
         (url.pathname === "/api/ops/inventory" && url.searchParams.get("catalogSync") === "1") ||
+        // OMNI-PRINT-004C: estado de job/terminal/agente nunca do cache (nem entre sessões no mesmo navegador).
+        url.pathname.startsWith("/api/print/") ||
         // Prova de venda no servidor (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001): consulta por
         // clientSaleId e capability do writer nunca do cache — offline vira erro de rede honesto.
         url.pathname === "/api/ops/vendas/by-client-sale-id" ||
