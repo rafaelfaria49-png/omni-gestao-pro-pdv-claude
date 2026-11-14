@@ -43,6 +43,7 @@ function modelo(partial: Partial<LojaModelo> & Pick<LojaModelo, "modelKey" | "br
     storeId: "loja-a",
     manufacturer: "",
     line: "",
+    lancamento: "lancado",
     aliases: [],
     notes: "",
     active: true,

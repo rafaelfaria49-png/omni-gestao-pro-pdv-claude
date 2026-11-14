@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
 import { getPeliculasPorModelo } from "@/lib/catalogo-aparelhos/peliculas"
-import { otherKeyOf, type LojaCompatCategoria } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import { canonicalizarOverrides, otherKeyOf, type LojaCompatCategoria } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import { listLojaCompatOverrides, setLojaCompatDecisao } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import {
   catalogoLojaFailureResponse,
@@ -38,13 +38,18 @@ export async function GET(req: Request) {
   if (!gate.ok) return gate.response
   const url = new URL(req.url)
   const categoria = categoriaDe(url.searchParams.get("categoria"))
-  const modelKey = (url.searchParams.get("modelKey") ?? "").trim().slice(0, 160)
-  if (!categoria || !modelKey) {
+  const modelKeyBruto = (url.searchParams.get("modelKey") ?? "").trim().slice(0, 160)
+  if (!categoria || !modelKeyBruto) {
     return NextResponse.json({ ok: false, error: "Informe categoria e modelKey." }, { status: 400 })
   }
   try {
     const index = loadCatalogoIndex()
-    const overrides = await listLojaCompatOverrides(prisma, gate.storeId, categoria, [modelKey])
+    // Chave mesclada abre o canônico; decisões gravadas com a chave antiga aparecem nele.
+    const modelKey = index.canonicalKeyOf(modelKeyBruto)
+    const overrides = canonicalizarOverrides(
+      await listLojaCompatOverrides(prisma, gate.storeId, categoria, index.equivalentKeysOf(modelKey)),
+      index.canonicalKeyOf,
+    )
     const globais =
       categoria === "pelicula_tela"
         ? getPeliculasPorModelo(index, modelKey).flatMap((g) =>

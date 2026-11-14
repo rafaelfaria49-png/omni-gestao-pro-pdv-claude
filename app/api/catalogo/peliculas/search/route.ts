@@ -5,6 +5,7 @@ import { getPeliculasPorModelo, type PeliculaGrupoMember } from "@/lib/catalogo-
 import {
   applyPeliculaOverrides,
   buildLojaCatalogoIndex,
+  canonicalizarOverrides,
   isManualModelKey,
   lojaModeloCanonicalName,
   overridesUtilizaveis,
@@ -17,6 +18,7 @@ import {
   listLojaModelos,
 } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import { resolveCatalogoLojaRead } from "@/lib/catalogo-aparelhos/loja-catalogo-api"
+import { marcasOcultasParaLoja } from "@/lib/compat/compat-marcas"
 import type { CatalogoIndex, DeviceModel } from "@/lib/catalogo-aparelhos/types"
 
 /**
@@ -94,8 +96,14 @@ async function withPeliculaGroups(
   lojaModelos: readonly LojaModelo[],
   base: BaseResult[],
 ) {
-  const keys = base.map((r) => r.model.modelKey)
-  const allOverrides = storeId ? await listLojaCompatOverrides(prisma, storeId, "pelicula_tela", keys) : []
+  // Chaves mescladas: decisões antigas gravadas com a chave anterior continuam valendo no canônico.
+  const keys = base.flatMap((r) => index.equivalentKeysOf(r.model.modelKey))
+  const allOverrides = storeId
+    ? canonicalizarOverrides(
+        await listLojaCompatOverrides(prisma, storeId, "pelicula_tela", keys),
+        index.canonicalKeyOf,
+      )
+    : []
 
   const manualByKey = new Map(lojaModelos.map((m) => [m.modelKey, m]))
   const faltantes = allOverrides
@@ -138,13 +146,15 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const q = (url.searchParams.get("q") ?? "").trim()
-  const modelKey = (url.searchParams.get("modelKey") ?? "").trim()
+  const modelKeyBruto = (url.searchParams.get("modelKey") ?? "").trim()
   const brand = (url.searchParams.get("brand") ?? "").trim() || undefined
   const limitRaw = parseInt(url.searchParams.get("limit") ?? "", 10)
   const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), MAX_LIMIT) : DEFAULT_LIMIT
 
   try {
     const index = loadCatalogoIndex()
+    // Chave mesclada (produto/venda antigos) abre o aparelho canônico.
+    const modelKey = modelKeyBruto ? index.canonicalKeyOf(modelKeyBruto) : ""
     const lojaModelos = storeId ? await listLojaModelos(prisma, storeId) : []
     const lojaIndex = buildLojaCatalogoIndex(lojaModelos)
 
@@ -184,7 +194,8 @@ export async function GET(req: Request) {
       })
     }
 
-    const matches = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand })
+    const marcasOcultas = await marcasOcultasParaLoja(storeId)
+    const matches = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand, marcasOcultas })
     const results = await withPeliculaGroups(
       index,
       storeId,

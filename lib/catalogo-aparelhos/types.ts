@@ -28,7 +28,28 @@ export interface DeviceModel {
   status: string
   confidence: string
   notes: string
+  /**
+   * COMPAT-CATALOGO-BRASIL-2023-2026-002 (colunas opcionais do CSV; vazias em linhas antigas):
+   *  - manufacturer: fabricante (Xiaomi para Redmi/POCO); vazio = derivado da marca.
+   *  - releaseYear: ano de lançamento oficial.
+   *  - visibilityTier: "prioritaria" (visível por padrão) | "secundaria" (oculta por padrão na loja).
+   *  - replacedBy: chave do modelo canônico quando esta linha foi MESCLADA (ex.: "iPhone 7 Branco",
+   *    que era a cor da borda da película). A linha continua existindo: históricos seguem válidos.
+   *  - sources: fontes oficiais/consultadas (texto livre, separado por " | ").
+   */
+  manufacturer?: string
+  releaseYear?: string
+  visibilityTier?: string
+  replacedBy?: string
+  sources?: string
 }
+
+/**
+ * Status que NÃO aparecem nas buscas operacionais (PDV, cadastro, consulta):
+ *  - mesclado: linha substituída por `replacedBy` (busca devolve o canônico);
+ *  - aguardando_lancamento: aparelho anunciado/esperado sem confirmação oficial — só gestão.
+ */
+export const STATUS_FORA_DA_BUSCA = Object.freeze(["mesclado", "aguardando_lancamento"])
 
 /** Alias de busca/autocomplete vinculado a um `modelKey` (device_aliases_seed_001.csv). */
 export interface DeviceAlias {
@@ -94,6 +115,11 @@ export interface SearchDeviceOptions {
   minQueryLength?: number
   /** Filtro por marca (desambigua aliases curtos). */
   brand?: string
+  /**
+   * Marcas ocultas nesta loja (chave normalizada, ex.: "OPPO"). Modelos dessas marcas não
+   * aparecem na busca; continuam resolvíveis por `modelKey` (produtos e vendas antigos intactos).
+   */
+  marcasOcultas?: ReadonlySet<string>
 }
 
 /** Índice em memória do catálogo (construído uma vez a partir dos seeds). */
@@ -105,4 +131,8 @@ export interface CatalogoIndex {
   aliasesByModelKey: Map<string, DeviceAlias[]>
   /** normalizado(alias) → marcas que têm um alias EXATAMENTE igual (detecção de colisão). */
   normalizedAliasBrands: Map<string, Set<string>>
+  /** Chave canônica de qualquer chave (segue `replacedBy`; chave sem mescla = ela mesma). */
+  canonicalKeyOf: (modelKey: string) => string
+  /** Canônico + chaves mescladas nele (para ler vínculos/produtos/decisões gravados com a chave antiga). */
+  equivalentKeysOf: (modelKey: string) => string[]
 }

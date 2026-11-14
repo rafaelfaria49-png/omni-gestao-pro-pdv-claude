@@ -22,6 +22,7 @@ import {
   findGlobalDuplicate,
   isManualModelKey,
   lojaModeloCanonicalName,
+  normalizeLancamento,
   normalizeLojaCompatStatus,
   orderedPair,
   sanitizeLojaModeloInput,
@@ -91,6 +92,7 @@ type ModeloRow = {
   brand: string
   manufacturer?: string | null
   line?: string | null
+  lancamento?: string | null
   name: string
   aliases: unknown
   notes: string
@@ -108,6 +110,7 @@ function toModelo(r: ModeloRow): LojaModelo {
     brand: r.brand,
     manufacturer: r.manufacturer ?? "",
     line: r.line ?? "",
+    lancamento: normalizeLancamento(r.lancamento),
     name: r.name,
     aliases: aliasesFromJson(r.aliases),
     notes: r.notes,
@@ -172,6 +175,9 @@ export async function listLojaCompatOverrides(
   try {
     const rows = await db.catalogoAparelhoLojaCompat.findMany({
       where: { storeId, categoria, OR: [{ modelKeyA: { in: keys } }, { modelKeyB: { in: keys } }] },
+      // Ordem determinística: entre decisões antigas equivalentes, vale a mais recente (mesma regra
+      // usada ao herdar campos na primeira gravação canônica).
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       take: MAX_OVERRIDES_POR_CONSULTA,
     })
     return rows.map((r) => ({
@@ -206,14 +212,24 @@ async function findLojaDuplicate(db: Db, storeId: string, brandKey: string, name
 
 function duplicateFromLoja(row: ModeloRow): LojaCatalogoFailure {
   const m = toModelo(row)
+  const aguardando = m.lancamento === "aguardando_lancamento"
   return {
     ok: false,
     code: "DUPLICATE",
     status: 409,
-    message: m.active
-      ? "Este modelo já está cadastrado nesta loja para a mesma marca."
-      : "Este modelo já existe nesta loja (desativado). Reative-o em vez de cadastrar de novo.",
-    existing: { modelKey: m.modelKey, brand: m.brand, canonicalName: lojaModeloCanonicalName(m), source: "loja", active: m.active },
+    message: !m.active
+      ? "Este modelo já existe nesta loja (desativado). Reative-o em vez de cadastrar de novo."
+      : aguardando
+        ? "Este modelo já está cadastrado nesta loja, aguardando lançamento. Confirme o lançamento na lista de modelos."
+        : "Este modelo já está cadastrado nesta loja para a mesma marca.",
+    // "active" aqui = pode ser usado já. Aguardando lançamento não entra em fluxo operacional.
+    existing: {
+      modelKey: m.modelKey,
+      brand: m.brand,
+      canonicalName: lojaModeloCanonicalName(m),
+      source: "loja",
+      active: m.active && !aguardando,
+    },
   }
 }
 
@@ -241,7 +257,7 @@ export async function createLojaModelo(
 ): Promise<LojaCatalogoResult<LojaModelo>> {
   const parsed = sanitizeLojaModeloInput(raw)
   if (!parsed.ok) return { ok: false, code: "INVALID", status: 400, message: "Dados do modelo inválidos.", errors: parsed.errors }
-  const { brand, manufacturer, line, name, aliases, notes } = parsed.value
+  const { brand, manufacturer, line, lancamento, name, aliases, notes } = parsed.value
   const globalDup = checkGlobal(globalIndex, { brand, name, manufacturer })
   if (globalDup) return globalDup
   const brandKey = catalogKey(brand)
@@ -260,6 +276,7 @@ export async function createLojaModelo(
         brand,
         manufacturer,
         line,
+        lancamento,
         name,
         brandKey,
         nameKey,
@@ -320,6 +337,7 @@ export async function updateLojaModelo(
         brand: "brand" in body ? body.brand : current.brand,
         manufacturer: "manufacturer" in body ? body.manufacturer : current.manufacturer,
         line: "line" in body ? body.line : current.line,
+        lancamento: "lancamento" in body ? body.lancamento : current.lancamento,
         name: "name" in body ? body.name : current.name,
         aliases: "aliases" in body ? body.aliases : aliasesFromJson(current.aliases),
         notes: "notes" in body ? body.notes : current.notes,
@@ -338,6 +356,7 @@ export async function updateLojaModelo(
         brand: v.brand,
         manufacturer: v.manufacturer,
         line: v.line,
+        lancamento: v.lancamento,
         name: v.name,
         brandKey,
         nameKey,
@@ -394,7 +413,9 @@ export async function setLojaCompatDecisao(
   if (categoria === "capinha" && decisao === "suprimir") {
     return { ok: false, code: "INVALID", status: 400, message: "Para capinha, remova o vínculo em vez de suprimir." }
   }
-  const pair = orderedPair(String(body.modelKey ?? ""), String(body.otherModelKey ?? ""))
+  // Linha mesclada grava no aparelho canônico (COMPAT-CATALOGO-BRASIL-2023-2026-002).
+  const canon = (k: string) => (isManualModelKey(k) ? k : globalIndex.canonicalKeyOf(k))
+  const pair = orderedPair(canon(String(body.modelKey ?? "").trim()), canon(String(body.otherModelKey ?? "").trim()))
   if (!pair || pair.modelKeyA.length > 160 || pair.modelKeyB.length > 160) {
     return { ok: false, code: "INVALID", status: 400, message: "Informe dois modelos diferentes." }
   }
@@ -427,9 +448,39 @@ export async function setLojaCompatDecisao(
     const where = {
       storeId_categoria_modelKeyA_modelKeyB: { storeId, categoria, modelKeyA: pair.modelKeyA, modelKeyB: pair.modelKeyB },
     }
+    // Mesmo par com chaves mescladas (decisões gravadas antes da mescla do catálogo).
+    const eqA = isManualModelKey(pair.modelKeyA) ? [pair.modelKeyA] : globalIndex.equivalentKeysOf(pair.modelKeyA)
+    const eqB = isManualModelKey(pair.modelKeyB) ? [pair.modelKeyB] : globalIndex.equivalentKeysOf(pair.modelKeyB)
+    const equivalentes = {
+      storeId,
+      categoria,
+      OR: [
+        { modelKeyA: { in: eqA }, modelKeyB: { in: eqB } },
+        { modelKeyA: { in: eqB }, modelKeyB: { in: eqA } },
+      ],
+    }
     if (decisao === "restaurar") {
-      await db.catalogoAparelhoLojaCompat.deleteMany({ where: { storeId, categoria, ...pair } })
+      // Restaurar também desfaz decisões antigas gravadas com a chave mesclada do mesmo aparelho.
+      await db.catalogoAparelhoLojaCompat.deleteMany({ where: equivalentes })
     } else {
+      // Primeira gravação no canônico de um vínculo antigo: o que o pedido não informa (observação,
+      // origem, status/confirmação) vem da decisão antiga — a linha canônica passa a prevalecer.
+      const antiga =
+        eqA.length > 1 || eqB.length > 1
+          ? await db.catalogoAparelhoLojaCompat.findFirst({
+              where: { ...equivalentes, NOT: { modelKeyA: pair.modelKeyA, modelKeyB: pair.modelKeyB } },
+              orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            })
+          : null
+      const herdado = antiga
+        ? {
+            ...(body.status === undefined
+              ? { status: normalizeLojaCompatStatus(antiga.status), confirmedBy: antiga.confirmedBy ?? "", confirmedAt: antiga.confirmedAt }
+              : {}),
+            ...(body.notes === undefined ? { notes: antiga.notes } : {}),
+            ...(body.origem === undefined ? { origem: antiga.origem ?? "" } : {}),
+          }
+        : {}
       const upsert = () => db.catalogoAparelhoLojaCompat.upsert({
         where,
         create: {
@@ -441,6 +492,7 @@ export async function setLojaCompatDecisao(
           notes,
           origem,
           ...confirmacao,
+          ...herdado,
           createdBy: actorId,
           updatedBy: actorId,
         },

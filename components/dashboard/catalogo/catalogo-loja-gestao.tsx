@@ -155,6 +155,11 @@ export function ModelosDaLojaPanel({
                     desativado
                   </Badge>
                 )}
+                {m.lancamento === "aguardando_lancamento" && (
+                  <Badge variant="outline" className="ml-2 text-[10px] text-muted-foreground">
+                    aguardando lançamento · fora da busca
+                  </Badge>
+                )}
               </p>
               <p className="truncate text-xs text-muted-foreground">
                 {[
@@ -187,6 +192,7 @@ export function ModelosDaLojaPanel({
         open={cadastroOpen}
         onOpenChange={setCadastroOpen}
         lojaHeader={lojaHeader}
+        permitirAguardando
         onCreated={() => changed()}
       />
       <EditarModeloDialog
@@ -218,6 +224,7 @@ function EditarModeloDialog({
   const { brand, name } = hier
   const [aliases, setAliases] = useState("")
   const [notes, setNotes] = useState("")
+  const [aguardando, setAguardando] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
@@ -226,6 +233,7 @@ function EditarModeloDialog({
     setHier({ manufacturer: modelo.manufacturer ?? "", brand: modelo.brand, line: modelo.line ?? "", name: modelo.name })
     setAliases(modelo.aliases.join(", "))
     setNotes(modelo.notes)
+    setAguardando(modelo.lancamento === "aguardando_lancamento")
     setError("")
     setBusy(false)
   }, [modelo])
@@ -239,6 +247,7 @@ function EditarModeloDialog({
       name,
       manufacturer: hier.manufacturer,
       line: hier.line,
+      lancamento: aguardando ? "aguardando_lancamento" : "lancado",
       aliases: aliases.split(/[,;\n]/).map((a) => a.trim()).filter(Boolean),
       notes,
     })
@@ -266,6 +275,13 @@ function EditarModeloDialog({
             <Label htmlFor={`${uid}-obs`}>Observação (opcional)</Label>
             <Textarea id={`${uid}-obs`} value={notes} maxLength={LOJA_MODELO_LIMITS.notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[56px]" />
           </div>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={aguardando} onChange={(e) => setAguardando(e.target.checked)} />
+            <span>
+              Aguardando lançamento oficial
+              <span className="block text-xs text-muted-foreground">Desmarque quando o lançamento for confirmado para ele voltar às buscas.</span>
+            </span>
+          </label>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
