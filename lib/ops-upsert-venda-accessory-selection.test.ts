@@ -323,3 +323,119 @@ describe("upsertVendaInTransaction — saneamento de accessorySelection (004B)",
     expect(lastPayload()?.lines?.[0]?.accessorySelection).toEqual({ version: 1, colorKey: "preto", colorLabel: "Preto" })
   })
 })
+
+/**
+ * COMPAT-PROFISSIONAL-001 — cor padrão desativada pela loja é recusada no SERVIDOR só na
+ * FINALIZAÇÃO AO VIVO sinalizada pelo PDV (`finalizacaoAoVivo`). Reenvio da fila (com ou sem
+ * `registeredOffline`), venda registrada offline, reenvio de venda gravada e histórico seguem
+ * aceitos. O relógio do PDV não participa da decisão (revisão independente).
+ */
+describe("upsertVendaInTransaction — cor padrão desativada pela loja", () => {
+  const AO_VIVO = { enforceStock: true, finalizacaoAoVivo: true } as const
+  const REENVIO = { enforceStock: true } as const
+  function comCorDesativada(products: FakeProduct[]) {
+    const fake = makeFakeTx(products)
+    const inativas: Array<{ storeId: string; baseKey: string; updatedAt: Date }> = []
+    // Como o banco: a venda gravada é encontrada de novo pelo `pedidoId` (caminho de replay real).
+    const gravadas = new Map<string, any>()
+    const create = fake.tx.venda.create
+    fake.tx.venda.create = async (args: any) => {
+      const row = await create(args)
+      gravadas.set(row.pedidoId, { ...row, itens: [] })
+      return row
+    }
+    fake.tx.venda.findUnique = async ({ where }: any) => gravadas.get(where.pedidoId) ?? null
+    fake.tx.compatCorLoja = {
+      findMany: async ({ where }: any) =>
+        inativas.filter((c) => c.storeId === where.storeId && where.ativo === false && where.baseKey.in.includes(c.baseKey)),
+    }
+    // Banco real: a tabela existe (to_regclass) — o guard consulta antes, sem abortar a transação.
+    fake.tx.$queryRaw = async () => [{ ok: true }]
+    return {
+      ...fake,
+      desativar: (baseKey: string, storeId = STORE) => inativas.push({ storeId, baseKey, updatedAt: new Date() }),
+    }
+  }
+  const venda = (id: string, atMs: number, colorKey: string, extra: Record<string, unknown> = {}, saleExtra: Record<string, unknown> = {}) =>
+    ({
+      id,
+      at: new Date(atMs).toISOString(),
+      total: 25,
+      paymentBreakdown: { dinheiro: 25 },
+      lines: [
+        { inventoryId: "prod-1", name: "Capinha", quantity: 1, unitPrice: 25, lineTotal: 25, accessorySelection: { version: 1, colorKey, ...extra } },
+      ],
+      ...saleExtra,
+    }) as SalePayload
+  const MIN = 60 * 1000
+
+  it("recusa a finalização ao vivo com cor desativada, antes de qualquer efeito", async () => {
+    const { tx, byId, ledger, lastPayload, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    await expect(upsertVendaInTransaction(tx, STORE, venda("PED-C1", Date.now(), "fume"), undefined, AO_VIVO)).rejects.toThrow(
+      /Fumê.*desativada/,
+    )
+    expect(lastPayload()).toBeUndefined()
+    expect(byId.get("prod-1")!.stock).toBe(5)
+    expect(ledger).toHaveLength(0)
+  })
+
+  it("relógio do PDV não decide: atrasado 11 min ou adiantado, a finalização ao vivo continua recusada", async () => {
+    const { tx, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    await expect(upsertVendaInTransaction(tx, STORE, venda("PED-C2", Date.now() - 11 * MIN, "fume"), undefined, AO_VIVO)).rejects.toThrow(/desativada/)
+    await expect(upsertVendaInTransaction(tx, STORE, venda("PED-C3", Date.now() + 60 * MIN, "fume"), undefined, AO_VIVO)).rejects.toThrow(/desativada/)
+  })
+
+  it("aceita reenvio da fila SEM registeredOffline (falha de rede na finalização), mesmo 2 min depois", async () => {
+    const { tx, byId, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    await expect(upsertVendaInTransaction(tx, STORE, venda("PED-C4", Date.now() - 2 * MIN, "fume"), undefined, REENVIO)).resolves.toMatchObject({
+      replayed: false,
+    })
+    expect(byId.get("prod-1")!.stock).toBe(4)
+  })
+
+  it("aceita venda REGISTRADA OFFLINE mesmo se a requisição vier marcada como finalização", async () => {
+    const { tx, byId, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    await expect(
+      upsertVendaInTransaction(tx, STORE, venda("PED-C5", Date.now(), "fume", {}, { registeredOffline: true }), undefined, AO_VIVO),
+    ).resolves.toMatchObject({ replayed: false })
+    expect(byId.get("prod-1")!.stock).toBe(4)
+  })
+
+  it("reenvio de venda já gravada não é revalidado (histórico intacto); cor de outra loja não pesa", async () => {
+    const { tx, byId, ledger, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("preto", "outra-loja")
+    const v = venda("PED-C6", Date.now(), "fume")
+    await upsertVendaInTransaction(tx, STORE, v, undefined, AO_VIVO)
+    desativar("fume")
+    await expect(upsertVendaInTransaction(tx, STORE, v, undefined, AO_VIVO)).resolves.toMatchObject({ replayed: true })
+    await upsertVendaInTransaction(tx, STORE, venda("PED-C7", Date.now(), "preto"), undefined, AO_VIVO)
+    expect(byId.get("prod-1")!.stock).toBe(3)
+    expect(ledger).toHaveLength(2)
+  })
+
+  it("'Outra' (texto livre / cor própria da loja) não é afetada", async () => {
+    const { tx, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    await expect(
+      upsertVendaInTransaction(tx, STORE, venda("PED-C8", Date.now(), "outra", { customColorLabel: "Fumê" }), undefined, AO_VIVO),
+    ).resolves.toMatchObject({ replayed: false })
+  })
+
+  it("tabela ausente (migration não aplicada): confere com to_regclass e NÃO consulta a tabela", async () => {
+    const { tx, byId, desativar } = comCorDesativada([produto({ stock: 5 })])
+    desativar("fume")
+    let consultou = false
+    tx.compatCorLoja.findMany = async () => {
+      consultou = true
+      throw Object.assign(new Error("relation does not exist"), { code: "P2021" })
+    }
+    tx.$queryRaw = async () => [{ ok: false }]
+    await upsertVendaInTransaction(tx, STORE, venda("PED-C9", Date.now(), "fume"), undefined, AO_VIVO)
+    expect(consultou).toBe(false)
+    expect(byId.get("prod-1")!.stock).toBe(4)
+  })
+})

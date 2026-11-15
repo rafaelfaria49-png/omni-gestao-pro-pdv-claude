@@ -102,7 +102,7 @@ test("cliente básico: desktop, busca, cadastros e menu móvel usam o pacote lib
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/dashboard")
   await page.getByRole("button", { name: "Abrir menu de navegação" }).click()
   await expect(page.getByRole("button", { name: "Abrir menu de navegação", includeHidden: true })).toHaveAttribute("data-state", "open")
-  await expect(page.getByRole("dialog", { name: "Navegação" })).not.toContainText(/IA Mestre|Master Console|WhatsApp HUB|Catálogo de Aparelhos/)
+  await expect(page.getByRole("dialog", { name: "Navegação" })).not.toContainText(/IA Mestre|Master Console|WhatsApp HUB|Catálogo de Aparelhos|\bCompat\b/)
   await expect(page.getByRole("dialog", { name: "Navegação" }).getByRole("link", { name: "PDV Clássico" })).toBeVisible()
   await page.screenshot({ path: "test-results/platform-pilot/basic-mobile.png", fullPage: true, animations: "disabled" })
 })

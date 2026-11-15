@@ -33,6 +33,7 @@ import "server-only"
 import type { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { ensureDepositoPrincipal } from "@/lib/estoque/deposito-core"
+import { isRecord, productVariantIssue, unsupportedVariantLineIssue } from "@/lib/vestuario/guard-contract"
 import {
   normalizeStockCommand,
   stockCommandTipo,
@@ -195,6 +196,8 @@ export async function applyStockMutationTx(
   if (!sid || !trustedPrincipalOk(context)) {
     return stockFail("UNTRUSTED_CONTEXT", "Contexto de estoque não confiável: loja precisa ser provada pelo servidor.")
   }
+  const unsupportedTarget = unsupportedVariantLineIssue(command)
+  if (unsupportedTarget) return stockFail(unsupportedTarget.code, unsupportedTarget.message)
   const cmd = normalizeStockCommand(command)
   if (!cmd.produtoId) return stockFail("VALIDATION", "produtoId inválido.")
   if (!cmd.origem) return stockFail("VALIDATION", "origem inválida.")
@@ -216,12 +219,18 @@ export async function applyStockMutationTx(
   // ── 1. Lock de linha por produto (serializa mutations concorrentes) ──────
   // O predicado inclui storeId: produto de outra loja nunca é travado/lido aqui.
   // Fakes de teste DEVEM validar o `FOR UPDATE` (ver stock-ledger-service.test.ts).
+  let variantMetadata: unknown = undefined
   try {
-    await tx.$queryRaw`
-      SELECT "id" FROM "estoque_produtos"
+    const locked = await tx.$queryRaw`
+      SELECT "id",
+        CASE WHEN jsonb_typeof("metadata") = 'object' THEN "metadata" ? 'vestuario' ELSE false END AS "hasVestuario",
+        "metadata" -> 'vestuario' AS "vestuario"
+      FROM "estoque_produtos"
       WHERE "id" = ${pid} AND "storeId" = ${sid}
       FOR UPDATE
     `
+    const row = Array.isArray(locked) ? locked[0] : undefined
+    if (isRecord(row) && row.hasVestuario === true) variantMetadata = { vestuario: row.vestuario }
   } catch (e) {
     return stockFail("PERSISTENCE", `Falha ao travar linha do produto: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -245,6 +254,9 @@ export async function applyStockMutationTx(
     if (elsewhere) return stockFail("CROSS_STORE", "Produto pertence a outra loja.")
     return stockFail("NOT_FOUND", "Produto não encontrado nesta loja.")
   }
+  // No mesmo lock/consulta: não transfere todo o JSON nem cria uma leitura adicional.
+  const variantIssue = productVariantIssue(variantMetadata)
+  if (variantIssue) return stockFail(variantIssue.code, variantIssue.message)
 
   // ── 3. Depósito alvo (explícito validado ou principal) ────────────────────
   let depositoId: string

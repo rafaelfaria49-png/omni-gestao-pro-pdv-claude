@@ -40,8 +40,11 @@ import {
 } from "@/lib/catalogo-aparelhos/loja-catalogo-client"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
 import { CadastrarModeloAparelhoDialog } from "./cadastrar-modelo-aparelho-dialog"
+import { HierarquiaFields, type HierarquiaValue } from "./hierarquia-fields"
+import { hierarquiaDoModeloLoja } from "@/lib/catalogo-aparelhos/hierarquia"
 
 export const LOJA_COMPAT_STATUS_LABELS: Record<LojaCompatStatus, string> = {
+  confirmado_loja: "Confirmada pela loja (teste físico)",
   provavel_mercado: "Provável (informado pela loja)",
   precisa_testar: "Precisa testar",
   nao_recomendado: "Não recomendado",
@@ -152,9 +155,20 @@ export function ModelosDaLojaPanel({
                     desativado
                   </Badge>
                 )}
+                {m.lancamento === "aguardando_lancamento" && (
+                  <Badge variant="outline" className="ml-2 text-[10px] text-muted-foreground">
+                    aguardando lançamento · fora da busca
+                  </Badge>
+                )}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {[m.brand, m.aliases.length ? `apelidos: ${m.aliases.join(", ")}` : "", m.notes].filter(Boolean).join(" · ")}
+                {[
+                  [hierarquiaDoModeloLoja(m).fabricante, m.brand, m.line].filter(Boolean).join(" › "),
+                  m.aliases.length ? `apelidos: ${m.aliases.join(", ")}` : "",
+                  m.notes,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
             <Button type="button" size="sm" variant="ghost" onClick={() => setEditando(m)} aria-label={`Editar ${m.name}`}>
@@ -178,6 +192,7 @@ export function ModelosDaLojaPanel({
         open={cadastroOpen}
         onOpenChange={setCadastroOpen}
         lojaHeader={lojaHeader}
+        permitirAguardando
         onCreated={() => changed()}
       />
       <EditarModeloDialog
@@ -205,19 +220,20 @@ function EditarModeloDialog({
   onSaved: () => void
 }) {
   const uid = useId()
-  const [brand, setBrand] = useState("")
-  const [name, setName] = useState("")
+  const [hier, setHier] = useState<HierarquiaValue>({ manufacturer: "", brand: "", line: "", name: "" })
+  const { brand, name } = hier
   const [aliases, setAliases] = useState("")
   const [notes, setNotes] = useState("")
+  const [aguardando, setAguardando] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
     if (!modelo) return
-    setBrand(modelo.brand)
-    setName(modelo.name)
+    setHier({ manufacturer: modelo.manufacturer ?? "", brand: modelo.brand, line: modelo.line ?? "", name: modelo.name })
     setAliases(modelo.aliases.join(", "))
     setNotes(modelo.notes)
+    setAguardando(modelo.lancamento === "aguardando_lancamento")
     setError("")
     setBusy(false)
   }, [modelo])
@@ -229,6 +245,9 @@ function EditarModeloDialog({
       version: modelo.version,
       brand,
       name,
+      manufacturer: hier.manufacturer,
+      line: hier.line,
+      lancamento: aguardando ? "aguardando_lancamento" : "lancado",
       aliases: aliases.split(/[,;\n]/).map((a) => a.trim()).filter(Boolean),
       notes,
     })
@@ -239,7 +258,7 @@ function EditarModeloDialog({
 
   return (
     <Dialog open={modelo !== null} onOpenChange={(next) => !next && !busy && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Editar modelo da loja</DialogTitle>
           <DialogDescription>
@@ -247,14 +266,7 @@ function EditarModeloDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 min-w-0">
-          <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-marca`}>Marca do aparelho</Label>
-            <Input id={`${uid}-marca`} value={brand} maxLength={LOJA_MODELO_LIMITS.brand} onChange={(e) => setBrand(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-nome`}>Nome comercial do modelo</Label>
-            <Input id={`${uid}-nome`} value={name} maxLength={LOJA_MODELO_LIMITS.name} onChange={(e) => setName(e.target.value)} />
-          </div>
+          <HierarquiaFields value={hier} onChange={setHier} lojaHeader={lojaHeader} excludeModelKey={modelo?.modelKey} />
           <div className="space-y-1.5">
             <Label htmlFor={`${uid}-alias`}>Apelidos (opcional)</Label>
             <Input id={`${uid}-alias`} value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Separe por vírgula" />
@@ -263,6 +275,13 @@ function EditarModeloDialog({
             <Label htmlFor={`${uid}-obs`}>Observação (opcional)</Label>
             <Textarea id={`${uid}-obs`} value={notes} maxLength={LOJA_MODELO_LIMITS.notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[56px]" />
           </div>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={aguardando} onChange={(e) => setAguardando(e.target.checked)} />
+            <span>
+              Aguardando lançamento oficial
+              <span className="block text-xs text-muted-foreground">Desmarque quando o lançamento for confirmado para ele voltar às buscas.</span>
+            </span>
+          </label>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
@@ -415,7 +434,8 @@ export function AdicionarEquivalenteDialog({
               value={status}
               onChange={(e) => setStatus(e.target.value as LojaCompatStatus)}
             >
-              {LOJA_COMPAT_STATUSES.map((s) => (
+              {/* "Confirmada" exige o registro de teste físico (aba Vínculos do Compat). */}
+              {LOJA_COMPAT_STATUSES.filter((s) => s !== "confirmado_loja").map((s) => (
                 <option key={s} value={s}>
                   {LOJA_COMPAT_STATUS_LABELS[s]}
                 </option>
