@@ -1,0 +1,76 @@
+name: Vestuario P01 - contratos e compatibilidade
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/vestuario/**"
+      - "lib/cadastros/product-commercial-contract.ts"
+      - "lib/cadastros/product-write-service.ts"
+      - "lib/estoque/stock-ledger-*.ts"
+      - "lib/ops-upsert-venda.ts"
+      - "lib/vendas/pending-sync-classification.ts"
+      - "docs/vestuario/**"
+      - ".github/workflows/vestuario-p01.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vestuario-p01-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts-and-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Sem banco, secrets, provisionamento, migration ou deploy neste job.
+    env:
+      DATABASE_URL: postgresql://p01_synthetic:isolated@127.0.0.1:1/vestuario_p01_isolated
+      DIRECT_URL: postgresql://p01_synthetic:isolated@127.0.0.1:1/vestuario_p01_isolated
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      VESTUARIO_CATALOG_ENABLED: "0"
+      VESTUARIO_STOCK_ENABLED: "0"
+      VESTUARIO_SALE_ENABLED: "0"
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Contratos, guards e regressao de venda/estoque/multiloja
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          lib/vestuario
+          lib/cadastros/product-write-service.test.ts
+          lib/cadastros/product-write-create-tx-014.test.ts
+          lib/cadastros/product-stock-movement-availability.test.ts
+          lib/estoque/stock-ledger-service.test.ts
+          lib/ops-upsert-venda
+          lib/auth/enterprise-permissions.test.ts
+          lib/pdv/cart-catalog-reconcile.test.ts
+          lib/pdv/pending-sale-attempt.test.ts
+          lib/vendas/pending-sync-classification.test.ts
+          lib/vendas/sale-sync-engine.test.ts
+          lib/pdv/parity-classic-finalize-audit.component.test.ts
+          lib/pdv/parity-venda-completa-finalize-audit.component.test.ts
+          app/api/ops/venda-persist/route.test.ts
+          app/api/ops/venda-persist/v2/route.test.ts
+          app/actions/cadastros.access.test.ts
+          --maxWorkers=2
+      - name: Lint do escopo P01
+        run: >-
+          node node_modules/eslint/bin/eslint.js
+          lib/vestuario
+          lib/cadastros/product-commercial-contract.ts
+          lib/cadastros/product-write-service.ts
+          lib/estoque/stock-ledger-contract.ts
+          lib/estoque/stock-ledger-service.ts
+          lib/ops-upsert-venda.ts
+          lib/vendas/pending-sync-classification.ts
+      - name: Typecheck completo
+        run: npm run typecheck
