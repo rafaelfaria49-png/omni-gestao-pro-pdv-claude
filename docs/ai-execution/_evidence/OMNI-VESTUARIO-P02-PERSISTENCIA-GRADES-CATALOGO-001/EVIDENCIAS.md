@@ -45,6 +45,30 @@ colisão com SKU legado recusada sem gravar, desativação sem apagar, tamanho e
 grade no Cadastro de Produtos, P01 na UI legada (estoque recusado), troca de loja sem vazamento, loja fora da
 allowlist sem aba, usuário só da loja B, mobile 390 px sem rolagem horizontal. Capturas em `e2e/`.
 
+## Finalização do CI (GOAL OMNI-VESTUARIO-P02-CI-FINALIZACAO-002)
+
+- **Causa raiz** dos 3 workflows vermelhos (Ramos e Cadastros, Cliente Assistido, Plataforma Piloto): todos rodam
+  `lib/cadastros/business-catalog.component.test.ts`, que renderiza o `CadastrosHub` mockando cada Server Action
+  usada por ele. A P02 adicionou `@/app/actions/vestuario-catalogo` ao HUB sem mock no teste; o Vitest executou o
+  módulo real → `auth` → `next-auth/lib/env.js` → `import "next/server"` (não resolvível em ESM puro no Node).
+  Não afeta o app: no Next o `"use server"` vira referência (E2E de build passou).
+- **Baseline**: na main `cdce14a` o mesmo arquivo passa 42/42; na P02 antes da correção, falha ao carregar.
+  Reproduzido localmente com a mesma mensagem.
+- **Correção**: mock da nova action no padrão das demais + 2 casos novos (aba ausente com catálogo off; aba presente
+  e status pedido para a loja ativa quando on) → 44/44. Nenhum teste desativado, nenhuma regra de auth alterada.
+  No servidor, a flag é avaliada antes de sessão/assinatura/banco: com catálogo off o status não faz nenhuma consulta.
+- **Listas completas dos 3 workflows** (Node 22, o mais próximo do Node 24 do CI disponível; Node 26 local quebra
+  `localStorage` do jsdom em testes alheios à P02): 825/825, 1435/1435 (+43 skipped do próprio workflow), 181/181.
+  `eslint .` do workflow de Cliente Assistido: 0 erros.
+- **Benchmark** (`bench-indice-trigger.sh`, 300 mil produtos sintéticos, fsync ligado): índice `(id, storeId)` em
+  0,27–0,52 s, SELECT concorrente não bloqueia, UPDATE espera o índice; 2.000 inserts legados com SKU 122–213 ms antes
+  × 148–234 ms depois (loja sem variações) e 305–368 ms em loja com 500 variações; UPDATE de preço não aciona trigger.
+  Achado e corrigido: o trigger de colisão do lado da variação era por linha e varria a loja a cada linha
+  (500 variações = 2,1 s numa loja de 6 mil produtos); agora é **por instrução**: 0,21 s (6 mil) e 0,24 s (50 mil).
+  Uma primeira versão por instrução com JOIN ficou 22 s (laço aninhado no plano do PL/pgSQL) e foi descartada.
+- **Concorrência**: integração 10/10 seguidas com CPU disputada (total histórico: 1 falha única em 25 execuções,
+  não reproduzida — flake de timing do teste de `lock_timeout`, sem defeito identificado).
+
 ## Revisão independente
 
 R1 via Codex (OpenAI) interrompida por limite de uso da conta, sem veredito. Plano B: revisor Claude de contexto

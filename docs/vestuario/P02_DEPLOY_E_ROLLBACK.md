@@ -10,13 +10,15 @@ Migration `20261115120000_vestuario_p02_grades_catalogo` (aditiva):
 | Objeto | Efeito em dados existentes |
 |---|---|
 | 5 tabelas `vestuario_*` (grades, tamanhos, cores, produto com grade, variantes) | Nenhum — tabelas novas e vazias. |
-| `CREATE UNIQUE INDEX estoque_produtos_id_storeId_key` | Nenhum dado muda. `id` já é PK, então não há duplicata possível. Toma lock `SHARE` (bloqueia escrita, não leitura) enquanto constrói o índice — duração ~ a de reconstruir a PK de `estoque_produtos`. |
+| `CREATE UNIQUE INDEX estoque_produtos_id_storeId_key` | Nenhum dado muda. `id` já é PK, então não há duplicata possível. Toma lock `SHARE` (bloqueia escrita, não leitura) enquanto constrói o índice — duração ~ a de reconstruir a PK de `estoque_produtos` (medido: 0,27–0,52 s com 300 mil produtos sintéticos, fsync ligado; SELECT concorrente respondeu normalmente, UPDATE esperou). |
 | Trigger `vestuario_produtos_colisao_trg` em `estoque_produtos` | Só age em INSERT/UPDATE que informa/altera `sku`, `barcode` ou `storeId`: 1 advisory lock transacional **compartilhado** por loja (cadastros de produto não se bloqueiam entre si; esperam uma gravação de código de variação em curso ou na fila — no máximo os 3 s de `lock_timeout` que o writer de variação aceita esperar) + 1 lookup indexado em `vestuario_variantes` (vazia até alguém cadastrar grade). Recusa código já usado por variação da mesma loja. |
-| Triggers de identidade/exclusão/colisão nas tabelas novas | Só nas tabelas novas. |
+| Triggers de identidade/exclusão/colisão nas tabelas novas | Só nas tabelas novas. A colisão do lado da variação é **por instrução** (transition table): uma varredura dos produtos da loja por comando — 500 variações em 0,21 s (loja com 6 mil produtos) e 0,24 s (loja com 50 mil). |
 | CHECKs | Só nas tabelas novas. |
 
 Sem DROP, TRUNCATE, ALTER de coluna, rename ou backfill. Produtos legados continuam simples; nenhum saldo,
-ledger, venda ou `gradePlanejada` é tocado. Ensaio: `docs/ai-execution/_evidence/OMNI-VESTUARIO-P02-PERSISTENCIA-GRADES-CATALOGO-001/ENSAIO_MIGRATION.txt`.
+ledger, venda ou `gradePlanejada` é tocado. Ensaio: `docs/ai-execution/_evidence/OMNI-VESTUARIO-P02-PERSISTENCIA-GRADES-CATALOGO-001/ENSAIO_MIGRATION.txt`;
+impacto do índice e dos triggers: `BENCH_INDICE_TRIGGER_300k_50lojas.txt` e `BENCH_INDICE_TRIGGER_300k_6lojas.txt` na mesma pasta.
+Antes da janela real, medir o tamanho de `estoque_produtos` em Production por leitura autorizada (não feito nesta execução).
 
 ## Ordem futura (somente com autorização específica a cada passo)
 
@@ -30,7 +32,7 @@ ledger, venda ou `gradePlanejada` é tocado. Ensaio: `docs/ai-execution/_evidenc
    `VESTUARIO_CATALOG_ENABLED` ausente (padrão): a aba não aparece e nenhuma query toca `vestuario_*`.
    Exceção a conhecer: o writer de produto passa a traduzir qualquer unique violado sem produto conflitante como
    `DUPLICATE` (antes `PERSISTENCE`); não depende da migration.
-4. **Conferir pós-migration** (read-only): 5 tabelas, 6 CHECKs validados, 5 triggers `vestuario_%`, drift zero
+4. **Conferir pós-migration** (read-only): 5 tabelas, 6 CHECKs validados, 6 triggers `vestuario_%`, drift zero
    (`prisma migrate diff --from-url … --to-schema-datamodel prisma/schema.prisma --exit-code`), 0 linhas em `vestuario_*`.
 5. **Deploy do código** com todas as flags de vestuário ausentes. Production permanece desligada: além da allowlist,
    `vestuarioFeatureFlags` recusa o catálogo quando `VERCEL_ENV=production` nesta fase.

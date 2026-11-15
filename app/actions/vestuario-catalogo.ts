@@ -24,6 +24,9 @@ const DISABLED: CatalogFailure = {
 async function gate(storeId: unknown): Promise<Gate> {
   const sid = typeof storeId === "string" ? storeId.trim() : ""
   if (!sid) return { ok: false, code: "UNTRUSTED", message: "Selecione a loja." }
+  // Flag primeiro (só ambiente, sem I/O): catálogo desligado não consulta sessão, assinatura nem banco.
+  // Não vaza nada: a resposta "desligado" é a mesma que um chamador sem sessão receberia.
+  if (!vestuarioFeatureFlags(sid).enabled.catalog) return DISABLED
   try {
     await requireModuleAction(sid, "catalog")
     const access = await requireCadastrosActionAccess(sid, "hub")

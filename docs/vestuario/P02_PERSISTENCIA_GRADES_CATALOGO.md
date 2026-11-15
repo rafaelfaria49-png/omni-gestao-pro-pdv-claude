@@ -99,8 +99,9 @@ integração em PG real, E2E com build de produção e NextAuth real, capturas d
 - Writers legados que não passam pelo writer canônico de produto (ex.: importações antigas, item avulso, adapters
   de OS) recebem o unique violado (P2002) sem contexto quando o código coincide com o de uma variação; quem trata
   P2002 como "já existe" pode procurar um produto inexistente. Só ocorre em loja com variações (hoje: QA).
-- A checagem variante × produto legado varre os produtos da loja (sem índice de expressão novo em `estoque_produtos`):
-  custo proporcional ao catálogo da loja, só ao gravar código de variante.
+- A checagem variante × produto legado varre os produtos da loja uma vez por comando (trigger por instrução, sem
+  índice de expressão novo em `estoque_produtos`): custo proporcional ao catálogo da loja, só ao gravar código de
+  variação (500 variações: 0,24 s numa loja sintética de 50 mil produtos).
 
 ## Dependências para a P03
 

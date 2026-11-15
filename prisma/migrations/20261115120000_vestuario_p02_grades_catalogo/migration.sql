@@ -261,27 +261,59 @@ CREATE OR REPLACE TRIGGER "vestuario_tamanhos_identidade_trg" BEFORE UPDATE ON "
 -- Colisão de identificadores na mesma loja, autoritativa no banco (todos os writers, inclusive legados):
 -- variante.sku/barcodeInterno × produto.sku/barcode (comparados por upper(btrim())) e sku × barcodeInterno
 -- entre variantes diferentes. Valores iguais na MESMA coluna da variante já são barrados pelos uniques.
-CREATE OR REPLACE FUNCTION "vestuario_variantes_colisao"() RETURNS trigger LANGUAGE plpgsql AS $fn$
-DECLARE keys TEXT[];
+-- Lado da variação: trigger POR INSTRUÇÃO com transition table — um único hash join por comando (incluir centenas
+-- de variações não varre os produtos da loja uma vez por linha). Lock EXCLUSIVO das lojas tocadas, em ordem,
+-- antes de conferir; as linhas novas já estão visíveis para a própria transação.
+CREATE OR REPLACE FUNCTION "vestuario_variantes_colisao_check"(p_ids TEXT[], p_stores TEXT[], p_codes TEXT[])
+RETURNS void LANGUAGE plpgsql AS $fn$
+DECLARE s TEXT; codes TEXT[];
 BEGIN
-  IF TG_OP = 'UPDATE' AND NEW."sku" IS NOT DISTINCT FROM OLD."sku" AND NEW."barcodeInterno" IS NOT DISTINCT FROM OLD."barcodeInterno" THEN
-    RETURN NEW;
-  END IF;
-  keys := array_remove(ARRAY[NEW."sku", NEW."barcodeInterno"], NULL);
-  IF cardinality(keys) = 0 THEN RETURN NEW; END IF;
-  PERFORM "vestuario_ident_lock"(NEW."storeId");
-  IF EXISTS (SELECT 1 FROM "estoque_produtos" p WHERE p."storeId" = NEW."storeId"
-             AND (upper(btrim(p."sku")) = ANY(keys) OR upper(btrim(p."barcode")) = ANY(keys))) THEN
-    RAISE EXCEPTION 'VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por um produto desta loja.' USING ERRCODE = '23505';
-  END IF;
-  IF EXISTS (SELECT 1 FROM "vestuario_variantes" v WHERE v."storeId" = NEW."storeId" AND v."id" <> NEW."id"
-             AND (v."sku" = ANY(keys) OR v."barcodeInterno" = ANY(keys))) THEN
-    RAISE EXCEPTION 'VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por outra variação desta loja.' USING ERRCODE = '23505';
-  END IF;
-  RETURN NEW;
+  FOR s IN SELECT DISTINCT x FROM unnest(p_stores) x ORDER BY 1 LOOP
+    PERFORM "vestuario_ident_lock"(s);
+  END LOOP;
+  FOR s IN SELECT DISTINCT x FROM unnest(p_stores) x ORDER BY 1 LOOP
+    SELECT array_agg(DISTINCT t.code) INTO codes FROM unnest(p_stores, p_codes) AS t(store, code) WHERE t.store = s;
+    -- Uma única varredura dos produtos da loja (índice storeId), comparando contra o array de códigos.
+    IF EXISTS (SELECT 1 FROM "estoque_produtos" p WHERE p."storeId" = s
+               AND (upper(btrim(p."sku")) = ANY(codes) OR upper(btrim(p."barcode")) = ANY(codes))) THEN
+      RAISE EXCEPTION 'VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por um produto desta loja.' USING ERRCODE = '23505';
+    END IF;
+    -- Outras variações (uniques (storeId, sku) e (storeId, barcodeInterno)); a própria linha pode repetir o código.
+    IF EXISTS (SELECT 1 FROM unnest(p_ids, p_stores, p_codes) AS k(id, store, code)
+               JOIN "vestuario_variantes" v ON v."storeId" = s AND (v."sku" = k.code OR v."barcodeInterno" = k.code)
+               WHERE k.store = s AND v."id" <> k.id) THEN
+      RAISE EXCEPTION 'VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por outra variação desta loja.' USING ERRCODE = '23505';
+    END IF;
+  END LOOP;
 END $fn$;
-CREATE OR REPLACE TRIGGER "vestuario_variantes_colisao_trg" BEFORE INSERT OR UPDATE OF "sku", "barcodeInterno" ON "vestuario_variantes"
-  FOR EACH ROW EXECUTE FUNCTION "vestuario_variantes_colisao"();
+
+CREATE OR REPLACE FUNCTION "vestuario_variantes_colisao_ins"() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE ids TEXT[]; stores TEXT[]; codes TEXT[];
+BEGIN
+  SELECT array_agg(n."id"), array_agg(n."storeId"), array_agg(x) INTO ids, stores, codes
+    FROM novas n CROSS JOIN LATERAL unnest(ARRAY[n."sku", n."barcodeInterno"]) x WHERE x IS NOT NULL;
+  IF codes IS NOT NULL THEN PERFORM "vestuario_variantes_colisao_check"(ids, stores, codes); END IF;
+  RETURN NULL;
+END $fn$;
+
+CREATE OR REPLACE FUNCTION "vestuario_variantes_colisao_upd"() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE ids TEXT[]; stores TEXT[]; codes TEXT[];
+BEGIN
+  -- Só os códigos que mudaram: atualizar preço/ativo não confere nem trava nada.
+  SELECT array_agg(n."id"), array_agg(n."storeId"), array_agg(x) INTO ids, stores, codes
+    FROM novas n JOIN antigas o ON o."id" = n."id"
+    CROSS JOIN LATERAL unnest(ARRAY[
+      CASE WHEN n."sku" IS DISTINCT FROM o."sku" THEN n."sku" END,
+      CASE WHEN n."barcodeInterno" IS DISTINCT FROM o."barcodeInterno" THEN n."barcodeInterno" END]) x
+    WHERE x IS NOT NULL;
+  IF codes IS NOT NULL THEN PERFORM "vestuario_variantes_colisao_check"(ids, stores, codes); END IF;
+  RETURN NULL;
+END $fn$;
+
+CREATE OR REPLACE TRIGGER "vestuario_variantes_colisao_ins_trg" AFTER INSERT ON "vestuario_variantes"
+  REFERENCING NEW TABLE AS novas FOR EACH STATEMENT EXECUTE FUNCTION "vestuario_variantes_colisao_ins"();
+CREATE OR REPLACE TRIGGER "vestuario_variantes_colisao_upd_trg" AFTER UPDATE ON "vestuario_variantes"
+  REFERENCING OLD TABLE AS antigas NEW TABLE AS novas FOR EACH STATEMENT EXECUTE FUNCTION "vestuario_variantes_colisao_upd"();
 
 CREATE OR REPLACE FUNCTION "vestuario_produtos_colisao"() RETURNS trigger LANGUAGE plpgsql AS $fn$
 DECLARE keys TEXT[];
