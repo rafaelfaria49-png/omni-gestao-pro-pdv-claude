@@ -35,8 +35,13 @@ FKs são todas `RESTRICT` (nada em cascata). Cor/tamanho usados não podem ser e
 - SKU (opcional na P02) e `barcodeInterno` (reservado à P03) são gravados normalizados: NFKC, maiúsculas, sem espaço,
   charset `[A-Z0-9._/-]` para SKU e ASCII visível para o código interno (CHECK no banco).
 - Colisão bloqueada no banco, nos dois sentidos, para todos os writers (inclusive legados): variante × `sku`/`barcode`
-  de produto da mesma loja (comparados por `upper(btrim())`), e SKU × código interno entre variantes. Ambos os lados
-  tomam o mesmo `pg_advisory_xact_lock` por loja, então duas criações simultâneas não passam juntas.
+  de produto da mesma loja (comparados por `upper(btrim())`), e SKU × código interno entre variantes. Advisory lock
+  transacional por loja na mesma chave: **exclusivo** para quem grava código de variação, **compartilhado** para
+  produtos — cadastros legados não se serializam entre si, e variação × produto nunca passam juntos sem que um
+  enxergue o outro já commitado. Uma gravação de código de variação espera transações de produto abertas da loja
+  (ex.: importação) por **no máximo 3 s** (`lock_timeout`) e então desiste com CONFLICT, sem gravar nada. Enquanto
+  ela está na fila, o PostgreSQL também segura novos cadastros de produto com SKU/barcode da mesma loja — por isso
+  a espera é limitada a esses 3 s.
 - Nenhum código é gerado. Sem SKU **e** código interno a variante fica em **Rascunho**; com os dois, "Cadastro
   completo" — que ainda não significa vendável nem estocável. GTIN não existe nesta fase.
 
@@ -91,6 +96,9 @@ integração em PG real, E2E com build de produção e NextAuth real, capturas d
 - Exclusão **em lote** (`/api/produtos/bulk-action`) que inclua um pai com grade aborta o lote inteiro sem alterar
   nada (FK RESTRICT); exclusão individual devolve mensagem clara. Inativação em lote do pai já era recusada desde a P01.
 - O trigger compara SKU legado por `upper(btrim())`; um SKU legado com acento (ex.: `CAMISÁ`) não colide com `CAMISA`.
+- Writers legados que não passam pelo writer canônico de produto (ex.: importações antigas, item avulso, adapters
+  de OS) recebem o unique violado (P2002) sem contexto quando o código coincide com o de uma variação; quem trata
+  P2002 como "já existe" pode procurar um produto inexistente. Só ocorre em loja com variações (hoje: QA).
 - A checagem variante × produto legado varre os produtos da loja (sem índice de expressão novo em `estoque_produtos`):
   custo proporcional ao catálogo da loja, só ao gravar código de variante.
 

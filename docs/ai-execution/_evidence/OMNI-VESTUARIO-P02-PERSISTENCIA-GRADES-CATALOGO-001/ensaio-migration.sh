@@ -109,8 +109,8 @@ expect_fail "renomear tamanho usado" "UPDATE vestuario_grade_tamanhos SET rotulo
 expect_fail "excluir produto pai com grade" "DELETE FROM estoque_produtos WHERE id='pai-a'" "produtoId_storeId_fkey"
 expect_fail "HEX inválido" "UPDATE vestuario_cores SET hex='#zzz' WHERE id='cb'" "nome_check"
 expect_fail "preço negativo" "UPDATE vestuario_variantes SET \"precoCentavos\"=-1 WHERE id='va1'" "valores_check"
-"${PSQL[@]}" -d "$DB" -c "UPDATE vestuario_grade_tamanhos SET rotulo='Médio', \"rotuloKey\"='MEDIO', ordem=9, ativo=false WHERE id='ta-m'" >/dev/null && log "   ACEITOU: renomear/reordenar/desativar tamanho NÃO usado" || { log "   FALHA: tamanho não usado deveria ser editável"; FAILS=$((FAILS+1)); }
-"${PSQL[@]}" -d "$DB" -c "UPDATE vestuario_cores SET nome='Preto Ônix', \"nomeKey\"='PRETO ONIX', ativo=false WHERE id='ca'" >/dev/null && log "   ACEITOU: renomear/desativar cor usada (identidade da variante preservada)" || { log "   FALHA: cor usada deveria ser editável"; FAILS=$((FAILS+1)); }
+"${PSQL[@]}" -d "$DB" -c "UPDATE vestuario_grade_tamanhos SET rotulo='Medio', \"rotuloKey\"='MEDIO', ordem=9, ativo=false WHERE id='ta-m'" >/dev/null && log "   ACEITOU: renomear/reordenar/desativar tamanho NÃO usado" || { log "   FALHA: tamanho não usado deveria ser editável"; FAILS=$((FAILS+1)); }
+"${PSQL[@]}" -d "$DB" -c "UPDATE vestuario_cores SET nome='Preto Onix', \"nomeKey\"='PRETO ONIX', ativo=false WHERE id='ca'" >/dev/null && log "   ACEITOU: renomear/desativar cor usada (identidade da variante preservada)" || { log "   FALHA: cor usada deveria ser editável"; FAILS=$((FAILS+1)); }
 "${PSQL[@]}" -d "$DB" -c "UPDATE estoque_produtos SET name='Legado renomeado', price=11 WHERE id='p2'" >/dev/null && log "   ACEITOU: edição legada sem mudar sku/barcode (trigger não interfere)" || { log "   FALHA: edição legada comum bloqueada"; FAILS=$((FAILS+1)); }
 "${PSQL[@]}" -d "$DB" -c "INSERT INTO estoque_produtos (id,\"storeId\",sku,name,\"updatedAt\") VALUES ('py','mig-b','CAM-PRETO-P','Mesmo SKU em OUTRA loja',now())" >/dev/null && log "   ACEITOU: mesmo SKU em outra loja" || { log "   FALHA: outra loja bloqueada"; FAILS=$((FAILS+1)); }
 

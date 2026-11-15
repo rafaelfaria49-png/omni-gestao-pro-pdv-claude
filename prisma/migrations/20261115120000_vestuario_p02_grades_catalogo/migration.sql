@@ -6,8 +6,8 @@
 --
 -- Locks: o CREATE UNIQUE INDEX em "estoque_produtos" toma SHARE (bloqueia escritas, não leituras) pelo tempo
 -- do build do índice; "id" já é PK, então não há duplicata possível e o índice tem ~o tamanho da PK.
--- Os triggers em "estoque_produtos" só agem quando sku/barcode é informado/alterado (custo: 1 advisory lock
--- transacional por loja + 1 lookup indexado em "vestuario_variantes").
+-- O trigger em "estoque_produtos" só age quando sku/barcode é informado/alterado (custo: 1 advisory lock
+-- COMPARTILHADO por loja — não serializa cadastros legados entre si — + 1 lookup indexado em "vestuario_variantes").
 -- Reversão operacional: docs/vestuario/rollback_20261115120000_vestuario_p02_grades_catalogo.sql
 
 -- CreateTable
@@ -209,9 +209,14 @@ BEGIN
   END IF;
 END $$;
 
--- Serializa, por loja, toda gravação de identificador de produto/variante (mesma chave nos dois lados).
+-- Lock de identificadores por loja (mesma chave nos dois lados, liberado no fim da transação):
+-- EXCLUSIVO para quem grava código de variação; COMPARTILHADO para produtos (legado × legado não se bloqueia).
+-- Assim variação × produto nunca passam juntos sem que um enxergue o outro já commitado.
 CREATE OR REPLACE FUNCTION "vestuario_ident_lock"(p_store TEXT) RETURNS void LANGUAGE sql AS $fn$
   SELECT pg_advisory_xact_lock(hashtextextended('omni.vestuario.ident:' || p_store, 0));
+$fn$;
+CREATE OR REPLACE FUNCTION "vestuario_ident_lock_shared"(p_store TEXT) RETURNS void LANGUAGE sql AS $fn$
+  SELECT pg_advisory_xact_lock_shared(hashtextextended('omni.vestuario.ident:' || p_store, 0));
 $fn$;
 
 -- Identidade: loja/produto/grade (e cor/tamanho na variante) imutáveis; variante e vínculo produto-grade
@@ -287,7 +292,7 @@ BEGIN
   END IF;
   keys := array_remove(ARRAY[NULLIF(upper(btrim(NEW."sku")), ''), NULLIF(upper(btrim(NEW."barcode")), '')], NULL);
   IF cardinality(keys) = 0 THEN RETURN NEW; END IF;
-  PERFORM "vestuario_ident_lock"(NEW."storeId");
+  PERFORM "vestuario_ident_lock_shared"(NEW."storeId");
   IF EXISTS (SELECT 1 FROM "vestuario_variantes" v WHERE v."storeId" = NEW."storeId"
              AND (v."sku" = ANY(keys) OR v."barcodeInterno" = ANY(keys))) THEN
     RAISE EXCEPTION 'VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por uma variação (cor/tamanho) desta loja.' USING ERRCODE = '23505';

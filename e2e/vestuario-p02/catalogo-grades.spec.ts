@@ -90,7 +90,7 @@ test("loja habilitada: grades, cores, produto com grade, variações em rascunho
     await expect(page.getByRole("textbox", { name: `Nome da cor ${nome}` })).toBeVisible()
   }
   await page.getByRole("textbox", { name: "Nome da cor Azul" }).fill("Azul Royal")
-  await page.getByRole("button", { name: "Salvar" }).click()
+  await page.getByRole("button", { name: "Salvar", exact: true }).click()
   await expect(page.getByRole("textbox", { name: "Nome da cor Azul Royal" })).toBeVisible()
   // duplicidade normalizada
   await page.getByPlaceholder("Ex.: Azul Marinho, Estampado").fill("  preto ")
@@ -124,10 +124,10 @@ test("loja habilitada: grades, cores, produto com grade, variações em rascunho
 
   // SKU da variação; colisão com produto legado simples é recusada sem gravar
   await edit.getByRole("textbox", { name: "SKU de Preto / P" }).fill("cam-e2e-preto-p")
-  await edit.getByRole("button", { name: "Salvar" }).first().click()
+  await edit.getByRole("button", { name: "Salvar", exact: true }).first().click()
   await expect.poll(async () => (await d.vestuarioVariante.findFirst({ where: { storeId: STORE_A, produtoId: pai.id, sku: "CAM-E2E-PRETO-P" } }))?.id ?? null).not.toBeNull()
   await edit.getByRole("textbox", { name: "SKU de Preto / M" }).fill("legado-e2e")
-  await edit.getByRole("button", { name: "Salvar" }).first().click()
+  await edit.getByRole("button", { name: "Salvar", exact: true }).first().click()
   await expect(page.getByText(/já é usado por um produto desta loja/)).toBeVisible()
   expect(await d.vestuarioVariante.count({ where: { storeId: STORE_A, sku: "LEGADO-E2E" } })).toBe(0)
   await edit.getByRole("textbox", { name: "SKU de Preto / M" }).fill("")
@@ -139,7 +139,7 @@ test("loja habilitada: grades, cores, produto com grade, variações em rascunho
   expect(await d.vestuarioVariante.count({ where: { storeId: STORE_A, produtoId: pai.id } })).toBe(10)
   await expect(edit.getByText("Fase de etiquetas").first()).toBeVisible()
   await page.screenshot({ path: shot("02-variacoes-desktop.png"), fullPage: false })
-  await edit.getByRole("button", { name: "Fechar" }).click()
+  await edit.getByRole("button", { name: "Fechar", exact: true }).click()
 
   // Tamanho em uso não é renomeável (UI desabilita; banco garante)
   await page.getByRole("button", { name: "Grades de tamanho" }).click()
@@ -147,12 +147,21 @@ test("loja habilitada: grades, cores, produto com grade, variações em rascunho
 
   // Modalidade no Cadastro de Produtos
   await page.goto("/dashboard/cadastros-v2?aba=produtos")
-  await page.getByRole("button", { name: /Novo produto/ }).first().click()
+  // P01 na UI legada: o pai com grade aparece na lista, mas estoque por produto é recusado.
+  await page.getByRole("row", { name: /Camiseta E2E/ }).getByRole("button", { name: "Estoque" }).click()
+  await expect(page.getByText(/Estoque por cor e tamanho ainda não disponível/).first()).toBeVisible()
+  await page.screenshot({ path: shot("05-p01-estoque-recusado.png"), fullPage: false })
+  await page.keyboard.press("Escape")
+  await page.goto("/dashboard/cadastros-v2?aba=produtos")
+  // O status do catálogo chega assíncrono; a modalidade só é oferecida depois dele (antes, abre o simples).
+  await expect(page.getByRole("button", { name: "Grades e variações" })).toBeVisible()
+  // Barra da lista (não o "Novo" do topo do app).
+  await page.getByText(/^\d+ produtos?$/).locator("..").getByRole("button", { name: "Novo", exact: true }).click()
   const escolha = page.getByRole("dialog", { name: "Novo produto" })
   await expect(escolha.getByText("Produto simples")).toBeVisible()
   await escolha.getByText("Produto com grade").click()
   await expect(page.getByRole("dialog", { name: "Novo produto com grade" })).toBeVisible()
-  await page.getByRole("dialog", { name: "Novo produto com grade" }).getByRole("button", { name: "Fechar" }).click()
+  await page.getByRole("dialog", { name: "Novo produto com grade" }).getByRole("button", { name: "Fechar", exact: true }).click()
 
   // Legado intocado
   const leg = await d.produto.findUniqueOrThrow({ where: { id: "e2e-vest-legado" } })
@@ -196,11 +205,11 @@ test("mobile: grades e editor cabem na tela sem rolagem horizontal", async ({ br
   await abrirGrades(page)
   await noHorizontalOverflow(page)
   await page.getByRole("button", { name: "Produtos com grade" }).click()
-  await page.getByRole("button", { name: "Abrir" }).first().click()
+  await page.getByRole("button", { name: "Abrir", exact: true }).first().click()
   await expect(page.getByText("Variações cadastradas")).toBeVisible()
   await noHorizontalOverflow(page)
   await page.screenshot({ path: shot("03-editor-mobile.png"), fullPage: false })
-  await page.getByRole("button", { name: "Fechar" }).click()
+  await page.getByRole("button", { name: "Fechar", exact: true }).click()
   await page.getByRole("button", { name: "Cores", exact: true }).click()
   await noHorizontalOverflow(page)
   await page.screenshot({ path: shot("04-cores-mobile.png"), fullPage: false })

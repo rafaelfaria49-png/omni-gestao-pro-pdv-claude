@@ -26,6 +26,8 @@ import {
 } from "./catalog-normalize"
 
 export const VESTUARIO_AUDIT_SOURCE = "vestuario-catalog-service"
+/** Coluna `precoCentavos` é INTEGER (INT4): R$ 21.474.836,47. */
+const PRECO_CENTAVOS_MAX = 2_147_483_647
 
 export type CatalogContext = { storeId: string; principal: CadastrosAuditPrincipal | null }
 export type CatalogFailureCode = "VALIDATION" | "NOT_FOUND" | "DUPLICATE" | "CONFLICT" | "IN_USE" | "UNTRUSTED"
@@ -85,8 +87,15 @@ async function audit(tx: Tx, ctx: CatalogContext, action: string, detail: string
   })
 }
 
+/**
+ * Lock EXCLUSIVO de identificadores da loja. Espera no máximo 3 s: enquanto um pedido exclusivo está na fila,
+ * o PostgreSQL segura também os pedidos compartilhados novos (cadastros de produto da loja), então a espera
+ * é limitada para não represar o legado atrás de uma importação longa. Estourou → CONFLICT ("tente de novo").
+ */
 async function identLock(tx: Tx, storeId: string) {
+  await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '3s'`)
   await tx.$executeRaw`SELECT "vestuario_ident_lock"(${storeId})`
+  await tx.$executeRawUnsafe(`SET LOCAL lock_timeout TO DEFAULT`)
 }
 
 /** Traduz erros do banco (constraints/triggers) em falhas estáveis; o resto propaga. */
@@ -96,18 +105,24 @@ function mapDbError(e: unknown): CatalogFailure | null {
   if (msg.includes("VESTUARIO_TAMANHO_EM_USO")) return fail("IN_USE", "Tamanho vinculado a variações não pode ser renomeado. Crie outro e desative este.", "rotulo")
   if (msg.includes("VESTUARIO_IDENTIDADE_IMUTAVEL")) return fail("CONFLICT", "Loja, produto, grade, cor e tamanho de uma variação não mudam.")
   if (msg.includes("VESTUARIO_EXCLUSAO_PROIBIDA")) return fail("IN_USE", "Registros de variação não são excluídos; desative.")
-  if (e instanceof Prisma.PrismaClientKnownRequestError) {
-    if (e.code === "P2002") {
-      const target = JSON.stringify(e.meta?.target ?? "")
+  if (msg.includes("lock timeout") || msg.includes("55P03")) {
+    return fail("CONFLICT", "Há cadastro de produtos em andamento nesta loja (ex.: importação). Nada foi alterado; tente de novo em instantes.")
+  }
+  // Checagem estrutural: no bundle do Next a classe do erro pode não ser a mesma instância (instanceof falha).
+  const known = e as { code?: unknown; meta?: { target?: unknown } } | null
+  const code = typeof known?.code === "string" ? known.code : ""
+  if (/^P\d{4}$/.test(code)) {
+    if (code === "P2002") {
+      const target = JSON.stringify(known?.meta?.target ?? "") + msg
       if (target.includes("nomeKey")) return fail("DUPLICATE", "Já existe um cadastro com esse nome nesta loja.", "nome")
       if (target.includes("rotuloKey")) return fail("DUPLICATE", "Esse tamanho já existe nesta grade.", "rotulo")
       if (target.includes("corId")) return fail("DUPLICATE", "Essa combinação de cor e tamanho já existe neste produto.", "combinacoes")
       if (target.includes("sku") || target.includes("barcode")) return fail("DUPLICATE", "Código já usado por outro produto ou variação desta loja.", "sku")
       return fail("DUPLICATE", "Registro duplicado.")
     }
-    if (e.code === "P2003") return fail("IN_USE", "Referência inválida ou em uso por outro cadastro.")
-    if (e.code === "P2025") return fail("NOT_FOUND", "Registro não encontrado nesta loja.")
-    if (e.code === "P2034") return fail("CONFLICT", "Outra alteração concorrente foi gravada. Recarregue e tente de novo.")
+    if (code === "P2003") return fail("IN_USE", "Referência inválida ou em uso por outro cadastro.")
+    if (code === "P2025") return fail("NOT_FOUND", "Registro não encontrado nesta loja.")
+    if (code === "P2034") return fail("CONFLICT", "Outra alteração concorrente foi gravada. Recarregue e tente de novo.")
   }
   return null
 }
@@ -442,10 +457,11 @@ async function validateCombosRefs(tx: Tx, storeId: string, gradeId: string, comb
   if (!combos.length) return null
   const corIds = [...new Set(combos.map((c) => c.corId))]
   const tamIds = [...new Set(combos.map((c) => c.tamanhoId))]
-  const [cores, tams] = await Promise.all([
-    tx.vestuarioCor.findMany({ where: { storeId, id: { in: corIds } }, select: { id: true, ativo: true } }),
-    tx.vestuarioTamanho.findMany({ where: { storeId, gradeId, id: { in: tamIds } }, select: { id: true, ativo: true } }),
-  ])
+  // FOR SHARE: uma desativação concorrente de cor/tamanho espera esta transação (sem variação nova sobre inativo).
+  const cores = await tx.$queryRaw<{ id: string; ativo: boolean }[]>`
+    SELECT "id", "ativo" FROM "vestuario_cores" WHERE "storeId" = ${storeId} AND "id" = ANY(${corIds}::text[]) FOR SHARE`
+  const tams = await tx.$queryRaw<{ id: string; ativo: boolean }[]>`
+    SELECT "id", "ativo" FROM "vestuario_grade_tamanhos" WHERE "storeId" = ${storeId} AND "gradeId" = ${gradeId} AND "id" = ANY(${tamIds}::text[]) FOR SHARE`
   if (cores.length !== corIds.length) return fail("NOT_FOUND", "Cor não encontrada nesta loja.", "combinacoes")
   if (tams.length !== tamIds.length) return fail("NOT_FOUND", "Tamanho não pertence à grade deste produto.", "combinacoes")
   if (!allowInactive && (cores.some((c) => !c.ativo) || tams.some((t) => !t.ativo))) {
@@ -554,9 +570,16 @@ export async function updateProdutoGradeBase(db: PrismaClient, ctxIn: CatalogCon
   const v = p.value
   const data: Prisma.ProdutoUpdateManyMutationInput = {}
   if (v.nome !== undefined) { const n = cleanLabel(v.nome, 200); if (!n) return fail("VALIDATION", "Nome do produto obrigatório.", "nome"); data.name = n }
-  if (v.categoria !== undefined) data.category = cleanLabel(v.categoria ?? "", 120)
-  if (v.marca !== undefined) data.brand = cleanLabel(v.marca ?? "", 120) ?? ""
-  if (v.fornecedor !== undefined) data.supplierName = cleanLabel(v.fornecedor ?? "", 200) ?? ""
+  // Vazio limpa o campo; texto acima do limite é recusado (nunca truncado/apagado em silêncio).
+  const optional = (raw: string | null | undefined, max: number, field: string): CatalogResult<string | null> => {
+    const text = (raw ?? "").trim()
+    if (!text) return ok(null)
+    const c = cleanLabel(text, max)
+    return c ? ok(c) : fail("VALIDATION", `${field}: até ${max} caracteres.`, field.toLowerCase())
+  }
+  if (v.categoria !== undefined) { const c = optional(v.categoria, 120, "Categoria"); if (!c.ok) return c; data.category = c.value }
+  if (v.marca !== undefined) { const c = optional(v.marca, 120, "Marca"); if (!c.ok) return c; data.brand = c.value ?? "" }
+  if (v.fornecedor !== undefined) { const c = optional(v.fornecedor, 200, "Fornecedor"); if (!c.ok) return c; data.supplierName = c.value ?? "" }
   const money = parsePrecoCusto(v); if (!money.ok) return money
   if (v.preco !== undefined) data.price = money.value.preco ?? 0
   if (v.custo !== undefined) data.precoCusto = money.value.custo ?? 0
@@ -579,6 +602,8 @@ export async function addVariantes(db: PrismaClient, ctxIn: CatalogContext, inpu
   return run(db, ctx, async (tx) => {
     await identLock(tx, ctx.storeId)
     const b = await bumpProduto(tx, ctx, p.value.produtoId, p.value.expectedVersion); if ("ok" in b) return b
+    const grade = await tx.$queryRaw<{ ativo: boolean }[]>`SELECT "ativo" FROM "vestuario_grades" WHERE "storeId" = ${ctx.storeId} AND "id" = ${b.gradeId} FOR SHARE`
+    if (!grade[0]?.ativo) return fail("VALIDATION", "Grade desativada não recebe novas variações.", "combinacoes")
     const refs = await validateCombosRefs(tx, ctx.storeId, b.gradeId, combos.value, false); if (refs) return refs
     const err = await insertVariantes(tx, ctx, p.value.produtoId, b.gradeId, combos.value); if (err) return err
     await audit(tx, ctx, "variante.create", `incluiu ${combos.value.length} variação(ões) no produto`, { produtoId: p.value.produtoId, combinacoes: combos.value })
@@ -607,7 +632,11 @@ export async function updateVariante(db: PrismaClient, ctxIn: CatalogContext, in
     const b = normalizeBarcodeInterno(v.barcodeInterno); if (!b.ok) return fail("VALIDATION", b.message, "barcodeInterno")
     data.barcodeInterno = b.value; if (b.value) codes.push(b.value)
   }
-  if (v.preco !== undefined) { const m = parseOptionalMoney(v.preco ?? undefined, PRICE_SCALE, "Preço"); if (!m.ok) return fail("VALIDATION", m.message, "preco"); data.precoCentavos = m.value }
+  if (v.preco !== undefined) {
+    const m = parseOptionalMoney(v.preco ?? undefined, PRICE_SCALE, "Preço"); if (!m.ok) return fail("VALIDATION", m.message, "preco")
+    if (m.value !== null && m.value > PRECO_CENTAVOS_MAX) return fail("VALIDATION", "Preço acima do limite aceito.", "preco")
+    data.precoCentavos = m.value
+  }
   if (v.custo !== undefined) {
     const m = parseOptionalMoney(v.custo ?? undefined, COST_SCALE, "Custo"); if (!m.ok) return fail("VALIDATION", m.message, "custo")
     data.custoMicros = m.value === null ? null : BigInt(m.value)

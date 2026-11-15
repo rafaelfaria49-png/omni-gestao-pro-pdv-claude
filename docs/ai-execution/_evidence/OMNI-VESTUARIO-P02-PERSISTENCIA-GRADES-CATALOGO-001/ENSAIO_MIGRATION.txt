@@ -11,8 +11,7 @@
 4. drift banco × schema.prisma: exit 0 (No difference detected.)
 5. constraints/FKs (dados sintéticos mig-a/mig-b):
    RECUSOU (combinação duplicada): ERROR:  duplicate key value violates unique constraint "vestuario_variantes_storeId_produtoId_corId_tamanhoId_key"
-   FALHA DO ENSAIO (SKU duplicado): esperado erro 'storeId_sku', obtido: ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por outra variação desta loja.
-CONTEXTO:  PL/pgSQL function vestuario_variantes_colisao() line 16 at RAISE
+   RECUSOU (SKU duplicado): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por outra variação desta loja.
    RECUSOU (SKU colide com produto legado (minúsculo/espaço)): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por um produto desta loja.
    RECUSOU (código interno = SKU de outra variante): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por outra variação desta loja.
    RECUSOU (produto legado novo com SKU de variante): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por uma variação (cor/tamanho) desta loja.
@@ -38,4 +37,4 @@ CONTEXTO:  PL/pgSQL function vestuario_variantes_colisao() line 16 at RAISE
 6. rollback com dados: RECUSADO (ROLLBACK_RECUSADO: há dados de vestuário); tabelas intactas: 1 variante(s)
    rollback sem dados: OK · tabelas vestuario restantes=0 · triggers=0 · produtos preservados=sim
    reaplicação após rollback: 20261115120000_vestuario_p02_grades_catalogo aplicada de novo
-RESULTADO: FAIL (1)
+RESULTADO: PASS

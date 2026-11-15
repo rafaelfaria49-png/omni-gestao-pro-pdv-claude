@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "credentialRedactions": 0,
+  "app": "next start (build de produção) em http://localhost:3117",
+  "database": "PostgreSQL descartável loopback (baseline main + migration P02 + drift zero)",
+  "auth": "NextAuth Credentials real; usuários sintéticos com senha aleatória por execução",
+  "flags": {
+    "catalogAllowlist": [
+      "e2e-vest-a",
+      "e2e-vest-b"
+    ],
+    "stockAndSaleRequestedButForcedOff": true
+  },
+  "productionWrites": 0
+}

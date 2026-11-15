@@ -225,6 +225,79 @@ describe.skipIf(!TEST_URL)("catálogo de grade P02 — PostgreSQL descartável",
     expect(upd.filter((r) => !r.ok && r.code === "CONFLICT")).toHaveLength(1)
   })
 
+  it("lock: legado × legado não se serializa; variação espera o legado aberto e enxerga a colisão", async () => {
+    const sku = `${up}-LOCK-1`
+    let releaseA!: () => void
+    const holdA = new Promise<void>((r) => { releaseA = r })
+    let insertedA!: () => void
+    const aInserted = new Promise<void>((r) => { insertedA = r })
+    const txA = db.$transaction(async (tx) => {
+      await tx.produto.create({ data: { storeId: A, name: "Lock legado A", sku } })
+      insertedA()
+      await holdA
+    }, { timeout: 20_000 })
+    await aInserted
+    // Outro cadastro legado da MESMA loja, com outro SKU, conclui com A ainda aberta (lock compartilhado).
+    const t0 = Date.now()
+    await other.$transaction((tx) => tx.produto.create({ data: { storeId: A, name: "Lock legado B", sku: `${up}-LOCK-2` } }))
+    expect(Date.now() - t0).toBeLessThan(3_000)
+    // Variação com o MESMO código de A precisa esperar A (lock exclusivo) e então recusar.
+    let variantDone = false
+    const variantP = svc.createProdutoGrade(other, ctxA, { nome: "Lock grade", gradeId: ids.adulto, combinacoes: [{ corId: ids.azul, tamanhoId: ids.tGG, sku }] })
+      .then((r) => { variantDone = true; return r })
+    await new Promise((r) => setTimeout(r, 1_000))
+    expect(variantDone).toBe(false)
+    releaseA()
+    await txA
+    expect(await variantP).toMatchObject({ ok: false, code: "DUPLICATE" })
+    expect(await db.vestuarioVariante.count({ where: { storeId: A, sku } })).toBe(0)
+  })
+
+  it("lock_timeout: variação não fica presa atrás de transação de produto longa (CONFLICT em ~3 s, nada gravado)", async () => {
+    let releaseA!: () => void
+    const holdA = new Promise<void>((r) => { releaseA = r })
+    let insertedA!: () => void
+    const aInserted = new Promise<void>((r) => { insertedA = r })
+    const txA = db.$transaction(async (tx) => {
+      await tx.produto.create({ data: { storeId: A, name: "Importação longa", sku: `${up}-IMP-1` } })
+      insertedA()
+      await holdA
+    }, { timeout: 30_000 })
+    await aInserted
+    const t0 = Date.now()
+    const r = await svc.createProdutoGrade(other, ctxA, { nome: "Espera longa", gradeId: ids.adulto, combinacoes: [{ corId: ids.azul, tamanhoId: ids.tGG, sku: `${up}-IMP-2` }] })
+    const waited = Date.now() - t0
+    releaseA(); await txA
+    expect(r).toMatchObject({ ok: false, code: "CONFLICT" })
+    expect(waited).toBeGreaterThanOrEqual(2_500)
+    expect(waited).toBeLessThan(10_000)
+    expect(await db.produto.count({ where: { storeId: A, name: "Espera longa" } })).toBe(0)
+  })
+
+  it("SKU do pai: trigger real na mesma sessão (exclusivo → compartilhado) e colisões nos dois sentidos", async () => {
+    const tams = (await svc.listCatalogo(db, A)).grades.find((g) => g.id === ids.adulto)!.tamanhos
+    const r = must(await svc.createProdutoGrade(db, ctxA, { nome: "Pai com SKU", skuPai: `${run}-pai`, gradeId: ids.adulto, combinacoes: [{ corId: ids.branco, tamanhoId: tams[0].id, sku: `${run}-pai-v1` }] }))
+    expect((await db.produto.findUniqueOrThrow({ where: { id: r.produtoId } })).sku).toBe(`${up}-PAI`)
+    expect(await svc.createProdutoGrade(db, ctxA, { nome: "Pai colide legado", skuPai: `${run}-leg`, gradeId: ids.adulto, combinacoes: [{ corId: ids.branco, tamanhoId: tams[0].id }] })).toMatchObject({ ok: false, code: "DUPLICATE" })
+    expect(await svc.createProdutoGrade(db, ctxA, { nome: "Pai colide variação", skuPai: `${run}-pai-v1`, gradeId: ids.adulto, combinacoes: [{ corId: ids.branco, tamanhoId: tams[0].id }] })).toMatchObject({ ok: false, code: "DUPLICATE" })
+    expect(await svc.createProdutoGrade(db, ctxA, { nome: "Pai = própria variação", skuPai: "X-1", gradeId: ids.adulto, combinacoes: [{ corId: ids.branco, tamanhoId: tams[0].id, sku: "x-1" }] })).toMatchObject({ ok: false, code: "DUPLICATE" })
+    expect(await db.produto.count({ where: { storeId: A, name: { startsWith: "Pai " } } })).toBe(1)
+  })
+
+  it("validações: preço acima do INT4, campo longo e grade desativada", async () => {
+    const cur = (await svc.getProdutoGrade(db, A, ids.cam))!
+    const v = cur.variantes.find((x) => x.id !== ids.vPretoP)!
+    expect(await svc.updateVariante(db, ctxA, { varianteId: v.id, expectedVersion: v.version, preco: "25000000" })).toMatchObject({ ok: false, code: "VALIDATION", field: "preco" })
+    expect(await svc.updateProdutoGradeBase(db, ctxA, { produtoId: ids.cam, expectedVersion: cur.catalogVersion, marca: "M".repeat(130) })).toMatchObject({ ok: false, code: "VALIDATION" })
+    expect((await db.produto.findUniqueOrThrow({ where: { id: ids.cam } })).brand).toBe("Marca QA")
+    const g = (await svc.listCatalogo(db, A)).grades.find((x) => x.id === ids.adulto)!
+    must(await svc.updateGrade(db, ctxA, { id: ids.adulto, ativo: false, expectedVersion: g.version }))
+    const p = (await svc.getProdutoGrade(db, A, ids.cam))!
+    expect(await svc.addVariantes(db, ctxA, { produtoId: ids.cam, expectedVersion: p.catalogVersion, combinacoes: [{ corId: ids.azul, tamanhoId: ids.tM }] })).toMatchObject({ ok: false, code: "VALIDATION" })
+    const g2 = (await svc.listCatalogo(db, A)).grades.find((x) => x.id === ids.adulto)!
+    must(await svc.updateGrade(db, ctxA, { id: ids.adulto, ativo: true, expectedVersion: g2.version }))
+  })
+
   it("listagem paginada e desativação de variante sem apagar", async () => {
     const page1 = await svc.listProdutosGrade(db, A, { take: 1 })
     expect(page1.items).toHaveLength(1)

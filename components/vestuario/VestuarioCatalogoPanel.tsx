@@ -62,7 +62,8 @@ export function VestuarioCatalogoPanel({ storeId, openNewProduct, onNewProductCo
     setLoadErr(null); setGrades(r.value.grades); setCores(r.value.cores);
   }, [guard, storeId]);
 
-  useEffect(() => { void reloadCatalogo(); }, [reloadCatalogo]);
+  // Recarrega ao abrir cada seção: "em uso"/ativos refletem variações criadas desde a última leitura.
+  useEffect(() => { void reloadCatalogo(); }, [reloadCatalogo, section]);
 
   const sections = [
     { id: "produtos" as const, label: "Produtos com grade", icon: Shirt },
@@ -414,7 +415,12 @@ function ProdutoGradeEditor({ storeId, grades, cores, produtoId, onClose, onSave
       }
       if (combos.length) {
         const r = await addVestuarioVariantes(storeId, { produtoId: produto.produtoId, expectedVersion: version, combinacoes: combos });
-        if (!notify(r)) return;
+        if (!r.ok) {
+          // Os dados comuns (se alterados) já foram gravados; recarrega para não ficar com versão antiga.
+          toast.error(changed ? `Dados do produto salvos, mas as novas variações não: ${r.message}` : r.message);
+          await reload();
+          return;
+        }
       }
       toast.success("Produto atualizado.");
       await reload();

@@ -21,6 +21,7 @@ DROP TABLE IF EXISTS "vestuario_grades";
 DROP FUNCTION IF EXISTS "vestuario_variantes_colisao"();
 DROP FUNCTION IF EXISTS "vestuario_tamanhos_identidade"();
 DROP FUNCTION IF EXISTS "vestuario_identidade_imutavel"();
+DROP FUNCTION IF EXISTS "vestuario_ident_lock_shared"(TEXT);
 DROP FUNCTION IF EXISTS "vestuario_ident_lock"(TEXT);
 DROP INDEX IF EXISTS "estoque_produtos_id_storeId_key";
 DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261115120000_vestuario_p02_grades_catalogo';

@@ -11,7 +11,7 @@ Migration `20261115120000_vestuario_p02_grades_catalogo` (aditiva):
 |---|---|
 | 5 tabelas `vestuario_*` (grades, tamanhos, cores, produto com grade, variantes) | Nenhum — tabelas novas e vazias. |
 | `CREATE UNIQUE INDEX estoque_produtos_id_storeId_key` | Nenhum dado muda. `id` já é PK, então não há duplicata possível. Toma lock `SHARE` (bloqueia escrita, não leitura) enquanto constrói o índice — duração ~ a de reconstruir a PK de `estoque_produtos`. |
-| Trigger `vestuario_produtos_colisao_trg` em `estoque_produtos` | Só age em INSERT/UPDATE que informa/altera `sku`, `barcode` ou `storeId`: 1 advisory lock transacional por loja + 1 lookup indexado em `vestuario_variantes` (vazia até alguém cadastrar grade). Recusa código já usado por variação da mesma loja. |
+| Trigger `vestuario_produtos_colisao_trg` em `estoque_produtos` | Só age em INSERT/UPDATE que informa/altera `sku`, `barcode` ou `storeId`: 1 advisory lock transacional **compartilhado** por loja (cadastros de produto não se bloqueiam entre si; esperam uma gravação de código de variação em curso ou na fila — no máximo os 3 s de `lock_timeout` que o writer de variação aceita esperar) + 1 lookup indexado em `vestuario_variantes` (vazia até alguém cadastrar grade). Recusa código já usado por variação da mesma loja. |
 | Triggers de identidade/exclusão/colisão nas tabelas novas | Só nas tabelas novas. |
 | CHECKs | Só nas tabelas novas. |
 

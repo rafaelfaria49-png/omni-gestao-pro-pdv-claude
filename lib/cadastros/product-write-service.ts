@@ -124,7 +124,7 @@ export type ProductWriteDeps = {
  * Vestuário P02: unique violado sem produto conflitante = código já usado por uma variação de cor/tamanho
  * (trigger `vestuario_produtos_colisao_trg` no banco) ou corrida. Nada foi gravado; antes virava PERSISTENCE.
  */
-const IDENTIFIER_TAKEN_FAILURE: ProductWriteResult = {
+const IDENTIFIER_TAKEN_FAILURE: Extract<ProductWriteResult, { ok: false }> = {
   ok: false, code: "DUPLICATE", field: "sku",
   message: "Código (SKU ou código de barras) já usado por outro produto ou por uma variação de cor/tamanho desta loja.",
 }
@@ -794,7 +794,8 @@ export async function updateProductTx(
     if (isPrismaKnownError(e, "P2002")) {
       const conflicted = await findDuplicate(tx, ctx.storeId, nextSku, nextBarcode, pid).catch(() => null)
       if (conflicted) return duplicateFailure(conflicted, nextSku, nextBarcode, "update")
-      return { ok: false, code: "DUPLICATE", message: "Produto já cadastrado nesta loja.", field: nextBarcode ? "barcode" : "sku" }
+      // Sem produto conflitante legível (transação já abortada ou código de variação — trigger P02).
+      return { ...IDENTIFIER_TAKEN_FAILURE, field: nextBarcode && !nextSku ? "barcode" : "sku" }
     }
     if (isPrismaKnownError(e, "P2025")) {
       return { ok: false, code: "NOT_FOUND", message: "Produto não encontrado." }
