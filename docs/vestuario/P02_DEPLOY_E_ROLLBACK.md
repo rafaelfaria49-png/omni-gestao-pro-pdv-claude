@@ -20,6 +20,19 @@ ledger, venda ou `gradePlanejada` é tocado. Ensaio: `docs/ai-execution/_evidenc
 impacto do índice e dos triggers: `BENCH_INDICE_TRIGGER_300k_50lojas.txt` e `BENCH_INDICE_TRIGGER_300k_6lojas.txt` na mesma pasta.
 Antes da janela real, medir o tamanho de `estoque_produtos` em Production por leitura autorizada (não feito nesta execução).
 
+## Preparo exclusivo de QA
+
+`scripts/vestuario/prepare-pg.mjs` é ferramenta de QA, não de deploy. Exige URL PostgreSQL loopback, porta
+explícita, banco `vest_p02_*`, schema public e ausência de parâmetros que redirecionem o destino. Antes de
+qualquer DDL, consulta identidade, papel, idade do servidor e ausência de tabelas, usando o preflight
+compartilhado de Cadastros. Fora do CI, exige também `data_directory` no scratchpad. Banco populado é
+recusado sem reset; cada ensaio deve receber um banco novo/vazio. A CLI Prisma é chamada sem shell.
+
+A revalidação revisou o trigger de identidade da migration P02 ainda pendente, acrescentando a imutabilidade
+do ID da variante. Nenhuma migration histórica da main foi alterada. Os ensaios anteriores eram descartáveis;
+devem ser repetidos a partir de banco vazio com a versão revisada. Não editar checksums de banco real para
+forçar a aplicação; qualquer futura divergência exige reconciliação autorizada antes do deploy.
+
 ## Ordem futura (somente com autorização específica a cada passo)
 
 1. **Revalidar a base**: main atual, `_prisma_migrations` de Production (checksums) e o guard de migrations

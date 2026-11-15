@@ -77,3 +77,59 @@ reformatação do schema revertida (diff só aditivo, 152 linhas); P3 mensagem d
 na UI, `FOR SHARE` contra TOCTOU e grade desativada, campo longo, teste do SKU do pai, limitação dos writers legados
 documentada. O E2E encontrou e a branch corrigiu ainda: `instanceof` de erro Prisma falhando no bundle do Next e
 "em uso" desatualizado na seção de grades.
+
+## Revalidação da PR #358 — main atual e regressões comprovadas
+
+Base original `cdce14a3d049e1977ecd295a4b0d15c501dc995e`; head recebido
+`5a90f0e053c3e70ae331e8a270012ed911eb3fe5`. Main revalidada
+`4dec9bb3a477baaf60823aaba7adab1c836debe2` incorporada à mesma branch por
+`e3b75a9213243dfce62d36001e4012ec9760adc1`, sem conflito, rebase ou force push.
+As mudanças de sessão, troca de loja e desktop da main foram preservadas.
+
+### Três falhas de CI históricas
+
+As falhas eram do head `012f76b2d8d2434361080da7d075a231a1335954`, nos runs
+[Plataforma](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/43731332497),
+[Ramos](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/43731332589) e
+[Cliente assistido](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/43731332635).
+Todas falhavam ao carregar o mesmo teste do HUB, via action não mockada → auth → next-auth/lib/env.js →
+next/server. Classificação: **regressão de isolamento do teste introduzida pela P02**, já corrigida no head
+recebido. Não foi corrigida substituindo auth/Next em runtime, alterando dependências ou apagando testes.
+
+Reprodução nova em três worktrees, mesmas dependências e Node **24.22.3** (major do CI): base exata **42/42**;
+head com falha **0 testes coletados, erro de importação idêntico**; head corrigido **44/44**. Os seis workflows
+do head recebido já estavam verdes; isso não substitui a validação do novo head integrado/corrigido.
+
+### Achados adicionais reproduzidos e corrigidos nesta revalidação
+
+| Achado | Antes da correção | Proteção nova |
+|---|---|---|
+| Exclusão de produto simples V1 | `deleteProduto` recusava metadata válida `mode:SIMPLES` como se fosse grade. | Usa o guard P01 `productVariantIssue`; simples/free metadata continuam excluíveis conforme permissões/vínculos. |
+| Desativação concorrente da grade | Com a outra transação desativando a grade, criação confirmava produto sobre leitura MVCC antiga. | `FOR SHARE` na grade em criação/adição, timeout 3 s, CONFLICT e rollback sem produto parcial. |
+| Troca de ID da variante por SQL | UPDATE simultâneo de `id` e `sku` passava, inclusive usando SKU de produto simples. | Trigger de identidade também compara ID, antes do check de colisão por instrução. |
+| Preparador de banco destrutivo | Aceitava outro nome/protocolo/schema só por ter host loopback. | URL restrita, identidade/papel/servidor recente, banco vazio e scratchpad fora de CI; CLI sem shell. |
+
+As regressões foram executadas antes das correções: **1 falha de exclusão**, **2 falhas PG reais** e
+**4 recusas de URL ausentes**. Dados eram inteiramente sintéticos e o PostgreSQL foi iniciado em diretório
+scratchpad próprio, porta 55469; nenhum banco existente foi reutilizado. O erro inicial de conexão no sandbox
+padrão foi de acesso ao loopback, não de domínio; a execução autorizada no PG descartável confirmou os defeitos.
+
+Após correção: **22/22 integrações PG**, **8/8 guards sem conexão**, **1.790/1.790 regressões em 106 arquivos**,
+typecheck completo sem erros e lint completo em **3.686 arquivos, 0 erros e 68 avisos**. Testes PG também
+comprovam que o preparador recusa banco populado sem apagar seus registros. A migration P02 revisada foi
+ensaiada em banco novo, com baseline da main atual e **drift zero**; nenhuma migration histórica foi alterada.
+
+Build local, E2E autenticado e CI do head final são gates adicionais da decisão de prontidão, com resultados
+no relatório final da execução e nos [checks da própria PR #358](https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/358/checks).
+A revisão independente desta revalidação encontrou os quatro P2 acima; suas correções foram revisadas novamente.
+Contratos P01 (`contracts`, `guard-contract`, `money`, `sale-policy`) permanecem idênticos à base P01;
+estoque/venda de variantes continuam false. A P03 foi preparada apenas em
+`docs/vestuario/P03_PROPOSTA_CODIGOS_ETIQUETAS.md`, sem implementação.
+
+Limitação P3 documentada: atalhos/topo do HUB ainda abrem o editor simples legado; a escolha de modalidade
+fica no Novo da lista e a criação com grade na aba dedicada. Não altera venda/estoque nem bloqueia o QA do
+catálogo; uniformizar esses caminhos requer uma decisão de UX própria. O benchmark anterior é histórico,
+não uma medição nova desta revalidação. O novo lock de grade adiciona duas consultas curtas por criação/adição
+de catálogo, sem consulta adicional no writer de produto simples ou no PDV.
+
+**PRODUCTION_WRITES=0 · PRODUCTION_MIGRATIONS=0 · PR_MERGE_EXECUTED=NO · DEPLOYMENT_EXECUTED=NO.**

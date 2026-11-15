@@ -98,6 +98,16 @@ async function identLock(tx: Tx, storeId: string) {
   await tx.$executeRawUnsafe(`SET LOCAL lock_timeout TO DEFAULT`)
 }
 
+/** Serializa criação/adição com a desativação da grade, sem espera ilimitada. */
+async function gradeForShare(tx: Tx, storeId: string, gradeId: string) {
+  await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '3s'`)
+  const rows = await tx.$queryRaw<{ id: string; nome: string; ativo: boolean }[]>`
+    SELECT "id", "nome", "ativo" FROM "vestuario_grades"
+    WHERE "storeId" = ${storeId} AND "id" = ${gradeId} FOR SHARE`
+  await tx.$executeRawUnsafe(`SET LOCAL lock_timeout TO DEFAULT`)
+  return rows[0]
+}
+
 /** Traduz erros do banco (constraints/triggers) em falhas estáveis; o resto propaga. */
 function mapDbError(e: unknown): CatalogFailure | null {
   const msg = e instanceof Error ? e.message : String(e)
@@ -523,7 +533,7 @@ export async function createProdutoGrade(db: PrismaClient, ctxIn: CatalogContext
   }
   return run(db, ctx, async (tx) => {
     await identLock(tx, ctx.storeId)
-    const grade = await tx.vestuarioGrade.findFirst({ where: { id: v.gradeId, storeId: ctx.storeId }, select: { id: true, ativo: true, nome: true } })
+    const grade = await gradeForShare(tx, ctx.storeId, v.gradeId)
     if (!grade) return fail("NOT_FOUND", "Grade não encontrada nesta loja.", "gradeId")
     if (!grade.ativo) return fail("VALIDATION", "Grade desativada não pode ser usada em produto novo.", "gradeId")
     const refs = await validateCombosRefs(tx, ctx.storeId, grade.id, combos.value, false); if (refs) return refs
@@ -602,8 +612,8 @@ export async function addVariantes(db: PrismaClient, ctxIn: CatalogContext, inpu
   return run(db, ctx, async (tx) => {
     await identLock(tx, ctx.storeId)
     const b = await bumpProduto(tx, ctx, p.value.produtoId, p.value.expectedVersion); if ("ok" in b) return b
-    const grade = await tx.$queryRaw<{ ativo: boolean }[]>`SELECT "ativo" FROM "vestuario_grades" WHERE "storeId" = ${ctx.storeId} AND "id" = ${b.gradeId} FOR SHARE`
-    if (!grade[0]?.ativo) return fail("VALIDATION", "Grade desativada não recebe novas variações.", "combinacoes")
+    const grade = await gradeForShare(tx, ctx.storeId, b.gradeId)
+    if (!grade?.ativo) return fail("VALIDATION", "Grade desativada não recebe novas variações.", "combinacoes")
     const refs = await validateCombosRefs(tx, ctx.storeId, b.gradeId, combos.value, false); if (refs) return refs
     const err = await insertVariantes(tx, ctx, p.value.produtoId, b.gradeId, combos.value); if (err) return err
     await audit(tx, ctx, "variante.create", `incluiu ${combos.value.length} variação(ões) no produto`, { produtoId: p.value.produtoId, combinacoes: combos.value })

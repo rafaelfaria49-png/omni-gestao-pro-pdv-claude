@@ -4,6 +4,10 @@ GOAL: `OMNI-VESTUARIO-P02-PERSISTENCIA-GRADES-CATALOGO-001`. Base: `cdce14a3d049
 (`main`, PR #357/P01 integrada), revalidada em 15/11/2026. Referências: `P01_CONTRATOS_COMPATIBILIDADE.md` e o
 plano técnico `OMNI-VESTUARIO-VARIACOES-MARKETPLACE-001` (seções DATA_MODEL, BARCODE e MIGRATION).
 
+Revalidação da PR #358: main `4dec9bb3a477baaf60823aaba7adab1c836debe2` integrada na branch existente
+por `e3b75a9213243dfce62d36001e4012ec9760adc1`, sem rebase ou force push. Alterações de sessão, troca de loja e
+desktop da main foram preservadas; não houve merge da PR, deployment ou migration em Production.
+
 ## Limite da entrega
 
 Cadastro real de grades, tamanhos, cores, produto com grade e variações, com integridade no banco e UI no
@@ -31,7 +35,8 @@ FKs são todas `RESTRICT` (nada em cascata). Cor/tamanho usados não podem ser e
 
 ### Identidade, SKU e código interno
 
-- `varianteId` = `cuid()` do servidor. Não deriva de SKU, rótulo, cor, tamanho ou posição na matriz.
+- `varianteId` = `cuid()` do servidor. Não deriva de SKU, rótulo, cor, tamanho ou posição na matriz. O trigger
+  também impede trocar esse ID por SQL direto, inclusive em um UPDATE que tente mudar simultaneamente o SKU.
 - SKU (opcional na P02) e `barcodeInterno` (reservado à P03) são gravados normalizados: NFKC, maiúsculas, sem espaço,
   charset `[A-Z0-9._/-]` para SKU e ASCII visível para o código interno (CHECK no banco).
 - Colisão bloqueada no banco, nos dois sentidos, para todos os writers (inclusive legados): variante × `sku`/`barcode`
@@ -68,6 +73,14 @@ validações/auditoria do cadastro simples) dentro da mesma transação — sem 
 `app/actions/vestuario-catalogo.ts`: cada Server Action exige sessão, módulo `catalog`, loja autorizada para a sessão
 (`requireCadastrosActionAccess`, perfil hub) e a flag da loja. O `storeId` recebido só escolhe a loja; nunca é
 autoridade. Falhas são devolvidas (não lançadas). Concorrência: `catalogVersion`/`version` (expectedVersion).
+
+A criação do pai e a adição de variantes leem a grade sob `FOR SHARE`, com espera máxima de 3 s e recusa
+`CONFLICT`/rollback se a desativação concorrente não liberar a linha. Não criam combinações sobre leitura
+antiga de uma grade em desativação. Isso adiciona duas chamadas SQL curtas para definir/restaurar o timeout
+nesses writers de catálogo; não altera o caminho de estoque/venda nem o writer de produto simples.
+
+Na exclusão legada, o guard P01 `productVariantIssue` bloqueia grade/declaração inválida e preserva a exclusão
+de `SIMPLES` V1 e metadata livre, sujeito às permissões e vínculos operacionais já existentes.
 
 ### Flags (`lib/vestuario/feature-flags.server.ts`)
 

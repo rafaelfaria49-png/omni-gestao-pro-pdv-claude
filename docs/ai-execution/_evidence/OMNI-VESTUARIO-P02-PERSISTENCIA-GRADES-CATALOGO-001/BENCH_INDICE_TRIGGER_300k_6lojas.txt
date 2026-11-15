@@ -1,5 +1,5 @@
 fsync=on
-produtos sintéticos: 
+produtos sintéticos:
 2.000 inserts legados com SKU ANTES da migration: 122 ms
 CREATE UNIQUE INDEX (id, storeId) com 300000 produtos: 269 ms · índice 9304 kB
 SELECT concorrente durante o índice (lock SHARE): respondeu em 121 ms (0 linhas)

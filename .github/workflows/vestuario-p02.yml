@@ -60,6 +60,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Guards do preparador descartavel (sem conectar a banco)
+        run: node --test scripts/vestuario/prepare-pg.test.mjs
       - name: Contratos P01/P02, normalização e regressões de cadastro/venda/estoque (sem banco)
         run: >-
           node node_modules/vitest/vitest.mjs run

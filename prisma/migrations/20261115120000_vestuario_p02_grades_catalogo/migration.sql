@@ -227,11 +227,12 @@ BEGIN
     RAISE EXCEPTION 'VESTUARIO_EXCLUSAO_PROIBIDA: % não pode ser excluído; desative o registro.', TG_TABLE_NAME
       USING ERRCODE = '55000';
   END IF;
-  IF NEW."storeId" IS DISTINCT FROM OLD."storeId" OR NEW."produtoId" IS DISTINCT FROM OLD."produtoId"
+  IF to_jsonb(NEW)->>'id' IS DISTINCT FROM to_jsonb(OLD)->>'id'
+     OR NEW."storeId" IS DISTINCT FROM OLD."storeId" OR NEW."produtoId" IS DISTINCT FROM OLD."produtoId"
      OR NEW."gradeId" IS DISTINCT FROM OLD."gradeId"
      OR to_jsonb(NEW)->>'corId' IS DISTINCT FROM to_jsonb(OLD)->>'corId'
      OR to_jsonb(NEW)->>'tamanhoId' IS DISTINCT FROM to_jsonb(OLD)->>'tamanhoId' THEN
-    RAISE EXCEPTION 'VESTUARIO_IDENTIDADE_IMUTAVEL: loja, produto, grade, cor e tamanho não mudam após a criação.'
+    RAISE EXCEPTION 'VESTUARIO_IDENTIDADE_IMUTAVEL: id, loja, produto, grade, cor e tamanho não mudam após a criação.'
       USING ERRCODE = '23514';
   END IF;
   RETURN NEW;

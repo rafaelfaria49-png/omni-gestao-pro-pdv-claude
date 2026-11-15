@@ -4,6 +4,7 @@
  * com a migration 20261115120000 aplicada; qualquer outro alvo é recusado antes da primeira consulta.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { spawnSync } from "node:child_process"
 import { Prisma, PrismaClient } from "@/generated/prisma"
 import { createProduct, createProductTx, updateProductTx, type ProductWriteDb, type ProductWriteTx } from "@/lib/cadastros/product-write-service"
 import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
@@ -316,5 +317,57 @@ describe.skipIf(!TEST_URL)("catálogo de grade P02 — PostgreSQL descartável",
     const p = (await svc.getProdutoGrade(db, A, ids.cam))!
     expect(await svc.addVariantes(db, ctxA, { produtoId: ids.cam, expectedVersion: p.catalogVersion, combinacoes: [{ corId: ids.estampa, tamanhoId: ids.tM }] })).toMatchObject({ ok: false, code: "VALIDATION" })
     expect(Prisma).toBeDefined()
+  })
+
+  it("criação do pai não passa por uma desativação concorrente da grade", async () => {
+    const gradeId = must(await svc.createGrade(db, ctxA, { nome: "Grade concorrente", tamanhos: ["Único"] })).id
+    const tamanho = (await svc.listCatalogo(db, A)).grades.find((g) => g.id === gradeId)!.tamanhos[0]
+    let release!: () => void
+    let signal!: () => void
+    const hold = new Promise<void>((resolve) => { release = resolve })
+    const ready = new Promise<void>((resolve) => { signal = resolve })
+    const deactivation = other.$transaction(async (tx) => {
+      await tx.vestuarioGrade.update({ where: { id: gradeId }, data: { ativo: false, version: { increment: 1 } } })
+      signal()
+      await hold
+    }, { timeout: 20_000 })
+    await ready
+    try {
+      const result = await svc.createProdutoGrade(db, ctxA, {
+        nome: "Não criar em grade desativando", gradeId,
+        combinacoes: [{ corId: ids.preto, tamanhoId: tamanho.id }],
+      })
+      expect(result).toMatchObject({ ok: false, code: "CONFLICT" })
+      expect(await db.produto.count({ where: { storeId: A, name: "Não criar em grade desativando" } })).toBe(0)
+    } finally {
+      release()
+      await deactivation
+    }
+    expect((await db.vestuarioGrade.findUniqueOrThrow({ where: { id: gradeId } })).ativo).toBe(false)
+  })
+
+  it("SQL não troca id da variante para burlar identidade estável e colisão com produto simples", async () => {
+    const produto = must(await svc.createProdutoGrade(db, ctxA, {
+      nome: "Identidade imutável QA", gradeId: ids.adulto,
+      combinacoes: [{ corId: ids.preto, tamanhoId: ids.tP, sku: `${up}-IDENTIDADE` }],
+    }))
+    const variante = await db.vestuarioVariante.findFirstOrThrow({ where: { storeId: A, produtoId: produto.produtoId } })
+    await expect(db.$executeRaw`
+      UPDATE "vestuario_variantes" SET "id" = ${`${variante.id}-trocado`}, "sku" = ${`${up}-LEG`}
+      WHERE "id" = ${variante.id} AND "storeId" = ${A}
+    `).rejects.toThrow(/VESTUARIO_IDENTIDADE_IMUTAVEL/)
+    expect(await db.vestuarioVariante.findUnique({ where: { id: variante.id } })).toMatchObject({ sku: variante.sku })
+    expect(await db.vestuarioVariante.count({ where: { storeId: A, sku: `${up}-LEG` } })).toBe(0)
+  })
+
+  it("preparador recusa banco já populado antes de qualquer DDL", async () => {
+    const before = await db.produto.count({ where: { storeId: A } })
+    const result = spawnSync(process.execPath, ["scripts/vestuario/prepare-pg.mjs"], {
+      env: process.env, encoding: "utf8", timeout: 20_000,
+    })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain("RAMOS_E2E_DATABASE_MUST_BE_EMPTY")
+    expect(await db.produto.count({ where: { storeId: A } })).toBe(before)
+    expect(await db.vestuarioVariante.findUnique({ where: { id: ids.vPretoP } })).not.toBeNull()
   })
 })
