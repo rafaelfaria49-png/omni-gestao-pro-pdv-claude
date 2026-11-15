@@ -9,6 +9,10 @@ const eslintConfig = [
   {
     ignores: [
       "node_modules/**",
+      "generated/**",
+      ".vercel/**",
+      // Referência arquivada, também excluída do TypeScript e do Vitest.
+      "components/pdv-github-original/**",
       ".next/**",
       "out/**",
       "build/**",

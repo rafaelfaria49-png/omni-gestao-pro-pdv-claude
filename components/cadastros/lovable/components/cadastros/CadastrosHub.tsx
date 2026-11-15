@@ -15,6 +15,8 @@ import { MovimentacaoEstoqueModal, HistoricoEstoqueGeralModal } from "./Moviment
 import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
 import { ClienteEditorDialog } from "./ClienteEditor";
 import { ImportacaoHub } from "./ImportacaoHub";
+import { AparelhosPanel } from "@/components/aparelhos/AparelhosPanel";
+import { TabletSmartphone } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useStoreBusiness } from "@/lib/use-store-business";
 import { BUSINESS_BRANCHES, BUSINESS_SETTINGS_HREF } from "@/lib/store-business-capabilities";
@@ -76,6 +78,7 @@ const TABS = [
   { id: "servicos", label: "Serviços", icon: Wrench },
   { id: "fornecedores", label: "Fornecedores", icon: Truck },
   { id: "tecnicos", label: "Técnicos", icon: HardHat },
+  { id: "aparelhos", label: "Aparelhos", icon: TabletSmartphone },
   { id: "equipamentos", label: "Equipamentos", icon: Smartphone },
   { id: "categorias", label: "Categorias / Marcas", icon: Tag },
   { id: "importacao", label: "Importação", icon: FileSpreadsheet },
@@ -88,6 +91,8 @@ function useCadastrosAvailability() {
   const p = business.permissions;
   return (id: string) => {
     if (["importacao", "auditoria"].includes(id)) return p?.platformAuthority === true;
+    // Aparelhos por IMEI: recurso explícito da loja (desligado por padrão) + módulo de catálogo de aparelhos.
+    if (id === "aparelhos") return business.resource("catalog.serializedDevices").operational;
     if (id === "equipamentos") return business.resource("service.technical").operational && p?.modules?.deviceCatalog === true;
     if (["servicos", "tecnicos"].includes(id)) return business.resource("service.technical").operational;
     return true;
@@ -244,6 +249,7 @@ export function CadastrosHub() {
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
+        {selectedTab === "aparelhos" && visibleTab("aparelhos") && storeId && <AparelhosPanel key={storeId} storeId={storeId} />}
         {selectedTab === "categorias" && <CategoriasPanel storeId={storeId} />}
         {selectedTab === "importacao" && <ImportacaoPanel />}
         {selectedTab === "auditoria" && <AuditoriaPanel />}

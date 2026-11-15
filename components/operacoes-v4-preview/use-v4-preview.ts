@@ -808,7 +808,7 @@ export function buildVals(
   ];
   const moreItems: Array<{ icon: string; label: string; color: string; onClick: () => void }> = [
     // "Editar OS" leva à aba Entrada real (edição dos grupos seguros) — não é mais no-op.
-    { icon: "✏", label: "Editar OS (Entrada)", color: C.body, onClick: () => go("entrada") },
+    { icon: "✏", label: "Editar OS", color: C.body, onClick: () => update({ edicaoCompleta: true, alvoSuperficies: chaveSuperficies, menu: null }) },
     // "Trocar OS" usa o fluxo real de busca: limpa a seleção e abre o seletor.
     { icon: "⇄", label: "Trocar OS", color: C.body, onClick: goToOSSearch },
   ];
@@ -1764,6 +1764,10 @@ export function buildVals(
     finalizarRetorno: ctx.finalizarRetorno,
     abrirOsVinculada: ctx.abrirOsVinculada,
     realOS,
+    edicaoCompletaOpen: st.edicaoCompleta === true && noAlvoSuperficies,
+    abrirEdicaoCompleta: () => update({ edicaoCompleta: true, alvoSuperficies: chaveSuperficies, menu: null }),
+    fecharEdicaoCompleta: () => update({ edicaoCompleta: false }),
+    onOSEditada: () => { ctx.reloadOrdens(); ctx.reloadDetail(); ctx.financialProjection.reload(); notify("OS corrigida com autorização do supervisor."); },
 
     // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
     // Sessão de caixa/recibo e ações do motor V3; totais vêm da projeção server-side.

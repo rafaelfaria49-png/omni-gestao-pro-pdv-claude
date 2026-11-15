@@ -96,6 +96,10 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { usePdvCapabilities } from "@/lib/pdv/use-pdv-capabilities"
+import { VendaAparelhoDialog, DocumentosAparelhoDialog, liberarReservaAparelho, nomeLinhaAparelho, type LinhaAparelho } from "@/components/aparelhos/VendaAparelhoDialog"
+import { useAparelhosVendaHabilitado } from "@/components/aparelhos/use-aparelhos-venda"
+import { CoberturaRegua } from "@/components/aparelhos/parts"
+import { Smartphone } from "lucide-react"
 import {
   applyDiscountIfEnabled,
   combineHoldSnapshotWithRuntime,
@@ -168,6 +172,8 @@ type CartLine = {
   accessorySelection?: AccessorySelectionV1
   /** Chave determinística produto+modelo+cor (agrupamento visual). */
   cartLineKey?: string
+  /** Aparelho individualizado (IMEI + garantia). Quantidade fixa em 1. */
+  device?: LinhaAparelho
 }
 
 type DraftData = {
@@ -263,6 +269,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
   // ── Carrinho ──────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartLine[]>([])
+  // OMNI-APARELHOS-ENDTOEND-001: venda de aparelho individualizado (unidade + garantia).
+  const aparelhosHabilitado = useAparelhosVendaHabilitado()
+  const [aparelhoDialog, setAparelhoDialog] = useState<{ open: boolean; produtoId: string | null }>({ open: false, produtoId: null })
+  const [docsAparelhoPedido, setDocsAparelhoPedido] = useState<string | null>(null)
   const [expandedLineId, setExpandedLineId] = useState<string | null>(null)
 
   // ── Desconto global ───────────────────────────────────────────────────────
@@ -601,6 +611,17 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
     (product: PdvCatalogProduct) => {
+      // Modelo de aparelho por IMEI: escolher a unidade física (nunca entra como item genérico).
+      if (product.serializedDevice) {
+        if (!aparelhosHabilitado) {
+          toast({ title: "Aparelho por IMEI", description: "Venda de aparelhos individualizados não está liberada para este usuário ou loja.", variant: "destructive" })
+          return
+        }
+        setAparelhoDialog({ open: true, produtoId: product.dbId ?? null })
+        setProductQuery("")
+        setShowProductDropdown(false)
+        return
+      }
       const isService = product.category === "Servicos"
       if (!isService && product.stock <= 0) {
         toast({ title: "Sem estoque", description: `${product.name} está sem estoque.`, variant: "destructive" })
@@ -639,13 +660,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       setProductQuery("")
       setShowProductDropdown(false)
     },
-    [pdvParams.garantiaPadraoDias, toast, accessoryModelColorEnabled],
+    [pdvParams.garantiaPadraoDias, toast, accessoryModelColorEnabled, aparelhosHabilitado],
   )
 
   function updateQtyDirect(lineId: string, rawQty: number) {
     let qty = rawQty
     if (qty <= 0) { removeFromCart(lineId); return }
     const line = cart.find((l) => l.lineId === lineId)
+    if (line?.device) return // aparelho individualizado: sempre 1 unidade
     if (line) {
       const invItem = inventory.find((i) => i.id === line.inventoryId)
       const isService = invItem?.category === "Servicos"
@@ -662,6 +684,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   }
 
   function removeFromCart(lineId: string) {
+    const removida = cart.find((l) => l.lineId === lineId)
+    if (removida?.device) liberarReservaAparelho(storeId, removida.device)
     setCart((prev) => prev.filter((l) => l.lineId !== lineId))
     if (expandedLineId === lineId) setExpandedLineId(null)
   }
@@ -1012,6 +1036,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           ...(l.isAvulso ? { isAvulso: true as const } : {}),
           ...(l.custoUnitario !== undefined ? { custoUnitario: l.custoUnitario } : {}),
           ...(l.accessorySelection ? { accessorySelection: l.accessorySelection } : {}),
+          ...(l.device ? { produtoId: l.device.produtoId, deviceSale: l.device.deviceSale } : {}),
         }))
 
       let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
@@ -1046,6 +1071,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           attribution.seedLocalCredit.nome,
           attribution.seedLocalCredit.saldo,
         )
+      }
+      // Aparelho: a garantia é do cliente da venda — crédito de terceiro não pode trocar o titular.
+      if (cart.some((l) => l.device) && !attribution.belongsToSelectedCustomer) {
+        toast({ title: "Cliente do aparelho", description: "Venda de aparelho precisa ficar no nome do cliente selecionado. Use outra forma de pagamento.", variant: "destructive" })
+        return false
       }
       const clienteVendaNome = attribution.saleName ?? selectedCliente.name
       const clienteVendaDoc = attribution.saleDoc ?? selectedCliente.document ?? undefined
@@ -1221,6 +1251,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       // CONFIRMED: cupom definitivo, limpeza de rascunho/carrinho e pós-venda.
       // (PENDING já retornou acima — nunca abre cupom pendente.)
       setCupomData(cupom)
+      if (cart.some((l) => l.device)) setDocsAparelhoPedido(result.saleId)
       setIsPaymentOpen(false)
       setCupomOpen(true)
 
@@ -1483,6 +1514,19 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {aparelhosHabilitado && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => setAparelhoDialog({ open: true, produtoId: null })}
+                      title="Adicionar aparelho pelo IMEI, com garantia"
+                    >
+                      <Smartphone className="h-3.5 w-3.5" />
+                      Adicionar aparelho
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -1704,7 +1748,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                               </td>
                               <td className="px-2 py-2.5">
                                 <p className="font-medium leading-tight text-foreground">{line.name}</p>
-                                {hasDetail && (
+                                {line.device && (
+                                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                    <span className="font-mono">{line.device.aparelho.imei1 || line.device.aparelho.serial}</span>
+                                    {" · "}90 d legais{line.device.deviceSale.contratualDias > 0 ? ` + ${line.device.deviceSale.contratualDias} d contratuais` : ""}
+                                  </p>
+                                )}
+                                {!line.device && hasDetail && (
                                   <p className="mt-0.5 text-[10px] text-muted-foreground">
                                     {[
                                       line.detail?.imei ? `IMEI: ${line.detail.imei}` : null,
@@ -1718,6 +1768,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                 <input
                                   type="number"
                                   min={1}
+                                  aria-label={`Quantidade de ${line.name}`}
+                                  disabled={!!line.device}
                                   value={line.qty}
                                   onChange={(e) => {
                                     const v = parseInt(e.target.value, 10)
@@ -1776,7 +1828,15 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                 </div>
                               </td>
                             </tr>
-                            {isExpanded && (
+                            {isExpanded && line.device && (
+                              <tr key={`${line.lineId}-device`} className="bg-muted/30">
+                                <td colSpan={9} className="px-3 py-3">
+                                  <CoberturaRegua dataEntrega={line.device.deviceSale.dataEntrega ?? new Date().toISOString().slice(0, 10)} contratualDias={line.device.deviceSale.contratualDias} />
+                                  <p className="mt-2 text-[11px] text-muted-foreground">Para trocar a unidade ou a garantia, remova a linha e adicione o aparelho de novo.</p>
+                                </td>
+                              </tr>
+                            )}
+                            {isExpanded && !line.device && (
                               <tr key={`${line.lineId}-detail`} className="bg-muted/30">
                                 <td colSpan={9} className="px-3 py-3">
                                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -2003,6 +2063,22 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
               </div>
             </div>
 
+            {/* Garantia dos aparelhos (régua de cobertura por unidade) */}
+            {cart.some((l) => l.device) && (
+              <div className="rounded-xl border border-border bg-card p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-foreground"><ShieldCheck className="h-3.5 w-3.5 text-primary" />Garantia dos aparelhos</p>
+                <div className="space-y-3">
+                  {cart.filter((l) => l.device).map((l) => (
+                    <div key={l.lineId} className="min-w-0">
+                      <p className="mb-1 truncate text-[11px] text-muted-foreground">{nomeLinhaAparelho(l.device!.aparelho)}</p>
+                      <CoberturaRegua compact dataEntrega={l.device!.deviceSale.dataEntrega ?? new Date().toISOString().slice(0, 10)} contratualDias={l.device!.deviceSale.contratualDias} />
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">Ao finalizar: comprovante, termo de garantia e termo de entrega para assinatura.</p>
+              </div>
+            )}
+
             {/* Avisos */}
             {!selectedCliente && (
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2">
@@ -2190,6 +2266,36 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         onResume={handleResumeSale}
         onDiscard={handleDiscardHold}
       />
+
+      {/* ── Aparelho individualizado (IMEI + garantia) ── */}
+      {aparelhosHabilitado && (
+        <VendaAparelhoDialog
+          open={aparelhoDialog.open}
+          onOpenChange={(v) => setAparelhoDialog((d) => ({ ...d, open: v }))}
+          storeId={storeId}
+          produtoId={aparelhoDialog.produtoId}
+          cliente={selectedCliente ? { id: selectedCliente.id, name: selectedCliente.name } : null}
+          jaNoCarrinho={cart.flatMap((l) => (l.device ? [l.device.deviceSale.aparelhoId] : []))}
+          onConfirm={(linha) => {
+            const produto = inventory.find((i) => i.dbId === linha.produtoId)
+            setCart((prev) => [
+              ...prev,
+              {
+                lineId: newPdvLineId(produto?.id ?? linha.produtoId),
+                inventoryId: produto?.id ?? linha.produtoId,
+                codigo: linha.aparelho.codigoInterno,
+                name: linha.name,
+                unid: "UN",
+                price: linha.price,
+                qty: 1,
+                discountPct: 0,
+                device: linha,
+              },
+            ])
+          }}
+        />
+      )}
+      <DocumentosAparelhoDialog open={!!docsAparelhoPedido && !cupomOpen} onOpenChange={(v) => !v && setDocsAparelhoPedido(null)} storeId={storeId} pedidoId={docsAparelhoPedido} />
 
       {/* ── Cupom não fiscal ── */}
       {cupomData && (

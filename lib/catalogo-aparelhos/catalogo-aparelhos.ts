@@ -12,6 +12,7 @@
  */
 
 import { parseCsvObjects } from "./csv"
+import { STATUS_FORA_DA_BUSCA } from "./types"
 import type {
   CatalogoIndex,
   DeviceAlias,
@@ -47,7 +48,18 @@ export function parseDeviceModels(text: string): DeviceModel[] {
       status: r.status ?? "",
       confidence: r.confidence ?? "",
       notes: r.notes ?? "",
+      // Colunas opcionais (COMPAT-CATALOGO-BRASIL-2023-2026-002); ausentes em CSV antigo = "".
+      manufacturer: (r.manufacturer ?? "").trim(),
+      releaseYear: (r.release_year ?? "").trim(),
+      visibilityTier: (r.visibility_tier ?? "").trim(),
+      replacedBy: (r.replaced_by ?? "").trim(),
+      sources: (r.sources ?? "").trim(),
     }))
+}
+
+/** Modelo aparece nas buscas operacionais? (mesclado / aguardando lançamento: não). */
+export function modeloOperacional(model: Pick<DeviceModel, "status">): boolean {
+  return !(STATUS_FORA_DA_BUSCA as readonly string[]).includes((model.status ?? "").trim().toLowerCase())
 }
 
 /** Aliases de busca. Linhas sem `model_key`/`alias` são descartadas. */
@@ -148,6 +160,40 @@ export function buildCatalogoIndex(input: {
     normalizedAliasBrands.set(norm, brands)
   }
 
+  // Cadeia de mescla (replacedBy), com proteção contra ciclo e alvo inexistente.
+  const canonicalCache = new Map<string, string>()
+  const canonicalKeyOf = (modelKey: string): string => {
+    const start = (modelKey ?? "").trim()
+    const hit = canonicalCache.get(start)
+    if (hit) return hit
+    let atual = start
+    const vistos = new Set<string>()
+    while (true) {
+      const alvo = modelByKey.get(atual)?.replacedBy?.trim()
+      if (!alvo || vistos.has(alvo) || !modelByKey.has(alvo)) break
+      vistos.add(atual)
+      atual = alvo
+    }
+    canonicalCache.set(start, atual)
+    return atual
+  }
+
+  // Inverso da mescla: canônico → todas as chaves gravadas que apontam para ele (inclusive ele mesmo).
+  // Vínculos, produtos e decisões antigos ficam gravados com a chave mesclada e continuam valendo.
+  const equivalentes = new Map<string, string[]>()
+  for (const m of modelByKey.values()) {
+    if (!m.replacedBy?.trim()) continue
+    const canon = canonicalKeyOf(m.modelKey)
+    if (canon === m.modelKey) continue
+    const arr = equivalentes.get(canon) ?? [canon]
+    arr.push(m.modelKey)
+    equivalentes.set(canon, arr)
+  }
+  const equivalentKeysOf = (modelKey: string): string[] => {
+    const canon = canonicalKeyOf(modelKey)
+    return equivalentes.get(canon)?.slice() ?? (canon ? [canon] : [])
+  }
+
   return {
     models: input.models,
     aliases: input.aliases,
@@ -155,6 +201,8 @@ export function buildCatalogoIndex(input: {
     modelByKey,
     aliasesByModelKey,
     normalizedAliasBrands,
+    canonicalKeyOf,
+    equivalentKeysOf,
   }
 }
 
@@ -218,7 +266,12 @@ export function searchDeviceModels(
   }
 
   const hits = new Map<string, Hit>()
-  const consider = (model: DeviceModel, matchType: DeviceMatchType, matchedText: string) => {
+  const consider = (original: DeviceModel, matchType: DeviceMatchType, matchedText: string) => {
+    // Linha mesclada: o resultado é o modelo canônico (nome antigo continua achando o aparelho).
+    const model = index.modelByKey.get(index.canonicalKeyOf(original.modelKey)) ?? original
+    // Fora da busca operacional: aguardando lançamento (e mesclado sem canônico válido).
+    if (!modeloOperacional(model)) return
+    if (options.marcasOcultas?.has(normalizeDeviceQuery(model.brand))) return
     const prev = hits.get(model.modelKey)
     if (!prev || MATCH_RANK[matchType] < MATCH_RANK[prev.matchType]) {
       hits.set(model.modelKey, { model, matchType, matchedText })
