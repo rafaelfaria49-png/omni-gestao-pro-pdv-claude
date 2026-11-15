@@ -48,6 +48,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { hasInvalidProductCommercial, isProductWeightDeclared, productCommercialFromMetadata, validateProductCommercial } from "@/lib/cadastros/product-commercial-contract"
 import { resolveBusinessResource } from "@/lib/store-business-capabilities"
+import { productVariantIssue } from "@/lib/vestuario/guard-contract"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 import { cadastrosAuditLogFields } from "@/lib/cadastros/cadastros-audit-principal"
 import {
@@ -373,6 +374,10 @@ function resolveMetadata(
   | { ok: true; metadata: Record<string, unknown> | undefined; clear: boolean }
   | { ok: false; error: ProductWriteResult } {
   const rawMetadata = input.metadata
+  // P01 não persiste grade nem permite removê-la por um editor legado.
+  // Ausência do namespace novo (inclusive gradePlanejada) preserva o contrato atual.
+  const variantIssue = productVariantIssue(existingMetadata) ?? productVariantIssue(rawMetadata)
+  if (variantIssue) return { ok: false, error: productWriteInvalid(variantIssue.message, "metadata") }
   if (rawMetadata !== undefined && rawMetadata !== null && !isRecord(rawMetadata)) {
     return { ok: false, error: productWriteInvalid("metadata deve ser objeto JSON ou null.", "metadata") }
   }

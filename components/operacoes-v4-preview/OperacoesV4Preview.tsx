@@ -37,6 +37,7 @@ import { ReciboModal } from "./parts/ReciboModal";
 import { DocPrintModal } from "./parts/DocPrintModal";
 import { CorrigirDatasModalV4 } from "./parts/CorrigirDatasModalV4";
 import { Toast } from "./parts/Toast";
+import { EdicaoCompletaOSDialog } from "@/components/operacoes-v3/components/EdicaoCompletaOSDialog";
 
 export function OperacoesV4Preview() {
   const v = useV4Preview();
@@ -96,6 +97,7 @@ export function OperacoesV4Preview() {
         onSalvo={v.onDatasCorrigidas}
       />
       <Toast v={v} />
+      {v.edicaoCompletaOpen && v.realOS && v.realOS.storeId && <EdicaoCompletaOSDialog key={`${v.realOS.storeId}:${v.realOS.id}`} open storeId={v.realOS.storeId} osId={v.realOS.id} onClose={v.fecharEdicaoCompleta} onSaved={v.onOSEditada} />}
     </div>
   );
 }
