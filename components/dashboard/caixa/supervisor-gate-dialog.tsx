@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 import { Loader2, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,6 +49,7 @@ export function SupervisorGateDialog({
   confirmLabel = "Autorizar",
   closeOnAuthorized = true,
   scope,
+  storeId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -74,8 +75,11 @@ export function SupervisorGateDialog({
    * liberar a Venda B. Sem `scope`, o token nasce genérico (fluxo legado).
    */
   scope?: { action: string; resource?: string }
+  /** Loja explícita do formulário revisado; não depende do cookie de outra aba. */
+  storeId?: string
 }) {
   const [pin, setPin] = useState("")
+  const pinId = useId()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -99,7 +103,7 @@ export function SupervisorGateDialog({
       const r = await fetch("/api/auth/admin", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(storeId ? { "x-assistec-loja-id": storeId } : {}) },
         body: JSON.stringify({
           pin: value,
           ...(scope ? { action: scope.action, resource: scope.resource } : {}),
@@ -136,8 +140,9 @@ export function SupervisorGateDialog({
         <div className="space-y-3 pt-1">
           {children}
           <div className="space-y-1.5">
-            <Label className="text-sm">Senha do supervisor</Label>
+            <Label htmlFor={pinId} className="text-sm">Senha do supervisor</Label>
             <Input
+              id={pinId}
               type="password"
               inputMode="numeric"
               autoComplete="off"

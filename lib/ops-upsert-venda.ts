@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
-import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
+import { assertNoUnsupportedVariantLines, assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import type { PixQrKind } from "@/lib/fiscal/payment/pix-qr-kind"
 import { buildFiscalPaymentHandoff, resolveCashTenderedEvidence, type FiscalPaymentHandoff } from "@/lib/vendas/fiscal-payment-handoff"
@@ -666,6 +666,8 @@ export async function upsertVendaInTransaction(
   operadorLabel?: string,
   options?: UpsertVendaOptions
 ): Promise<UpsertVendaResult> {
+  // Nenhum writer V1/V2/histórico pode tratar uma identidade futura como produto simples.
+  assertNoUnsupportedVariantLines(sale.lines)
   // ── GUARD FAIL-CLOSED: quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005) ──
   // PRIMEIRA coisa na função, ANTES de qualquer lookup (replay incluso), gate de
   // caixa, `Venda.create`, itens, estoque, financeiro ou títulos. `ItemVenda.quantidade`
