@@ -34,127 +34,132 @@ model Store {
   /**
    * Use ids estáveis: loja-1, loja-2, ...
    */
-  id               String           @id
-  name             String           @default("") @map("name")
-  cnpj             String           @default("") @map("cnpj")
-  phone            String           @default("") @map("phone")
-  logoUrl          String           @default("") @map("logoUrl")
+  id                   String           @id
+  name                 String           @default("") @map("name")
+  cnpj                 String           @default("") @map("cnpj")
+  phone                String           @default("") @map("phone")
+  logoUrl              String           @default("") @map("logoUrl")
   /**
    * Endereço completo (rua/numero/bairro/cidade/uf/cep) como JSON.
    */
-  address          Json?            @map("address") @db.JsonB
-  profile          StoreProfile     @default(ASSISTENCIA) @map("profile")
+  address              Json?            @map("address") @db.JsonB
+  profile              StoreProfile     @default(ASSISTENCIA) @map("profile")
   /**
    * Plano SaaS oficial por unidade (first-class).
    */
-  subscriptionPlan SubscriptionPlan @default(BRONZE) @map("subscriptionPlan")
+  subscriptionPlan     SubscriptionPlan @default(BRONZE) @map("subscriptionPlan")
   /**
    * Código estável da numeração comercial de venda (GOAL 002B — aditivo/dormente).
    * 2–8 caracteres A-Z0-9, único entre lojas e configurado explicitamente.
    * NULL significa que a loja ainda não pode usar a numeração server-side.
    */
   codigoNumeracaoVenda String?          @unique @map("codigoNumeracaoVenda") @db.VarChar(8)
-  createdAt        DateTime         @default(now()) @map("createdAt")
-  updatedAt        DateTime         @updatedAt @map("updatedAt")
+  createdAt            DateTime         @default(now()) @map("createdAt")
+  updatedAt            DateTime         @updatedAt @map("updatedAt")
 
-  /** Plataforma controla a liberação. NULL preserva lojas legadas; novas lojas recebem piloto básico. */
+  /**
+   * Plataforma controla a liberação. NULL preserva lojas legadas; novas lojas recebem piloto básico.
+   */
   moduleAccess Json? @default("{\"version\":1,\"modules\":[\"home\",\"pdv\",\"sales\",\"cash\",\"catalog\",\"stock\",\"reports\",\"settings\"]}") @db.JsonB
 
-  clientes               Cliente[]
-  produtos               Produto[]
-  depositos              Deposito[]
-  servicos               Servico[]
-  ordensServico          OrdemServico[]
-  contasReceber          ContaReceberTitulo[]
-  contasPagar            ContaPagarTitulo[]
-  movimentacoes          MovimentacaoFinanceira[]
-  carteiras              CarteiraFinanceira[]
-  fechamentos            FechamentoFinanceiro[]
-  conciliacoes           ConciliacaoFinanceira[]
-  auditorias             AuditoriaFinanceira[]
-  fornecedores           Fornecedor[]
-  financialAccounts      FinancialAccount[]
-  financialCategories    FinancialCategory[]
-  financialTransactions  FinancialTransaction[]
-  vendas                 Venda[]
-  categorias             CategoriaProduto[]
-  categoriasCadastro     CategoriaCadastro[]
-  marcasCadastro         MarcaCadastro[]
-  tecnicos               Tecnico[]
-  equipamentosModelos    EquipamentoModelo[]
-  productMedia           ProductMedia[]
-  marketplaceListings    MarketplaceListing[]
-  settings               StoreSettings?
-  iaConversations        IaConversation[]
-  iaMessages             IaMessage[]
-  marketingIaPosts       MarketingIaPost[]
-  marketingPosts         MarketingPost[]
-  marketingMediaJobs     MarketingMediaJob[]
-  whatsappContacts       WhatsAppContact[]
-  whatsappConversations  WhatsAppConversation[]
-  whatsappMessages       WhatsAppMessage[]
-  whatsappAutomations    WhatsAppAutomation[]
-  whatsappQuickReplies   WhatsAppQuickReply[]
-  whatsappEtiquetas      WhatsAppEtiqueta[]
-  whatsappAiSetting      WhatsAppAiSetting?
-  whatsappAutomationLogs WhatsAppAutomationLog[]
-  whatsappPhoneNumbers   WhatsAppPhoneNumber[]
-  sessoesCaixa           SessaoCaixa[]
-  devolucoes             DevolucaoVenda[]
-  garantiasOrdemServico  GarantiaOrdemServico[]
-  adminUserStores        AdminUserStore[]
-  omniAgentCommands      OmniAgentCommand[]
-  omniAgentAutomations   OmniAgentAutomation[]
-  omniAgentConfig        OmniAgentConfig?
-  omniAgentMemories      OmniAgentMemory[]
-  marketplaceConnections   MarketplaceConnection[]
-  marketplaceSyncLogs      MarketplaceSyncLog[]
-  marketplaceProductLinks  MarketplaceProductLink[]
-  movimentacoesEstoque     MovimentacaoEstoque[]
-  creditos                 ClienteCredito[]
-  usosCredito              UsoCreditoCliente[]
-  pdvTerminais             PdvTerminal[]
-  inventarioSessoes        InventarioSessao[]
+  clientes                   Cliente[]
+  produtos                   Produto[]
+  depositos                  Deposito[]
+  servicos                   Servico[]
+  ordensServico              OrdemServico[]
+  contasReceber              ContaReceberTitulo[]
+  contasPagar                ContaPagarTitulo[]
+  movimentacoes              MovimentacaoFinanceira[]
+  carteiras                  CarteiraFinanceira[]
+  fechamentos                FechamentoFinanceiro[]
+  conciliacoes               ConciliacaoFinanceira[]
+  auditorias                 AuditoriaFinanceira[]
+  fornecedores               Fornecedor[]
+  financialAccounts          FinancialAccount[]
+  financialCategories        FinancialCategory[]
+  financialTransactions      FinancialTransaction[]
+  vendas                     Venda[]
+  categorias                 CategoriaProduto[]
+  categoriasCadastro         CategoriaCadastro[]
+  marcasCadastro             MarcaCadastro[]
+  tecnicos                   Tecnico[]
+  equipamentosModelos        EquipamentoModelo[]
+  productMedia               ProductMedia[]
+  marketplaceListings        MarketplaceListing[]
+  settings                   StoreSettings?
+  iaConversations            IaConversation[]
+  iaMessages                 IaMessage[]
+  marketingIaPosts           MarketingIaPost[]
+  marketingPosts             MarketingPost[]
+  marketingMediaJobs         MarketingMediaJob[]
+  whatsappContacts           WhatsAppContact[]
+  whatsappConversations      WhatsAppConversation[]
+  whatsappMessages           WhatsAppMessage[]
+  whatsappAutomations        WhatsAppAutomation[]
+  whatsappQuickReplies       WhatsAppQuickReply[]
+  whatsappEtiquetas          WhatsAppEtiqueta[]
+  whatsappAiSetting          WhatsAppAiSetting?
+  whatsappAutomationLogs     WhatsAppAutomationLog[]
+  whatsappPhoneNumbers       WhatsAppPhoneNumber[]
+  sessoesCaixa               SessaoCaixa[]
+  devolucoes                 DevolucaoVenda[]
+  garantiasOrdemServico      GarantiaOrdemServico[]
+  adminUserStores            AdminUserStore[]
+  omniAgentCommands          OmniAgentCommand[]
+  omniAgentAutomations       OmniAgentAutomation[]
+  omniAgentConfig            OmniAgentConfig?
+  omniAgentMemories          OmniAgentMemory[]
+  marketplaceConnections     MarketplaceConnection[]
+  marketplaceSyncLogs        MarketplaceSyncLog[]
+  marketplaceProductLinks    MarketplaceProductLink[]
+  movimentacoesEstoque       MovimentacaoEstoque[]
+  creditos                   ClienteCredito[]
+  usosCredito                UsoCreditoCliente[]
+  pdvTerminais               PdvTerminal[]
+  inventarioSessoes          InventarioSessao[]
   // ─── Fiscal (GOAL_001B — aditivo/dormente; só relações inversas, sem coluna física) ──
-  configuracaoFiscal       ConfiguracaoFiscalLoja?
-  certificadosDigitais     CertificadoDigital[]
-  seriesFiscais            SerieFiscal[]
-  notasFiscais             NotaFiscal[]
-  eventosFiscais           EventoFiscal[]
-  fiscalEmissaoJobs        FiscalEmissaoJob[]
-  fiscalLogs               FiscalLog[]
+  configuracaoFiscal         ConfiguracaoFiscalLoja?
+  certificadosDigitais       CertificadoDigital[]
+  seriesFiscais              SerieFiscal[]
+  notasFiscais               NotaFiscal[]
+  eventosFiscais             EventoFiscal[]
+  fiscalEmissaoJobs          FiscalEmissaoJob[]
+  fiscalLogs                 FiscalLog[]
   // ─── Contador HUB (GOAL 009 — aditivo; só relações inversas, sem coluna física) ──
-  contadorCompetencias     ContadorCompetencia[]
-  contadorDocumentos       ContadorDocumento[]
-  contadorEventos          ContadorEvento[]
-  dpEmpregadoresGestora DpEmpregador[] @relation("DpEmpregadorGestora")
-  dpUnidades DpUnidadeVinculo[]
-  dpAcessos DpAcesso[]
-  dpVinculos DpVinculo[]
-  dpDocumentos DpDocumento[]
-  dpAuditorias DpAuditoria[]
+  contadorCompetencias       ContadorCompetencia[]
+  contadorDocumentos         ContadorDocumento[]
+  contadorEventos            ContadorEvento[]
+  dpEmpregadoresGestora      DpEmpregador[]               @relation("DpEmpregadorGestora")
+  dpUnidades                 DpUnidadeVinculo[]
+  dpAcessos                  DpAcesso[]
+  dpVinculos                 DpVinculo[]
+  dpDocumentos               DpDocumento[]
+  dpAuditorias               DpAuditoria[]
   // ─── Contador HUB identidade externa (GOAL 014 — aditivo; só relações inversas) ──
-  contadorConvites         ContadorConvite[]
-  contadorAcessos          ContadorAcesso[]
+  contadorConvites           ContadorConvite[]
+  contadorAcessos            ContadorAcesso[]
   // ─── Contador HUB agenda (GOAL 016 — aditivo; só relações inversas, sem coluna física) ──
   contadorObrigacaoTemplates ContadorObrigacaoTemplate[]
   contadorObrigacoes         ContadorObrigacao[]
   contadorGuias              ContadorGuia[]
   // ─── Numeração server-side de venda (GOAL 002B — aditivo/dormente) ──
-  seriesVenda              SerieVenda[]
+  seriesVenda                SerieVenda[]
   // ─── Catálogo de aparelhos por loja (CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — aditivo) ──
-  catalogoAparelhosModelos CatalogoAparelhoLojaModelo[]
-  catalogoAparelhosCompat  CatalogoAparelhoLojaCompat[]
+  catalogoAparelhosModelos   CatalogoAparelhoLojaModelo[]
+  catalogoAparelhosCompat    CatalogoAparelhoLojaCompat[]
   // ─── Compat profissional (COMPAT-PROFISSIONAL-001 — aditivo; só relações inversas) ──
-  compatPaineis            CompatPainel[]
-  compatFileiras           CompatFileira[]
-  compatLocalizacoes       CompatLocalizacao[]
-  compatCores              CompatCorLoja[]
-  compatPreferencias       CompatPreferenciasLoja?
+  compatPaineis              CompatPainel[]
+  compatFileiras             CompatFileira[]
+  compatLocalizacoes         CompatLocalizacao[]
+  compatCores                CompatCorLoja[]
+  compatPreferencias         CompatPreferenciasLoja?
   // ─── Aparelhos físicos serializados (OMNI-APARELHOS-ENDTOEND-001 — aditivo; só relações inversas) ──
-  aparelhosFisicos         AparelhoFisico[]
-  aparelhosAquisicoes      AparelhoAquisicao[]
-  aparelhosVendas          AparelhoVenda[]
+  aparelhosFisicos           AparelhoFisico[]
+  aparelhosAquisicoes        AparelhoAquisicao[]
+  aparelhosVendas            AparelhoVenda[]
+  // ─── Vestuário P02: grades/cores por loja (OMNI-VESTUARIO-P02 — aditivo; só relações inversas) ──
+  vestuarioGrades            VestuarioGrade[]
+  vestuarioCores             VestuarioCor[]
 
   @@index([profile])
   @@map("stores")
@@ -174,14 +179,18 @@ enum MarketplaceConnectionStatus {
   SYNCING      @map("syncing")
 }
 
-/** Estado de publicação do vínculo produto ↔ canal (simulado na Fase 2). */
+/**
+ * Estado de publicação do vínculo produto ↔ canal (simulado na Fase 2).
+ */
 enum MarketplaceProductLinkStatus {
   NOT_PUBLISHED @map("not_published")
   PUBLISHED     @map("published")
   ERROR         @map("error")
 }
 
-/** Estado de sincronização do vínculo (simulado). */
+/**
+ * Estado de sincronização do vínculo (simulado).
+ */
 enum MarketplaceProductSyncStatus {
   IDLE       @map("idle")
   PENDING    @map("pending")
@@ -193,20 +202,22 @@ enum MarketplaceProductSyncStatus {
  * Conta de marketplace por unidade (OAuth real na Fase 2+).
  */
 model MarketplaceConnection {
-  id              String                        @id @default(cuid())
-  storeId         String                        @map("storeId")
-  store           Store                         @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  provider        MarketplaceProvider           @map("provider")
-  accountName     String                        @map("accountName")
-  status          MarketplaceConnectionStatus   @default(DISCONNECTED) @map("status")
-  /** Placeholder até criptografia/KMS — não expor na API pública. */
-  accessToken     String                        @default("") @map("accessToken")
-  refreshToken    String                        @default("") @map("refreshToken")
-  metadata        Json?                         @map("metadata") @db.JsonB
-  lastSyncAt      DateTime?                     @map("lastSyncAt")
-  lastSyncMessage String                        @default("") @map("lastSyncMessage")
-  createdAt       DateTime                      @default(now()) @map("createdAt")
-  updatedAt       DateTime                      @updatedAt @map("updatedAt")
+  id              String                      @id @default(cuid())
+  storeId         String                      @map("storeId")
+  store           Store                       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  provider        MarketplaceProvider         @map("provider")
+  accountName     String                      @map("accountName")
+  status          MarketplaceConnectionStatus @default(DISCONNECTED) @map("status")
+  /**
+   * Placeholder até criptografia/KMS — não expor na API pública.
+   */
+  accessToken     String                      @default("") @map("accessToken")
+  refreshToken    String                      @default("") @map("refreshToken")
+  metadata        Json?                       @map("metadata") @db.JsonB
+  lastSyncAt      DateTime?                   @map("lastSyncAt")
+  lastSyncMessage String                      @default("") @map("lastSyncMessage")
+  createdAt       DateTime                    @default(now()) @map("createdAt")
+  updatedAt       DateTime                    @updatedAt @map("updatedAt")
 
   syncLogs     MarketplaceSyncLog[]
   productLinks MarketplaceProductLink[]
@@ -221,17 +232,17 @@ model MarketplaceConnection {
  * Opcionalmente amarrado a produto e vínculo (Fase 3 — filtros na UI).
  */
 model MarketplaceSyncLog {
-  id             String                  @id @default(cuid())
-  storeId        String                  @map("storeId")
-  store          Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  connectionId   String                  @map("connectionId")
-  connection     MarketplaceConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  produtoId      String?                 @map("produtoId")
-  produto        Produto?                @relation(fields: [produtoId], references: [id], onDelete: SetNull)
-  productLinkId  String?                 @map("productLinkId")
-  productLink    MarketplaceProductLink? @relation(fields: [productLinkId], references: [id], onDelete: SetNull)
-  message        String                  @map("message")
-  createdAt      DateTime                @default(now()) @map("createdAt")
+  id            String                  @id @default(cuid())
+  storeId       String                  @map("storeId")
+  store         Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  connectionId  String                  @map("connectionId")
+  connection    MarketplaceConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  produtoId     String?                 @map("produtoId")
+  produto       Produto?                @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  productLinkId String?                 @map("productLinkId")
+  productLink   MarketplaceProductLink? @relation(fields: [productLinkId], references: [id], onDelete: SetNull)
+  message       String                  @map("message")
+  createdAt     DateTime                @default(now()) @map("createdAt")
 
   @@index([storeId])
   @@index([connectionId, createdAt])
@@ -385,14 +396,14 @@ model WhatsAppQuickReply {
 }
 
 model WhatsAppEtiqueta {
-  id           String   @id @default(cuid())
-  storeId      String   @map("storeId")
-  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  nome         String   @map("nome")
-  cor          String   @default("#10b981") @map("cor")
-  ativo        Boolean  @default(true) @map("ativo")
-  createdAt    DateTime @default(now()) @map("createdAt")
-  updatedAt    DateTime @updatedAt @map("updatedAt")
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  nome      String   @map("nome")
+  cor       String   @default("#10b981") @map("cor")
+  ativo     Boolean  @default(true) @map("ativo")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
   conversacoes WhatsAppConversacaoEtiqueta[]
 
@@ -458,13 +469,21 @@ model WhatsAppPhoneNumber {
   id            String   @id @default(cuid())
   storeId       String   @map("storeId")
   store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  /** Meta WhatsApp Cloud `phone_number_id` — chave de roteamento do webhook. */
+  /**
+   * Meta WhatsApp Cloud `phone_number_id` — chave de roteamento do webhook.
+   */
   phoneNumberId String   @unique @map("phoneNumberId")
-  /** WhatsApp Business Account id (`entry[].id`) — auditoria/diagnóstico. */
+  /**
+   * WhatsApp Business Account id (`entry[].id`) — auditoria/diagnóstico.
+   */
   wabaId        String   @default("") @map("wabaId")
-  /** Número exibível (E.164) — apresentação. */
+  /**
+   * Número exibível (E.164) — apresentação.
+   */
   displayPhone  String   @default("") @map("displayPhone")
-  /** Nome da env (Vercel secret) com o access token da loja. Token nunca no DB. */
+  /**
+   * Nome da env (Vercel secret) com o access token da loja. Token nunca no DB.
+   */
   tokenEnvKey   String   @default("WHATSAPP_ACCESS_TOKEN") @map("tokenEnvKey")
   active        Boolean  @default(true) @map("active")
   createdAt     DateTime @default(now()) @map("createdAt")
@@ -483,9 +502,13 @@ model MarketingPost {
   storeId     String    @map("storeId")
   store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   titulo      String    @map("titulo")
-  /** instagram | facebook | whatsapp | google | geral */
+  /**
+   * instagram | facebook | whatsapp | google | geral
+   */
   canal       String    @map("canal")
-  /** rascunho | agendado | publicado | erro */
+  /**
+   * rascunho | agendado | publicado | erro
+   */
   status      String    @default("rascunho") @map("status")
   conteudo    String    @default("") @map("conteudo") @db.Text
   legenda     String    @default("") @map("legenda") @db.Text
@@ -661,7 +684,6 @@ model Cliente {
   document       String    @default("") @map("document")
   /**
    * CAD-R2-019 — Chave canônica de unicidade de documento forte.
-   *
    * - Somente dígitos de CPF/CNPJ com DV válido (`toStrongDocumentKey`).
    * - NULL para vazio/ausente/inválido: não participa da unique.
    * - `document` permanece como display/legado; esta coluna é a identidade.
@@ -695,9 +717,9 @@ model Cliente {
   aparelhosVendas       AparelhoVenda[]
   aparelhosAquisicoes   AparelhoAquisicao[]
 
+  @@unique([storeId, documentKey])
   @@index([storeId])
   @@index([storeId, documentKey])
-  @@unique([storeId, documentKey])
   @@map("clientes_importados")
 }
 
@@ -734,8 +756,8 @@ model OrdemServico {
   createdAt    DateTime           @default(now()) @map("createdAt")
   updatedAt    DateTime           @default(now()) @updatedAt @map("updatedAt")
 
-  itens                  OrdemServicoItem[]
-  garantiasOperacionais  GarantiaOrdemServico[]
+  itens                 OrdemServicoItem[]
+  garantiasOperacionais GarantiaOrdemServico[]
 
   @@index([storeId])
   @@index([clienteId])
@@ -773,18 +795,22 @@ model OrdemServicoItem {
   /**
    * Peça vinculada ao catálogo (estoque). Nulo quando `tipo = "servico"` (mão de obra sem SKU).
    */
-  produtoId String?  @map("produtoId")
-  produto   Produto? @relation(fields: [produtoId], references: [id], onDelete: Restrict)
-  /** peca | servico */
-  tipo       String @default("peca") @map("tipo")
-  /** Rótulo persistido (nome da peça ou descrição do serviço). */
-  descricao  String @default("") @map("descricao")
-  quantidade Int    @map("quantidade")
+  produtoId      String?      @map("produtoId")
+  produto        Produto?     @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  /**
+   * peca | servico
+   */
+  tipo           String       @default("peca") @map("tipo")
+  /**
+   * Rótulo persistido (nome da peça ou descrição do serviço).
+   */
+  descricao      String       @default("") @map("descricao")
+  quantidade     Int          @map("quantidade")
   /**
    * Preço unitário no momento da baixa (snapshot).
    */
-  precoUnitario Float @map("precoUnitario")
-  observacao    String @default("") @map("observacao") @db.Text
+  precoUnitario  Float        @map("precoUnitario")
+  observacao     String       @default("") @map("observacao") @db.Text
 
   @@index([ordemServicoId])
   @@index([produtoId])
@@ -816,20 +842,30 @@ model Produto {
   warrantyDays Int      @default(0) @map("warrantyDays")
   status       String   @default("Ativo") @map("status")
   active       Boolean  @default(true) @map("active")
-  /** Extensível (Fase IA: foto, voz, WhatsApp, pipeline) — não substituir colunas core. */
+  /**
+   * Extensível (Fase IA: foto, voz, WhatsApp, pipeline) — não substituir colunas core.
+   */
   metadata     Json?    @map("metadata") @db.JsonB
   createdAt    DateTime @default(now()) @map("createdAt")
   updatedAt    DateTime @default(now()) @updatedAt @map("updatedAt")
 
-  ordemServicoItens         OrdemServicoItem[]
-  aparelhosFisicos          AparelhoFisico[]
-  media                     ProductMedia[]
+  ordemServicoItens       OrdemServicoItem[]
+  aparelhosFisicos        AparelhoFisico[]
+  media                   ProductMedia[]
   marketplaceListings     MarketplaceListing[]
   marketplaceProductLinks MarketplaceProductLink[]
   marketplaceSyncLogs     MarketplaceSyncLog[]
   movimentacoesEstoque    MovimentacaoEstoque[]
   produtoDepositos        ProdutoDeposito[]
+  /**
+   * Vestuário P02 (aditivo): fonte autoritativa do modo COM_GRADE. Ausente = produto simples.
+   */
+  vestuarioGrade          VestuarioProdutoGrade?
 
+  /**
+   * Vestuário P02: alvo das FKs compostas (produto, loja). `id` já é único; não muda nenhum dado.
+   */
+  @@unique([id, storeId], name: "id_storeId")
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")
   @@index([storeId])
@@ -852,16 +888,24 @@ model MovimentacaoEstoque {
   produtoId String?  @map("produtoId")
   produto   Produto? @relation(fields: [produtoId], references: [id], onDelete: SetNull)
 
-  /** Snapshot para auditoria — sobrevive à exclusão/edição do produto. */
+  /**
+   * Snapshot para auditoria — sobrevive à exclusão/edição do produto.
+   */
   produtoSku  String? @map("produtoSku")
   produtoNome String  @map("produtoNome")
 
-  /** "entrada" | "ajuste" | "saida" */
+  /**
+   * "entrada" | "ajuste" | "saida"
+   */
   tipo   String @map("tipo")
-  /** "manual" | "importacao" | "os" | "pdv" | "cancelamento_pdv" | "correcao_pdv" | "devolucao" | "inventario" | "cadastro" */
+  /**
+   * "manual" | "importacao" | "os" | "pdv" | "cancelamento_pdv" | "correcao_pdv" | "devolucao" | "inventario" | "cadastro"
+   */
   origem String @default("manual") @map("origem")
 
-  /** Delta assinado aplicado ao saldo (+ entrada, +/- ajuste). */
+  /**
+   * Delta assinado aplicado ao saldo (+ entrada, +/- ajuste).
+   */
   quantidade    Int @map("quantidade")
   estoqueAntes  Int @map("estoqueAntes")
   estoqueDepois Int @map("estoqueDepois")
@@ -869,7 +913,9 @@ model MovimentacaoEstoque {
   custoUnitario    Float @default(0) @map("custoUnitario")
   custoMedioAntes  Float @default(0) @map("custoMedioAntes")
   custoMedioDepois Float @default(0) @map("custoMedioDepois")
-  /** quantidade × custoUnitario (valor da movimentação). */
+  /**
+   * quantidade × custoUnitario (valor da movimentação).
+   */
   valorTotal       Float @default(0) @map("valorTotal")
 
   documento  String? @map("documento")
@@ -888,10 +934,10 @@ model MovimentacaoEstoque {
 
   createdAt DateTime @default(now()) @map("createdAt")
 
+  @@unique([storeId, idempotencyKey], name: "storeId_idempotencyKey")
   @@index([storeId])
   @@index([storeId, produtoId])
   @@index([storeId, createdAt])
-  @@unique([storeId, idempotencyKey], name: "storeId_idempotencyKey")
   @@map("movimentacoes_estoque")
 }
 
@@ -908,10 +954,14 @@ model Deposito {
   storeId   String   @map("storeId")
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   nome      String   @map("nome")
-  /** Código estável por loja (ex.: "PRINCIPAL"). Único por loja. */
+  /**
+   * Código estável por loja (ex.: "PRINCIPAL"). Único por loja.
+   */
   codigo    String   @map("codigo")
   ativo     Boolean  @default(true) @map("ativo")
-  /** Depósito principal da loja — destino de todo consumo até as fases de seleção (Fase 2). */
+  /**
+   * Depósito principal da loja — destino de todo consumo até as fases de seleção (Fase 2).
+   */
   principal Boolean  @default(false) @map("principal")
   createdAt DateTime @default(now()) @map("createdAt")
   updatedAt DateTime @default(now()) @updatedAt @map("updatedAt")
@@ -958,17 +1008,25 @@ model InventarioSessao {
   id           String    @id @default(cuid())
   storeId      String    @map("storeId")
   store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  /** "aberta" | "finalizada" | "cancelada" */
+  /**
+   * "aberta" | "finalizada" | "cancelada"
+   */
   status       String    @default("aberta") @map("status")
-  /** Nome do operador (sessão NextAuth) que conduz a contagem. */
+  /**
+   * Nome do operador (sessão NextAuth) que conduz a contagem.
+   */
   operador     String?   @map("operador")
-  /** Depósito-alvo (BL-07 ready). Null = contagem agregada da loja (`Produto.stock`). */
+  /**
+   * Depósito-alvo (BL-07 ready). Null = contagem agregada da loja (`Produto.stock`).
+   */
   depositoId   String?   @map("depositoId")
   nome         String?   @map("nome")
   observacao   String?   @map("observacao")
   iniciadoEm   DateTime  @default(now()) @map("iniciadoEm")
   finalizadoEm DateTime? @map("finalizadoEm")
-  /** Snapshot do relatório gerado no fechamento (A/B/C/D + filas), para auditoria histórica. */
+  /**
+   * Snapshot do relatório gerado no fechamento (A/B/C/D + filas), para auditoria histórica.
+   */
   payload      Json?     @map("payload") @db.JsonB
   createdAt    DateTime  @default(now()) @map("createdAt")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updatedAt")
@@ -992,20 +1050,30 @@ model InventarioContagem {
   storeId                String           @map("storeId")
   sessaoId               String           @map("sessaoId")
   sessao                 InventarioSessao @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
-  /** Null = sem correspondência no catálogo (fila de reconciliação). */
+  /**
+   * Null = sem correspondência no catálogo (fila de reconciliação).
+   */
   produtoId              String?          @map("produtoId")
-  /** Código EAN/SKU/id efetivamente lido no leitor. */
+  /**
+   * Código EAN/SKU/id efetivamente lido no leitor.
+   */
   codigoBipado           String           @map("codigoBipado")
   produtoNomeSnapshot    String?          @map("produtoNomeSnapshot")
   produtoSkuSnapshot     String?          @map("produtoSkuSnapshot")
-  /** `Produto.stock` no momento do 1º bipe (foto p/ divergência). */
+  /**
+   * `Produto.stock` no momento do 1º bipe (foto p/ divergência).
+   */
   estoqueSistemaSnapshot Int?             @map("estoqueSistemaSnapshot")
   quantidadeContada      Int              @default(0) @map("quantidadeContada")
-  /** "encontrado" | "reconciliacao" */
+  /**
+   * "encontrado" | "reconciliacao"
+   */
   status                 String           @default("encontrado") @map("status")
   primeiroBipeEm         DateTime         @default(now()) @map("primeiroBipeEm")
   ultimoBipeEm           DateTime         @default(now()) @map("ultimoBipeEm")
-  /** Histórico opcional de bipes/observações da linha. */
+  /**
+   * Histórico opcional de bipes/observações da linha.
+   */
   payload                Json?            @map("payload") @db.JsonB
   createdAt              DateTime         @default(now()) @map("createdAt")
   updatedAt              DateTime         @default(now()) @updatedAt @map("updatedAt")
@@ -1022,21 +1090,20 @@ model Tecnico {
   storeId String @default("loja-1") @map("storeId")
   store   Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  name              String   @map("name")
-  email             String   @default("") @map("email")
-  phone             String   @default("") @map("phone")
-  role              String   @default("") @map("role")
-  specialty         String   @default("") @map("specialty")
-  commissionPercent Float    @default(0) @map("commissionPercent")
-  active            Boolean  @default(true) @map("active")
-  createdAt         DateTime @default(now()) @map("createdAt")
-  updatedAt         DateTime @updatedAt @map("updatedAt")
+  name              String            @map("name")
+  email             String            @default("") @map("email")
+  phone             String            @default("") @map("phone")
+  role              String            @default("") @map("role")
+  specialty         String            @default("") @map("specialty")
+  commissionPercent Float             @default(0) @map("commissionPercent")
+  active            Boolean           @default(true) @map("active")
+  createdAt         DateTime          @default(now()) @map("createdAt")
+  updatedAt         DateTime          @updatedAt @map("updatedAt")
+  dpPessoas         DpPessoaTecnico[]
 
   @@unique([id, storeId])
   @@index([storeId])
   @@index([name])
-  dpPessoas DpPessoaTecnico[]
-
   @@map("tecnicos")
 }
 
@@ -1242,7 +1309,7 @@ model Fornecedor {
   createdAt        DateTime @default(now()) @map("createdAt")
   updatedAt        DateTime @updatedAt @map("updatedAt")
 
-  contasPagar ContaPagarTitulo[]
+  contasPagar         ContaPagarTitulo[]
   aparelhosAquisicoes AparelhoAquisicao[]
 
   @@index([storeId])
@@ -1452,11 +1519,17 @@ model SerieVenda {
   id            String   @id @default(cuid())
   storeId       String   @map("storeId")
   store         Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  /** Ano civil de aceitação no servidor (America/Sao_Paulo). */
+  /**
+   * Ano civil de aceitação no servidor (America/Sao_Paulo).
+   */
   ano           Int      @map("ano")
-  /** Snapshot write-once de Store.codigoNumeracaoVenda na criação da série. */
+  /**
+   * Snapshot write-once de Store.codigoNumeracaoVenda na criação da série.
+   */
   prefixo       String   @map("prefixo") @db.VarChar(8)
-  /** Próximo número emitível; 1000000 representa série esgotada. */
+  /**
+   * Próximo número emitível; 1000000 representa série esgotada.
+   */
   proximoNumero Int      @default(1) @map("proximoNumero")
   ativo         Boolean  @default(true) @map("ativo")
   createdAt     DateTime @default(now()) @map("createdAt")
@@ -1475,69 +1548,83 @@ model SerieVenda {
  * Venda (PDV ou importada) opcionalmente ligada a um título em aberto.
  */
 model Venda {
-  id                   String              @id @default(cuid())
-  storeId              String              @default("loja-1") @map("storeId")
-  store                Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id                     String                @id @default(cuid())
+  storeId                String                @default("loja-1") @map("storeId")
+  store                  Store                 @relation(fields: [storeId], references: [id], onDelete: Restrict)
   /**
    * Ex.: VDA-2026-0001 — chave de negócio
    */
-  pedidoId             String              @unique @map("pedidoId")
+  pedidoId               String                @unique @map("pedidoId")
   // ─── Idempotência e numeração server-side (GOAL 002B — nullable/dormente) ─────
-  /** Identidade da tentativa futura; única por loja. NULL no histórico/writer v1. */
+  /**
+   * /** Identidade da tentativa futura; única por loja. NULL no histórico/writer v1.
+   */
   clientSaleId           String?               @map("clientSaleId") @db.VarChar(128)
-  /** Hash canônico futuro para detectar reuso da chave de tentativa. */
+  /**
+   * Hash canônico futuro para detectar reuso da chave de tentativa.
+   */
   idempotencyHash        String?               @map("idempotencyHash") @db.Char(64)
-  /** Versão do canonicalizador do hash. */
+  /**
+   * Versão do canonicalizador do hash.
+   */
   idempotencyHashVersion Int?                  @map("idempotencyHashVersion")
-  /** Série que alocou o número; a FK composta também inclui storeId. */
+  /**
+   * Série que alocou o número; a FK composta também inclui storeId.
+   */
   serieVendaId           String?               @map("serieVendaId")
   serieVenda             SerieVenda?           @relation(fields: [serieVendaId, storeId], references: [id, storeId], onDelete: Restrict)
-  /** Ano e componente numérico persistidos para consulta/auditoria futuras. */
+  /**
+   * Ano e componente numérico persistidos para consulta/auditoria futuras.
+   */
   anoNumero              Int?                  @map("anoNumero")
   numeroSequencial       Int?                  @map("numeroSequencial")
   numeradaEm             DateTime?             @map("numeradaEm")
-  /** NULL preserva o histórico sem backfill nem coluna obrigatória. */
+  /**
+   * NULL preserva o histórico sem backfill nem coluna obrigatória.
+   */
   numeracaoOrigem        VendaNumeracaoOrigem? @map("numeracaoOrigem")
   /**
    * Snapshot JSON da venda (formas de pagamento, linhas, etc.) para recuperação fiel.
    */
-  payload              Json?               @map("payload") @db.JsonB
-  total                Float               @default(0) @map("total")
-  at                   DateTime            @default(now()) @map("at")
-  clienteNome          String?             @map("clienteNome")
+  payload                Json?                 @map("payload") @db.JsonB
+  total                  Float                 @default(0) @map("total")
+  at                     DateTime              @default(now()) @map("at")
+  clienteNome            String?               @map("clienteNome")
   /**
    * FK opcional para o cliente cadastrado.
    * Nulo em vendas de consumidor final ou vendas antigas sem vínculo.
    * Preservado via SetNull se o cliente for excluído.
    */
-  clienteId            String?             @map("clienteId")
-  cliente              Cliente?            @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  clienteId              String?               @map("clienteId")
+  cliente                Cliente?              @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   /**
    * Status do ciclo de vida da venda.
    * concluida | cancelada | parcialmente_devolvida | devolvida
    */
-  status               String              @default("concluida") @map("status")
-  /** Operador que realizou a venda (extraído de payload.cashierId). */
-  operador             String?             @map("operador")
-  canceladaEm          DateTime?           @map("canceladaEm")
-  canceladaPor         String?             @map("canceladaPor")
-  motivoCancelamento   String?             @map("motivoCancelamento")
-  contaReceberTituloId String?             @map("contaReceberTituloId")
-  contaReceberTitulo   ContaReceberTitulo? @relation(fields: [contaReceberTituloId], references: [id], onDelete: SetNull)
+  status                 String                @default("concluida") @map("status")
+  /**
+   * Operador que realizou a venda (extraído de payload.cashierId).
+   */
+  operador               String?               @map("operador")
+  canceladaEm            DateTime?             @map("canceladaEm")
+  canceladaPor           String?               @map("canceladaPor")
+  motivoCancelamento     String?               @map("motivoCancelamento")
+  contaReceberTituloId   String?               @map("contaReceberTituloId")
+  contaReceberTitulo     ContaReceberTitulo?   @relation(fields: [contaReceberTituloId], references: [id], onDelete: SetNull)
   /**
    * Terminal PDV (PDV1, PDV2...) em que a venda foi realizada. Nullable para
    * retrocompatibilidade; o valor também viaja em `payload.terminalId`.
    */
-  terminalId           String?             @map("terminalId")
-  itens                ItemVenda[]
+  terminalId             String?               @map("terminalId")
+  itens                  ItemVenda[]
   /**
    * Estado fiscal da venda (GOAL_001B — aditivo/dormente). Ortogonal ao `status`
    * operacional. Default NAO_FISCAL → toda venda (nova e antiga) nasce sem efeito fiscal;
    * só transita quando a loja tem ConfiguracaoFiscalLoja.fiscalEnabled = true (GOAL_003+).
    */
-  fiscalStatus         FiscalStatusVenda   @default(NAO_FISCAL) @map("fiscalStatus")
-  notasFiscais         NotaFiscal[]
-  aparelhosVendas      AparelhoVenda[]
+  fiscalStatus           FiscalStatusVenda     @default(NAO_FISCAL) @map("fiscalStatus")
+  notasFiscais           NotaFiscal[]
+  aparelhosVendas        AparelhoVenda[]
 
   @@unique([storeId, clientSaleId])
   @@unique([serieVendaId, numeroSequencial])
@@ -1575,26 +1662,32 @@ model ItemVenda {
  * - `vendaId`: opcional, venda original. Null se venda só existe no localStorage.
  */
 model DevolucaoVenda {
-  id             String      @id @default(cuid())
-  storeId        String      @map("storeId")
-  store          Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  /** Chave de negócio local (DEV-2026-0001). Unique por loja. */
-  localId        String      @map("localId")
-  vendaLocalId   String      @default("") @map("vendaLocalId")
-  sessaoId       String?     @map("sessaoId")
-  sessao         SessaoCaixa? @relation(fields: [sessaoId], references: [id], onDelete: SetNull)
-  /** "vale_credito" | "somente_estoque" | "troca" */
-  tipo           String      @map("tipo")
-  valorTotal     Float       @default(0) @map("valorTotal")
-  creditoEmitido Float       @default(0) @map("creditoEmitido")
-  clienteNome    String      @default("") @map("clienteNome")
-  clienteDoc     String      @default("") @map("clienteDoc")
-  operador       String      @default("") @map("operador")
-  motivo         String      @default("") @map("motivo")
-  observacao     String      @default("") @map("observacao")
-  at             DateTime    @default(now()) @map("at")
-  /** Snapshot com linhas e contexto. */
-  payload        Json?       @map("payload") @db.JsonB
+  id             String               @id @default(cuid())
+  storeId        String               @map("storeId")
+  store          Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /**
+   * Chave de negócio local (DEV-2026-0001). Unique por loja.
+   */
+  localId        String               @map("localId")
+  vendaLocalId   String               @default("") @map("vendaLocalId")
+  sessaoId       String?              @map("sessaoId")
+  sessao         SessaoCaixa?         @relation(fields: [sessaoId], references: [id], onDelete: SetNull)
+  /**
+   * "vale_credito" | "somente_estoque" | "troca"
+   */
+  tipo           String               @map("tipo")
+  valorTotal     Float                @default(0) @map("valorTotal")
+  creditoEmitido Float                @default(0) @map("creditoEmitido")
+  clienteNome    String               @default("") @map("clienteNome")
+  clienteDoc     String               @default("") @map("clienteDoc")
+  operador       String               @default("") @map("operador")
+  motivo         String               @default("") @map("motivo")
+  observacao     String               @default("") @map("observacao")
+  at             DateTime             @default(now()) @map("at")
+  /**
+   * Snapshot com linhas e contexto.
+   */
+  payload        Json?                @map("payload") @db.JsonB
   itens          ItemDevolucaoVenda[]
   creditos       ClienteCredito[]
 
@@ -1627,27 +1720,37 @@ model ItemDevolucaoVenda {
  * clienteDoc é a chave de lookup (CPF/CNPJ somente dígitos).
  */
 model ClienteCredito {
-  id            String          @id @default(cuid())
-  storeId       String          @map("storeId")
-  store         Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  /** CPF/CNPJ somente dígitos — chave de lookup principal */
-  clienteDoc    String          @map("clienteDoc")
-  clienteNome   String          @default("") @map("clienteNome")
-  /** FK opcional ao cliente cadastrado */
-  clienteId     String?         @map("clienteId")
-  cliente       Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  /** Devolução que originou este crédito */
-  devolucaoId   String?         @map("devolucaoId")
-  devolucao     DevolucaoVenda? @relation(fields: [devolucaoId], references: [id], onDelete: SetNull)
-  /** localId da venda que originou a devolução */
-  vendaOrigemId String          @default("") @map("vendaOrigemId")
-  valorOriginal Float           @map("valorOriginal")
-  saldoAtual    Float           @map("saldoAtual")
-  /** "ativo" | "zerado" | "expirado" */
-  status        String          @default("ativo") @map("status")
-  validoAte     DateTime?       @map("validoAte")
-  createdAt     DateTime        @default(now()) @map("createdAt")
-  updatedAt     DateTime        @default(now()) @updatedAt @map("updatedAt")
+  id            String              @id @default(cuid())
+  storeId       String              @map("storeId")
+  store         Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /**
+   * CPF/CNPJ somente dígitos — chave de lookup principal
+   */
+  clienteDoc    String              @map("clienteDoc")
+  clienteNome   String              @default("") @map("clienteNome")
+  /**
+   * FK opcional ao cliente cadastrado
+   */
+  clienteId     String?             @map("clienteId")
+  cliente       Cliente?            @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  /**
+   * Devolução que originou este crédito
+   */
+  devolucaoId   String?             @map("devolucaoId")
+  devolucao     DevolucaoVenda?     @relation(fields: [devolucaoId], references: [id], onDelete: SetNull)
+  /**
+   * localId da venda que originou a devolução
+   */
+  vendaOrigemId String              @default("") @map("vendaOrigemId")
+  valorOriginal Float               @map("valorOriginal")
+  saldoAtual    Float               @map("saldoAtual")
+  /**
+   * "ativo" | "zerado" | "expirado"
+   */
+  status        String              @default("ativo") @map("status")
+  validoAte     DateTime?           @map("validoAte")
+  createdAt     DateTime            @default(now()) @map("createdAt")
+  updatedAt     DateTime            @default(now()) @updatedAt @map("updatedAt")
   usos          UsoCreditoCliente[]
 
   @@index([storeId, clienteDoc, status])
@@ -1655,14 +1758,18 @@ model ClienteCredito {
   @@map("clientes_creditos")
 }
 
-/** Registro de uso de crédito/vale em uma venda. */
+/**
+ * Registro de uso de crédito/vale em uma venda.
+ */
 model UsoCreditoCliente {
   id          String         @id @default(cuid())
   creditoId   String         @map("creditoId")
   credito     ClienteCredito @relation(fields: [creditoId], references: [id], onDelete: Cascade)
   storeId     String         @map("storeId")
   store       Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  /** pedidoId da venda que consumiu este crédito */
+  /**
+   * pedidoId da venda que consumiu este crédito
+   */
   vendaId     String         @default("") @map("vendaId")
   valor       Float          @map("valor")
   saldoAntes  Float          @map("saldoAntes")
@@ -1865,34 +1972,34 @@ model FinancialAttachment {
  * Congela o estado do fluxo no momento do fechamento e permite reabertura controlada.
  */
 model FechamentoFinanceiro {
-  id              String    @id @default(cuid())
-  storeId         String    @default("loja-1") @map("storeId")
-  store           Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id             String    @id @default(cuid())
+  storeId        String    @default("loja-1") @map("storeId")
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
   /**
    * "diario" | "mensal"
    */
-  tipo            String    @default("diario") @map("tipo")
+  tipo           String    @default("diario") @map("tipo")
   /**
    * yyyy-mm-dd para diário; 1º dia do mês para mensal
    */
-  dataReferencia  String    @map("dataReferencia")
-  mes             Int       @map("mes")
-  ano             Int       @map("ano")
+  dataReferencia String    @map("dataReferencia")
+  mes            Int       @map("mes")
+  ano            Int       @map("ano")
   /**
    * "aberto" | "fechado" | "reaberto"
    */
-  status          String    @default("fechado") @map("status")
-  saldoSistema    Float     @default(0) @map("saldoSistema")
-  saldoInformado  Float?    @map("saldoInformado")
-  diferenca       Float     @default(0) @map("diferenca")
-  observacao      String?   @map("observacao") @db.Text
-  snapshotDRE     Json?     @map("snapshotDRE") @db.JsonB
-  fechadoPor      String?   @map("fechadoPor")
-  reabertoPor     String?   @map("reabertoPor")
-  fechadoEm       DateTime? @map("fechadoEm")
-  reabertoEm      DateTime? @map("reabertoEm")
-  createdAt       DateTime  @default(now()) @map("createdAt")
-  updatedAt       DateTime  @updatedAt @map("updatedAt")
+  status         String    @default("fechado") @map("status")
+  saldoSistema   Float     @default(0) @map("saldoSistema")
+  saldoInformado Float?    @map("saldoInformado")
+  diferenca      Float     @default(0) @map("diferenca")
+  observacao     String?   @map("observacao") @db.Text
+  snapshotDRE    Json?     @map("snapshotDRE") @db.JsonB
+  fechadoPor     String?   @map("fechadoPor")
+  reabertoPor    String?   @map("reabertoPor")
+  fechadoEm      DateTime? @map("fechadoEm")
+  reabertoEm     DateTime? @map("reabertoEm")
+  createdAt      DateTime  @default(now()) @map("createdAt")
+  updatedAt      DateTime  @updatedAt @map("updatedAt")
 
   @@unique([storeId, tipo, dataReferencia], name: "fechamento_store_tipo_data")
   @@index([storeId])
@@ -1905,27 +2012,27 @@ model FechamentoFinanceiro {
  * Conciliação de saldo de carteira financeira (sistema vs. informado).
  */
 model ConciliacaoFinanceira {
-  id              String             @id @default(cuid())
-  storeId         String             @default("loja-1") @map("storeId")
-  store           Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  carteiraId      String             @map("carteiraId")
-  carteira        CarteiraFinanceira @relation(fields: [carteiraId], references: [id], onDelete: Restrict)
+  id             String             @id @default(cuid())
+  storeId        String             @default("loja-1") @map("storeId")
+  store          Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  carteiraId     String             @map("carteiraId")
+  carteira       CarteiraFinanceira @relation(fields: [carteiraId], references: [id], onDelete: Restrict)
   /**
    * yyyy-mm-dd data da conciliação
    */
-  dataReferencia  String             @map("dataReferencia")
-  saldoSistema    Float              @default(0) @map("saldoSistema")
-  saldoInformado  Float              @default(0) @map("saldoInformado")
-  diferenca       Float              @default(0) @map("diferenca")
+  dataReferencia String             @map("dataReferencia")
+  saldoSistema   Float              @default(0) @map("saldoSistema")
+  saldoInformado Float              @default(0) @map("saldoInformado")
+  diferenca      Float              @default(0) @map("diferenca")
   /**
    * "pendente" | "conciliado" | "divergente"
    */
-  status          String             @default("pendente") @map("status")
-  observacao      String?            @map("observacao") @db.Text
-  conciliadoPor   String?            @map("conciliadoPor")
-  conciliadoEm    DateTime?          @map("conciliadoEm")
-  createdAt       DateTime           @default(now()) @map("createdAt")
-  updatedAt       DateTime           @updatedAt @map("updatedAt")
+  status         String             @default("pendente") @map("status")
+  observacao     String?            @map("observacao") @db.Text
+  conciliadoPor  String?            @map("conciliadoPor")
+  conciliadoEm   DateTime?          @map("conciliadoEm")
+  createdAt      DateTime           @default(now()) @map("createdAt")
+  updatedAt      DateTime           @updatedAt @map("updatedAt")
 
   @@index([storeId])
   @@index([carteiraId])
@@ -1939,31 +2046,31 @@ model ConciliacaoFinanceira {
  * Nunca atualizar nem deletar — append-only.
  */
 model AuditoriaFinanceira {
-  id           String   @id @default(cuid())
-  storeId      String   @default("loja-1") @map("storeId")
-  store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id          String   @id @default(cuid())
+  storeId     String   @default("loja-1") @map("storeId")
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
   /**
    * "movimentacao" | "receber" | "pagar" | "carteira" | "dre" | "fechamento" | "conciliacao"
    */
-  entidade     String   @map("entidade")
-  entidadeId   String?  @map("entidadeId")
+  entidade    String   @map("entidade")
+  entidadeId  String?  @map("entidadeId")
   /**
    * "criar" | "editar" | "excluir" | "liquidar" | "estornar" | "fechar" | "reabrir" | "conciliar"
    */
-  acao         String   @map("acao")
+  acao        String   @map("acao")
   /**
    * Estado antes da operação (JSON snapshot)
    */
-  antes        Json?    @map("antes") @db.JsonB
+  antes       Json?    @map("antes") @db.JsonB
   /**
    * Estado depois da operação (JSON snapshot)
    */
-  depois       Json?    @map("depois") @db.JsonB
-  usuarioId    String?  @map("usuarioId")
-  usuarioNome  String?  @map("usuarioNome")
-  ip           String?  @map("ip")
-  userAgent    String?  @map("userAgent")
-  createdAt    DateTime @default(now()) @map("createdAt")
+  depois      Json?    @map("depois") @db.JsonB
+  usuarioId   String?  @map("usuarioId")
+  usuarioNome String?  @map("usuarioNome")
+  ip          String?  @map("ip")
+  userAgent   String?  @map("userAgent")
+  createdAt   DateTime @default(now()) @map("createdAt")
 
   @@index([storeId])
   @@index([storeId, entidade])
@@ -1984,24 +2091,26 @@ enum SessaoCaixaStatus {
  * Persiste no servidor para auditoria e dashboards sem remover o localStorage fast-path.
  */
 model SessaoCaixa {
-  id           String             @id @default(cuid())
-  storeId      String             @map("storeId")
-  store        Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  operador     String             @default("") @map("operador")
-  saldoInicial Float              @default(0) @map("saldoInicial")
-  saldoFinal   Float?             @map("saldoFinal")
-  saldoContado Float?             @map("saldoContado")
-  observacao   String             @default("") @map("observacao")
-  status       SessaoCaixaStatus  @default(ABERTA) @map("status")
-  abertaEm     DateTime           @default(now()) @map("abertaEm")
-  fechadaEm    DateTime?          @map("fechadaEm")
+  id           String            @id @default(cuid())
+  storeId      String            @map("storeId")
+  store        Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  operador     String            @default("") @map("operador")
+  saldoInicial Float             @default(0) @map("saldoInicial")
+  saldoFinal   Float?            @map("saldoFinal")
+  saldoContado Float?            @map("saldoContado")
+  observacao   String            @default("") @map("observacao")
+  status       SessaoCaixaStatus @default(ABERTA) @map("status")
+  abertaEm     DateTime          @default(now()) @map("abertaEm")
+  fechadaEm    DateTime?         @map("fechadaEm")
   /**
    * Terminal PDV (PDV1, PDV2...) que abriu a sessão. Nullable para retrocompatibilidade:
    * sessões anteriores ao multi-terminal ficam null ("Terminal Legacy").
    */
-  terminalId   String?            @map("terminalId")
-  /** Snapshot de totais do dia (ledger) no momento do fechamento. */
-  payload      Json?              @map("payload") @db.JsonB
+  terminalId   String?           @map("terminalId")
+  /**
+   * Snapshot de totais do dia (ledger) no momento do fechamento.
+   */
+  payload      Json?             @map("payload") @db.JsonB
   operacoes    CaixaOperacao[]
   devolucoes   DevolucaoVenda[]
 
@@ -2019,7 +2128,9 @@ model CaixaOperacao {
   sessaoId String      @map("sessaoId")
   sessao   SessaoCaixa @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
   storeId  String      @map("storeId")
-  /** "sangria" | "suprimento" | "devolucao" */
+  /**
+   * "sangria" | "suprimento" | "devolucao"
+   */
   tipo     String      @map("tipo")
   valor    Float       @default(0) @map("valor")
   motivo   String      @default("") @map("motivo")
@@ -2038,15 +2149,21 @@ model CaixaOperacao {
  * próprios. Fase 1: cadastro/seleção. Fase 2 (futuro): lock/heartbeat anti-simultâneo.
  */
 model PdvTerminal {
-  id        String   @id @default(cuid())
-  storeId   String   @map("storeId")
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  /** Código de negócio único por loja: PDV1, PDV2, PDV3... */
-  code      String   @map("code")
-  /** Nome amigável exibido na seleção (ex.: "PDV 1", "Caixa Principal"). */
-  name      String   @default("") @map("name")
-  /** "ACTIVE" | "INACTIVE" — terminal inativo não aparece na seleção por padrão. */
-  status    String   @default("ACTIVE") @map("status")
+  id               String    @id @default(cuid())
+  storeId          String    @map("storeId")
+  store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /**
+   * Código de negócio único por loja: PDV1, PDV2, PDV3...
+   */
+  code             String    @map("code")
+  /**
+   * Nome amigável exibido na seleção (ex.: "PDV 1", "Caixa Principal").
+   */
+  name             String    @default("") @map("name")
+  /**
+   * "ACTIVE" | "INACTIVE" — terminal inativo não aparece na seleção por padrão.
+   */
+  status           String    @default("ACTIVE") @map("status")
   /**
    * Lock anti-uso-simultâneo (Fase 2). Tudo nullable/backward-compatible.
    * `lockedByDeviceId` = deviceId do navegador que detém o terminal; `heartbeatAt` =
@@ -2057,8 +2174,8 @@ model PdvTerminal {
   lockedByOperador String?   @map("lockedByOperador")
   lockedAt         DateTime? @map("lockedAt")
   heartbeatAt      DateTime? @map("heartbeatAt")
-  createdAt DateTime @default(now()) @map("createdAt")
-  updatedAt DateTime @updatedAt @map("updatedAt")
+  createdAt        DateTime  @default(now()) @map("createdAt")
+  updatedAt        DateTime  @updatedAt @map("updatedAt")
 
   @@unique([storeId, code])
   @@index([storeId, status])
@@ -2079,17 +2196,19 @@ enum OmniAgentCommandStatus {
  * Comando interpretado pelo Omni Agent HUB (texto → intenção → execução controlada).
  */
 model OmniAgentCommand {
-  id               String                  @id @default(cuid())
-  storeId          String                  @map("storeId")
-  store            Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  /** Canal de origem: texto_interno | whatsapp | voz */
-  canal            String                  @default("texto_interno") @map("canal")
-  comandoOriginal  String                  @map("comandoOriginal") @db.Text
-  interpretacao    Json                    @map("interpretacao") @db.JsonB
-  status           OmniAgentCommandStatus  @map("status")
-  resultado        Json?                   @map("resultado") @db.JsonB
-  executadoEm      DateTime?               @map("executadoEm")
-  createdAt        DateTime                @default(now()) @map("createdAt")
+  id              String                 @id @default(cuid())
+  storeId         String                 @map("storeId")
+  store           Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /**
+   * Canal de origem: texto_interno | whatsapp | voz
+   */
+  canal           String                 @default("texto_interno") @map("canal")
+  comandoOriginal String                 @map("comandoOriginal") @db.Text
+  interpretacao   Json                   @map("interpretacao") @db.JsonB
+  status          OmniAgentCommandStatus @map("status")
+  resultado       Json?                  @map("resultado") @db.JsonB
+  executadoEm     DateTime?              @map("executadoEm")
+  createdAt       DateTime               @default(now()) @map("createdAt")
 
   automationRuns OmniAgentAutomationRun[]
 
@@ -2106,7 +2225,9 @@ model OmniAgentAutomation {
   storeId         String   @map("storeId")
   store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name            String   @default("") @map("name")
-  /** venda_finalizada | os_entregue | conta_receber_vencida */
+  /**
+   * venda_finalizada | os_entregue | conta_receber_vencida
+   */
   triggerKey      String   @map("triggerKey")
   enabled         Boolean  @default(false) @map("enabled")
   commandTemplate String   @map("commandTemplate") @db.Text
@@ -2122,16 +2243,16 @@ model OmniAgentAutomation {
 }
 
 model OmniAgentAutomationRun {
-  id             String   @id @default(cuid())
-  automationId String   @map("automationId")
-  automation   OmniAgentAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  storeId      String   @map("storeId")
-  eventKey     String   @map("eventKey")
-  entityId     String?  @map("entityId")
-  comandoGerado String  @map("comandoGerado") @db.Text
-  commandId    String?  @map("commandId")
-  omniCommand  OmniAgentCommand? @relation(fields: [commandId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now()) @map("createdAt")
+  id            String              @id @default(cuid())
+  automationId  String              @map("automationId")
+  automation    OmniAgentAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  storeId       String              @map("storeId")
+  eventKey      String              @map("eventKey")
+  entityId      String?             @map("entityId")
+  comandoGerado String              @map("comandoGerado") @db.Text
+  commandId     String?             @map("commandId")
+  omniCommand   OmniAgentCommand?   @relation(fields: [commandId], references: [id], onDelete: SetNull)
+  createdAt     DateTime            @default(now()) @map("createdAt")
 
   @@index([storeId, createdAt])
   @@index([automationId, createdAt])
@@ -2147,20 +2268,22 @@ model OmniAgentAutomationRun {
  * independentemente desta config.
  */
 model OmniAgentConfig {
-  id                   String   @id @default(cuid())
-  storeId              String   @unique @map("storeId")
-  store                Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  agentName            String   @default("Omni") @map("agentName")
-  tone                 String   @default("consultivo") @map("tone")
-  basePrompt           String   @default("") @map("basePrompt") @db.Text
-  autonomyLevel        String   @default("medio") @map("autonomyLevel")
-  defaultChannel       String   @default("texto_interno") @map("defaultChannel")
-  businessHoursStart   String   @default("08:00") @map("businessHoursStart")
-  businessHoursEnd     String   @default("18:00") @map("businessHoursEnd")
-  businessHoursDays    String[] @default(["seg", "ter", "qua", "qui", "sex"]) @map("businessHoursDays")
-  /** Intenções de leitura que devem exigir confirmação humana além do padrão (ex.: CASHBOX_QUERY). */
-  extraConfirmIntents  String[] @default([]) @map("extraConfirmIntents")
-  updatedAt            DateTime @updatedAt @map("updatedAt")
+  id                  String   @id @default(cuid())
+  storeId             String   @unique @map("storeId")
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  agentName           String   @default("Omni") @map("agentName")
+  tone                String   @default("consultivo") @map("tone")
+  basePrompt          String   @default("") @map("basePrompt") @db.Text
+  autonomyLevel       String   @default("medio") @map("autonomyLevel")
+  defaultChannel      String   @default("texto_interno") @map("defaultChannel")
+  businessHoursStart  String   @default("08:00") @map("businessHoursStart")
+  businessHoursEnd    String   @default("18:00") @map("businessHoursEnd")
+  businessHoursDays   String[] @default(["seg", "ter", "qua", "qui", "sex"]) @map("businessHoursDays")
+  /**
+   * Intenções de leitura que devem exigir confirmação humana além do padrão (ex.: CASHBOX_QUERY).
+   */
+  extraConfirmIntents String[] @default([]) @map("extraConfirmIntents")
+  updatedAt           DateTime @updatedAt @map("updatedAt")
 
   @@map("omni_agent_configs")
 }
@@ -2177,15 +2300,21 @@ model OmniAgentMemory {
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   clienteId String?  @map("clienteId")
   cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  /** nota | decisao | lembrete | incidente | preferencia | observacao */
+  /**
+   * nota | decisao | lembrete | incidente | preferencia | observacao
+   */
   tipo      String   @map("tipo")
   titulo    String   @map("titulo")
   conteudo  String   @map("conteudo") @db.Text
   tags      String[] @default([]) @map("tags")
-  /** manual | omni_agent */
+  /**
+   * manual | omni_agent
+   */
   origem    String   @default("manual") @map("origem")
   criadoPor String   @default("") @map("criadoPor")
-  /** ativo | arquivado */
+  /**
+   * ativo | arquivado
+   */
   status    String   @default("ativo") @map("status")
   createdAt DateTime @default(now()) @map("createdAt")
   updatedAt DateTime @updatedAt @map("updatedAt")
@@ -2228,25 +2357,29 @@ model AdminUserStore {
  * Usuários de acesso ao painel OmniGestão (email + senha). Separado do User PIN-based.
  */
 model AdminUser {
-  id        String   @id @default(cuid())
-  name      String   @default("")
-  email     String   @unique
-  password  String
-  role      UserRole @default(OPERADOR)
-  lojaId    String?
-  /** Conta ativa; inativos não autenticam no painel. */
-  active    Boolean  @default(true) @map("active")
-  /** NULL: compatibilidade de contas anteriores à migration; novas contas sempre STORE. */
-  accessScope String? @default("STORE")
-  mustChangePassword Boolean @default(false)
-  sessionVersion Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  name               String   @default("")
+  email              String   @unique
+  password           String
+  role               UserRole @default(OPERADOR)
+  lojaId             String?
+  /**
+   * Conta ativa; inativos não autenticam no painel.
+   */
+  active             Boolean  @default(true) @map("active")
+  /**
+   * NULL: compatibilidade de contas anteriores à migration; novas contas sempre STORE.
+   */
+  accessScope        String?  @default("STORE")
+  mustChangePassword Boolean  @default(false)
+  sessionVersion     Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   adminUserStores AdminUserStore[]
-  dpAcessos DpAcesso[]
-  dpPessoas DpPessoaUsuario[]
-  dpAuditorias DpAuditoria[]
+  dpAcessos       DpAcesso[]
+  dpPessoas       DpPessoaUsuario[]
+  dpAuditorias    DpAuditoria[]
 
   // ─── Stripe / Billing ───────────────────────────────────────────────────────
   stripeCustomerId     String?   @unique
@@ -2279,7 +2412,9 @@ model AdminUser {
 // Desenho: docs/architecture/FISCAL_SCHEMA_DESIGN_v01.md · Governa: MASTER_FISCAL_EXECUTION_PLAN.md
 // =================================================================================
 
-/** Estado fiscal da venda (visão "colapsada"; default NAO_FISCAL = comportamento atual). */
+/**
+ * Estado fiscal da venda (visão "colapsada"; default NAO_FISCAL = comportamento atual).
+ */
 enum FiscalStatusVenda {
   NAO_FISCAL
   PENDENTE
@@ -2291,7 +2426,9 @@ enum FiscalStatusVenda {
   BLOQUEADA_FISCAL
 }
 
-/** Estado do documento fiscal (mais granular que o da venda). */
+/**
+ * Estado do documento fiscal (mais granular que o da venda).
+ */
 enum StatusNotaFiscal {
   RASCUNHO
   VALIDANDO
@@ -2382,50 +2519,50 @@ enum FiscalJobStatus {
  * single-empresa (P0-B). CSC/token de gateway são SEGREDO → só referência (*Ref).
  */
 model ConfiguracaoFiscalLoja {
-  id                  String   @id @default(cuid())
-  storeId             String   @unique @map("storeId")
-  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  storeId String @unique @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   // Flags — tudo nasce desligado (default-off)
-  fiscalEnabled       Boolean        @default(false) @map("fiscalEnabled")
-  ambiente            AmbienteFiscal @default(HOMOLOGACAO) @map("ambiente")
-  modeloFiscal        ModeloFiscal   @default(NFCE) @map("modeloFiscal")
+  fiscalEnabled Boolean        @default(false) @map("fiscalEnabled")
+  ambiente      AmbienteFiscal @default(HOMOLOGACAO) @map("ambiente")
+  modeloFiscal  ModeloFiscal   @default(NFCE) @map("modeloFiscal")
 
   // Identidade fiscal
-  razaoSocial         String   @default("") @map("razaoSocial")
-  nomeFantasia        String   @default("") @map("nomeFantasia")
-  cnpj                String   @default("") @map("cnpj")
-  inscricaoEstadual   String   @default("") @map("inscricaoEstadual")
-  inscricaoMunicipal  String   @default("") @map("inscricaoMunicipal")
-  regimeTributario    RegimeTributario @default(SIMPLES_NACIONAL) @map("regimeTributario")
-  crt                 Int      @default(1) @map("crt")
+  razaoSocial        String           @default("") @map("razaoSocial")
+  nomeFantasia       String           @default("") @map("nomeFantasia")
+  cnpj               String           @default("") @map("cnpj")
+  inscricaoEstadual  String           @default("") @map("inscricaoEstadual")
+  inscricaoMunicipal String           @default("") @map("inscricaoMunicipal")
+  regimeTributario   RegimeTributario @default(SIMPLES_NACIONAL) @map("regimeTributario")
+  crt                Int              @default(1) @map("crt")
 
   // Endereço fiscal ESTRUTURADO (exigência do XML)
-  logradouro          String   @default("") @map("logradouro")
-  numero              String   @default("") @map("numero")
-  complemento         String   @default("") @map("complemento")
-  bairro              String   @default("") @map("bairro")
-  codigoMunicipioIbge String   @default("") @map("codigoMunicipioIbge")
-  municipio           String   @default("") @map("municipio")
-  uf                  String   @default("") @map("uf")
-  cep                 String   @default("") @map("cep")
-  codigoPais          String   @default("1058") @map("codigoPais")
-  fone                String   @default("") @map("fone")
-  email               String   @default("") @map("email")
+  logradouro          String @default("") @map("logradouro")
+  numero              String @default("") @map("numero")
+  complemento         String @default("") @map("complemento")
+  bairro              String @default("") @map("bairro")
+  codigoMunicipioIbge String @default("") @map("codigoMunicipioIbge")
+  municipio           String @default("") @map("municipio")
+  uf                  String @default("") @map("uf")
+  cep                 String @default("") @map("cep")
+  codigoPais          String @default("1058") @map("codigoPais")
+  fone                String @default("") @map("fone")
+  email               String @default("") @map("email")
 
   // CSC (NFC-e) — SÓ referência ao segredo
-  cscId               String   @default("") @map("cscId")
-  cscTokenRef         String?  @map("cscTokenRef")
+  cscId       String  @default("") @map("cscId")
+  cscTokenRef String? @map("cscTokenRef")
 
   // Provider (provider-agnóstico) — token do gateway por referência
-  provider            FiscalProviderTipo @default(STUB_HOMOLOGACAO) @map("provider")
-  providerConfig      Json?    @map("providerConfig") @db.JsonB
-  providerTokenRef    String?  @map("providerTokenRef")
+  provider         FiscalProviderTipo @default(STUB_HOMOLOGACAO) @map("provider")
+  providerConfig   Json?              @map("providerConfig") @db.JsonB
+  providerTokenRef String?            @map("providerTokenRef")
 
-  certificadoAtivoId  String?  @map("certificadoAtivoId")
+  certificadoAtivoId String? @map("certificadoAtivoId")
 
-  createdAt           DateTime @default(now()) @map("createdAt")
-  updatedAt           DateTime @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
   @@index([fiscalEnabled])
   @@map("configuracoes_fiscais_loja")
@@ -2436,28 +2573,28 @@ model ConfiguracaoFiscalLoja {
  * NUNCA bytes do .pfx nem a senha em coluna em claro (blueprint §9). O cofre é decidido no GOAL_002.
  */
 model CertificadoDigital {
-  id            String   @id @default(cuid())
-  storeId       String   @map("storeId")
-  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
-  apelido       String   @default("") @map("apelido")
-  tipo          String   @default("A1") @map("tipo")
-  titularCn     String   @default("") @map("titularCn")
-  cnpjTitular   String   @default("") @map("cnpjTitular")
-  serialNumber  String   @default("") @map("serialNumber")
-  fingerprint   String   @default("") @map("fingerprint")
-  validoDe      DateTime? @map("validoDe")
-  validoAte     DateTime? @map("validoAte")
-  status        CertificadoStatus @default(PENDENTE_VALIDACAO) @map("status")
-  ativo         Boolean  @default(false) @map("ativo")
+  apelido      String            @default("") @map("apelido")
+  tipo         String            @default("A1") @map("tipo")
+  titularCn    String            @default("") @map("titularCn")
+  cnpjTitular  String            @default("") @map("cnpjTitular")
+  serialNumber String            @default("") @map("serialNumber")
+  fingerprint  String            @default("") @map("fingerprint")
+  validoDe     DateTime?         @map("validoDe")
+  validoAte    DateTime?         @map("validoAte")
+  status       CertificadoStatus @default(PENDENTE_VALIDACAO) @map("status")
+  ativo        Boolean           @default(false) @map("ativo")
 
   // SEGREDO — só referência
-  blobRef       String?  @map("blobRef")
-  senhaRef      String?  @map("senhaRef")
+  blobRef  String? @map("blobRef")
+  senhaRef String? @map("senhaRef")
 
-  uploadedBy    String?  @map("uploadedBy")
-  createdAt     DateTime @default(now()) @map("createdAt")
-  updatedAt     DateTime @updatedAt @map("updatedAt")
+  uploadedBy String?  @map("uploadedBy")
+  createdAt  DateTime @default(now()) @map("createdAt")
+  updatedAt  DateTime @updatedAt @map("updatedAt")
 
   notasAssinadas NotaFiscal[]
 
@@ -2467,23 +2604,25 @@ model CertificadoDigital {
   @@map("certificados_digitais")
 }
 
-/** Série + contador atômico de numeração por (loja, modelo, série, ambiente). Resolve P1-E. */
+/**
+ * Série + contador atômico de numeração por (loja, modelo, série, ambiente). Resolve P1-E.
+ */
 model SerieFiscal {
-  id            String       @id @default(cuid())
-  storeId       String       @map("storeId")
-  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   modelo        ModeloFiscal   @default(NFCE) @map("modelo")
   ambiente      AmbienteFiscal @default(HOMOLOGACAO) @map("ambiente")
-  serie         Int          @default(1) @map("serie")
-  proximoNumero Int          @default(1) @map("proximoNumero")
-  descricao     String       @default("") @map("descricao")
-  ativo         Boolean      @default(true) @map("ativo")
+  serie         Int            @default(1) @map("serie")
+  proximoNumero Int            @default(1) @map("proximoNumero")
+  descricao     String         @default("") @map("descricao")
+  ativo         Boolean        @default(true) @map("ativo")
 
-  createdAt     DateTime     @default(now()) @map("createdAt")
-  updatedAt     DateTime     @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
-  notas         NotaFiscal[]
+  notas NotaFiscal[]
 
   @@unique([storeId, modelo, serie, ambiente])
   @@index([storeId])
@@ -2495,39 +2634,39 @@ model SerieFiscal {
  * 1 venda → N tentativas, 1 vigente (índice único PARCIAL na migration). XML é registro legal.
  */
 model NotaFiscal {
-  id               String   @id @default(cuid())
-  storeId          String   @map("storeId")
-  store            Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  vendaId          String   @map("vendaId")
-  venda            Venda    @relation(fields: [vendaId], references: [id], onDelete: Restrict)
+  vendaId String @map("vendaId")
+  venda   Venda  @relation(fields: [vendaId], references: [id], onDelete: Restrict)
 
-  modelo           ModeloFiscal     @default(NFCE) @map("modelo")
-  ambiente         AmbienteFiscal   @map("ambiente")
-  tipoEmissao      TipoEmissao      @default(NORMAL) @map("tipoEmissao")
-  status           StatusNotaFiscal @default(RASCUNHO) @map("status")
-  vigente          Boolean          @default(true) @map("vigente")
+  modelo      ModeloFiscal     @default(NFCE) @map("modelo")
+  ambiente    AmbienteFiscal   @map("ambiente")
+  tipoEmissao TipoEmissao      @default(NORMAL) @map("tipoEmissao")
+  status      StatusNotaFiscal @default(RASCUNHO) @map("status")
+  vigente     Boolean          @default(true) @map("vigente")
 
-  serieFiscalId    String?  @map("serieFiscalId")
-  serieFiscal      SerieFiscal? @relation(fields: [serieFiscalId], references: [id], onDelete: SetNull)
-  serie            Int?     @map("serie")
-  numero           Int?     @map("numero")
+  serieFiscalId String?      @map("serieFiscalId")
+  serieFiscal   SerieFiscal? @relation(fields: [serieFiscalId], references: [id], onDelete: SetNull)
+  serie         Int?         @map("serie")
+  numero        Int?         @map("numero")
 
   // Resultado SEFAZ
-  chaveAcesso      String?  @unique @map("chaveAcesso")
-  protocolo        String?  @map("protocolo")
-  cStat            String?  @map("cStat")
-  xMotivo          String?  @map("xMotivo")
-  dataAutorizacao  DateTime? @map("dataAutorizacao")
-  digestValue      String?  @map("digestValue")
-  qrCodeData       String?  @map("qrCodeData") @db.Text
-  urlConsulta      String?  @map("urlConsulta")
+  chaveAcesso     String?   @unique @map("chaveAcesso")
+  protocolo       String?   @map("protocolo")
+  cStat           String?   @map("cStat")
+  xMotivo         String?   @map("xMotivo")
+  dataAutorizacao DateTime? @map("dataAutorizacao")
+  digestValue     String?   @map("digestValue")
+  qrCodeData      String?   @map("qrCodeData") @db.Text
+  urlConsulta     String?   @map("urlConsulta")
 
   // Totais
-  valorTotal         Float  @default(0) @map("valorTotal")
-  valorDesconto      Float  @default(0) @map("valorDesconto")
-  valorFrete         Float  @default(0) @map("valorFrete")
-  valorTotalTributos Float  @default(0) @map("valorTotalTributos")
+  valorTotal         Float @default(0) @map("valorTotal")
+  valorDesconto      Float @default(0) @map("valorDesconto")
+  valorFrete         Float @default(0) @map("valorFrete")
+  valorTotalTributos Float @default(0) @map("valorTotalTributos")
 
   // SNAPSHOTS congelados (foto do instante)
   snapshotEmitente     Json? @map("snapshotEmitente") @db.JsonB
@@ -2535,25 +2674,25 @@ model NotaFiscal {
   snapshotPagamento    Json? @map("snapshotPagamento") @db.JsonB
 
   // XML (documento legal)
-  xmlAssinado      String?  @map("xmlAssinado") @db.Text
-  xmlAutorizado    String?  @map("xmlAutorizado") @db.Text
-  xmlStorageRef    String?  @map("xmlStorageRef")
+  xmlAssinado   String? @map("xmlAssinado") @db.Text
+  xmlAutorizado String? @map("xmlAutorizado") @db.Text
+  xmlStorageRef String? @map("xmlStorageRef")
 
-  certificadoId    String?  @map("certificadoId")
-  certificado      CertificadoDigital? @relation(fields: [certificadoId], references: [id], onDelete: SetNull)
+  certificadoId String?             @map("certificadoId")
+  certificado   CertificadoDigital? @relation(fields: [certificadoId], references: [id], onDelete: SetNull)
 
-  localKey         String?  @map("localKey")
-  tentativas       Int      @default(0) @map("tentativas")
-  ultimoErro       String?  @map("ultimoErro")
-  emitidaPor       String?  @map("emitidaPor")
+  localKey         String?   @map("localKey")
+  tentativas       Int       @default(0) @map("tentativas")
+  ultimoErro       String?   @map("ultimoErro")
+  emitidaPor       String?   @map("emitidaPor")
   dataContingencia DateTime? @map("dataContingencia")
-  justContingencia String?  @map("justContingencia")
+  justContingencia String?   @map("justContingencia")
 
-  createdAt        DateTime @default(now()) @map("createdAt")
-  updatedAt        DateTime @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
-  itens            NotaFiscalItem[]
-  eventos          EventoFiscal[]
+  itens   NotaFiscalItem[]
+  eventos EventoFiscal[]
 
   @@unique([storeId, modelo, serie, numero, ambiente])
   @@unique([storeId, localKey])
@@ -2563,102 +2702,108 @@ model NotaFiscal {
   @@map("notas_fiscais")
 }
 
-/** Snapshot fiscal CONGELADO por item (origem em GOAL_004/005). Foto do produto no ato. */
+/**
+ * Snapshot fiscal CONGELADO por item (origem em GOAL_004/005). Foto do produto no ato.
+ */
 model NotaFiscalItem {
-  id               String   @id @default(cuid())
-  notaFiscalId     String   @map("notaFiscalId")
-  notaFiscal       NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+  id           String     @id @default(cuid())
+  notaFiscalId String     @map("notaFiscalId")
+  notaFiscal   NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
 
-  itemVendaId      String?  @map("itemVendaId")
-  produtoId        String?  @map("produtoId")
-  numeroItem       Int      @default(1) @map("numeroItem")
+  itemVendaId String? @map("itemVendaId")
+  produtoId   String? @map("produtoId")
+  numeroItem  Int     @default(1) @map("numeroItem")
 
-  codigoProduto    String   @default("") @map("codigoProduto")
-  descricao        String   @default("") @map("descricao")
-  gtin             String?  @map("gtin")
-  ncm              String   @default("") @map("ncm")
-  cest             String?  @map("cest")
-  cfop             String   @default("") @map("cfop")
-  cst              String?  @map("cst")
-  csosn            String?  @map("csosn")
-  origemMercadoria Int      @default(0) @map("origemMercadoria")
-  unidadeComercial String   @default("UN") @map("unidadeComercial")
+  codigoProduto    String  @default("") @map("codigoProduto")
+  descricao        String  @default("") @map("descricao")
+  gtin             String? @map("gtin")
+  ncm              String  @default("") @map("ncm")
+  cest             String? @map("cest")
+  cfop             String  @default("") @map("cfop")
+  cst              String? @map("cst")
+  csosn            String? @map("csosn")
+  origemMercadoria Int     @default(0) @map("origemMercadoria")
+  unidadeComercial String  @default("UN") @map("unidadeComercial")
 
-  quantidade       Float    @default(1) @map("quantidade")
-  valorUnitario    Float    @default(0) @map("valorUnitario")
-  valorBruto       Float    @default(0) @map("valorBruto")
-  valorDesconto    Float    @default(0) @map("valorDesconto")
-  valorTotal       Float    @default(0) @map("valorTotal")
+  quantidade    Float @default(1) @map("quantidade")
+  valorUnitario Float @default(0) @map("valorUnitario")
+  valorBruto    Float @default(0) @map("valorBruto")
+  valorDesconto Float @default(0) @map("valorDesconto")
+  valorTotal    Float @default(0) @map("valorTotal")
 
-  baseCalculoIcms  Float    @default(0) @map("baseCalculoIcms")
-  aliquotaIcms     Float    @default(0) @map("aliquotaIcms")
-  valorIcms        Float    @default(0) @map("valorIcms")
-  valorTributos    Float    @default(0) @map("valorTributos")
+  baseCalculoIcms Float @default(0) @map("baseCalculoIcms")
+  aliquotaIcms    Float @default(0) @map("aliquotaIcms")
+  valorIcms       Float @default(0) @map("valorIcms")
+  valorTributos   Float @default(0) @map("valorTributos")
 
-  createdAt        DateTime @default(now()) @map("createdAt")
+  createdAt DateTime @default(now()) @map("createdAt")
 
   @@index([notaFiscalId])
   @@map("notas_fiscais_itens")
 }
 
-/** Eventos da nota (cancelamento/CC-e/inutilização/contingência). Idempotente por (nota,tipo,seq). */
+/**
+ * Eventos da nota (cancelamento/CC-e/inutilização/contingência). Idempotente por (nota,tipo,seq).
+ */
 model EventoFiscal {
-  id            String   @id @default(cuid())
-  storeId       String   @map("storeId")
-  store         Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  notaFiscalId  String   @map("notaFiscalId")
-  notaFiscal    NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+  notaFiscalId String     @map("notaFiscalId")
+  notaFiscal   NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
 
-  tipo          TipoEventoFiscal @map("tipo")
-  sequencia     Int      @default(1) @map("sequencia")
-  status        StatusEventoFiscal @default(PENDENTE) @map("status")
+  tipo      TipoEventoFiscal   @map("tipo")
+  sequencia Int                @default(1) @map("sequencia")
+  status    StatusEventoFiscal @default(PENDENTE) @map("status")
 
-  protocolo     String?  @map("protocolo")
-  cStat         String?  @map("cStat")
-  xMotivo       String?  @map("xMotivo")
-  justificativa String?  @map("justificativa")
-  xmlEvento     String?  @map("xmlEvento") @db.Text
-  xmlRetorno    String?  @map("xmlRetorno") @db.Text
+  protocolo     String? @map("protocolo")
+  cStat         String? @map("cStat")
+  xMotivo       String? @map("xMotivo")
+  justificativa String? @map("justificativa")
+  xmlEvento     String? @map("xmlEvento") @db.Text
+  xmlRetorno    String? @map("xmlRetorno") @db.Text
 
-  dataEvento    DateTime @default(now()) @map("dataEvento")
-  operador      String?  @map("operador")
-  createdAt     DateTime @default(now()) @map("createdAt")
-  updatedAt     DateTime @updatedAt @map("updatedAt")
+  dataEvento DateTime @default(now()) @map("dataEvento")
+  operador   String?  @map("operador")
+  createdAt  DateTime @default(now()) @map("createdAt")
+  updatedAt  DateTime @updatedAt @map("updatedAt")
 
   @@unique([notaFiscalId, tipo, sequencia])
   @@index([storeId])
   @@map("eventos_fiscais")
 }
 
-/** Fila idempotente de emissão/cancelamento/contingência (pós-commit). Desacopla o balcão (P0-D). */
+/**
+ * Fila idempotente de emissão/cancelamento/contingência (pós-commit). Desacopla o balcão (P0-D).
+ */
 model FiscalEmissaoJob {
-  id                 String   @id @default(cuid())
-  storeId            String   @map("storeId")
-  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
-  vendaId            String   @map("vendaId")
-  notaFiscalId       String?  @map("notaFiscalId")
+  vendaId      String  @map("vendaId")
+  notaFiscalId String? @map("notaFiscalId")
 
-  tipo               FiscalJobTipo   @default(EMISSAO) @map("tipo")
-  status             FiscalJobStatus @default(PENDENTE) @map("status")
+  tipo   FiscalJobTipo   @default(EMISSAO) @map("tipo")
+  status FiscalJobStatus @default(PENDENTE) @map("status")
 
-  tentativas         Int      @default(0) @map("tentativas")
-  maxTentativas      Int      @default(5) @map("maxTentativas")
+  tentativas         Int       @default(0) @map("tentativas")
+  maxTentativas      Int       @default(5) @map("maxTentativas")
   proximaTentativaEm DateTime? @map("proximaTentativaEm")
-  prioridade         Int      @default(0) @map("prioridade")
+  prioridade         Int       @default(0) @map("prioridade")
 
-  lockOwner          String?  @map("lockOwner")
-  lockedAt           DateTime? @map("lockedAt")
-  lockExpiresAt      DateTime? @map("lockExpiresAt")
+  lockOwner     String?   @map("lockOwner")
+  lockedAt      DateTime? @map("lockedAt")
+  lockExpiresAt DateTime? @map("lockExpiresAt")
 
-  dedupeKey          String?  @map("dedupeKey")
-  payload            Json?    @map("payload") @db.JsonB
-  ultimoErro         String?  @map("ultimoErro")
-  concluidoEm        DateTime? @map("concluidoEm")
+  dedupeKey   String?   @map("dedupeKey")
+  payload     Json?     @map("payload") @db.JsonB
+  ultimoErro  String?   @map("ultimoErro")
+  concluidoEm DateTime? @map("concluidoEm")
 
-  createdAt          DateTime @default(now()) @map("createdAt")
-  updatedAt          DateTime @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
   @@unique([storeId, dedupeKey])
   @@index([status, proximaTentativaEm])
@@ -2666,26 +2811,28 @@ model FiscalEmissaoJob {
   @@map("fiscal_emissao_jobs")
 }
 
-/** Trilha append-only de toda interação fiscal (montar/assinar/transmitir/consultar + cStat). */
+/**
+ * Trilha append-only de toda interação fiscal (montar/assinar/transmitir/consultar + cStat).
+ */
 model FiscalLog {
-  id             String   @id @default(cuid())
-  storeId        String   @map("storeId")
-  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
-  vendaId        String?  @map("vendaId")
-  notaFiscalId   String?  @map("notaFiscalId")
-  eventoFiscalId String?  @map("eventoFiscalId")
-  jobId          String?  @map("jobId")
+  vendaId        String? @map("vendaId")
+  notaFiscalId   String? @map("notaFiscalId")
+  eventoFiscalId String? @map("eventoFiscalId")
+  jobId          String? @map("jobId")
 
-  nivel          String   @default("INFO") @map("nivel")
-  acao           String   @default("") @map("acao")
-  cStat          String?  @map("cStat")
-  xMotivo        String?  @map("xMotivo")
-  mensagem       String   @default("") @map("mensagem")
-  detalhe        Json?    @map("detalhe") @db.JsonB
-  operador       String?  @map("operador")
+  nivel    String  @default("INFO") @map("nivel")
+  acao     String  @default("") @map("acao")
+  cStat    String? @map("cStat")
+  xMotivo  String? @map("xMotivo")
+  mensagem String  @default("") @map("mensagem")
+  detalhe  Json?   @map("detalhe") @db.JsonB
+  operador String? @map("operador")
 
-  createdAt      DateTime @default(now()) @map("createdAt")
+  createdAt DateTime @default(now()) @map("createdAt")
 
   @@index([storeId, createdAt])
   @@index([notaFiscalId])
@@ -2710,7 +2857,9 @@ model FiscalLog {
 // cruzem loja e que comentário/versão não cruzem competência. Padrão multi-tenant
 // do Prisma: campos escalares (storeId/competenciaId) compartilhados entre relações.
 
-/** Estados PERSISTIDOS da competência (ADR-005). `reaberta` é transição auditada, não estado. */
+/**
+ * Estados PERSISTIDOS da competência (ADR-005). `reaberta` é transição auditada, não estado.
+ */
 enum ContadorCompetenciaStatus {
   ABERTA        @map("aberta")
   ENVIADA       @map("enviada")
@@ -2718,7 +2867,9 @@ enum ContadorCompetenciaStatus {
   FECHADA       @map("fechada")
 }
 
-/** Ciclo de vida de um item/documento (ADR-005). `vencido` é flag DERIVADA, nunca persistida. */
+/**
+ * Ciclo de vida de um item/documento (ADR-005). `vencido` é flag DERIVADA, nunca persistida.
+ */
 enum ContadorItemStatus {
   PENDENTE  @map("pendente")
   ENVIADO   @map("enviado")
@@ -2726,7 +2877,9 @@ enum ContadorItemStatus {
   RESOLVIDO @map("resolvido")
 }
 
-/** Categoria contábil do documento. */
+/**
+ * Categoria contábil do documento.
+ */
 enum ContadorDocumentoCategoria {
   FISCAL     @map("fiscal")
   FINANCEIRO @map("financeiro")
@@ -2737,26 +2890,29 @@ enum ContadorDocumentoCategoria {
 
 /**
  * Competência mensal do Contador HUB — uma por loja/ano/mês.
- *
  * Viva enquanto `aberta`/`enviada`; o snapshot só é congelado no fechamento
  * (GOAL 012) e NUNCA contém linhas operacionais detalhadas (ADR-001).
  * Reabertura é transição auditada: incrementa `versao` e preserva snapshot e
  * pacotes anteriores. Sem soft delete — competência não é excluída.
  */
 model ContadorCompetencia {
-  id             String    @id @default(cuid())
-  storeId        String    @map("storeId")
-  store          Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  ano            Int       @map("ano")
-  mes            Int       @map("mes")
-  status         ContadorCompetenciaStatus @default(ABERTA) @map("status")
-  /** Incrementada a cada reabertura auditada (ADR-005). Nasce em 1. */
-  versao         Int       @default(1) @map("versao")
+  ano    Int                       @map("ano")
+  mes    Int                       @map("mes")
+  status ContadorCompetenciaStatus @default(ABERTA) @map("status")
+  /**
+   * Incrementada a cada reabertura auditada (ADR-005). Nasce em 1.
+   */
+  versao Int                       @default(1) @map("versao")
 
-  /** Snapshot oficial congelado no fechamento (GOAL 012). Agregados — sem linhas operacionais nem PII. */
-  snapshot       Json?     @map("snapshot") @db.JsonB
-  snapshotHash   String?   @map("snapshotHash")
+  /**
+   * Snapshot oficial congelado no fechamento (GOAL 012). Agregados — sem linhas operacionais nem PII.
+   */
+  snapshot     Json?   @map("snapshot") @db.JsonB
+  snapshotHash String? @map("snapshotHash")
 
   fechadaEm      DateTime? @map("fechadaEm")
   fechadaPorId   String?   @map("fechadaPorId")
@@ -2764,16 +2920,16 @@ model ContadorCompetencia {
   reabertaPorId  String?   @map("reabertaPorId")
   reabertaMotivo String?   @map("reabertaMotivo") @db.Text
 
-  createdAt      DateTime  @default(now()) @map("createdAt")
-  updatedAt      DateTime  @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
-  documentos     ContadorDocumento[]
-  pacotes        ContadorPacote[]
-  comentarios    ContadorComentario[]
-  eventos        ContadorEvento[]
+  documentos  ContadorDocumento[]
+  pacotes     ContadorPacote[]
+  comentarios ContadorComentario[]
+  eventos     ContadorEvento[]
   // GOAL 016 — inversas Prisma-only (sem ALTER na tabela existente).
-  obrigacoes     ContadorObrigacao[]
-  guias          ContadorGuia[]
+  obrigacoes  ContadorObrigacao[]
+  guias       ContadorGuia[]
 
   @@unique([storeId, ano, mes])
   // Alvo das FKs compostas escopadas (documento/evento) — garante que competenciaId
@@ -2785,58 +2941,63 @@ model ContadorCompetencia {
 
 /**
  * Metadados de um documento contábil da competência (ADR-003).
- *
  * O binário vive no storage (GOAL 010) — aqui só referência privada `storageRef`,
  * nunca URL pública. Substituição NÃO sobrescreve: cria nova linha apontando a
  * anterior por `versaoDeId`. Exclusão é SOFT (motivo obrigatório) e não remove o blob.
  */
 model ContadorDocumento {
-  id             String    @id @default(cuid())
-  competenciaId  String    @map("competenciaId")
-  storeId        String    @map("storeId")
+  id            String              @id @default(cuid())
+  competenciaId String              @map("competenciaId")
+  storeId       String              @map("storeId")
   // FK COMPOSTA: (competenciaId, storeId) referencia a MESMA competência da MESMA loja.
   // Impede documento com competenciaId da loja A e storeId da loja B (pina doc.storeId == competencia.storeId).
-  competencia    ContadorCompetencia @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
+  competencia   ContadorCompetencia @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
   // FK direta à loja preservada (relação inversa em Store; storeId sempre válido).
-  store          Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store         Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  categoria      ContadorDocumentoCategoria @map("categoria")
-  titulo         String    @map("titulo")
-  nomeArquivo    String    @map("nomeArquivo")
-  mime           String    @map("mime")
-  bytes          Int       @map("bytes")
-  /** Hash do conteúdo — metadado de integridade; verificação física é do GOAL 010. */
-  sha256         String    @map("sha256")
-  /** Caminho privado namespaced `contador/{storeId}/{aaaa-mm}/{docId}`. NUNCA URL pública. */
-  storageRef     String    @map("storageRef")
+  categoria   ContadorDocumentoCategoria @map("categoria")
+  titulo      String                     @map("titulo")
+  nomeArquivo String                     @map("nomeArquivo")
+  mime        String                     @map("mime")
+  bytes       Int                        @map("bytes")
+  /**
+   * Hash do conteúdo — metadado de integridade; verificação física é do GOAL 010.
+   */
+  sha256      String                     @map("sha256")
+  /**
+   * Caminho privado namespaced `contador/{storeId}/{aaaa-mm}/{docId}`. NUNCA URL pública.
+   */
+  storageRef  String                     @map("storageRef")
 
-  status         ContadorItemStatus @default(PENDENTE) @map("status")
-  vencimento     DateTime? @map("vencimento")
+  status     ContadorItemStatus @default(PENDENTE) @map("status")
+  vencimento DateTime?          @map("vencimento")
 
-  /** "interno" | "externo". `enviadoPorId` é ID técnico, nunca nome/e-mail. */
-  enviadoPorTipo String    @map("enviadoPorTipo")
-  enviadoPorId   String    @map("enviadoPorId")
+  /**
+   * "interno" | "externo". `enviadoPorId` é ID técnico, nunca nome/e-mail.
+   */
+  enviadoPorTipo String @map("enviadoPorTipo")
+  enviadoPorId   String @map("enviadoPorId")
 
   /**
    * Documento que esta linha substitui (versionamento append-only).
    * FK COMPOSTA: (versaoDeId, competenciaId, storeId) referencia o predecessor pela
    * MESMA competência e MESMA loja — impede substituir documento de outra competência ou loja.
    */
-  versaoDeId     String?   @map("versaoDeId")
-  versaoDe       ContadorDocumento?  @relation("ContadorDocumentoVersao", fields: [versaoDeId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
-  versoes        ContadorDocumento[] @relation("ContadorDocumentoVersao")
+  versaoDeId String?             @map("versaoDeId")
+  versaoDe   ContadorDocumento?  @relation("ContadorDocumentoVersao", fields: [versaoDeId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
+  versoes    ContadorDocumento[] @relation("ContadorDocumentoVersao")
 
   excluidoEm     DateTime? @map("excluidoEm")
   excluidoPorId  String?   @map("excluidoPorId")
   excluidoMotivo String?   @map("excluidoMotivo") @db.Text
 
-  createdAt      DateTime  @default(now()) @map("createdAt")
-  updatedAt      DateTime  @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
-  comentarios    ContadorComentario[]
+  comentarios      ContadorComentario[]
   // GOAL 016 — inversas nomeadas Prisma-only (sem ALTER na tabela existente).
-  guiasPdf         ContadorGuia[] @relation("ContadorGuiaPdf")
-  guiasComprovante ContadorGuia[] @relation("ContadorGuiaComprovante")
+  guiasPdf         ContadorGuia[]       @relation("ContadorGuiaPdf")
+  guiasComprovante ContadorGuia[]       @relation("ContadorGuiaComprovante")
 
   // Alvo da FK composta do comentário (documento da MESMA competência).
   @@unique([id, competenciaId])
@@ -2850,28 +3011,31 @@ model ContadorDocumento {
 
 /**
  * Versão OFICIAL do pacote da competência (ADR-004) — materializada só no GOAL 012.
- *
  * Versões anteriores NUNCA são sobrescritas: supersessão = nova versão auditada.
  * `manifestoHash` = sha256 do `manifest.json` canônico (`omni.contador.pacote.manifest/v1`).
  * O pacote MVP sob demanda (GOAL 008) permanece intocado e não grava aqui.
  */
 model ContadorPacote {
-  id            String   @id @default(cuid())
-  competenciaId String   @map("competenciaId")
+  id            String              @id @default(cuid())
+  competenciaId String              @map("competenciaId")
   competencia   ContadorCompetencia @relation(fields: [competenciaId], references: [id], onDelete: Restrict)
 
-  versao        Int      @map("versao")
-  manifestoHash String   @map("manifestoHash")
-  /** Referência privada do ZIP no storage. NUNCA URL pública. */
-  storageRef    String   @map("storageRef")
-  bytes         Int      @map("bytes")
+  versao        Int    @map("versao")
+  manifestoHash String @map("manifestoHash")
+  /**
+   * Referência privada do ZIP no storage. NUNCA URL pública.
+   */
+  storageRef    String @map("storageRef")
+  bytes         Int    @map("bytes")
 
-  /** "interno" | "externo". `geradoPorId` é pseudônimo/ID técnico, nunca nome/e-mail. */
+  /**
+   * "interno" | "externo". `geradoPorId` é pseudônimo/ID técnico, nunca nome/e-mail.
+   */
   geradoPorTipo String   @map("geradoPorTipo")
   geradoPorId   String   @map("geradoPorId")
   geradoEm      DateTime @default(now()) @map("geradoEm")
 
-  itens         ContadorPacoteItem[]
+  itens ContadorPacoteItem[]
 
   @@unique([competenciaId, versao])
   @@index([competenciaId, geradoEm])
@@ -2884,15 +3048,17 @@ model ContadorPacote {
  * Nunca conteúdo de arquivo, nunca URL.
  */
 model ContadorPacoteItem {
-  id       String @id @default(cuid())
-  pacoteId String @map("pacoteId")
+  id       String         @id @default(cuid())
+  pacoteId String         @map("pacoteId")
   pacote   ContadorPacote @relation(fields: [pacoteId], references: [id], onDelete: Cascade)
 
-  /** Caminho relativo dentro do ZIP (ex.: `financeiro/movimentacoes.csv`). */
-  caminho  String @map("caminho")
-  bytes    Int    @map("bytes")
-  sha256   String @map("sha256")
-  fonte    String @map("fonte")
+  /**
+   * Caminho relativo dentro do ZIP (ex.: `financeiro/movimentacoes.csv`).
+   */
+  caminho String @map("caminho")
+  bytes   Int    @map("bytes")
+  sha256  String @map("sha256")
+  fonte   String @map("fonte")
 
   @@unique([pacoteId, caminho])
   @@index([pacoteId])
@@ -2905,22 +3071,26 @@ model ContadorPacoteItem {
  * `autorId` é ID técnico — nunca nome, e-mail ou telefone.
  */
 model ContadorComentario {
-  id            String   @id @default(cuid())
-  competenciaId String   @map("competenciaId")
+  id            String              @id @default(cuid())
+  competenciaId String              @map("competenciaId")
   competencia   ContadorCompetencia @relation(fields: [competenciaId], references: [id], onDelete: Restrict)
-  documentoId   String?  @map("documentoId")
+  documentoId   String?             @map("documentoId")
   // FK COMPOSTA: (documentoId, competenciaId) exige que o documento pertença à MESMA
   // competência do comentário. Impede comentário de uma competência apontar documento de outra.
   documento     ContadorDocumento?  @relation(fields: [documentoId, competenciaId], references: [id, competenciaId], onDelete: Restrict)
 
-  /** "interno" | "externo". */
-  autorTipo     String   @map("autorTipo")
-  autorId       String   @map("autorId")
-  /** "interna" | "compartilhada". */
-  visibilidade  String   @map("visibilidade")
-  texto         String   @map("texto") @db.Text
+  /**
+   * "interno" | "externo".
+   */
+  autorTipo    String @map("autorTipo")
+  autorId      String @map("autorId")
+  /**
+   * "interna" | "compartilhada".
+   */
+  visibilidade String @map("visibilidade")
+  texto        String @map("texto") @db.Text
 
-  createdAt     DateTime @default(now()) @map("createdAt")
+  createdAt DateTime @default(now()) @map("createdAt")
 
   @@index([competenciaId, createdAt])
   @@index([documentoId, createdAt])
@@ -2929,37 +3099,40 @@ model ContadorComentario {
 
 /**
  * Trilha APPEND-ONLY do Contador HUB.
- *
  * NUNCA editar nem deletar linhas deste model — correção se faz por NOVO evento.
  * `metadata` (nome fixado pela emenda Accepted do Gate G2 — não usar `payload`)
  * carrega apenas dados saneados: sem payload bruto de venda/OS, sem cookie, token,
  * senha, stack, conteúdo de documento, URL assinada ou qualquer PII.
  */
 model ContadorEvento {
-  id            String   @id @default(cuid())
-  storeId       String   @map("storeId")
+  id            String               @id @default(cuid())
+  storeId       String               @map("storeId")
   // FK direta à loja preservada — evento sem competência exige apenas storeId válido.
-  store         Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  competenciaId String?  @map("competenciaId")
+  store         Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  competenciaId String?              @map("competenciaId")
   // FK COMPOSTA opcional: quando competenciaId existe, (competenciaId, storeId) deve pertencer
   // à MESMA competência e MESMA loja. competenciaId nulo → FK não enforça (MATCH SIMPLE), evento sem competência permitido.
   competencia   ContadorCompetencia? @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
 
-  tipo          String   @map("tipo")
-  /** "sistema" | "interno" | "externo". `atorId` é ID técnico, nunca nome/e-mail. */
-  atorTipo      String   @map("atorTipo")
-  atorId        String   @map("atorId")
+  tipo     String @map("tipo")
+  /**
+   * "sistema" | "interno" | "externo". `atorId` é ID técnico, nunca nome/e-mail.
+   */
+  atorTipo String @map("atorTipo")
+  atorId   String @map("atorId")
 
-  entidade      String?  @map("entidade")
-  entidadeId    String?  @map("entidadeId")
-  origem        String?  @map("origem")
-  /** Metadados SANEADOS do evento. Sem PII, sem payload bruto, sem segredo. */
-  metadata      Json?    @map("metadata") @db.JsonB
+  entidade   String? @map("entidade")
+  entidadeId String? @map("entidadeId")
+  origem     String? @map("origem")
+  /**
+   * Metadados SANEADOS do evento. Sem PII, sem payload bruto, sem segredo.
+   */
+  metadata   Json?   @map("metadata") @db.JsonB
 
-  ip            String?  @map("ip")
-  userAgent     String?  @map("userAgent")
+  ip        String? @map("ip")
+  userAgent String? @map("userAgent")
 
-  createdAt     DateTime @default(now()) @map("createdAt")
+  createdAt DateTime @default(now()) @map("createdAt")
 
   @@index([storeId, createdAt])
   @@index([competenciaId, createdAt])
@@ -2978,19 +3151,25 @@ model ContadorEvento {
 // AdminUser/AdminUserStore, nenhum papel interno, nenhuma permissão do ERP.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Ciclo de vida da identidade externa do contador. */
+/**
+ * Ciclo de vida da identidade externa do contador.
+ */
 enum ContadorUsuarioStatus {
   ATIVO    @map("ativo")
   SUSPENSO @map("suspenso")
 }
 
-/** Papel externo mínimo do vínculo contador↔loja. Nenhum papel "all". */
+/**
+ * Papel externo mínimo do vínculo contador↔loja. Nenhum papel "all".
+ */
 enum ContadorPapelExterno {
   LEITURA     @map("leitura")
   CONFERENCIA @map("conferencia")
 }
 
-/** Ciclo de vida do vínculo. Revogação é terminal; reconcessão reativa a mesma linha. */
+/**
+ * Ciclo de vida do vínculo. Revogação é terminal; reconcessão reativa a mesma linha.
+ */
 enum ContadorAcessoStatus {
   ATIVO    @map("ativo")
   SUSPENSO @map("suspenso")
@@ -2999,7 +3178,6 @@ enum ContadorAcessoStatus {
 
 /**
  * Identidade externa dedicada do contador (GOAL 014, §A da proposta).
- *
  * SEM role, SEM lojaId, SEM storeAccess, SEM FK para AdminUser: não autentica
  * nenhuma rota interna por construção (cookie e verificador distintos).
  * `email` é normalizado na aplicação (trim + lowercase) antes de qualquer
@@ -3007,15 +3185,15 @@ enum ContadorAcessoStatus {
  * admin interno). `tokenVersion++` em suspensão derruba todas as sessões.
  */
 model ContadorUsuario {
-  id            String                @id @default(cuid())
-  email         String                @unique
+  id            String                  @id @default(cuid())
+  email         String                  @unique
   nome          String
   senhaHash     String
-  status        ContadorUsuarioStatus @default(ATIVO)
-  tokenVersion  Int                   @default(1)
+  status        ContadorUsuarioStatus   @default(ATIVO)
+  tokenVersion  Int                     @default(1)
   ultimoLoginEm DateTime?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
   acessos       ContadorAcesso[]
   sessoes       ContadorSessaoExterna[]
 
@@ -3024,7 +3202,6 @@ model ContadorUsuario {
 
 /**
  * Convite de vínculo para UMA loja (GOAL 014, §C da proposta).
- *
  * O token bruto (32 bytes, base64url) é retornado UMA vez na criação e NUNCA
  * persistido nem logado — o banco guarda somente `tokenHash` (sha256 hex).
  * Uso único: o aceite é um update condicional atômico (`usadoEm IS NULL`).
@@ -3053,7 +3230,6 @@ model ContadorConvite {
 
 /**
  * Vínculo contador↔loja (GOAL 014, §B da proposta) — N:N via este model.
- *
  * Um vínculo por par (usuarioId, storeId). Reconcessão após revogação ATUALIZA
  * a linha existente (status→ativo, papel novo, concessão renovada, campos de
  * suspensão/revogação limpos); a trilha fica nos eventos. Suspensão/revogação
@@ -3084,7 +3260,6 @@ model ContadorAcesso {
 
 /**
  * Sessão externa persistida e revogável (GOAL 014, §D da proposta).
- *
  * `id` É o `sid` do cookie HMAC. Verificada a CADA request (revogadoEm/expiraEm/
  * status/tokenVersion da identidade). SEM storeId de propósito: a sessão
  * identifica a pessoa, não autoriza loja alguma — a loja é parâmetro de rota
@@ -3117,7 +3292,9 @@ model ContadorSessaoExterna {
 // informados pelo responsável.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Tipo informado da obrigação — catálogo operacional, não motor fiscal. */
+/**
+ * Tipo informado da obrigação — catálogo operacional, não motor fiscal.
+ */
 enum ContadorObrigacaoTipo {
   ENVIO_DOCUMENTO @map("envio_documento")
   PAGAMENTO_GUIA  @map("pagamento_guia")
@@ -3128,13 +3305,17 @@ enum ContadorObrigacaoTipo {
   TAREFA          @map("tarefa")
 }
 
-/** Recorrência do template. `mensal` entra em «Gerar deste mês»; `nenhuma` não. */
+/**
+ * Recorrência do template. `mensal` entra em «Gerar deste mês»; `nenhuma` não.
+ */
 enum ContadorObrigacaoRecorrencia {
   MENSAL  @map("mensal")
   NENHUMA @map("nenhuma")
 }
 
-/** Origem da guia — sempre informada; nunca calculada. */
+/**
+ * Origem da guia — sempre informada; nunca calculada.
+ */
 enum ContadorGuiaOrigem {
   MANUAL   @map("manual")
   CONTADOR @map("contador")
@@ -3142,15 +3323,14 @@ enum ContadorGuiaOrigem {
 
 /**
  * Template de obrigação da loja (GOAL 016).
- *
  * Não pertence a uma competência. `diaVencimento` 1..31 (CHECK no SQL); recorrência
  * `mensal` exige dia. Instanciação é sempre explícita (lote ou seleção) — nunca por
  * tempo/cron/boot. `vencido` NÃO existe aqui.
  */
 model ContadorObrigacaoTemplate {
-  id            String                       @id @default(cuid())
-  storeId       String                       @map("storeId")
-  store         Store                        @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   titulo        String                       @map("titulo")
   descricao     String?                      @map("descricao") @db.Text
@@ -3159,13 +3339,13 @@ model ContadorObrigacaoTemplate {
   recorrencia   ContadorObrigacaoRecorrencia @default(MENSAL) @map("recorrencia")
   ativo         Boolean                      @default(true) @map("ativo")
 
-  criadoPorTipo String                       @map("criadoPorTipo")
-  criadoPorId   String                       @map("criadoPorId")
+  criadoPorTipo String @map("criadoPorTipo")
+  criadoPorId   String @map("criadoPorId")
 
-  createdAt     DateTime                     @default(now()) @map("createdAt")
-  updatedAt     DateTime                     @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
-  obrigacoes    ContadorObrigacao[]
+  obrigacoes ContadorObrigacao[]
 
   @@unique([id, storeId])
   @@index([storeId, ativo])
@@ -3174,36 +3354,35 @@ model ContadorObrigacaoTemplate {
 
 /**
  * Obrigação da competência (GOAL 016).
- *
  * Status reutiliza `ContadorItemStatus` (matriz 011). Sem coluna `vencido` e sem
  * `valorCentavos`. `templateId` nullable: UNIQUE(templateId, competenciaId) sem
  * predicado parcial — Postgres permite vários NULL (obrigações manuais).
  * FK composta (competenciaId, storeId) pina a loja da competência.
  */
 model ContadorObrigacao {
-  id            String                @id @default(cuid())
-  storeId       String                @map("storeId")
-  store         Store                 @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  competenciaId String                @map("competenciaId")
-  competencia   ContadorCompetencia   @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
+  competenciaId String              @map("competenciaId")
+  competencia   ContadorCompetencia @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
 
-  templateId    String?               @map("templateId")
-  template      ContadorObrigacaoTemplate? @relation(fields: [templateId, storeId], references: [id, storeId], onDelete: Restrict)
+  templateId String?                    @map("templateId")
+  template   ContadorObrigacaoTemplate? @relation(fields: [templateId, storeId], references: [id, storeId], onDelete: Restrict)
 
-  titulo        String                @map("titulo")
-  descricao     String?               @map("descricao") @db.Text
-  tipo          ContadorObrigacaoTipo @map("tipo")
-  vencimento    DateTime?             @map("vencimento")
-  status        ContadorItemStatus    @default(PENDENTE) @map("status")
+  titulo     String                @map("titulo")
+  descricao  String?               @map("descricao") @db.Text
+  tipo       ContadorObrigacaoTipo @map("tipo")
+  vencimento DateTime?             @map("vencimento")
+  status     ContadorItemStatus    @default(PENDENTE) @map("status")
 
-  criadoPorTipo String                @map("criadoPorTipo")
-  criadoPorId   String                @map("criadoPorId")
+  criadoPorTipo String @map("criadoPorTipo")
+  criadoPorId   String @map("criadoPorId")
 
-  createdAt     DateTime              @default(now()) @map("createdAt")
-  updatedAt     DateTime              @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
-  guias         ContadorGuia[]
+  guias ContadorGuia[]
 
   @@unique([templateId, competenciaId])
   @@unique([id, storeId])
@@ -3215,70 +3394,70 @@ model ContadorObrigacao {
 
 /**
  * Guia informada da competência (GOAL 016).
- *
  * Sem máquina 011: paga = `pagaEm` não nulo (one-way). `valorCentavos` ≥ 0 (CHECK
  * no SQL). PDF e comprovante reutilizam `ContadorDocumento` da MESMA competência
  * e loja (FKs compostas nomeadas). Sem storage paralelo.
  */
 model ContadorGuia {
-  id                     String              @id @default(cuid())
-  storeId                String              @map("storeId")
-  store                  Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id      String @id @default(cuid())
+  storeId String @map("storeId")
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  competenciaId          String              @map("competenciaId")
-  competencia            ContadorCompetencia @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
+  competenciaId String              @map("competenciaId")
+  competencia   ContadorCompetencia @relation(fields: [competenciaId, storeId], references: [id, storeId], onDelete: Restrict)
 
-  obrigacaoId            String?             @map("obrigacaoId")
-  obrigacao              ContadorObrigacao?  @relation(fields: [obrigacaoId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
+  obrigacaoId String?            @map("obrigacaoId")
+  obrigacao   ContadorObrigacao? @relation(fields: [obrigacaoId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
 
-  titulo                 String              @map("titulo")
-  valorCentavos          Int                 @map("valorCentavos")
-  vencimento             DateTime            @map("vencimento")
-  origem                 ContadorGuiaOrigem  @map("origem")
+  titulo        String             @map("titulo")
+  valorCentavos Int                @map("valorCentavos")
+  vencimento    DateTime           @map("vencimento")
+  origem        ContadorGuiaOrigem @map("origem")
 
-  pdfDocumentoId         String?             @map("pdfDocumentoId")
-  pdf                    ContadorDocumento?  @relation("ContadorGuiaPdf", fields: [pdfDocumentoId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
+  pdfDocumentoId String?            @map("pdfDocumentoId")
+  pdf            ContadorDocumento? @relation("ContadorGuiaPdf", fields: [pdfDocumentoId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
 
-  comprovanteDocumentoId String?             @map("comprovanteDocumentoId")
-  comprovante            ContadorDocumento?  @relation("ContadorGuiaComprovante", fields: [comprovanteDocumentoId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
+  comprovanteDocumentoId String?            @map("comprovanteDocumentoId")
+  comprovante            ContadorDocumento? @relation("ContadorGuiaComprovante", fields: [comprovanteDocumentoId, competenciaId, storeId], references: [id, competenciaId, storeId], onDelete: Restrict)
 
-  pagaEm                 DateTime?           @map("pagaEm")
+  pagaEm DateTime? @map("pagaEm")
 
-  criadoPorTipo          String              @map("criadoPorTipo")
-  criadoPorId            String              @map("criadoPorId")
+  criadoPorTipo String @map("criadoPorTipo")
+  criadoPorId   String @map("criadoPorId")
 
-  createdAt              DateTime            @default(now()) @map("createdAt")
-  updatedAt              DateTime            @updatedAt @map("updatedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
 
   @@unique([id, storeId])
   @@index([competenciaId, vencimento])
   @@index([storeId, vencimento])
   @@map("contador_guias")
 }
+
 // ─── Pessoas / DP: cadastro e documentos (PESSOAS-001A) ──────────────────────
 // Identidade legal separada de Store. Sem tabelas de folha neste GOAL.
 
 model DpEmpregador {
-  id String @id @default(cuid())
+  id             String   @id @default(cuid())
   storeGestoraId String
-  storeGestora Store @relation("DpEmpregadorGestora", fields: [storeGestoraId], references: [id], onDelete: Restrict)
-  tipoInscricao String @db.VarChar(12)
-  inscricao String @db.VarChar(32)
-  nome String @db.VarChar(240)
-  status String @default("ATIVO") @db.VarChar(20)
-  versaoAtual Int @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  storeGestora   Store    @relation("DpEmpregadorGestora", fields: [storeGestoraId], references: [id], onDelete: Restrict)
+  tipoInscricao  String   @db.VarChar(12)
+  inscricao      String   @db.VarChar(32)
+  nome           String   @db.VarChar(240)
+  status         String   @default("ATIVO") @db.VarChar(20)
+  versaoAtual    Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  versoes DpEmpregadorVersao[]
+  versoes          DpEmpregadorVersao[]
   estabelecimentos DpEstabelecimento[]
-  unidades DpUnidadeVinculo[]
-  acessos DpAcesso[]
-  pessoas DpPessoa[]
-  vinculos DpVinculo[]
-  contratos DpContratoVersao[]
-  documentos DpDocumento[]
-  auditorias DpAuditoria[]
+  unidades         DpUnidadeVinculo[]
+  acessos          DpAcesso[]
+  pessoas          DpPessoa[]
+  vinculos         DpVinculo[]
+  contratos        DpContratoVersao[]
+  documentos       DpDocumento[]
+  auditorias       DpAuditoria[]
 
   @@unique([storeGestoraId, tipoInscricao, inscricao])
   @@unique([id, storeGestoraId])
@@ -3286,24 +3465,24 @@ model DpEmpregador {
 }
 
 model DpEmpregadorVersao {
-  id String @id @default(cuid())
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  versao Int
-  tipoInscricao String @db.VarChar(12)
-  inscricao String @db.VarChar(32)
-  nome String @db.VarChar(240)
-  endereco Json? @db.JsonB
-  regime String? @db.VarChar(80)
-  validFrom DateTime @db.Date
-  validTo DateTime? @db.Date
-  recordedAt DateTime @default(now())
-  supersedesId String?
-  supersedes DpEmpregadorVersao? @relation("DpEmpregadorSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  id            String               @id @default(cuid())
+  empregadorId  String
+  empregador    DpEmpregador         @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  versao        Int
+  tipoInscricao String               @db.VarChar(12)
+  inscricao     String               @db.VarChar(32)
+  nome          String               @db.VarChar(240)
+  endereco      Json?                @db.JsonB
+  regime        String?              @db.VarChar(80)
+  validFrom     DateTime             @db.Date
+  validTo       DateTime?            @db.Date
+  recordedAt    DateTime             @default(now())
+  supersedesId  String?
+  supersedes    DpEmpregadorVersao?  @relation("DpEmpregadorSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
   substituicoes DpEmpregadorVersao[] @relation("DpEmpregadorSupersessao")
-  supersededAt DateTime?
-  autorId String
-  motivo String @db.Text
+  supersededAt  DateTime?
+  autorId       String
+  motivo        String               @db.Text
 
   @@unique([empregadorId, versao])
   @@unique([id, empregadorId])
@@ -3312,17 +3491,17 @@ model DpEmpregadorVersao {
 }
 
 model DpEstabelecimento {
-  id String @id @default(cuid())
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  tipoInscricao String @db.VarChar(12)
-  inscricao String @db.VarChar(32)
-  status String @default("ATIVO") @db.VarChar(20)
-  versaoAtual Int @default(1)
-  createdAt DateTime @default(now())
-  versoes DpEstabelecimentoVersao[]
-  unidades DpUnidadeVinculo[]
-  contratos DpContratoVersao[]
+  id            String                    @id @default(cuid())
+  empregadorId  String
+  empregador    DpEmpregador              @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  tipoInscricao String                    @db.VarChar(12)
+  inscricao     String                    @db.VarChar(32)
+  status        String                    @default("ATIVO") @db.VarChar(20)
+  versaoAtual   Int                       @default(1)
+  createdAt     DateTime                  @default(now())
+  versoes       DpEstabelecimentoVersao[]
+  unidades      DpUnidadeVinculo[]
+  contratos     DpContratoVersao[]
 
   @@unique([empregadorId, tipoInscricao, inscricao])
   @@unique([id, empregadorId])
@@ -3330,23 +3509,23 @@ model DpEstabelecimento {
 }
 
 model DpEstabelecimentoVersao {
-  id String @id @default(cuid())
-  empregadorId String
+  id                String                    @id @default(cuid())
+  empregadorId      String
   estabelecimentoId String
-  estabelecimento DpEstabelecimento @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  versao Int
-  nome String @db.VarChar(240)
-  endereco Json? @db.JsonB
-  lotacaoRef String? @db.VarChar(80)
-  validFrom DateTime @db.Date
-  validTo DateTime? @db.Date
-  recordedAt DateTime @default(now())
-  supersedesId String?
-  supersedes DpEstabelecimentoVersao? @relation("DpEstabelecimentoSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  substituicoes DpEstabelecimentoVersao[] @relation("DpEstabelecimentoSupersessao")
-  supersededAt DateTime?
-  autorId String
-  motivo String @db.Text
+  estabelecimento   DpEstabelecimento         @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versao            Int
+  nome              String                    @db.VarChar(240)
+  endereco          Json?                     @db.JsonB
+  lotacaoRef        String?                   @db.VarChar(80)
+  validFrom         DateTime                  @db.Date
+  validTo           DateTime?                 @db.Date
+  recordedAt        DateTime                  @default(now())
+  supersedesId      String?
+  supersedes        DpEstabelecimentoVersao?  @relation("DpEstabelecimentoSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  substituicoes     DpEstabelecimentoVersao[] @relation("DpEstabelecimentoSupersessao")
+  supersededAt      DateTime?
+  autorId           String
+  motivo            String                    @db.Text
 
   @@unique([estabelecimentoId, versao])
   @@unique([id, empregadorId])
@@ -3354,18 +3533,18 @@ model DpEstabelecimentoVersao {
 }
 
 model DpUnidadeVinculo {
-  id String @id @default(cuid())
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  id                String            @id @default(cuid())
+  empregadorId      String
+  empregador        DpEmpregador      @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
   estabelecimentoId String
-  estabelecimento DpEstabelecimento @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  storeId String
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  validFrom DateTime @db.Date
-  validTo DateTime? @db.Date
-  aprovadoPorId String
-  recordedAt DateTime @default(now())
-  motivo String @db.Text
+  estabelecimento   DpEstabelecimento @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  storeId           String
+  store             Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  validFrom         DateTime          @db.Date
+  validTo           DateTime?         @db.Date
+  aprovadoPorId     String
+  recordedAt        DateTime          @default(now())
+  motivo            String            @db.Text
 
   @@unique([empregadorId, storeId, validFrom])
   @@index([storeId, validTo])
@@ -3373,37 +3552,37 @@ model DpUnidadeVinculo {
 }
 
 model DpAcesso {
-  id String @id @default(cuid())
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  storeId String
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  adminUserId String
-  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
-  capacidades String[] @default([])
+  id             String       @id @default(cuid())
+  empregadorId   String
+  empregador     DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  storeId        String
+  store          Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  adminUserId    String
+  adminUser      AdminUser    @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  capacidades    String[]     @default([])
   concedidoPorId String
-  concedidoEm DateTime @default(now())
-  revogadoPorId String?
-  revogadoEm DateTime?
-  motivo String @db.Text
+  concedidoEm    DateTime     @default(now())
+  revogadoPorId  String?
+  revogadoEm     DateTime?
+  motivo         String       @db.Text
 
   @@index([empregadorId, storeId, adminUserId])
   @@map("dp_acessos")
 }
 
 model DpPessoa {
-  id String @id @default(cuid())
+  id           String            @id @default(cuid())
   empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  cpfCipher String? @db.Text
-  cpfHash String? @db.VarChar(64)
-  versaoAtual Int @default(0)
-  createdAt DateTime @default(now())
-  versoes DpPessoaVersao[]
-  vinculos DpVinculo[]
-  usuarios DpPessoaUsuario[]
-  tecnicos DpPessoaTecnico[]
-  documentos DpDocumento[]
+  empregador   DpEmpregador      @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  cpfCipher    String?           @db.Text
+  cpfHash      String?           @db.VarChar(64)
+  versaoAtual  Int               @default(0)
+  createdAt    DateTime          @default(now())
+  versoes      DpPessoaVersao[]
+  vinculos     DpVinculo[]
+  usuarios     DpPessoaUsuario[]
+  tecnicos     DpPessoaTecnico[]
+  documentos   DpDocumento[]
 
   @@unique([empregadorId, cpfHash])
   @@unique([id, empregadorId])
@@ -3411,24 +3590,24 @@ model DpPessoa {
 }
 
 model DpPessoaVersao {
-  id String @id @default(cuid())
-  empregadorId String
-  pessoaId String
-  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  versao Int
-  nome String? @db.VarChar(240)
-  nascimento DateTime? @db.Date
-  endereco Json? @db.JsonB
-  cpfCipher String? @db.Text
-  cpfHash String? @db.VarChar(64)
-  validFrom DateTime? @db.Date
-  validTo DateTime? @db.Date
-  recordedAt DateTime @default(now())
-  supersedesId String?
-  supersedes DpPessoaVersao? @relation("DpPessoaSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  id            String           @id @default(cuid())
+  empregadorId  String
+  pessoaId      String
+  pessoa        DpPessoa         @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versao        Int
+  nome          String?          @db.VarChar(240)
+  nascimento    DateTime?        @db.Date
+  endereco      Json?            @db.JsonB
+  cpfCipher     String?          @db.Text
+  cpfHash       String?          @db.VarChar(64)
+  validFrom     DateTime?        @db.Date
+  validTo       DateTime?        @db.Date
+  recordedAt    DateTime         @default(now())
+  supersedesId  String?
+  supersedes    DpPessoaVersao?  @relation("DpPessoaSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
   substituicoes DpPessoaVersao[] @relation("DpPessoaSupersessao")
-  autorId String
-  motivo String @db.Text
+  autorId       String
+  motivo        String           @db.Text
 
   @@unique([pessoaId, versao])
   @@unique([id, empregadorId])
@@ -3436,61 +3615,61 @@ model DpPessoaVersao {
 }
 
 model DpPessoaUsuario {
-  id String @id @default(cuid())
+  id           String    @id @default(cuid())
   empregadorId String
-  pessoaId String
-  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  adminUserId String
-  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
-  validFrom DateTime @db.Date
-  validTo DateTime? @db.Date
-  autorId String
-  motivo String @db.Text
-  recordedAt DateTime @default(now())
+  pessoaId     String
+  pessoa       DpPessoa  @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  adminUserId  String
+  adminUser    AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  validFrom    DateTime  @db.Date
+  validTo      DateTime? @db.Date
+  autorId      String
+  motivo       String    @db.Text
+  recordedAt   DateTime  @default(now())
 
   @@index([empregadorId, adminUserId])
   @@map("dp_pessoa_usuarios")
 }
 
 model DpPessoaTecnico {
-  id String @id @default(cuid())
+  id           String    @id @default(cuid())
   empregadorId String
-  pessoaId String
-  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  tecnicoId String
-  storeId String
-  tecnico Tecnico @relation(fields: [tecnicoId, storeId], references: [id, storeId], onDelete: Restrict)
-  validFrom DateTime @db.Date
-  validTo DateTime? @db.Date
-  autorId String
-  motivo String @db.Text
-  recordedAt DateTime @default(now())
+  pessoaId     String
+  pessoa       DpPessoa  @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  tecnicoId    String
+  storeId      String
+  tecnico      Tecnico   @relation(fields: [tecnicoId, storeId], references: [id, storeId], onDelete: Restrict)
+  validFrom    DateTime  @db.Date
+  validTo      DateTime? @db.Date
+  autorId      String
+  motivo       String    @db.Text
+  recordedAt   DateTime  @default(now())
 
   @@index([empregadorId, tecnicoId])
   @@map("dp_pessoa_tecnicos")
 }
 
 model DpVinculo {
-  id String @id @default(cuid())
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  pessoaId String
-  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  storeId String
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  matricula String? @db.VarChar(64)
-  admissao DateTime? @db.Date
-  termino DateTime? @db.Date
-  regime String? @db.VarChar(80)
-  categoria String? @db.VarChar(80)
-  status String @default("RASCUNHO") @db.VarChar(20)
-  versaoAtual Int @default(0)
-  arquivadoEm DateTime?
+  id             String             @id @default(cuid())
+  empregadorId   String
+  empregador     DpEmpregador       @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  pessoaId       String
+  pessoa         DpPessoa           @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  storeId        String
+  store          Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  matricula      String?            @db.VarChar(64)
+  admissao       DateTime?          @db.Date
+  termino        DateTime?          @db.Date
+  regime         String?            @db.VarChar(80)
+  categoria      String?            @db.VarChar(80)
+  status         String             @default("RASCUNHO") @db.VarChar(20)
+  versaoAtual    Int                @default(0)
+  arquivadoEm    DateTime?
   arquivadoPorId String?
-  motivoArquivo String? @db.Text
-  createdAt DateTime @default(now())
-  contratos DpContratoVersao[]
-  documentos DpDocumento[]
+  motivoArquivo  String?            @db.Text
+  createdAt      DateTime           @default(now())
+  contratos      DpContratoVersao[]
+  documentos     DpDocumento[]
 
   @@unique([empregadorId, matricula])
   @@unique([id, empregadorId])
@@ -3500,31 +3679,31 @@ model DpVinculo {
 }
 
 model DpContratoVersao {
-  id String @id @default(cuid())
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  vinculoId String
-  vinculo DpVinculo @relation(fields: [vinculoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  id                String             @id @default(cuid())
+  empregadorId      String
+  empregador        DpEmpregador       @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  vinculoId         String
+  vinculo           DpVinculo          @relation(fields: [vinculoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
   estabelecimentoId String?
-  estabelecimento DpEstabelecimento? @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  versao Int
-  cargo String? @db.VarChar(160)
-  cbo String? @db.VarChar(12)
-  tipoContrato String? @db.VarChar(80)
-  salarioBase Decimal? @db.Decimal(18, 2)
-  unidadeSalario String? @db.VarChar(24)
-  jornadaSemanal Decimal? @db.Decimal(8, 2)
-  divisor Int?
-  cctRef String? @db.VarChar(160)
-  validFrom DateTime? @db.Date
-  validTo DateTime? @db.Date
-  recordedAt DateTime @default(now())
-  supersedesId String?
-  supersedes DpContratoVersao? @relation("DpContratoSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  substituicoes DpContratoVersao[] @relation("DpContratoSupersessao")
-  supersededAt DateTime?
-  autorId String
-  motivo String @db.Text
+  estabelecimento   DpEstabelecimento? @relation(fields: [estabelecimentoId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versao            Int
+  cargo             String?            @db.VarChar(160)
+  cbo               String?            @db.VarChar(12)
+  tipoContrato      String?            @db.VarChar(80)
+  salarioBase       Decimal?           @db.Decimal(18, 2)
+  unidadeSalario    String?            @db.VarChar(24)
+  jornadaSemanal    Decimal?           @db.Decimal(8, 2)
+  divisor           Int?
+  cctRef            String?            @db.VarChar(160)
+  validFrom         DateTime?          @db.Date
+  validTo           DateTime?          @db.Date
+  recordedAt        DateTime           @default(now())
+  supersedesId      String?
+  supersedes        DpContratoVersao?  @relation("DpContratoSupersessao", fields: [supersedesId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  substituicoes     DpContratoVersao[] @relation("DpContratoSupersessao")
+  supersededAt      DateTime?
+  autorId           String
+  motivo            String             @db.Text
 
   @@unique([vinculoId, versao])
   @@unique([id, empregadorId])
@@ -3533,28 +3712,28 @@ model DpContratoVersao {
 }
 
 model DpDocumento {
-  id String @id
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  pessoaId String
-  pessoa DpPessoa @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  vinculoId String?
-  vinculo DpVinculo? @relation(fields: [vinculoId, empregadorId, pessoaId], references: [id, empregadorId, pessoaId], onDelete: Restrict)
-  storeId String
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  categoria String @db.VarChar(64)
-  classificacao String @db.VarChar(32)
-  origem String @db.VarChar(32)
-  nomeArquivo String @db.VarChar(180)
-  storageRef String @unique @db.Text
-  mime String @db.VarChar(80)
-  bytes Int
-  sha256 String @db.VarChar(64)
-  versaoDeId String?
-  versaoDe DpDocumento? @relation("DpDocumentoVersao", fields: [versaoDeId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
-  versoes DpDocumento[] @relation("DpDocumentoVersao")
-  enviadoPorId String
-  createdAt DateTime @default(now())
+  id            String        @id
+  empregadorId  String
+  empregador    DpEmpregador  @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  pessoaId      String
+  pessoa        DpPessoa      @relation(fields: [pessoaId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  vinculoId     String?
+  vinculo       DpVinculo?    @relation(fields: [vinculoId, empregadorId, pessoaId], references: [id, empregadorId, pessoaId], onDelete: Restrict)
+  storeId       String
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  categoria     String        @db.VarChar(64)
+  classificacao String        @db.VarChar(32)
+  origem        String        @db.VarChar(32)
+  nomeArquivo   String        @db.VarChar(180)
+  storageRef    String        @unique @db.Text
+  mime          String        @db.VarChar(80)
+  bytes         Int
+  sha256        String        @db.VarChar(64)
+  versaoDeId    String?
+  versaoDe      DpDocumento?  @relation("DpDocumentoVersao", fields: [versaoDeId, empregadorId], references: [id, empregadorId], onDelete: Restrict)
+  versoes       DpDocumento[] @relation("DpDocumentoVersao")
+  enviadoPorId  String
+  createdAt     DateTime      @default(now())
 
   @@unique([id, empregadorId])
   @@index([empregadorId, storeId, vinculoId])
@@ -3562,21 +3741,21 @@ model DpDocumento {
 }
 
 model DpAuditoria {
-  id String @id @default(cuid())
-  empregadorId String
-  empregador DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
-  storeId String
-  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  atorId String
-  ator AdminUser @relation(fields: [atorId], references: [id], onDelete: Restrict)
-  comandoId String @db.VarChar(100)
-  acao String @db.VarChar(80)
-  entidade String @db.VarChar(80)
-  entidadeId String
-  payloadHash String @db.VarChar(64)
-  justificativa String? @db.Text
-  diffSaneado Json? @db.JsonB
-  createdAt DateTime @default(now())
+  id            String       @id @default(cuid())
+  empregadorId  String
+  empregador    DpEmpregador @relation(fields: [empregadorId], references: [id], onDelete: Restrict)
+  storeId       String
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  atorId        String
+  ator          AdminUser    @relation(fields: [atorId], references: [id], onDelete: Restrict)
+  comandoId     String       @db.VarChar(100)
+  acao          String       @db.VarChar(80)
+  entidade      String       @db.VarChar(80)
+  entidadeId    String
+  payloadHash   String       @db.VarChar(64)
+  justificativa String?      @db.Text
+  diffSaneado   Json?        @db.JsonB
+  createdAt     DateTime     @default(now())
 
   @@unique([storeId, atorId, comandoId])
   @@index([empregadorId, createdAt])
@@ -3589,34 +3768,34 @@ model DpAuditoria {
 /// usada em Produto.metadata.catalogoAparelhos e no snapshot do item vendido.
 /// Desativar (`active=false`) só esconde da busca: histórico e vínculos são preservados.
 model CatalogoAparelhoLojaModelo {
-  id        String   @id @default(cuid())
-  storeId   String   @map("storeId")
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  modelKey  String   @unique @map("modelKey")
-  brand     String   @map("brand")
-  name      String   @map("name")
+  id           String   @id @default(cuid())
+  storeId      String   @map("storeId")
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  modelKey     String   @unique @map("modelKey")
+  brand        String   @map("brand")
+  name         String   @map("name")
   /// COMPAT-PROFISSIONAL-001 — fabricante (ex.: Xiaomi para a marca comercial Redmi/POCO).
   /// "" em registros antigos: o fabricante é derivado da marca na leitura.
-  manufacturer String @default("") @map("manufacturer")
+  manufacturer String   @default("") @map("manufacturer")
   /// COMPAT-PROFISSIONAL-001 — linha comercial (ex.: "A", "Note", "G"). Opcional.
-  line      String   @default("") @map("line")
+  line         String   @default("") @map("line")
   /// COMPAT-CATALOGO-BRASIL-2023-2026-002 — "lancado" | "aguardando_lancamento" (oculto das buscas
   /// operacionais até a loja confirmar o lançamento oficial). Registros antigos = "lancado".
-  lancamento String  @default("lancado") @map("lancamento")
+  lancamento   String   @default("lancado") @map("lancamento")
   /// Marca normalizada (sem acento, maiúscula) — chave de duplicidade.
-  brandKey  String   @map("brandKey")
+  brandKey     String   @map("brandKey")
   /// Nome normalizado (sem acento, maiúscula) — chave de duplicidade.
-  nameKey   String   @map("nameKey")
+  nameKey      String   @map("nameKey")
   /// Lista de apelidos (string[]).
-  aliases   Json     @default("[]") @map("aliases") @db.JsonB
-  notes     String   @default("") @map("notes")
-  active    Boolean  @default(true) @map("active")
+  aliases      Json     @default("[]") @map("aliases") @db.JsonB
+  notes        String   @default("") @map("notes")
+  active       Boolean  @default(true) @map("active")
   /// Controle otimista de concorrência (edição).
-  version   Int      @default(1) @map("version")
-  createdBy String   @default("") @map("createdBy")
-  updatedBy String   @default("") @map("updatedBy")
-  createdAt DateTime @default(now()) @map("createdAt")
-  updatedAt DateTime @updatedAt @map("updatedAt")
+  version      Int      @default(1) @map("version")
+  createdBy    String   @default("") @map("createdBy")
+  updatedBy    String   @default("") @map("updatedBy")
+  createdAt    DateTime @default(now()) @map("createdAt")
+  updatedAt    DateTime @updatedAt @map("updatedAt")
 
   @@unique([storeId, brandKey, nameKey])
   @@index([storeId, active])
@@ -3628,24 +3807,24 @@ model CatalogoAparelhoLojaModelo {
 /// (esconde uma relação global incorreta só nesta loja). Par ordenado (modelKeyA < modelKeyB).
 /// `categoria` separa película de capinha — nunca há inferência entre categorias.
 model CatalogoAparelhoLojaCompat {
-  id        String   @id @default(cuid())
-  storeId   String   @map("storeId")
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  categoria String   @map("categoria")
-  modelKeyA String   @map("modelKeyA")
-  modelKeyB String   @map("modelKeyB")
-  acao      String   @map("acao")
-  status    String   @default("precisa_testar") @map("status")
-  notes     String   @default("") @map("notes")
+  id          String    @id @default(cuid())
+  storeId     String    @map("storeId")
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  categoria   String    @map("categoria")
+  modelKeyA   String    @map("modelKeyA")
+  modelKeyB   String    @map("modelKeyB")
+  acao        String    @map("acao")
+  status      String    @default("precisa_testar") @map("status")
+  notes       String    @default("") @map("notes")
   /// COMPAT-PROFISSIONAL-001 — origem informada da relação (ex.: "teste no balcão", "fornecedor X").
-  origem    String   @default("") @map("origem")
+  origem      String    @default("") @map("origem")
   /// COMPAT-PROFISSIONAL-001 — quem confirmou fisicamente (status `confirmado_loja`).
-  confirmedBy String   @default("") @map("confirmedBy")
+  confirmedBy String    @default("") @map("confirmedBy")
   confirmedAt DateTime? @map("confirmedAt")
-  createdBy String   @default("") @map("createdBy")
-  updatedBy String   @default("") @map("updatedBy")
-  createdAt DateTime @default(now()) @map("createdAt")
-  updatedAt DateTime @updatedAt @map("updatedAt")
+  createdBy   String    @default("") @map("createdBy")
+  updatedBy   String    @default("") @map("updatedBy")
+  createdAt   DateTime  @default(now()) @map("createdAt")
+  updatedAt   DateTime  @updatedAt @map("updatedAt")
 
   @@unique([storeId, categoria, modelKeyA, modelKeyB])
   @@index([storeId, categoria, modelKeyA])
@@ -3790,61 +3969,61 @@ model CompatPreferenciasLoja {
 /// Unidade física individualizada. `status` é a máquina de estados persistida
 /// (`lib/aparelhos/lifecycle.ts`); mudanças passam pelo serviço com evento append-only.
 model AparelhoFisico {
-  id            String   @id @default(cuid())
-  storeId       String   @map("storeId")
-  store         Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id                     String             @id @default(cuid())
+  storeId                String             @map("storeId")
+  store                  Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
   /// Produto comercial (modelo) que carrega o saldo agregado no ledger.
-  produtoId     String   @map("produtoId")
-  produto       Produto  @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  produtoId              String             @map("produtoId")
+  produto                Produto            @relation(fields: [produtoId], references: [id], onDelete: Restrict)
   /// Código interno estável por loja (APA-000001).
-  codigoInterno String   @map("codigoInterno")
-  marca         String   @map("marca")
-  modelo        String   @map("modelo")
-  variante      String   @default("") @map("variante")
-  armazenamento String   @default("") @map("armazenamento")
-  memoriaRam    String   @default("") @map("memoriaRam")
-  cor           String   @default("") @map("cor")
+  codigoInterno          String             @map("codigoInterno")
+  marca                  String             @map("marca")
+  modelo                 String             @map("modelo")
+  variante               String             @default("") @map("variante")
+  armazenamento          String             @default("") @map("armazenamento")
+  memoriaRam             String             @default("") @map("memoriaRam")
+  cor                    String             @default("") @map("cor")
   /// novo_lacrado | novo_aberto | seminovo | usado | recondicionado
-  condicao      String   @map("condicao")
-  imei1         String?  @map("imei1")
-  imei2         String?  @map("imei2")
-  serial        String?  @map("serial")
-  ean           String?  @map("ean")
+  condicao               String             @map("condicao")
+  imei1                  String?            @map("imei1")
+  imei2                  String?            @map("imei2")
+  serial                 String?            @map("serial")
+  ean                    String?            @map("ean")
   /// aguardando_conferencia | em_avaliacao | disponivel | reservado | em_revisao | vendido | devolvido | bloqueado | baixado
-  status        String   @default("aguardando_conferencia") @map("status")
+  status                 String             @default("aguardando_conferencia") @map("status")
   /// loja | negociacao | aguardando_aquisicao
-  propriedade   String   @default("aguardando_aquisicao") @map("propriedade")
+  propriedade            String             @default("aguardando_aquisicao") @map("propriedade")
   /// cadastro_manual | fornecedor | lote | compra_cliente | negociacao
-  origem        String   @map("origem")
-  aquisicaoId   String?  @map("aquisicaoId")
-  aquisicao     AparelhoAquisicao? @relation(fields: [aquisicaoId], references: [id], onDelete: SetNull)
-  custoAquisicao Float   @default(0) @map("custoAquisicao")
-  despesas      Float    @default(0) @map("despesas")
-  custoTotal    Float    @default(0) @map("custoTotal")
-  precoSugerido Float?   @map("precoSugerido")
-  precoVenda    Float    @default(0) @map("precoVenda")
+  origem                 String             @map("origem")
+  aquisicaoId            String?            @map("aquisicaoId")
+  aquisicao              AparelhoAquisicao? @relation(fields: [aquisicaoId], references: [id], onDelete: SetNull)
+  custoAquisicao         Float              @default(0) @map("custoAquisicao")
+  despesas               Float              @default(0) @map("despesas")
+  custoTotal             Float              @default(0) @map("custoTotal")
+  precoSugerido          Float?             @map("precoSugerido")
+  precoVenda             Float              @default(0) @map("precoVenda")
   /// Prazo contratual ADICIONAL sugerido na venda (a legal de 90 dias é sempre aplicada).
-  garantiaContratualDias Int @default(0) @map("garantiaContratualDias")
-  acessorios    Json     @default("{}") @map("acessorios") @db.JsonB
-  estadoFisico  String   @default("") @map("estadoFisico")
+  garantiaContratualDias Int                @default(0) @map("garantiaContratualDias")
+  acessorios             Json               @default("{}") @map("acessorios") @db.JsonB
+  estadoFisico           String             @default("") @map("estadoFisico")
   /// Checklist PASS/FAIL/NAO_TESTADO/NAO_APLICAVEL por item.
-  checklist     Json     @default("{}") @map("checklist") @db.JsonB
-  bateriaSaude  Int?     @map("bateriaSaude")
-  bateriaFonte  String?  @map("bateriaFonte")
+  checklist              Json               @default("{}") @map("checklist") @db.JsonB
+  bateriaSaude           Int?               @map("bateriaSaude")
+  bateriaFonte           String?            @map("bateriaFonte")
   /// nao_consultado | conferido_sem_restricao | restricao_conhecida
-  restricaoStatus String @default("nao_consultado") @map("restricaoStatus")
-  restricaoFonte  String? @map("restricaoFonte")
-  restricaoConferidaEm  DateTime? @map("restricaoConferidaEm")
-  restricaoConferidaPor String?   @map("restricaoConferidaPor")
-  observacoes   String   @default("") @map("observacoes") @db.Text
-  entradaEstoqueEm DateTime? @map("entradaEstoqueEm")
-  reservaToken  String?  @map("reservaToken")
-  reservadoAte  DateTime? @map("reservadoAte")
-  reservadoPor  String?  @map("reservadoPor")
-  version       Int      @default(1) @map("version")
-  createdBy     String   @default("") @map("createdBy")
-  createdAt     DateTime @default(now()) @map("createdAt")
-  updatedAt     DateTime @updatedAt @map("updatedAt")
+  restricaoStatus        String             @default("nao_consultado") @map("restricaoStatus")
+  restricaoFonte         String?            @map("restricaoFonte")
+  restricaoConferidaEm   DateTime?          @map("restricaoConferidaEm")
+  restricaoConferidaPor  String?            @map("restricaoConferidaPor")
+  observacoes            String             @default("") @map("observacoes") @db.Text
+  entradaEstoqueEm       DateTime?          @map("entradaEstoqueEm")
+  reservaToken           String?            @map("reservaToken")
+  reservadoAte           DateTime?          @map("reservadoAte")
+  reservadoPor           String?            @map("reservadoPor")
+  version                Int                @default(1) @map("version")
+  createdBy              String             @default("") @map("createdBy")
+  createdAt              DateTime           @default(now()) @map("createdAt")
+  updatedAt              DateTime           @updatedAt @map("updatedAt")
 
   identificadores AparelhoIdentificador[]
   eventos         AparelhoEvento[]
@@ -3862,14 +4041,14 @@ model AparelhoFisico {
 /// Identificadores únicos por loja (IMEI 1, IMEI 2 e serial no MESMO espaço):
 /// impede duas unidades com o mesmo IMEI mesmo quando um é IMEI 1 e o outro IMEI 2.
 model AparelhoIdentificador {
-  id          String         @id @default(cuid())
-  storeId     String         @map("storeId")
-  aparelhoId  String         @map("aparelhoId")
-  aparelho    AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Cascade)
+  id         String         @id @default(cuid())
+  storeId    String         @map("storeId")
+  aparelhoId String         @map("aparelhoId")
+  aparelho   AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Cascade)
   /// imei | serial
-  tipo        String         @map("tipo")
-  valor       String         @map("valor")
-  createdAt   DateTime       @default(now()) @map("createdAt")
+  tipo       String         @map("tipo")
+  valor      String         @map("valor")
+  createdAt  DateTime       @default(now()) @map("createdAt")
 
   @@unique([storeId, tipo, valor])
   @@index([aparelhoId])
@@ -3878,17 +4057,17 @@ model AparelhoIdentificador {
 
 /// Linha do tempo imutável (append-only) da unidade.
 model AparelhoEvento {
-  id          String         @id @default(cuid())
-  storeId     String         @map("storeId")
-  aparelhoId  String         @map("aparelhoId")
-  aparelho    AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
-  tipo        String         @map("tipo")
-  deStatus    String?        @map("deStatus")
-  paraStatus  String?        @map("paraStatus")
-  dados       Json           @default("{}") @map("dados") @db.JsonB
-  operador    String         @default("") @map("operador")
-  idempotencyKey String?     @map("idempotencyKey")
-  createdAt   DateTime       @default(now()) @map("createdAt")
+  id             String         @id @default(cuid())
+  storeId        String         @map("storeId")
+  aparelhoId     String         @map("aparelhoId")
+  aparelho       AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
+  tipo           String         @map("tipo")
+  deStatus       String?        @map("deStatus")
+  paraStatus     String?        @map("paraStatus")
+  dados          Json           @default("{}") @map("dados") @db.JsonB
+  operador       String         @default("") @map("operador")
+  idempotencyKey String?        @map("idempotencyKey")
+  createdAt      DateTime       @default(now()) @map("createdAt")
 
   @@unique([storeId, idempotencyKey])
   @@index([storeId, aparelhoId, createdAt])
@@ -3897,14 +4076,14 @@ model AparelhoEvento {
 
 /// Fotos da unidade (imagem reduzida no cliente, ≤ 400 KB cada).
 model AparelhoFoto {
-  id          String         @id @default(cuid())
-  storeId     String         @map("storeId")
-  aparelhoId  String         @map("aparelhoId")
-  aparelho    AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Cascade)
-  dataUrl     String         @map("dataUrl") @db.Text
-  legenda     String         @default("") @map("legenda")
-  createdBy   String         @default("") @map("createdBy")
-  createdAt   DateTime       @default(now()) @map("createdAt")
+  id         String         @id @default(cuid())
+  storeId    String         @map("storeId")
+  aparelhoId String         @map("aparelhoId")
+  aparelho   AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Cascade)
+  dataUrl    String         @map("dataUrl") @db.Text
+  legenda    String         @default("") @map("legenda")
+  createdBy  String         @default("") @map("createdBy")
+  createdAt  DateTime       @default(now()) @map("createdAt")
 
   @@index([storeId, aparelhoId])
   @@map("aparelhos_fotos")
@@ -3913,41 +4092,41 @@ model AparelhoFoto {
 /// Aquisição (compra de cliente, fornecedor, lote, negociação). Documento comercial —
 /// NÃO substitui nota fiscal. Estoque só é creditado na confirmação + liberação.
 model AparelhoAquisicao {
-  id            String    @id @default(cuid())
-  storeId       String    @map("storeId")
-  store         Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  id                    String      @id @default(cuid())
+  storeId               String      @map("storeId")
+  store                 Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
   /// AQ-AAAA-NNNN por loja.
-  protocolo     String    @map("protocolo")
+  protocolo             String      @map("protocolo")
   /// compra_cliente | fornecedor | lote | negociacao
-  tipo          String    @map("tipo")
+  tipo                  String      @map("tipo")
   /// aguardando_aprovacao | confirmada | recusada | cancelada
-  status        String    @default("aguardando_aprovacao") @map("status")
-  clienteId     String?   @map("clienteId")
-  cliente       Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  fornecedorId  String?   @map("fornecedorId")
-  fornecedor    Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
-  vendedorNome  String    @default("") @map("vendedorNome")
+  status                String      @default("aguardando_aprovacao") @map("status")
+  clienteId             String?     @map("clienteId")
+  cliente               Cliente?    @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  fornecedorId          String?     @map("fornecedorId")
+  fornecedor            Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  vendedorNome          String      @default("") @map("vendedorNome")
   /// Documento do vendedor mascarado para exibição (***.456.789-**). O completo não é gravado aqui.
-  vendedorDocMascarado String @default("") @map("vendedorDocMascarado")
+  vendedorDocMascarado  String      @default("") @map("vendedorDocMascarado")
   /// Hash SHA-256 do documento normalizado (conferência sem expor o número).
-  vendedorDocHash String?  @map("vendedorDocHash")
+  vendedorDocHash       String?     @map("vendedorDocHash")
   /// declaracao_procedencia | nota_fiscal | recibo | outro
-  documentoOrigemTipo   String @default("") @map("documentoOrigemTipo")
-  documentoOrigemNumero String @default("") @map("documentoOrigemNumero")
-  valorTotal    Float     @default(0) @map("valorTotal")
+  documentoOrigemTipo   String      @default("") @map("documentoOrigemTipo")
+  documentoOrigemNumero String      @default("") @map("documentoOrigemNumero")
+  valorTotal            Float       @default(0) @map("valorTotal")
   /// dinheiro | pix | transferencia | credito_loja | abatimento_venda | outro
-  formaPagamento String   @default("") @map("formaPagamento")
+  formaPagamento        String      @default("") @map("formaPagamento")
   /// pago | pendente
-  pagamentoStatus String  @default("pendente") @map("pagamentoStatus")
-  observacoes   String    @default("") @map("observacoes") @db.Text
-  motivoRecusa  String    @default("") @map("motivoRecusa")
-  aprovadaPor   String?   @map("aprovadaPor")
-  aprovadaEm    DateTime? @map("aprovadaEm")
-  createdBy     String    @default("") @map("createdBy")
-  createdAt     DateTime  @default(now()) @map("createdAt")
-  updatedAt     DateTime  @updatedAt @map("updatedAt")
+  pagamentoStatus       String      @default("pendente") @map("pagamentoStatus")
+  observacoes           String      @default("") @map("observacoes") @db.Text
+  motivoRecusa          String      @default("") @map("motivoRecusa")
+  aprovadaPor           String?     @map("aprovadaPor")
+  aprovadaEm            DateTime?   @map("aprovadaEm")
+  createdBy             String      @default("") @map("createdBy")
+  createdAt             DateTime    @default(now()) @map("createdAt")
+  updatedAt             DateTime    @updatedAt @map("updatedAt")
 
-  aparelhos     AparelhoFisico[]
+  aparelhos AparelhoFisico[]
 
   @@unique([storeId, protocolo])
   @@index([storeId, status])
@@ -3959,40 +4138,40 @@ model AparelhoAquisicao {
 /// Garantias separadas: legal (CDC art. 26, II — 90 dias), contratual (CDC art. 50,
 /// complementar) e fabricante (informativa, não presumida).
 model AparelhoVenda {
-  id            String    @id @default(cuid())
-  storeId       String    @map("storeId")
-  store         Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  aparelhoId    String    @map("aparelhoId")
-  aparelho      AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
-  vendaId       String    @map("vendaId")
-  venda         Venda     @relation(fields: [vendaId], references: [id], onDelete: Restrict)
-  pedidoId      String    @map("pedidoId")
-  clienteId     String?   @map("clienteId")
-  cliente       Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  id             String         @id @default(cuid())
+  storeId        String         @map("storeId")
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  aparelhoId     String         @map("aparelhoId")
+  aparelho       AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
+  vendaId        String         @map("vendaId")
+  venda          Venda          @relation(fields: [vendaId], references: [id], onDelete: Restrict)
+  pedidoId       String         @map("pedidoId")
+  clienteId      String?        @map("clienteId")
+  cliente        Cliente?       @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   /// GAR-AAAA-NNNN por loja — referência única do termo.
-  numeroGarantia String   @map("numeroGarantia")
+  numeroGarantia String         @map("numeroGarantia")
   /// ativa | devolvida | cancelada | recomprada (loja recomprou a unidade: garantia anterior encerrada)
-  status        String    @default("ativa") @map("status")
-  precoVenda    Float     @map("precoVenda")
-  dataVenda     DateTime  @map("dataVenda")
-  dataEntrega   DateTime  @map("dataEntrega")
-  legalDias     Int       @default(90) @map("legalDias")
-  legalFim      DateTime  @map("legalFim")
-  contratualDias Int      @default(0) @map("contratualDias")
-  contratualFim DateTime? @map("contratualFim")
+  status         String         @default("ativa") @map("status")
+  precoVenda     Float          @map("precoVenda")
+  dataVenda      DateTime       @map("dataVenda")
+  dataEntrega    DateTime       @map("dataEntrega")
+  legalDias      Int            @default(90) @map("legalDias")
+  legalFim       DateTime       @map("legalFim")
+  contratualDias Int            @default(0) @map("contratualDias")
+  contratualFim  DateTime?      @map("contratualFim")
   /// Fim da cobertura somada (contratual + legal), leitura mais favorável ao consumidor.
-  coberturaFim  DateTime  @map("coberturaFim")
-  fabricanteInfo String   @default("") @map("fabricanteInfo")
-  fabricanteFim DateTime? @map("fabricanteFim")
-  politicaVersao Int      @map("politicaVersao")
+  coberturaFim   DateTime       @map("coberturaFim")
+  fabricanteInfo String         @default("") @map("fabricanteInfo")
+  fabricanteFim  DateTime?      @map("fabricanteFim")
+  politicaVersao Int            @map("politicaVersao")
   /// Snapshot completo do termo (loja, cliente mascarado, aparelho, condições) — reimpressão fiel.
-  snapshot      Json      @map("snapshot") @db.JsonB
-  snapshotHash  String    @map("snapshotHash") @db.Char(64)
-  operador      String    @default("") @map("operador")
-  createdAt     DateTime  @default(now()) @map("createdAt")
-  updatedAt     DateTime  @updatedAt @map("updatedAt")
+  snapshot       Json           @map("snapshot") @db.JsonB
+  snapshotHash   String         @map("snapshotHash") @db.Char(64)
+  operador       String         @default("") @map("operador")
+  createdAt      DateTime       @default(now()) @map("createdAt")
+  updatedAt      DateTime       @updatedAt @map("updatedAt")
 
-  documentos    AparelhoDocumento[]
+  documentos AparelhoDocumento[]
 
   @@unique([storeId, numeroGarantia])
   @@unique([vendaId, aparelhoId])
@@ -4003,21 +4182,21 @@ model AparelhoVenda {
 
 /// Política de garantia/aquisição da loja. Versionada; vendas guardam a versão aplicada.
 model AparelhoPoliticaLoja {
-  id            String   @id @default(cuid())
-  storeId       String   @unique @map("storeId")
-  versao        Int      @default(1) @map("versao")
+  id                        String   @id @default(cuid())
+  storeId                   String   @unique @map("storeId")
+  versao                    Int      @default(1) @map("versao")
   /// Presets de garantia CONTRATUAL adicional (dias). 0 = sem adicional.
-  presetsContratuaisDias Json @default("[0,30,90,180,365]") @map("presetsContratuaisDias") @db.JsonB
-  contratualPadraoDias Int @default(90) @map("contratualPadraoDias")
-  contratualMaxDias Int    @default(730) @map("contratualMaxDias")
-  condicoesTermo String   @default("") @map("condicoesTermo") @db.Text
+  presetsContratuaisDias    Json     @default("[0,30,90,180,365]") @map("presetsContratuaisDias") @db.JsonB
+  contratualPadraoDias      Int      @default(90) @map("contratualPadraoDias")
+  contratualMaxDias         Int      @default(730) @map("contratualMaxDias")
+  condicoesTermo            String   @default("") @map("condicoesTermo") @db.Text
   /// Aquisição de cliente exige aprovação de gerente antes de confirmar.
-  aquisicaoExigeAprovacao Boolean @default(true) @map("aquisicaoExigeAprovacao")
+  aquisicaoExigeAprovacao   Boolean  @default(true) @map("aquisicaoExigeAprovacao")
   /// Liberação para revenda exige conferência de restrição registrada.
-  liberacaoExigeConferencia Boolean @default(true) @map("liberacaoExigeConferencia")
-  updatedBy     String   @default("") @map("updatedBy")
-  createdAt     DateTime @default(now()) @map("createdAt")
-  updatedAt     DateTime @updatedAt @map("updatedAt")
+  liberacaoExigeConferencia Boolean  @default(true) @map("liberacaoExigeConferencia")
+  updatedBy                 String   @default("") @map("updatedBy")
+  createdAt                 DateTime @default(now()) @map("createdAt")
+  updatedAt                 DateTime @updatedAt @map("updatedAt")
 
   @@map("aparelhos_politicas_loja")
 }
@@ -4025,20 +4204,20 @@ model AparelhoPoliticaLoja {
 /// Registro de emissão/reimpressão de documento comercial. Reimprimir NÃO cria venda,
 /// garantia nem movimento — só incrementa contador e preserva o hash da versão emitida.
 model AparelhoDocumento {
-  id            String   @id @default(cuid())
-  storeId       String   @map("storeId")
-  aparelhoVendaId String? @map("aparelhoVendaId")
-  aparelhoVenda AparelhoVenda? @relation(fields: [aparelhoVendaId], references: [id], onDelete: Restrict)
-  aquisicaoId   String?  @map("aquisicaoId")
+  id                String         @id @default(cuid())
+  storeId           String         @map("storeId")
+  aparelhoVendaId   String?        @map("aparelhoVendaId")
+  aparelhoVenda     AparelhoVenda? @relation(fields: [aparelhoVendaId], references: [id], onDelete: Restrict)
+  aquisicaoId       String?        @map("aquisicaoId")
   /// comprovante_venda | termo_garantia | termo_entrega | protocolo_aquisicao
-  tipo          String   @map("tipo")
+  tipo              String         @map("tipo")
   /// a4 | 80mm
-  formato       String   @map("formato")
-  conteudoHash  String   @map("conteudoHash") @db.Char(64)
-  emissoes      Int      @default(1) @map("emissoes")
-  primeiraEmissaoEm DateTime @default(now()) @map("primeiraEmissaoEm")
-  ultimaEmissaoEm   DateTime @default(now()) @map("ultimaEmissaoEm")
-  emitidoPor    String   @default("") @map("emitidoPor")
+  formato           String         @map("formato")
+  conteudoHash      String         @map("conteudoHash") @db.Char(64)
+  emissoes          Int            @default(1) @map("emissoes")
+  primeiraEmissaoEm DateTime       @default(now()) @map("primeiraEmissaoEm")
+  ultimaEmissaoEm   DateTime       @default(now()) @map("ultimaEmissaoEm")
+  emitidoPor        String         @default("") @map("emitidoPor")
 
   @@unique([storeId, tipo, formato, aparelhoVendaId])
   @@unique([storeId, tipo, formato, aquisicaoId])
@@ -4056,4 +4235,149 @@ model AparelhoSequencia {
 
   @@id([storeId, chave, ano])
   @@map("aparelhos_sequencias")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OMNI-VESTUARIO-P02-PERSISTENCIA-GRADES-CATALOGO-001 — catálogo de grade (ADITIVO)
+// Somente cadastro. Nenhum saldo, venda, reserva ou movimentação usa estas tabelas na P02.
+// Integridade multiloja no banco: toda FK interna é composta com `storeId`.
+// Nada é apagado em cascata: FKs RESTRICT; variantes não aceitam DELETE (trigger na migration);
+// cor/tamanho/produto da variante são imutáveis (trigger). SKU/código interno normalizados
+// (maiúsculas, sem espaço) e colisão com SKU/barcode de produto da mesma loja bloqueada
+// nos dois sentidos (writer + trigger em estoque_produtos, sob o mesmo advisory lock por loja).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Grade de tamanhos da loja (ex.: Adulto, Jeans, Calçados, Infantil). Nada fixo no código.
+ */
+model VestuarioGrade {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome      String   @map("nome")
+  /**
+   * Chave de duplicidade (caixa/acentos/espaços normalizados).
+   */
+  nomeKey   String   @map("nomeKey")
+  ativo     Boolean  @default(true) @map("ativo")
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  tamanhos VestuarioTamanho[]
+  produtos VestuarioProdutoGrade[]
+
+  @@unique([storeId, id], name: "storeId_id")
+  @@unique([storeId, nomeKey], name: "storeId_nomeKey")
+  @@map("vestuario_grades")
+}
+
+/**
+ * Valor autorizado de uma grade (PP, 38, 4 anos…). ID estável; rótulo de tamanho usado não muda.
+ */
+model VestuarioTamanho {
+  id        String         @id @default(cuid())
+  storeId   String         @map("storeId")
+  gradeId   String         @map("gradeId")
+  grade     VestuarioGrade @relation(fields: [storeId, gradeId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  rotulo    String         @map("rotulo")
+  rotuloKey String         @map("rotuloKey")
+  ordem     Int            @default(0) @map("ordem")
+  ativo     Boolean        @default(true) @map("ativo")
+  createdAt DateTime       @default(now()) @map("createdAt")
+  updatedAt DateTime       @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([storeId, gradeId, id], name: "storeId_gradeId_id")
+  @@unique([storeId, gradeId, rotuloKey], name: "storeId_gradeId_rotuloKey")
+  @@index([storeId, gradeId, ordem])
+  @@map("vestuario_grade_tamanhos")
+}
+
+/**
+ * Cor comercial da loja. HEX é só referência visual opcional (estampas não têm um HEX).
+ */
+model VestuarioCor {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome      String   @map("nome")
+  nomeKey   String   @map("nomeKey")
+  hex       String?  @map("hex")
+  ordem     Int      @default(0) @map("ordem")
+  ativo     Boolean  @default(true) @map("ativo")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([storeId, id], name: "storeId_id")
+  @@unique([storeId, nomeKey], name: "storeId_nomeKey")
+  @@index([storeId, ativo, ordem])
+  @@map("vestuario_cores")
+}
+
+/**
+ * Fonte persistida AUTORITATIVA do modo COM_GRADE (1:1 com o produto pai). Sem linha = simples.
+ * `metadata.vestuario` do produto é apenas o marcador de compatibilidade lido pelos guards P01.
+ * Produto e grade são imutáveis após a criação (trigger).
+ */
+model VestuarioProdutoGrade {
+  id             String         @id @default(cuid())
+  storeId        String         @map("storeId")
+  produtoId      String         @unique @map("produtoId")
+  produto        Produto        @relation(fields: [produtoId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  gradeId        String         @map("gradeId")
+  grade          VestuarioGrade @relation(fields: [storeId, gradeId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogVersion Int            @default(1) @map("catalogVersion")
+  createdBy      String         @default("") @map("createdBy")
+  createdAt      DateTime       @default(now()) @map("createdAt")
+  updatedAt      DateTime       @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([produtoId, storeId], name: "produtoId_storeId")
+  @@unique([storeId, produtoId, gradeId], name: "storeId_produtoId_gradeId")
+  @@index([storeId, gradeId])
+  @@map("vestuario_produtos_grade")
+}
+
+/**
+ * Variante cor × tamanho. `id` é a identidade estável (opaca, do servidor): não deriva de SKU,
+ * rótulo ou posição. SKU/código interno são opcionais na P02 (rascunho) e nunca fabricados.
+ * Preço em centavos (override do pai) e custo de referência em milionésimos — contrato P01.
+ */
+model VestuarioVariante {
+  id             String                @id @default(cuid())
+  storeId        String                @map("storeId")
+  produtoId      String                @map("produtoId")
+  gradeId        String                @map("gradeId")
+  produtoGrade   VestuarioProdutoGrade @relation(fields: [storeId, produtoId, gradeId], references: [storeId, produtoId, gradeId], onDelete: Restrict, onUpdate: Restrict)
+  corId          String                @map("corId")
+  cor            VestuarioCor          @relation(fields: [storeId, corId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  tamanhoId      String                @map("tamanhoId")
+  tamanho        VestuarioTamanho      @relation(fields: [storeId, gradeId, tamanhoId], references: [storeId, gradeId, id], onDelete: Restrict, onUpdate: Restrict)
+  sku            String?               @map("sku")
+  barcodeInterno String?               @map("barcodeInterno")
+  precoCentavos  Int?                  @map("precoCentavos")
+  custoMicros    BigInt?               @map("custoMicros")
+  ativo          Boolean               @default(true) @map("ativo")
+  version        Int                   @default(1) @map("version")
+  createdBy      String                @default("") @map("createdBy")
+  updatedBy      String                @default("") @map("updatedBy")
+  createdAt      DateTime              @default(now()) @map("createdAt")
+  updatedAt      DateTime              @updatedAt @map("updatedAt")
+
+  @@unique([storeId, produtoId, corId, tamanhoId], name: "storeId_produtoId_corId_tamanhoId")
+  @@unique([storeId, sku], name: "storeId_sku")
+  @@unique([storeId, barcodeInterno], name: "storeId_barcodeInterno")
+  @@index([storeId, produtoId, ativo])
+  @@index([storeId, corId])
+  @@index([storeId, gradeId, tamanhoId])
+  @@map("vestuario_variantes")
 }

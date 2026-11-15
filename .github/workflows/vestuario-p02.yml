@@ -1,0 +1,99 @@
+name: Vestuario P02 - persistencia de grades e catalogo
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/vestuario/**"
+      - "app/actions/vestuario-catalogo.ts"
+      - "components/vestuario/**"
+      - "components/cadastros/lovable/components/cadastros/CadastrosHub.tsx"
+      - "lib/cadastros/product-write-service.ts"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20261115120000_vestuario_p02_grades_catalogo/**"
+      - "scripts/vestuario/**"
+      - "e2e/vestuario-p02/**"
+      - "e2e/vestuario-p02.playwright.config.ts"
+      - "docs/vestuario/**"
+      - ".github/workflows/vestuario-p02.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vestuario-p02-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  catalog-pg-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # PostgreSQL descartável do próprio job. Sem secrets, sem banco remoto, sem deploy.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: vest_p02
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: vest_p02_pg
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vest_p02" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      VESTUARIO_P02_TEST_DATABASE_URL: postgresql://vest_p02:isolated_ci_only@127.0.0.1:5432/vest_p02_pg
+      DATABASE_URL: postgresql://vest_p02:isolated_ci_only@127.0.0.1:5432/vest_p02_pg
+      DIRECT_URL: postgresql://vest_p02:isolated_ci_only@127.0.0.1:5432/vest_p02_pg
+      AUTH_SECRET: isolated-vestuario-p02-fixture-without-production-authority
+      AUTH_TRUST_HOST: "true"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Contratos P01/P02, normalização e regressões de cadastro/venda/estoque (sem banco)
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          lib/vestuario
+          lib/cadastros/product-write-service.test.ts
+          lib/cadastros/product-write-create-tx-014.test.ts
+          lib/estoque/stock-ledger-service.test.ts
+          lib/ops-upsert-venda
+          app/actions/cadastros.access.test.ts
+          --exclude "**/*.integration.test.ts" --maxWorkers=2
+      - name: Migration aditiva em PostgreSQL 17 descartável (baseline main + drift zero)
+        run: VESTUARIO_P02_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/vestuario/prepare-pg.mjs
+      - name: Integração PG real (constraints, FKs, triggers, multiloja, concorrência, guards P01)
+        run: node node_modules/vitest/vitest.mjs run lib/vestuario/catalog-service.integration.test.ts --testTimeout=60000 --maxWorkers=1
+      - name: Lint do escopo P02
+        run: >-
+          node node_modules/eslint/bin/eslint.js
+          lib/vestuario app/actions/vestuario-catalogo.ts components/vestuario
+          lib/cadastros/product-write-service.ts
+          e2e/vestuario-p02 scripts/vestuario
+      - name: Build de produção (sem migration; guard SKIP fora de Production)
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: E2E autenticado (next start + NextAuth real + PG descartável)
+        env:
+          VESTUARIO_P02_TEST_DATABASE_URL: postgresql://vest_p02:isolated_ci_only@127.0.0.1:5432/vest_p02_e2e
+        run: |
+          PGPASSWORD=isolated_ci_only psql -h 127.0.0.1 -U vest_p02 -d vest_p02_pg -c "CREATE DATABASE vest_p02_e2e"
+          VESTUARIO_P02_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/vestuario/run-vestuario-p02-e2e.mjs
+      - name: Evidências E2E (sem credenciais)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vestuario-p02-e2e
+          path: test-results/vestuario-p02-e2e
+          retention-days: 7
+          if-no-files-found: ignore

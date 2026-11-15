@@ -25,6 +25,7 @@ import {
 } from "@/lib/cadastros/client-write-contract";
 import { applyStockMutation } from "@/lib/estoque/stock-ledger-service";
 import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract";
+import { hasVestuarioDeclaration } from "@/lib/vestuario/guard-contract";
 import type { ExistingProdutoLite } from "@/lib/produtos/duplicate-product";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 import {
@@ -2075,9 +2076,17 @@ export async function deleteProduto(
 
   const produto = await prisma.produto.findFirst({
     where: { id: produtoId, storeId: sid },
-    select: { id: true, name: true },
+    select: { id: true, name: true, metadata: true },
   });
   if (!produto) return { ok: false, reason: "Produto não encontrado nesta loja" };
+  // Vestuário P02: produto com grade (marcador P01) nunca é excluído — as variações e o histórico dependem dele.
+  if (hasVestuarioDeclaration(produto.metadata)) {
+    return {
+      ok: false,
+      reason: "Produto com grade de cor e tamanho não pode ser excluído. Desative-o em Cadastros › Grades e variações.",
+      produto: { id: produto.id, nome: produto.name },
+    };
+  }
 
   // Marketplace listings usa `productId` (inconsistência histórica do schema). Links usa `produtoId`.
   const [osItens, listings, links] = await Promise.all([

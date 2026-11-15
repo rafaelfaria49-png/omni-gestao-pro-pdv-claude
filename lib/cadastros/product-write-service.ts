@@ -120,6 +120,15 @@ export type ProductWriteDeps = {
   db?: ProductWriteDb
 }
 
+/**
+ * Vestuário P02: unique violado sem produto conflitante = código já usado por uma variação de cor/tamanho
+ * (trigger `vestuario_produtos_colisao_trg` no banco) ou corrida. Nada foi gravado; antes virava PERSISTENCE.
+ */
+const IDENTIFIER_TAKEN_FAILURE: ProductWriteResult = {
+  ok: false, code: "DUPLICATE", field: "sku",
+  message: "Código (SKU ou código de barras) já usado por outro produto ou por uma variação de cor/tamanho desta loja.",
+}
+
 type TrustedContext = { storeId: string; principal: ProductWriteContext["principal"] }
 
 function trustedContext(
@@ -661,6 +670,7 @@ export async function createProduct(
     if (isPrismaKnownError(e, "P2002")) {
       const conflicted = await findDuplicate(db, ctx.storeId, prePatch.sku, prePatch.barcode).catch(() => null)
       if (conflicted) return duplicateFailure(conflicted, prePatch.sku, prePatch.barcode, "create")
+      return IDENTIFIER_TAKEN_FAILURE
     }
     console.error("[product-write-service] create falhou:", e instanceof Error ? e.message : String(e))
     return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
@@ -814,6 +824,7 @@ export async function updateProduct(
   try {
     return await db.$transaction((tx) => updateProductTx(tx, context, productId, input, opts))
   } catch (e) {
+    if (isPrismaKnownError(e, "P2002")) return IDENTIFIER_TAKEN_FAILURE
     console.error("[product-write-service] update transacional falhou:", e instanceof Error ? e.message : String(e))
     return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
   }

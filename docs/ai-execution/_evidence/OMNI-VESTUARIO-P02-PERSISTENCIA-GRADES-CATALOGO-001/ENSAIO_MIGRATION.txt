@@ -1,0 +1,41 @@
+0. servidor: 127.0.0.1:55457 · data_directory=…/p02/pgdata · 17.10
+1. banco vazio (schema da main, 27 migrations registradas): aplicada 20261115120000_vestuario_p02_grades_catalogo
+2. banco com legado: 2001 produtos (400 com metadata livre/gradePlanejada) · antes 2001:a1c5eab3071771f1f73daacc14514ea9
+   preservação: produtos/saldos/metadata IGUAIS após a migration
+   produtos com grade criados por backfill: 0 · variantes: 0
+   triggers: vestuario_produtos_colisao_trg, vestuario_produtos_grade_identidade_trg, vestuario_tamanhos_identidade_trg, vestuario_variantes_colisao_trg, vestuario_variantes_identidade_trg
+   CHECKs validados: 6 de 6 (true)
+   FKs compostas: 6 (todas RESTRICT: t)
+3. migrate deploy de novo: No pending migrations to apply.
+   reexecução da seção fora do Prisma: OK; CHECKs=6 triggers=5
+4. drift banco × schema.prisma: exit 0 (No difference detected.)
+5. constraints/FKs (dados sintéticos mig-a/mig-b):
+   RECUSOU (combinação duplicada): ERROR:  duplicate key value violates unique constraint "vestuario_variantes_storeId_produtoId_corId_tamanhoId_key"
+   FALHA DO ENSAIO (SKU duplicado): esperado erro 'storeId_sku', obtido: ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por outra variação desta loja.
+CONTEXTO:  PL/pgSQL function vestuario_variantes_colisao() line 16 at RAISE
+   RECUSOU (SKU colide com produto legado (minúsculo/espaço)): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por um produto desta loja.
+   RECUSOU (código interno = SKU de outra variante): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por outra variação desta loja.
+   RECUSOU (produto legado novo com SKU de variante): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por uma variação (cor/tamanho) desta loja.
+   RECUSOU (produto legado editado para barcode de variante): ERROR:  VESTUARIO_IDENTIFICADOR_DUPLICADO: código já usado por uma variação (cor/tamanho) desta loja.
+   RECUSOU (SKU não normalizado): ERROR:  new row for relation "vestuario_variantes" violates check constraint "vestuario_variantes_identificadores_check"
+   RECUSOU (cor de outra loja): ERROR:  insert or update on table "vestuario_variantes" violates foreign key constraint "vestuario_variantes_storeId_corId_fkey"
+   RECUSOU (tamanho de outra loja/grade): ERROR:  insert or update on table "vestuario_variantes" violates foreign key constraint "vestuario_variantes_storeId_gradeId_tamanhoId_fkey"
+   RECUSOU (grade que não é a do produto): ERROR:  insert or update on table "vestuario_variantes" violates foreign key constraint "vestuario_variantes_storeId_produtoId_gradeId_fkey"
+   RECUSOU (produto de outra loja ligado à grade): ERROR:  insert or update on table "vestuario_produtos_grade" violates foreign key constraint "vestuario_produtos_grade_produtoId_storeId_fke
+   RECUSOU (trocar cor da variante): ERROR:  VESTUARIO_IDENTIDADE_IMUTAVEL: loja, produto, grade, cor e tamanho não mudam após a criação.
+   RECUSOU (trocar grade do produto): ERROR:  VESTUARIO_IDENTIDADE_IMUTAVEL: loja, produto, grade, cor e tamanho não mudam após a criação.
+   RECUSOU (excluir variante): ERROR:  VESTUARIO_EXCLUSAO_PROIBIDA: vestuario_variantes não pode ser excluído; desative o registro.
+   RECUSOU (excluir cor usada): ERROR:  update or delete on table "vestuario_cores" violates foreign key constraint "vestuario_variantes_storeId_corId_fkey" on table "vestu
+   RECUSOU (excluir tamanho usado): ERROR:  update or delete on table "vestuario_grade_tamanhos" violates foreign key constraint "vestuario_variantes_storeId_gradeId_tamanhoId_
+   RECUSOU (renomear tamanho usado): ERROR:  VESTUARIO_TAMANHO_EM_USO: tamanho vinculado a variações não pode ser renomeado; crie outro e desative este.
+   RECUSOU (excluir produto pai com grade): ERROR:  update or delete on table "estoque_produtos" violates foreign key constraint "vestuario_produtos_grade_produtoId_storeId_fkey" on ta
+   RECUSOU (HEX inválido): ERROR:  new row for relation "vestuario_cores" violates check constraint "vestuario_cores_nome_check"
+   RECUSOU (preço negativo): ERROR:  new row for relation "vestuario_variantes" violates check constraint "vestuario_variantes_valores_check"
+   ACEITOU: renomear/reordenar/desativar tamanho NÃO usado
+   ACEITOU: renomear/desativar cor usada (identidade da variante preservada)
+   ACEITOU: edição legada sem mudar sku/barcode (trigger não interfere)
+   ACEITOU: mesmo SKU em outra loja
+6. rollback com dados: RECUSADO (ROLLBACK_RECUSADO: há dados de vestuário); tabelas intactas: 1 variante(s)
+   rollback sem dados: OK · tabelas vestuario restantes=0 · triggers=0 · produtos preservados=sim
+   reaplicação após rollback: 20261115120000_vestuario_p02_grades_catalogo aplicada de novo
+RESULTADO: FAIL (1)
