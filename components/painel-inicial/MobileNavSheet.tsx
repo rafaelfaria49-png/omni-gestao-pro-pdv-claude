@@ -17,6 +17,7 @@ import {
   type DashboardNavItem,
 } from "@/lib/navigation/dashboard-nav-items"
 import { cn } from "@/lib/utils"
+import { StoreSwitcher } from "./StoreSwitcher"
 
 function NavLinkRow({ item, path, onNavigate }: { item: DashboardNavItem; path: string; onNavigate: () => void }) {
   const active = isDashboardRouteActive(path, item.to)
@@ -92,6 +93,7 @@ export function MobileNavSheet() {
       <SheetContent side="left" className="w-[min(100vw-2rem,18rem)] p-0 flex flex-col">
         <SheetHeader className="border-b border-border px-4 py-3 text-left">
           <SheetTitle className="text-sm font-semibold">Navegação</SheetTitle>
+          <StoreSwitcher variant="sheet" fallback={null} onSwitched={close} />
         </SheetHeader>
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
           {sections.map((section) => (
