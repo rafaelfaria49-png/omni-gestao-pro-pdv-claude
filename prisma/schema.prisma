@@ -155,6 +155,9 @@ model Store {
   aparelhosFisicos         AparelhoFisico[]
   aparelhosAquisicoes      AparelhoAquisicao[]
   aparelhosVendas          AparelhoVenda[]
+  // ─── Vestuário P02: grades/cores por loja (OMNI-VESTUARIO-P02 — aditivo; só relações inversas) ──
+  vestuarioGrades          VestuarioGrade[]
+  vestuarioCores           VestuarioCor[]
 
   @@index([profile])
   @@map("stores")
@@ -829,7 +832,11 @@ model Produto {
   marketplaceSyncLogs     MarketplaceSyncLog[]
   movimentacoesEstoque    MovimentacaoEstoque[]
   produtoDepositos        ProdutoDeposito[]
+  /** Vestuário P02 (aditivo): fonte autoritativa do modo COM_GRADE. Ausente = produto simples. */
+  vestuarioGrade          VestuarioProdutoGrade?
 
+  /** Vestuário P02: alvo das FKs compostas (produto, loja). `id` já é único; não muda nenhum dado. */
+  @@unique([id, storeId], name: "id_storeId")
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")
   @@index([storeId])
@@ -4077,4 +4084,149 @@ model AparelhoSequencia {
 
   @@id([storeId, chave, ano])
   @@map("aparelhos_sequencias")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OMNI-VESTUARIO-P02-PERSISTENCIA-GRADES-CATALOGO-001 — catálogo de grade (ADITIVO)
+// Somente cadastro. Nenhum saldo, venda, reserva ou movimentação usa estas tabelas na P02.
+// Integridade multiloja no banco: toda FK interna é composta com `storeId`.
+// Nada é apagado em cascata: FKs RESTRICT; variantes não aceitam DELETE (trigger na migration);
+// cor/tamanho/produto da variante são imutáveis (trigger). SKU/código interno normalizados
+// (maiúsculas, sem espaço) e colisão com SKU/barcode de produto da mesma loja bloqueada
+// nos dois sentidos (writer + trigger em estoque_produtos, sob o mesmo advisory lock por loja).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Grade de tamanhos da loja (ex.: Adulto, Jeans, Calçados, Infantil). Nada fixo no código.
+ */
+model VestuarioGrade {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome      String   @map("nome")
+  /**
+   * Chave de duplicidade (caixa/acentos/espaços normalizados).
+   */
+  nomeKey   String   @map("nomeKey")
+  ativo     Boolean  @default(true) @map("ativo")
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  tamanhos VestuarioTamanho[]
+  produtos VestuarioProdutoGrade[]
+
+  @@unique([storeId, id], name: "storeId_id")
+  @@unique([storeId, nomeKey], name: "storeId_nomeKey")
+  @@map("vestuario_grades")
+}
+
+/**
+ * Valor autorizado de uma grade (PP, 38, 4 anos…). ID estável; rótulo de tamanho usado não muda.
+ */
+model VestuarioTamanho {
+  id        String         @id @default(cuid())
+  storeId   String         @map("storeId")
+  gradeId   String         @map("gradeId")
+  grade     VestuarioGrade @relation(fields: [storeId, gradeId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  rotulo    String         @map("rotulo")
+  rotuloKey String         @map("rotuloKey")
+  ordem     Int            @default(0) @map("ordem")
+  ativo     Boolean        @default(true) @map("ativo")
+  createdAt DateTime       @default(now()) @map("createdAt")
+  updatedAt DateTime       @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([storeId, gradeId, id], name: "storeId_gradeId_id")
+  @@unique([storeId, gradeId, rotuloKey], name: "storeId_gradeId_rotuloKey")
+  @@index([storeId, gradeId, ordem])
+  @@map("vestuario_grade_tamanhos")
+}
+
+/**
+ * Cor comercial da loja. HEX é só referência visual opcional (estampas não têm um HEX).
+ */
+model VestuarioCor {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome      String   @map("nome")
+  nomeKey   String   @map("nomeKey")
+  hex       String?  @map("hex")
+  ordem     Int      @default(0) @map("ordem")
+  ativo     Boolean  @default(true) @map("ativo")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([storeId, id], name: "storeId_id")
+  @@unique([storeId, nomeKey], name: "storeId_nomeKey")
+  @@index([storeId, ativo, ordem])
+  @@map("vestuario_cores")
+}
+
+/**
+ * Fonte persistida AUTORITATIVA do modo COM_GRADE (1:1 com o produto pai). Sem linha = simples.
+ * `metadata.vestuario` do produto é apenas o marcador de compatibilidade lido pelos guards P01.
+ * Produto e grade são imutáveis após a criação (trigger).
+ */
+model VestuarioProdutoGrade {
+  id             String         @id @default(cuid())
+  storeId        String         @map("storeId")
+  produtoId      String         @unique @map("produtoId")
+  produto        Produto        @relation(fields: [produtoId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  gradeId        String         @map("gradeId")
+  grade          VestuarioGrade @relation(fields: [storeId, gradeId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogVersion Int            @default(1) @map("catalogVersion")
+  createdBy      String         @default("") @map("createdBy")
+  createdAt      DateTime       @default(now()) @map("createdAt")
+  updatedAt      DateTime       @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([produtoId, storeId], name: "produtoId_storeId")
+  @@unique([storeId, produtoId, gradeId], name: "storeId_produtoId_gradeId")
+  @@index([storeId, gradeId])
+  @@map("vestuario_produtos_grade")
+}
+
+/**
+ * Variante cor × tamanho. `id` é a identidade estável (opaca, do servidor): não deriva de SKU,
+ * rótulo ou posição. SKU/código interno são opcionais na P02 (rascunho) e nunca fabricados.
+ * Preço em centavos (override do pai) e custo de referência em milionésimos — contrato P01.
+ */
+model VestuarioVariante {
+  id             String                @id @default(cuid())
+  storeId        String                @map("storeId")
+  produtoId      String                @map("produtoId")
+  gradeId        String                @map("gradeId")
+  produtoGrade   VestuarioProdutoGrade @relation(fields: [storeId, produtoId, gradeId], references: [storeId, produtoId, gradeId], onDelete: Restrict, onUpdate: Restrict)
+  corId          String                @map("corId")
+  cor            VestuarioCor          @relation(fields: [storeId, corId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  tamanhoId      String                @map("tamanhoId")
+  tamanho        VestuarioTamanho      @relation(fields: [storeId, gradeId, tamanhoId], references: [storeId, gradeId, id], onDelete: Restrict, onUpdate: Restrict)
+  sku            String?               @map("sku")
+  barcodeInterno String?               @map("barcodeInterno")
+  precoCentavos  Int?                  @map("precoCentavos")
+  custoMicros    BigInt?               @map("custoMicros")
+  ativo          Boolean               @default(true) @map("ativo")
+  version        Int                   @default(1) @map("version")
+  createdBy      String                @default("") @map("createdBy")
+  updatedBy      String                @default("") @map("updatedBy")
+  createdAt      DateTime              @default(now()) @map("createdAt")
+  updatedAt      DateTime              @updatedAt @map("updatedAt")
+
+  @@unique([storeId, produtoId, corId, tamanhoId], name: "storeId_produtoId_corId_tamanhoId")
+  @@unique([storeId, sku], name: "storeId_sku")
+  @@unique([storeId, barcodeInterno], name: "storeId_barcodeInterno")
+  @@index([storeId, produtoId, ativo])
+  @@index([storeId, corId])
+  @@index([storeId, gradeId, tamanhoId])
+  @@map("vestuario_variantes")
 }

@@ -16,7 +16,9 @@ import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
 import { ClienteEditorDialog } from "./ClienteEditor";
 import { ImportacaoHub } from "./ImportacaoHub";
 import { AparelhosPanel } from "@/components/aparelhos/AparelhosPanel";
-import { TabletSmartphone } from "lucide-react";
+import { VestuarioCatalogoPanel } from "@/components/vestuario/VestuarioCatalogoPanel";
+import { getVestuarioCatalogoStatus } from "@/app/actions/vestuario-catalogo";
+import { Shirt, TabletSmartphone } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useStoreBusiness } from "@/lib/use-store-business";
 import { BUSINESS_BRANCHES, BUSINESS_SETTINGS_HREF } from "@/lib/store-business-capabilities";
@@ -75,6 +77,7 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "produtos", label: "Produtos", icon: Package },
+  { id: "grades", label: "Grades e variações", icon: Shirt },
   { id: "servicos", label: "Serviços", icon: Wrench },
   { id: "fornecedores", label: "Fornecedores", icon: Truck },
   { id: "tecnicos", label: "Técnicos", icon: HardHat },
@@ -122,7 +125,17 @@ export function CadastrosHub() {
   const storeId = (lojaAtivaId ?? "").trim();
   const business = useStoreBusiness();
   const technical = business.resource("service.technical").operational;
-  const visibleTab = useCadastrosAvailability();
+  const baseVisibleTab = useCadastrosAvailability();
+  // Vestuário P02: a aba só existe quando o SERVIDOR habilita o catálogo para a loja (flag + allowlist).
+  const [vestuarioEnabled, setVestuarioEnabled] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setVestuarioEnabled(false);
+    if (!storeId) return;
+    getVestuarioCatalogoStatus(storeId).then((r) => { if (alive) setVestuarioEnabled(r.enabled); }, () => {});
+    return () => { alive = false; };
+  }, [storeId]);
+  const visibleTab = (id: string) => (id === "grades" ? vestuarioEnabled && !!storeId : baseVisibleTab(id));
   const selectedTab = visibleTab(tab) ? tab : "dashboard";
   return (
     <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
@@ -219,6 +232,15 @@ export function CadastrosHub() {
             storeId={storeId}
             autoOpen={autoOpenNew === "produtos" && !!storeId}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
+            onNewWithGrade={vestuarioEnabled ? () => { setTab("grades"); setAutoOpenNew("grades"); } : undefined}
+          />
+        )}
+        {selectedTab === "grades" && vestuarioEnabled && storeId && (
+          <VestuarioCatalogoPanel
+            key={storeId}
+            storeId={storeId}
+            openNewProduct={autoOpenNew === "grades"}
+            onNewProductConsumed={() => setAutoOpenNew(null)}
           />
         )}
         {selectedTab === "servicos" && (
@@ -1164,11 +1186,14 @@ export function ProdutosPanel({
   autoOpen,
   onAutoOpenConsumed,
   variant = "cadastros",
+  onNewWithGrade,
 }: {
   storeId: string;
   autoOpen?: boolean;
   onAutoOpenConsumed?: () => void;
   variant?: "cadastros" | "estoque";
+  /** Vestuário P02: presente só quando o catálogo de grade está habilitado para a loja. */
+  onNewWithGrade?: () => void;
 }) {
   const business = useStoreBusiness();
   const perms = business.permissions;
@@ -1176,6 +1201,8 @@ export function ProdutosPanel({
   const marketplaceOffered = perms?.modules?.marketplace === true;
   const importFiltersOffered = usesClientExperience(perms) === false;
   const m = useToggle();
+  const modalidade = useToggle();
+  const openNewProduct = onNewWithGrade ? modalidade.openIt : m.openIt;
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);
   const [deleteResult, setDeleteResult] = useState<DeleteProdutoResult | null>(null);
@@ -1602,7 +1629,7 @@ export function ProdutosPanel({
       <Toolbar
         count={totalRows}
         label="produtos"
-        onNew={m.openIt}
+        onNew={openNewProduct}
         filterQuery={filterQuery}
         onFilterQueryChange={setFilterQuery}
         onFilterClick={() => setShowFilters(!showFilters)}
@@ -1733,7 +1760,7 @@ export function ProdutosPanel({
           </p>
           <button
             type="button"
-            onClick={m.openIt}
+            onClick={openNewProduct}
             className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
             <Plus className="h-4 w-4" /> Novo produto
@@ -2332,6 +2359,22 @@ export function ProdutosPanel({
                 {saving ? "Excluindo…" : "Confirmar exclusão"}
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+      {onNewWithGrade && (
+        <Modal open={modalidade.open} onClose={modalidade.close} accessible title="Novo produto" subtitle="Escolha a modalidade do cadastro.">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            <button type="button" onClick={() => { modalidade.close(); m.openIt(); }} className="min-w-0 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/30 hover:bg-primary/5">
+              <Package className="mb-2 h-5 w-5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">Produto simples</p>
+              <p className="mt-1 text-xs text-muted-foreground">Um único item, com estoque e venda como hoje.</p>
+            </button>
+            <button type="button" onClick={() => { modalidade.close(); onNewWithGrade(); }} className="min-w-0 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/30 hover:bg-primary/5">
+              <Shirt className="mb-2 h-5 w-5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">Produto com grade</p>
+              <p className="mt-1 text-xs text-muted-foreground">Cores × tamanhos. Somente cadastro nesta etapa: estoque e venda por variação ainda não disponíveis.</p>
+            </button>
           </div>
         </Modal>
       )}

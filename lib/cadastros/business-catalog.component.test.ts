@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
   save: vi.fn(async (_patch: unknown) => {}),
   upsert: vi.fn(async (_id: string, _input: unknown) => ({ ok: true, id: "p-new" })),
+  vestuarioStatus: vi.fn(async (_storeId: string) => ({ enabled: false })),
 }))
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   storeId: h.storeId, ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
@@ -42,6 +43,16 @@ vi.mock("@/app/actions/cadastros", () => ({
   listProdutosPaginado: h.readProducts, listServicos: vi.fn(), listTecnicos: vi.fn(), listLogsAuditoriaCadastros: vi.fn(),
   upsertEquipamentoModelo: vi.fn(), upsertFornecedor: vi.fn(), upsertTecnico: vi.fn(), updateCliente: vi.fn(),
   upsertServico: vi.fn(), deleteProduto: vi.fn(), getUltimoBatchProdutos: vi.fn(),
+}))
+// Vestuário P02: Server Actions mockadas como as demais do HUB (o módulo real exige sessão/NextAuth).
+vi.mock("@/app/actions/vestuario-catalogo", () => ({
+  getVestuarioCatalogoStatus: h.vestuarioStatus,
+  listVestuarioCatalogo: vi.fn(async () => ({ ok: true, value: { grades: [], cores: [] } })),
+  listVestuarioProdutosGrade: vi.fn(async () => ({ ok: true, value: { items: [], nextCursor: null } })),
+  getVestuarioProdutoGrade: vi.fn(), createVestuarioGrade: vi.fn(), updateVestuarioGrade: vi.fn(), addVestuarioTamanho: vi.fn(),
+  updateVestuarioTamanho: vi.fn(), reorderVestuarioTamanhos: vi.fn(), createVestuarioCor: vi.fn(), updateVestuarioCor: vi.fn(),
+  reorderVestuarioCores: vi.fn(), createVestuarioProdutoGrade: vi.fn(), updateVestuarioProdutoGradeBase: vi.fn(),
+  addVestuarioVariantes: vi.fn(), updateVestuarioVariante: vi.fn(),
 }))
 vi.mock("@/components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal", () => ({ MovimentacaoEstoqueModal: () => null, HistoricoEstoqueGeralModal: () => null }))
 vi.mock("@/components/cadastros/lovable/components/cadastros/ClienteEditor", () => ({ ClienteEditorDialog: () => null }))
@@ -70,6 +81,7 @@ beforeEach(() => {
   h.upsert.mockReset().mockResolvedValue({ ok: true, id: "p-new" })
   h.readProducts.mockClear()
   h.save.mockClear()
+  h.vestuarioStatus.mockReset().mockResolvedValue({ enabled: false })
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })))
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -146,6 +158,20 @@ describe("Cadastros adaptados por recursos e produto", () => {
     await screen.findByText("Cadastros: Assistência técnica")
     expect(screen.getByRole("button", { name: "Técnicos" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Equipamentos" })).toBeNull()
+  })
+  it("vestuário: catálogo desligado não oferece a aba de grades nem a escolha de modalidade", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "moda" } }
+    render(React.createElement(CadastrosHub))
+    await waitFor(() => expect(h.vestuarioStatus).toHaveBeenCalledWith("loja-a"))
+    expect(screen.queryByRole("button", { name: "Grades e variações" })).toBeNull()
+  })
+  it("vestuário: catálogo habilitado pelo servidor mostra a aba de grades da loja ativa", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "moda" } }
+    h.vestuarioStatus.mockResolvedValue({ enabled: true })
+    render(React.createElement(CadastrosHub))
+    fireEvent.click(await screen.findByRole("button", { name: "Grades e variações" }))
+    expect(await screen.findByText("Cadastro de grades e variações (cor × tamanho)")).toBeTruthy()
+    expect(h.vestuarioStatus).toHaveBeenCalledWith("loja-a")
   })
   it("edição com seções ocultas omite configurações e preserva o patch", async () => {
     product({ nome: "Mercadoria", garantia: 60, metadata: {
