@@ -42,6 +42,8 @@ vi.mock("@/app/actions/cadastros", () => ({
   upsertEquipamentoModelo: vi.fn(), upsertFornecedor: vi.fn(), upsertTecnico: vi.fn(), updateCliente: vi.fn(),
   upsertServico: vi.fn(), deleteProduto: vi.fn(), getUltimoBatchProdutos: vi.fn(async () => null),
 }))
+// Vestuário P02 (main): Server Action real exige sessão/NextAuth — mock igual ao business-catalog.
+vi.mock("@/app/actions/vestuario-catalogo", () => ({ getVestuarioCatalogoStatus: vi.fn(async () => ({ enabled: false })) }))
 vi.mock("@/components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal", () => ({ MovimentacaoEstoqueModal: () => null, HistoricoEstoqueGeralModal: () => null }))
 vi.mock("@/components/cadastros/lovable/components/cadastros/ClienteEditor", () => ({ ClienteEditorDialog: () => null }))
 vi.mock("@/components/cadastros/lovable/components/cadastros/ImportacaoHub", () => ({ ImportacaoHub: () => null }))
