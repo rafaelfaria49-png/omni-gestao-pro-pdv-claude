@@ -23,7 +23,7 @@ describe("legado preservado, sem reinterpretar descrição como grade", () => {
     expect(() => assertProductCommercialSaleSupported(metadata)).not.toThrow()
     expect(productVariantIssue(metadata)).toBeNull()
     expect(productCommercialCatalogProjection(metadata, 39.9)).toMatchObject({ vendaOperacional: true, gradeOperacional: false, precoNaBase: 39.9 })
-    expect(productStockMovementAvailability(metadata)).toEqual({ disponivel: true, unidade: "UN" })
+    expect(productStockMovementAvailability(metadata)).toEqual({ disponivel: true, unidade: "UN", ajusteDisponivel: true })
     expect(JSON.stringify(metadata)).toBe(before)
   })
   it("preserva os bloqueios e códigos existentes de peso e declaração inválida", () => {
@@ -37,7 +37,7 @@ describe("legado preservado, sem reinterpretar descrição como grade", () => {
     const metadata = { vestuario, comercial: simpleCommercial }
     expect(() => assertProductCommercialSaleSupported(metadata)).not.toThrow()
     expect(productVariantIssue(metadata)).toBeNull()
-    expect(productStockMovementAvailability(metadata)).toEqual({ disponivel: true, unidade: "UN" })
+    expect(productStockMovementAvailability(metadata)).toEqual({ disponivel: true, unidade: "UN", ajusteDisponivel: true })
     expect(() => assertNoUnsupportedVariantLines([{ inventoryId: "p-a", vestuario }])).not.toThrow()
   })
   it("cadastro simples preserva metadata.vestuario livre sem alterar saldo", async () => {
