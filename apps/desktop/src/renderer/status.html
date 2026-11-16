@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniGestão Pro</title>
+  <link rel="stylesheet" href="status.css" />
+</head>
+<body data-kind="loading">
+  <div class="channel-strip" id="channel-strip" hidden></div>
+
+  <main class="panel" aria-live="polite">
+    <img class="mark" src="icon.svg" alt="" width="64" height="64" />
+    <div class="progress" id="progress" aria-hidden="true"><span></span></div>
+    <h1 id="title">Abrindo o OmniGestão</h1>
+    <p id="message">Conectando ao servidor da sua loja.</p>
+    <p class="detail" id="detail" hidden></p>
+    <div class="actions" id="actions">
+      <button type="button" class="primary" id="retry" hidden>Tentar conectar de novo</button>
+      <button type="button" class="secondary" id="update" hidden>Ver nova versão</button>
+      <button type="button" class="secondary" id="close" hidden>Voltar ao sistema</button>
+    </div>
+  </main>
+
+  <footer class="meta" id="meta"></footer>
+  <script src="status.js"></script>
+</body>
+</html>

@@ -9,6 +9,10 @@ const eslintConfig = [
   {
     ignores: [
       "node_modules/**",
+      "generated/**",
+      ".vercel/**",
+      // Referência arquivada, também excluída do TypeScript e do Vitest.
+      "components/pdv-github-original/**",
       ".next/**",
       "out/**",
       "build/**",
@@ -16,6 +20,8 @@ const eslintConfig = [
       "prisma/migrations/**",
       /** Roteiros de evidência (.cjs/.sh) não são código da app; o bloco de regras abaixo não cobre .cjs. */
       "docs/ai-execution/_evidence/**",
+      // Cliente Windows (Electron): pacote separado, validado por tsc estrito + testes próprios.
+      "apps/desktop/**",
     ],
   },
   ...nextCoreWebVitals,

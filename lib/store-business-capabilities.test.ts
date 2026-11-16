@@ -15,6 +15,26 @@ describe("Ramos combináveis, contrato canônico V1", () => {
     }
     expect(businessPresentation(bakery).productExample).toContain("Pão")
   })
+  it("aparelhos por IMEI: nenhum ramo nem perfil legado liga; origem é ativação manual", () => {
+    const branches = ["padaria", "assistencia", "acessorios", "moda", "variedades", "agropecuaria", "supermercado", "comercio"] as const
+    for (const branch of branches) {
+      expect(resolveBusinessResource(caps(branch), "catalog.serializedDevices")).toMatchObject({ requested: false, enabled: false, operational: false, source: "manual" })
+    }
+    for (const profile of [null, "ASSISTENCIA", "VARIEDADES", "SUPERMERCADO"]) {
+      expect(resolveBusinessResource(null, "catalog.serializedDevices", profile)).toMatchObject({ requested: false, source: "manual" })
+    }
+    // Os recursos de aparelho que o ramo sugere continuam como sugestão — só o IMEI é manual.
+    expect(resolveBusinessResource(caps("assistencia"), "catalog.deviceCompatibility")).toMatchObject({ requested: true, source: "preset" })
+    expect(resolveBusinessResource(null, "pdv.accessoryModelColor", "ASSISTENCIA")).toMatchObject({ requested: true, source: "legacy" })
+  })
+  it("aparelhos por IMEI: escolha explícita liga, mas a permissão do módulo continua obrigatória", () => {
+    for (const override of [true, { enabled: true, nota: "piloto" }] as const) {
+      const shop = caps("padaria", { "catalog.serializedDevices": override })
+      expect(resolveBusinessResource(shop, "catalog.serializedDevices")).toMatchObject({ requested: true, enabled: true, operational: true, source: "explicit" })
+      expect(resolveBusinessResource(shop, "catalog.serializedDevices", undefined, false)).toMatchObject({ requested: true, enabled: false, operational: false })
+    }
+    expect(resolveBusinessResource(caps("assistencia", { "catalog.serializedDevices": false }), "catalog.serializedDevices")).toMatchObject({ requested: false, source: "explicit" })
+  })
   it.each(["variedades", "agropecuaria", "comercio"] as const)("%s combina peso e grade sem mudar ramo", (branch) => {
     const mixed = caps(branch, { "catalog.weight": true, "catalog.variants": { enabled: true } })
     for (const key of ["catalog.weight", "catalog.variants"] as const) {

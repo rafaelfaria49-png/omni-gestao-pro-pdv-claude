@@ -1,5 +1,6 @@
 import { ManualKgSaleError } from "@/lib/vendas/manual-kg-contract"
 import { ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
+import { AparelhoDevolucaoBloqueadaError } from "@/lib/aparelhos/sale-reversal"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -198,7 +199,7 @@ export async function POST(req: Request) {
       }
     }
     // Guards da venda/estoque KG (#315/#335) que escapem do escritor: 409, nada gravado.
-    if (error instanceof ManualKgSaleError || error instanceof ProductWeightNotOperationalError || error instanceof ProductCommercialInvalidError) {
+    if (error instanceof ManualKgSaleError || error instanceof ProductWeightNotOperationalError || error instanceof ProductCommercialInvalidError || error instanceof AparelhoDevolucaoBloqueadaError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
     }
     if (error instanceof DevolucaoBusinessError) {

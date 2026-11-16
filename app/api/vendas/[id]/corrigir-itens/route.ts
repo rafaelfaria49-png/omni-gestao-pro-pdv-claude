@@ -1,5 +1,6 @@
 import { correctManualKgWeight, KgCorrectionError } from "@/lib/vendas/manual-kg-correction-service"
 import { itemCommercialQuantity } from "@/lib/vendas/item-quantity"
+import { APARELHO_REVERSAO_NAO_INTEGRADA, linhasAparelhoDoPayload } from "@/lib/aparelhos/sale-reversal"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/corrigir-itens  — Workspace de Correção, F2 (Produtos/Estoque)
@@ -113,6 +114,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!venda) return NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 })
     if (venda.status === "cancelada") {
       return NextResponse.json({ ok: false, error: "Não é possível corrigir uma venda cancelada" }, { status: 409 })
+    }
+    // Aparelho por IMEI: correção de itens não integrada — fail-closed (estoque/unidade/garantia em sincronia).
+    if (linhasAparelhoDoPayload(venda.payload).length > 0) {
+      return NextResponse.json({ ok: false, error: APARELHO_REVERSAO_NAO_INTEGRADA.message, code: APARELHO_REVERSAO_NAO_INTEGRADA.code }, { status: 409 })
     }
 
     // Gate fiscal (GOAL_003): NAO_FISCAL → no-op; estados fiscais bloqueados impedem a correção.

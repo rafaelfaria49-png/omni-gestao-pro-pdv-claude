@@ -15,6 +15,7 @@
  */
 
 import { buildCatalogoIndex, normalizeDeviceQuery, searchDeviceModels } from "./catalogo-aparelhos"
+import { chaveNomeSemFabricante, fabricanteDaMarca, hierarquiaDoModeloGlobal } from "./hierarquia"
 import type { PeliculaGrupo, PeliculaGrupoMember } from "./peliculas"
 import type {
   CatalogoIndex,
@@ -33,6 +34,8 @@ export const MANUAL_MODEL_KEY_PREFIX = "manual_"
 
 export const LOJA_MODELO_LIMITS = Object.freeze({
   brand: 60,
+  manufacturer: 60,
+  line: 30,
   name: 80,
   alias: 60,
   aliases: 10,
@@ -45,6 +48,15 @@ export interface LojaModelo {
   storeId: string
   modelKey: string
   brand: string
+  /** Fabricante (COMPAT-PROFISSIONAL-001). "" em registros antigos → derivar da marca. */
+  manufacturer: string
+  /** Linha comercial (ex.: "A", "Note"). Opcional. */
+  line: string
+  /**
+   * COMPAT-CATALOGO-BRASIL-2023-2026-002 — "aguardando_lancamento" = registro administrativo de
+   * aparelho ainda não lançado oficialmente: aparece na gestão, mas NÃO nas buscas operacionais.
+   */
+  lancamento: LojaModeloLancamento
   name: string
   aliases: string[]
   notes: string
@@ -64,8 +76,13 @@ export type LojaCompatAcao = (typeof LOJA_COMPAT_ACOES)[number]
 /**
  * Status aceitos para relação MANUAL. `confirmado_fornecedor` fica de fora de propósito:
  * decisão da loja não é confirmação de fabricante/fornecedor.
+ *
+ * COMPAT-PROFISSIONAL-001: `confirmado_loja` = a LOJA testou fisicamente o encaixe. Só é
+ * gravado com confirmação explícita do operador (`confirmacaoFisica: true`), registrada
+ * (quem/quando). Nunca é apresentado como confirmação do fabricante.
+ * Ordem: do mais forte ao mais fraco (usada para ordenar grupos).
  */
-export const LOJA_COMPAT_STATUSES = ["provavel_mercado", "precisa_testar", "nao_recomendado"] as const
+export const LOJA_COMPAT_STATUSES = ["confirmado_loja", "provavel_mercado", "precisa_testar", "nao_recomendado"] as const
 export type LojaCompatStatus = (typeof LOJA_COMPAT_STATUSES)[number]
 
 export interface LojaCompatOverride {
@@ -75,6 +92,10 @@ export interface LojaCompatOverride {
   acao: LojaCompatAcao
   status: LojaCompatStatus
   notes: string
+  /** Origem informada (COMPAT-PROFISSIONAL-001). */
+  origem?: string
+  confirmedBy?: string
+  confirmedAt?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -105,10 +126,20 @@ export function isManualModelKey(modelKey: string): boolean {
   return typeof modelKey === "string" && modelKey.startsWith(MANUAL_MODEL_KEY_PREFIX)
 }
 
-export type LojaModeloInputErrors = Partial<Record<"brand" | "name" | "aliases" | "notes", string>>
+export type LojaModeloInputErrors = Partial<Record<"brand" | "manufacturer" | "line" | "name" | "aliases" | "notes", string>>
+
+export const LOJA_MODELO_LANCAMENTOS = ["lancado", "aguardando_lancamento"] as const
+export type LojaModeloLancamento = (typeof LOJA_MODELO_LANCAMENTOS)[number]
+
+export function normalizeLancamento(v: unknown): LojaModeloLancamento {
+  return v === "aguardando_lancamento" ? "aguardando_lancamento" : "lancado"
+}
 
 export interface LojaModeloInput {
   brand: string
+  manufacturer: string
+  line: string
+  lancamento: LojaModeloLancamento
   name: string
   aliases: string[]
   notes: string
@@ -144,9 +175,13 @@ export function sanitizeLojaModeloInput(
     errors.aliases = `No máximo ${LOJA_MODELO_LIMITS.aliases} apelidos.`
   }
   const notes = cleanCatalogText(input.notes, LOJA_MODELO_LIMITS.notes)
+  // Fabricante ausente = derivado da marca (ex.: POCO → Xiaomi); nunca inventado além do mapa.
+  const manufacturer = cleanCatalogText(input.manufacturer, LOJA_MODELO_LIMITS.manufacturer) || fabricanteDaMarca(brand)
+  const line = cleanCatalogText(input.line, LOJA_MODELO_LIMITS.line)
 
   if (Object.keys(errors).length > 0) return { ok: false, errors }
-  return { ok: true, value: { brand, name, aliases, notes } }
+  const lancamento = normalizeLancamento(input.lancamento)
+  return { ok: true, value: { brand, manufacturer, line, lancamento, name, aliases, notes } }
 }
 
 /** Nome exibido/gravado na venda: "Marca Modelo" (sem repetir a marca). */
@@ -179,14 +214,25 @@ export function aliasesFromJson(value: unknown): string[] {
  */
 export function findGlobalDuplicate(
   index: CatalogoIndex,
-  input: { brand: string; name: string },
+  input: { brand: string; name: string; manufacturer?: string },
 ): DeviceModel | null {
   const brandKey = catalogKey(input.brand)
   const nameKey = catalogKey(input.name)
   const fullKey = catalogKey(lojaModeloCanonicalName(input))
   if (!brandKey || !nameKey) return null
+  // COMPAT-PROFISSIONAL-001: a loja informa a MARCA COMERCIAL ("Galaxy", "Redmi") e o CSV às vezes
+  // guarda o FABRICANTE ("Samsung"). Dentro do mesmo fabricante, compara também o nome completo
+  // sem o fabricante: "Galaxy" + "A56 5G" colide com "Samsung Galaxy A56 5G"; "A56" NÃO colide
+  // com "A56 5G" (nomes semelhantes não são confundidos).
+  const fabKey = catalogKey((input.manufacturer ?? "").trim() || fabricanteDaMarca(input.brand))
+  const semFab = chaveNomeSemFabricante(fabKey, lojaModeloCanonicalName(input))
   for (const model of index.models) {
-    if (catalogKey(model.brand) !== brandKey) continue
+    if (catalogKey(model.brand) !== brandKey) {
+      if (fabKey && catalogKey(hierarquiaDoModeloGlobal(model).fabricante) === fabKey) {
+        if (chaveNomeSemFabricante(fabKey, model.canonicalName) === semFab) return model
+      }
+      continue
+    }
     const canonical = catalogKey(model.canonicalName)
     const withoutBrand = canonical.startsWith(brandKey + " ") ? canonical.slice(brandKey.length + 1) : canonical
     const candidates = [canonical, withoutBrand, catalogKey(model.shortName)]
@@ -207,17 +253,19 @@ export function buildLojaCatalogoIndex(modelos: readonly LojaModelo[]): Catalogo
   const models: DeviceModel[] = []
   const aliases: DeviceAlias[] = []
   for (const m of modelos) {
-    if (!m.active) continue
+    // Inativo ou aguardando lançamento: fora da busca (continua resolvível por chave/gestão).
+    if (!m.active || m.lancamento === "aguardando_lancamento") continue
     models.push({
       modelKey: m.modelKey,
       brand: m.brand,
-      commercialLine: "",
+      commercialLine: m.line ?? "",
       canonicalName: lojaModeloCanonicalName(m),
       shortName: m.name,
       generation: "",
       networkVariant: "",
       yearHint: "",
       sourceOrigin: "manual_loja",
+      manufacturer: m.manufacturer ?? "",
       status: "ativo",
       confidence: "",
       notes: m.notes,
@@ -241,6 +289,30 @@ export function buildLojaCatalogoIndex(modelos: readonly LojaModelo[]): Catalogo
 
 const MATCH_RANK = { exact: 0, prefix: 1, contains: 2 } as const
 
+const cobertosCache = new WeakMap<CatalogoIndex, { global: CatalogoIndex; keys: Map<string, DeviceModel> }>()
+
+/**
+ * Chave global → modelo manual (ativo) da loja que já representa esse aparelho — mesma regra da
+ * duplicidade. Usado para trocar o resultado global pelo cadastro da loja, preservando o casamento.
+ */
+export function globaisCobertosPelaLoja(
+  globalIndex: CatalogoIndex,
+  lojaIndex: CatalogoIndex | null,
+): Map<string, DeviceModel> {
+  if (!lojaIndex) return new Map()
+  const hit = cobertosCache.get(lojaIndex)
+  if (hit && hit.global === globalIndex) return hit.keys
+  const keys = new Map<string, DeviceModel>()
+  for (const m of lojaIndex.models) {
+    const g = findGlobalDuplicate(globalIndex, { brand: m.brand, name: m.shortName, manufacturer: m.manufacturer })
+    // Pelo canônico: manual legado "iPhone 17 Air" cobre o "iPhone Air" que a busca devolve.
+    const canon = g ? globalIndex.canonicalKeyOf(g.modelKey) : ""
+    if (canon && !keys.has(canon)) keys.set(canon, m)
+  }
+  cobertosCache.set(lojaIndex, { global: globalIndex, keys })
+  return keys
+}
+
 /**
  * Busca no catálogo global E nos modelos manuais da loja. Os manuais são marcados com
  * `source: "loja"` e a flag `cadastro_manual_loja`; o ranking (tipo de match) é preservado.
@@ -252,21 +324,52 @@ export function searchDeviceModelsComLoja(
   options: SearchDeviceOptions = {},
 ): DeviceSearchResult[] {
   const limit = options.limit ?? 20
-  const globais = searchDeviceModels(globalIndex, query, { ...options, limit }).map((r) => ({
-    ...r,
-    source: "global" as const,
-  }))
-  if (!lojaIndex || lojaIndex.models.length === 0) return globais
-  const manuais = searchDeviceModels(lojaIndex, query, { ...options, limit }).map((r) => ({
+  if (!lojaIndex || lojaIndex.models.length === 0) {
+    return searchDeviceModels(globalIndex, query, { ...options, limit }).map((r) => ({ ...r, source: "global" as const }))
+  }
+  // Marca oculta na loja vale só para o catálogo global: modelo cadastrado pela loja sempre aparece
+  // (inclusive quando achado pelo nome/alias do global equivalente).
+  const { marcasOcultas, ...semOcultas } = options
+  const globaisCobertos = globaisCobertosPelaLoja(globalIndex, lojaIndex)
+  // Sem corte aqui: ocultação, cobertura e deduplicação vêm antes do limite final (senão um global
+  // descartado ocuparia vaga e esconderia resultado válido). Global de marca oculta só entra quando a
+  // loja o cadastrou à mão (vira o manual logo abaixo).
+  const globais = searchDeviceModels(globalIndex, query, { ...semOcultas, limit: globalIndex.models.length })
+    .filter((r) => globaisCobertos.has(r.modelKey) || !marcasOcultas?.has(normalizeDeviceQuery(r.brand)))
+    .map((r) => ({ ...r, source: "global" as const }))
+  const manuais = searchDeviceModels(lojaIndex, query, { ...semOcultas, limit }).map((r) => ({
     ...r,
     source: "loja" as const,
     reviewFlags: [...r.reviewFlags, "cadastro_manual_loja"],
   }))
+  // COMPAT-CATALOGO-BRASIL-2023-2026-002: quando o catálogo global passa a ter um aparelho que a
+  // loja já cadastrou à mão (ex.: G47), a busca DESTA loja mostra só o cadastro dela — os produtos e
+  // vendas vinculados à chave manual continuam valendo e não aparece duplicata. O casamento do
+  // global (ex.: "Moto G47", alias "MotoG47") é preservado: o resultado vira o cadastro da loja.
+  const globaisOuManual = globais.map((g) => {
+    const manual = globaisCobertos.get(g.modelKey)
+    if (!manual) return g
+    return {
+      ...g,
+      modelKey: manual.modelKey,
+      brand: manual.brand,
+      canonicalName: manual.canonicalName,
+      shortName: manual.shortName,
+      commercialLine: manual.commercialLine,
+      aliases: (lojaIndex.aliasesByModelKey.get(manual.modelKey) ?? []).map((a) => a.alias).slice(0, 6),
+      confidence: manual.confidence,
+      status: manual.status,
+      source: "loja" as const,
+      reviewFlags: ["cadastro_manual_loja"],
+    }
+  })
   // Manuais primeiro no empate: o operador acabou de cadastrar e espera encontrá-los.
-  return [...manuais, ...globais]
+  const vistos = new Set<string>()
+  return [...manuais, ...globaisOuManual]
     .map((r, i) => ({ r, i }))
     .sort((a, b) => MATCH_RANK[a.r.matchType] - MATCH_RANK[b.r.matchType] || a.i - b.i)
     .map(({ r }) => r)
+    .filter((r) => (vistos.has(r.modelKey) ? false : (vistos.add(r.modelKey), true)))
     .slice(0, limit)
 }
 
@@ -297,11 +400,40 @@ export function normalizeLojaCompatStatus(v: unknown): LojaCompatStatus {
 export const LOJA_MANUAL_GROUP_PREFIX = "loja_manual"
 export const AVISO_COMPAT_MANUAL =
   "Informada manualmente pela loja — não é confirmação do fabricante. Teste antes de vender."
+/** Aviso do status `confirmado_loja`: confirmação física DA LOJA, não do fabricante. */
+export const AVISO_COMPAT_CONFIRMADA_LOJA =
+  "Confirmada pela loja em teste físico — não é confirmação do fabricante."
+/** Aviso fixo: compatibilidades de película e capinha são independentes. */
+export const AVISO_CATEGORIAS_INDEPENDENTES =
+  "Película e capinha têm compatibilidades independentes: uma não garante a outra."
 
 export interface PeliculaGruposComLoja {
   grupos: PeliculaGrupo[]
   /** Modelos removidos POR ESTA LOJA de grupos globais (para exibir/restaurar). */
   suprimidos: PeliculaGrupoMember[]
+}
+
+/**
+ * COMPAT-CATALOGO-BRASIL-2023-2026-002 — decisões gravadas com chave MESCLADA (ex.: "iPhone 7 Branco")
+ * passam a valer para o aparelho canônico. Ligação que vira o próprio modelo (A≡B) é descartada.
+ */
+export function canonicalizarOverrides<T extends Pick<LojaCompatOverride, "modelKeyA" | "modelKeyB">>(
+  overrides: readonly T[],
+  canonicalKeyOf: (modelKey: string) => string,
+): T[] {
+  // Mesmo par gravado com a chave antiga E com a canônica: vale a canônica. Entre antigas, vale a primeira
+  // recebida — `listLojaCompatOverrides` entrega da mais recente para a mais antiga.
+  const porPar = new Map<string, { o: T; jaCanonica: boolean }>()
+  for (const o of overrides) {
+    const pair = orderedPair(canonicalKeyOf(o.modelKeyA), canonicalKeyOf(o.modelKeyB))
+    if (!pair) continue
+    const jaCanonica = pair.modelKeyA === o.modelKeyA && pair.modelKeyB === o.modelKeyB
+    const id = `${(o as { categoria?: string }).categoria ?? ""}|${pair.modelKeyA}|${pair.modelKeyB}`
+    const atual = porPar.get(id)
+    if (atual && (atual.jaCanonica || !jaCanonica)) continue
+    porPar.set(id, { o: jaCanonica ? o : { ...o, ...pair }, jaCanonica })
+  }
+  return [...porPar.values()].map((x) => x.o)
 }
 
 /**
@@ -376,21 +508,67 @@ export function applyPeliculaOverrides(
     if (!members?.length) continue
     members.sort((a, b) => a.brand.localeCompare(b.brand, "pt-BR") || a.canonicalName.localeCompare(b.canonicalName, "pt-BR"))
     const brands = new Set([resolveMember(key), ...members].map((m) => m.brand.trim().toLowerCase()).filter(Boolean))
-    grupos.push({
-      groupKey: `${LOJA_MANUAL_GROUP_PREFIX}__${status}`,
-      groupName: "Compatibilidade informada pela loja",
-      compatibilityType: "grupo_pelicula_manual_loja",
-      productCategory: "pelicula_tela",
-      status,
-      confidence: "baixa",
-      requiresDryTest: true,
-      isCrossBrandGroup: brands.size > 1,
-      memberCount: members.length + 1,
-      members,
-      evidence: "",
-      warnings: [AVISO_COMPAT_MANUAL],
-    })
+    grupos.push(grupoManual("pelicula_tela", status, members, brands.size > 1))
   }
 
   return { grupos, suprimidos: [...suprimidosVistos.values()] }
+}
+
+function grupoManual(
+  categoria: LojaCompatCategoria,
+  status: LojaCompatStatus,
+  members: PeliculaGrupoMember[],
+  crossBrand: boolean,
+): PeliculaGrupo {
+  const confirmada = status === "confirmado_loja"
+  return {
+    groupKey:
+      categoria === "pelicula_tela"
+        ? `${LOJA_MANUAL_GROUP_PREFIX}__${status}`
+        : `${LOJA_MANUAL_GROUP_PREFIX}_capinha__${status}`,
+    groupName: confirmada ? "Confirmada pela loja (teste físico)" : "Compatibilidade informada pela loja",
+    compatibilityType: categoria === "pelicula_tela" ? "grupo_pelicula_manual_loja" : "grupo_capinha_manual_loja",
+    productCategory: categoria,
+    status,
+    confidence: confirmada ? "media" : "baixa",
+    requiresDryTest: !confirmada,
+    isCrossBrandGroup: crossBrand,
+    memberCount: members.length + 1,
+    members,
+    evidence: "",
+    warnings: [confirmada ? AVISO_COMPAT_CONFIRMADA_LOJA : AVISO_COMPAT_MANUAL],
+  }
+}
+
+/**
+ * COMPAT-PROFISSIONAL-001 — grupos de CAPINHA de um modelo. Não há base global de capinha:
+ * tudo vem das relações informadas pela loja (categoria `capinha`), agrupadas por status e
+ * NÃO transitivas. Relações de película nunca entram aqui (e vice-versa).
+ */
+export function buildCapinhaGrupos(
+  modelKey: string,
+  overrides: readonly LojaCompatOverride[],
+  resolveMember: (modelKey: string) => PeliculaGrupoMember,
+): PeliculaGrupo[] {
+  const key = (modelKey ?? "").trim()
+  const porStatus = new Map<LojaCompatStatus, PeliculaGrupoMember[]>()
+  const vistos = new Set<string>()
+  for (const o of overrides) {
+    if (o.categoria !== "capinha" || o.acao !== "adicionar") continue
+    const other = otherKeyOf(o, key)
+    if (!other || vistos.has(other)) continue
+    vistos.add(other)
+    const arr = porStatus.get(o.status) ?? []
+    arr.push(resolveMember(other))
+    porStatus.set(o.status, arr)
+  }
+  const grupos: PeliculaGrupo[] = []
+  for (const status of LOJA_COMPAT_STATUSES) {
+    const members = porStatus.get(status)
+    if (!members?.length) continue
+    members.sort((a, b) => a.brand.localeCompare(b.brand, "pt-BR") || a.canonicalName.localeCompare(b.canonicalName, "pt-BR"))
+    const brands = new Set([resolveMember(key), ...members].map((m) => m.brand.trim().toLowerCase()).filter(Boolean))
+    grupos.push(grupoManual("capinha", status, members, brands.size > 1))
+  }
+  return grupos
 }

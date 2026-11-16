@@ -4,6 +4,7 @@ import { loadCatalogoIndex } from "@/lib/catalogo-aparelhos/catalogo-loader"
 import { buildLojaCatalogoIndex, searchDeviceModelsComLoja } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import { listLojaModelos } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import { resolveCatalogoLojaRead } from "@/lib/catalogo-aparelhos/loja-catalogo-api"
+import { marcasOcultasParaLoja } from "@/lib/compat/compat-marcas"
 
 /**
  * CATALOGO-APARELHOS-METADATA-MVP-001 — busca/autocomplete de modelos de aparelhos.
@@ -40,7 +41,9 @@ export async function GET(req: Request) {
   try {
     const index = loadCatalogoIndex()
     const lojaIndex = gate.storeId ? buildLojaCatalogoIndex(await listLojaModelos(prisma, gate.storeId)) : null
-    const results = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand })
+    // Marcas ocultas nesta loja (padrão: só as prioritárias aparecem). Modelos da loja nunca são ocultados.
+    const marcasOcultas = await marcasOcultasParaLoja(gate.storeId)
+    const results = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand, marcasOcultas })
     return NextResponse.json({ query: q, results })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

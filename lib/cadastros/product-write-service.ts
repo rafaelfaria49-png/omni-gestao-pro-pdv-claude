@@ -48,6 +48,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { hasInvalidProductCommercial, isProductWeightDeclared, productCommercialFromMetadata, validateProductCommercial } from "@/lib/cadastros/product-commercial-contract"
 import { resolveBusinessResource } from "@/lib/store-business-capabilities"
+import { productVariantIssue } from "@/lib/vestuario/guard-contract"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 import { cadastrosAuditLogFields } from "@/lib/cadastros/cadastros-audit-principal"
 import {
@@ -117,6 +118,15 @@ export type ProductWriteDb = {
 export type ProductWriteDeps = {
   /** Default: Prisma real. Testes injetam um fake — sem banco, sem mocks de módulo. */
   db?: ProductWriteDb
+}
+
+/**
+ * Vestuário P02: unique violado sem produto conflitante = código já usado por uma variação de cor/tamanho
+ * (trigger `vestuario_produtos_colisao_trg` no banco) ou corrida. Nada foi gravado; antes virava PERSISTENCE.
+ */
+const IDENTIFIER_TAKEN_FAILURE: Extract<ProductWriteResult, { ok: false }> = {
+  ok: false, code: "DUPLICATE", field: "sku",
+  message: "Código (SKU ou código de barras) já usado por outro produto ou por uma variação de cor/tamanho desta loja.",
 }
 
 type TrustedContext = { storeId: string; principal: ProductWriteContext["principal"] }
@@ -373,6 +383,10 @@ function resolveMetadata(
   | { ok: true; metadata: Record<string, unknown> | undefined; clear: boolean }
   | { ok: false; error: ProductWriteResult } {
   const rawMetadata = input.metadata
+  // P01 não persiste grade nem permite removê-la por um editor legado.
+  // Ausência do namespace novo (inclusive gradePlanejada) preserva o contrato atual.
+  const variantIssue = productVariantIssue(existingMetadata) ?? productVariantIssue(rawMetadata)
+  if (variantIssue) return { ok: false, error: productWriteInvalid(variantIssue.message, "metadata") }
   if (rawMetadata !== undefined && rawMetadata !== null && !isRecord(rawMetadata)) {
     return { ok: false, error: productWriteInvalid("metadata deve ser objeto JSON ou null.", "metadata") }
   }
@@ -656,6 +670,7 @@ export async function createProduct(
     if (isPrismaKnownError(e, "P2002")) {
       const conflicted = await findDuplicate(db, ctx.storeId, prePatch.sku, prePatch.barcode).catch(() => null)
       if (conflicted) return duplicateFailure(conflicted, prePatch.sku, prePatch.barcode, "create")
+      return IDENTIFIER_TAKEN_FAILURE
     }
     console.error("[product-write-service] create falhou:", e instanceof Error ? e.message : String(e))
     return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
@@ -779,7 +794,8 @@ export async function updateProductTx(
     if (isPrismaKnownError(e, "P2002")) {
       const conflicted = await findDuplicate(tx, ctx.storeId, nextSku, nextBarcode, pid).catch(() => null)
       if (conflicted) return duplicateFailure(conflicted, nextSku, nextBarcode, "update")
-      return { ok: false, code: "DUPLICATE", message: "Produto já cadastrado nesta loja.", field: nextBarcode ? "barcode" : "sku" }
+      // Sem produto conflitante legível (transação já abortada ou código de variação — trigger P02).
+      return { ...IDENTIFIER_TAKEN_FAILURE, field: nextBarcode && !nextSku ? "barcode" : "sku" }
     }
     if (isPrismaKnownError(e, "P2025")) {
       return { ok: false, code: "NOT_FOUND", message: "Produto não encontrado." }
@@ -809,6 +825,7 @@ export async function updateProduct(
   try {
     return await db.$transaction((tx) => updateProductTx(tx, context, productId, input, opts))
   } catch (e) {
+    if (isPrismaKnownError(e, "P2002")) return IDENTIFIER_TAKEN_FAILURE
     console.error("[product-write-service] update transacional falhou:", e instanceof Error ? e.message : String(e))
     return { ok: false, code: "PERSISTENCE", message: "Não foi possível salvar o produto. Tente novamente." }
   }
