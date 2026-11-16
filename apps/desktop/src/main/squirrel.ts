@@ -24,7 +24,9 @@ export function handleSquirrelEvent(event: SquirrelEvent, quit: () => void): boo
       ? [`--removeShortcut=${exeName}`]
       : [`--createShortcut=${exeName}`, "--shortcut-locations=Desktop,StartMenu"]
   try {
-    const child = spawn(updateExe, args, { detached: true, stdio: "ignore", windowsHide: true })
+    // cwd na raiz da instalação: o Squirrel inicia o gancho dentro de app-<versão>, e um processo
+    // com essa pasta como diretório atual impede o desinstalador de removê-la.
+    const child = spawn(updateExe, args, { cwd: path.dirname(updateExe), detached: true, stdio: "ignore", windowsHide: true })
     child.on("close", () => quit())
     child.on("error", () => quit())
   } catch {

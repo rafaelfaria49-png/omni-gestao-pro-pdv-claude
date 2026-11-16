@@ -261,9 +261,14 @@ try {
         env,
       )
       console.log(`INFO restos em ${installDir}: ${JSON.stringify(files)}`)
-      for (const log of ["SquirrelSetup.log", "Squirrel-Shortcut.log"]) {
+      const procs = ps(
+        "$d=$env:OMNI_INSTALL_DIR; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($d,[StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.CommandLine })",
+        env,
+      )
+      console.log(`INFO processos vivos da pasta: ${JSON.stringify(procs)}`)
+      for (const log of [path.join(installDir, "SquirrelSetup.log"), path.join(localAppData, "SquirrelTemp", "SquirrelSetup.log")]) {
         try {
-          console.log(`INFO ${log} (fim):\n${readFileSync(path.join(installDir, log), "utf8").split(/\r?\n/).slice(-25).join("\n")}`)
+          console.log(`INFO ${log} (fim):\n${readFileSync(log, "utf8").split(/\r?\n/).slice(-40).join("\n")}`)
         } catch {
           /* sem log */
         }
