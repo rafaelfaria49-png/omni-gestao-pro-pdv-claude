@@ -55,6 +55,11 @@ chave composta da P02. CHECKs/uniques/triggers protegem também SQL direto, não
 Dois índices GIN de arrays de chaves derivadas (produto/variante) aceleram consulta e diagnóstico das fontes
 históricas sem backfill, reescrita ou UNIQUE que recusaria ambiguidades antigas. Construção e custo de escrita
 devem ser medidos em QA e novamente antes de qualquer autorização de migration Production.
+O normalizador puro `p03_key` usa corpo SQL `RETURN`, analisado na criação, com built-ins `pg_catalog`:
+evita configuração de search_path por chamada e permite inline, sem depender de resolução tardia de nomes.
+Os helpers agregados/owners e os triggers preservam `SET search_path=pg_catalog,public`. A/B em PG17 QA:
+10 mil entradas ~157 ms versus ~44 ms e zero diferenças em 10 mil casos de whitespace/Unicode. O impacto
+no lote de catálogo deve ser medido separadamente; esse microteste não representa capacidade Production.
 
 ### Fonte de verdade e compatibilidade
 

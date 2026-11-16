@@ -150,9 +150,9 @@ ALTER TABLE "identificacao_solicitacoes" ADD CONSTRAINT "identificacao_solicitac
 ALTER TABLE "identificacao_solicitacoes" ADD CONSTRAINT "identificacao_solicitacoes_tentativaId_storeId_fkey" FOREIGN KEY ("tentativaId", "storeId") REFERENCES "etiqueta_tentativas"("id", "storeId") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- P03: extensão aditiva. Sem backfill, conversão de legado, saldo ou mudança em migrations anteriores.
-CREATE FUNCTION p03_key(v text) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path = pg_catalog, public AS $fn$
- SELECT translate(btrim(coalesce(v,''), E' \t\n\r\f' || chr(11)||chr(160)||chr(5760)||chr(8192)||chr(8193)||chr(8194)||chr(8195)||chr(8196)||chr(8197)||chr(8198)||chr(8199)||chr(8200)||chr(8201)||chr(8202)||chr(8232)||chr(8233)||chr(8239)||chr(8287)||chr(12288)||chr(65279)), 'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ');
-$fn$;
+-- Corpo SQL analisado na criação: dependências ligadas, inline de normalização pura e sem SET por linha.
+CREATE FUNCTION p03_key(v text) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
+RETURN pg_catalog.translate(pg_catalog.btrim(coalesce(v,''), E' \t\n\r\f' || pg_catalog.chr(11)||pg_catalog.chr(160)||pg_catalog.chr(5760)||pg_catalog.chr(8192)||pg_catalog.chr(8193)||pg_catalog.chr(8194)||pg_catalog.chr(8195)||pg_catalog.chr(8196)||pg_catalog.chr(8197)||pg_catalog.chr(8198)||pg_catalog.chr(8199)||pg_catalog.chr(8200)||pg_catalog.chr(8201)||pg_catalog.chr(8202)||pg_catalog.chr(8232)||pg_catalog.chr(8233)||pg_catalog.chr(8239)||pg_catalog.chr(8287)||pg_catalog.chr(12288)||pg_catalog.chr(65279)), 'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ');
 CREATE FUNCTION p03_product_keys(pid text, sku text, barcode text, meta jsonb) RETURNS text[] LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path = pg_catalog, public AS $fn$
  SELECT coalesce(array_agg(DISTINCT p03_key(v) ORDER BY p03_key(v)), ARRAY[]::text[]) FROM (
    SELECT unnest(ARRAY[pid,sku,barcode]) AS v UNION ALL

@@ -5,13 +5,15 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { performance } from "node:perf_hooks"
 import * as catalog from "@/lib/vestuario/catalog-service"
 import * as svc from "./service"
-import { DEFAULT_MEDIA, type MutationRef, type Result, type Target } from "./contracts"
+import { DEFAULT_MEDIA, codeKey, type Result, type Target } from "./contracts"
 vi.mock("@/lib/prisma", () => ({ prisma: {} }))
 const URL_QA = process.env.VESTUARIO_P03_TEST_DATABASE_URL || ""
 if (URL_QA && !/^postgresql:\/\/[^@]+@127\.0\.0\.1:\d+\/vest_p02_[a-z0-9_]+$/.test(URL_QA)) throw new Error("P03 exige PostgreSQL QA loopback vest_p02_* explícito.")
 const must = <T>(r: Result<T>): T => { if (!r.ok) throw new Error(`${r.code}: ${r.message}`); return r.value }
 describe.skipIf(!URL_QA)("P03 — constraints, emissão, lookup e etiquetas em PG17 descartável", () => {
-  const db = new PrismaClient({ datasourceUrl: URL_QA, log: [{ emit: "event", level: "query" }] }), other = new PrismaClient({ datasourceUrl: URL_QA })
+  // Options explícitas evitam replicar todo TypeMap para cada literal de log; QueryEvent segue tipado.
+  const db = new PrismaClient<Prisma.PrismaClientOptions, "query">({ datasourceUrl: URL_QA, log: [{ emit: "event", level: "query" }] })
+  const other = new PrismaClient<Prisma.PrismaClientOptions>({ datasourceUrl: URL_QA })
   let queries = 0
   let observedQueries: string[] | null = null
   db.$on("query", e => { queries++; observedQueries?.push(e.query.trim()) })
@@ -32,13 +34,13 @@ describe.skipIf(!URL_QA)("P03 — constraints, emissão, lookup e etiquetas em P
     await db.produto.create({ data: { id: simple.produtoId, storeId: A, name: "Camiseta simples", sku: "SIM-QA", barcode: "LEGACY-001", price: 1.005, stock: 7,
       metadata: { codigosAlias: ["Alias-Legado"], atributos: { tamanho: "M", cor: "Azul" } } } })
     await db.produto.create({ data: { id: simpleB.produtoId, storeId: B, name: "Camiseta B", sku: "SIM-QA", price: 20, stock: 3 } })
-    const grade = must(await catalog.createGrade(db, ctx, { nome: "Adulto", tamanhos: ["P", "M", "G", "GG"] }))
-    const preto = must(await catalog.createCor(db, ctx, { nome: "Preto" })), azul = must(await catalog.createCor(db, ctx, { nome: "Azul" }))
-    const sizes = (await catalog.listCatalogo(db, A)).grades.find(g => g.id === grade.id)!.tamanhos
-    const p = must(await catalog.createProdutoGrade(db, ctx, { nome: "Camiseta Algodão São João", preco: "49,90", gradeId: grade.id,
+    const grade = must(await catalog.createGrade(other, ctx, { nome: "Adulto", tamanhos: ["P", "M", "G", "GG"] }))
+    const preto = must(await catalog.createCor(other, ctx, { nome: "Preto" })), azul = must(await catalog.createCor(other, ctx, { nome: "Azul" }))
+    const sizes = (await catalog.listCatalogo(other, A)).grades.find(g => g.id === grade.id)!.tamanhos
+    const p = must(await catalog.createProdutoGrade(other, ctx, { nome: "Camiseta Algodão São João", preco: "49,90", gradeId: grade.id,
       combinacoes: sizes.flatMap(t => [preto, azul].map(c => ({ corId: c.id, tamanhoId: t.id, sku: `CAM-${c.id}-${t.rotulo}`, ...(c.id === azul.id && t.rotulo === "GG" ? { barcodeInterno: "OLD-VARIANT" } : {}) }))) }))
     parent = p.produtoId
-    const dto = (await catalog.getProdutoGrade(db, A, parent))!
+    const dto = (await catalog.getProdutoGrade(other, A, parent))!
     vOld = dto.variantes.find(v => v.barcodeInterno === "OLD-VARIANT")!.id
     v1 = dto.variantes.find(v => v.id !== vOld)!.id; v2 = dto.variantes.find(v => v.id !== vOld && v.id !== v1)!.id
     oldVersion = dto.variantes.find(v => v.id === vOld)!.version; oldParentVersion = dto.catalogVersion
@@ -60,6 +62,13 @@ describe.skipIf(!URL_QA)("P03 — constraints, emissão, lookup e etiquetas em P
     expect(await svc.issueInternal(db, ctxB, { target: { produtoId: parent, varianteId: v1 }, requestKey: key() })).toMatchObject({ code: "NOT_FOUND" })
     expect(await svc.issueInternal(db, ctx, { target: { ...simple, varianteId: v1 }, requestKey: key() })).toMatchObject({ code: "NOT_FOUND" })
     expect(await svc.issueInternal(db, { ...ctx, principal: null }, { target: simple, requestKey: key() })).toMatchObject({ code: "UNTRUSTED" })
+    expect(await svc.issueInternal(db, ctx, { target: { produtoId: "x'OR('1'='1')--" }, requestKey: key() })).toMatchObject({ code: "NOT_FOUND" })
+  })
+  it("normalizador SQL coincide com o contrato JS para whitespace e caixa ASCII", async () => {
+    const whites = [9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279]
+    const samples = whites.map(c => String.fromCodePoint(c) + "Abc-v áßａｂｃ" + String.fromCodePoint(c))
+    const rows = await db.$queryRaw<{ value: string; key: string }[]>`SELECT value,public.p03_key(value) AS key FROM unnest(${samples}::text[]) t(value)`
+    expect(rows.map(r => r.key)).toEqual(rows.map(r => codeKey(r.value)))
   })
   it("geração concorrente mesma solicitação e chaves diferentes devolvem uma identidade permanente", async () => {
     const requestKey = key(), payload = { target: simple, requestKey }
@@ -89,9 +98,9 @@ describe.skipIf(!URL_QA)("P03 — constraints, emissão, lookup e etiquetas em P
     must(await svc.issueInternal(db, ctx, { target: t, preservarCodigoExistente: true, requestKey: key() }))
     const v = await db.vestuarioVariante.findUniqueOrThrow({ where: { id: vOld } })
     expect(v.barcodeInterno).toMatch(/^OGV-/); expect(v.version).toBe(oldVersion + 1)
-    expect((await catalog.getProdutoGrade(db, A, parent))!.catalogVersion).toBe(oldParentVersion + 1)
+    expect((await catalog.getProdutoGrade(other, A, parent))!.catalogVersion).toBe(oldParentVersion + 1)
     expect(must(await svc.lookup(db, ctx, "old-variant")).varianteId).toBe(vOld)
-    expect(await catalog.addVariantes(db, ctx, { produtoId: parent, expectedVersion: oldParentVersion, combinacoes: [] })).toMatchObject({ ok: false })
+    expect(await catalog.addVariantes(other, ctx, { produtoId: parent, expectedVersion: oldParentVersion, combinacoes: [] })).toMatchObject({ ok: false })
     await expect(db.vestuarioVariante.update({ where: { id: vOld }, data: { barcodeInterno: "OVERRIDE" } })).rejects.toThrow(/VESTUARIO_IDENTIDADE_IMUTAVEL/)
   })
   it("colisão aleatória global aborta a tentativa e repete só após rollback conhecido", async () => {

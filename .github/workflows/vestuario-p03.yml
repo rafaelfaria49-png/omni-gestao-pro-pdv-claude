@@ -40,7 +40,7 @@ jobs:
           POSTGRES_DB: vest_p02_p03_pg
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U p03_qa" --health-interval 5s --health-timeout 5s --health-retries 20
+          --health-cmd "pg_isready -U p03_qa -d vest_p02_p03_pg" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       VESTUARIO_P02_TEST_DATABASE_URL: postgresql://p03_qa:isolated_ci_only@127.0.0.1:5432/vest_p02_p03_pg
       VESTUARIO_P03_TEST_DATABASE_URL: postgresql://p03_qa:isolated_ci_only@127.0.0.1:5432/vest_p02_p03_pg

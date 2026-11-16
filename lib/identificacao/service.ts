@@ -15,7 +15,9 @@ import {
 } from "./contracts"
 
 type Tx = Prisma.TransactionClient
-type Reader = Pick<Tx, "$queryRaw" | "identificadorProduto" | "etiquetaLote">
+/** Fronteira mínima: não compara eventos/extensões e delegates alheios ao serviço. */
+export type IdentificationDb = Pick<PrismaClient, "$transaction" | "$queryRaw" | "$queryRawUnsafe" | "identificadorProduto" | "etiquetaLote" | "identificacaoSolicitacao">
+type Reader = Pick<Tx, "$queryRaw" | "$queryRawUnsafe" | "identificadorProduto" | "etiquetaLote">
 class Refusal extends Error { constructor(readonly code: string, message: string) { super(message) } }
 const refuse = (code: string, message: string): never => { throw new Refusal(code, message) }
 const success = <T>(value: T): Result<T> => ({ ok: true, value })
@@ -67,7 +69,7 @@ function reference(row: { identificadorId: string | null; loteId: string | null;
   return refuse("CONFLICT", "Solicitação sem resultado persistido.")
 }
 async function mutation<S extends z.ZodTypeAny>(
-  db: PrismaClient, ctx: CatalogContext, op: Operation, schema: S, input: unknown,
+  db: IdentificationDb, ctx: CatalogContext, op: Operation, schema: S, input: unknown,
   fn: (tx: Tx, value: z.output<S>) => Promise<MutationRef>,
 ): Promise<Result<MutationRef>> {
   try {
@@ -96,10 +98,12 @@ async function mutation<S extends z.ZodTypeAny>(
 
 /** Lê só campos necessários: sem custo, saldo, mídia remota nem metadata inteira. */
 async function target(db: Reader, storeId: string, t: Target, lock = false): Promise<TargetDTO> {
-  const [p] = await db.$queryRaw<{ id: string; name: string; sku: string | null; price: number; active: boolean; updatedAt: Date; declaration: Prisma.JsonValue; grade: boolean }[]>`
+  // SQL é constante; somente o sufixo booleano interno escolhe o lock. Valores SEMPRE por bind.
+  // Evita fragmentos Prisma.sql de identidades diferentes após bundling do Next no E2E real.
+  const [p] = await db.$queryRawUnsafe<{ id: string; name: string; sku: string | null; price: number; active: boolean; updatedAt: Date; declaration: Prisma.JsonValue; grade: boolean }[]>(`
     SELECT p."id",p."name",p."sku",p."price",p."active",p."updatedAt",p."metadata"->'vestuario' AS declaration,
       EXISTS(SELECT 1 FROM vestuario_produtos_grade g WHERE g."storeId"=p."storeId" AND g."produtoId"=p."id") AS grade
-    FROM estoque_produtos p WHERE p."id"=${t.produtoId} AND p."storeId"=${storeId} ${lock ? Prisma.sql`FOR SHARE OF p` : Prisma.empty}`
+    FROM estoque_produtos p WHERE p."id"=$1 AND p."storeId"=$2 ${lock ? "FOR SHARE OF p" : ""}`, t.produtoId, storeId)
   if (!p || !p.active) return refuse("NOT_FOUND", "Alvo ativo não encontrado nesta loja.")
   const issue = productVariantIssue({ vestuario: p.declaration })
   if (!t.varianteId && (p.grade || issue)) return refuse(issue?.code || "VARIANTE_OBRIGATORIA", "Produto com grade exige uma variante válida.")
@@ -107,11 +111,11 @@ async function target(db: Reader, storeId: string, t: Target, lock = false): Pro
   let precoCentavos: number | null = null
   try { precoCentavos = decimalToUnits(String(p.price), PRICE_SCALE) } catch { /* Preço legado inválido não é reinterpretado. */ }
   if (t.varianteId) {
-    const [v] = await db.$queryRaw<{ sku: string | null; cor: string; tamanho: string; ativo: boolean; version: number; barcodeInterno: string | null; precoCentavos: number | null }[]>`
+    const [v] = await db.$queryRawUnsafe<{ sku: string | null; cor: string; tamanho: string; ativo: boolean; version: number; barcodeInterno: string | null; precoCentavos: number | null }[]>(`
       SELECT v."sku",v."ativo",v."version",v."barcodeInterno",v."precoCentavos",c."nome" AS cor,t."rotulo" AS tamanho
       FROM vestuario_variantes v JOIN vestuario_cores c ON c."id"=v."corId" AND c."storeId"=v."storeId"
       JOIN vestuario_grade_tamanhos t ON t."id"=v."tamanhoId" AND t."storeId"=v."storeId"
-      WHERE v."id"=${t.varianteId} AND v."produtoId"=${p.id} AND v."storeId"=${storeId} ${lock ? Prisma.sql`FOR SHARE OF v,c,t` : Prisma.empty}`
+      WHERE v."id"=$1 AND v."produtoId"=$2 AND v."storeId"=$3 ${lock ? "FOR SHARE OF v,c,t" : ""}`, t.varianteId, p.id, storeId)
     if (!v || !v.ativo || !p.grade) return refuse("NOT_FOUND", "Variação ativa não encontrada nesta loja/produto.")
     sku = v.sku; cor = v.cor; tamanho = v.tamanho; variantVersion = v.version; codigoExistente = v.barcodeInterno
     precoCentavos = v.precoCentavos ?? precoCentavos
@@ -122,7 +126,7 @@ async function target(db: Reader, storeId: string, t: Target, lock = false): Pro
 }
 const identSelect = { id: true, produtoId: true, varianteId: true, tipo: true, valor: true, ativo: true, version: true, formato: true, origem: true, evidencia: true } as const
 
-export async function issueInternal(db: PrismaClient, ctx: CatalogContext, input: unknown, randomCode: () => string = generateInternalCode): Promise<Result<MutationRef>> {
+export async function issueInternal(db: IdentificationDb, ctx: CatalogContext, input: unknown, randomCode: () => string = generateInternalCode): Promise<Result<MutationRef>> {
   // Retry só após unicidade comprovadamente abortada; nunca após erro de rede/commit incerto.
   for (let retry = 0; retry < 3; retry++) {
     let generatedCollision = false
@@ -158,7 +162,7 @@ export async function issueInternal(db: PrismaClient, ctx: CatalogContext, input
   return { ok: false, code: "CONFLICT", message: "Não foi possível reservar um código. Repita a mesma solicitação." }
 }
 
-export async function registerIdentifier(db: PrismaClient, ctx: CatalogContext, input: unknown) {
+export async function registerIdentifier(db: IdentificationDb, ctx: CatalogContext, input: unknown) {
   return mutation(db, ctx, "CADASTRAR", identifierSchema, input, async (tx, value) => {
     await target(tx, ctx.storeId, value.target, true)
     const valor = value.valor.trim()
@@ -184,7 +188,7 @@ export async function registerIdentifier(db: PrismaClient, ctx: CatalogContext, 
     return { id: row.id, kind: "identifier" }
   })
 }
-export async function setIdentifierActive(db: PrismaClient, ctx: CatalogContext, input: unknown) {
+export async function setIdentifierActive(db: IdentificationDb, ctx: CatalogContext, input: unknown) {
   return mutation(db, ctx, "ATIVO", activeSchema, input, async (tx, value) => {
     const r = await tx.identificadorProduto.findFirst({ where: { storeId: ctx.storeId, id: value.id } })
     if (!r) return refuse("NOT_FOUND", "Identificador não encontrado nesta loja.")
@@ -199,7 +203,7 @@ export async function setIdentifierActive(db: PrismaClient, ctx: CatalogContext,
 async function read<T>(ctx: CatalogContext, fn: () => Promise<T>): Promise<Result<T>> {
   try { context(ctx); return success(await fn()) } catch (e) { return failure(e) }
 }
-export async function listTargets(db: PrismaClient, ctx: CatalogContext, query: unknown = "") {
+export async function listTargets(db: IdentificationDb, ctx: CatalogContext, query: unknown = "") {
   return read(ctx, async () => {
     const q = parse(z.string().trim().max(100), query)
     type Row = TargetDTO & { price: number; declaration: Prisma.JsonValue; updatedAt: Date; override: number | null }
@@ -230,7 +234,7 @@ export async function listTargets(db: PrismaClient, ctx: CatalogContext, query: 
     return { items, limited: rows.length > 40 }
   })
 }
-export async function lookup(db: PrismaClient, ctx: CatalogContext, input: unknown) {
+export async function lookup(db: IdentificationDb, ctx: CatalogContext, input: unknown) {
   return read(ctx, async () => {
     const key = codeKey(parse(z.string().max(160).refine(v => !!v.trim()), input))
     const rows = await db.$queryRaw<(Target & { identificadorId: string | null; ativo: boolean | null })[]>`
@@ -244,7 +248,7 @@ export async function lookup(db: PrismaClient, ctx: CatalogContext, input: unkno
     return target(db, ctx.storeId, owners.values().next().value!)
   })
 }
-export async function listIdentifiers(db: PrismaClient, ctx: CatalogContext, input: unknown): Promise<Result<IdentifierDTO[]>> {
+export async function listIdentifiers(db: IdentificationDb, ctx: CatalogContext, input: unknown): Promise<Result<IdentifierDTO[]>> {
   return read(ctx, async () => {
     const t = parse(targetSchema, input)
     await target(db, ctx.storeId, t)
@@ -252,7 +256,7 @@ export async function listIdentifiers(db: PrismaClient, ctx: CatalogContext, inp
   })
 }
 
-export async function createJob(db: PrismaClient, ctx: CatalogContext, input: unknown) {
+export async function createJob(db: IdentificationDb, ctx: CatalogContext, input: unknown) {
   return mutation(db, ctx, "LOTE", jobSchema, input, async (tx, value) => {
     const items: LabelSnapshot["items"] = []
     for (const v of value.items) {
@@ -288,15 +292,15 @@ async function job(db: Reader, storeId: string, jobId: string): Promise<JobDTO> 
   return { id: row.id, total: row.total, originalId: row.originalId, motivo: row.motivo, createdAt: row.createdAt.toISOString(), snapshot,
     tentativas: row.tentativas.map(t => ({ id: t.id, estado: t.estado as PrintState, confirmedBy: t.confirmedBy })) }
 }
-export async function getJob(db: PrismaClient, ctx: CatalogContext, jobId: unknown): Promise<Result<JobDTO>> {
+export async function getJob(db: IdentificationDb, ctx: CatalogContext, jobId: unknown): Promise<Result<JobDTO>> {
   return read(ctx, () => job(db, ctx.storeId, parse(id, jobId)))
 }
-export async function listJobs(db: PrismaClient, ctx: CatalogContext) {
+export async function listJobs(db: IdentificationDb, ctx: CatalogContext) {
   return read(ctx, async () => (await db.etiquetaLote.findMany({ where: { storeId: ctx.storeId },
     select: { id: true, total: true, originalId: true, motivo: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 20,
   })).map(r => ({ ...r, createdAt: r.createdAt.toISOString() })))
 }
-export async function reprintJob(db: PrismaClient, ctx: CatalogContext, input: unknown) {
+export async function reprintJob(db: IdentificationDb, ctx: CatalogContext, input: unknown) {
   return mutation(db, ctx, "REIMPRIMIR", reprintSchema, input, async (tx, value) => {
     const original = await job(tx, ctx.storeId, value.loteId)
     const row = await tx.etiquetaLote.create({ data: { storeId: ctx.storeId, originalId: original.id, motivo: value.motivo,
@@ -305,7 +309,7 @@ export async function reprintJob(db: PrismaClient, ctx: CatalogContext, input: u
     return { id: row.id, kind: "job" }
   })
 }
-export async function startAttempt(db: PrismaClient, ctx: CatalogContext, input: unknown) {
+export async function startAttempt(db: IdentificationDb, ctx: CatalogContext, input: unknown) {
   return mutation(db, ctx, "TENTATIVA", attemptSchema, input, async (tx, value) => {
     const current = await job(tx, ctx.storeId, value.loteId)
     if (current.tentativas.some(t => t.estado !== "FALHA_ANTES_ENVIO")) {
@@ -315,7 +319,7 @@ export async function startAttempt(db: PrismaClient, ctx: CatalogContext, input:
     return { id: row.id, kind: "attempt" }
   })
 }
-export async function recordAttemptEvent(db: PrismaClient, ctx: CatalogContext, input: unknown) {
+export async function recordAttemptEvent(db: IdentificationDb, ctx: CatalogContext, input: unknown) {
   return mutation(db, ctx, "EVENTO", attemptEventSchema, input, async (tx, value) => {
     const row = await tx.etiquetaTentativa.findFirst({ where: { storeId: ctx.storeId, id: value.tentativaId } })
     if (!row) return refuse("NOT_FOUND", "Tentativa não encontrada nesta loja.")
@@ -326,7 +330,7 @@ export async function recordAttemptEvent(db: PrismaClient, ctx: CatalogContext, 
     return { id: row.id, kind: "attempt" }
   })
 }
-export async function recoverRequest(db: PrismaClient, ctx: CatalogContext, op: unknown, key: unknown) {
+export async function recoverRequest(db: IdentificationDb, ctx: CatalogContext, op: unknown, key: unknown) {
   return read(ctx, async () => {
     const row = await db.identificacaoSolicitacao.findUnique({ where: { storeId_operacao_chave: { storeId: ctx.storeId, operacao: parse(operationSchema, op), chave: parse(requestKey, key) } } })
     // Ausente ainda pode estar em execução: não autoriza trocar a chave.

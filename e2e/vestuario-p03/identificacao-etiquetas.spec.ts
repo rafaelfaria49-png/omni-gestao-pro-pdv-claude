@@ -48,7 +48,7 @@ test("HUB → emissão real → lookup → lote → PDF → impressão incerta e
   await issue(page, "P03-PRE-M")
   const identifier = await db.identificadorProduto.findFirstOrThrow({ where: { storeId: A, produtoId: "e2e-vest-legado", tipo: "INTERNO" } })
   await page.getByRole("textbox", { name: "Ler código", exact: true }).fill(identifier.valor)
-  await page.getByRole("button", { name: "Identificar", exact: true }).click()
+  await page.getByRole("textbox", { name: "Ler código", exact: true }).press("Enter")
   await expect(page.getByText("Código identificado nesta loja.")).toBeVisible()
   await expect(row(page, "LEGADO-E2E")).toBeVisible()
   await page.getByRole("button", { name: "Buscar", exact: true }).click()
