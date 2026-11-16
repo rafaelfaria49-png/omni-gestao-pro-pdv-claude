@@ -13,6 +13,7 @@
 // Não faz login nem usa porta de depuração (Produção recusa). Só abre /login (GET), como um navegador.
 // Recusa rodar se o canal já estiver instalado neste Windows: o teste nunca desinstala o app de alguém.
 import { spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -195,7 +196,11 @@ try {
   check("pasta por usuário em %LocalAppData%", s1.dir && s1.stub && s1.update, installDir)
   const version = expectVersion
   check(`versão instalada = ${version} (esperada do Setup)`, s1.apps.length === 1 && s1.apps[0] === `app-${version}`, s1.apps.join(","))
-  check("ícone do app instalado", s1.icon)
+  // O app.ico é o que "Aplicativos instalados" mostra (DisplayIcon): tem de ser o ícone do produto.
+  const repoIcon = createHash("sha256").update(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", "icon.ico"))).digest("hex")
+  const installedIcon = s1.icon ? createHash("sha256").update(readFileSync(path.join(installDir, "app.ico"))).digest("hex") : null
+  check("ícone do app instalado = assets/icon.ico", installedIcon === repoIcon, installedIcon ? installedIcon.slice(0, 12) : "app.ico ausente")
+  check("Aplicativos instalados aponta para o ícone", s1.reg?.icon && /app\.ico$/i.test(s1.reg.icon) && existsSync(s1.reg.icon), s1.reg?.icon || "DisplayIcon vazio")
   check("atalho na Área de Trabalho", s1.desktop && /OmniGestaoPro\.exe$/i.test(s1.desktop.target), s1.desktop?.path)
   check("atalho no Menu Iniciar (RAFACELL)", s1.startMenu && /OmniGestaoPro\.exe$/i.test(s1.startMenu.target), s1.startMenu?.path)
   check("entrada em Aplicativos instalados", s1.reg && s1.reg.name === productName && s1.reg.publisher === "RAFACELL", s1.reg && `${s1.reg.name} ${s1.reg.version}`)

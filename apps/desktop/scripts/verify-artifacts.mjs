@@ -10,6 +10,7 @@
 import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import * as asar from "@electron/asar"
@@ -73,6 +74,14 @@ const packedConfig = JSON.parse(asar.extractFile(asarFile, "build-config.json").
 check("build-config do pacote = build atual", packedConfig.channel === config.channel && packedConfig.origin === config.origin && packedConfig.buildCommit === config.buildCommit, `${packedConfig.channel} ${packedConfig.origin}`)
 const packedPkg = JSON.parse(asar.extractFile(asarFile, "package.json").toString("utf8"))
 check("versão do pacote = package.json", packedPkg.version === pkg.version, packedPkg.version)
+
+// Ícone de "Aplicativos instalados": o Squirrel baixa o iconUrl no PC de quem instala. Um caminho
+// local da máquina de build não existe lá — em build de CI ele tem de ser HTTPS.
+const require = createRequire(import.meta.url)
+const squirrelMaker = require(path.join(root, "forge.config.js")).makers.find((m) => m.name === "@electron-forge/maker-squirrel")
+const iconUrl = String(squirrelMaker?.config?.iconUrl ?? "")
+if (process.env.GITHUB_ACTIONS === "true") check("iconUrl do instalador é HTTPS (baixável no PC do cliente)", iconUrl.startsWith("https://"), iconUrl)
+else console.log(`INFO iconUrl (build local, só vale nesta máquina): ${iconUrl}`)
 
 // Assinatura Authenticode (informativa: sem certificado o pacote é NÃO ASSINADO, só uso interno).
 let signature = "desconhecida"
