@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "node scripts/vercel-build.mjs",
-  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false, "codex/fix-a01-login-proxy": false } },
+  "git": { "deploymentEnabled": { "codex/platform-pilot-access": false, "codex/fix-a01-login-proxy": false, "codex/ops-edicao-completa-v3-v4": false, "codex/omni-vestuario-p01-contratos-001": false, "claude/vestuario-p02-grades-catalogo-001": false } },
 
   "headers": [
     {

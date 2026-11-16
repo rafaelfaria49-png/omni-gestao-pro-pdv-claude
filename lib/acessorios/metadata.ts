@@ -1,9 +1,41 @@
 import { ACESSORIO_CORES_PADRAO, isAcessorioColorKey, type AcessorioColorKey } from "./cores"
 import {
+  ACESSORIO_MODOS_CAPTURA,
   PRODUTO_ACESSORIO_TIPOS,
+  type AcessorioModoCaptura,
   type ProdutoAcessorioTipo,
   type ProdutoAcessoriosMetadataV1,
 } from "./types"
+
+export function isAcessorioModoCaptura(value: unknown): value is AcessorioModoCaptura {
+  return typeof value === "string" && (ACESSORIO_MODOS_CAPTURA as readonly string[]).includes(value)
+}
+
+/** Modo efetivo de captura do modelo (produtos antigos: derivado de `exigeModelo`). */
+export function modoModeloEfetivo(config: ProdutoAcessoriosMetadataV1 | null | undefined): AcessorioModoCaptura {
+  if (!config) return "desativado"
+  return config.modoModelo ?? (config.exigeModelo ? "obrigatorio" : "desativado")
+}
+
+/** Modo efetivo de captura da cor (produtos antigos: derivado de `exigeCor`). */
+export function modoCorEfetivo(config: ProdutoAcessoriosMetadataV1 | null | undefined): AcessorioModoCaptura {
+  if (!config) return "desativado"
+  return config.modoCor ?? (config.exigeCor ? "obrigatorio" : "desativado")
+}
+
+const MAX_CORES_LOJA_POR_PRODUTO = 100
+
+function sanitizeCoresLoja(value: readonly unknown[]): readonly string[] {
+  const out: string[] = []
+  for (const item of value) {
+    if (typeof item !== "string") continue
+    const id = item.trim()
+    if (!id || id.length > 64 || !/^[A-Za-z0-9_-]+$/.test(id) || out.includes(id)) continue
+    out.push(id)
+    if (out.length >= MAX_CORES_LOJA_POR_PRODUTO) break
+  }
+  return Object.freeze(out)
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -43,12 +75,33 @@ export function sanitizeProdutoAcessoriosMetadata(value: unknown): ProdutoAcesso
     exigeCor: boolean
     usaCoresPadrao: boolean
     coresPermitidas?: readonly AcessorioColorKey[] | null
+    modoModelo?: AcessorioModoCaptura
+    modoCor?: AcessorioModoCaptura
+    coresLoja?: readonly string[] | null
   } = {
     version: 1,
     tipo: input.tipo,
     exigeModelo: input.exigeModelo,
     exigeCor: input.exigeCor,
     usaCoresPadrao: input.usaCoresPadrao,
+  }
+
+  // COMPAT-PROFISSIONAL-001: o modo explícito manda; os booleanos ficam coerentes com ele
+  // (o servidor da venda continua validando por `exigeModelo`/`exigeCor`).
+  if (input.modoModelo !== undefined) {
+    if (!isAcessorioModoCaptura(input.modoModelo)) return null
+    output.modoModelo = input.modoModelo
+    output.exigeModelo = input.modoModelo === "obrigatorio"
+  }
+  if (input.modoCor !== undefined) {
+    if (!isAcessorioModoCaptura(input.modoCor)) return null
+    output.modoCor = input.modoCor
+    output.exigeCor = input.modoCor === "obrigatorio"
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "coresLoja")) {
+    if (input.coresLoja === null) output.coresLoja = null
+    else if (Array.isArray(input.coresLoja)) output.coresLoja = sanitizeCoresLoja(input.coresLoja)
+    else return null
   }
 
   if (Object.prototype.hasOwnProperty.call(input, "coresPermitidas")) {

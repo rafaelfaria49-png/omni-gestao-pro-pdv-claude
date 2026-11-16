@@ -110,7 +110,11 @@ type LojaPerfilRemoto = PerfilLojaUnidade & { telefone?: string }
 type LojaAtivaContextType = {
   lojas: PerfilLojaUnidade[]
   lojaAtivaId: string | null
-  setLojaAtivaId: (id: string) => void
+  /**
+   * `onSettled` (opcional) recebe `true` quando a sondagem confirma a loja nova e `false` quando a
+   * troca é revertida. Não é chamado se a troca for barrada pela guarda da V4 ou superada por outra.
+   */
+  setLojaAtivaId: (id: string, opts?: { onSettled?: (ok: boolean) => void }) => void
   /** Recarrega `/api/stores` (ex.: após salvar Dados da Empresa) para atualizar o header. */
   refreshStoresList: () => Promise<void>
   /** Incrementa após cada refresh da lista de lojas (mesma aba + sinal para refetch em telas como o PDV). */
@@ -261,7 +265,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     }
   }, [configHydrated, lojas, session])
 
-  const executarTrocaLoja = useCallback((next: string) => {
+  const executarTrocaLoja = useCallback((next: string, onSettled?: (ok: boolean) => void) => {
     if (!canAccessStore(session, next)) return
     const prev = (lojaAtivaIdRef.current || "").trim()
     const version = ++storeSwitchVersionRef.current
@@ -295,7 +299,10 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
             })] : []),
           ])
           if (responses.some((response) => !response.ok)) throw new Error("unavailable")
-          if (workspaceActiveRef.current && version === storeSwitchVersionRef.current) void refreshSession()
+          if (workspaceActiveRef.current && version === storeSwitchVersionRef.current) {
+            void refreshSession()
+            onSettled?.(true)
+          }
         } catch {
           // Navegação completa ou outra troca tornam esta sondagem obsoleta.
           // Uma resposta antiga nunca reescreve cookie/storage da unidade atual.
@@ -334,6 +341,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
             }
             setActiveStoreCookie(prev)
           }
+          onSettled?.(false)
           window.alert("Dados da unidade indisponíveis no momento")
         } finally {
           window.clearTimeout(t)
@@ -342,14 +350,14 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     }
   }, [session, refreshSession])
 
-  const setLojaAtivaId = useCallback((id: string) => {
+  const setLojaAtivaId = useCallback((id: string, opts?: { onSettled?: (ok: boolean) => void }) => {
     const next = id.trim()
     if (!next) return
     // R04: com guarda V4 registrada e rascunho sujo, a troca passa pelo
     // pêndulo salvar/descartar/cancelar (Cancelar impede a saída).
     aplicarTrocaLojaComGuarda({
       guarda: guardaTrocaLojaV4,
-      trocar: () => executarTrocaLoja(next),
+      trocar: () => executarTrocaLoja(next, opts?.onSettled),
       descricao: `troca de loja para ${next}`,
     })
   }, [executarTrocaLoja])

@@ -53,6 +53,7 @@ export type V4Module = "workspace" | "dashboard" | "fila" | "bancada" | "sla" | 
 export type V4Menu = "print" | "more" | null;
 
 export interface V4State {
+  edicaoCompleta?: boolean;
   view: V4View;
   module: V4Module;
   stage: V4Stage;

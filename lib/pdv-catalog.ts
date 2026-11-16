@@ -22,6 +22,8 @@ export type PdvCatalogProduct = {
   accessoryConfig?: ProdutoAcessoriosMetadataV1
   /** Produto declarado por peso: venda bloqueada no PDV (`lib/pdv-weight-sale-guard.ts`). */
   vendaPesoIndisponivel?: boolean
+  /** Modelo de aparelho por IMEI: incluir abre a seleção da unidade física. */
+  serializedDevice?: boolean
 }
 
 /**
@@ -63,6 +65,8 @@ export function mergePdvCatalogWithInventory(
     else delete next.accessoryConfig
     if (inv.vendaPesoIndisponivel) next.vendaPesoIndisponivel = true
     else delete next.vendaPesoIndisponivel
+    if (inv.serializedDevice) next.serializedDevice = true
+    else delete next.serializedDevice
     return next
   })
 
@@ -86,6 +90,7 @@ export function mergePdvCatalogWithInventory(
       atributos: inv.atributos,
       ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
       ...(inv.vendaPesoIndisponivel ? { vendaPesoIndisponivel: true } : {}),
+      ...(inv.serializedDevice ? { serializedDevice: true } : {}),
     })
   }
 

@@ -1,3 +1,4 @@
+import { isSerializedDeviceProduct } from "@/lib/aparelhos/serialized-product"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -84,6 +85,8 @@ type InvPayload = {
    * pagamento (o servidor já recusa a venda com `PRODUTO_POR_PESO_NAO_OPERACIONAL`).
    */
   vendaPesoIndisponivel?: true
+  /** Modelo de aparelho por IMEI: o PDV abre a seleção da unidade (venda exige unidade). */
+  serializedDevice?: true
 }
 
 function rowToItem(row: Produto): InvPayload {
@@ -115,6 +118,7 @@ function rowToItem(row: Produto): InvPayload {
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
     ...(accessoryConfig ? { accessoryConfig } : {}),
     ...inventoryWeightSaleProjection(row.metadata),
+    ...(isSerializedDeviceProduct(row.metadata) ? { serializedDevice: true as const } : {}),
   }
 }
 
