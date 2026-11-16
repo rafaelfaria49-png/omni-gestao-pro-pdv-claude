@@ -102,8 +102,9 @@ test("HUB → emissão real → lookup → lote → PDF → impressão incerta e
   await page.getByTitle("Prévia das etiquetas").scrollIntoViewIfNeeded()
   await expect(visual.getByRole("img").first()).toBeInViewport({ ratio: 0.95 })
   await expect(page.getByTitle("Prévia das etiquetas")).toBeInViewport({ ratio: 0.8 })
-  await visual.locator("body").evaluate(async () => {
-    await document.fonts.ready
+  await visual.locator("body").evaluate(async () => { await document.fonts.ready })
+  // Callbacks de pintura não executam no frame sem allow-scripts; aguarde no documento pai.
+  await page.evaluate(async () => {
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
   })
   await page.screenshot({ path: shot("03-previa-mobile.png") })
