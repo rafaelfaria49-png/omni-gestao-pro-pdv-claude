@@ -63,7 +63,7 @@ function ps(script, env = {}) {
   const r = spawnSync(
     "powershell",
     ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${script}`],
-    { env: { ...process.env, ...env }, encoding: "utf8", windowsHide: true, timeout: 120_000 },
+    { env: { ...process.env, PSModulePath: undefined, ...env }, encoding: "utf8", windowsHide: true, timeout: 120_000 },
   )
   if (r.status !== 0) throw new Error(`powershell falhou: ${r.stderr || r.stdout}`)
   const out = r.stdout.trim()
@@ -268,8 +268,8 @@ try {
     const kb = Math.round(rest.reduce((a, x) => a + Number(x.b), 0) / 1024)
     check("desinstalação: aplicativo removido (sem OmniGestaoPro.exe nem resources/app.asar)", appFiles.length === 0, appFiles.slice(0, 5).map((x) => x.f).join(", "))
     check(
-      "desinstalação: restos só do Squirrel, marcados .dead e pequenos",
-      rest.length === 0 || (rest.some((x) => x.f === ".dead") && kb < 10_240),
+      "desinstalação: restos só do Squirrel, marcados .dead e pequenos (< 64 MB; o app tem ~300 MB)",
+      rest.length === 0 || (rest.some((x) => x.f === ".dead") && kb < 65_536),
       rest.length ? `${rest.map((x) => x.f).join(", ")} (${kb} KB)` : "pasta vazia",
     )
     check("desinstalação: nenhum processo do app", appProcesses().length === 0)

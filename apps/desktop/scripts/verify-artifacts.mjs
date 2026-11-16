@@ -78,7 +78,8 @@ check("versão do pacote = package.json", packedPkg.version === pkg.version, pac
 let signature = "desconhecida"
 if (process.platform === "win32") {
   const ps = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", "(Get-AuthenticodeSignature -LiteralPath $env:OMNI_SIG_FILE).Status.ToString()"], {
-    env: { ...process.env, OMNI_SIG_FILE: setup },
+    // Sem PSModulePath herdado do pwsh 7 (CI): o Windows PowerShell 5.1 não carregaria o módulo de segurança.
+    env: { ...process.env, PSModulePath: undefined, OMNI_SIG_FILE: setup },
     encoding: "utf8",
   })
   signature = ps.stdout.trim() || "desconhecida"
