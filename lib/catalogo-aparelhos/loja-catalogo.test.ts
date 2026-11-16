@@ -38,7 +38,18 @@ const globalIndex = buildCatalogoIndex({
 })
 
 function modelo(partial: Partial<LojaModelo> & Pick<LojaModelo, "modelKey" | "brand" | "name">): LojaModelo {
-  return { id: partial.modelKey, storeId: "loja-a", aliases: [], notes: "", active: true, version: 1, ...partial }
+  return {
+    id: partial.modelKey,
+    storeId: "loja-a",
+    manufacturer: "",
+    line: "",
+    lancamento: "lancado",
+    aliases: [],
+    notes: "",
+    active: true,
+    version: 1,
+    ...partial,
+  }
 }
 
 const resolve = (key: string): PeliculaGrupoMember => {

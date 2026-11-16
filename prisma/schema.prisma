@@ -145,6 +145,19 @@ model Store {
   // ─── Catálogo de aparelhos por loja (CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — aditivo) ──
   catalogoAparelhosModelos CatalogoAparelhoLojaModelo[]
   catalogoAparelhosCompat  CatalogoAparelhoLojaCompat[]
+  // ─── Compat profissional (COMPAT-PROFISSIONAL-001 — aditivo; só relações inversas) ──
+  compatPaineis            CompatPainel[]
+  compatFileiras           CompatFileira[]
+  compatLocalizacoes       CompatLocalizacao[]
+  compatCores              CompatCorLoja[]
+  compatPreferencias       CompatPreferenciasLoja?
+  // ─── Aparelhos físicos serializados (OMNI-APARELHOS-ENDTOEND-001 — aditivo; só relações inversas) ──
+  aparelhosFisicos         AparelhoFisico[]
+  aparelhosAquisicoes      AparelhoAquisicao[]
+  aparelhosVendas          AparelhoVenda[]
+  // ─── Vestuário P02: grades/cores por loja (OMNI-VESTUARIO-P02 — aditivo; só relações inversas) ──
+  vestuarioGrades          VestuarioGrade[]
+  vestuarioCores           VestuarioCor[]
 
   @@index([profile])
   @@map("stores")
@@ -682,6 +695,8 @@ model Cliente {
   whatsappConversations WhatsAppConversation[]
   creditos              ClienteCredito[]
   omniAgentMemories     OmniAgentMemory[]
+  aparelhosVendas       AparelhoVenda[]
+  aparelhosAquisicoes   AparelhoAquisicao[]
 
   @@index([storeId])
   @@index([storeId, documentKey])
@@ -814,13 +829,18 @@ model Produto {
   updatedAt    DateTime @default(now()) @updatedAt @map("updatedAt")
 
   ordemServicoItens         OrdemServicoItem[]
+  aparelhosFisicos          AparelhoFisico[]
   media                     ProductMedia[]
   marketplaceListings     MarketplaceListing[]
   marketplaceProductLinks MarketplaceProductLink[]
   marketplaceSyncLogs     MarketplaceSyncLog[]
   movimentacoesEstoque    MovimentacaoEstoque[]
   produtoDepositos        ProdutoDeposito[]
+  /** Vestuário P02 (aditivo): fonte autoritativa do modo COM_GRADE. Ausente = produto simples. */
+  vestuarioGrade          VestuarioProdutoGrade?
 
+  /** Vestuário P02: alvo das FKs compostas (produto, loja). `id` já é único; não muda nenhum dado. */
+  @@unique([id, storeId], name: "id_storeId")
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")
   @@index([storeId])
@@ -1235,6 +1255,7 @@ model Fornecedor {
   updatedAt        DateTime @updatedAt @map("updatedAt")
 
   contasPagar ContaPagarTitulo[]
+  aparelhosAquisicoes AparelhoAquisicao[]
 
   @@index([storeId])
   @@index([name])
@@ -1528,6 +1549,7 @@ model Venda {
    */
   fiscalStatus         FiscalStatusVenda   @default(NAO_FISCAL) @map("fiscalStatus")
   notasFiscais         NotaFiscal[]
+  aparelhosVendas      AparelhoVenda[]
 
   @@unique([storeId, clientSaleId])
   @@unique([serieVendaId, numeroSequencial])
@@ -2237,6 +2259,8 @@ model AdminUser {
   updatedAt DateTime @updatedAt
 
   adminUserStores AdminUserStore[]
+  /** Sessões de login (revogação por sessão no servidor). */
+  adminSessions AdminSession[]
   dpAcessos DpAcesso[]
   dpPessoas DpPessoaUsuario[]
   dpAuditorias DpAuditoria[]
@@ -2262,6 +2286,25 @@ model AdminUser {
   currentPeriodEnd     DateTime?
 
   @@map("admin_users")
+}
+
+/**
+ * Sessão de login do painel. O JWT carrega só o `id` (sid); o servidor recusa o token quando a
+ * sessão foi revogada (logout), expirou ou não existe. Revoga uma sessão sem afetar outras.
+ * Ver lib/auth/admin-session.ts.
+ */
+model AdminSession {
+  id            String    @id
+  userId        String
+  user          AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
 }
 
 // =================================================================================
@@ -3588,6 +3631,14 @@ model CatalogoAparelhoLojaModelo {
   modelKey  String   @unique @map("modelKey")
   brand     String   @map("brand")
   name      String   @map("name")
+  /// COMPAT-PROFISSIONAL-001 — fabricante (ex.: Xiaomi para a marca comercial Redmi/POCO).
+  /// "" em registros antigos: o fabricante é derivado da marca na leitura.
+  manufacturer String @default("") @map("manufacturer")
+  /// COMPAT-PROFISSIONAL-001 — linha comercial (ex.: "A", "Note", "G"). Opcional.
+  line      String   @default("") @map("line")
+  /// COMPAT-CATALOGO-BRASIL-2023-2026-002 — "lancado" | "aguardando_lancamento" (oculto das buscas
+  /// operacionais até a loja confirmar o lançamento oficial). Registros antigos = "lancado".
+  lancamento String  @default("lancado") @map("lancamento")
   /// Marca normalizada (sem acento, maiúscula) — chave de duplicidade.
   brandKey  String   @map("brandKey")
   /// Nome normalizado (sem acento, maiúscula) — chave de duplicidade.
@@ -3622,6 +3673,11 @@ model CatalogoAparelhoLojaCompat {
   acao      String   @map("acao")
   status    String   @default("precisa_testar") @map("status")
   notes     String   @default("") @map("notes")
+  /// COMPAT-PROFISSIONAL-001 — origem informada da relação (ex.: "teste no balcão", "fornecedor X").
+  origem    String   @default("") @map("origem")
+  /// COMPAT-PROFISSIONAL-001 — quem confirmou fisicamente (status `confirmado_loja`).
+  confirmedBy String   @default("") @map("confirmedBy")
+  confirmedAt DateTime? @map("confirmedAt")
   createdBy String   @default("") @map("createdBy")
   updatedBy String   @default("") @map("updatedBy")
   createdAt DateTime @default(now()) @map("createdAt")
@@ -3631,4 +3687,554 @@ model CatalogoAparelhoLojaCompat {
   @@index([storeId, categoria, modelKeyA])
   @@index([storeId, categoria, modelKeyB])
   @@map("catalogo_aparelhos_loja_compat")
+}
+
+// ─── Compat profissional (COMPAT-PROFISSIONAL-001) ──────────────────────────────
+// ADITIVO. Organização física de capinhas (painéis → fileiras → localização), cores e
+// preferências POR LOJA. Nenhuma tabela aqui guarda estoque: o saldo continua 100% em
+// `Produto.stock` (ledger oficial). Localização é endereço físico, nunca quantidade.
+
+/// Painel físico da loja (ex.: "Painel 1", "Painel A"). Renomear não quebra vínculos (FK por id).
+model CompatPainel {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  nome      String   @map("nome")
+  /// Nome normalizado — impede "Painel 1" e "painel  1" na mesma loja.
+  nomeKey   String   @map("nomeKey")
+  descricao String   @default("") @map("descricao")
+  ordem     Int      @default(0) @map("ordem")
+  ativo     Boolean  @default(true) @map("ativo")
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  fileiras     CompatFileira[]
+  localizacoes CompatLocalizacao[]
+
+  @@unique([storeId, nomeKey])
+  @@index([storeId, ordem])
+  @@map("compat_paineis")
+}
+
+/// Fileira de um painel (ex.: "Fileira 1 — iPhone / Samsung").
+model CompatFileira {
+  id        String       @id @default(cuid())
+  storeId   String       @map("storeId")
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  painelId  String       @map("painelId")
+  painel    CompatPainel @relation(fields: [painelId], references: [id], onDelete: Restrict)
+  nome      String       @map("nome")
+  nomeKey   String       @map("nomeKey")
+  descricao String       @default("") @map("descricao")
+  ordem     Int          @default(0) @map("ordem")
+  ativo     Boolean      @default(true) @map("ativo")
+  version   Int          @default(1) @map("version")
+  createdBy String       @default("") @map("createdBy")
+  updatedBy String       @default("") @map("updatedBy")
+  createdAt DateTime     @default(now()) @map("createdAt")
+  updatedAt DateTime     @updatedAt @map("updatedAt")
+
+  localizacoes CompatLocalizacao[]
+
+  @@unique([painelId, nomeKey])
+  @@index([storeId, painelId, ordem])
+  @@map("compat_fileiras")
+}
+
+/// Onde fica a capinha de um modelo (e, opcionalmente, de um produto específico).
+/// `modelKey` = modelo do catálogo (global ou manual da loja); `produtoId` = produto específico
+/// (ex.: "Capinha carteira"). Pelo menos um dos dois é obrigatório (CHECK na migration).
+model CompatLocalizacao {
+  id        String         @id @default(cuid())
+  storeId   String         @map("storeId")
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  modelKey  String         @default("") @map("modelKey")
+  produtoId String?        @map("produtoId")
+  painelId  String         @map("painelId")
+  painel    CompatPainel   @relation(fields: [painelId], references: [id], onDelete: Restrict)
+  fileiraId String?        @map("fileiraId")
+  fileira   CompatFileira? @relation(fields: [fileiraId], references: [id], onDelete: Restrict)
+  /// Posição individual (só quando a loja habilitou posições). "" = sem posição.
+  posicao   String         @default("") @map("posicao")
+  principal Boolean        @default(false) @map("principal")
+  notes     String         @default("") @map("notes")
+  createdBy String         @default("") @map("createdBy")
+  updatedBy String         @default("") @map("updatedBy")
+  createdAt DateTime       @default(now()) @map("createdAt")
+  updatedAt DateTime       @updatedAt @map("updatedAt")
+
+  @@index([storeId, modelKey])
+  @@index([storeId, produtoId])
+  @@index([painelId])
+  @@index([fileiraId])
+  @@map("compat_localizacoes")
+}
+
+/// Cor da loja: `baseKey` = cor da paleta padrão (ativar/desativar na loja) ou NULL = cor própria.
+model CompatCorLoja {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  baseKey   String?  @map("baseKey")
+  label     String   @map("label")
+  /// Rótulo normalizado — impede "Azul Bebê" e "azul bebe" na mesma loja.
+  labelKey  String   @map("labelKey")
+  ativo     Boolean  @default(true) @map("ativo")
+  ordem     Int      @default(0) @map("ordem")
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, labelKey])
+  @@unique([storeId, baseKey])
+  @@map("compat_cores_loja")
+}
+
+/// Preferências do Compat por loja (uma linha por loja; ausente = padrões).
+model CompatPreferenciasLoja {
+  storeId             String   @id @map("storeId")
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /// Controle de posições individuais dentro da fileira. Desligado por padrão.
+  posicoesHabilitadas Boolean  @default(false) @map("posicoesHabilitadas")
+  /// Padrão sugerido para produtos novos: obrigatorio | opcional | desativado.
+  modoModeloPadrao    String   @default("opcional") @map("modoModeloPadrao")
+  modoCorPadrao       String   @default("opcional") @map("modoCorPadrao")
+  /// COMPAT-CATALOGO-BRASIL-2023-2026-002 — marca → visível na busca (true/false). {} = padrão
+  /// (prioritárias visíveis, demais ocultas). Ocultar nunca apaga modelo, produto ou venda.
+  marcasConfig        Json     @default("{}") @map("marcasConfig") @db.JsonB
+  version             Int      @default(1) @map("version")
+  updatedBy           String   @default("") @map("updatedBy")
+  createdAt           DateTime @default(now()) @map("createdAt")
+  updatedAt           DateTime @updatedAt @map("updatedAt")
+
+  @@map("compat_preferencias_loja")
+}
+
+// ─── Aparelhos físicos serializados (OMNI-APARELHOS-CADASTRO-COMPRAS-VENDAS-GARANTIAS-ENDTOEND-001) ──
+// ADITIVO. Três conceitos separados:
+//   (A) modelo comercial  → `Produto` canônico (estoque agregado pelo ledger oficial);
+//   (B) unidade física    → `AparelhoFisico` (identidade estável + IMEI/serial);
+//   (C) aparelho de cliente em assistência → continua na OS (`OrdemServico.payload`), NUNCA aqui
+//       como estoque: `propriedade` distingue o dono e só `loja` entra no estoque comercial.
+// Toda mutação de saldo passa por `applyStockMutationTx` (entrada ao liberar, saída na venda).
+
+/// Unidade física individualizada. `status` é a máquina de estados persistida
+/// (`lib/aparelhos/lifecycle.ts`); mudanças passam pelo serviço com evento append-only.
+model AparelhoFisico {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /// Produto comercial (modelo) que carrega o saldo agregado no ledger.
+  produtoId     String   @map("produtoId")
+  produto       Produto  @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  /// Código interno estável por loja (APA-000001).
+  codigoInterno String   @map("codigoInterno")
+  marca         String   @map("marca")
+  modelo        String   @map("modelo")
+  variante      String   @default("") @map("variante")
+  armazenamento String   @default("") @map("armazenamento")
+  memoriaRam    String   @default("") @map("memoriaRam")
+  cor           String   @default("") @map("cor")
+  /// novo_lacrado | novo_aberto | seminovo | usado | recondicionado
+  condicao      String   @map("condicao")
+  imei1         String?  @map("imei1")
+  imei2         String?  @map("imei2")
+  serial        String?  @map("serial")
+  ean           String?  @map("ean")
+  /// aguardando_conferencia | em_avaliacao | disponivel | reservado | em_revisao | vendido | devolvido | bloqueado | baixado
+  status        String   @default("aguardando_conferencia") @map("status")
+  /// loja | negociacao | aguardando_aquisicao
+  propriedade   String   @default("aguardando_aquisicao") @map("propriedade")
+  /// cadastro_manual | fornecedor | lote | compra_cliente | negociacao
+  origem        String   @map("origem")
+  aquisicaoId   String?  @map("aquisicaoId")
+  aquisicao     AparelhoAquisicao? @relation(fields: [aquisicaoId], references: [id], onDelete: SetNull)
+  custoAquisicao Float   @default(0) @map("custoAquisicao")
+  despesas      Float    @default(0) @map("despesas")
+  custoTotal    Float    @default(0) @map("custoTotal")
+  precoSugerido Float?   @map("precoSugerido")
+  precoVenda    Float    @default(0) @map("precoVenda")
+  /// Prazo contratual ADICIONAL sugerido na venda (a legal de 90 dias é sempre aplicada).
+  garantiaContratualDias Int @default(0) @map("garantiaContratualDias")
+  acessorios    Json     @default("{}") @map("acessorios") @db.JsonB
+  estadoFisico  String   @default("") @map("estadoFisico")
+  /// Checklist PASS/FAIL/NAO_TESTADO/NAO_APLICAVEL por item.
+  checklist     Json     @default("{}") @map("checklist") @db.JsonB
+  bateriaSaude  Int?     @map("bateriaSaude")
+  bateriaFonte  String?  @map("bateriaFonte")
+  /// nao_consultado | conferido_sem_restricao | restricao_conhecida
+  restricaoStatus String @default("nao_consultado") @map("restricaoStatus")
+  restricaoFonte  String? @map("restricaoFonte")
+  restricaoConferidaEm  DateTime? @map("restricaoConferidaEm")
+  restricaoConferidaPor String?   @map("restricaoConferidaPor")
+  observacoes   String   @default("") @map("observacoes") @db.Text
+  entradaEstoqueEm DateTime? @map("entradaEstoqueEm")
+  reservaToken  String?  @map("reservaToken")
+  reservadoAte  DateTime? @map("reservadoAte")
+  reservadoPor  String?  @map("reservadoPor")
+  version       Int      @default(1) @map("version")
+  createdBy     String   @default("") @map("createdBy")
+  createdAt     DateTime @default(now()) @map("createdAt")
+  updatedAt     DateTime @updatedAt @map("updatedAt")
+
+  identificadores AparelhoIdentificador[]
+  eventos         AparelhoEvento[]
+  fotos           AparelhoFoto[]
+  vendas          AparelhoVenda[]
+
+  @@unique([storeId, codigoInterno])
+  @@unique([id, storeId])
+  @@index([storeId, status])
+  @@index([storeId, produtoId])
+  @@index([storeId, createdAt])
+  @@map("aparelhos_fisicos")
+}
+
+/// Identificadores únicos por loja (IMEI 1, IMEI 2 e serial no MESMO espaço):
+/// impede duas unidades com o mesmo IMEI mesmo quando um é IMEI 1 e o outro IMEI 2.
+model AparelhoIdentificador {
+  id          String         @id @default(cuid())
+  storeId     String         @map("storeId")
+  aparelhoId  String         @map("aparelhoId")
+  aparelho    AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Cascade)
+  /// imei | serial
+  tipo        String         @map("tipo")
+  valor       String         @map("valor")
+  createdAt   DateTime       @default(now()) @map("createdAt")
+
+  @@unique([storeId, tipo, valor])
+  @@index([aparelhoId])
+  @@map("aparelhos_identificadores")
+}
+
+/// Linha do tempo imutável (append-only) da unidade.
+model AparelhoEvento {
+  id          String         @id @default(cuid())
+  storeId     String         @map("storeId")
+  aparelhoId  String         @map("aparelhoId")
+  aparelho    AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
+  tipo        String         @map("tipo")
+  deStatus    String?        @map("deStatus")
+  paraStatus  String?        @map("paraStatus")
+  dados       Json           @default("{}") @map("dados") @db.JsonB
+  operador    String         @default("") @map("operador")
+  idempotencyKey String?     @map("idempotencyKey")
+  createdAt   DateTime       @default(now()) @map("createdAt")
+
+  @@unique([storeId, idempotencyKey])
+  @@index([storeId, aparelhoId, createdAt])
+  @@map("aparelhos_eventos")
+}
+
+/// Fotos da unidade (imagem reduzida no cliente, ≤ 400 KB cada).
+model AparelhoFoto {
+  id          String         @id @default(cuid())
+  storeId     String         @map("storeId")
+  aparelhoId  String         @map("aparelhoId")
+  aparelho    AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Cascade)
+  dataUrl     String         @map("dataUrl") @db.Text
+  legenda     String         @default("") @map("legenda")
+  createdBy   String         @default("") @map("createdBy")
+  createdAt   DateTime       @default(now()) @map("createdAt")
+
+  @@index([storeId, aparelhoId])
+  @@map("aparelhos_fotos")
+}
+
+/// Aquisição (compra de cliente, fornecedor, lote, negociação). Documento comercial —
+/// NÃO substitui nota fiscal. Estoque só é creditado na confirmação + liberação.
+model AparelhoAquisicao {
+  id            String    @id @default(cuid())
+  storeId       String    @map("storeId")
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /// AQ-AAAA-NNNN por loja.
+  protocolo     String    @map("protocolo")
+  /// compra_cliente | fornecedor | lote | negociacao
+  tipo          String    @map("tipo")
+  /// aguardando_aprovacao | confirmada | recusada | cancelada
+  status        String    @default("aguardando_aprovacao") @map("status")
+  clienteId     String?   @map("clienteId")
+  cliente       Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  fornecedorId  String?   @map("fornecedorId")
+  fornecedor    Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  vendedorNome  String    @default("") @map("vendedorNome")
+  /// Documento do vendedor mascarado para exibição (***.456.789-**). O completo não é gravado aqui.
+  vendedorDocMascarado String @default("") @map("vendedorDocMascarado")
+  /// Hash SHA-256 do documento normalizado (conferência sem expor o número).
+  vendedorDocHash String?  @map("vendedorDocHash")
+  /// declaracao_procedencia | nota_fiscal | recibo | outro
+  documentoOrigemTipo   String @default("") @map("documentoOrigemTipo")
+  documentoOrigemNumero String @default("") @map("documentoOrigemNumero")
+  valorTotal    Float     @default(0) @map("valorTotal")
+  /// dinheiro | pix | transferencia | credito_loja | abatimento_venda | outro
+  formaPagamento String   @default("") @map("formaPagamento")
+  /// pago | pendente
+  pagamentoStatus String  @default("pendente") @map("pagamentoStatus")
+  observacoes   String    @default("") @map("observacoes") @db.Text
+  motivoRecusa  String    @default("") @map("motivoRecusa")
+  aprovadaPor   String?   @map("aprovadaPor")
+  aprovadaEm    DateTime? @map("aprovadaEm")
+  createdBy     String    @default("") @map("createdBy")
+  createdAt     DateTime  @default(now()) @map("createdAt")
+  updatedAt     DateTime  @updatedAt @map("updatedAt")
+
+  aparelhos     AparelhoFisico[]
+
+  @@unique([storeId, protocolo])
+  @@index([storeId, status])
+  @@map("aparelhos_aquisicoes")
+}
+
+/// Vínculo venda ↔ unidade física + SNAPSHOT imutável da garantia emitida.
+/// Índice parcial único (migration) garante UMA venda ativa por unidade.
+/// Garantias separadas: legal (CDC art. 26, II — 90 dias), contratual (CDC art. 50,
+/// complementar) e fabricante (informativa, não presumida).
+model AparelhoVenda {
+  id            String    @id @default(cuid())
+  storeId       String    @map("storeId")
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  aparelhoId    String    @map("aparelhoId")
+  aparelho      AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
+  vendaId       String    @map("vendaId")
+  venda         Venda     @relation(fields: [vendaId], references: [id], onDelete: Restrict)
+  pedidoId      String    @map("pedidoId")
+  clienteId     String?   @map("clienteId")
+  cliente       Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  /// GAR-AAAA-NNNN por loja — referência única do termo.
+  numeroGarantia String   @map("numeroGarantia")
+  /// ativa | devolvida | cancelada | recomprada (loja recomprou a unidade: garantia anterior encerrada)
+  status        String    @default("ativa") @map("status")
+  precoVenda    Float     @map("precoVenda")
+  dataVenda     DateTime  @map("dataVenda")
+  dataEntrega   DateTime  @map("dataEntrega")
+  legalDias     Int       @default(90) @map("legalDias")
+  legalFim      DateTime  @map("legalFim")
+  contratualDias Int      @default(0) @map("contratualDias")
+  contratualFim DateTime? @map("contratualFim")
+  /// Fim da cobertura somada (contratual + legal), leitura mais favorável ao consumidor.
+  coberturaFim  DateTime  @map("coberturaFim")
+  fabricanteInfo String   @default("") @map("fabricanteInfo")
+  fabricanteFim DateTime? @map("fabricanteFim")
+  politicaVersao Int      @map("politicaVersao")
+  /// Snapshot completo do termo (loja, cliente mascarado, aparelho, condições) — reimpressão fiel.
+  snapshot      Json      @map("snapshot") @db.JsonB
+  snapshotHash  String    @map("snapshotHash") @db.Char(64)
+  operador      String    @default("") @map("operador")
+  createdAt     DateTime  @default(now()) @map("createdAt")
+  updatedAt     DateTime  @updatedAt @map("updatedAt")
+
+  documentos    AparelhoDocumento[]
+
+  @@unique([storeId, numeroGarantia])
+  @@unique([vendaId, aparelhoId])
+  @@index([storeId, aparelhoId])
+  @@index([storeId, clienteId])
+  @@map("aparelhos_vendas")
+}
+
+/// Política de garantia/aquisição da loja. Versionada; vendas guardam a versão aplicada.
+model AparelhoPoliticaLoja {
+  id            String   @id @default(cuid())
+  storeId       String   @unique @map("storeId")
+  versao        Int      @default(1) @map("versao")
+  /// Presets de garantia CONTRATUAL adicional (dias). 0 = sem adicional.
+  presetsContratuaisDias Json @default("[0,30,90,180,365]") @map("presetsContratuaisDias") @db.JsonB
+  contratualPadraoDias Int @default(90) @map("contratualPadraoDias")
+  contratualMaxDias Int    @default(730) @map("contratualMaxDias")
+  condicoesTermo String   @default("") @map("condicoesTermo") @db.Text
+  /// Aquisição de cliente exige aprovação de gerente antes de confirmar.
+  aquisicaoExigeAprovacao Boolean @default(true) @map("aquisicaoExigeAprovacao")
+  /// Liberação para revenda exige conferência de restrição registrada.
+  liberacaoExigeConferencia Boolean @default(true) @map("liberacaoExigeConferencia")
+  updatedBy     String   @default("") @map("updatedBy")
+  createdAt     DateTime @default(now()) @map("createdAt")
+  updatedAt     DateTime @updatedAt @map("updatedAt")
+
+  @@map("aparelhos_politicas_loja")
+}
+
+/// Registro de emissão/reimpressão de documento comercial. Reimprimir NÃO cria venda,
+/// garantia nem movimento — só incrementa contador e preserva o hash da versão emitida.
+model AparelhoDocumento {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  aparelhoVendaId String? @map("aparelhoVendaId")
+  aparelhoVenda AparelhoVenda? @relation(fields: [aparelhoVendaId], references: [id], onDelete: Restrict)
+  aquisicaoId   String?  @map("aquisicaoId")
+  /// comprovante_venda | termo_garantia | termo_entrega | protocolo_aquisicao
+  tipo          String   @map("tipo")
+  /// a4 | 80mm
+  formato       String   @map("formato")
+  conteudoHash  String   @map("conteudoHash") @db.Char(64)
+  emissoes      Int      @default(1) @map("emissoes")
+  primeiraEmissaoEm DateTime @default(now()) @map("primeiraEmissaoEm")
+  ultimaEmissaoEm   DateTime @default(now()) @map("ultimaEmissaoEm")
+  emitidoPor    String   @default("") @map("emitidoPor")
+
+  @@unique([storeId, tipo, formato, aparelhoVendaId])
+  @@unique([storeId, tipo, formato, aquisicaoId])
+  @@index([storeId])
+  @@map("aparelhos_documentos")
+}
+
+/// Sequências por loja/ano (APA, AQ, GAR) — incremento atômico via upsert.
+model AparelhoSequencia {
+  storeId   String   @map("storeId")
+  chave     String   @map("chave")
+  ano       Int      @map("ano")
+  ultimo    Int      @default(0) @map("ultimo")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@id([storeId, chave, ano])
+  @@map("aparelhos_sequencias")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OMNI-VESTUARIO-P02-PERSISTENCIA-GRADES-CATALOGO-001 — catálogo de grade (ADITIVO)
+// Somente cadastro. Nenhum saldo, venda, reserva ou movimentação usa estas tabelas na P02.
+// Integridade multiloja no banco: toda FK interna é composta com `storeId`.
+// Nada é apagado em cascata: FKs RESTRICT; variantes não aceitam DELETE (trigger na migration);
+// cor/tamanho/produto da variante são imutáveis (trigger). SKU/código interno normalizados
+// (maiúsculas, sem espaço) e colisão com SKU/barcode de produto da mesma loja bloqueada
+// nos dois sentidos (writer + trigger em estoque_produtos, sob o mesmo advisory lock por loja).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Grade de tamanhos da loja (ex.: Adulto, Jeans, Calçados, Infantil). Nada fixo no código.
+ */
+model VestuarioGrade {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome      String   @map("nome")
+  /**
+   * Chave de duplicidade (caixa/acentos/espaços normalizados).
+   */
+  nomeKey   String   @map("nomeKey")
+  ativo     Boolean  @default(true) @map("ativo")
+  version   Int      @default(1) @map("version")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  tamanhos VestuarioTamanho[]
+  produtos VestuarioProdutoGrade[]
+
+  @@unique([storeId, id], name: "storeId_id")
+  @@unique([storeId, nomeKey], name: "storeId_nomeKey")
+  @@map("vestuario_grades")
+}
+
+/**
+ * Valor autorizado de uma grade (PP, 38, 4 anos…). ID estável; rótulo de tamanho usado não muda.
+ */
+model VestuarioTamanho {
+  id        String         @id @default(cuid())
+  storeId   String         @map("storeId")
+  gradeId   String         @map("gradeId")
+  grade     VestuarioGrade @relation(fields: [storeId, gradeId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  rotulo    String         @map("rotulo")
+  rotuloKey String         @map("rotuloKey")
+  ordem     Int            @default(0) @map("ordem")
+  ativo     Boolean        @default(true) @map("ativo")
+  createdAt DateTime       @default(now()) @map("createdAt")
+  updatedAt DateTime       @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([storeId, gradeId, id], name: "storeId_gradeId_id")
+  @@unique([storeId, gradeId, rotuloKey], name: "storeId_gradeId_rotuloKey")
+  @@index([storeId, gradeId, ordem])
+  @@map("vestuario_grade_tamanhos")
+}
+
+/**
+ * Cor comercial da loja. HEX é só referência visual opcional (estampas não têm um HEX).
+ */
+model VestuarioCor {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome      String   @map("nome")
+  nomeKey   String   @map("nomeKey")
+  hex       String?  @map("hex")
+  ordem     Int      @default(0) @map("ordem")
+  ativo     Boolean  @default(true) @map("ativo")
+  createdBy String   @default("") @map("createdBy")
+  updatedBy String   @default("") @map("updatedBy")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([storeId, id], name: "storeId_id")
+  @@unique([storeId, nomeKey], name: "storeId_nomeKey")
+  @@index([storeId, ativo, ordem])
+  @@map("vestuario_cores")
+}
+
+/**
+ * Fonte persistida AUTORITATIVA do modo COM_GRADE (1:1 com o produto pai). Sem linha = simples.
+ * `metadata.vestuario` do produto é apenas o marcador de compatibilidade lido pelos guards P01.
+ * Produto e grade são imutáveis após a criação (trigger).
+ */
+model VestuarioProdutoGrade {
+  id             String         @id @default(cuid())
+  storeId        String         @map("storeId")
+  produtoId      String         @unique @map("produtoId")
+  produto        Produto        @relation(fields: [produtoId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  gradeId        String         @map("gradeId")
+  grade          VestuarioGrade @relation(fields: [storeId, gradeId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogVersion Int            @default(1) @map("catalogVersion")
+  createdBy      String         @default("") @map("createdBy")
+  createdAt      DateTime       @default(now()) @map("createdAt")
+  updatedAt      DateTime       @updatedAt @map("updatedAt")
+
+  variantes VestuarioVariante[]
+
+  @@unique([produtoId, storeId], name: "produtoId_storeId")
+  @@unique([storeId, produtoId, gradeId], name: "storeId_produtoId_gradeId")
+  @@index([storeId, gradeId])
+  @@map("vestuario_produtos_grade")
+}
+
+/**
+ * Variante cor × tamanho. `id` é a identidade estável (opaca, do servidor): não deriva de SKU,
+ * rótulo ou posição. SKU/código interno são opcionais na P02 (rascunho) e nunca fabricados.
+ * Preço em centavos (override do pai) e custo de referência em milionésimos — contrato P01.
+ */
+model VestuarioVariante {
+  id             String                @id @default(cuid())
+  storeId        String                @map("storeId")
+  produtoId      String                @map("produtoId")
+  gradeId        String                @map("gradeId")
+  produtoGrade   VestuarioProdutoGrade @relation(fields: [storeId, produtoId, gradeId], references: [storeId, produtoId, gradeId], onDelete: Restrict, onUpdate: Restrict)
+  corId          String                @map("corId")
+  cor            VestuarioCor          @relation(fields: [storeId, corId], references: [storeId, id], onDelete: Restrict, onUpdate: Restrict)
+  tamanhoId      String                @map("tamanhoId")
+  tamanho        VestuarioTamanho      @relation(fields: [storeId, gradeId, tamanhoId], references: [storeId, gradeId, id], onDelete: Restrict, onUpdate: Restrict)
+  sku            String?               @map("sku")
+  barcodeInterno String?               @map("barcodeInterno")
+  precoCentavos  Int?                  @map("precoCentavos")
+  custoMicros    BigInt?               @map("custoMicros")
+  ativo          Boolean               @default(true) @map("ativo")
+  version        Int                   @default(1) @map("version")
+  createdBy      String                @default("") @map("createdBy")
+  updatedBy      String                @default("") @map("updatedBy")
+  createdAt      DateTime              @default(now()) @map("createdAt")
+  updatedAt      DateTime              @updatedAt @map("updatedAt")
+
+  @@unique([storeId, produtoId, corId, tamanhoId], name: "storeId_produtoId_corId_tamanhoId")
+  @@unique([storeId, sku], name: "storeId_sku")
+  @@unique([storeId, barcodeInterno], name: "storeId_barcodeInterno")
+  @@index([storeId, produtoId, ativo])
+  @@index([storeId, corId])
+  @@index([storeId, gradeId, tamanhoId])
+  @@map("vestuario_variantes")
 }

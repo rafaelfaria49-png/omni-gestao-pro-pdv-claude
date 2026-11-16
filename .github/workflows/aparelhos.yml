@@ -1,0 +1,71 @@
+name: Aparelhos (IMEI, compra, venda, garantia)
+
+on:
+  pull_request:
+    paths:
+      - "lib/aparelhos/**"
+      - "components/aparelhos/**"
+      - "app/api/aparelhos/**"
+      - "lib/ops-upsert-venda*"
+      - "lib/operations-sale-*"
+      - "lib/pdv-catalog*"
+      - "app/api/ops/inventory/route.ts"
+      - "lib/store-business-capabilities*"
+      - "lib/capabilities-persistence-v1*"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20261110120000_aparelhos_fisicos_serializados/**"
+      - "scripts/aparelhos/**"
+      - "test/aparelhos/**"
+      - "e2e/aparelhos/**"
+      - "e2e/aparelhos.playwright.config.ts"
+      - ".github/workflows/aparelhos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: aparelhos
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: aparelhos_pg
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aparelhos" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      APARELHOS_TEST_DATABASE_URL: postgresql://aparelhos:isolated_ci_only@127.0.0.1:5432/aparelhos_pg
+      DATABASE_URL: postgresql://aparelhos:isolated_ci_only@127.0.0.1:5432/aparelhos_pg
+      DIRECT_URL: postgresql://aparelhos:isolated_ci_only@127.0.0.1:5432/aparelhos_pg
+      AUTH_SECRET: isolated-aparelhos-fixture-without-production-authority
+      AUTH_TRUST_HOST: "true"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Domínio, documentos e regressões do motor de venda
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          lib/aparelhos lib/store-business-capabilities.test.ts
+          components/aparelhos
+          lib/ops-upsert-venda.test.ts lib/ops-upsert-venda-fractional.test.ts lib/ops-upsert-venda-lines-integrity.test.ts
+          lib/ops-upsert-venda-safety.test.ts lib/ops-upsert-venda-produto-identidade.test.ts
+          lib/vendas/pending-sync-classification.test.ts --maxWorkers=2
+      - name: Migration aditiva em PostgreSQL 17 descartável (baseline main + drift zero)
+        run: APARELHOS_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/aparelhos/prepare-pg.mjs
+      - name: Integração PG real (serviço + motor canônico de venda)
+        run: node node_modules/vitest/vitest.mjs run test/aparelhos --testTimeout=60000 --maxWorkers=1

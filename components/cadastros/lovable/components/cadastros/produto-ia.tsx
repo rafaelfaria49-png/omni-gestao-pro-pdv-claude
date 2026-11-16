@@ -1949,7 +1949,7 @@ function ProductAIEditor({
               </div>
             </div>}
             {showAccessories && <div className="col-span-full">
-              <ProdutoAcessoriosConfig value={acessoriosValue} onChange={(value) => { setAcessoriosValue(value); setAccessoriesTouched(true); }} />
+              <ProdutoAcessoriosConfig lojaHeader={storeId} value={acessoriosValue} onChange={(value) => { setAcessoriosValue(value); setAccessoriesTouched(true); }} />
             </div>}
           </fieldset>
         </div>

@@ -1,5 +1,7 @@
 import { MANUAL_KG_SALE, ManualKgSaleError } from "@/lib/vendas/manual-kg-contract"
 import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
+import { APARELHO_REVERSAO_NAO_INTEGRADA, AparelhoDevolucaoBloqueadaError, operacaoTocaAparelho } from "@/lib/aparelhos/sale-reversal"
+import { isSerializedDeviceProduct } from "@/lib/aparelhos/serialized-product"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -120,6 +122,14 @@ export async function POST(req: Request) {
     // Valor autoritativo — pode ser recalculado DENTRO da transação (passo 0) e
     // é usado fora dela pela integração financeira (createSaida).
     let valorTotalEfetivo = data.valorTotal
+    // Aparelho por IMEI: devolução ainda não integrada (F8) — fail-closed, nada é gravado.
+    if (data.vendaLocalId) {
+      const origem = await prisma.venda.findFirst({ where: { pedidoId: data.vendaLocalId, storeId: lojaId }, select: { payload: true } })
+      if (origem && operacaoTocaAparelho(origem.payload, data.itens.map((i) => i.inventoryId ?? ""))) {
+        return NextResponse.json({ error: APARELHO_REVERSAO_NAO_INTEGRADA.message, code: APARELHO_REVERSAO_NAO_INTEGRADA.code }, { status: 409 })
+      }
+    }
+
     const devolucao = await prisma.$transaction(async (tx) => {
       // 0. Valor autoritativo — quando a venda de origem existe no banco, o valor
       // devolvido e o crédito emitido são RECALCULADOS dos itens persistidos
@@ -219,6 +229,8 @@ export async function POST(req: Request) {
         })
         if (!produto) continue
         assertProductCommercialSaleSupported(produto.metadata)
+        // Modelo de aparelho por IMEI: saldo só volta pela unidade (devolução não integrada) — fail-closed.
+        if (isSerializedDeviceProduct(produto.metadata)) throw new AparelhoDevolucaoBloqueadaError()
 
         const jaExiste = await tx.movimentacaoEstoque.findFirst({
           where: { storeId: lojaId, documento: data.localId, produtoId: produto.id, origem: "devolucao" },
@@ -322,7 +334,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, devolucaoId: devolucao.id, devolucao })
   } catch (e) {
-    if (e instanceof ManualKgSaleError || e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) {
+    if (e instanceof ManualKgSaleError || e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError || e instanceof AparelhoDevolucaoBloqueadaError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
     }
     const msg = e instanceof Error ? e.message : String(e)

@@ -11,6 +11,7 @@ import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import { CollapsibleHoverRail } from "@/components/ui/collapsible-hover-rail";
 import { WORKSPACE_OVERLAY_PRIORITY } from "@/lib/workspace-overlay-orchestrator";
+import { StoreSwitcher } from "./StoreSwitcher";
 import {
   administrationNavItems,
   filterDashboardNav,
@@ -208,7 +209,9 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
           <div className="font-display font-semibold text-[13px] text-sidebar-foreground tracking-tight truncate">
             OmniGestão Pro
           </div>
-          <div className="text-[10px] text-muted-foreground truncate">{perms?.platformAuthority ? "Administração da plataforma" : "Acesso da loja"}</div>
+          <StoreSwitcher
+            fallback={<div className="text-[10px] text-muted-foreground truncate">{perms?.platformAuthority ? "Administração da plataforma" : "Acesso da loja"}</div>}
+          />
         </div>
         <button
           type="button"

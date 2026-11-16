@@ -2265,7 +2265,7 @@ export function GestaoProdutos({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <ProdutoAcessoriosConfig value={acessoriosValue} onChange={setAcessoriosValue} />
+                  <ProdutoAcessoriosConfig lojaHeader={lojaHeader} value={acessoriosValue} onChange={setAcessoriosValue} />
                 </div>
 
                 <div className="space-y-2">

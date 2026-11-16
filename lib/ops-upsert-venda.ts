@@ -5,7 +5,7 @@ import { assertManualKgAvailable, isManualKgProduct, enterManualKgTransaction } 
 import { toStockUnits, fromStockUnits, type StockUnit } from "@/lib/estoque/stock-quantity"
 import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
-import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
+import { assertNoUnsupportedVariantLines, assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import type { PixQrKind } from "@/lib/fiscal/payment/pix-qr-kind"
 import { buildFiscalPaymentHandoff, resolveCashTenderedEvidence, type FiscalPaymentHandoff } from "@/lib/vendas/fiscal-payment-handoff"
@@ -19,6 +19,7 @@ import {
 } from "@/lib/vendas/sale-quantity-contract"
 
 import { stripClientSyncFlags } from "@/lib/vendas/sale-sync-flags"
+import { isSerializedDeviceProduct, lineHasDeviceSale } from "@/lib/aparelhos/serialized-product"
 import { buildLegacySaleFingerprint, isLegacySaleFactsComparable } from "@/lib/vendas/legacy-sale-fingerprint"
 import {
   parseClientSaleId,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/vendas/sale-identity-contracts"
 import { StockIdempotency, type StockDriftFailureDetails } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
+import { corPadraoDesativadaNaVenda } from "@/lib/compat/venda-cores-guard"
 
 /** Re-exportado para as rotas traduzirem o erro de negócio em HTTP 409. */
 export { FractionalQuantityError }
@@ -327,6 +329,11 @@ export function isPrismaUniqueConstraintError(error: unknown): boolean {
 
 export type UpsertVendaOptions = {
   /**
+   * COMPAT-PROFISSIONAL-001 — a requisição é a FINALIZAÇÃO ao vivo no PDV (não reenvio da fila).
+   * Só então cor padrão desativada pela loja é recusada. Ausente = reenvio/legado: aceita.
+   */
+  finalizacaoAoVivo?: boolean
+  /**
    * Quando `true`, a baixa de estoque bloqueia qualquer decremento que deixaria o saldo
    * negativo, falhando com `InsufficientStockError`. Usado no fluxo PDV ao vivo
    * (`/api/ops/venda-persist`). O replay legado (`/api/ops/sync-legacy-vendas`) mantém
@@ -470,6 +477,12 @@ export type SalePayload = {
     serviceCategory?: string
     warrantyDays?: number
     serviceTerms?: string
+    /**
+     * Venda de aparelho individualizado (OMNI-APARELHOS-ENDTOEND-001): unidade física exata
+     * (`aparelhoId`) + garantia contratual escolhida. O servidor revalida tudo (lock da
+     * unidade, cliente obrigatório, legal de 90 dias) em `lib/aparelhos/sale-hook.ts`.
+     */
+    deviceSale?: unknown
   }>
 }
 
@@ -676,6 +689,8 @@ export async function upsertVendaInTransaction(
     const monetaryValues = [sale.total, ...Object.values(sale.paymentBreakdown ?? {}), sale.discountTotal ?? 0, sale.discountReais ?? 0, ...(sale.lines ?? []).flatMap((line) => [line.unitPrice, line.lineTotal])]
     if (monetaryValues.some((value) => moneyCents(value) === null)) throw new ManualKgSaleError("Valores monetários inválidos: use centavos exatos antes de reenviar a venda.")
   }
+  // Nenhum writer V1/V2/histórico pode tratar uma identidade futura como produto simples.
+  assertNoUnsupportedVariantLines(sale.lines)
   // ── GUARD FAIL-CLOSED: quantidade fracionada (FRACTIONAL-SALE-HARD-BLOCK-005) ──
   // PRIMEIRA coisa na função, ANTES de qualquer lookup (replay incluso), gate de
   // caixa, `Venda.create`, itens, estoque, financeiro ou títulos. `ItemVenda.quantidade`
@@ -795,6 +810,13 @@ export async function upsertVendaInTransaction(
   }
   const lines = sanitizedLines as SalePayloadLine[]
 
+  // ── Aparelho serializado (OMNI-APARELHOS-ENDTOEND-001) — pré-validação SEM escrita ──
+  // Import dinâmico: o módulo de aparelhos só carrega quando a venda tem unidade física
+  // (vendas comuns não tocam as tabelas novas). Cliente obrigatório e quantidade 1.
+  const hasDeviceLines = lines.some(lineHasDeviceSale)
+  const deviceSaleModule = hasDeviceLines || enforceStock ? await import("@/lib/aparelhos/sale-hook") : null
+  if (hasDeviceLines) deviceSaleModule!.assertDeviceSaleLinesShape(lines, clienteId)
+
   // REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_VALE_ALINHAMENTO): receita à vista =
   // total − aPrazo − creditoVale (ver `valorAVistaVenda`). > 0 ⇒ a venda move a
   // gaveta (MovimentacaoFinanceira no passo 4) e, portanto, exige caixa aberto.
@@ -843,6 +865,23 @@ export async function upsertVendaInTransaction(
       Number(pb?.creditoVale ?? 0)
     if (!Number.isFinite(somaPagamentos) || Math.abs(somaPagamentos - rawTotal) > 0.02) {
       throw new SalePaymentsMismatchError(rawTotal, somaPagamentos)
+    }
+    // COMPAT-PROFISSIONAL-001: cor padrão desativada pela loja não entra em venda NOVA finalizada
+    // ao vivo. Venda registrada offline / sincronizada da fila segue aceita. Antes de qualquer
+    // efeito; replay nunca chega aqui.
+    const corRecusada = await corPadraoDesativadaNaVenda(
+      tx as unknown as Parameters<typeof corPadraoDesativadaNaVenda>[0],
+      lojaId,
+      {
+        lines,
+        registeredOffline: (sale as { registeredOffline?: unknown }).registeredOffline,
+        finalizacaoAoVivo: options?.finalizacaoAoVivo === true,
+      },
+    )
+    if (corRecusada) {
+      throw new InvalidSaleLinesError(
+        `A cor "${corRecusada}" está desativada nesta loja. Escolha outra cor no item e finalize de novo.`,
+      )
     }
   }
 
@@ -1017,6 +1056,7 @@ export async function upsertVendaInTransaction(
     name: string
     unit: StockUnit
     price: number
+    serialized: boolean
   }
   const resolvedProductMap = new Map<string, ResolvedProduct>()
 
@@ -1066,6 +1106,7 @@ export async function upsertVendaInTransaction(
           name: produto.name,
           unit: isManualKgProduct(produto.metadata) ? "KG" : "UN",
           price: produto.price,
+          serialized: isSerializedDeviceProduct(produto.metadata),
         })
       }
     }
@@ -1137,6 +1178,15 @@ export async function upsertVendaInTransaction(
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
     if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
     const resolved = resolvedProductMap.get(productResolutionKey(line).key)
+    // Modelo serializado nunca sai sem a unidade (IMEI) — em QUALQUER escritor (ao vivo ou sync
+    // legado), senão Produto.stock deixa de casar com as unidades disponíveis. Fail-closed.
+    if (resolved?.serialized && !lineHasDeviceSale(line)) {
+      const mod = deviceSaleModule ?? (await import("@/lib/aparelhos/sale-hook"))
+      throw new mod.DeviceSaleError(
+        "APARELHO_IMEI_OBRIGATORIO",
+        `"${resolved.name}" é aparelho individualizado: selecione a unidade pelo IMEI antes de finalizar.`,
+      )
+    }
     if (!resolved) {
       // Item vendido referencia inventoryId sem casamento por id/sku/barcode.
       // Causa típica: produto removido após cache do PDV ou SKU divergente. Sem ledger.
@@ -1259,6 +1309,15 @@ export async function upsertVendaInTransaction(
         } as SalePayload),
       },
     })
+  }
+
+  // ── 3b. Unidade física do aparelho (mesma transação; lock + snapshot de garantia) ──
+  if (hasDeviceLines) {
+    await deviceSaleModule!.applyDeviceSaleLinesTx(
+      tx,
+      { storeId: lojaId, vendaId: v.id, pedidoId, at, clienteId, operador: (operadorLabel ?? "").trim() || operador },
+      lines,
+    )
   }
 
   // ── 4. MovimentacaoFinanceira (receita à vista PDV) ─────────────────────────
