@@ -1,6 +1,9 @@
 import path from "node:path"
+import { mkdir, writeFile } from "node:fs/promises"
+import { PDFDocument } from "pdf-lib"
 import { expect, test, type Browser, type Page } from "@playwright/test"
 import { PrismaClient } from "../../generated/prisma"
+import { snapshotSchema } from "../../lib/identificacao/contracts"
 
 const A = "e2e-vest-a", B = "e2e-vest-b", OFF = "e2e-vest-off", LOJA_KEY = "assistec-pro-loja-ativa-v1"
 const url = process.env.VESTUARIO_P02_E2E_DATABASE_URL || ""
@@ -63,8 +66,23 @@ test("HUB → emissão real → lookup → lote → PDF → impressão incerta e
   await page.getByRole("button", { name: "Gerar prévia / PDF" }).click()
   const pdf = await response
   expect(pdf.status()).toBe(200); expect(pdf.headers()["content-type"]).toBe("application/pdf")
-  expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-")
+  // APIRequest lê o transporte binário sem a interceptação PDF do Chromium/CDP.
+  const transport = await page.request.get(`/api/identificacao/etiquetas/${original.id}?storeId=${A}`)
+  expect(transport.status()).toBe(200)
+  const body = await transport.body()
+  expect(body.subarray(0, 5).toString()).toBe("%PDF-")
+  expect((await PDFDocument.load(body)).getPageCount()).toBe(5)
+  expect(Number(transport.headers()["content-length"])).toBe(body.byteLength)
   await expect(page.getByRole("link", { name: "Baixar PDF" })).toBeVisible()
+  const clientBytes = await page.getByRole("link", { name: "Baixar PDF" }).evaluate(async link => {
+    const data = await (await fetch((link as HTMLAnchorElement).href)).arrayBuffer()
+    return Array.from(new Uint8Array(data))
+  })
+  expect(Buffer.from(clientBytes).equals(body)).toBe(true)
+  await mkdir(path.join(__dirname, "../../test-results/vestuario-p03-e2e/pdf"), { recursive: true })
+  await writeFile(path.join(__dirname, "../../test-results/vestuario-p03-e2e/pdf/lote-real-api.pdf"), body)
+  const snapshot = snapshotSchema.parse(original.snapshot)
+  await writeFile(path.join(__dirname, "../../test-results/vestuario-p03-e2e/pdf/expected.json"), JSON.stringify({ codes: snapshot.items.flatMap(i => Array.from({ length: i.quantidade }, () => i.codigo)) }))
   await page.screenshot({ path: shot("01-lote-pdf-desktop.png"), fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1)

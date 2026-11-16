@@ -85,7 +85,8 @@ jobs:
       - run: npm run test:fiscal-xsd:unit
       - name: Testes provider SEFAZ
         run: npx vitest run lib/fiscal/provider/sefaz --testTimeout=30000
-      - run: npx tsc --noEmit --incremental false
+      # Mesmo check integral sem cache; usa o orçamento de heap do script canônico do projeto.
+      - run: npm run typecheck -- --incremental false
       - name: ESLint fiscal focado
         run: >-
           npx eslint lib/fiscal/xsd lib/fiscal/xsd-worker lib/fiscal/provider/sefaz

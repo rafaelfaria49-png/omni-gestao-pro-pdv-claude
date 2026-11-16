@@ -123,7 +123,9 @@ export function IdentificacaoEtiquetasPanel({ storeId }: { storeId: string }) {
     try {
       const r = await fetch(endpoint(jobId), { cache: "no-store" })
       if (!r.ok) throw new Error((await r.json()).message || "Falha ao gerar PDF.")
-      const blob = await r.blob()
+      const bytes = new Uint8Array(await r.arrayBuffer())
+      if (bytes.length < 5 || [37, 80, 68, 70, 45].some((b, i) => bytes[i] !== b)) throw new Error("Resposta de PDF vazia ou inválida. O lote permanece salvo; tente gerar novamente.")
+      const blob = new Blob([bytes], { type: "application/pdf" })
       if (!alive.current || currentJobId.current !== jobId || seq !== previewSequence.current) return
       if (pdfUrl.current) URL.revokeObjectURL(pdfUrl.current)
       pdfUrl.current = URL.createObjectURL(blob); setPreview(pdfUrl.current); setPdfReady(true); setMessage("PDF pronto para conferência. Impressão física não homologada.")

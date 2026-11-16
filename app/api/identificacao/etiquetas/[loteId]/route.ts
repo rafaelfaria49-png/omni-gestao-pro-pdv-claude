@@ -15,8 +15,9 @@ export async function GET(request: Request, route: { params: Promise<{ loteId: s
     if (url.searchParams.get("format") === "html") return new Response(await renderer.renderLabelsHtml(job.value.snapshot), { headers: {
       ...headers, "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
     } })
-    const pdf = await renderer.renderLabelsPdf(job.value.snapshot)
-    return new Response(new Uint8Array(pdf), { headers: { ...headers, "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="etiquetas-${job.value.id.replace(/[^a-zA-Z0-9-]/g, "")}.pdf"` } })
+    const pdf = Uint8Array.from(await renderer.renderLabelsPdf(job.value.snapshot))
+    if (pdf.length < 5 || [37, 80, 68, 70, 45].some((b, i) => pdf[i] !== b)) throw new Error("LABEL_INVALID_PDF")
+    return new Response(pdf.buffer, { headers: { ...headers, "Content-Type": "application/pdf", "Content-Length": String(pdf.byteLength), "Content-Disposition": `inline; filename="etiquetas-${job.value.id.replace(/[^a-zA-Z0-9-]/g, "")}.pdf"` } })
   } catch (e) {
     const unsupported = e instanceof Error && e.message.startsWith("LABEL_UNSUPPORTED_GLYPH")
     return Response.json({ ok: false, code: "RENDER_FAILED", message: unsupported ? "Há caracteres sem suporte na fonte. Revise o cadastro antes de gerar etiquetas." : "Falha ao gerar prévia/PDF. O lote permanece salvo; tente novamente." }, { status: 422, headers })

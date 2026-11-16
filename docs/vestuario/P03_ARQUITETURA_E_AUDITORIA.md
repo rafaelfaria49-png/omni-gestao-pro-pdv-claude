@@ -164,3 +164,27 @@ autenticado; render PDF em PNG e decodificar Code128 por biblioteca independente
 Custos: emissão/lookup sob demanda, índices de chaves e limites de lote. Medir CPU/bytes PDF e queries de
 emissão; triggers de colisão acrescentam leituras em mudança de códigos/aliases, inclusive com UI desligada.
 Não afirmar custo zero. Rollback operacional desliga apenas P03, mantém reservas/dados/guards e opt-in P02.
+
+### Recursos de CI e bloqueio anterior à P03
+
+O schema e os contratos ampliam o programa TypeScript integral. O check fiscal com heap padrão (~2 GB)
+passa na base exata `51265894` (run `43910747836`, matrizes Ubuntu/Windows), mas esgotou heap com P03.
+Fronteiras DB mínimas e opções Prisma explícitas foram aplicadas sem casts; um diagnóstico separado sem
+o novo teste PG também esgotou 2 GB. Nenhum arquivo/check foi retirado da validação autoritativa.
+O workflow fiscal passa a chamar `npm run typecheck -- --incremental false`: mesmos checks, sem cache,
+orçamento de 4 GB já definido em `package.json` na main. Node20 do worker, limites de container e
+controles fiscais não mudam. Memória/tempo do compilador devem constar no relatório final de QA.
+
+A comparação da base também comprovou falha independente da P03 no build do container fiscal:
+`libpcre2-8-0=10.42-1+deb12u1` está indisponível no APT (`43910747836`, job `133454912075`).
+Dockerfile, pins e integridade desse worker não são alterados pela P03. Isso deve ser reportado como
+bloqueio do CI global enquanto não houver correção fiscal autorizada; não omitir nem desabilitar o job.
+
+O E2E verifica o PDF binário por HTTP autenticado, compara-o integralmente ao Blob recebido pela UI,
+confere Content-Length e cinco páginas do lote real. O artefato desse transporte é rasterizado e
+decodificado novamente por PDFium/ZXing em 203/300 DPI. HTTP 200 vazio/inválido não habilita imprimir.
+A leitura de body pelo CDP não é a evidência binária autoritativa do plugin PDF do Chromium.
+
+Revalidação de 16/11: main avançou de `51265894` para `8fbb727d` com #368–#370, relativas ao desktop
+e impressão. A atualização será incorporada por merge, preservando esses arquivos. A P03 continua
+usando apenas o diálogo do navegador, sem consumir ou modificar a nova ponte de impressão desktop.

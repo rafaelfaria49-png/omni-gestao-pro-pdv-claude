@@ -95,6 +95,8 @@ jobs:
         run: |
           PGPASSWORD=isolated_ci_only psql -h 127.0.0.1 -U p03_qa -d vest_p02_p03_pg -c 'CREATE DATABASE vest_p02_e2e_p03'
           VESTUARIO_P02_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/vestuario/run-vestuario-p03-e2e.mjs
+      - name: Decodificação independente do PDF recebido no E2E autenticado
+        run: python scripts/vestuario/verify-p03-pdf.py --e2e
       - name: Evidências QA sem banco nem credenciais
         if: always()
         uses: actions/upload-artifact@v4
