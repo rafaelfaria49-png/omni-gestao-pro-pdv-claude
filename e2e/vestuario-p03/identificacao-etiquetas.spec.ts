@@ -98,7 +98,14 @@ test("HUB → emissão real → lookup → lote → PDF → impressão incerta e
   expect((await mobileName.boundingBox())!.width).toBeGreaterThanOrEqual(240)
   await page.screenshot({ path: shot("02-etiquetas-mobile.png") })
   await page.getByRole("heading", { name: "Prévia e saída", exact: true }).scrollIntoViewIfNeeded()
-  await expect(visual.getByRole("img").first()).toBeVisible()
+  await visual.getByRole("img").first().scrollIntoViewIfNeeded()
+  await page.getByTitle("Prévia das etiquetas").scrollIntoViewIfNeeded()
+  await expect(visual.getByRole("img").first()).toBeInViewport({ ratio: 0.95 })
+  await expect(page.getByTitle("Prévia das etiquetas")).toBeInViewport({ ratio: 0.8 })
+  await visual.locator("body").evaluate(async () => {
+    await document.fonts.ready
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  })
   await page.screenshot({ path: shot("03-previa-mobile.png") })
   await page.setViewportSize({ width: 1440, height: 1000 })
   // Stub SOMENTE do boundary físico. Toda solicitação/estado passa pela app/NextAuth/PG real.
