@@ -1,0 +1,12 @@
+fsync=on
+produtos sintéticos:
+2.000 inserts legados com SKU ANTES da migration: 122 ms
+CREATE UNIQUE INDEX (id, storeId) com 300000 produtos: 269 ms · índice 9304 kB
+SELECT concorrente durante o índice (lock SHARE): respondeu em 121 ms (0 linhas)
+UPDATE concorrente durante o índice: bloqueou (esperado: escrita espera o índice)
+migration P02 completa (transação única) com 300000 produtos: 1139 ms
+2.000 inserts legados com SKU DEPOIS (loja sem variações): 168 ms
+500 variações com SKU numa loja com 50000 produtos (trigger varre a loja): 239 ms
+2.000 inserts legados com SKU DEPOIS (loja COM 500 variações): 313 ms
+UPDATE de preço em 50000 produtos da loja (sem mexer em sku/barcode; trigger não age): 6616 ms
+OK

@@ -35,7 +35,9 @@ describe.skipIf(!TEST_URL)("catálogo por loja — PostgreSQL descartável", () 
 
   beforeAll(async () => {
     expect(global.modelByKey.has("samsung_galaxy_a05")).toBe(true)
-    expect(global.models.some((m) => /G47/i.test(m.canonicalName))).toBe(false)
+    // O modelo de teste é da marca sintética: não pode existir no catálogo global (o G47 da Motorola
+    // passou a existir oficialmente em 2026 — COMPAT-CATALOGO-BRASIL-2023-2026-002).
+    expect(global.models.some((m) => /Marca Sint/i.test(m.brand))).toBe(false)
     for (const id of [storeA, storeB]) {
       await db.store.create({ data: { id, name: `Loja ${id}`, cnpj: "00.000.000/0000-00", phone: "(00) 0000-0000" } })
     }
@@ -131,8 +133,11 @@ describe.skipIf(!TEST_URL)("catálogo por loja — PostgreSQL descartável", () 
     expect(getPeliculasPorModelo(global, "samsung_galaxy_a05")).toEqual(groupsA05)
   })
 
-  it("rejeita categoria capinha, status confirmado e par inválido", async () => {
-    expect(await setLojaCompatDecisao(db, global, storeA, "u", { categoria: "capinha", modelKey: g47Key, otherModelKey: "samsung_galaxy_a05", decisao: "adicionar" }))
+  it("rejeita categoria desconhecida, suprimir capinha, status confirmado e par inválido", async () => {
+    // COMPAT-PROFISSIONAL-001: capinha passou a ser aceita (independente); categoria fora do domínio, não.
+    expect(await setLojaCompatDecisao(db, global, storeA, "u", { categoria: "tela", modelKey: g47Key, otherModelKey: "samsung_galaxy_a05", decisao: "adicionar" }))
+      .toMatchObject({ ok: false, code: "INVALID" })
+    expect(await setLojaCompatDecisao(db, global, storeA, "u", { categoria: "capinha", modelKey: g47Key, otherModelKey: "samsung_galaxy_a05", decisao: "suprimir" }))
       .toMatchObject({ ok: false, code: "INVALID" })
     expect(await setLojaCompatDecisao(db, global, storeA, "u", { modelKey: g47Key, otherModelKey: g47Key, decisao: "adicionar" }))
       .toMatchObject({ ok: false, code: "INVALID" })

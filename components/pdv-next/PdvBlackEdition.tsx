@@ -1,5 +1,6 @@
 "use client"
 
+import { APARELHO_FORA_DO_FLUXO, isAparelhoSerializado } from "@/components/aparelhos/bloqueio-layout"
 import {
   Suspense,
   useCallback,
@@ -355,6 +356,11 @@ export function PdvBlackEdition() {
       const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
       if (pesoBloqueado) {
         toast({ ...pesoBloqueado, variant: "destructive" })
+        return
+      }
+      // OMNI-APARELHOS-ENDTOEND-001: este layout não vende unidade por IMEI — bloqueio explícito.
+      if (isAparelhoSerializado(product)) {
+        toast({ variant: "destructive", ...APARELHO_FORA_DO_FLUXO })
         return
       }
       const effectiveQty = qty ?? 1

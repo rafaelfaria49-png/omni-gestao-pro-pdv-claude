@@ -52,6 +52,8 @@ import {
   type CondicaoMercadoria,
 } from "@/lib/pdv/devolucao/trocas-peso-policy"
 import { enterManualKgTransaction } from "@/lib/vendas/manual-kg-server"
+import { AparelhoDevolucaoBloqueadaError, operacaoTocaAparelho } from "@/lib/aparelhos/sale-reversal"
+import { isSerializedDeviceProduct } from "@/lib/aparelhos/serialized-product"
 
 export type DevolucaoTipo = "vale_credito" | "somente_estoque" | "troca" | "devolucao"
 
@@ -469,6 +471,12 @@ export async function registrarDevolucaoInTransaction(
   if (!venda) {
     throw new DevolucaoBusinessError("VENDA_ORIGEM_NAO_ENCONTRADA", `Venda ${vendaLocalId} não encontrada.`, { vendaLocalId })
   }
+
+  // Aparelho por IMEI (OMNI-APARELHOS-ENDTOEND-001): devolução ainda não integrada — recusa
+  // ANTES de gravar qualquer coisa (documento, estoque, vale). Vale para troca e devolução.
+  if (operacaoTocaAparelho(venda.payload, input.itens.flatMap((i) => [i.inventoryId ?? "", i.produtoId ?? ""]))) {
+    throw new AparelhoDevolucaoBloqueadaError()
+  }
   if (venda.status === "cancelada") {
     throw new DevolucaoBusinessError("VENDA_CANCELADA", `A venda ${vendaLocalId} está cancelada: não há o que devolver.`)
   }
@@ -574,6 +582,8 @@ export async function registrarDevolucaoInTransaction(
     select: { id: true, metadata: true },
   })
   const unidadeCadastro = new Map<string, "UN" | "KG" | "G">(produtosAtuais.map((p) => [p.id, productCommercialFromMetadata(p.metadata).unidade]))
+  // Modelo de aparelho por IMEI: saldo só volta pela unidade física (não integrada) — fail-closed.
+  if (produtosAtuais.some((p) => isSerializedDeviceProduct(p.metadata))) throw new AparelhoDevolucaoBloqueadaError()
 
   for (const req of input.itens) {
     const k = canon(req.inventoryId, req.produtoId)

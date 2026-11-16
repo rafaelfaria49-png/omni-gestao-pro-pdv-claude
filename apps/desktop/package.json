@@ -1,0 +1,34 @@
+{
+  "name": "omnigestao-desktop",
+  "productName": "OmniGestão Pro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OmniGestão Pro para Windows — cliente desktop do sistema web",
+  "author": "RAFACELL",
+  "license": "UNLICENSED",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "node scripts/clean.mjs dist && tsc -p tsconfig.json && node scripts/copy-renderer.mjs",
+    "build-config": "node scripts/write-build-config.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "npm run build && node scripts/write-build-config.mjs --channel development --origin http://127.0.0.1:47613 && playwright test",
+    "test:packaged": "node tests/packaged/smoke.mjs",
+    "icons": "electron scripts/generate-icons.cjs",
+    "start": "npm run build && electron .",
+    "package": "npm run build && electron-forge package",
+    "make": "npm run build && electron-forge make"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "8.0.1",
+    "@electron-forge/maker-squirrel": "8.0.1",
+    "@electron-forge/plugin-fuses": "8.0.1",
+    "@electron/fuses": "2.1.3",
+    "@playwright/test": "1.52.0",
+    "@types/node": "22.19.3",
+    "electron": "45.2.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12"
+  }
+}

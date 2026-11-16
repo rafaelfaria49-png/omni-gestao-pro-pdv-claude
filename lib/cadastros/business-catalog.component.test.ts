@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
   save: vi.fn(async (_patch: unknown) => {}),
   upsert: vi.fn(async (_id: string, _input: unknown) => ({ ok: true, id: "p-new" })),
+  vestuarioStatus: vi.fn(async (_storeId: string) => ({ enabled: false })),
 }))
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   storeId: h.storeId, ready: h.ready, hydrated: h.hydrated, capabilities: h.capabilities, refresh: h.refresh,
@@ -26,7 +27,7 @@ vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({
   canConfigure: h.canConfigure, presentation: businessPresentation(h.capabilities), save: h.save,
   resource: (key: Parameters<typeof resolveBusinessResource>[1]) => resolveBusinessResource(h.capabilities, key, undefined, h.permitted),
 }) }))
-vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted } }) }))
+vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ ...getEnterprisePermissions("ADMIN"), platformAuthority: false, workspace: { iaMestre: false, omniAgent: false }, modules: { ai: false, marketplace: false, service: h.permitted, deviceCatalog: h.permitted && h.deviceCatalog } }) }))
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-a" }) }))
 vi.mock("@/components/configuracoes-v3/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -42,6 +43,16 @@ vi.mock("@/app/actions/cadastros", () => ({
   listProdutosPaginado: h.readProducts, listServicos: vi.fn(), listTecnicos: vi.fn(), listLogsAuditoriaCadastros: vi.fn(),
   upsertEquipamentoModelo: vi.fn(), upsertFornecedor: vi.fn(), upsertTecnico: vi.fn(), updateCliente: vi.fn(),
   upsertServico: vi.fn(), deleteProduto: vi.fn(), getUltimoBatchProdutos: vi.fn(),
+}))
+// Vestuário P02: Server Actions mockadas como as demais do HUB (o módulo real exige sessão/NextAuth).
+vi.mock("@/app/actions/vestuario-catalogo", () => ({
+  getVestuarioCatalogoStatus: h.vestuarioStatus,
+  listVestuarioCatalogo: vi.fn(async () => ({ ok: true, value: { grades: [], cores: [] } })),
+  listVestuarioProdutosGrade: vi.fn(async () => ({ ok: true, value: { items: [], nextCursor: null } })),
+  getVestuarioProdutoGrade: vi.fn(), createVestuarioGrade: vi.fn(), updateVestuarioGrade: vi.fn(), addVestuarioTamanho: vi.fn(),
+  updateVestuarioTamanho: vi.fn(), reorderVestuarioTamanhos: vi.fn(), createVestuarioCor: vi.fn(), updateVestuarioCor: vi.fn(),
+  reorderVestuarioCores: vi.fn(), createVestuarioProdutoGrade: vi.fn(), updateVestuarioProdutoGradeBase: vi.fn(),
+  addVestuarioVariantes: vi.fn(), updateVestuarioVariante: vi.fn(),
 }))
 vi.mock("@/components/cadastros/lovable/components/cadastros/MovimentacaoEstoqueModal", () => ({ MovimentacaoEstoqueModal: () => null, HistoricoEstoqueGeralModal: () => null }))
 vi.mock("@/components/cadastros/lovable/components/cadastros/ClienteEditor", () => ({ ClienteEditorDialog: () => null }))
@@ -70,6 +81,7 @@ beforeEach(() => {
   h.upsert.mockReset().mockResolvedValue({ ok: true, id: "p-new" })
   h.readProducts.mockClear()
   h.save.mockClear()
+  h.vestuarioStatus.mockReset().mockResolvedValue({ enabled: false })
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })))
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -146,6 +158,20 @@ describe("Cadastros adaptados por recursos e produto", () => {
     await screen.findByText("Cadastros: Assistência técnica")
     expect(screen.getByRole("button", { name: "Técnicos" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Equipamentos" })).toBeNull()
+  })
+  it("vestuário: catálogo desligado não oferece a aba de grades nem a escolha de modalidade", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "moda" } }
+    render(React.createElement(CadastrosHub))
+    await waitFor(() => expect(h.vestuarioStatus).toHaveBeenCalledWith("loja-a"))
+    expect(screen.queryByRole("button", { name: "Grades e variações" })).toBeNull()
+  })
+  it("vestuário: catálogo habilitado pelo servidor mostra a aba de grades da loja ativa", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "moda" } }
+    h.vestuarioStatus.mockResolvedValue({ enabled: true })
+    render(React.createElement(CadastrosHub))
+    fireEvent.click(await screen.findByRole("button", { name: "Grades e variações" }))
+    expect(await screen.findByText("Cadastro de grades e variações (cor × tamanho)")).toBeTruthy()
+    expect(h.vestuarioStatus).toHaveBeenCalledWith("loja-a")
   })
   it("edição com seções ocultas omite configurações e preserva o patch", async () => {
     product({ nome: "Mercadoria", garantia: 60, metadata: {
@@ -248,7 +274,59 @@ describe("Editor oficial de configuração", () => {
     fireEvent.click(box)
     fireEvent.click(box)
     expect(screen.getAllByText("Sugestão do ramo").length).toBe(5)
+    expect(screen.getAllByText("Ativação manual").length).toBe(1)
     expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it.each(["padaria", "assistencia", "acessorios"] as const)("%s: aparelhos por IMEI aparece desligado e como ativação manual, não como sugestão", (branch) => {
+    h.capabilities = { version: 1, business: { primaryBranch: branch } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement
+    expect(box.checked).toBe(false)
+    const row = box.closest("label")!
+    expect(row.textContent).toContain("Ativação manual")
+    expect(row.textContent).not.toContain("Sugestão do ramo")
+    expect(row.textContent).toMatch(/Desligado por padrão em todos os ramos/)
+    // A explicação é descrição, não nome: o nome acessível continua curto.
+    expect(screen.getByRole("checkbox", { name: /^Aparelhos por IMEI \(compra, venda e garantia\)\s*Ativação manual$/, description: /Desligado por padrão em todos os ramos/ })).toBe(box)
+  })
+  it("ligar aparelhos por IMEI grava só esse override explícito da unidade", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement
+    fireEvent.click(box)
+    expect(box.checked).toBe(true)
+    expect(box.closest("label")!.textContent).toContain("Escolha explícita")
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }))
+    await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
+    expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: {},
+      overrides: { "catalog.serializedDevices": true } } } })
+  })
+  it("ligar e desligar aparelhos por IMEI volta à ativação manual sem gravar nada", () => {
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ })
+    fireEvent.click(box)
+    fireEvent.click(box)
+    expect(box.closest("label")!.textContent).toContain("Ativação manual")
+    expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it("sem liberação do catálogo de aparelhos a opção de IMEI não é oferecida", () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    h.deviceCatalog = false
+    render(React.createElement(BusinessResourcesCard))
+    expect(screen.queryByRole("checkbox", { name: /Aparelhos por IMEI/ })).toBeNull()
+    // Controle positivo: o formulário renderizou e só os recursos de aparelho saíram.
+    expect(screen.getByRole("checkbox", { name: /Produtos por peso/ })).toBeTruthy()
+    expect(screen.getByRole("checkbox", { name: /Assistência técnica/ })).toBeTruthy()
+    expect(screen.queryByRole("checkbox", { name: /Acessórios para aparelhos/ })).toBeNull()
+  })
+  it("escolha não salva de IMEI na loja A não vaza para a loja B", () => {
+    const ui = render(React.createElement(BusinessResourcesCard))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }))
+    h.storeId = "loja-b"
+    ui.rerender(React.createElement(BusinessResourcesCard))
+    expect((screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement).checked).toBe(false)
+    expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
+    expect(h.save).not.toHaveBeenCalled()
   })
   it("exibe preparação com honestidade e desabilita edição sem permissão", () => {
     h.canConfigure = false

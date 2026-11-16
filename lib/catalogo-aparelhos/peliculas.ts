@@ -126,8 +126,9 @@ function buildPeliculaIndex(index: CatalogoIndex): PeliculaIndex {
 
   for (const c of index.compatibilities) {
     if (!isPeliculaRow(c)) continue
-    const source = (c.sourceModelKey ?? "").trim()
-    const target = (c.targetModelKey ?? "").trim()
+    // Linhas mescladas (ex.: "iPhone 7 Branco" = cor da borda da película) entram pelo canônico.
+    const source = index.canonicalKeyOf((c.sourceModelKey ?? "").trim())
+    const target = index.canonicalKeyOf((c.targetModelKey ?? "").trim())
     if (!source && !target) continue
 
     const gk = groupKeyOf(c)
@@ -177,6 +178,13 @@ function getPeliculaIndex(index: CatalogoIndex): PeliculaIndex {
 // Consulta principal
 // ---------------------------------------------------------------------------
 
+/**
+ * COMPAT-CATALOGO-BRASIL-2023-2026-002 — relação documentada pelo FABRICANTE DE UM ACESSÓRIO
+ * específico (ex.: Belkin UltraGlass 2 vendida pela Apple para "iPhone 17 Pro / 18 Pro"). Mantém
+ * a distinção SKU × molde genérico: o grupo é exibido com aviso de escopo, nunca como equivalência geral.
+ */
+export const TIPO_ACESSORIO_ESPECIFICO = "acessorio_especifico"
+
 /** Limiar de "grupo grande" — reaproveitamento amplo aumenta risco de molde divergente. */
 const LARGE_GROUP_THRESHOLD = 10
 
@@ -194,7 +202,7 @@ function resolveMember(index: CatalogoIndex, modelKey: string): PeliculaGrupoMem
  * mais forte (confirmado_fornecedor) ao mais fraco. Modelo sem grupo → `[]` (vazio honesto).
  */
 export function getPeliculasPorModelo(index: CatalogoIndex, modelKey: string): PeliculaGrupo[] {
-  const key = (modelKey ?? "").trim()
+  const key = index.canonicalKeyOf((modelKey ?? "").trim())
   if (!key) return []
 
   const peliculaIndex = getPeliculaIndex(index)
@@ -219,6 +227,12 @@ export function getPeliculasPorModelo(index: CatalogoIndex, modelKey: string): P
     const isCrossBrandGroup = brands.size > 1
 
     const warnings: string[] = []
+    // Compatibilidade documentada para UM acessório (SKU/linha de um fabricante): não é molde genérico.
+    if (agg.compatibilityType.trim().toLowerCase() === TIPO_ACESSORIO_ESPECIFICO) {
+      warnings.push(
+        `Documentado só para o acessório "${agg.groupName}". Não garante que outras películas sirvam nos mesmos aparelhos.`,
+      )
+    }
     if (agg.requiresDryTest) {
       warnings.push("Testar a seco antes de vender: borda, câmera e sensor podem variar por molde.")
     }

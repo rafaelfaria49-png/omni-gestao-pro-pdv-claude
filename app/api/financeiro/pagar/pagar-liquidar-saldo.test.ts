@@ -119,11 +119,22 @@ const h = vi.hoisted(() => {
 const STORE = "loja-2"
 
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
+// `requireModuleApi` (guard real, desde 2026-10-22) lê a loja por estas funções e exige sessão
+// com a loja liberada e o módulo `finance` (RELATORIOS-FASE-A-001 · A9).
 vi.mock("@/lib/store-id-from-request", () => ({
   storeIdFromAssistecRequestForWrite: vi.fn(() => STORE),
+  storeIdFromAssistecRequestForRead: vi.fn(() => STORE),
+  activeStoreIdFromCookieHeader: vi.fn(() => null),
 }))
 vi.mock("@/lib/ops-api-gate", () => ({ opsLojaIdFromRequest: vi.fn(() => STORE) }))
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "u1", name: "Tester" } })) }))
+vi.mock("@/auth", () => ({
+  auth: vi.fn(async () => ({
+    user: {
+      id: "u1", name: "Tester", role: "ADMIN", accessScope: "STORE", platformAuthority: false,
+      mustChangePassword: false, allowedStoreIds: [STORE], storeModules: { [STORE]: ["finance"] },
+    },
+  })),
+}))
 vi.mock("@/lib/auth/session-operator", () => ({ getOperatorLabelFromSession: vi.fn(() => "Tester") }))
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({
   apiGuardFinanceiroEditEnterpriseOrLegacy: vi.fn(async () => null),

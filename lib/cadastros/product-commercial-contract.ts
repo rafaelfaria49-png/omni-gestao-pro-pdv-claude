@@ -1,4 +1,5 @@
 import { getProdutoAcessoriosMetadata } from "@/lib/acessorios/metadata"
+import { productVariantIssue, unsupportedVariantLineIssue, type VestuarioGuardIssue } from "@/lib/vestuario/guard-contract"
 
 /** Descrição comercial. Não armazena saldo, não converte estoque nem habilita PDV. */
 export type ProductCommercialV1 = {
@@ -53,7 +54,7 @@ export function productCommercialCatalogProjection(metadata: unknown, price: num
     precisaoQuantidade: commercial.unidade === "KG" ? 3 : 0,
     vendaPorPeso: commercial.modoVenda === "peso",
     declaracaoComercialInvalida: hasInvalidProductCommercial(metadata),
-    vendaOperacional: commercial.modoVenda === "unidade" && !hasInvalidProductCommercial(metadata),
+    vendaOperacional: commercial.modoVenda === "unidade" && !hasInvalidProductCommercial(metadata) && !productVariantIssue(metadata),
     /** Entrada manual em KG (3 casas) é operacional; venda por peso continua bloqueada. */
     estoqueFracionadoOperacional: commercial.unidade === "KG" && !hasInvalidProductCommercial(metadata),
     gradeOperacional: false as const,
@@ -65,6 +66,7 @@ export type ProductStockMovementAvailability =
   | { disponivel: true; unidade: "KG"; ajusteDisponivel: false; ajusteOrientacao: string }
   | { disponivel: false; motivo: "peso_em_preparacao"; unidade: "G"; titulo: string; orientacao: string }
   | { disponivel: false; motivo: "declaracao_invalida"; unidade: null; titulo: string; orientacao: string }
+  | { disponivel: false; motivo: "grade_em_preparacao"; unidade: "UN"; titulo: string; orientacao: string }
 
 /**
  * Leitura da projeção canônica para a tela: diz se Entrada/Ajuste existem para o
@@ -72,6 +74,11 @@ export type ProductStockMovementAvailability =
  * (`assertProductCommercialSaleSupported`); isto só evita oferecer ação impossível.
  */
 export function productStockMovementAvailability(metadata: unknown): ProductStockMovementAvailability {
+  const variantIssue = productVariantIssue(metadata)
+  if (variantIssue) return {
+    disponivel: false, motivo: "grade_em_preparacao", unidade: "UN",
+    titulo: "Estoque por cor e tamanho ainda não disponível.", orientacao: variantIssue.message,
+  }
   const projection = productCommercialCatalogProjection(metadata, 0)
   if (projection.declaracaoComercialInvalida) {
     return {
@@ -119,9 +126,13 @@ export class ProductWeightNotOperationalError extends Error {
 }
 
 export class ProductCommercialInvalidError extends Error {
-  readonly code = "PRODUTO_COMERCIAL_INVALIDO"
-  constructor() {
-    super("Declaração comercial inválida: revise modo de venda, unidade e base do preço. Venda bloqueada; nenhum saldo ou preço foi convertido.")
+  readonly code: "PRODUTO_COMERCIAL_INVALIDO" | VestuarioGuardIssue["code"]
+  constructor(
+    message = "Declaração comercial inválida: revise modo de venda, unidade e base do preço. Venda bloqueada; nenhum saldo ou preço foi convertido.",
+    code: ProductCommercialInvalidError["code"] = "PRODUTO_COMERCIAL_INVALIDO",
+  ) {
+    super(message)
+    this.code = code
     this.name = "ProductCommercialInvalidError"
   }
 }
@@ -142,7 +153,25 @@ export function assertProductStockEntrySupported(metadata: unknown): void {
   }
 }
 
+/** Mantém a tradução 409 dos boundaries existentes por herdar o erro comercial já tratado. */
+export class ProductVariantGuardError extends ProductCommercialInvalidError {
+  constructor(issue: VestuarioGuardIssue) {
+    super(issue.message, issue.code)
+    this.name = "ProductVariantGuardError"
+  }
+}
+
+export function assertNoUnsupportedVariantLines(lines: unknown): void {
+  if (!Array.isArray(lines)) return
+  for (const line of lines) {
+    const issue = unsupportedVariantLineIssue(line)
+    if (issue) throw new ProductVariantGuardError(issue)
+  }
+}
+
 export function assertProductCommercialSaleSupported(metadata: unknown): void {
   if (isProductWeightDeclared(metadata)) throw new ProductWeightNotOperationalError()
   if (hasInvalidProductCommercial(metadata)) throw new ProductCommercialInvalidError()
+  const issue = productVariantIssue(metadata)
+  if (issue) throw new ProductVariantGuardError(issue)
 }

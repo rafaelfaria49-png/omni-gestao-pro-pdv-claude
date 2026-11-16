@@ -1,6 +1,6 @@
 import { ACESSORIO_CORES_PADRAO, type AcessorioCor } from "./cores"
 import { buildAccessoryLineDescription } from "./line-description"
-import { sanitizeProdutoAcessoriosMetadata } from "./metadata"
+import { modoCorEfetivo, modoModeloEfetivo, sanitizeProdutoAcessoriosMetadata } from "./metadata"
 import { buildAccessoryConsolidationKey, validateAccessorySelectionAgainstConfig } from "./selection"
 import type {
   AccessorySelectionV1,
@@ -16,20 +16,24 @@ import type {
  * `cartLineKey` existe apenas para agrupar visualmente combinações iguais.
  */
 
-/** Config válida que exige interação do operador na venda (modelo e/ou cor). */
+/**
+ * Config válida que pede interação do operador na venda (modelo e/ou cor).
+ * COMPAT-PROFISSIONAL-001: modo `opcional` também abre o seletor — mas permite adicionar sem
+ * informar. `desativado` nos dois = venda direta por quantidade, sem modal.
+ */
 export function accessoryConfigRequiresSelection(configValue: unknown): boolean {
   const config = sanitizeProdutoAcessoriosMetadata(configValue)
-  return !!config && (config.exigeModelo || config.exigeCor)
+  return !!config && (modoModeloEfetivo(config) !== "desativado" || modoCorEfetivo(config) !== "desativado")
 }
 
 /**
  * Cores elegíveis para a config: subconjunto `coresPermitidas` quando presente,
- * senão a lista global canônica. Vazio quando a config não exige cor.
+ * senão a lista global canônica. Vazio quando a captura de cor está desativada.
  * Nunca duplica labels — retorna sempre referências de `ACESSORIO_CORES_PADRAO`.
  */
 export function resolveAccessoryColorOptions(configValue: unknown): readonly AcessorioCor[] {
   const config = sanitizeProdutoAcessoriosMetadata(configValue)
-  if (!config?.exigeCor) return []
+  if (!config || modoCorEfetivo(config) === "desativado") return []
   const allowed = config.coresPermitidas
   if (Array.isArray(allowed) && allowed.length > 0) {
     return ACESSORIO_CORES_PADRAO.filter((cor) => allowed.includes(cor.key))
