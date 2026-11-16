@@ -96,3 +96,19 @@ B2 (PIN global) já resolvido pela #320 (merge 2026-10-28).
 **P3 da revisão fechado:** 2 testes PG novos no `f8-venda-kg.pg.test.ts` (venda com `deviceSale` em vale e troca;
 produto que virou serializado após a venda). Prova de mutação: com as travas desligadas, exatamente esses 2 falham
 (86/88); restaurado: **88/88 + 35 checks**. CI: #336 `a0bf107` 12/12, #337 `f03e7c5` 6/6.
+
+## 8. Loja piloto confirmada pelo proprietário (2026-11-16)
+
+`PILOT_STORE_ID = cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e` (conta hoje chamada "Padaria TESTE"; cliente
+PADARIA REAL). Valores do F1, a aplicar **somente** depois de W1–W3 concluídas, só em Production, seguido de
+deployment novo READY do commit esperado:
+
+```
+PDV_MANUAL_KG_RELEASE=PDV-PADARIA-KG-RELEASE-HARDENING-002
+PDV_MANUAL_KG_STORES=cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e
+```
+
+Nenhuma outra loja na allowlist; `loja-1`/`loja-2` seguem sem KG. Pré-requisito da 1ª venda (ação do dono no app,
+não deste GOAL): provisionar `codigoNumeracaoVenda` da loja (Gestão de Unidades → Numeração de venda).
+Renomear a loja para "Padaria Real" é opcional e não afeta o código; não foi feito (escrita em Production fora do
+escopo KG).
