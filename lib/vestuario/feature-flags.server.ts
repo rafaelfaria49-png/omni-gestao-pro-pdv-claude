@@ -2,8 +2,9 @@ import "server-only"
 
 /**
  * Flags privadas do vestuário. P02: somente o CATÁLOGO (cadastro de grades/cores/variantes) pode ser
- * habilitado, e só em QA: flag literal "1" + loja na allowlist explícita + ambiente que não seja
- * Production. Estoque e venda continuam forçados a false até as fases P04/P06 autorizadas.
+ * habilitado com flag privada literal "1" e loja na allowlist explícita. Em Production, exige
+ * opt-in adicional VESTUARIO_CATALOG_PRODUCTION_ENABLED="1". Estoque e venda continuam forçados
+ * a false até as fases P04/P06 autorizadas. Sem flag/allowlist: fail-closed, sem consultas ao banco.
  */
 const FLAG_KEYS = {
   catalog: "VESTUARIO_CATALOG_ENABLED",
@@ -22,15 +23,17 @@ export function vestuarioFeatureFlags(
     stock: scoped && env[FLAG_KEYS.stock] === "1",
     sale: scoped && env[FLAG_KEYS.sale] === "1",
   }
-  // P02 não é liberada em Production: nem a flag nem a allowlist abrem o catálogo lá.
+  // Production exige liberação EXTRA explícita, sem herdar acidentalmente flags de QA/Preview.
+  // Independente do ambiente, estoque e venda de variantes permanecem não operacionais.
   const production = env.VERCEL_ENV === "production"
-  const catalog = requested.catalog && !production
+  const productionReleased = env.VESTUARIO_CATALOG_PRODUCTION_ENABLED === "1"
+  const catalog = requested.catalog && (!production || productionReleased)
   return {
     phase: "P02",
     requested,
     enabled: { catalog, stock: false, sale: false },
-    reason: production && requested.catalog
-      ? "CATALOG_NOT_RELEASED_IN_PRODUCTION"
-      : catalog ? "CATALOG_QA_ONLY_STOCK_AND_SALE_NOT_RELEASED" : "PERSISTENCE_AND_STOCK_NOT_RELEASED",
+    reason: production && requested.catalog && !productionReleased
+      ? "CATALOG_PRODUCTION_RELEASE_REQUIRED"
+      : catalog ? "CATALOG_ENABLED_STOCK_AND_SALE_NOT_RELEASED" : "PERSISTENCE_AND_STOCK_NOT_RELEASED",
   } as const
 }
