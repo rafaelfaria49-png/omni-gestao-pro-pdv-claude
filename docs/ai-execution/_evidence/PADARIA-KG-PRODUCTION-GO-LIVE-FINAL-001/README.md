@@ -75,3 +75,24 @@ Defeitos de integração achados e corrigidos (todos introduzidos pela junção 
 | L1 | PENDENTE — conferência presencial dos terminais |
 | R3 | Codex pendente (sem cota); substituta APPROVE_WITH_NOTES |
 | F1 | desligado; storeId da padaria piloto **não confirmado** |
+
+## 7. Atualização do proprietário (2026-11-16, tarde) — loja piloto "Padaria Real"
+
+Decisão do dono: a cliente é **PADARIA REAL**; a conta "Padaria TESTE" pode servir de QA e, após auditoria,
+ser renomeada (ou criar-se loja definitiva pelo cadastro). O código não pode depender do nome.
+
+**Código:** a liberação KG é só `PDV_MANUAL_KG_RELEASE` = `PDV-PADARIA-KG-RELEASE-HARDENING-002` + `storeId` na
+allowlist `PDV_MANUAL_KG_STORES` (`lib/vendas/manual-kg-server.ts`). "padaria" no código é o ramo de negócio
+(`capabilities`), nunca o nome. Renomear não muda comportamento.
+
+**Auditoria RO da conta `cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e` (18:00Z, `05-padaria-teste-readonly.txt`):**
+criada 2026-10-25; 1 ADMIN escopo STORE ativo; 1 produto `PAO FRANCES` já declarado KG (`modoVenda=peso`), saldo 0;
+0 vendas, 0 caixas, 0 movimentos, 0 devoluções; `printerConfig` só `capabilities`/`pdvMainLayout`
+(trocas por peso = padrão ativado). **Sem `codigoNumeracaoVenda`** — Production está no writer v2
+(`VDA-L01-…`/`VDA-L02-…` nas vendas dos últimos 3 dias), então a 1ª venda dessa loja ficaria em
+`SALE_NUMBERING_NOT_CONFIGURED` até o dono provisionar o código pelo app (Gestão de Unidades → Numeração de venda).
+B2 (PIN global) já resolvido pela #320 (merge 2026-10-28).
+
+**P3 da revisão fechado:** 2 testes PG novos no `f8-venda-kg.pg.test.ts` (venda com `deviceSale` em vale e troca;
+produto que virou serializado após a venda). Prova de mutação: com as travas desligadas, exatamente esses 2 falham
+(86/88); restaurado: **88/88 + 35 checks**. CI: #336 `a0bf107` 12/12, #337 `f03e7c5` 6/6.

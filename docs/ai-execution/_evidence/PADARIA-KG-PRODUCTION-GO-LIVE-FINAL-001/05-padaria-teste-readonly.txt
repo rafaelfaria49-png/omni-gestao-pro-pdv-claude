@@ -1,0 +1,90 @@
+O uso do paginador est� desativado.
+BEGIN
+ identidade_ok |              now              
+---------------+-------------------------------
+             1 | 2026-11-16 18:00:53.540419+00
+(1 linha)
+
+== loja
+                      id                      |     name      | tem_cnpj | codigoNumeracaoVenda |        createdAt        |        updatedAt        |                                              moduleAccess                                              
+----------------------------------------------+---------------+----------+----------------------+-------------------------+-------------------------+--------------------------------------------------------------------------------------------------------
+ cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e | Padaria TESTE | f        |                      | 2026-10-25 00:55:47.865 | 2026-10-25 00:55:47.865 | {"modules": ["home", "pdv", "sales", "cash", "catalog", "stock", "reports", "settings"], "version": 1}
+(1 linha)
+
+== settings (chaves de printerConfig e trocas por peso)
+            chaves            | trocas_peso | layout 
+------------------------------+-------------+--------
+ {capabilities,pdvMainLayout} |             | 
+(1 linha)
+
+== usuarios com acesso
+ role  | accessScope | active | mustChangePassword | loja_principal 
+-------+-------------+--------+--------------------+----------------
+ ADMIN | STORE       | t      | f                  | t
+(1 linha)
+
+== produtos
+ total | kg | peso_legado | soma_stock 
+-------+----+-------------+------------
+     1 |  1 |           0 |          0
+(1 linha)
+
+    name     | sku | stock |                                comercial                                
+-------------+-----+-------+-------------------------------------------------------------------------
+ PAO FRANCES |     |     0 | {"unidade": "KG", "version": 1, "basePreco": "KG", "modoVenda": "peso"}
+(1 linha)
+
+== movimentos, vendas, caixas, devolucoes
+psql:C:/Users/rafae/AppData/Local/Temp/claude/d56b45d46a1f04b2/53315c76-768d-44ec-8e9c-5df56f34cac8/scratchpad/ro-padaria.sql:16: ERROR:  relation "contas_receber" does not exist
+LINHA 1: ...-7c1076a72f2e') devolucoes, (SELECT count(*) FROM contas_rec...
+                                                              ^
+O uso do paginador est� desativado.
+BEGIN
+ identidade_ok |              now              
+---------------+-------------------------------
+             1 | 2026-11-16 18:01:00.308613+00
+(1 linha)
+
+== loja
+                      id                      |     name      | tem_cnpj | codigoNumeracaoVenda |        createdAt        |        updatedAt        |                                              moduleAccess                                              
+----------------------------------------------+---------------+----------+----------------------+-------------------------+-------------------------+--------------------------------------------------------------------------------------------------------
+ cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e | Padaria TESTE | f        |                      | 2026-10-25 00:55:47.865 | 2026-10-25 00:55:47.865 | {"modules": ["home", "pdv", "sales", "cash", "catalog", "stock", "reports", "settings"], "version": 1}
+(1 linha)
+
+== settings (chaves de printerConfig e trocas por peso)
+            chaves            | trocas_peso | layout 
+------------------------------+-------------+--------
+ {capabilities,pdvMainLayout} |             | 
+(1 linha)
+
+== usuarios com acesso
+ role  | accessScope | active | mustChangePassword | loja_principal 
+-------+-------------+--------+--------------------+----------------
+ ADMIN | STORE       | t      | f                  | t
+(1 linha)
+
+== produtos
+ total | kg | peso_legado | soma_stock 
+-------+----+-------------+------------
+     1 |  1 |           0 |          0
+(1 linha)
+
+    name     | sku | stock |                                comercial                                
+-------------+-----+-------+-------------------------------------------------------------------------
+ PAO FRANCES |     |     0 | {"unidade": "KG", "version": 1, "basePreco": "KG", "modoVenda": "peso"}
+(1 linha)
+
+== movimentos, vendas, caixas, devolucoes
+ movs | vendas | ultima_venda | caixas | abertos | devolucoes 
+------+--------+--------------+--------+---------+------------
+    0 |      0 |              |      0 |       0 |          0
+(1 linha)
+
+== caixas abertos (todas as lojas) agora
+ storeId | count |           min           
+---------+-------+-------------------------
+ loja-1  |     1 | 2026-11-16 13:28:41.066
+ loja-2  |     1 | 2026-11-16 11:57:15.087
+(2 linhas)
+
+ROLLBACK
