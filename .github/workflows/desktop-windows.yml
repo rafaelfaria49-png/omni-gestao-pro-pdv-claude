@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: desktop-windows-${{ github.ref }}
+  group: desktop-windows-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -45,6 +45,8 @@ jobs:
         working-directory: apps/desktop
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -60,7 +62,10 @@ jobs:
       - run: npm run test:e2e
 
       - name: Gerar instalador (canal production, electron-forge make)
+        shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
           npm run build
           node scripts/write-build-config.mjs --channel production
           npx electron-forge make
@@ -71,6 +76,7 @@ jobs:
       - name: Guardar o instalador desta versão
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force out/release | Out-Null
           Copy-Item out/make/squirrel.windows/x64/* out/release/
           Get-Content out/release/SHA256SUMS.txt
@@ -78,6 +84,8 @@ jobs:
       - name: Gerar instalador de versão maior (só para testar atualização; descartado)
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $v = [version]$pkg.version
           $next = "{0}.{1}.{2}" -f $v.Major, $v.Minor, ($v.Build + 1)
@@ -118,6 +126,8 @@ jobs:
         working-directory: apps/desktop
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -127,17 +137,24 @@ jobs:
       - run: node node_modules/electron/install.js
       - run: node scripts/prepare-installer-tools.mjs
       - name: Gerar instalador (canal production)
+        shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
           npm run build
           node scripts/write-build-config.mjs --channel production
           npx electron-forge make
       - run: node scripts/check-fuses.mjs out/OmniGestaoPro-win32-x64/OmniGestaoPro.exe
       - run: node scripts/verify-artifacts.mjs
+      - name: Instalação real do Setup.exe que vai para a release
+        run: node tests/packaged/install-test.mjs --channel production --setup out/make/squirrel.windows/x64/OmniGestaoPro-Setup.exe
       - name: Criar rascunho de release interna
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $short = "${{ github.sha }}".Substring(0, 7)
           $tag = "desktop-v$($pkg.version)-$short"

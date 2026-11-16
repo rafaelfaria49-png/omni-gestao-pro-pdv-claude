@@ -15,6 +15,7 @@
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 
 if (process.platform !== "win32") throw new Error("teste de instalação só roda no Windows")
 
@@ -32,6 +33,11 @@ if (!existsSync(setup)) throw new Error(`--setup não encontrado: ${setup}`)
 const upgradeSetup = args["upgrade-setup"] ? path.resolve(String(args["upgrade-setup"])) : null
 if (upgradeSetup && !existsSync(upgradeSetup)) throw new Error(`--upgrade-setup não encontrado: ${upgradeSetup}`)
 const keepInstalled = args["keep-installed"] === true
+const allowExistingProfile = args["allow-existing-profile"] === true
+// Versão esperada do Setup.exe (padrão: package.json deste checkout) — nunca deduzida da pasta instalada.
+const expectVersion = String(
+  args["expect-version"] ?? JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json"), "utf8")).version,
+)
 
 const isQa = channel === "qa"
 const squirrelId = isQa ? "OmniGestaoProQA" : "OmniGestaoPro"
@@ -133,10 +139,14 @@ async function closeApp(label) {
 async function launchFromShortcut(label, expectedVersion) {
   const st = installState()
   if (!check(`${label}: atalho da Área de Trabalho existe`, st.desktop, st.desktop?.path)) return
+  // Um processo antigo (ex.: instância do --squirrel-firstrun) seguraria o lock de instância única
+  // e a janela vista seria a dele: só vale janela de um processo NOVO, iniciado pelo atalho.
+  const oldPids = new Set(appProcesses().map((p) => p.id))
+  check(`${label}: nenhuma instância anterior aberta`, oldPids.size === 0, [...oldPids].join(","))
   const before = readLog().length
   ps("Start-Process -FilePath $env:OMNI_LNK", { OMNI_LNK: st.desktop.path })
-  const win = await waitFor(() => appProcesses().find((p) => p.title), 30_000)
-  check(`${label}: janela aberta`, win, win ? `"${win.title}"` : "sem janela em 30 s")
+  const win = await waitFor(() => appProcesses().find((p) => p.title && !oldPids.has(p.id)), 30_000)
+  check(`${label}: janela aberta por processo novo`, win, win ? `"${win.title}" pid ${win.id}` : "sem janela em 30 s")
   check(`${label}: título é do produto/canal`, win && (isQa ? win.title.startsWith("OmniGestão Pro — QA") : win.title === "OmniGestão Pro"), win?.title)
   const started = await waitFor(() => {
     const fresh = readLog().slice(before)
@@ -167,6 +177,11 @@ if (pre.dir || pre.reg) {
 }
 if (appProcesses().length) throw new Error("há processos do app em execução")
 const hadProfile = existsSync(profileDir)
+if (hadProfile && !allowExistingProfile) {
+  // Perfil de uma instalação anterior pode ter sessão e vendas pendentes reais: o teste não o usa sem ordem expressa.
+  throw new Error(`perfil ${profileDir} já existe — use --allow-existing-profile só se ele for de teste`)
+}
+let installedByTest = false
 
 try {
   // 1. Instalação
@@ -176,17 +191,18 @@ try {
     return s.desktop && s.startMenu && s.reg ? s : null
   }, 30_000)
   const s1 = st ?? installState()
+  installedByTest = s1.dir || !!s1.reg
   check("pasta por usuário em %LocalAppData%", s1.dir && s1.stub && s1.update, installDir)
-  check("versão instalada em app-<versão>", s1.apps.length === 1, s1.apps.join(","))
-  const version = s1.apps[0]?.replace(/^app-/, "")
+  const version = expectVersion
+  check(`versão instalada = ${version} (esperada do Setup)`, s1.apps.length === 1 && s1.apps[0] === `app-${version}`, s1.apps.join(","))
   check("ícone do app instalado", s1.icon)
   check("atalho na Área de Trabalho", s1.desktop && /OmniGestaoPro\.exe$/i.test(s1.desktop.target), s1.desktop?.path)
   check("atalho no Menu Iniciar (RAFACELL)", s1.startMenu && /OmniGestaoPro\.exe$/i.test(s1.startMenu.target), s1.startMenu?.path)
   check("entrada em Aplicativos instalados", s1.reg && s1.reg.name === productName && s1.reg.publisher === "RAFACELL", s1.reg && `${s1.reg.name} ${s1.reg.version}`)
   check("versão em Aplicativos instalados", s1.reg?.version === version, s1.reg?.version)
-  // O Squirrel pode abrir o app no fim da instalação (--squirrel-firstrun); fecha para testar pelo atalho.
-  await sleep(3000)
-  if (appProcesses().length) await closeApp("pós-instalação")
+  // O Squirrel abre o app no fim da instalação (--squirrel-firstrun), às vezes com atraso: espera
+  // essa instância aparecer e a fecha, para a abertura seguinte ser de fato pelo atalho.
+  if (await waitFor(() => appProcesses().length > 0, 15_000)) await closeApp("pós-instalação (firstrun)")
 
   // 2. Abertura pelo atalho, fechamento e nova abertura
   await launchFromShortcut("1ª abertura", version)
@@ -201,8 +217,7 @@ try {
 
   // 3. Reinstalação da mesma versão
   await runSetup(setup, "reinstalação")
-  await sleep(3000)
-  if (appProcesses().length) await closeApp("pós-reinstalação")
+  if (await waitFor(() => appProcesses().length > 0, 15_000)) await closeApp("pós-reinstalação (firstrun)")
   const s2 = installState()
   check("reinstalação: mesma versão e atalhos íntegros", s2.apps.includes(`app-${version}`) && s2.desktop && s2.startMenu && s2.reg?.version === version, s2.apps.join(","))
   check("reinstalação: dados locais preservados", existsSync(sentinel))
@@ -219,8 +234,7 @@ try {
     const nv = s3?.reg?.version
     check("atualização: nova versão registrada", nv && nv !== version, `${version} → ${nv}`)
     check("atualização: pasta da nova versão", s3?.apps.includes(`app-${nv}`), s3?.apps.join(","))
-    await sleep(3000)
-    if (appProcesses().length) await closeApp("pós-atualização")
+    if (await waitFor(() => appProcesses().length > 0, 15_000)) await closeApp("pós-atualização (firstrun)")
     check("atualização: dados locais preservados", existsSync(sentinel))
     await launchFromShortcut("abertura após atualização", nv)
     await closeApp("abertura após atualização")
@@ -247,6 +261,11 @@ try {
   }
 } finally {
   for (const p of appProcesses()) spawnSync("taskkill", ["/PID", String(p.id), "/T", "/F"], { stdio: "ignore" })
+  // Falha no meio: não deixa para trás o app que ESTE teste instalou (o perfil continua intocado).
+  if (installedByTest && !keepInstalled && existsSync(path.join(installDir, "Update.exe")) && installState().reg) {
+    const r = spawnSync(path.join(installDir, "Update.exe"), ["--uninstall", "-s"], { windowsHide: true, timeout: 120_000 })
+    console.log(`INFO desinstalação de limpeza após falha: exit ${r.status}`)
+  }
   // Remove só o marcador deste teste; o perfil do operador nunca é apagado.
   rmSync(sentinel, { force: true })
   report.hadProfileBefore = hadProfile
