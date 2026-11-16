@@ -45,6 +45,7 @@ vi.mock("@/app/actions/cadastros", () => ({
   upsertServico: vi.fn(), deleteProduto: vi.fn(), getUltimoBatchProdutos: vi.fn(),
 }))
 // Vestuário P02: Server Actions mockadas como as demais do HUB (o módulo real exige sessão/NextAuth).
+vi.mock("@/app/actions/identificacao-etiquetas", () => ({ getIdentificacaoStatus: vi.fn(async () => ({ enabled: false })) }))
 vi.mock("@/app/actions/vestuario-catalogo", () => ({
   getVestuarioCatalogoStatus: h.vestuarioStatus,
   listVestuarioCatalogo: vi.fn(async () => ({ ok: true, value: { grades: [], cores: [] } })),

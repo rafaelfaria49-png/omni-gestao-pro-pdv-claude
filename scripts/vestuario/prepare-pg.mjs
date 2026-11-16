@@ -75,6 +75,10 @@ try {
   const aplicar = readdirSync(MIG_DIR).filter((n) => isMigration(n) && !noBaseline.has(n)).sort()
   if (!aplicar.includes(MIGRATION_P02)) throw new Error(`BASELINE_INVALIDO: ${MIGRATION_P02} já estava no baseline.`)
   for (const name of aplicar) {
+    if (name === "20261116090000_identificadores_etiquetas_p03" && process.env.VESTUARIO_P03_QA_SEED_LEGACY === "1") {
+      const { seedP03LegacyFixture } = await import("./p03-legacy-fixture.mjs")
+      await seedP03LegacyFixture(PrismaClient, url)
+    }
     run(["db", "execute", "--url", url, "--file", join(MIG_DIR, name, "migration.sql")])
     console.log(`MIGRATION_OK ${name}`)
   }
