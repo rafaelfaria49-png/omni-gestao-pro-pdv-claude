@@ -243,7 +243,8 @@ test("atalhos do PDV chegam à página; F5 não recarrega; acorde do desktop abr
   const status = await statusPage(app)
   await expect(status.locator("#title")).toHaveText("OmniGestão Pro para Windows")
   await expect(status.locator("#channel-strip")).toContainText("Desenvolvimento")
-  await expect(status.locator("#meta")).toContainText("Versão 0.1.0")
+  const { version } = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as { version: string }
+  await expect(status.locator("#meta")).toContainText(`Versão ${version}`)
   await status.keyboard.press("Escape")
   await expect.poll(() => statusVisible(app)).toBe(false)
 })
