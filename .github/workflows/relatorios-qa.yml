@@ -19,6 +19,7 @@ on:
       - "prisma/schema.prisma"
       - ".github/workflows/relatorios-qa.yml"
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
