@@ -1,0 +1,5 @@
+# Apenas CI/ferramentas QA. Não instala Python na aplicação.
+pypdfium2==5.13.0
+pypdf==6.21.4
+Pillow==13.0.0
+zxing-cpp==3.1.1

@@ -2105,7 +2105,16 @@ export async function deleteProduto(
     };
   }
 
-  await prisma.produto.delete({ where: { id: produtoId } });
+  try {
+    await prisma.produto.delete({ where: { id: produtoId } });
+  } catch (e) {
+    // FK permanente P03 (ou vínculo histórico concorrente). Sem consultar tabela P03:
+    // este boundary também roda em Production antes de qualquer migration P03.
+    if ((e as { code?: string } | null)?.code === "P2003") {
+      return { ok: false, reason: "Produto com identificadores permanentes ou vínculos históricos não pode ser excluído. Use o botão de status para Inativar.", produto: { id: produto.id, nome: produto.name } };
+    }
+    throw e;
+  }
   revalidatePath("/dashboard/cadastros-v2");
   return { ok: true, deleted: true, produto: { id: produto.id, nome: produto.name } };
 }

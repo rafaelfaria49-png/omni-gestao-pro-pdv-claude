@@ -13,6 +13,8 @@ function protegerWorkerPessoas() {
         url.pathname === "/api/ops/import/clientes" ||
         url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
+        // P03: etiquetas exigem sessão, loja e estado atuais; sem cache offline.
+        url.pathname.startsWith("/api/identificacao/") ||
         url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
       )) return Promise.resolve()
     }
@@ -70,6 +72,7 @@ const withPWA = withPWAInit({
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
         url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/") ||
         // Sync do catálogo do PDV (PDV-CADASTROS-SYNC-AUTOMATICO-001): versão e snapshot nunca do
+        url.pathname.startsWith("/api/identificacao/") ||
         // cache — rede lenta devolveria catálogo velho. A carga inicial do PDV segue cacheável.
         (url.pathname === "/api/ops/inventory" && url.searchParams.get("catalogSync") === "1") ||
         // Prova de venda no servidor (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001): consulta por
@@ -152,6 +155,8 @@ if (isVercel) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Isola tracing na própria árvore (inclusive worktrees), sem incluir o checkout pai.
+  outputFileTracingRoot: process.cwd(),
   /** Next.js 16 — HMR/webpack dev a partir de 127.0.0.1 (ex.: Playwright com IPv4). */
   allowedDevOrigins: ["127.0.0.1"],
   /** Next.js 16 usa Turbopack por padrão; o plugin PWA injeta webpack — config vazia evita erro de build. */
@@ -180,6 +185,7 @@ const nextConfig = {
     "/api/fiscal/**": ["./lib/fiscal/provider/sefaz/trust/icp-brasil-v10.pem"],
     "/api/internal/fiscal/**": ["./lib/fiscal/provider/sefaz/trust/icp-brasil-v10.pem"],
     "/api/vendas/**": ["./lib/fiscal/provider/sefaz/trust/icp-brasil-v10.pem"],
+    "/api/identificacao/etiquetas/**": ["./lib/identificacao/assets/NotoSans-Regular.ttf"],
   },
   typescript: {
     ignoreBuildErrors: true,
