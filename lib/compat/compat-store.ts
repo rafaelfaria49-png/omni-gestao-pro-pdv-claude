@@ -818,7 +818,8 @@ export async function listDevolucoesPorVenda(
       const porItem = out.get(d.vendaLocalId) ?? new Map<string, number>()
       for (const it of d.itens) {
         const k = (it.inventoryId ?? "").trim()
-        if (k) porItem.set(k, (porItem.get(k) ?? 0) + Math.max(0, it.quantidade))
+        // Linha KG (#336) grava `quantidadeKg` e deixa `quantidade` nula: não é unidade de capinha.
+        if (k) porItem.set(k, (porItem.get(k) ?? 0) + Math.max(0, it.quantidade ?? 0))
       }
       out.set(d.vendaLocalId, porItem)
     }

@@ -82,6 +82,10 @@ describe("fila offline — erros de política KG são recusa definitiva, não re
     }
   })
 
+  it("recusa de aparelho por IMEI é definitiva (não trava o F8 com tentativa incerta)", () => {
+    expect(classificarRespostaDevolucao(409, "APARELHO_DEVOLUCAO_NAO_INTEGRADA")).toBe("recusada")
+  })
+
   it("erros transitórios continuam aguardando (rede, venda ainda não sincronizada)", () => {
     expect(classificarRespostaDevolucao(503, undefined)).toBe("aguardar")
     expect(classificarRespostaDevolucao(409, "VENDA_ORIGEM_NAO_ENCONTRADA")).toBe("aguardar")

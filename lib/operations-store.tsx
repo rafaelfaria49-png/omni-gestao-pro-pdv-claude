@@ -568,6 +568,9 @@ export const DEVOLUCAO_RECUSA_DEFINITIVA = new Set([
   "CONDICAO_MERCADORIA_INVALIDA",
   "JUSTIFICATIVA_CONDICAO_OBRIGATORIA",
   "LINHA_VENDA_QUANTIDADE_INVALIDA",
+  // Aparelho por IMEI (main, OMNI-APARELHOS-ENDTOEND-001): devolução/troca não integrada —
+  // reenvio nunca muda; sem isto a tentativa ficava "incerta" e travava o F8 da aba.
+  "APARELHO_DEVOLUCAO_NAO_INTEGRADA",
 ])
 
 /**
