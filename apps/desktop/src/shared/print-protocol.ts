@@ -81,7 +81,7 @@ export function buildPrintDocument(inner: string, bobina: Bobina, title = "Cupom
 <style>
   @page { size: ${bobina} auto; margin: 0; }
   html, body { margin: 0; padding: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; color: #000; background: #fff; }
-  .wrap { box-sizing: border-box; width: ${wrapWidth}; margin: 0; padding: 1mm 0 3mm 1mm; overflow-wrap: anywhere; }
+  .wrap { box-sizing: border-box; width: ${wrapWidth}; margin: 0; padding: 1mm 0 3mm 3mm; /* POS-80: medido 5 mm à esq. e 9 mm à dir. com 1 mm */ overflow-wrap: anywhere; }
   p { margin: 2px 0; }
   .no-print { display: none !important; }
 </style></head>
