@@ -185,7 +185,8 @@ confere Content-Length e cinco páginas do lote real. O artefato desse transport
 decodificado novamente por PDFium/ZXing em 203/300 DPI. HTTP 200 vazio/inválido não habilita imprimir.
 A leitura de body pelo CDP não é a evidência binária autoritativa do plugin PDF do Chromium.
 O iframe de conferência usa SVG/HTML do mesmo motor geométrico, com sandbox sem scripts e CSP da rota;
-assim a prévia não depende de plugin PDF do navegador. Download/diálogo usam o PDF binário conferido.
+assim a prévia não depende de plugin PDF do navegador. Download usa o PDF binário conferido; o diálogo
+de impressão usa o HTML do mesmo snapshot/motor, sem depender do plugin PDF.
 O E2E exige etiquetas visíveis no frame e inspeciona a ausência da rota privada no Cache Storage.
 
 O contexto E2E permite o service worker real e espera seu registro; bloquear o SW por Playwright faz o
