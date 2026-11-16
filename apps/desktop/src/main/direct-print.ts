@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, session as electronSession, type IpcMainInvokeEvent, type WebContents } from "electron"
+import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs"
 import path from "node:path"
@@ -129,6 +130,12 @@ export function installDirectPrint(opts: {
       log("print printer-missing")
       return { ok: false, status: "printer-missing", error: `Impressora "${station.deviceName}" não está instalada/disponível no Windows.` }
     }
+    // Impressora USB desligada/desconectada: o spooler ACEITA e DESCARTA o job (provado no POS-80).
+    // Checa a presença física antes de enviar para o status ser honesto e o cupom não se perder.
+    if ((await usbPresence(station.deviceName)) === "absent") {
+      log("print usb-absent")
+      return { ok: false, status: "printer-missing", error: `${station.deviceName} está desligada ou desconectada. Ligue a impressora e toque em Tentar novamente.` }
+    }
     const bobina = req.bobina ?? station.bobina
     const inner = req.kind === "test" ? buildTestReceiptInner(station.deviceName, bobina, new Date(), app.getVersion()) : req.html
     const key = createHash("sha256").update(`${station.deviceName}\0${bobina}\0${inner}`).digest("hex")
@@ -145,3 +152,31 @@ export function installDirectPrint(opts: {
   })
 }
 
+
+/**
+ * "absent" só quando a fila usa porta USBnnn e o dispositivo USBPRINT dessa porta não está presente.
+ * Porta de rede/outra ou erro na consulta = "unknown" (não bloqueia a impressão).
+ */
+function usbPresence(deviceName: string): Promise<"present" | "absent" | "unknown"> {
+  if (process.platform !== "win32") return Promise.resolve("unknown")
+  // Nome da impressora vai por variável de ambiente, nunca interpolado no comando.
+  const script =
+    "$ErrorActionPreference='Stop';" +
+    "$p=Get-CimInstance Win32_Printer | Where-Object { $_.Name -eq $env:OMNI_PRINTER };" +
+    "if(-not $p){'unknown';exit};$port=[string]$p.PortName;" +
+    "if($port -notmatch '^USB[0-9]+$'){'unknown';exit};" +
+    "$d2=Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like ('USBPRINT*' + $port) };" +
+    "if($d2){'present'}else{'absent'}"
+  return new Promise((resolve) => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      { env: { ...process.env, OMNI_PRINTER: deviceName }, timeout: 8000, windowsHide: true },
+      (err, stdout) => {
+        if (err) return resolve("unknown")
+        const out = String(stdout).trim().split(/\s+/).pop()
+        resolve(out === "present" || out === "absent" ? out : "unknown")
+      },
+    )
+  })
+}
