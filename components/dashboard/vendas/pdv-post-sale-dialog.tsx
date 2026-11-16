@@ -76,11 +76,13 @@ export function PdvPostSaleDialog({
       setPrinted(true)
       toast({
         title: "Comprovante enviado",
-        description: `${impressaoConfig.impressoraHost.trim() || "Impressora configurada"} · ${impressaoConfig.viasCupom} via(s).`,
+        description: `${(result.via === "desktop" ? result.deviceName : impressaoConfig.impressoraHost.trim()) || "Impressora configurada"} · ${impressaoConfig.viasCupom} via(s).`,
       })
     } else {
       const target = impressaoConfig.impressoraHost.trim()
-      const errMsg = target
+      const errMsg = result.via === "desktop"
+        ? `Impressora do Windows: ${result.error || "falha ao enviar."}`
+        : target
         ? `Impressora ${target}:${impressaoConfig.impressoraPorta} inacessível. ${result.error || "Verifique a conexão."}`
         : result.error || "Nenhuma impressora térmica respondeu."
       setPrintError(errMsg)

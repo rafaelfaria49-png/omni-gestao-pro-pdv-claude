@@ -103,13 +103,12 @@ test("abre a origem fixa em /login, com título fixo e janela segura", async () 
         contextIsolation: prefs.contextIsolation,
         sandbox: prefs.sandbox,
         webSecurity: prefs.webSecurity,
-        preload: prefs.preload ?? null,
       },
     }
   })
   expect(info.title).toBe("OmniGestão Pro — Desenvolvimento (127.0.0.1:47613)")
   expect(info.min).toEqual([1024, 640])
-  expect(info.prefs).toEqual({ nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, preload: null })
+  expect(info.prefs).toEqual({ nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true })
 
   // Página remota não enxerga Node nem a ponte da tela de status.
   const exposed = await page.evaluate(() => ({

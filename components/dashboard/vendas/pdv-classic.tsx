@@ -1456,9 +1456,11 @@ export function PdvClassic({
     })
     if (result.ok) {
       toast({
-        title: result.via === "proxy" ? "Cupom enviado" : "Cupom preparado",
+        title: result.via === "proxy" || result.via === "desktop" ? "Cupom enviado" : "Cupom preparado",
         description:
-          result.via === "proxy"
+          result.via === "desktop"
+            ? `Enviado à fila de ${result.deviceName ?? "impressora do Windows"} · ${impressaoConfig.viasCupom} via(s).`
+            : result.via === "proxy"
             ? `Impressora ${impressaoConfig.impressoraHost.trim() || "padrão do servidor"} · ${impressaoConfig.viasCupom} via(s).`
             : "Impressão HTML ou arquivo .bin gerado (fallback web).",
       })
