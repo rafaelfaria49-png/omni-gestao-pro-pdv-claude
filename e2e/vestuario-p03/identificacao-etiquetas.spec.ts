@@ -10,9 +10,13 @@ const url = process.env.VESTUARIO_P02_E2E_DATABASE_URL || ""
 if (!/^postgresql:\/\/[^@]+@127\.0\.0\.1:\d+\/vest_p02_e2e[a-z0-9_]*$/.test(url)) throw new Error("E2E P03 somente PG descartável loopback.")
 const db = new PrismaClient({ datasourceUrl: url })
 test.afterAll(() => db.$disconnect())
+let pageErrors: string[] = []
+test.beforeEach(() => { pageErrors = [] })
+test.afterEach(() => { expect(pageErrors).toEqual([]) })
 const shot = (name: string) => path.join(__dirname, "../../test-results/vestuario-p03-e2e/screens", name)
 async function session(browser: Browser, store = A, user: "dono" | "lojaB" = "dono"): Promise<Page> {
-  const ctx = await browser.newContext({ locale: "pt-BR", serviceWorkers: "block", viewport: { width: 1440, height: 1000 } })
+  const ctx = await browser.newContext({ locale: "pt-BR", serviceWorkers: "allow", viewport: { width: 1440, height: 1000 } })
+  ctx.on("page", p => p.on("pageerror", e => pageErrors.push(e.stack || e.message)))
   await ctx.addInitScript(([key, value]) => {
     if (!sessionStorage.getItem("p03-e2e-store")) { localStorage.setItem(key, value); sessionStorage.setItem("p03-e2e-store", "1") }
   }, [LOJA_KEY, store] as const)
@@ -27,6 +31,7 @@ async function session(browser: Browser, store = A, user: "dono" | "lojaB" = "do
     el.dispatchEvent(new Event("input", { bubbles: true }))
   }, pw)
   await Promise.all([page.waitForURL(/\/dashboard(\/|\?|$)/), page.getByRole("button", { name: "Entrar" }).click()])
+  await page.evaluate(async () => { await navigator.serviceWorker.ready })
   return page
 }
 async function open(page: Page) {
@@ -44,8 +49,6 @@ async function issue(page: Page, sku: string) {
 }
 test("HUB → emissão real → lookup → lote → PDF → impressão incerta e reimpressão auditada", async ({ browser }) => {
   const page = await session(browser)
-  const errors: string[] = []
-  page.on("pageerror", e => errors.push(e.message))
   await open(page)
   await issue(page, "LEGADO-E2E")
   await issue(page, "P03-PRE-M")
@@ -79,6 +82,10 @@ test("HUB → emissão real → lookup → lote → PDF → impressão incerta e
     return Array.from(new Uint8Array(data))
   })
   expect(Buffer.from(clientBytes).equals(body)).toBe(true)
+  const visual = page.frameLocator('iframe[title="Prévia das etiquetas"]')
+  await expect(visual.getByRole("img")).toHaveCount(5)
+  await expect(visual.getByRole("img").first()).toBeVisible()
+  await visual.locator("body").evaluate(async () => { await document.fonts.ready })
   await mkdir(path.join(__dirname, "../../test-results/vestuario-p03-e2e/pdf"), { recursive: true })
   await writeFile(path.join(__dirname, "../../test-results/vestuario-p03-e2e/pdf/lote-real-api.pdf"), body)
   const snapshot = snapshotSchema.parse(original.snapshot)
@@ -114,7 +121,14 @@ test("HUB → emissão real → lookup → lote → PDF → impressão incerta e
   expect(await db.identificadorProduto.count({ where: { storeId: A, tipo: "INTERNO" } })).toBe(2)
   expect((await db.produto.findUniqueOrThrow({ where: { id: "e2e-vest-legado" } })).stock).toBe(4)
   expect(await db.movimentacaoEstoque.count({ where: { produtoId: { in: ["e2e-vest-legado", "p03-e2e-camiseta"] } } })).toBe(0)
-  expect(errors).toEqual([])
+  const cachedPrivate = await page.evaluate(async () => {
+    const urls: string[] = []
+    for (const name of await caches.keys()) for (const request of await (await caches.open(name)).keys()) {
+      if (new URL(request.url).pathname.startsWith("/api/identificacao/")) urls.push(request.url)
+    }
+    return urls
+  })
+  expect(cachedPrivate).toEqual([])
   await page.context().close()
 })
 test("resposta perdida após commit recupera a mesma emissão; consentimento preserva código P02", async ({ browser }) => {
@@ -123,7 +137,7 @@ test("resposta perdida após commit recupera a mesma emissão; consentimento pre
   await expect(page.getByRole("button", { name: "Emitir código interno" })).toBeDisabled()
   await page.getByRole("checkbox", { name: /Preservar o código existente/ }).check()
   let lost = false
-  await page.route("**/dashboard/cadastros-v2*", async route => {
+  await page.context().route("**/dashboard/cadastros-v2*", async route => {
     if (!lost && route.request().method() === "POST" && route.request().postData()?.includes("preservarCodigoExistente")) {
       lost = true; await route.fetch(); await route.abort("failed")
     } else await route.continue()

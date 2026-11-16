@@ -53,9 +53,16 @@ describe("etiquetas reais em PDF/HTML", () => {
     const bytes = await renderLabelsPdf(s)
     const used = process.cpuUsage(cpu)
     expect((await PDFDocument.load(bytes)).getPageCount()).toBe(500)
+    const htmlStart = performance.now(), htmlCpu = process.cpuUsage()
+    const html = await renderLabelsHtml(s)
+    const htmlUsed = process.cpuUsage(htmlCpu), htmlBytes = Buffer.byteLength(html)
+    expect(html.match(/<section/g)).toHaveLength(500)
+    expect(htmlBytes).toBeLessThan(4_000_000)
     await mkdir("test-results/vestuario-p03/pdf", { recursive: true })
     await writeFile("test-results/vestuario-p03/pdf/max-batch-metrics.json", JSON.stringify({ pages: 500, targets: 5, bytes: bytes.length,
-      wallMs: Math.round(performance.now() - start), cpuMs: (used.user + used.system) / 1000, runtime: process.version, physicalHomologation: "NOT_EXECUTED" }, null, 2))
+      wallMs: Math.round(htmlStart - start), cpuMs: (used.user + used.system) / 1000,
+      html: { bytes: htmlBytes, wallMs: Math.round(performance.now() - htmlStart), cpuMs: (htmlUsed.user + htmlUsed.system) / 1000 },
+      runtime: process.version, physicalHomologation: "NOT_EXECUTED" }, null, 2))
   }, 60_000)
   it("recusa glyph sem suporte, mídia inválida e inconsistência de código/total", async () => {
     const s = syntheticSnapshot(); s.items[0].nome = "Camiseta 🦄"

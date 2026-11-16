@@ -184,6 +184,15 @@ O E2E verifica o PDF binário por HTTP autenticado, compara-o integralmente ao B
 confere Content-Length e cinco páginas do lote real. O artefato desse transporte é rasterizado e
 decodificado novamente por PDFium/ZXing em 203/300 DPI. HTTP 200 vazio/inválido não habilita imprimir.
 A leitura de body pelo CDP não é a evidência binária autoritativa do plugin PDF do Chromium.
+O iframe de conferência usa SVG/HTML do mesmo motor geométrico, com sandbox sem scripts e CSP da rota;
+assim a prévia não depende de plugin PDF do navegador. Download/diálogo usam o PDF binário conferido.
+O E2E exige etiquetas visíveis no frame e inspeciona a ausência da rota privada no Cache Storage.
+
+O contexto E2E permite o service worker real e espera seu registro; bloquear o SW por Playwright faz o
+Workbox preexistente receber registro undefined e acessar waiting. A perda de resposta é injetada no
+BrowserContext, incluindo requests do SW, mantendo o commit real e a asserção de recuperação/sem duplicata.
+Não há filtro de pageerror; cada sessão é verificada, com stack para diagnóstico. Referência de roteamento:
+https://playwright.dev/docs/service-workers#network-events-and-routing.
 
 Revalidação de 16/11: main avançou de `51265894` para `8fbb727d` com #368–#370, relativas ao desktop
 e impressão. A atualização será incorporada por merge, preservando esses arquivos. A P03 continua
