@@ -253,26 +253,37 @@ try {
     const fin = s4 ?? installState()
     check("desinstalação: atalhos removidos", !fin.desktop && !fin.startMenu)
     check("desinstalação: removido de Aplicativos instalados", !fin.reg)
-    // O Squirrel não consegue apagar os próprios binários em uso (Update.exe e o squirrel.exe da
-    // última versão): deixa-os com o marcador .dead e limpa a pasta na próxima instalação.
-    // O que NÃO pode sobrar é o aplicativo (OmniGestaoPro.exe, resources/app.asar).
+    // O Squirrel apaga a pasta "ou desiste": o próprio Update.exe (em uso) e, às vezes, arquivos que
+    // o antivírus está lendo (squirrel.exe, v8_context_snapshot.bin) ficam, com o marcador .dead, e
+    // são limpos na próxima instalação. O que NÃO pode sobrar é o aplicativo executável.
     const leftover = () =>
       ps(
         "$d=$env:OMNI_INSTALL_DIR; ConvertTo-Json -Compress -InputObject @(Get-ChildItem -LiteralPath $d -Recurse -Force -File -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ f=$_.FullName.Substring($d.Length).TrimStart('\\'); b=$_.Length } })",
         env,
       ) ?? []
-    await waitFor(() => !leftover().some((x) => /^app-[^\\]+\\(OmniGestaoPro\.exe|resources\\)/i.test(x.f)), 30_000)
+    const isApp = (f) => /^(OmniGestaoPro\.exe$|app-[^\\]+\\(OmniGestaoPro\.exe$|resources\\))/i.test(f)
+    await waitFor(() => !leftover().some((x) => isApp(x.f)), 30_000)
     const rest = leftover()
-    const appFiles = rest.filter((x) => /^app-[^\\]+\\(?!squirrel\.exe$)/i.test(x.f))
+    const appFiles = rest.filter((x) => isApp(x.f))
     const kb = Math.round(rest.reduce((a, x) => a + Number(x.b), 0) / 1024)
-    check("desinstalação: aplicativo removido (nenhum OmniGestaoPro.exe/asar restante)", appFiles.length === 0, appFiles.slice(0, 5).map((x) => x.f).join(", "))
+    check("desinstalação: aplicativo removido (sem OmniGestaoPro.exe nem resources/app.asar)", appFiles.length === 0, appFiles.slice(0, 5).map((x) => x.f).join(", "))
     check(
-      "desinstalação: só restos do Squirrel, marcados .dead e pequenos",
+      "desinstalação: restos só do Squirrel, marcados .dead e pequenos",
       rest.length === 0 || (rest.some((x) => x.f === ".dead") && kb < 10_240),
       rest.length ? `${rest.map((x) => x.f).join(", ")} (${kb} KB)` : "pasta vazia",
     )
     check("desinstalação: nenhum processo do app", appProcesses().length === 0)
     check("desinstalação: perfil local preservado (vendas pendentes)", existsSync(sentinel), profileDir)
+
+    // Restos .dead não podem atrapalhar: uma nova instalação limpa a pasta e funciona; depois sai de novo.
+    if (rest.length) {
+      await runSetup(setup, "reinstalação sobre restos .dead")
+      if (await waitFor(() => appProcesses().length > 0, 15_000)) await closeApp("pós-reinstalação sobre restos (firstrun)")
+      const s5 = installState()
+      check("reinstalação sobre restos: só a versão instalada, restos limpos", s5.apps.length === 1 && s5.apps[0] === `app-${version}` && !!s5.reg, s5.apps.join(","))
+      const r2 = spawnSync(path.join(installDir, "Update.exe"), ["--uninstall", "-s"], { windowsHide: true, timeout: 120_000 })
+      check("reinstalação sobre restos: desinstalada de novo", r2.status === 0 && !!(await waitFor(() => !installState().reg, 30_000)), `exit ${r2.status}`)
+    }
   } else {
     console.log(`INFO mantido instalado (--keep-installed): ${installDir}`)
   }

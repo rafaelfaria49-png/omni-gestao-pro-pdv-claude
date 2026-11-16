@@ -24,16 +24,7 @@ export function handleSquirrelEvent(event: SquirrelEvent, quit: () => void): boo
       ? [`--removeShortcut=${exeName}`]
       : [`--createShortcut=${exeName}`, "--shortcut-locations=Desktop,StartMenu"]
   try {
-    // cwd na raiz da instalação: o Squirrel inicia o gancho dentro de app-<versão>, e um processo
-    // com essa pasta como diretório atual impede que ela seja apagada.
-    const child = spawn(updateExe, args, { cwd: path.dirname(updateExe), detached: true, stdio: "ignore", windowsHide: true })
-    if (event === "uninstall") {
-      // Logo depois deste gancho o Squirrel apaga app-<versão>: sair já, sem esperar o Update.exe
-      // filho, para nenhum arquivo da versão (ex.: v8_context_snapshot.bin) seguir mapeado.
-      child.unref()
-      quit()
-      return true
-    }
+    const child = spawn(updateExe, args, { detached: true, stdio: "ignore", windowsHide: true })
     child.on("close", () => quit())
     child.on("error", () => quit())
   } catch {

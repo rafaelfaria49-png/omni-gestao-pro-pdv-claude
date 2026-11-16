@@ -437,8 +437,7 @@ if (config && config.channel !== "production") {
   app.setPath("userData", testProfile || path.join(app.getPath("appData"), `OmniGestão Pro ${channelLabel(config.channel)}`))
 }
 const squirrelEvent = parseSquirrelEvent(process.argv)
-// Ganchos do instalador não abrem janela: app.exit encerra na hora (app.quit esperaria o "ready").
-if (!handleSquirrelEvent(squirrelEvent, () => app.exit(0))) {
+if (!handleSquirrelEvent(squirrelEvent, () => app.quit())) {
   if (!config) fatal(configError ?? "configuração ausente")
   if (config) {
     const debugForbidden =
