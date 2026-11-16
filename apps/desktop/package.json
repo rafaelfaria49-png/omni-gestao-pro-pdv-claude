@@ -1,7 +1,7 @@
 {
   "name": "omnigestao-desktop",
   "productName": "OmniGestão Pro",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "OmniGestão Pro para Windows — cliente desktop do sistema web",
   "author": "RAFACELL",
@@ -15,10 +15,14 @@
     "test": "vitest run",
     "test:e2e": "npm run build && node scripts/write-build-config.mjs --channel development --origin http://127.0.0.1:47613 && playwright test",
     "test:packaged": "node tests/packaged/smoke.mjs",
+    "test:install": "node tests/packaged/install-test.mjs",
     "icons": "electron scripts/generate-icons.cjs",
     "start": "npm run build && electron .",
     "package": "npm run build && electron-forge package",
-    "make": "npm run build && electron-forge make"
+    "make": "npm run build && node scripts/prepare-installer-tools.mjs && electron-forge make",
+    "prepare-installer-tools": "node scripts/prepare-installer-tools.mjs",
+    "check:fuses": "node scripts/check-fuses.mjs",
+    "verify:artifacts": "node scripts/verify-artifacts.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.1",
