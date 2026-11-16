@@ -171,9 +171,13 @@ O schema e os contratos ampliam o programa TypeScript integral. O check fiscal c
 passa na base exata `51265894` (run `43910747836`, matrizes Ubuntu/Windows), mas esgotou heap com P03.
 Fronteiras DB mínimas e opções Prisma explícitas foram aplicadas sem casts; um diagnóstico separado sem
 o novo teste PG também esgotou 2 GB. Nenhum arquivo/check foi retirado da validação autoritativa.
-O workflow fiscal passa a chamar `npm run typecheck -- --incremental false`: mesmos checks, sem cache,
-orçamento de 4 GB já definido em `package.json` na main. Node20 do worker, limites de container e
-controles fiscais não mudam. Memória/tempo do compilador devem constar no relatório final de QA.
+O workflow fiscal chama `npm run typecheck -- --incremental false`: mesmos checks, sem cache,
+orçamento de 4 GB já definido em `package.json` na main. O check integral usa apenas nesse passo a engine
+Node24 declarada pelo app; os testes/hashes do worker continuam Node20.20.2 e a engine é restaurada antes
+do lint fiscal. Matriz dos dois sistemas, dependência do gate, pins/limites de container e controles
+fiscais não mudam. Node20 passou esse check em f75c2d4, mas esgotou também 4 GB em c32be72 nos dois OS;
+o Node24 sem incremental deve passar no head final, sem excluir arquivos ou aumentar heap novamente.
+Não foi atribuída causa exata a chamadas Playwright sem perfil A/B. Memória/tempo constam no relatório QA.
 
 A comparação da base também comprovou falha independente da P03 no build do container fiscal:
 `libpcre2-8-0=10.42-1+deb12u1` está indisponível no APT (`43910747836`, job `133454912075`).
