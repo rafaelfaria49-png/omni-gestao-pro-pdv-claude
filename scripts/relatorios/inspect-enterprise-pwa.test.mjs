@@ -185,3 +185,21 @@ test("proteções Clientes/Pessoas do build continuam aceitas pelo inspetor ofic
   const r = await inspectPwaBuild(WS)
   assert.equal(r.offline.cacheAccesses, 0)
 })
+
+test("worker auxiliar emitido não lê, aquece ou grava HTML/RSC de relatórios", { skip }, async () => {
+  const names=fs.readdirSync(PUBLIC).filter(n=>/^swe-worker-[a-f0-9]+\.js$/.test(n))
+  assert.equal(names.length,1)
+  const source=fs.readFileSync(path.join(PUBLIC,names[0]),"utf8")
+  for(const type of ["__FRONTEND_NAV_CACHE__","__START_URL_CACHE__"]){
+    for(const url of RELATORIO.filter(u=>u.startsWith("/dashboard/"))){
+      for(const hit of [true,false])for(const shouldCacheAggressively of [true,false]){
+        const trace=[],self={location:new URL(ORIGEM+"/"+names[0])}
+        const caches={open:async name=>{trace.push("open:"+name);return {match:async()=>{trace.push("match");return hit?new Response("old-session"):undefined},put:async()=>trace.push("put"),add:async()=>trace.push("add")}}}
+        const fetch=async()=>{trace.push("fetch");return new Response("network")}
+        vm.runInNewContext(source,{self,caches,fetch,URL,Promise},{timeout:10000})
+        await self.onmessage({data:{type,url,shouldCacheAggressively}})
+        assert.deepEqual(trace,[],`${type} tocou cache/rede para ${url}`)
+      }
+    }
+  }
+})

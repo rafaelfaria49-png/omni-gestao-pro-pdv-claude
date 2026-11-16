@@ -35,7 +35,8 @@ describe("exports",()=>{
     const report={title:"QA (teste) \\ texto",storeId:"qa-a",period:{from:"2026-11-01",to:"2026-11-10"},generatedAt:"2026-11-10T12:00:00Z",basis:"Caixa parcial",source:"PostgreSQL",limitations:["CMV indisponível"],metrics:[],columns:[{key:"name",label:"Nome"}],rows:Array.from({length:100},(_,i)=>({name:`Item ${i} () \\` })),total:100} as unknown as ReportResponse
     const text=Buffer.from(pdfReport(report)).toString("latin1")
     expect(text).toContain("%PDF-1.4")
-    expect(text).toContain("/Count 6")
+    expect(Number(text.match(/\/Count (\d+)/)?.[1])).toBeGreaterThan(1)
+    expect(text).toContain("Item 99")
     expect(text).toContain("CMV indisponível")
     const offset=Number(text.match(/startxref\n(\d+)/)?.[1])
     expect(text.slice(offset,offset+4)).toBe("xref")

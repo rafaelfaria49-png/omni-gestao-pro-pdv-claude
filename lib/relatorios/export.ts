@@ -29,10 +29,21 @@ export function pdfReport(report: ReportResponse): Uint8Array {
   const lines=[report.title,`Loja: ${report.storeId} | ${report.period.from} a ${report.period.to} (America/Sao_Paulo)`,
     `Gerado: ${formatCell(report.generatedAt,"date")} | ${report.total} registros`,...wrap(report.basis),...wrap(`Fontes: ${report.source}`),"",
     ...report.metrics.flatMap(m=>wrap(`${m.label}: ${formatCell(m.value,m.format)}${m.value===null?` - ${m.reason??"Sem cobertura suficiente"}`:""}`)),"Limitações:",
-    ...report.limitations.flatMap(l=>wrap(l)),"","Registros:",
-    ...report.rows.flatMap((row,i)=>[`${i+1}.`,...report.columns.flatMap(c=>wrap(`${c.label}: ${formatCell(row[c.key],c.format)}`)),""])]
-  const pages:string[][]=[]
-  for(let i=0;i<lines.length;i+=53)pages.push(lines.slice(i,i+53))
+    ...report.limitations.flatMap(l=>wrap(l)),"","Registros:"]
+  const pages:string[][]=[[]]
+  const append=(block:string[],continuation?:string)=>{
+    for(const [index,line] of block.entries()){
+      if(pages.at(-1)!.length===53){pages.push([]);if(index>0&&continuation)pages.at(-1)!.push(continuation)}
+      pages.at(-1)!.push(line)
+    }
+  }
+  append(lines)
+  report.rows.forEach((row,i)=>{
+    const block=[`${i+1}.`,...report.columns.flatMap(c=>wrap(`${c.label}: ${formatCell(row[c.key],c.format)}`)),""]
+    // Keep ordinary records together; identify continuation of oversized records.
+    if(block.length<=53&&pages.at(-1)!.length+block.length>53)pages.push([])
+    append(block,`Registro ${i+1} (continuação)`)
+  })
   const objects:string[]=["", "", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"]
   const pageIds:number[]=[]
   pages.forEach((page,index)=>{
