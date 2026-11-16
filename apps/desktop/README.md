@@ -20,14 +20,55 @@ Electron (Windows) ──HTTPS──> OmniGestão Pro na nuvem (Vercel) ──> 
 ```bash
 npm ci                              # dependências do desktop (separadas do Next.js)
 node node_modules/electron/install.js   # baixa o binário do Electron (checksum verificado)
+node scripts/prepare-installer-tools.mjs # 7-Zip do Squirrel (o npm 12 bloqueia o script do pacote)
 npm run typecheck
 npm test                            # unitários (Vitest)
 npm run test:e2e                    # Electron real contra servidor-fixture local
 npm run build
+
+# Instalador da loja (Produção):
+node scripts/write-build-config.mjs --channel production
+npx electron-forge make             # package + make → out/make/squirrel.windows/x64/OmniGestaoPro-Setup.exe
+node scripts/check-fuses.mjs out/OmniGestaoPro-win32-x64/OmniGestaoPro.exe
+node scripts/verify-artifacts.mjs   # PE, RELEASES×nupkg, conteúdo do asar, assinatura → SHA256SUMS.txt + artifacts.json
+node tests/packaged/install-test.mjs --channel production --setup out/make/squirrel.windows/x64/OmniGestaoPro-Setup.exe \
+     [--upgrade-setup <Setup.exe de versão maior>] [--keep-installed]
+
+# Instalador de QA (preview autorizado; nunca Produção):
 node scripts/write-build-config.mjs --channel qa --origin https://<preview>.vercel.app
 npx electron-forge make             # out/make/squirrel.windows/x64/OmniGestaoPro-QA-Setup.exe
-node tests/packaged/smoke.mjs "<OmniGestaoPro.exe>"   # smoke do EXE real (só QA)
+node tests/packaged/smoke.mjs "<OmniGestaoPro.exe>"   # smoke do EXE real (só QA: usa porta de depuração)
 ```
+
+`electron-forge package` só monta a pasta do app; o **instalador** só existe depois do `make`.
+O teste de instalação recusa rodar se o canal já estiver instalado (nunca desinstala o app de
+alguém) e preserva o perfil em `%AppData%`.
+
+## Distribuição (CI)
+
+`.github/workflows/desktop-windows.yml` (Windows, Node 24), em toda PR que toca o desktop e na main:
+typecheck → unitários → E2E → `make` de Produção → fuses → verificação + SHA-256 → instalação real
+no runner (instalar, atalhos, abrir pelo atalho, fechar, reabrir, reinstalar, **atualizar para uma
+versão maior** gerada só para o teste, desinstalar). O repositório é público: o Setup.exe **não**
+vira artefato do Actions; vão só `SHA256SUMS.txt`, `artifacts.json` e o relatório da instalação
+(retenção 30 dias).
+
+Release interna: *Actions → Desktop Windows → Run workflow* na `main` com `internal_release`
+marcado. Um job separado (único com `contents: write`) refaz o build e cria um **rascunho** de
+release `desktop-v<versão>-<commit>` com Setup.exe + SHA256SUMS.txt — visível só para quem tem
+escrita no repositório. Publicar o rascunho ou distribuir fora da loja é decisão humana.
+
+### Instalar na loja
+
+1. Baixe `OmniGestaoPro-Setup.exe` do rascunho de release e confira o hash no PowerShell:
+   `Get-FileHash .\OmniGestaoPro-Setup.exe` (deve ser igual ao do `SHA256SUMS.txt`).
+2. Execute o arquivo. Sem assinatura, o SmartScreen mostra "O Windows protegeu o computador":
+   *Mais informações → Executar assim mesmo* (só para este arquivo conferido).
+3. O app abre sozinho e fica com atalhos "OmniGestão Pro" na Área de Trabalho e no Menu Iniciar.
+
+Atualizar: rodar o Setup.exe da versão nova (o perfil e as vendas pendentes ficam).
+Reverter: desinstalar em *Aplicativos instalados* e instalar o Setup.exe da versão anterior —
+o perfil em `%AppData%\OmniGestão Pro` não é apagado.
 
 Ícones: `npm run icons` regenera `assets/icon.ico`/`icon.png` a partir de
 `public/omni-gestao-pro-icon.svg` (o SVG público tem o "ã" corrompido; a cópia corrige).

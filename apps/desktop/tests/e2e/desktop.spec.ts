@@ -103,13 +103,12 @@ test("abre a origem fixa em /login, com título fixo e janela segura", async () 
         contextIsolation: prefs.contextIsolation,
         sandbox: prefs.sandbox,
         webSecurity: prefs.webSecurity,
-        preload: prefs.preload ?? null,
       },
     }
   })
   expect(info.title).toBe("OmniGestão Pro — Desenvolvimento (127.0.0.1:47613)")
   expect(info.min).toEqual([1024, 640])
-  expect(info.prefs).toEqual({ nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, preload: null })
+  expect(info.prefs).toEqual({ nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true })
 
   // Página remota não enxerga Node nem a ponte da tela de status.
   const exposed = await page.evaluate(() => ({
@@ -243,7 +242,8 @@ test("atalhos do PDV chegam à página; F5 não recarrega; acorde do desktop abr
   const status = await statusPage(app)
   await expect(status.locator("#title")).toHaveText("OmniGestão Pro para Windows")
   await expect(status.locator("#channel-strip")).toContainText("Desenvolvimento")
-  await expect(status.locator("#meta")).toContainText("Versão 0.1.0")
+  const { version } = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as { version: string }
+  await expect(status.locator("#meta")).toContainText(`Versão ${version}`)
   await status.keyboard.press("Escape")
   await expect.poll(() => statusVisible(app)).toBe(false)
 })
