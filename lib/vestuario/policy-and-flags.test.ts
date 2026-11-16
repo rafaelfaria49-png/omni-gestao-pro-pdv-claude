@@ -12,11 +12,24 @@ describe("flags privadas P01 e política de venda", () => {
     expect(vestuarioFeatureFlags("loja-c", env).enabled.catalog).toBe(false)
     expect(vestuarioFeatureFlags("loja-c", env).requested.sale).toBe(false)
   })
-  it("P02: catálogo nunca liga em Production, mesmo com flag e allowlist", () => {
+  it("Production permanece bloqueada sem opt-in extra, mesmo com flag e allowlist", () => {
     const env = { VERCEL_ENV: "production", VESTUARIO_STORE_ALLOWLIST: "loja-a", VESTUARIO_CATALOG_ENABLED: "1", VESTUARIO_STOCK_ENABLED: "1", VESTUARIO_SALE_ENABLED: "1" }
-    expect(vestuarioFeatureFlags("loja-a", env)).toMatchObject({ enabled: { catalog: false, stock: false, sale: false }, reason: "CATALOG_NOT_RELEASED_IN_PRODUCTION" })
+    expect(vestuarioFeatureFlags("loja-a", env)).toMatchObject({ enabled: { catalog: false, stock: false, sale: false }, reason: "CATALOG_PRODUCTION_RELEASE_REQUIRED" })
+    expect(vestuarioFeatureFlags("loja-a", { ...env, VESTUARIO_CATALOG_PRODUCTION_ENABLED: "true" }).enabled.catalog).toBe(false)
     expect(vestuarioFeatureFlags("loja-a", { ...env, VERCEL_ENV: "preview" }).enabled).toEqual({ catalog: true, stock: false, sale: false })
-    expect(vestuarioFeatureFlags("loja-a", { VESTUARIO_STORE_ALLOWLIST: "loja-a", VESTUARIO_CATALOG_ENABLED: "true" }).enabled.catalog).toBe(false)
+  })
+  it("Production: só loja na allowlist com ambas as flags privadas exatas recebe catálogo", () => {
+    const env = { VERCEL_ENV: "production", VESTUARIO_STORE_ALLOWLIST: "loja-a", VESTUARIO_CATALOG_ENABLED: "1", VESTUARIO_CATALOG_PRODUCTION_ENABLED: "1", VESTUARIO_STOCK_ENABLED: "1", VESTUARIO_SALE_ENABLED: "1" }
+    expect(vestuarioFeatureFlags("loja-a", env)).toMatchObject({
+      enabled: { catalog: true, stock: false, sale: false },
+      reason: "CATALOG_ENABLED_STOCK_AND_SALE_NOT_RELEASED",
+    })
+    expect(vestuarioFeatureFlags("loja-b", env).enabled).toEqual({ catalog: false, stock: false, sale: false })
+    expect(vestuarioFeatureFlags("loja-a", { ...env, VESTUARIO_CATALOG_ENABLED: "true" }).enabled.catalog).toBe(false)
+    expect(vestuarioFeatureFlags("loja-a", { ...env, VESTUARIO_CATALOG_ENABLED: "0" }).enabled.catalog).toBe(false)
+    expect(vestuarioFeatureFlags("loja-a", { ...env, VESTUARIO_STORE_ALLOWLIST: "*" }).enabled.catalog).toBe(false)
+    expect(vestuarioFeatureFlags("loja-a", { ...env, VESTUARIO_STORE_ALLOWLIST: "" }).enabled.catalog).toBe(false)
+    expect(vestuarioFeatureFlags("loja-a", { ...env, NEXT_PUBLIC_VESTUARIO_CATALOG_ENABLED: "1", VESTUARIO_CATALOG_ENABLED: undefined }).enabled.catalog).toBe(false)
   })
   it("não aceita flag pública, truthiness ou wildcard para autorizar loja", () => {
     expect(vestuarioFeatureFlags("loja-a", { NEXT_PUBLIC_VESTUARIO_SALE_ENABLED: "1", VESTUARIO_STORE_ALLOWLIST: "*", VESTUARIO_SALE_ENABLED: "1" }).requested.sale).toBe(false)
