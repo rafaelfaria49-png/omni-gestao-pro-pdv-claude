@@ -18,6 +18,11 @@ const isQa = buildConfig.channel === "qa"
 const productName = isQa ? "OmniGestão Pro QA" : "OmniGestão Pro"
 const squirrelId = isQa ? "OmniGestaoProQA" : "OmniGestaoPro"
 const icon = path.join(__dirname, "assets", "icon.ico")
+const ciCommit = process.env.GITHUB_ACTIONS === "true" ? process.env.GITHUB_SHA : ""
+const SQUIRREL_ICON_URL =
+  ciCommit && /^[0-9a-f]{40}$/.test(ciCommit) && /^[\w.-]+\/[\w.-]+$/.test(process.env.GITHUB_REPOSITORY ?? "")
+    ? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${ciCommit}/apps/desktop/assets/icon.ico`
+    : pathToFileURL(icon).toString()
 
 /** Só o necessário entra no pacote: código compilado, ícones, config e package.json. */
 const ALLOWED = [/^\/package\.json$/, /^\/build-config\.json$/, /^\/dist(\/|$)/, /^\/assets(\/|$)/]
@@ -51,8 +56,10 @@ module.exports = {
         exe: "OmniGestaoPro.exe",
         setupExe: isQa ? "OmniGestaoPro-QA-Setup.exe" : "OmniGestaoPro-Setup.exe",
         setupIcon: icon,
-        // Ícone em "Aplicativos instalados". Sem URL pública, aponta para o arquivo local do build.
-        iconUrl: pathToFileURL(icon).toString(),
+        // Ícone em "Aplicativos instalados": o Squirrel BAIXA este endereço no PC de quem instala.
+        // Caminho local só funciona na máquina que gerou o build; na CI usa o icon.ico do commit exato
+        // no GitHub (repositório público; o ícone não é segredo).
+        iconUrl: SQUIRREL_ICON_URL,
         noMsi: true,
         // Assinatura: só com certificado real fornecido por variável de ambiente no build.
         ...(process.env.OMNI_DESKTOP_CERT_FILE
