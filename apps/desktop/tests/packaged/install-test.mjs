@@ -253,7 +253,23 @@ try {
     const fin = s4 ?? installState()
     check("desinstalação: atalhos removidos", !fin.desktop && !fin.startMenu)
     check("desinstalação: removido de Aplicativos instalados", !fin.reg)
-    check("desinstalação: versões removidas", fin.apps.length === 0, fin.apps.join(","))
+    const gone = await waitFor(() => installState().apps.length === 0, 30_000)
+    const left = gone ? [] : installState().apps
+    if (left.length) {
+      const files = ps(
+        "$d=$env:OMNI_INSTALL_DIR; ConvertTo-Json -Compress -InputObject @(Get-ChildItem -LiteralPath $d -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 15 | ForEach-Object { $_.FullName.Substring($d.Length) })",
+        env,
+      )
+      console.log(`INFO restos em ${installDir}: ${JSON.stringify(files)}`)
+      for (const log of ["SquirrelSetup.log", "Squirrel-Shortcut.log"]) {
+        try {
+          console.log(`INFO ${log} (fim):\n${readFileSync(path.join(installDir, log), "utf8").split(/\r?\n/).slice(-25).join("\n")}`)
+        } catch {
+          /* sem log */
+        }
+      }
+    }
+    check("desinstalação: versões removidas", left.length === 0, left.join(","))
     check("desinstalação: nenhum processo do app", appProcesses().length === 0)
     check("desinstalação: perfil local preservado (vendas pendentes)", existsSync(sentinel), profileDir)
   } else {
