@@ -253,28 +253,24 @@ try {
     const fin = s4 ?? installState()
     check("desinstalação: atalhos removidos", !fin.desktop && !fin.startMenu)
     check("desinstalação: removido de Aplicativos instalados", !fin.reg)
-    const gone = await waitFor(() => installState().apps.length === 0, 30_000)
-    const left = gone ? [] : installState().apps
-    if (left.length) {
-      const files = ps(
-        "$d=$env:OMNI_INSTALL_DIR; ConvertTo-Json -Compress -InputObject @(Get-ChildItem -LiteralPath $d -Recurse -Force -File -ErrorAction SilentlyContinue | Select-Object -First 15 | ForEach-Object { $_.FullName.Substring($d.Length) })",
+    // O Squirrel não consegue apagar os próprios binários em uso (Update.exe e o squirrel.exe da
+    // última versão): deixa-os com o marcador .dead e limpa a pasta na próxima instalação.
+    // O que NÃO pode sobrar é o aplicativo (OmniGestaoPro.exe, resources/app.asar).
+    const leftover = () =>
+      ps(
+        "$d=$env:OMNI_INSTALL_DIR; ConvertTo-Json -Compress -InputObject @(Get-ChildItem -LiteralPath $d -Recurse -Force -File -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ f=$_.FullName.Substring($d.Length).TrimStart('\\'); b=$_.Length } })",
         env,
-      )
-      console.log(`INFO restos em ${installDir}: ${JSON.stringify(files)}`)
-      const procs = ps(
-        "$d=$env:OMNI_INSTALL_DIR; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($d,[StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.CommandLine })",
-        env,
-      )
-      console.log(`INFO processos vivos da pasta: ${JSON.stringify(procs)}`)
-      for (const log of [path.join(installDir, "SquirrelSetup.log"), path.join(localAppData, "SquirrelTemp", "SquirrelSetup.log")]) {
-        try {
-          console.log(`INFO ${log} (fim):\n${readFileSync(log, "utf8").split(/\r?\n/).slice(-40).join("\n")}`)
-        } catch {
-          /* sem log */
-        }
-      }
-    }
-    check("desinstalação: versões removidas", left.length === 0, left.join(","))
+      ) ?? []
+    await waitFor(() => !leftover().some((x) => /^app-[^\\]+\\(OmniGestaoPro\.exe|resources\\)/i.test(x.f)), 30_000)
+    const rest = leftover()
+    const appFiles = rest.filter((x) => /^app-[^\\]+\\(?!squirrel\.exe$)/i.test(x.f))
+    const kb = Math.round(rest.reduce((a, x) => a + Number(x.b), 0) / 1024)
+    check("desinstalação: aplicativo removido (nenhum OmniGestaoPro.exe/asar restante)", appFiles.length === 0, appFiles.slice(0, 5).map((x) => x.f).join(", "))
+    check(
+      "desinstalação: só restos do Squirrel, marcados .dead e pequenos",
+      rest.length === 0 || (rest.some((x) => x.f === ".dead") && kb < 10_240),
+      rest.length ? `${rest.map((x) => x.f).join(", ")} (${kb} KB)` : "pasta vazia",
+    )
     check("desinstalação: nenhum processo do app", appProcesses().length === 0)
     check("desinstalação: perfil local preservado (vendas pendentes)", existsSync(sentinel), profileDir)
   } else {
