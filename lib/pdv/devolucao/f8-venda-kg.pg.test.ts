@@ -550,4 +550,34 @@ suite("F8 × KG — trocas por peso configuráveis (PostgreSQL real)", { timeout
     const un = lines.find((l) => l.produtoId === refri.id)!
     expect(un).toMatchObject({ quantity: 2, qtyReturned: 0, unidade: "UN" })
   })
+  // ── Integração com a main (OMNI-APARELHOS-ENDTOEND-001): aparelho por IMEI ────
+  it("venda que toca aparelho por IMEI: devolução e troca recusadas no escritor F8, nada gravado", async () => {
+    const cel = await produto({ name: "Celular IMEI", price: 900, metadata: UN, sku: "CIM", estoque: 3 })
+    const sale = venda([{ id: cel.id, name: cel.name, quantity: 1, price: 900 }], { kg: false })
+    await persist(sale)
+    // Linha marcada como venda de unidade física (o que o fluxo de aparelhos grava no payload).
+    const v = await prisma.venda.findFirstOrThrow({ where: { pedidoId: sale.id, storeId: A }, select: { id: true, payload: true } })
+    const payload = v.payload as { lines: Array<Record<string, unknown>> }
+    payload.lines = payload.lines.map((l) => ({ ...l, deviceSale: { aparelhoId: "apar-sintetico-1" } }))
+    await prisma.venda.update({ where: { id: v.id }, data: { payload: payload as never } })
+    const antes = await efeitos(sale.id!, [cel.id])
+    for (const tipo of ["vale_credito", "troca"]) {
+      const r = await devolver({ localId: "TF-" + randomUUID(), tipo, vendaLocalId: sale.id, itens: [unItem(cel.id, 1)] })
+      expect(r.status, JSON.stringify(r.body)).toBe(409)
+      expect(r.body.code).toBe("APARELHO_DEVOLUCAO_NAO_INTEGRADA")
+    }
+    expect(await efeitos(sale.id!, [cel.id])).toEqual(antes)
+  })
+
+  it("produto virou modelo serializado depois da venda: devolução recusada sem gravar (saldo só volta pela unidade)", async () => {
+    const mod = await produto({ name: "Modelo serializado", price: 500, metadata: UN, sku: "MSZ", estoque: 2 })
+    const sale = venda([{ id: mod.id, name: mod.name, quantity: 1, price: 500 }], { kg: false })
+    await persist(sale)
+    await prisma.produto.update({ where: { id: mod.id }, data: { metadata: { ...UN, serializedDevice: { version: 1 } } as never } })
+    const antes = await efeitos(sale.id!, [mod.id])
+    const r = await devolver({ localId: "TF-" + randomUUID(), tipo: "vale_credito", vendaLocalId: sale.id, itens: [unItem(mod.id, 1)] })
+    expect(r.status, JSON.stringify(r.body)).toBe(409)
+    expect(r.body.code).toBe("APARELHO_DEVOLUCAO_NAO_INTEGRADA")
+    expect(await efeitos(sale.id!, [mod.id])).toEqual(antes)
+  })
 })
