@@ -21,6 +21,9 @@ describe("report query boundaries",()=>{
   it.each(["from=2026-02-30&to=2026-03-01","from=2025-01-01&to=2026-11-01","from=2026-11-02&to=2026-11-01","from=2026-11-01&to=2026-11-02&page=-1","from=2026-11-01&to=2026-11-02&pageSize=1000","from=2026-11-01&to=2026-11-02&sort=sql"])("rejects invalid/unbounded query %s",raw=>{
     expect(()=>parseReportQuery(new URLSearchParams(raw))).toThrow()
   })
+  it("bounds source identifiers and rejects controls before SQL",()=>{
+    for(const source of["x".repeat(513),"id\u0000data"])expect(()=>parseReportQuery(new URLSearchParams({from:"2026-11-01",to:"2026-11-02",source}))).toThrow()
+  })
 })
 describe("exports",()=>{
   it.each(["=HYPERLINK(1)","  +SUM(1)","\t@SUM(1)","\n-1+1"])("neutralizes formula text %s",text=>expect(csvCell(text)).toContain("'"))

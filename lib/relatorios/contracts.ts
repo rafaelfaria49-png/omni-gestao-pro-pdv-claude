@@ -8,7 +8,7 @@ export type Metric = { key: string; label: string; value: number | null; format?
 export type ReportQuery = {
   from: string; to: string; start: Date; end: Date; page: number; pageSize: number
   search: string; category: string; brand: string; status: string; technician: string; wallet: string
-  entity: string
+  entity: string; source: string
   sort: "value" | "quantity" | "name"; grain: "day" | "week" | "month"; compare: "previous" | "year"
 }
 export type Report = {
@@ -68,9 +68,9 @@ export function parseReportQuery(params: URLSearchParams): ReportQuery {
     if (!/^[1-9]\d*$/.test(raw) || Number(raw) > max) throw new Error(`Parâmetro ${key} inválido.`)
     return Number(raw)
   }
-  const filter = (key: string) => {
+  const filter = (key: string, max = 120) => {
     const raw = (params.get(key) ?? "").trim()
-    if (raw.length > 120 || /[\u0000-\u001f]/.test(raw)) throw new Error(`Filtro ${key} inválido.`)
+    if (raw.length > max || /[\u0000-\u001f]/.test(raw)) throw new Error(`Filtro ${key} inválido.`)
     return raw
   }
   const sort = params.get("sort") ?? "value"
@@ -78,7 +78,7 @@ export function parseReportQuery(params: URLSearchParams): ReportQuery {
   const compare = params.get("compare") ?? "previous"
   if (!["value", "quantity", "name"].includes(sort) || !["day", "week", "month"].includes(grain) || !["previous", "year"].includes(compare)) throw new Error("Ordenação ou agrupamento inválido.")
   return { from, to, start, end, page: integer("page", 1, 10000), pageSize: integer("pageSize", 20, 100),
-    search: filter("q"), category: filter("category"), brand: filter("brand"), status: filter("status"), technician: filter("technician"), wallet: filter("wallet"), entity: filter("entity"),
+    search: filter("q"), category: filter("category"), brand: filter("brand"), status: filter("status"), technician: filter("technician"), wallet: filter("wallet"), entity: filter("entity"), source: filter("source",512),
     sort: sort as ReportQuery["sort"], grain: grain as ReportQuery["grain"], compare: compare as ReportQuery["compare"] }
 }
 export function previousQuery(q: ReportQuery): ReportQuery {

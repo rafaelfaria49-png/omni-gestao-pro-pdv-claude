@@ -50,6 +50,6 @@ export async function whatsappReport(db: ReportDb, storeId: string, q: ReportQue
       {key:"failures",label:"Falhas de entrega",value:null,reason:"Sem telemetria de status de entrega completa e persistida."}],
     columns:[{key:"id",label:"Conversa"},{key:"status",label:"Status atual"},{key:"first",label:"Primeiro inbound",format:"date"},
       {key:"response",label:"Primeira resposta",format:"date"},{key:"hours",label:"Tempo de resposta",format:"hours"},{key:"evidence",label:"Evidência"}],
-    rows:rows.map(r=>({...r,href:`/dashboard/relatorios/whatsapp?entity=${encodeURIComponent(String(r.id))}&from=${q.from}&to=${q.to}`})),total:t.total,trend,
+    rows:rows.map(r=>({...r,href:`/dashboard/relatorios/whatsapp?source=${encodeURIComponent(String(r.id))}&from=${q.from}&to=${q.to}`})),total:t.total,trend,
   }
 }

@@ -2,6 +2,7 @@ import "server-only"
 import { Prisma } from "@/generated/prisma"
 import { bucket, emptyArray, like, numeric, paginate, utcText, type ReportDb } from "./sql"
 import { money, type Report, type ReportQuery } from "./contracts"
+import { dreClass,originHref } from "./origins"
 
 function movements(storeId: string, q: ReportQuery) {
   return Prisma.sql`WITH m AS (
@@ -92,19 +93,14 @@ export async function cashFlowReport(db: ReportDb, storeId: string, q: ReportQue
       { key: "overdueIncoming", label: "A receber — vencido antes do início", value: money(p.vencidosReceber), format: "money" }, { key: "overdueOutgoing", label: "A pagar — vencido antes do início", value: money(p.vencidosPagar), format: "money" },
       { key: "projection", label: "Projeção indicativa (sem vencidos)", value: q.wallet || q.category || p.indeterminados ? null : money(final + p.receber - p.pagar), format: "money", reason: "Projeção indisponível com filtro de carteira/categoria ou títulos sem cobertura." }],
     columns: [{ key: "date", label: "Lançamento", format: "date" }, { key: "origin", label: "Origem" }, { key: "wallet", label: "Carteira" }, { key: "category", label: "Categoria" }, { key: "class", label: "Natureza" }, { key: "incoming", label: "Entrada", format: "money" }, { key: "outgoing", label: "Saída", format: "money" }],
-    rows: rows.map(r => ({ ...r, href: "/dashboard/financeiro-v2" })), total: t.total, trend: daily, options: { wallets, categories },
+    rows: rows.map(r => ({ ...r, href: originHref("fluxo-caixa",String(r.id),q) })), total: t.total, trend: daily, options: { wallets, categories },
   }
 }
 
 export async function dreReport(db: ReportDb, storeId: string, q: ReportQuery): Promise<Report> {
   const cte = movements(storeId, q)
   const [rows] = await Promise.all([db.$queryRaw<{ name: string; value: number; total: number }[]>(Prisma.sql`${cte}, classified AS (
-      SELECT CASE
-        WHEN lower(origem) ~ '^(estorno_receber|devolucao_|devolução_)' THEN 'Reversões de recebimentos'
-        WHEN lower(origem) ~ '^estorno_pagar' THEN 'Reversões de pagamentos'
-        WHEN tipo='entrada' AND lower(origem) ~ '^(receber|pdv$|venda$|os$|marketplace$)' THEN 'Recebimentos de clientes'
-        WHEN tipo='saida' AND lower(origem) ~ '^pagar' THEN 'Pagamentos: ' || categoria
-        ELSE 'Sem classificação de resultado' END AS name,
+      SELECT ${dreClass} AS name,
         CASE tipo WHEN 'entrada' THEN valor WHEN 'saida' THEN -valor ELSE 0 END AS value
       FROM m WHERE "createdAt">=${q.start} AND NOT transferencia AND origem NOT IN ('sangria_pdv','suprimento_pdv')
     ), grouped AS (SELECT name,sum(value)::float8 AS value FROM classified GROUP BY name)
@@ -126,6 +122,6 @@ export async function dreReport(db: ReportDb, storeId: string, q: ReportQuery): 
       { key: "receipts", label: "Recebimentos brutos — caixa", value: money(t.recebimentos), format: "money" }, { key: "deductions", label: "Reversões comprovadas — caixa", value: money(t.reversoes), format: "money" },
       { key: "netReceipts", label: "Recebimentos líquidos — caixa", value: money(t.recebimentos-t.reversoes), format: "money" }, { key: "payments", label: "Pagamentos líquidos (inclui compras)", value: money(t.pagamentos), format: "money" },
       ...["CMV / custo de serviços", "Lucro bruto", "Despesas operacionais por competência", "Resultado operacional", "Resultado líquido"].map((label,i) => ({ key: `unavailable${i}`, label, value: null, reason: "Sem cobertura histórica/classificação integral comprovada." }))],
-    columns: [{ key: "name", label: "Classificação de caixa" }, { key: "value", label: "Valor com sinal", format: "money" }], rows, total: rows[0]?.total ?? 0, trend: [],
+    columns: [{ key: "name", label: "Classificação de caixa" }, { key: "value", label: "Valor com sinal", format: "money" }], rows:rows.map(r=>({...r,href:originHref("dre",r.name,q)})), total: rows[0]?.total ?? 0, trend: [],
   }
 }

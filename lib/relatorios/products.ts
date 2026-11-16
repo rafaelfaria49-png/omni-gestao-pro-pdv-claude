@@ -1,6 +1,7 @@
 import "server-only"
 import { Prisma } from "@/generated/prisma"
-import { agregarProdutosVendidos, type DadosProdutosVendidos, type LinhaItem } from "./produtos-vendidos"
+import { agregarProdutosVendidos, criarResolvedor, type DadosProdutosVendidos, type LinhaItem } from "./produtos-vendidos"
+import { originHref,productOriginReport } from "./origins"
 import { bucket, type ReportDb } from "./sql"
 import type { Report, ReportQuery } from "./contracts"
 
@@ -39,6 +40,10 @@ export async function productReport(db: ReportDb, storeId: string, q: ReportQuer
     products.push(...await db.produto.findMany({ where: { storeId, OR: [{ id: { in: ids } }, { sku: { in: ids } }, { barcode: { in: ids } }] },
       select: { id: true, name: true, sku: true, barcode: true, category: true, brand: true, active: true } }))
   }
+  if(q.source){
+    const resolve=criarResolvedor(products)
+    return productOriginReport(db,storeId,q,groups.filter(g=>resolve(g.inventoryId,g.nome).chave===q.source).map(g=>({inventoryId:g.inventoryId,nome:g.nome})))
+  }
   const data: DadosProdutosVendidos = {
     grupos: groups.map(g => ({ inventoryId: g.inventoryId, nome: g.nome, quantidade: g._sum.quantidade ?? 0, receita: g._sum.lineTotal ?? 0 })),
     vendasComDevolucao: linkedReturns.map(v => ({ pedidoId: v.pedidoId, itens: v.itens })),
@@ -74,7 +79,7 @@ export async function productReport(db: ReportDb, storeId: string, q: ReportQuer
     rows: result.produtos.map(p => ({ id: p.chave, name: p.nome, sku: p.sku ?? p.codigoBarras, category: p.categoriaNome, brand: p.marca,
       grossQuantity: p.quantidadeBruta, returnedQuantity: p.quantidadeDevolvida, quantity: p.quantidadeLiquida,
       gross: p.receitaBruta, returns: p.valorDevolvido, net: p.receitaLiquida, average: p.precoMedio, share: p.participacaoReceita * 100, abc: p.abc ?? null,
-      href: `/dashboard/relatorios/produtos?entity=${encodeURIComponent(p.chave)}&from=${q.from}&to=${q.to}` })),
+      href: originHref("produtos",p.chave,q) })),
     total: result.totalProdutos, trend,
     options: { categories: result.categorias.map(c => ({ value: c.chave, label: c.nome })), brands: [...new Set(products.map(p => p.brand).filter((b): b is string => !!b))].sort() },
   }

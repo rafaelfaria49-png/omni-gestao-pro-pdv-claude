@@ -58,6 +58,8 @@ describe.skipIf(!url)("enterprise reports — real disposable PostgreSQL",()=>{
       await db.ordemServico.create({data:{id,storeId:A,numero:id,status,createdAt:at,valorTotal:500,payload:{id,storeId:A,codigo:id,status:state,tecnico:{id:"qa-tech",nome:"QA Técnico"},aberturaV3:{recepcao:{dataEntrada:"2026-11-02T09:00:00-03:00",previsaoEntrega:"2026-11-03T18:00:00-03:00"}},...(state==="entregue"?{entregaV3:{entregueEm:"2026-11-03T10:00:00-03:00"},timeline:[{tipo:"garantia_acionada"}]}:{})}}})
     }
     await db.garantiaOrdemServico.create({data:{id:"qa-warranty",storeId:A,ordemServicoId:"qa-os-done",prazoDias:90,dataInicio:at,dataFim:new Date("2027-02-01T12:00:00Z")}})
+    await db.ordemServicoItem.create({data:{id:"qa-os-part",ordemServicoId:"qa-os-done",produtoId:"qa-pa",descricao:"QA Peça Persistida",quantidade:2,precoUnitario:50}})
+    await db.ordemServico.create({data:{id:"qa-os-b",storeId:B,numero:"QA OS B",createdAt:at}})
     await db.whatsAppContact.create({data:{id:"qa-contact",storeId:A,phoneDigits:"5500000000000"}})
     await db.whatsAppConversation.createMany({data:[{id:"qa-conv",storeId:A,contactId:"qa-contact"},{id:"qa-demo",storeId:A,contactId:"qa-contact"}]})
     await db.whatsAppMessage.createMany({data:[{storeId:A,conversationId:"qa-conv",direction:"inbound",body:"Synthetic QA",externalMessageId:"wamid.qa-in",createdAt:at},
@@ -65,6 +67,9 @@ describe.skipIf(!url)("enterprise reports — real disposable PostgreSQL",()=>{
       {storeId:A,conversationId:"qa-conv",direction:"outbound",body:"Synthetic QA reply",externalMessageId:"wamid.qa-out",createdAt:new Date(at.getTime()+3600000)},
       {storeId:A,conversationId:"qa-demo",direction:"inbound",body:"Demo never external",createdAt:at}]})
     await db.whatsAppAutomationLog.create({data:{storeId:A,action:"automation_simulation",createdAt:at}})
+    await db.whatsAppContact.create({data:{id:"qa-contact-b",storeId:B,phoneDigits:"5500000000001"}})
+    await db.whatsAppConversation.create({data:{id:"qa-conv-b",storeId:B,contactId:"qa-contact-b"}})
+    await db.whatsAppMessage.create({data:{storeId:B,conversationId:"qa-conv-b",direction:"inbound",body:"Private B",externalMessageId:"wamid.qa-b",createdAt:at}})
     const password=await bcrypt.hash(qaPassword,4)
     for(const [id,role,stores]of[["qa-manager","GERENTE",[A,B]],["qa-restricted","TECNICO",[A]]]as const){await db.adminUser.create({data:{id,name:"QA Reports",email:`${id}@example.invalid`,password,role,lojaId:A,accessScope:"STORE",adminUserStores:{create:stores.map(storeId=>({storeId}))}}})}
     await db.store.create({data:{id:"reports-qa-boundary",name:"Synthetic UTC boundary",moduleAccess:all}})
@@ -79,6 +84,9 @@ describe.skipIf(!url)("enterprise reports — real disposable PostgreSQL",()=>{
       await db.ordemServico.create({data:{id,storeId:A,numero:id,createdAt:new Date("2026-10-15T12:00:00Z"),payload:{id,codigo:id,storeId:A,...payload}}})
     }
     for(const [id,meta]of[["qa-preos-null",null],["qa-preos-empty",{}]]as const){await db.ordemServico.create({data:{id,storeId:A,createdAt:new Date("2026-10-15T12:00:00Z"),payload:{id,codigo:id,storeId:A,status:"entregue",tecnico:{id:"qa-tech"},comercialV4:{tipo:"orcamento_pre_os"},aberturaV3:{recepcao:{dataEntrada:"2026-10-15T12:00:00Z",dataEntradaMeta:meta}},entregueEm:"2026-10-16T12:00:00Z"}}})}
+    for(const [id,payloadId,payloadStore]of[["qa-wrong-payload-store","qa-wrong-payload-store",B],["qa-wrong-payload-id","foreign-order",A]]as const){
+      await db.ordemServico.create({data:{id,storeId:A,createdAt:new Date("2026-10-20T12:00:00Z"),payload:{id:payloadId,storeId:payloadStore,timeline:[{tipo:"garantia_acionada"}]}}})
+    }
   },60000)
   afterAll(()=>db.$disconnect())
   it("products agree with independent SQL, cancel/returns clamp and remain in their sale cohort",async()=>{
@@ -101,6 +109,54 @@ describe.skipIf(!url)("enterprise reports — real disposable PostgreSQL",()=>{
   it("DRE never calls inventory purchases CMV or invents net profit",async()=>{const r=await report("dre");expect(metric(r,"receipts")).toBe(120);expect(metric(r,"payments")).toBe(40);expect(r.metrics.filter(m=>m.label.includes("Resultado")).every(m=>m.value===null)).toBe(true);expect(r.rows.some(x=>x.name==="Pagamentos: estoque")).toBe(true)})
   it("customers use strong FK; duplicates and another-store FK stay unassigned",async()=>{const r=await report("clientes");expect(metric(r,"spent")).toBe(100);expect(metric(r,"recurring")).toBe(1);expect(r.limitations.join(" ")).toContain("Vendas sem cliente identificado/vínculo válido: 2");expect(r.rows.every(x=>x.rfm===null)).toBe(true)})
   it("customer history is authorized, persisted and net of returns",async()=>{const r=await report("clientes","entity=qa-c1");expect(r.total).toBe(2);expect(r.rows.reduce((sum,x)=>sum+Number(x.net),0)).toBe(100);expect((await report("clientes","entity=qa-cb")).rows).toEqual([])})
+  it("product origin resolves ID and SKU aliases to real physical sale lines",async()=>{
+    const r=await report("produtos","source=produto%3Aqa-pa")
+    expect(r.total).toBe(2);expect(r.rows.reduce((n,x)=>n+Number(x.gross),0)).toBe(230)
+    expect(r.rows.map(x=>x.sale).sort()).toEqual(["QA-BAD-FK","QA-V1"])
+    expect(r.rows.every(x=>String(x.href).includes("source=venda%3A"))).toBe(true)
+    expect((await report("produtos","source=produto%3Aqa-pb")).rows).toEqual([])
+  })
+  it("sale origin preserves store, customer FK and original line amounts",async()=>{
+    const r=await report("clientes","entity=qa-c1&source=venda%3AQA-V1")
+    expect(r.rows).toHaveLength(1);expect(r.rows[0]).toMatchObject({sale:"QA-V1",quantity:2,gross:200})
+    expect((await report("clientes","entity=qa-cb&source=venda%3AQA-V1")).rows).toEqual([])
+    expect((await report("produtos","source=venda%3AQA-B")).rows).toEqual([])
+  })
+  it("DRE source movements reconcile to each exact signed classification",async()=>{
+    const dre=await report("dre")
+    for(const group of dre.rows){
+      const r=await report("dre",`source=${encodeURIComponent(String(group.name))}`)
+      expect(r.rows.reduce((n,x)=>n+(x.type==="entrada"?1:-1)*Number(x.amount),0)).toBe(group.value)
+      expect(r.rows.every(x=>x.origin!=="transferencia"&&x.origin!=="sangria_pdv"&&x.origin!=="suprimento_pdv")).toBe(true)
+    }
+  })
+  it("ledger source identifies one stored movement and rejects the other store",async()=>{
+    const cash=await report("fluxo-caixa"),other=await report("fluxo-caixa","",B)
+    const r=await report("fluxo-caixa",`source=${cash.rows[0].id}`)
+    expect(r.total).toBe(1);expect(r.rows[0].id).toBe(cash.rows[0].id)
+    expect((await report("fluxo-caixa",`source=${other.rows[0].id}`)).rows).toEqual([])
+  })
+  it("OS origin has persisted parts, warranty and event types without raw payload",async()=>{
+    const r=await report("os","source=qa-os-done")
+    expect(r.rows.some(x=>x.label==="QA Peça Persistida"&&x.quantity===2)).toBe(true)
+    expect(r.rows.some(x=>x.label==="garantia_acionada")).toBe(true)
+    expect(r.rows.some(x=>x.type==="Garantia: ativa")).toBe(true)
+    expect(r.rows.every(x=>!("payload"in x)&&!("cash"in x))).toBe(true)
+    expect((await report("os","source=qa-os-b")).rows).toEqual([])
+  })
+  it("conversation origin exposes physical metadata, excluding bodies/contact/external IDs",async()=>{
+    const r=await report("whatsapp","source=qa-conv")
+    expect(r.total).toBe(3)
+    for(const secret of["Synthetic QA","Duplicate QA","5500000000000","wamid.qa-in","wamid.qa-out"])expect(JSON.stringify(r)).not.toContain(secret)
+    expect((await report("whatsapp","source=qa-conv-b")).rows).toEqual([])
+  })
+  it("OS origin rejects timeline from a mismatched payload identity or store",async()=>{
+    for(const source of["qa-wrong-payload-store","qa-wrong-payload-id"]){
+      const r=await buildReport(db,"os",A,parseReportQuery(new URLSearchParams({from:"2026-10-20",to:"2026-10-20",source})),{compare:false})
+      expect(r.total).toBe(1);expect(r.rows[0].type).toBe("OS persistida")
+      expect(r.rows.some(x=>x.label==="garantia_acionada")).toBe(false)
+    }
+  })
   it("OS V3/V4 count once; cancellation from payload and measured elapsed time",async()=>{const r=await report("os");expect(metric(r,"orders")).toBe(3);expect(metric(r,"cancelled")).toBe(1);expect(metric(r,"hours")).toBe(25);expect(metric(r,"cash")).toBe(80);expect(metric(r,"revenue")).toBeNull()})
   it("technicians carry sample size and suppress unfair SLA with fewer than 5",async()=>{const r=await report("tecnicos");expect(r.total).toBe(1);expect(r.rows[0]).toMatchObject({assigned:3,completed:1,sample:1,sla:null,returns:1,warranties:1,cash:80})})
   it("operations without financial permission strips values from both table and summary",async()=>{const r=await buildReport(db,"os",A,query(),{compare:false,financial:false});expect(r.metrics.some(x=>x.key==="cash")).toBe(false);expect(r.rows.every(x=>!("cash"in x))).toBe(true)})

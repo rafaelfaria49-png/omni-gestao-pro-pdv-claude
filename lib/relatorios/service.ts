@@ -7,6 +7,7 @@ import { customerReport } from "./customers"
 import { operationsReport } from "./operations"
 import { whatsappReport } from "./whatsapp"
 import type { ReportDb } from "./sql"
+import { originReport } from "./origins"
 
 const builders={produtos:productReport,"fluxo-caixa":cashFlowReport,dre:dreReport,clientes:customerReport,os:operationsReport,
   tecnicos:(db:ReportDb,storeId:string,q:ReportQuery)=>operationsReport(db,storeId,q,true),whatsapp:whatsappReport}
@@ -18,8 +19,8 @@ export async function buildReport(db:PrismaClient,kind:ReportKind,storeId:string
     await tx.$executeRaw`SET TRANSACTION READ ONLY`
     await tx.$executeRaw`SET LOCAL TIME ZONE 'UTC'`
     await tx.$executeRaw`SET LOCAL statement_timeout = '12000ms'`
-    const current=await builders[kind](tx,storeId,q)
-    const before=options.compare===false?null:await builders[kind](tx,storeId,previous)
+    const current=q.source&&(kind!=="produtos"||q.source.startsWith("venda:"))?await originReport(tx,kind,storeId,q):await builders[kind](tx,storeId,q)
+    const before=options.compare===false||q.source?null:await builders[kind](tx,storeId,previous)
     return {...current,previousMetrics:before?.metrics.filter(m=>!m.key.startsWith("forecast")&&!m.key.startsWith("overdue")&&m.key!=="projection")??[]}
   },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:30000,maxWait:5000})
   if ((kind==="os"||kind==="tecnicos")&&!options.financial) {

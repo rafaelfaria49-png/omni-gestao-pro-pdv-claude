@@ -2,6 +2,7 @@ import "server-only"
 import { Prisma } from "@/generated/prisma"
 import { bucket, like, paginate, utcText, type ReportDb } from "./sql"
 import { money, type Report, type ReportQuery } from "./contracts"
+import { originHref } from "./origins"
 
 export async function customerReport(db: ReportDb, storeId: string, q: ReportQuery): Promise<Report> {
   const cte = Prisma.sql`WITH sales AS (
@@ -38,7 +39,7 @@ export async function customerReport(db: ReportDb, storeId: string, q: ReportQue
       limitations: ["Cadastros duplicados permanecem separados. As vendas canceladas ficam fora dos valores e da frequência. Valores líquidos não são recebimentos financeiros."],
       metrics: [{ key: "purchases", label: "Compras no período", value: count[0].total, format: "number" }],
       columns: [{ key: "number", label: "Venda" }, { key: "date", label: "Data", format: "date" }, { key: "gross", label: "Total gravado", format: "money" }, { key: "net", label: "Líquido de devoluções", format: "money" }, { key: "status", label: "Status" }],
-      rows: rows.map(r => ({ ...r, href: `/dashboard/vendas-arquivo-geral?q=${encodeURIComponent(String(r.number))}` })), total: count[0].total, trend: [] }
+      rows: rows.map(r => ({ ...r, href: `${originHref("clientes",`venda:${r.number}`,q)}&entity=${encodeURIComponent(q.entity)}` })), total: count[0].total, trend: [] }
   }
   const [rows, metrics, unknown, trend] = await Promise.all([
     db.$queryRaw<Record<string,string|number|null>[]>(Prisma.sql`${cte}

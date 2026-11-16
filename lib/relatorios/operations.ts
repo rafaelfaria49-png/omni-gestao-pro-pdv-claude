@@ -102,7 +102,7 @@ export async function operationsReport(db: ReportDb, storeId: string, q: ReportQ
       :[{key:"number",label:"OS"},{key:"status",label:"Status"},{key:"technician",label:"Técnico"},{key:"entered",label:"Entrada efetiva",format:"date"},
         {key:"delivered",label:"Entrega",format:"date"},{key:"promised",label:"Prometida",format:"date"},{key:"hours",label:"Tempo medido",format:"hours"},
         {key:"sla",label:"Prazo"},{key:"warranty",label:"Garantia"},{key:"cash",label:"Recebimentos vinculados",format:"money"}],
-    rows:rows.map(r=>({...r,href:technicians?`/dashboard/relatorios/os?technician=${encodeURIComponent(String(r.id))}&from=${q.from}&to=${q.to}`:`/dashboard/relatorios/os?entity=${encodeURIComponent(String(r.id))}&from=${q.from}&to=${q.to}`})),
+    rows:rows.map(r=>({...r,href:technicians?`/dashboard/relatorios/os?technician=${encodeURIComponent(String(r.id))}&from=${q.from}&to=${q.to}`:`/dashboard/relatorios/os?source=${encodeURIComponent(String(r.id))}&from=${q.from}&to=${q.to}`})),
     total:total[0].total,trend,
   }
 }
