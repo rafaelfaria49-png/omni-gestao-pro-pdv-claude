@@ -86,6 +86,9 @@ jobs:
       - name: Testes provider SEFAZ
         run: npx vitest run lib/fiscal/provider/sefaz --testTimeout=30000
       - run: npx tsc --noEmit --incremental false
+        env:
+          # Heap padrão não comporta mais o grafo de tipos completo (OOM no CI em 2026-11-17).
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: ESLint fiscal focado
         run: >-
           npx eslint lib/fiscal/xsd lib/fiscal/xsd-worker lib/fiscal/provider/sefaz
