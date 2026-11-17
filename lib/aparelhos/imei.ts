@@ -31,9 +31,10 @@ export function luhnCheckDigit(body14: string): number {
 
 export type ImeiCheck =
   | { ok: true; imei: string }
-  | { ok: false; reason: "VAZIO" | "TAMANHO" | "DIGITO_VERIFICADOR" | "SEQUENCIA_INVALIDA"; message: string }
+  | { ok: false; reason: "VAZIO" | "CARACTERES" | "TAMANHO" | "DIGITO_VERIFICADOR" | "SEQUENCIA_INVALIDA"; message: string }
 
 export function validateImei(raw: unknown): ImeiCheck {
+  if (typeof raw === "string" && /[^\d\s.-]/.test(raw)) return { ok: false, reason: "CARACTERES", message: "IMEI deve conter somente os 15 dígitos (separadores de leitura são permitidos)." }
   const imei = normalizeImei(raw)
   if (!imei) return { ok: false, reason: "VAZIO", message: "Informe o IMEI." }
   if (imei.length !== 15) {

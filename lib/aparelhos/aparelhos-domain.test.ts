@@ -25,6 +25,7 @@ describe("IMEI", () => {
     expect(validateImei("12345")).toMatchObject({ ok: false, reason: "TAMANHO" })
     expect(validateImei("000000000000000")).toMatchObject({ ok: false, reason: "SEQUENCIA_INVALIDA" })
     expect(validateImei("")).toMatchObject({ ok: false, reason: "VAZIO" })
+    expect(validateImei(`ABC${ok}`)).toMatchObject({ ok: false, reason: "CARACTERES" })
   })
   it("formata e mascara sem expor o número completo", () => {
     const imei = imeiValido("35678912345678")

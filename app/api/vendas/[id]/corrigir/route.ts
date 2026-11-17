@@ -1,4 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { APARELHO_CORRECAO_NAO_INTEGRADA, linhasAparelhoDoPayload } from "@/lib/aparelhos/sale-reversal"
 /**
  * POST /api/vendas/[id]/corrigir
  *
@@ -146,6 +147,9 @@ export async function POST(
 
     if (!venda) {
       return NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 })
+    }
+    if (linhasAparelhoDoPayload(venda.payload).length > 0) {
+      return NextResponse.json({ ok: false, code: APARELHO_CORRECAO_NAO_INTEGRADA.code, error: APARELHO_CORRECAO_NAO_INTEGRADA.message }, { status: 409 })
     }
 
     if (venda.status === "cancelada") {

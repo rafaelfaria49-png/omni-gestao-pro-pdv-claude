@@ -4,7 +4,9 @@
 // Serviço real + motor canônico de venda (`upsertVendaInTransaction`) real.
 // Sem ambiente = BLOQUEIO_EXPLICITO_PG (nunca skip). Prepare com scripts/aparelhos/prepare-pg.mjs.
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { PrismaClient } from "@/generated/prisma"
+import { Prisma, PrismaClient } from "@/generated/prisma"
+import type { StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
+import type { ProductWriteTx } from "@/lib/cadastros/product-write-service"
 
 function exigirBancoLocal(): string {
   const url = (process.env.APARELHOS_TEST_DATABASE_URL ?? "").trim()
@@ -88,7 +90,10 @@ async function erroDe(p: Promise<unknown>): Promise<string> {
 }
 
 beforeAll(async () => {
-  for (const id of [LOJA_A, LOJA_B]) await db.store.create({ data: { id, name: `Loja QA ${id}`, cnpj: "00.000.000/0001-00" } })
+  for (const id of [LOJA_A, LOJA_B]) {
+    await db.store.create({ data: { id, name: `Loja QA ${id}`, cnpj: "00.000.000/0001-00", moduleAccess: Prisma.DbNull } })
+    await db.storeSettings.create({ data: { storeId: id, printerConfig: { capabilities: { version: 1, overrides: { "catalog.serializedDevices": true } } } } })
+  }
   clienteA = (await db.cliente.create({ data: { storeId: LOJA_A, name: "João QA", document: "12345678909" } })).id
   sessaoA = (await db.sessaoCaixa.create({ data: { storeId: LOJA_A, operador: "Caixa QA" } })).id
   await db.sessaoCaixa.create({ data: { storeId: LOJA_B, operador: "Caixa QA B" } })
@@ -111,6 +116,14 @@ describe("Cadastro e identidade (01–07, 44)", () => {
     const bad = valido.slice(0, 14) + String((Number(valido[14]) + 1) % 10)
     expect(await svc.cadastrarAparelho(ADMIN_A, device({ imei1: bad }), D)).toMatchObject({ ok: false, code: "IMEI_INVALIDO", field: "imei1" })
     expect(await svc.cadastrarAparelho(ADMIN_A, device({ imei1: "", serial: "" }), D)).toMatchObject({ ok: false, code: "IDENTIFICADOR_OBRIGATORIO" })
+  })
+  it("recusa série inválida ou truncada e preserva unicidade da série normalizada", async () => {
+    for (const serial of ["<invalida>", "S".repeat(65)]) {
+      expect(await svc.cadastrarAparelho(ADMIN_A, device({ serial }), D)).toMatchObject({ ok: false, code: "SERIAL_INVALIDO" })
+    }
+    const first = ok(await svc.cadastrarAparelho(ADMIN_A, device({ serial: "qa-ab/123" }), D))
+    expect(await svc.cadastrarAparelho(ADMIN_A, device({ serial: "QA-AB/123" }), D)).toMatchObject({ ok: false, code: "IMEI_DUPLICADO" })
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: first.aparelho.id } })).serial).toBe("QA-AB/123")
   })
   it("05: IMEI duplicado (inclusive IMEI 2 igual ao IMEI 1 de outro) é recusado", async () => {
     const i = imei()
@@ -186,6 +199,50 @@ describe("Estoque e ciclo de vida (11, 12, 13, 14, 15, 16)", () => {
     expect(v).toBeTruthy()
     expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("vendido")
   })
+  it("reserva expirada pode ser assumida por outro caixa sem aumentar saldo; token anterior não vende", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "Reserva expirada QA" })
+    ok(await svc.reservarAparelho(CAIXA_A, u.id, { token: "token-expirado" }, D))
+    await db.aparelhoFisico.update({ where: { id: u.id }, data: { reservadoAte: new Date(Date.now() - 60_000) } })
+    ok(await svc.reservarAparelho(VENDEDOR_A, u.id, { token: "token-novo" }, D))
+    expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(1)
+    expect(await erroDe(vender(LOJA_A, saleFor(u, { reservaToken: "token-expirado" })))).toBe("APARELHO_RESERVADO")
+    await vender(LOJA_A, saleFor(u, { reservaToken: "token-novo" }))
+    expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(0)
+  })
+  it("entrada, ajuste, OS e devolução genéricos não alteram o saldo de um modelo por IMEI", async () => {
+    const { applyStockMutationTx } = await import("@/lib/estoque/stock-ledger-service")
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "Guard estoque QA" })
+    const antes = await db.movimentacaoEstoque.count({ where: { storeId: LOJA_A, produtoId: u.produtoId } })
+    for (const source of ["cadastros", "inventario", "os", "ops-devolucao", "vendas-cancelar"]) {
+      const result = await db.$transaction((tx) => applyStockMutationTx(tx as unknown as StockLedgerTx,
+        { storeId: LOJA_A, principal: null, source },
+        { kind: "entrada", produtoId: u.produtoId, quantidade: 1, origem: source }))
+      expect(result).toMatchObject({ ok: false, code: "APARELHO_ESTOQUE_INDIVIDUAL" })
+    }
+    const ajuste = await db.$transaction((tx) => applyStockMutationTx(tx as unknown as StockLedgerTx,
+      { storeId: LOJA_A, principal: null, source: "inventario" },
+      { kind: "ajuste", produtoId: u.produtoId, novoSaldo: 7, origem: "inventario" }))
+    expect(ajuste).toMatchObject({ ok: false, code: "APARELHO_ESTOQUE_INDIVIDUAL" })
+    expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(1)
+    expect(await db.movimentacaoEstoque.count({ where: { storeId: LOJA_A, produtoId: u.produtoId } })).toBe(antes)
+  })
+  it("cadastro genérico preserva o marcador de IMEI contra CLEAR, reinterpretação e criação artificial", async () => {
+    const { updateProductTx, createProductTx } = await import("@/lib/cadastros/product-write-service")
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "Identidade protegida QA" })
+    const original = await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })
+    const writeCtx = { storeId: LOJA_A, principal: null }
+    for (const metadata of [null, { serializedDevice: null }, { serializedDevice: { version: 0 } }]) {
+      const result = await db.$transaction((tx) => updateProductTx(tx as unknown as ProductWriteTx, writeCtx, u.produtoId, { metadata }, { clearMetadata: true }))
+      expect(result).toMatchObject({ ok: false, code: "VALIDATION", field: "metadata" })
+    }
+    const forged = await db.$transaction((tx) => createProductTx(tx as unknown as ProductWriteTx, writeCtx, { name: "Modelo sem unidade", metadata: { serializedDevice: { version: 1 } } }))
+    expect(forged).toMatchObject({ ok: false, code: "VALIDATION", field: "metadata" })
+    const renamed = await db.$transaction((tx) => updateProductTx(tx as unknown as ProductWriteTx, writeCtx, u.produtoId, { name: "Nome comercial corrigido", metadata: original.metadata }))
+    expect(renamed.ok).toBe(true)
+    const updated = await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })
+    expect(updated.metadata).toEqual(original.metadata)
+    expect(updated.stock).toBe(1)
+  })
 })
 
 describe("Aquisição de cliente (08, 09, 10, 40)", () => {
@@ -239,6 +296,25 @@ describe("Aquisição de cliente (08, 09, 10, 40)", () => {
 })
 
 describe("Venda pelo motor canônico (17–24)", () => {
+  it("payload direto não vende com capability desligada nem sem módulo contratado; tudo reverte", async () => {
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "Gate servidor QA" })
+    const antes = await db.movimentacaoEstoque.count({ where: { storeId: LOJA_A, produtoId: u.produtoId } })
+    const sale = saleFor(u)
+    try {
+      await db.storeSettings.update({ where: { storeId: LOJA_A }, data: { printerConfig: {} } })
+      expect(await erroDe(vender(LOJA_A, sale))).toBe("APARELHO_RECURSO_DESATIVADO")
+      await db.storeSettings.update({ where: { storeId: LOJA_A }, data: { printerConfig: { capabilities: { version: 1, overrides: { "catalog.serializedDevices": true } } } } })
+      await db.store.update({ where: { id: LOJA_A }, data: { moduleAccess: { version: 1, modules: ["pdv"] } } })
+      expect(await erroDe(vender(LOJA_A, sale))).toBe("APARELHO_MODULO_NAO_LIBERADO")
+      expect(await db.venda.count({ where: { storeId: LOJA_A, pedidoId: sale.id } })).toBe(0)
+      expect(await db.aparelhoVenda.count({ where: { aparelhoId: u.id } })).toBe(0)
+      expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(1)
+      expect(await db.movimentacaoEstoque.count({ where: { storeId: LOJA_A, produtoId: u.produtoId } })).toBe(antes)
+    } finally {
+      await db.store.update({ where: { id: LOJA_A }, data: { moduleAccess: Prisma.DbNull } })
+      await db.storeSettings.update({ where: { storeId: LOJA_A }, data: { printerConfig: { capabilities: { version: 1, overrides: { "catalog.serializedDevices": true } } } } })
+    }
+  })
   it("17/18: venda vincula a unidade exata, baixa 1 do produto e emite garantia", async () => {
     const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone 14 Pro" })
     const stock0 = (await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock
@@ -394,7 +470,7 @@ describe("Regressões da revisão independente", () => {
     await vender(LOJA_A, saleFor(revenda))
     expect(await db.aparelhoVenda.count({ where: { aparelhoId: u.id, status: "ativa" } })).toBe(1)
   })
-  it("P1-2: cancelamento devolve a unidade à venda e cancela a garantia; devolução/correção ficam bloqueadas", async () => {
+  it("P1-2: cancelamento mantém a unidade em revisão, fora do saldo, até nova liberação", async () => {
     const { cancelarAparelhosDaVendaTx, operacaoTocaAparelho, linhasAparelhoDoPayload } = await import("@/lib/aparelhos/sale-reversal")
     const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Cancela" })
     const sale = saleFor(u)
@@ -405,8 +481,12 @@ describe("Regressões da revisão independente", () => {
     expect(operacaoTocaAparelho(venda.payload, ["outro"])).toBe(false)
     const n = await db.$transaction((tx) => cancelarAparelhosDaVendaTx(tx, { storeId: LOJA_A, vendaId: venda.id, pedidoId: sale.id!, operador: "QA", payload: venda.payload }))
     expect(n).toBe(1)
-    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("disponivel")
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("em_revisao")
+    expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(0)
     expect((await db.aparelhoVenda.findFirstOrThrow({ where: { vendaId: venda.id } })).status).toBe("cancelada")
+    expect(await erroDe(vender(LOJA_A, saleFor(u)))).not.toBe("SEM_ERRO")
+    ok(await svc.liberarParaVenda(ADMIN_A, u.id, D))
+    expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(1)
     const comum = await db.venda.findFirstOrThrow({ where: { pedidoId: `VDA-COMUM-${sufixo}` } })
     expect(await db.$transaction((tx) => cancelarAparelhosDaVendaTx(tx, { storeId: LOJA_A, vendaId: comum.id, pedidoId: comum.pedidoId, operador: "QA", payload: comum.payload }))).toBe(0)
   })
@@ -449,6 +529,52 @@ describe("Regressões da revisão independente", () => {
 })
 
 describe("Regressões da 2ª rodada da revisão", () => {
+  it("cancelamento a prazo sem recebimento é transacional; falha posterior desfaz títulos, garantia e unidade", async () => {
+    const { cancelarTitulosAparelhosTx } = await import("@/lib/aparelhos/sale-reversal-finance")
+    const { cancelarAparelhosDaVendaTx } = await import("@/lib/aparelhos/sale-reversal")
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "Cancelamento financiado QA" })
+    const sale: SalePayload = { ...saleFor(u), paymentBreakdown: { aPrazo: u.precoVenda }, aPrazoConfig: { parcelas: 2, intervalDias: 30 } }
+    await vender(LOJA_A, sale)
+    const venda = await db.venda.findFirstOrThrow({ where: { pedidoId: sale.id, storeId: LOJA_A } })
+    const cancelar = async (falhar: boolean) => db.$transaction(async (tx) => {
+      const count = await cancelarTitulosAparelhosTx(tx, { storeId: LOJA_A, pedidoId: sale.id!, tituloId: venda.contaReceberTituloId, motivo: "QA", operador: "QA" })
+      await cancelarAparelhosDaVendaTx(tx, { storeId: LOJA_A, vendaId: venda.id, pedidoId: sale.id!, operador: "QA", payload: venda.payload })
+      await tx.venda.update({ where: { id: venda.id }, data: { status: "cancelada" } })
+      if (falhar) throw new Error("FALHA_QA_DEPOIS_DOS_TITULOS")
+      return count
+    })
+    await expect(cancelar(true)).rejects.toThrow("FALHA_QA")
+    expect(await db.contaReceberTitulo.count({ where: { storeId: LOJA_A, localKey: { startsWith: `pdv-aprazo-${sale.id}` }, status: "pendente" } })).toBe(2)
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("vendido")
+    expect((await db.aparelhoVenda.findFirstOrThrow({ where: { vendaId: venda.id } })).status).toBe("ativa")
+    expect(await cancelar(false)).toBe(2)
+    expect(await db.contaReceberTitulo.count({ where: { storeId: LOJA_A, localKey: { startsWith: `pdv-aprazo-${sale.id}` }, status: "cancelado" } })).toBe(2)
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("em_revisao")
+    expect((await db.produto.findUniqueOrThrow({ where: { id: u.produtoId } })).stock).toBe(0)
+  })
+  it("recebimento parcial bloqueia cancelamento e títulos de outro pedido com mesmo prefixo ficam intactos", async () => {
+    const { cancelarTitulosAparelhosTx } = await import("@/lib/aparelhos/sale-reversal-finance")
+    const { AparelhoCancelamentoBloqueadoError } = await import("@/lib/aparelhos/sale-reversal")
+    const u = await cadastrarLiberado(ADMIN_A, { modelo: "Cancelamento parcial QA" })
+    const sale: SalePayload = { ...saleFor(u), paymentBreakdown: { aPrazo: u.precoVenda } }
+    await vender(LOJA_A, sale)
+    const venda = await db.venda.findFirstOrThrow({ where: { pedidoId: sale.id, storeId: LOJA_A } })
+    const titulo = await db.contaReceberTitulo.findUniqueOrThrow({ where: { id: venda.contaReceberTituloId! } })
+    const other = await db.contaReceberTitulo.create({ data: { storeId: LOJA_A, localKey: `pdv-aprazo-${sale.id}-OUTRO`, status: "pago", valor: 20, payload: { vendas: [{ saleId: `${sale.id}-OUTRO` }] } } })
+    const payload = titulo.payload as Prisma.JsonObject
+    await db.contaReceberTitulo.update({ where: { id: titulo.id }, data: { status: "parcial", payload: { ...payload, historico: [{ tipo: "pagamento", valor: 100, at: new Date().toISOString() }] } } })
+    const args = { storeId: LOJA_A, pedidoId: sale.id!, tituloId: titulo.id, motivo: "QA", operador: "QA" }
+    await expect(db.$transaction((tx) => cancelarTitulosAparelhosTx(tx, args))).rejects.toBeInstanceOf(AparelhoCancelamentoBloqueadoError)
+    expect((await db.contaReceberTitulo.findUniqueOrThrow({ where: { id: titulo.id } })).status).toBe("parcial")
+    expect((await db.aparelhoFisico.findUniqueOrThrow({ where: { id: u.id } })).status).toBe("vendido")
+    await db.contaReceberTitulo.update({ where: { id: titulo.id }, data: { status: "pendente", payload } })
+    await db.contaReceberTitulo.update({ where: { id: titulo.id }, data: { payload: { ...payload, vendas: [{ saleId: sale.id! }, { saleId: "OUTRA-VENDA-QA" }] } } })
+    await expect(db.$transaction((tx) => cancelarTitulosAparelhosTx(tx, args))).rejects.toThrow("compartilhado")
+    expect((await db.contaReceberTitulo.findUniqueOrThrow({ where: { id: titulo.id } })).status).toBe("pendente")
+    await db.contaReceberTitulo.update({ where: { id: titulo.id }, data: { payload } })
+    expect(await db.$transaction((tx) => cancelarTitulosAparelhosTx(tx, args))).toBe(1)
+    expect((await db.contaReceberTitulo.findUniqueOrThrow({ where: { id: other.id } })).status).toBe("pago")
+  })
   it("P2-A: cancelar venda cujo aparelho está em recompra é bloqueado sem efeito", async () => {
     const { cancelarAparelhosDaVendaTx, AparelhoCancelamentoBloqueadoError } = await import("@/lib/aparelhos/sale-reversal")
     const u = await cadastrarLiberado(ADMIN_A, { modelo: "iPhone Cancela Recompra" })
