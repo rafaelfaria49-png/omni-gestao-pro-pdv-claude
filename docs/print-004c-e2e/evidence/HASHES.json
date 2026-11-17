@@ -218,7 +218,7 @@
     "tools/print-d03/options.test.ts": "8ec2ea79b9f6aa85c7fce73910d6d6aac23dcd328455175a5687f4c0ad83b404",
     "tools/print-d03/retention.pg.test.ts": "32a46f03e3891b30cc37af7c95e4073b03b9529b32081515adeebcbf03ce7e59",
     "tools/print-d03/run.ts": "6aceaa079e37eced6544af8bd65f8721989fd62c60209e786b14ca22a2036f13",
-    "tools/print-d03/verify.mjs": "49aea7934aefb6e229db77cb515350fb5967014e4eef6bb76bf5ef5ac7330396",
+    "tools/print-d03/verify.mjs": "2364f7b810f4e427340462dccf119a5f58eeba355219762f6f0ecc1fa6c6b4e4",
     ".github/workflows/omni-print-d03.yml": "323eb29255a72194a155a1c4afa7805c98ab71a1c738fcc2bc8cab74deafc852",
     "tools/print-d04/.gitignore": "d11958f695674a97e7bf5645c13cba154d0631cd97931d98d4f232275b358b6f",
     "tools/print-d04/cross-user-dpapi.ps1": "c6b84e703e451f322a351a3168a43b84df5bc7e16661857d6247bcca932c61ed",
