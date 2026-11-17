@@ -473,8 +473,8 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
                 disabled={printing}
                 onClick={() => void handleImprimir()}
               >
-                {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : printed ? <CheckCircle2 className="h-4 w-4" /> : <Printer className="h-4 w-4" />}
-                {printing ? "Enviando…" : printed ? "Imprimir 2ª via" : "Enviar para térmica"}
+                {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : printError ? <Printer className="h-4 w-4" /> : printed ? <CheckCircle2 className="h-4 w-4" /> : <Printer className="h-4 w-4" />}
+                {printing ? "Enviando…" : printError ? "Tentar novamente" : printed ? "Imprimir 2ª via" : "Enviar para térmica"}
               </Button>
               {printError && (
                 <Button
