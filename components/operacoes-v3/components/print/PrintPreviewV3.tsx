@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { lerVersoesTermoGarantiaV3 } from "@/lib/operacoes-v3/garantia-termos-model";
+import { lerVersoesDocumentoOSV3 } from "@/lib/operacoes-v3/edicao-documentos-model";
 import { ArrowLeft, Printer, MessageCircle } from "lucide-react";
 import type { LinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
 import { montarLinkWaV4 } from "@/lib/operacoes-v4/orcamento-mensagem";
@@ -71,10 +72,14 @@ export function PrintPreviewV3({
   const alvo = os?.storeId + ":" + os?.id + ":" + tipo;
   const versoes = lerVersoesTermoGarantiaV3(os);
   const [escolha, setEscolha] = useState<{ alvo: string; versao: number } | null>(null);
+  const [escolhaDocumento, setEscolhaDocumento] = useState<{ alvo: string; versao: number } | null>(null);
+  const versoesDocumento = lerVersoesDocumentoOSV3(os);
+  const versaoDocumento = escolhaDocumento?.alvo === alvo ? escolhaDocumento.versao : 0;
+  const osImpressao = tipo !== "termo_garantia" && versaoDocumento ? versoesDocumento.find((v) => v.versao === versaoDocumento)?.os ?? os : os;
   const versao = escolha?.alvo === alvo ? escolha.versao : versoes.at(-1)?.versao;
   const retornoFoco = useRef<HTMLElement | null>(null);
   const docGarantia = useMemo(() => os && tipo === "termo_garantia" ? montarTermoGarantiaDocV3(os, empresa, { versao }) : null, [os, tipo, empresa, versao]);
-  const whatsappEfetivo = tipo === "termo_garantia" && os
+  const whatsappEfetivo = versaoDocumento && tipo !== "termo_garantia" ? null : tipo === "termo_garantia" && os
     ? docGarantia?.limitacao ? null : montarLinkWaV4(docGarantia?.cliente.telefone, montarMensagemDocumentoV4(tipo, os, versao))
     : whatsapp;
 
@@ -82,23 +87,23 @@ export function PrintPreviewV3({
     if (!open || !os || !tipo) return null;
     switch (tipo) {
       case "os_cliente":
-        return <OSPrintDocumentV3 doc={montarDocumentoOSV3(os, empresa, { variante: "cliente" })} />;
+        return <OSPrintDocumentV3 doc={montarDocumentoOSV3(osImpressao!, empresa, { variante: "cliente" })} />;
       case "comprovante_interno":
-        return <OSPrintDocumentV3 doc={montarDocumentoOSV3(os, empresa, { variante: "interna" })} />;
+        return <OSPrintDocumentV3 doc={montarDocumentoOSV3(osImpressao!, empresa, { variante: "interna" })} />;
       case "termo_garantia":
         return <TermoGarantiaDocV3 doc={docGarantia!} />;
       case "termo_entrega":
-        return <TermoEntregaDocV3 doc={montarTermoEntregaV3(os, empresa)} />;
+        return <TermoEntregaDocV3 doc={montarTermoEntregaV3(osImpressao!, empresa)} />;
       case "etiqueta":
-        return <EtiquetaTecnicaV3 etiqueta={montarEtiquetaV3(os)} />;
+        return <EtiquetaTecnicaV3 etiqueta={montarEtiquetaV3(osImpressao!)} />;
       case "orcamento_cliente": {
-        const view = montarOrcamentoClienteViewV4(os, empresa);
+        const view = montarOrcamentoClienteViewV4(osImpressao!, empresa);
         return view ? <OrcamentoClienteDocV4 doc={view} /> : null;
       }
       default:
         return null;
     }
-  }, [open, os, tipo, empresa, docGarantia]);
+  }, [open, os, osImpressao, tipo, empresa, docGarantia]);
 
   if (!open || !mounted || !conteudo || !tipo) return null;
 
@@ -143,6 +148,7 @@ export function PrintPreviewV3({
             </span>
           ) : null}
           {tipo === "termo_garantia" && versoes.length ? <label className="text-xs">Versão<select aria-label="Versão do termo" className="ml-2 rounded border bg-background p-1" value={versao} onChange={(e) => setEscolha({ alvo, versao: Number(e.target.value) })}>{versoes.map((v) => <option key={v.versao} value={v.versao}>v{v.versao} · {v.tipo === "original" ? "Original" : v.tipo === "aditivo" ? "Aditivo" : v.tipo === "correcao_data" ? "Correção de data" : "Reemissão de legado"}</option>)}</select></label> : null}
+          {tipo !== "termo_garantia" && versoesDocumento.length ? <label className="text-xs">Revisão<select aria-label="Versão do documento da OS" className="ml-2 rounded border bg-background p-1" value={versaoDocumento} onChange={(e) => setEscolhaDocumento({ alvo, versao: Number(e.target.value) })}><option value={0}>Dados atuais</option>{versoesDocumento.map((v) => <option key={v.versao} value={v.versao}>v{v.versao} · {v.motivo}</option>)}</select></label> : null}
           <ButtonV3 variant="primary" disabled={!!docGarantia?.limitacao} onClick={imprimir}>
             <Printer className="h-4 w-4" aria-hidden /> Imprimir
           </ButtonV3>

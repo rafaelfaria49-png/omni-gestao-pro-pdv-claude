@@ -1,5 +1,6 @@
 import type { SaleLineRecord } from "@/lib/operations-sale-types"
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
+import type { DeviceSaleLineV1 } from "@/lib/aparelhos/device-sale-line"
 import { resolveSaleLineItemType, type SaleLineItemType } from "@/lib/sale-line-classification"
 import { serviceIdFromVirtualInventoryId } from "@/lib/os-pdv-virtual-lines"
 
@@ -23,6 +24,8 @@ export type FinalizeSaleLineInput = {
   serviceCategory?: string
   warrantyDays?: number
   serviceTerms?: string
+  /** Aparelho individualizado: unidade + garantia (revalidado no servidor). */
+  deviceSale?: DeviceSaleLineV1
 }
 
 export type SaleLineInventorySnapshot = { name: string; price: number }
@@ -59,6 +62,7 @@ export function saleLineRecordFromFinalizeInput(
     ...(itemType === "avulso" ? { isAvulso: true } : {}),
     ...(custoUnitario !== undefined ? { custoUnitario } : {}),
     ...(line.accessorySelection ? { accessorySelection: line.accessorySelection } : {}),
+    ...(itemType === "produto" && line.deviceSale ? { deviceSale: line.deviceSale } : {}),
     ...(itemType === "servico"
       ? {
           serviceId: line.serviceId ?? serviceIdFromVirtualInventoryId(line.inventoryId) ?? undefined,

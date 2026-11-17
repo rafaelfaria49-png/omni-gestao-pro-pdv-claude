@@ -33,6 +33,7 @@ export const CATALOG_CAPABILITY_KEYS_V1 = [
   "catalog.deviceCompatibility",
   "catalog.weight",
   "catalog.variants",
+  "catalog.serializedDevices",
 ] as const
 
 export const KNOWN_CAPABILITY_KEYS_V1 = [...KNOWN_PDV_CAPABILITY_KEYS_V1, ...CATALOG_CAPABILITY_KEYS_V1] as const

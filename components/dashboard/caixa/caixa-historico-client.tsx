@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Unlock,
   Lock,
@@ -43,6 +43,9 @@ import {
   type ResumoFechamentoPersistido,
 } from "@/lib/caixa/fechamento-blocos"
 import { aggregateRecebimentosSessao, classificarRecebimentoCaixa } from "@/lib/caixa/recebimentos-sessao"
+import { periodoCaixaParaConsulta } from "@/lib/caixa/historico-periodo"
+
+const CAIXA_HISTORICO_PAGE_SIZE = 50
 
 /** Soma das vendas por forma no ledger legado (sessões sem resumoFechamento premium). */
 const LEDGER_VENDAS_KEYS = [
@@ -149,6 +152,12 @@ export function CaixaHistoricoClient() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos")
   const [terminalFilter, setTerminalFilter] = useState<string>("todos") // "todos" | "sem" | id
   const [search, setSearch] = useState("")
+  // Período + paginação no servidor (RELATORIOS-FASE-A-001 · A5): antes só as 50 mais recentes.
+  const [deData, setDeData] = useState("")
+  const [ateData, setAteData] = useState("")
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const periodo = useMemo(() => periodoCaixaParaConsulta(deData, ateData), [deData, ateData])
   const [terminais, setTerminais] = useState<TerminalInfo[]>([])
   const terminalMap = useMemo(
     () => new Map(terminais.map((t) => [t.id, t] as const)),
@@ -179,22 +188,52 @@ export function CaixaHistoricoClient() {
     }
   }, [lojaAtivaId])
 
+  // Troca de loja volta para a 1ª página (efeito: pode sair uma consulta com a página antiga,
+  // descartada pelo guard abaixo). Os filtros zeram a página no próprio evento.
+  useEffect(() => {
+    setPage(0)
+  }, [lojaAtivaId])
+  const comPaginaZerada = <T,>(set: (v: T) => void) => (v: T) => {
+    setPage(0)
+    set(v)
+  }
+  // Só a resposta da consulta mais recente atualiza a tela (rede fora de ordem não sobrescreve).
+  const ultimaConsulta = useRef(0)
+
   const fetchSessoes = useCallback(async () => {
     if (!lojaAtivaId) return
+    const consulta = ++ultimaConsulta.current
+    if (!periodo.ok) {
+      // Período inválido: nada da consulta anterior fica na tela nem chega depois.
+      setSessoes([])
+      setTotal(0)
+      setFetchError(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setFetchError(null)
     try {
-      const params = new URLSearchParams({ take: "50" })
+      const params = new URLSearchParams({ take: String(CAIXA_HISTORICO_PAGE_SIZE), skip: String(page * CAIXA_HISTORICO_PAGE_SIZE) })
       if (statusFilter !== "todos") params.set("status", statusFilter)
       if (terminalFilter !== "todos") params.set("terminalId", terminalFilter)
+      if (periodo.from) params.set("from", periodo.from)
+      if (periodo.to) params.set("to", periodo.to)
       const res = await fetch(`/api/ops/caixa/sessoes?${params}`, {
         credentials: "include",
         cache: "no-store",
         headers: { "x-assistec-loja-id": lojaAtivaId },
       })
+      if (consulta !== ultimaConsulta.current) return
       if (res.ok) {
-        const data = (await res.json()) as { sessoes: SessaoItem[] }
+        const data = (await res.json()) as { sessoes: SessaoItem[]; total?: number }
+        if (consulta !== ultimaConsulta.current) return
+        const novoTotal = typeof data.total === "number" ? data.total : (data.sessoes ?? []).length
         setSessoes(data.sessoes ?? [])
+        setTotal(novoTotal)
+        // Total encolheu (sessões removidas/filtro): volta para a última página que existe.
+        const ultimaPagina = Math.max(0, Math.ceil(novoTotal / CAIXA_HISTORICO_PAGE_SIZE) - 1)
+        if (page > ultimaPagina) setPage(ultimaPagina)
       } else {
         const errData = await res.json().catch(() => null) as { error?: string } | null
         const msg = errData?.error ?? `HTTP ${res.status}`
@@ -202,17 +241,21 @@ export function CaixaHistoricoClient() {
         setFetchError(msg)
       }
     } catch (e) {
+      if (consulta !== ultimaConsulta.current) return
       const msg = e instanceof Error ? e.message : "Falha de rede"
       console.error("[caixa/historico] sessoes:", msg)
       setFetchError(msg)
     } finally {
-      setLoading(false)
+      if (consulta === ultimaConsulta.current) setLoading(false)
     }
-  }, [lojaAtivaId, statusFilter, terminalFilter])
+  }, [lojaAtivaId, statusFilter, terminalFilter, periodo, page])
 
   useEffect(() => {
     fetchSessoes()
   }, [fetchSessoes])
+
+  const totalPages = Math.max(1, Math.ceil(total / CAIXA_HISTORICO_PAGE_SIZE))
+  const filtroAtivo = statusFilter !== "todos" || terminalFilter !== "todos" || deData !== "" || ateData !== "" || search !== ""
 
   const loadDetalhe = useCallback(
     async (sessaoId: string) => {
@@ -340,7 +383,7 @@ export function CaixaHistoricoClient() {
             className="h-9 pl-9 bg-secondary border-border"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+        <Select value={statusFilter} onValueChange={(v) => comPaginaZerada(setStatusFilter)(v as StatusFilter)}>
           <SelectTrigger className="h-9 w-[140px] border-border bg-secondary">
             <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue />
@@ -351,7 +394,7 @@ export function CaixaHistoricoClient() {
             <SelectItem value="FECHADA">Fechados</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={terminalFilter} onValueChange={setTerminalFilter}>
+        <Select value={terminalFilter} onValueChange={comPaginaZerada(setTerminalFilter)}>
           <SelectTrigger className="h-9 w-[180px] border-border bg-secondary">
             <Monitor className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Terminal" />
@@ -366,7 +409,39 @@ export function CaixaHistoricoClient() {
             <SelectItem value="sem">Sem terminal</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex min-w-0 items-center gap-2">
+          <label htmlFor="caixa-historico-de" className="text-xs text-muted-foreground">De</label>
+          <Input
+            id="caixa-historico-de"
+            type="date"
+            value={deData}
+            max={ateData || undefined}
+            onChange={(e) => comPaginaZerada(setDeData)(e.target.value)}
+            className="h-9 w-[150px] bg-secondary border-border"
+          />
+          <label htmlFor="caixa-historico-ate" className="text-xs text-muted-foreground">Até</label>
+          <Input
+            id="caixa-historico-ate"
+            type="date"
+            value={ateData}
+            min={deData || undefined}
+            onChange={(e) => comPaginaZerada(setAteData)(e.target.value)}
+            className="h-9 w-[150px] bg-secondary border-border"
+          />
+          {(deData || ateData) && (
+            <Button variant="ghost" size="sm" className="h-9" onClick={() => { setPage(0); setDeData(""); setAteData("") }}>
+              Limpar período
+            </Button>
+          )}
+        </div>
       </div>
+      {!periodo.ok && (
+        <p role="alert" className="text-sm text-destructive">
+          {periodo.motivo === "inicio-depois-do-fim"
+            ? "A data inicial é posterior à data final."
+            : "Data inválida no período."}
+        </p>
+      )}
 
       {/* Lista de sessões */}
       {loading ? (
@@ -390,7 +465,9 @@ export function CaixaHistoricoClient() {
           <Lock className="mb-3 h-8 w-8 text-muted-foreground/50" />
           <p className="font-medium text-foreground">Nenhuma sessão encontrada</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            As sessões de caixa aparecerão aqui após a primeira abertura.
+            {filtroAtivo
+              ? "Nenhuma sessão corresponde aos filtros e ao período escolhidos."
+              : "As sessões de caixa aparecerão aqui após a primeira abertura."}
           </p>
         </div>
       ) : (
@@ -480,6 +557,25 @@ export function CaixaHistoricoClient() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {!loading && !fetchError && total > 0 && (
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span aria-live="polite">
+            Página {page + 1} de {totalPages} · {total.toLocaleString("pt-BR")} sessão(ões)
+            {search ? " · a busca vale para esta página" : ""}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                Anterior
+              </Button>
+              <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>
+                Próxima
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

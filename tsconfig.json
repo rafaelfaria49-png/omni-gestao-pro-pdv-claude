@@ -124,6 +124,7 @@
   ],
   "exclude": [
     "node_modules",
+    "apps/desktop",
     ".next/types/**",
     ".next/dev/types/**",
     "components/configuracoes/lovable_backup_antes_reset",
