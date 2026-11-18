@@ -86,7 +86,9 @@ export function SolicitacaoTesteForm({ exibirPlanos }: { exibirPlanos: boolean }
           <p>{estado.repetida
             ? "Já havia um pedido aberto com este email. Mantivemos o mesmo protocolo e não criamos outro."
             : "Seu pedido foi registrado. O acesso ainda não foi criado: nossa equipe libera a sua loja no contato."}</p>
-          <p>Vamos falar com você pelo WhatsApp <strong>{estado.whatsapp}</strong> ou pelo email <strong style={{ overflowWrap: "anywhere" }}>{estado.email}</strong>. Se precisar falar com a equipe, informe o protocolo.</p>
+          {estado.repetida
+            ? <p>Vamos falar com você pelo contato informado no primeiro pedido. Se o seu WhatsApp mudou, informe o protocolo quando falarmos com você.</p>
+            : <p>Vamos falar com você pelo WhatsApp <strong>{estado.whatsapp}</strong> ou pelo email <strong style={{ overflowWrap: "anywhere" }}>{estado.email}</strong>. Se precisar falar com a equipe, informe o protocolo.</p>}
           <button type="button" className="gl-btn gl-btn--ghost gl-btn--sm" style={{ justifySelf: "start" }} onClick={() => setEstado({ fase: "editando", erros: {} })}>Enviar outro pedido</button>
         </div>
       </div>

@@ -55,7 +55,8 @@ export type SolicitacaoDb = {
     count(args: { where: { createdAt: { gte: Date }; ipHash?: string } }): Promise<number>
     create(args: { data: Record<string, unknown>; select: { protocolo: true } }): Promise<{ protocolo: string }>
     findUnique(args: { where: { emailAberto: string } | { id: string }; select: Record<string, true> }): Promise<Linha | null>
-    update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>
+    /** Gravação condicional ao status lido: duas mudanças simultâneas não se sobrescrevem. */
+    updateMany(args: { where: { id: string; status: string }; data: Record<string, unknown> }): Promise<{ count: number }>
   }
 }
 
@@ -147,18 +148,21 @@ export async function atualizarStatusSolicitacao(
   db: SolicitacaoDb,
   args: { id: string; status: StatusSolicitacao; por: string; agora?: Date },
 ): Promise<{ ok: true } | { ok: false; erro: string }> {
+  // Compare-and-set: só grava se o status ainda for o que foi lido. Sem isso, "descartada"
+  // e "em_contato" simultâneos deixavam um pedido aberto com emailAberto=NULL.
   const tabela = db.solicitacaoTesteComercial
   const atual = await tabela.findUnique({ where: { id: args.id }, select: { id: true, protocolo: true, status: true, historico: true } })
   if (!atual) return { ok: false, erro: "Solicitação não encontrada." }
   if (STATUS_ENCERRADOS.has(atual.status as StatusSolicitacao)) return { ok: false, erro: "Solicitação já encerrada." }
   const historico = Array.isArray(atual.historico) ? atual.historico : []
-  await tabela.update({
-    where: { id: args.id },
+  const gravado = await tabela.updateMany({
+    where: { id: args.id, status: atual.status },
     data: {
       status: args.status,
       ...(STATUS_ENCERRADOS.has(args.status) ? { emailAberto: null } : {}),
       historico: [...historico, { em: (args.agora ?? new Date()).toISOString(), evento: args.status, por: args.por }],
     },
   })
+  if (gravado.count !== 1) return { ok: false, erro: "A solicitação mudou enquanto você atualizava. Recarregue a lista." }
   return { ok: true }
 }

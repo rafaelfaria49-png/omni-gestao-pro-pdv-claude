@@ -87,3 +87,14 @@ alvos de toque ≥ 40px, sem rolagem horizontal em 375px.
 | `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1` | mostra os 3 planos propostos com aviso de "em avaliação" (só QA) |
 | `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` | URL `https` do instalador homologado; sem ela, botão desligado |
 | `GESTAO_LOJAS_CONTATO_WHATSAPP` / `_EMAIL` | canais diretos; sem eles, a página não mostra número/email |
+
+A página é estática (`force-static`): as chaves são lidas **no build**. Ligar ou desligar exige redeploy.
+
+## Limites conhecidos do pedido de teste
+
+- O limite por origem (5/h) usa o 1º IP de `x-forwarded-for`. Na Vercel o cabeçalho é reescrito pela
+  plataforma; fora dela (proxy que só acrescenta) o limite pode ser contornado. O limite global
+  (60 a cada 10 min) continua valendo, mas uma enxurrada com IPs rotativos pode esgotá-lo e atrasar
+  pedidos reais. Sem captcha: só campo-isca. Reavaliar antes de divulgar a página em escala.
+- Repetir o pedido com um email que já tem pedido aberto devolve o mesmo protocolo (sem expor dados
+  do pedido anterior além do protocolo).

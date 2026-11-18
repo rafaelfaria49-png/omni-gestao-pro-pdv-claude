@@ -29,10 +29,11 @@ function fakeDb(opts: { falhar?: boolean } = {}) {
         const r = "id" in where ? rows.find((x) => x.id === where.id) : rows.find((x) => x.emailAberto === where.emailAberto)
         return r ? { id: r.id, protocolo: r.protocolo, status: r.status, historico: r.historico } : null
       },
-      async update({ where, data }) {
-        const r = rows.find((x) => x.id === where.id)!
+      async updateMany({ where, data }) {
+        const r = rows.find((x) => x.id === where.id && x.status === where.status)
+        if (!r) return { count: 0 }
         Object.assign(r, data)
-        return r
+        return { count: 1 }
       },
     },
   }
@@ -150,6 +151,20 @@ describe("registrarSolicitacaoTeste", () => {
 })
 
 describe("atualizarStatusSolicitacao", () => {
+  it("mudança concorrente: a segunda gravação recusa em vez de sobrescrever", async () => {
+    const { db, rows } = fakeDb()
+    await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })
+    const id = rows[0].id
+    const lento = { ...db.solicitacaoTesteComercial }
+    // Simula a corrida: ambos leem "recebida"; o "descartada" grava primeiro.
+    const lido = await db.solicitacaoTesteComercial.findUnique({ where: { id }, select: { id: true, protocolo: true, status: true, historico: true } })
+    lento.findUnique = async () => lido
+    expect(await atualizarStatusSolicitacao(db, { id, status: "descartada", por: "a@x" })).toEqual({ ok: true })
+    const r = await atualizarStatusSolicitacao({ solicitacaoTesteComercial: lento }, { id, status: "em_contato", por: "b@x" })
+    expect(r.ok).toBe(false)
+    expect({ status: rows[0].status, aberto: rows[0].emailAberto }).toEqual({ status: "descartada", aberto: null })
+  })
+
   it("anexa histórico e não reabre solicitação encerrada", async () => {
     const { db, rows } = fakeDb()
     await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })

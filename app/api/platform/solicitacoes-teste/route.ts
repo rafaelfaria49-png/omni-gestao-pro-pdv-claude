@@ -15,8 +15,11 @@ const NEGADO = () => NextResponse.json({ ok: false, error: "Somente a plataforma
 export async function GET() {
   const session = await auth()
   if (!isPlatformSession(session) || session?.user.mustChangePassword) return NEGADO()
+  // Só as abertas (a caixa de entrada mostra apenas estas): pedidos antigos ainda abertos
+  // não somem atrás de 200 encerrados.
   const solicitacoes = await prisma.solicitacaoTesteComercial.findMany({
-    orderBy: { createdAt: "desc" }, take: 200,
+    where: { status: { in: ["recebida", "em_contato"] } },
+    orderBy: { createdAt: "desc" }, take: 500,
     select: { id: true, protocolo: true, nome: true, nomeLoja: true, email: true, whatsapp: true, ramo: true, planoInteresse: true, mensagem: true, status: true, createdAt: true },
   })
   return NextResponse.json({ ok: true, solicitacoes }, { headers: SEM_CACHE })
