@@ -8,12 +8,12 @@
 // fora da allowlist (código compilado, ícones, config e package.json); o build-config dentro do asar
 // divergir do canal/origem do build; ou o nome do instalador não for o esperado para o canal.
 import { createHash } from "node:crypto"
-import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import * as asar from "@electron/asar"
+import { authenticode } from "./lib/authenticode.mjs"
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"))
@@ -83,18 +83,23 @@ const iconUrl = String(squirrelMaker?.config?.iconUrl ?? "")
 if (process.env.GITHUB_ACTIONS === "true") check("iconUrl do instalador é HTTPS (baixável no PC do cliente)", iconUrl.startsWith("https://"), iconUrl)
 else console.log(`INFO iconUrl (build local, só vale nesta máquina): ${iconUrl}`)
 
-// Assinatura Authenticode (informativa: sem certificado o pacote é NÃO ASSINADO, só uso interno).
-let signature = "desconhecida"
-if (process.platform === "win32") {
-  const ps = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", "(Get-AuthenticodeSignature -LiteralPath $env:OMNI_SIG_FILE).Status.ToString()"], {
-    // Sem PSModulePath herdado do pwsh 7 (CI): o Windows PowerShell 5.1 não carregaria o módulo de segurança.
-    env: { ...process.env, PSModulePath: undefined, OMNI_SIG_FILE: setup },
-    encoding: "utf8",
-  })
-  signature = ps.stdout.trim() || "desconhecida"
+// Assinatura Authenticode. Sem `--require-signed` é informativa (pacote NÃO ASSINADO = só uso
+// interno/QA). Com `--require-signed` (workflow de release pública) Setup.exe e o executável do
+// app precisam de assinatura Valid, com carimbo de tempo e do MESMO certificado.
+const requireSigned = process.argv.includes("--require-signed")
+const sigSetup = authenticode(setup)
+const sigExe = authenticode(exe)
+const signed = sigSetup.status === "Valid"
+console.log(`INFO assinatura do Setup.exe: ${sigSetup.status}${signed ? ` — ${sigSetup.signer}` : " — NÃO ASSINADO (somente instalação interna/QA)"}`)
+console.log(`INFO assinatura do OmniGestaoPro.exe: ${sigExe.status}`)
+if (requireSigned) {
+  check("Setup.exe com assinatura Authenticode válida", sigSetup.status === "Valid", sigSetup.status)
+  check("OmniGestaoPro.exe com assinatura Authenticode válida", sigExe.status === "Valid", sigExe.status)
+  check("assinaturas com carimbo de tempo", sigSetup.timestamped && sigExe.timestamped)
+  check("Setup.exe e OmniGestaoPro.exe com o mesmo certificado", Boolean(sigSetup.thumbprint) && sigSetup.thumbprint === sigExe.thumbprint)
+  const expected = (process.env.OMNI_DESKTOP_SIGN_SHA1 ?? "").trim().toLowerCase()
+  if (expected) check("certificado = o configurado no build", sigSetup.thumbprint === expected, sigSetup.thumbprint)
 }
-const signed = signature === "Valid"
-console.log(`INFO assinatura do Setup.exe: ${signature}${signed ? "" : " — NÃO ASSINADO (somente instalação interna/QA)"}`)
 
 const files = [setup, nupkg, releases].map((f) => ({ file: path.basename(f), bytes: statSync(f).size, sha256: sha256(f) }))
 writeFileSync(path.join(makeDir, "SHA256SUMS.txt"), files.map((f) => `${f.sha256}  ${f.file}`).join("\n") + "\n")
@@ -110,6 +115,7 @@ writeFileSync(
       buildTime: config.buildTime,
       arch: "x64",
       signature: signed ? "assinado" : "NAO_ASSINADO",
+      authenticode: { setup: sigSetup, exe: sigExe },
       files,
       checks: results,
     },

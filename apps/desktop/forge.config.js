@@ -24,6 +24,30 @@ const SQUIRREL_ICON_URL =
     ? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${ciCommit}/apps/desktop/assets/icon.ico`
     : pathToFileURL(icon).toString()
 
+/**
+ * Assinatura Authenticode — SÓ com certificado real fornecido no ambiente do build (nunca no repo):
+ *  - OMNI_DESKTOP_SIGN_SHA1: thumbprint de certificado no repositório do Windows. É o caminho dos
+ *    certificados de code signing atuais (chave em HSM/nuvem do fornecedor, exposta por KSP/CSP);
+ *  - OMNI_DESKTOP_CERT_FILE + OMNI_DESKTOP_CERT_PASSWORD: .pfx legado.
+ * OMNI_DESKTOP_TIMESTAMP_URL (RFC 3161 da autoridade certificadora) é obrigatório ao assinar:
+ * sem carimbo de tempo a assinatura morre quando o certificado vence.
+ * Sem nenhuma das duas, o pacote sai NÃO ASSINADO (uso interno/QA); o workflow de release pública
+ * recusa publicar nesse caso.
+ */
+function windowsSignOptions() {
+  const sha1 = (process.env.OMNI_DESKTOP_SIGN_SHA1 ?? "").trim()
+  const certFile = (process.env.OMNI_DESKTOP_CERT_FILE ?? "").trim()
+  if (!sha1 && !certFile) return null
+  if (sha1 && !/^[0-9a-fA-F]{40}$/.test(sha1)) throw new Error("OMNI_DESKTOP_SIGN_SHA1 deve ser o thumbprint SHA-1 (40 hex)")
+  const timestampServer = (process.env.OMNI_DESKTOP_TIMESTAMP_URL ?? "").trim()
+  if (!/^https?:\/\/[^\s]+$/.test(timestampServer)) throw new Error("OMNI_DESKTOP_TIMESTAMP_URL obrigatório para assinar")
+  const common = { timestampServer, description: productName, website: "https://omni-gestao-pro.vercel.app" }
+  return sha1
+    ? { ...common, signWithParams: ["/sha1", sha1] }
+    : { ...common, certificateFile: certFile, certificatePassword: process.env.OMNI_DESKTOP_CERT_PASSWORD }
+}
+const windowsSign = windowsSignOptions()
+
 /** Só o necessário entra no pacote: código compilado, ícones, config e package.json. */
 const ALLOWED = [/^\/package\.json$/, /^\/build-config\.json$/, /^\/dist(\/|$)/, /^\/assets(\/|$)/]
 
@@ -44,6 +68,8 @@ module.exports = {
       OriginalFilename: "OmniGestaoPro.exe",
     },
     ignore: (p) => p !== "" && !ALLOWED.some((re) => re.test(p.replace(/\\/g, "/"))),
+    // OmniGestaoPro.exe assinado já no empacotamento (depois dos fuses), antes de entrar no .nupkg.
+    ...(windowsSign ? { windowsSign } : {}),
   },
   makers: [
     {
@@ -61,13 +87,8 @@ module.exports = {
         // no GitHub (repositório público; o ícone não é segredo).
         iconUrl: SQUIRREL_ICON_URL,
         noMsi: true,
-        // Assinatura: só com certificado real fornecido por variável de ambiente no build.
-        ...(process.env.OMNI_DESKTOP_CERT_FILE
-          ? {
-              certificateFile: process.env.OMNI_DESKTOP_CERT_FILE,
-              certificatePassword: process.env.OMNI_DESKTOP_CERT_PASSWORD,
-            }
-          : {}),
+        // Assina Setup.exe, Update.exe e os executáveis do pacote (ver windowsSignOptions).
+        ...(windowsSign ? { windowsSign } : {}),
       },
     },
   ],

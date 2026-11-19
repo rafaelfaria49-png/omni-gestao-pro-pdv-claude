@@ -71,7 +71,7 @@ export default async function RootLayout({
 }>) {
   const session = await auth()
   const path = (await headers()).get('x-omni-pathname') || '/'
-  const isPublic = path === '/' || path === '/privacy' || path === '/suporte' ||
+  const isPublic = path === '/' || path === '/privacy' || path === '/baixar' || path === '/suporte' ||
     path.startsWith('/login') || path === '/portal' || path.startsWith('/portal/') ||
     path === '/contador' || path.startsWith('/contador/') || path.startsWith('/contador-externo')
   if (!isPublic && !path.startsWith('/dashboard') && path !== '/conta/seguranca') {

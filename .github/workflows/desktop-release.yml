@@ -1,0 +1,265 @@
+name: Desktop Release pública (assinada)
+
+# Distribuição OFICIAL do OmniGestão Pro para Windows — separada do CI de PR (desktop-windows.yml).
+#
+#   action=publish  → build Production ASSINADO (Authenticode + carimbo de tempo), verificação estrita,
+#                     instalação real, envio IMUTÁVEL ao armazenamento de downloads (Cloudflare R2 + CDN),
+#                     download de volta pela URL PÚBLICA, conferência de SHA-256 e assinatura do arquivo
+#                     baixado, instalação real DESSE arquivo e gravação de release.json da versão.
+#                     NÃO muda a versão oferecida aos clientes.
+#   action=promote  → aponta latest.json para uma versão já publicada (depois de baixar e conferir de novo).
+#                     Rollback = promote de uma versão anterior.
+#
+# Nada aqui roda em pull_request. Os segredos ficam no environment `desktop-release` (com revisores
+# obrigatórios configurados pelo proprietário). Sem certificado, o job FALHA: executável não assinado
+# nunca vira download comercial. A página /baixar só oferece o arquivo com DESKTOP_PUBLIC_DOWNLOAD=on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "publish = gerar e enviar nova versão · promote = tornar uma versão publicada a oficial (ou rollback)"
+        type: choice
+        options: [publish, promote]
+        default: publish
+      version:
+        description: "Somente para promote: versão já publicada (ex.: 1.0.4)"
+        type: string
+        default: ""
+      notes:
+        description: "Somente para publish: nota curta da versão (opcional)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+env:
+  AWS_DEFAULT_REGION: auto
+  # Cloudflare R2 (API S3). Sem as proteções de checksum novas do AWS CLI, que o R2 pode recusar.
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+
+jobs:
+  publish:
+    if: inputs.action == 'publish' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 75
+    environment: desktop-release
+    defaults:
+      run:
+        working-directory: apps/desktop
+        shell: pwsh
+    env:
+      RELEASES_BASE_URL: ${{ vars.OMNI_DESKTOP_RELEASES_BASE_URL }}
+      R2_BUCKET: ${{ vars.OMNI_DESKTOP_R2_BUCKET }}
+      AWS_ENDPOINT_URL_S3: ${{ secrets.OMNI_DESKTOP_R2_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.OMNI_DESKTOP_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.OMNI_DESKTOP_R2_SECRET_ACCESS_KEY }}
+      SIGN_PROVIDER: ${{ vars.OMNI_DESKTOP_SIGN_PROVIDER }}
+      OMNI_DESKTOP_TIMESTAMP_URL: ${{ vars.OMNI_DESKTOP_TIMESTAMP_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Exigir armazenamento e assinatura configurados (sem certificado = sem release pública)
+        run: |
+          $missing = @()
+          foreach ($n in "RELEASES_BASE_URL","R2_BUCKET","AWS_ENDPOINT_URL_S3","AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","SIGN_PROVIDER","OMNI_DESKTOP_TIMESTAMP_URL") {
+            if (-not [Environment]::GetEnvironmentVariable($n)) { $missing += $n }
+          }
+          if ($env:SIGN_PROVIDER -notin @("store","pfx")) { $missing += "OMNI_DESKTOP_SIGN_PROVIDER (store|pfx)" }
+          if ($missing.Count) { Write-Error "Configuração ausente no environment desktop-release: $($missing -join ', '). Ver docs/desktop/DISTRIBUICAO_PUBLICA.md"; exit 1 }
+          if ($env:RELEASES_BASE_URL -notmatch '^https://[^/]+$' -or $env:RELEASES_BASE_URL -match '\.vercel\.app$') { Write-Error "OMNI_DESKTOP_RELEASES_BASE_URL deve ser só a origem https da CDN de downloads"; exit 1 }
+
+      # ---- certificado ------------------------------------------------------------------------
+      # store: o fornecedor (HSM em nuvem) expõe o certificado no repositório do Windows por KSP/CSP.
+      #        Acrescente aqui, ANTES deste passo, a instalação/login da ferramenta do fornecedor
+      #        (ver docs). O thumbprint vem de vars.OMNI_DESKTOP_SIGN_SHA1.
+      # pfx:   certificado .pfx (legado) em segredo base64; importado só neste runner descartável.
+      - name: Certificado — repositório do Windows (HSM do fornecedor)
+        if: env.SIGN_PROVIDER == 'store'
+        env:
+          SIGN_SHA1: ${{ vars.OMNI_DESKTOP_SIGN_SHA1 }}
+        run: |
+          if ($env:SIGN_SHA1 -notmatch '^[0-9a-fA-F]{40}$') { Write-Error "vars.OMNI_DESKTOP_SIGN_SHA1 ausente/inválido"; exit 1 }
+          $c = Get-ChildItem Cert:\CurrentUser\My, Cert:\LocalMachine\My | Where-Object Thumbprint -eq $env:SIGN_SHA1.ToUpper() | Select-Object -First 1
+          if (-not $c) { Write-Error "Certificado $($env:SIGN_SHA1) não está no repositório do Windows — a ferramenta do fornecedor foi configurada?"; exit 1 }
+          if ($c.NotAfter -lt (Get-Date).AddDays(7)) { Write-Error "Certificado vence em menos de 7 dias ($($c.NotAfter))"; exit 1 }
+          "OMNI_DESKTOP_SIGN_SHA1=$($env:SIGN_SHA1.ToLower())" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Certificado — .pfx (legado)
+        if: env.SIGN_PROVIDER == 'pfx'
+        env:
+          PFX_BASE64: ${{ secrets.OMNI_DESKTOP_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.OMNI_DESKTOP_PFX_PASSWORD }}
+        run: |
+          if (-not $env:PFX_BASE64 -or -not $env:PFX_PASSWORD) { Write-Error "segredos OMNI_DESKTOP_PFX_BASE64/OMNI_DESKTOP_PFX_PASSWORD ausentes"; exit 1 }
+          $pfx = Join-Path $env:RUNNER_TEMP "omni-sign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+          $pw = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $c = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          Remove-Item $pfx -Force
+          if ($c.NotAfter -lt (Get-Date).AddDays(7)) { Write-Error "Certificado vence em menos de 7 dias ($($c.NotAfter))"; exit 1 }
+          "OMNI_DESKTOP_SIGN_SHA1=$($c.Thumbprint.ToLower())" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      # ---- build ------------------------------------------------------------------------------
+      - run: npm ci --no-audit --no-fund
+      - run: node node_modules/electron/install.js
+      - run: node scripts/prepare-installer-tools.mjs
+      - run: npm run typecheck
+      - run: npm test
+      - name: Gerar instalador ASSINADO (canal production)
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          npm run build
+          node scripts/write-build-config.mjs --channel production
+          npx electron-forge make
+      - run: node scripts/check-fuses.mjs out/OmniGestaoPro-win32-x64/OmniGestaoPro.exe
+      - name: Verificação estrita (assinatura Valid + carimbo + mesmo certificado)
+        run: node scripts/verify-artifacts.mjs --require-signed
+
+      - name: Versão nova e imutável no armazenamento
+        id: meta
+        run: |
+          $art = Get-Content out/make/squirrel.windows/x64/artifacts.json -Raw | ConvertFrom-Json
+          $v = $art.version
+          $key = "desktop/production/$v/OmniGestaoPro-Setup.exe"
+          aws s3api head-object --bucket $env:R2_BUCKET --key $key *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Error "A versão $v já existe no armazenamento (release imutável). Suba a versão no package.json."; exit 1 }
+          $sha = ($art.files | Where-Object file -eq "OmniGestaoPro-Setup.exe").sha256
+          "version=$v" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "sha256=$sha" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "key=$key" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
+      - name: Versão oficial anterior (para testar atualização sobre ela)
+        id: previous
+        run: |
+          New-Item -ItemType Directory -Force out/previous | Out-Null
+          try {
+            $prev = Invoke-RestMethod -Uri "$env:RELEASES_BASE_URL/desktop/production/latest.json" -MaximumRedirection 0
+          } catch { "found=false" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT; exit 0 }
+          node scripts/verify-published-release.mjs --url $prev.installer.url --sha256 $prev.installer.sha256 --thumbprint $prev.signature.thumbprint --out out/previous/OmniGestaoPro-Setup.exe
+          if ($LASTEXITCODE -ne 0) { Write-Error "A versão oficial atual não confere mais na CDN — investigar antes de publicar"; exit 1 }
+          "found=true" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "version=$($prev.version)" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
+      # ---- envio imutável e prova pelo download público ----------------------------------------
+      - name: Enviar ao armazenamento (sem sobrescrever)
+        env:
+          KEY: ${{ steps.meta.outputs.key }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          $dir = "out/make/squirrel.windows/x64"
+          $imm = "public, max-age=31536000, immutable"
+          aws s3api put-object --bucket $env:R2_BUCKET --key $env:KEY --body "$dir/OmniGestaoPro-Setup.exe" --if-none-match "*" --content-type "application/vnd.microsoft.portable-executable" --content-disposition 'attachment; filename="OmniGestaoPro-Setup.exe"' --cache-control $imm | Out-Null
+          aws s3api put-object --bucket $env:R2_BUCKET --key "desktop/production/$env:VERSION/SHA256SUMS.txt" --body "$dir/SHA256SUMS.txt" --if-none-match "*" --content-type "text/plain; charset=utf-8" --cache-control $imm | Out-Null
+          aws s3api put-object --bucket $env:R2_BUCKET --key "desktop/production/$env:VERSION/artifacts.json" --body "$dir/artifacts.json" --if-none-match "*" --content-type "application/json" --cache-control $imm | Out-Null
+
+      - name: Baixar pela URL pública e conferir SHA-256 + assinatura
+        env:
+          KEY: ${{ steps.meta.outputs.key }}
+          SHA: ${{ steps.meta.outputs.sha256 }}
+        run: |
+          New-Item -ItemType Directory -Force out/public | Out-Null
+          node scripts/verify-published-release.mjs --url "$env:RELEASES_BASE_URL/$env:KEY" --sha256 $env:SHA --thumbprint $env:OMNI_DESKTOP_SIGN_SHA1 --out out/public/OmniGestaoPro-Setup.exe --report out/public/public-check.json
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # Uma única instalação real por runner (restos do Squirrel e o perfil impedem a 2ª), feita sobre o
+      # MESMO arquivo que os clientes baixam. Se falhar, a versão fica enviada mas sem release.json e
+      # sem latest.json: nunca é oferecida; corrija e publique uma versão nova.
+      - name: Instalação real do ARQUIVO BAIXADO (atualizando sobre a versão oficial, se houver)
+        run: |
+          if ("${{ steps.previous.outputs.found }}" -eq "true") {
+            node tests/packaged/install-test.mjs --channel production --setup out/previous/OmniGestaoPro-Setup.exe --expect-version "${{ steps.previous.outputs.version }}" --upgrade-setup out/public/OmniGestaoPro-Setup.exe
+          } else {
+            node tests/packaged/install-test.mjs --channel production --setup out/public/OmniGestaoPro-Setup.exe
+          }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Gravar release.json da versão (latest.json NÃO muda aqui)
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          node scripts/write-release-manifest.mjs --base $env:RELEASES_BASE_URL --artifacts out/make/squirrel.windows/x64/artifacts.json --public-check out/public/public-check.json --install-test passed --out-dir out/manifest --notes "$env:NOTES"
+          aws s3api put-object --bucket $env:R2_BUCKET --key "desktop/production/$env:VERSION/release.json" --body out/manifest/release.json --if-none-match "*" --content-type "application/json" --cache-control "public, max-age=31536000, immutable" | Out-Null
+          Get-Content out/manifest/release.json
+
+      - name: Relatórios (sem o executável)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-${{ steps.meta.outputs.version || 'falhou' }}
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            apps/desktop/out/make/squirrel.windows/x64/SHA256SUMS.txt
+            apps/desktop/out/make/squirrel.windows/x64/artifacts.json
+            apps/desktop/out/public/public-check.json
+            apps/desktop/out/manifest/release.json
+            apps/desktop/test-results/install-test-production.json
+
+      - name: Remover certificado importado do runner
+        if: always() && env.SIGN_PROVIDER == 'pfx'
+        run: |
+          if ($env:OMNI_DESKTOP_SIGN_SHA1) { Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $env:OMNI_DESKTOP_SIGN_SHA1.ToUpper() | Remove-Item -Force -ErrorAction SilentlyContinue }
+
+  promote:
+    if: inputs.action == 'promote' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    environment: desktop-release
+    defaults:
+      run:
+        working-directory: apps/desktop
+        shell: pwsh
+    env:
+      RELEASES_BASE_URL: ${{ vars.OMNI_DESKTOP_RELEASES_BASE_URL }}
+      R2_BUCKET: ${{ vars.OMNI_DESKTOP_R2_BUCKET }}
+      AWS_ENDPOINT_URL_S3: ${{ secrets.OMNI_DESKTOP_R2_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.OMNI_DESKTOP_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.OMNI_DESKTOP_R2_SECRET_ACCESS_KEY }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validar versão
+        run: |
+          if ($env:VERSION -notmatch '^\d{1,4}\.\d{1,4}\.\d{1,6}$') { Write-Error "informe a versão publicada (ex.: 1.0.4)"; exit 1 }
+          if (-not $env:RELEASES_BASE_URL -or -not $env:R2_BUCKET) { Write-Error "armazenamento não configurado"; exit 1 }
+      - name: Baixar release.json e o instalador pela URL pública e conferir de novo
+        run: |
+          New-Item -ItemType Directory -Force out/promote | Out-Null
+          $rel = Invoke-RestMethod -Uri "$env:RELEASES_BASE_URL/desktop/production/$env:VERSION/release.json" -MaximumRedirection 0
+          if ($rel.version -ne $env:VERSION -or $rel.channel -ne "production" -or $rel.signature.status -ne "Valid") { Write-Error "release.json inválido"; exit 1 }
+          node scripts/verify-published-release.mjs --url $rel.installer.url --sha256 $rel.installer.sha256 --thumbprint $rel.signature.thumbprint --out out/promote/OmniGestaoPro-Setup.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Invoke-WebRequest -Uri "$env:RELEASES_BASE_URL/desktop/production/$env:VERSION/release.json" -OutFile out/promote/release.json -MaximumRedirection 0
+      - name: Tornar oficial (latest.json) e registrar no histórico
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          try { Invoke-WebRequest -Uri "$env:RELEASES_BASE_URL/desktop/production/versions.json" -OutFile out/promote/versions-current.json -MaximumRedirection 0 } catch { }
+          node --input-type=module -e "import fs from 'node:fs'; import { appendHistory } from './scripts/lib/release-manifest-builder.mjs'; const rel=JSON.parse(fs.readFileSync('out/promote/release.json','utf8')); const cur=fs.existsSync('out/promote/versions-current.json')?JSON.parse(fs.readFileSync('out/promote/versions-current.json','utf8')):null; fs.writeFileSync('out/promote/versions.json', JSON.stringify(appendHistory(cur, rel), null, 2)+'\n')"
+          aws s3api put-object --bucket $env:R2_BUCKET --key "desktop/production/versions.json" --body out/promote/versions.json --content-type "application/json" --cache-control "public, max-age=60" | Out-Null
+          aws s3api put-object --bucket $env:R2_BUCKET --key "desktop/production/latest.json" --body out/promote/release.json --content-type "application/json" --cache-control "public, max-age=60" | Out-Null
+          Write-Host "latest.json → $env:VERSION. A página /baixar reflete em até ~5 min (cache da Vercel) e só com DESKTOP_PUBLIC_DOWNLOAD=on."
