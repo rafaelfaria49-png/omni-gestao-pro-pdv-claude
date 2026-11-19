@@ -33,7 +33,10 @@ try {
 const config = validateBuildConfig({
   channel,
   origin,
-  updateManifestUrl: args["update-manifest"] ?? null,
+  // Produção sempre consulta o manifesto oficial (rota JSON do próprio sistema; 404 até existir
+  // release pública assinada). Sem ele, quem instalasse a 1ª versão pública nunca saberia da 2ª.
+  updateManifestUrl:
+    args["update-manifest"] ?? (channel === "production" ? `${PRODUCTION_ORIGIN}/api/desktop/update-manifest` : null),
   buildCommit: commit,
   buildTime: new Date().toISOString(),
 })
