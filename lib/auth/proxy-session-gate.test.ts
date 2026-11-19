@@ -151,3 +151,7 @@ describe("ausência de lockout e de dependência do selo", () => {
 })
 
 it.each(["/privacy/internal", "/privacy-admin", "/client-privacy-cache.js/private", "/dashboard/clientes"])("CAD-R2-020 does not make %s public", path => { expect(isPublicPath(path)).toBe(false); expect(entrar(path, false).kind).toBe("redirect-login") })
+
+// OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001: só a página comercial e a sua imagem OG ficam públicas.
+it.each(["/gestao-lojas", "/gestao-lojas/", "/gestao-lojas/opengraph-image", "/gestao-lojas/opengraph-image-1a2b3c"])("%s é público (página comercial)", (p) => { expect(isPublicPath(p)).toBe(true); expect(entrar(p, false)).toEqual({ kind: "allow" }) })
+it.each(["/gestao-lojas/admin", "/gestao-lojas-interno", "/gestao-lojasx", "/dashboard/plataforma"])("%s NÃO fica público por herança da página comercial", (p) => { expect(isPublicPath(p)).toBe(false); expect(entrar(p, false).kind).toBe("redirect-login") })
