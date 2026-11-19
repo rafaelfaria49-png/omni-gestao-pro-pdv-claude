@@ -162,12 +162,16 @@ test("jornada: pedido → plataforma provisiona com os dados do pedido → login
   const protocolo = (await vp.getByTestId("protocolo").innerText()).trim()
   await visitante.close()
 
-  const owner = await login("owner")
+  // A plataforma opera a partir de uma unidade própria com cadastro básico COMPLETO.
+  // Assim o assistente de primeiro acesso (que remonta o painel e zera formulários) não
+  // depende de quais specs rodaram antes e deixaram `pilot-a` completa ou incompleta.
+  const sede = "gl-plataforma-" + randomBytes(3).toString("hex")
+  await db.store.create({ data: { id: sede, name: "Sede Plataforma Sintética", cnpj: "00.000.000/0000-00", phone: "1130000000", address: { rua: "Rua Sintética", numero: "1", bairro: "Centro", cidade: "São Paulo", estado: "SP", cep: "01000-000" } } })
+  await db.storeSettings.create({ data: { storeId: sede, contactEmail: "sede@pilot.invalid", contactWhatsapp: "11900000000", contactWhatsappDono: "11900000000", printerConfig: { capabilities: { version: 1, business: { primaryBranch: "comercio" } } } } })
+  const owner = await login("owner", sede)
   await setupPage(page, owner)
+  await page.context().addInitScript((id) => { try { localStorage.setItem("assistec-pro-loja-ativa-v1", id) } catch { /* */ } }, sede)
   await page.goto("/dashboard/plataforma")
-  // O assistente de primeiro acesso (pré-existente) abre de forma assíncrona e, ao ser
-  // dispensado, remonta o painel. Só seguimos depois dele, senão o formulário é zerado.
-  await expect(page.getByRole("button", { name: "Retomar configuração inicial" })).toBeVisible()
   const item = page.locator(`[data-protocolo="${protocolo}"]`)
   await expect(item).toContainText("Acessórios Jornada Sintética")
   await item.getByRole("button", { name: "Usar no provisionamento" }).click()
