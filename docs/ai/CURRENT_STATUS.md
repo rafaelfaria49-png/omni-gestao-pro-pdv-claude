@@ -58,6 +58,20 @@
 
 ---
 
+## Página comercial "Vendas e Estoque" `/gestao-lojas` (`OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001`) · 18/11/2026
+
+- **Real, em PR, sem merge**: página pública `/gestao-lojas` (sem IA), pedido de teste gravado em
+  `solicitacoes_teste_comercial` com protocolo, consentimento, histórico, idempotência por email aberto
+  (UNIQUE `emailAberto`) e limite por origem/global no banco; caixa de entrada em `/dashboard/plataforma`
+  ligada ao provisionamento assistido existente. Pedido **não** cria conta, loja, trial nem cobrança.
+- **Migration aditiva `20261118120000_solicitacoes_teste_comercial` NÃO aplicada em Production**
+  (merge na `main` pode disparar `migrate deploy` no `omni-gestao-pro`). Exige autorização do proprietário.
+- **Fail-closed por env**: preços propostos (R$ 39,90/69,90/99,90 — **não aprovados**) só com
+  `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1`; download Windows só com `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` https.
+- `/` (acesso piloto) e a landing antiga de IA (`/dashboard/landing-preview`) **inalteradas**. Stripe intocado.
+- Matriz recurso/plano/status e auditoria Stripe: `docs/comercial/GESTAO_LOJAS_MATRIZ_RECURSOS.md`;
+  design system: `docs/comercial/GESTAO_LOJAS_DESIGN_SYSTEM.md`.
+
 ## Aparelhos por IMEI — cadastro, compra, venda e garantia (`OMNI-APARELHOS-CADASTRO-COMPRAS-VENDAS-GARANTIAS-ENDTOEND-001`) · 12/11/2026
 
 - **Real (PG + API), em PR, sem merge**: Cadastros HUB → Aparelhos (visão geral, lista, compras de cliente, garantias, histórico); venda na Venda Completa e no PDV Clássico pelo motor canônico (`upsertVendaInTransaction` + gancho `lib/aparelhos/sale-hook.ts`); documentos A4/80 mm por snapshot.

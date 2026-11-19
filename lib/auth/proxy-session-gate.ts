@@ -27,6 +27,10 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname === "/privacy" || pathname === "/privacy/") return true
   // Página pública de download do programa Windows (só informação; o instalador vem da CDN).
   if (pathname === "/baixar" || pathname === "/baixar/") return true
+  // Página comercial pública "Vendas e Estoque" e a sua imagem de compartilhamento.
+  // Só estas rotas exatas: nada abaixo de `/gestao-lojas/` fica público por herança.
+  if (pathname === "/gestao-lojas" || pathname === "/gestao-lojas/") return true
+  if (pathname === "/gestao-lojas/opengraph-image" || pathname.startsWith("/gestao-lojas/opengraph-image-")) return true
   if (pathname.startsWith("/workbox-") || pathname.startsWith("/worker-")) return true
   if (/\.(png|svg|ico|webp|jpg|jpeg|gif|webmanifest)$/i.test(pathname)) return true
   if (pathname === "/login" || pathname.startsWith("/login/")) return true
