@@ -22,7 +22,7 @@ function SubmitButton() {
   )
 }
 
-export function LoginForm() {
+export function LoginForm({ showDesktopDownload = false }: { showDesktopDownload?: boolean }) {
   const [state, formAction] = useActionState(signInAction, { error: null })
   const [showPassword, setShowPassword] = useState(false)
 
@@ -108,6 +108,11 @@ export function LoginForm() {
         <p className="text-center text-xs text-muted-foreground">
           Sistema exclusivo para colaboradores autorizados.
         </p>
+        {showDesktopDownload ? (
+          <p className="text-center text-xs">
+            <a href="/baixar" className="text-primary underline-offset-4 hover:underline">Programa para Windows</a>
+          </p>
+        ) : null}
       </div>
     </div>
   )
