@@ -11,8 +11,10 @@ armazenamento de downloads, teste em Windows 10 e autorização comercial (seç�
 GitHub Actions (desktop-release.yml, environment protegido)
   build Production ─► assina (Authenticode + carimbo de tempo) ─► verify-artifacts --require-signed
   ─► R2: desktop/production/<versão>/OmniGestaoPro-Setup.exe  (imutável, --if-none-match "*")
-  ─► baixa de volta pela URL PÚBLICA ─► confere SHA-256 + assinatura + certificado
-  ─► instala ESSE arquivo no runner (atualizando sobre a versão oficial anterior, se houver)
+  ─► remove o certificado do runner
+  ─► baixa de volta pela URL PÚBLICA ─► confere SHA-256 + assinatura + certificado (lista confiável)
+  ─► instala ESSE arquivo no runner: como atualização sobre a versão oficial anterior, se houver;
+     senão, instalação nova (a instalação nova do mesmo código também roda em toda PR)
   ─► grava <versão>/release.json
   promote (decisão humana) ─► latest.json + versions.json
 
@@ -25,9 +27,13 @@ CDN de downloads (Cloudflare R2 + domínio próprio, HTTPS)
 - O executável **nunca** passa por função da Vercel: o botão aponta direto para a CDN.
 - `lib/desktop-distribution/release-manifest.ts` valida o `latest.json` de forma **fail-closed**:
   canal production, x64, URL dentro do diretório imutável da versão, SHA-256, assinatura `Valid`
-  com carimbo de tempo, download público conferido e teste de instalação aprovado. Qualquer
+  com carimbo de tempo, certificado na lista confiável (`DESKTOP_TRUSTED_SIGNER_SHA1` — a Vercel não
+  verifica Authenticode, então isto barra um manifesto adulterado na CDN com outro signatário),
+  download público conferido e teste de instalação aprovado. Qualquer
   desvio ⇒ página mostra só "acesso pelo navegador" e o endpoint devolve 404.
-- O contrato pipeline ↔ web tem teste: `lib/desktop-distribution/release-contract.test.ts`.
+- O contrato pipeline ↔ web tem teste: `lib/desktop-distribution/release-contract.test.ts` (o
+  `checkReleaseManifest` do promote e o validador da página recusam os mesmos casos).
+- Certificados aceitos vêm sempre da configuração do proprietário, nunca do manifesto conferido.
 
 ### Por que R2
 
@@ -42,9 +48,10 @@ pública num repositório público expõe todo o histórico de builds internos).
 | Variável | Valor |
 |---|---|
 | `DESKTOP_RELEASES_BASE_URL` | origem https da CDN (ex.: `https://downloads.<seu-domínio>`), sem caminho |
+| `DESKTOP_TRUSTED_SIGNER_SHA1` | thumbprint(s) SHA-1 do certificado da empresa, separados por vírgula (atual + anterior na troca) |
 | `DESKTOP_PUBLIC_DOWNLOAD` | `on` **somente** com autorização comercial do proprietário |
 
-Sem as duas, ou sem `latest.json` válido, nada é oferecido. Desligar = remover `DESKTOP_PUBLIC_DOWNLOAD`
+Sem as três, ou sem `latest.json` válido, nada é oferecido. Desligar = remover `DESKTOP_PUBLIC_DOWNLOAD`
 e redeploy (lembrar: deployments antigos guardam a env antiga nas URLs diretas).
 
 ## 3. Publicar, promover e voltar versão
@@ -66,13 +73,15 @@ corrigir e publicar a próxima versão. Isso é intencional (imutabilidade).
 | Tipo | Como chega |
 |---|---|
 | A) Sistema web | Deploy da Vercel. O programa só abre o site: atualiza sozinho, como o navegador. |
-| B) Executável Electron | Novo Setup.exe. A partir da **1.0.4** o build Production consulta `/api/desktop/update-manifest`; versão nova aparece em *Sobre* (Ctrl+Shift+Alt+V) com o SHA-256, e "baixar" abre `/baixar` no navegador. |
+| B) Executável Electron | Novo Setup.exe. A partir da **1.0.4** o build Production consulta `/api/desktop/update-manifest` ao abrir; versão nova aparece em *Sobre* (Ctrl+Shift+Alt+V) com o SHA-256, e "baixar" abre `/baixar` no navegador. |
 
 Regras mantidas: o programa **não baixa, não instala e não reinicia** sozinho (não fecha venda
 aberta); produção recusa manifesto sem `signed: true`; manifesto só da própria origem por HTTPS
 (`build-config.ts`); atualizar pelo Setup.exe preserva `%AppData%\OmniGestão Pro` (sessão, vendas
 offline pendentes em localStorage/IndexedDB e `print-station.json`).
 Instalações 1.0.0–1.0.3 (lojas piloto) não consultam manifesto: atualizar essas manualmente uma vez.
+A verificação acontece na abertura: versão promovida com o programa aberto aparece após reabrir.
+Dentro do programa, o botão de download da CDN pede confirmação para abrir no navegador (host externo).
 
 ## 5. Matriz de testes antes do `promote`
 
@@ -118,18 +127,24 @@ Configurar no GitHub: *Settings → Environments → `desktop-release`* (com **R
 | var | `OMNI_DESKTOP_SIGN_PROVIDER` | `store` (HSM do fornecedor) ou `pfx` (legado) |
 | var | `OMNI_DESKTOP_SIGN_SHA1` | thumbprint do certificado (modo `store`) |
 | var | `OMNI_DESKTOP_TIMESTAMP_URL` | servidor RFC 3161 da AC |
+| var | `OMNI_DESKTOP_TRUSTED_SHA1` | thumbprint(s) aceitos (mesmo valor de `DESKTOP_TRUSTED_SIGNER_SHA1` na Vercel) |
 | secret | `OMNI_DESKTOP_PFX_BASE64` / `OMNI_DESKTOP_PFX_PASSWORD` | só modo `pfx` |
 
 No modo `store`, acrescentar ao job `publish` (antes de "Certificado — repositório do Windows") o
 passo oficial do fornecedor que instala o KSP e autentica com a credencial dele (em secrets do
-mesmo environment). O job confere que o certificado está no repositório e não vence em 7 dias.
+mesmo environment). O job confere que o certificado está em `Cert:CurrentUserMy`, está na lista
+confiável e não vence em 7 dias. Assinatura só SHA-256 + RFC 3161. No modo `pfx` o certificado é
+removido do runner antes de qualquer instalador ser executado; no modo `store`, encerrar a sessão
+do fornecedor no mesmo ponto se a ferramenta dele permitir.
 
 ### 6.2 Armazenamento de downloads
 
 1. Cloudflare R2: bucket novo só para isso (ex.: `omni-desktop-releases`), **não** o do Contador.
 2. Domínio próprio no bucket (ex.: `downloads.<seu-domínio>`), HTTPS; acesso público só por ele.
 3. Token R2 com escrita **somente nesse bucket**.
-4. No environment `desktop-release`: var `OMNI_DESKTOP_RELEASES_BASE_URL` (`https://downloads.<…>`),
+4. Antes da 1ª publicação, testar com uma chave descartável que o bucket recusa `put-object
+   --if-none-match "*"` sobre objeto existente (imutabilidade depende disso).
+5. No environment `desktop-release`: var `OMNI_DESKTOP_RELEASES_BASE_URL` (`https://downloads.<…>`),
    var `OMNI_DESKTOP_R2_BUCKET`, secrets `OMNI_DESKTOP_R2_ENDPOINT`
    (`https://<account>.r2.cloudflarestorage.com`), `OMNI_DESKTOP_R2_ACCESS_KEY_ID`,
    `OMNI_DESKTOP_R2_SECRET_ACCESS_KEY`.

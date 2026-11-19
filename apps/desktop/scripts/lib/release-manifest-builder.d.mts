@@ -17,6 +17,12 @@ export declare function buildReleaseManifest(args: {
   publishedAt: string
   notes?: string
 }): Record<string, unknown>
+export declare function parseTrustedThumbprints(raw: unknown): string[]
+export declare function checkReleaseManifest(
+  raw: unknown,
+  base: string,
+  trusted: string[],
+): { version: string; sha256: string; thumbprint: string; url: string }
 export declare function appendHistory(
   history: unknown,
   release: Record<string, unknown>,

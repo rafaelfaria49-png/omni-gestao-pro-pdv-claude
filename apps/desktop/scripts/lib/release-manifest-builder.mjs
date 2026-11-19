@@ -73,6 +73,44 @@ export function buildReleaseManifest({ base, artifacts, publicCheck, installTest
   }
 }
 
+/** Lista de thumbprints confiáveis ("a,b"): SHA-1 hex, minúsculo. Vazia = nenhum confiável. */
+export function parseTrustedThumbprints(raw) {
+  return String(raw ?? "")
+    .split(/[,\s]+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => HEX40.test(t))
+}
+
+/**
+ * Mesmo contrato de `lib/desktop-distribution/release-manifest.ts` (teste de contrato garante).
+ * Usado pelo promote antes de virar latest.json. Lança Error em qualquer desvio.
+ */
+export function checkReleaseManifest(raw, base, trusted) {
+  const origin = parseBase(base)
+  const fail = (m) => {
+    throw new Error(m)
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("manifesto ausente")
+  if (raw.schema !== 1 || raw.channel !== "production" || raw.arch !== "x64") fail("schema/canal/arquitetura")
+  const v = String(raw.version ?? "")
+  if (!/^(\d{1,4})\.(\d{1,4})\.(\d{1,6})$/.test(v)) fail("versão inválida")
+  const i = raw.installer ?? {}
+  if (i.fileName !== SETUP_FILE_NAME) fail("nome do instalador")
+  if (i.url !== `${origin.origin}/${objectKeys(v).setup}`) fail("instalador fora do diretório imutável da versão")
+  const sha = String(i.sha256 ?? "").toLowerCase()
+  if (!HEX64.test(sha)) fail("sha256 inválido")
+  if (!Number.isInteger(i.bytes) || i.bytes < 50 * 1024 * 1024 || i.bytes > 400 * 1024 * 1024) fail("tamanho implausível")
+  const s = raw.signature ?? {}
+  if (s.status !== "Valid" || s.timestamped !== true || typeof s.signer !== "string" || !s.signer.trim()) fail("assinatura")
+  const tp = String(s.thumbprint ?? "").toLowerCase()
+  if (!HEX40.test(tp) || !trusted.includes(tp)) fail("certificado fora da lista confiável")
+  const ver = raw.verification ?? {}
+  if (ver.publicDownloadSha256 !== sha || ver.publicDownloadSignature !== "Valid" || ver.installTest !== "passed") fail("verificação")
+  if (!HEX40.test(String(raw.buildCommit ?? "").toLowerCase())) fail("commit inválido")
+  if (typeof raw.publishedAt !== "string" || Number.isNaN(Date.parse(raw.publishedAt))) fail("data inválida")
+  return { version: v, sha256: sha, thumbprint: tp, url: i.url }
+}
+
 /** Histórico de versões publicadas (para rollback): acrescenta sem duplicar, mais nova primeiro. */
 export function appendHistory(history, release) {
   const list = Array.isArray(history?.versions) ? history.versions.filter((v) => v.version !== release.version) : []

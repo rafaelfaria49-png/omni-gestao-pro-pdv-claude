@@ -72,7 +72,19 @@ function obj(r: Record<string, unknown>, key: string): Record<string, unknown> {
   return v as Record<string, unknown>
 }
 
-export function parseReleaseManifest(raw: unknown, base: URL): DesktopRelease {
+/**
+ * Certificados de assinatura aceitos (`DESKTOP_TRUSTED_SIGNER_SHA1`, thumbprints SHA-1 separados por
+ * vírgula — atual + anterior durante a troca de certificado). A Vercel não consegue verificar
+ * Authenticode; esta lista impede que um manifesto adulterado na CDN aponte outro signatário.
+ */
+export function parseTrustedThumbprints(raw: string | undefined | null): string[] {
+  return String(raw ?? "")
+    .split(/[,\s]+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => HEX40.test(t))
+}
+
+export function parseReleaseManifest(raw: unknown, base: URL, trusted: readonly string[]): DesktopRelease {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new ReleaseManifestError("manifesto ausente")
   const r = raw as Record<string, unknown>
   if (r.schema !== RELEASE_MANIFEST_SCHEMA) throw new ReleaseManifestError("schema não suportado")
@@ -110,6 +122,7 @@ export function parseReleaseManifest(raw: unknown, base: URL): DesktopRelease {
   const signer = str(signature, "signer").slice(0, 200)
   const thumbprint = str(signature, "thumbprint").toLowerCase()
   if (!HEX40.test(thumbprint)) throw new ReleaseManifestError("thumbprint inválido")
+  if (!trusted.includes(thumbprint)) throw new ReleaseManifestError("certificado fora da lista confiável")
 
   const verification = obj(r, "verification")
   if (verification.publicDownloadSha256 !== sha256) throw new ReleaseManifestError("download público não conferido")

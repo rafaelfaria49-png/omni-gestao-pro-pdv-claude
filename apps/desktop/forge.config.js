@@ -41,7 +41,9 @@ function windowsSignOptions() {
   if (sha1 && !/^[0-9a-fA-F]{40}$/.test(sha1)) throw new Error("OMNI_DESKTOP_SIGN_SHA1 deve ser o thumbprint SHA-1 (40 hex)")
   const timestampServer = (process.env.OMNI_DESKTOP_TIMESTAMP_URL ?? "").trim()
   if (!/^https?:\/\/[^\s]+$/.test(timestampServer)) throw new Error("OMNI_DESKTOP_TIMESTAMP_URL obrigatório para assinar")
-  const common = { timestampServer, description: productName, website: "https://omni-gestao-pro.vercel.app" }
+  // Só SHA-256 + RFC 3161: o padrão do @electron/windows-sign assina também em SHA-1 (legado), que HSMs
+  // em nuvem recusam e que viraria a assinatura primária lida pelo Get-AuthenticodeSignature.
+  const common = { timestampServer, hashes: ["sha256"], description: productName, website: "https://omni-gestao-pro.vercel.app" }
   return sha1
     ? { ...common, signWithParams: ["/sha1", sha1] }
     : { ...common, certificateFile: certFile, certificatePassword: process.env.OMNI_DESKTOP_CERT_PASSWORD }

@@ -5,6 +5,7 @@ import { compareSemver } from "./semver"
 
 const base = parseReleasesBaseUrl("https://downloads.exemplo.com.br")!
 const SHA = "a".repeat(64)
+const TRUSTED = ["b".repeat(40)]
 
 function manifest(over: Record<string, unknown> = {}) {
   return {
@@ -45,7 +46,7 @@ describe("origem de downloads", () => {
 
 describe("manifesto da release pública (fail-closed)", () => {
   it("aceita release assinada, conferida e instalada", () => {
-    const r = parseReleaseManifest(manifest(), base)
+    const r = parseReleaseManifest(manifest(), base, TRUSTED)
     expect(r.version).toBe("1.0.4")
     expect(r.installerUrl).toBe("https://downloads.exemplo.com.br/desktop/production/1.0.4/OmniGestaoPro-Setup.exe")
     expect(r.signer).toBe("CN=RAFACELL LTDA")
@@ -63,7 +64,7 @@ describe("manifesto da release pública (fail-closed)", () => {
     ["commit inválido", { buildCommit: "abc" }],
   ]
   it.each(bad)("recusa: %s", (_name, over) => {
-    expect(() => parseReleaseManifest(manifest(over), base)).toThrow(ReleaseManifestError)
+    expect(() => parseReleaseManifest(manifest(over), base, TRUSTED)).toThrow(ReleaseManifestError)
   })
 
   it.each([
@@ -73,18 +74,23 @@ describe("manifesto da release pública (fail-closed)", () => {
     ["query", "https://downloads.exemplo.com.br/desktop/production/1.0.4/OmniGestaoPro-Setup.exe?x=1"],
   ])("recusa instalador em %s", (_n, url) => {
     const m = manifest()
-    expect(() => parseReleaseManifest({ ...m, installer: { ...m.installer, url } }, base)).toThrow(ReleaseManifestError)
+    expect(() => parseReleaseManifest({ ...m, installer: { ...m.installer, url } }, base, TRUSTED)).toThrow(ReleaseManifestError)
   })
 
   it("recusa tamanho implausível e sha inválido", () => {
     const m = manifest()
-    expect(() => parseReleaseManifest({ ...m, installer: { ...m.installer, bytes: 1000 } }, base)).toThrow()
-    expect(() => parseReleaseManifest({ ...m, installer: { ...m.installer, sha256: "xyz" } }, base)).toThrow()
+    expect(() => parseReleaseManifest({ ...m, installer: { ...m.installer, bytes: 1000 } }, base, TRUSTED)).toThrow()
+    expect(() => parseReleaseManifest({ ...m, installer: { ...m.installer, sha256: "xyz" } }, base, TRUSTED)).toThrow()
+  })
+
+  it("recusa certificado fora da lista confiável (manifesto adulterado na CDN)", () => {
+    expect(() => parseReleaseManifest(manifest(), base, ["d".repeat(40)])).toThrow(/confiável/)
+    expect(() => parseReleaseManifest(manifest(), base, [])).toThrow(/confiável/)
   })
 
   it("recusa entrada que não é objeto", () => {
-    expect(() => parseReleaseManifest(null, base)).toThrow()
-    expect(() => parseReleaseManifest([], base)).toThrow()
+    expect(() => parseReleaseManifest(null, base, TRUSTED)).toThrow()
+    expect(() => parseReleaseManifest([], base, TRUSTED)).toThrow()
   })
 })
 

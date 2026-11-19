@@ -167,8 +167,8 @@ export default async function BaixarPage() {
           <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
             <li>As telas e funções do sistema atualizam sozinhas, como no navegador — não é preciso reinstalar.</li>
             <li>
-              Uma versão nova do programa aparece em <em>Sobre</em> (atalho Ctrl+Shift+Alt+V). O programa nunca se fecha nem
-              reinicia sozinho: instale a versão nova com o caixa fechado e sem venda em andamento.
+              Ao ser aberto, o programa verifica se há versão nova e avisa em <em>Sobre</em> (atalho Ctrl+Shift+Alt+V). Ele nunca
+              se fecha nem reinicia sozinho: instale a versão nova com o caixa fechado e sem venda em andamento.
             </li>
             <li>Ao atualizar, ficam guardados o login, as vendas que ainda aguardam envio e a impressora escolhida.</li>
           </ul>
