@@ -234,4 +234,48 @@ describe.skipIf(!TEST_URL)("catálogo por loja — PostgreSQL descartável", () 
     await expect(ins("ok")).resolves.toBe(1)
     await expect(ins("invertido")).rejects.toThrow()
   })
+
+  it("COMPAT-BUSCA-MODELOS-NATURAL-001: nome de 1 caractere grava; iPhone 7 existente é reaproveitado; duplicata segue barrada", async () => {
+    // "iPhone" + "7" (fabricante Apple) = Apple iPhone 7 do catálogo global → usar o existente, sem gravar.
+    const global7 = await createLojaModelo(db, global, storeB, "user-b", { manufacturer: "Apple", brand: "iPhone", name: "7" })
+    expect(global7).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: "apple_iphone_7", source: "global", active: true } })
+    expect(await db.catalogoAparelhoLojaModelo.count({ where: { storeId: storeB, nameKey: "7" } })).toBe(0)
+
+    // marca sintética (fora do catálogo global): nome de um caractere é válido
+    const z = await createLojaModelo(db, global, storeB, "user-b", { brand: BRAND, name: "Z" })
+    expect(z.ok).toBe(true)
+    if (!z.ok) return
+    expect(z.value).toMatchObject({ name: "Z", brand: BRAND })
+    // mesmo marca+nome (outra grafia): bloqueado, oferecendo o existente
+    expect(await createLojaModelo(db, global, storeB, "user-b", { brand: BRAND.toUpperCase(), name: "z" })).toMatchObject({
+      ok: false,
+      code: "DUPLICATE",
+      existing: { modelKey: z.value.modelKey, source: "loja" },
+    })
+    // a busca da loja acha o modelo de 1 caractere pelo nome padronizado; a outra loja não o vê
+    const idxB = buildLojaCatalogoIndex(await listLojaModelos(db, storeB))
+    expect(searchDeviceModelsComLoja(global, idxB, `${BRAND} Z`).map((r) => r.modelKey)).toContain(z.value.modelKey)
+    const idxA = buildLojaCatalogoIndex(await listLojaModelos(db, storeA))
+    expect(searchDeviceModelsComLoja(global, idxA, `${BRAND} Z`).map((r) => r.modelKey)).not.toContain(z.value.modelKey)
+    // nome sem letra nem número continua inválido
+    expect(await createLojaModelo(db, global, storeB, "user-b", { brand: BRAND, name: "-" })).toMatchObject({ ok: false, code: "INVALID" })
+
+    // revisão R3: edição não cria o mesmo aparelho escrito de outro jeito
+    // ("Fab Sintética QA" + "Linha QA 5" ≡ "Linha QA" + "5", fabricante Fab Sintética QA).
+    const FAB = "Fab Sintética QA"
+    const existente = await createLojaModelo(db, global, storeB, "user-b", { brand: FAB, manufacturer: FAB, name: "Linha QA 5" })
+    expect(existente.ok).toBe(true)
+    if (!existente.ok) return
+    const outro = await createLojaModelo(db, global, storeB, "user-b", { brand: "Linha QA", manufacturer: FAB, name: "5s" })
+    expect(outro.ok).toBe(true)
+    if (!outro.ok) return
+    // criar direto o equivalente: bloqueado
+    expect(await createLojaModelo(db, global, storeB, "user-b", { brand: "Linha QA", manufacturer: FAB, name: "5" })).toMatchObject({
+      ok: false, code: "DUPLICATE", existing: { modelKey: existente.value.modelKey },
+    })
+    const row = await db.catalogoAparelhoLojaModelo.findFirstOrThrow({ where: { storeId: storeB, modelKey: outro.value.modelKey } })
+    const editado = await updateLojaModelo(db, global, storeB, "user-b", row.id, { version: row.version, name: "5" })
+    expect(editado).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: existente.value.modelKey } })
+    expect((await db.catalogoAparelhoLojaModelo.findFirstOrThrow({ where: { id: row.id } })).name).toBe("5s")
+  })
 })

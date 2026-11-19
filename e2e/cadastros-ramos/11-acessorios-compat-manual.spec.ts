@@ -365,6 +365,12 @@ test("ZG47: cadastro manual, compatibilidades por loja e venda no PDV", async ({
     expect(await db.venda.count({ where: { storeId: B } })).toBe(vendasAntes)
     // trocar para o ZG47 (busca mostra o modelo manual DESTA loja, não o da loja D)
     await acessorio.getByRole("button", { name: "Trocar modelo" }).click()
+    // COMPAT-BUSCA-MODELOS-NATURAL-001: "iPhone" mostra o iPhone 7 já na 1ª página, separado do 7 Plus,
+    // e oferece "Mostrar mais" em vez de cortar a lista em silêncio.
+    await acessorio.getByLabel("Modelo do aparelho").fill("iPhone")
+    await expect(acessorio.locator("button").filter({ has: page.getByText("Apple iPhone 7", { exact: true }) })).toHaveCount(1)
+    await expect(acessorio.locator("button").filter({ has: page.getByText("Apple iPhone 7 Plus", { exact: true }) })).toHaveCount(1)
+    await expect(acessorio.getByRole("button", { name: "Mostrar mais" })).toBeVisible()
     await acessorio.getByLabel("Modelo do aparelho").fill("ZG47")
     await expect(acessorio.locator("button").filter({ hasText: ZG47 }).filter({ hasText: "cadastro da loja" })).toHaveCount(1)
     await acessorio.locator("button").filter({ hasText: ZG47 }).filter({ hasText: "cadastro da loja" }).click()
@@ -408,5 +414,116 @@ test("ZG47: cadastro manual, compatibilidades por loja e venda no PDV", async ({
     expect(JSON.stringify(venda.payload)).toContain(ZG47)
     // a loja D não foi afetada pela desativação na loja B
     expect((await modeloDb("MARCA SINTETICA E2E", "ZG47"))?.active).toBe(true)
+  })
+})
+
+/**
+ * COMPAT-BUSCA-MODELOS-NATURAL-001 — bug de produção: "iPhone" listava 11, 12, 13… e o iPhone 7 sumia
+ * (ordem alfabética + corte silencioso em 20). Prova a ordem natural, a paginação sem perdas e o cadastro
+ * de nome de um caractere ("7") reaproveitando o modelo existente.
+ */
+test("Busca natural de modelos, paginação e cadastro de nome de 1 caractere", async ({ page }) => {
+  test.setTimeout(300_000)
+  await login(page, USERS.admin)
+  await switchStore(page, "Acessórios Sintéticos D")
+  const db = await readDb()
+  const H = { "x-assistec-loja-id": D }
+  type Pagina = { results: Array<{ modelKey: string; matchType: string }>; total: number; hasMore: boolean; nextOffset: number | null }
+  const pagina = async (q: string, offset = 0, limit = 20): Promise<Pagina> => {
+    const r = await page.request.get(`/api/catalogo/aparelhos/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`, { headers: H })
+    expect(r.status()).toBe(200)
+    return r.json()
+  }
+  const todas = async (q: string, limit = 20) => {
+    const out: string[] = []
+    let offset: number | null = 0
+    let total = 0
+    for (let i = 0; offset !== null && i < 100; i++) {
+      const p: Pagina = await pagina(q, offset, limit)
+      out.push(...p.results.map((x) => x.modelKey))
+      total = p.total
+      offset = p.nextOffset
+    }
+    return { out, total }
+  }
+
+  await test.step("API: iPhone 7 na 1ª página; 7 × 7 Plus; família 12; Moto G em ordem natural; páginas sem perda", async () => {
+    const p1 = await pagina("iPhone")
+    const k1 = p1.results.map((r) => r.modelKey)
+    expect(k1).toContain("apple_iphone_7")
+    expect(k1.indexOf("apple_iphone_7")).toBeLessThan(k1.indexOf("apple_iphone_7_plus"))
+    expect(k1.indexOf("apple_iphone_8_plus")).toBeLessThan(k1.indexOf("apple_iphone_x"))
+    expect(k1.indexOf("apple_iphone_xs")).toBeLessThan(k1.indexOf("apple_iphone_11"))
+    expect(p1.hasMore).toBe(true)
+
+    const sete = (await pagina("iPhone 7")).results
+    expect(sete[0]).toMatchObject({ modelKey: "apple_iphone_7", matchType: "exact" })
+    expect(sete[1].modelKey).toBe("apple_iphone_7_plus")
+    expect((await pagina("iPhone 12")).results.slice(0, 4).map((r) => r.modelKey)).toEqual([
+      "apple_iphone_12", "apple_iphone_12_mini", "apple_iphone_12_pro", "apple_iphone_12_pro_max",
+    ])
+
+    const moto = (await todas("Moto G")).out
+    expect(moto.indexOf("motorola_moto_g7")).toBeGreaterThanOrEqual(0)
+    expect(moto.indexOf("motorola_moto_g7")).toBeLessThan(moto.indexOf("motorola_moto_g47"))
+    expect(moto.indexOf("motorola_moto_g47")).toBeLessThan(moto.indexOf("motorola_moto_g77"))
+    const galaxy = (await todas("Galaxy S")).out
+    expect(galaxy.indexOf("samsung_galaxy_s21")).toBeLessThan(galaxy.indexOf("samsung_galaxy_s26"))
+
+    for (const q of ["iPhone", "Galaxy A", "Redmi"]) {
+      const em7 = await todas(q, 7)
+      const em20 = await todas(q, 20)
+      expect(em7.out, q).toEqual(em20.out)
+      expect(new Set(em20.out).size, q).toBe(em20.out.length)
+      expect(em20.out.length, q).toBe(em20.total)
+    }
+  })
+
+  await test.step('Compat Películas: iPhone 7 visível e "Mostrar mais aparelhos" traz o iPhone 8', async () => {
+    await abrirCatalogo(page)
+    await abrirPeliculas(page)
+    await pesquisar(page, "iPhone")
+    await expect(card(page, "apple_iphone_7")).toBeVisible()
+    await expect(card(page, "apple_iphone_7_plus")).toBeVisible()
+    await expect(card(page, "apple_iphone_8")).toHaveCount(0)
+    await page.getByRole("button", { name: "Mostrar mais aparelhos" }).click()
+    await expect(card(page, "apple_iphone_8")).toBeVisible()
+    await expect(card(page, "apple_iphone_7")).toHaveCount(1)
+  })
+
+  await test.step("Cadastro: iPhone + 7 oferece usar o Apple iPhone 7 existente (sem gravar)", async () => {
+    await abrirModelos(page)
+    const painel = page.getByRole("region", { name: "Modelos cadastrados pela loja" })
+    const antes = await db.catalogoAparelhoLojaModelo.count({ where: { storeId: D } })
+    await painel.getByRole("button", { name: "Cadastrar novo modelo" }).click()
+    const dialog = page.getByRole("dialog", { name: "Cadastrar novo modelo" })
+    await dialog.getByLabel("Fabricante").fill("Apple")
+    await dialog.getByLabel("Marca comercial").fill("iPhone")
+    await dialog.getByLabel("Nome comercial do modelo").fill("7")
+    await expect(dialog.getByRole("button", { name: "Cadastrar modelo" })).toBeEnabled()
+    const usar = dialog.getByRole("button", { name: "Usar modelo existente: Apple iPhone 7", exact: true })
+    await expect(usar).toBeVisible()
+    await usar.click()
+    await expect(dialog).toHaveCount(0)
+    expect(await db.catalogoAparelhoLojaModelo.count({ where: { storeId: D } })).toBe(antes)
+
+    // insistir em gravar: o servidor recusa e oferece o existente
+    const dup = await page.request.post("/api/catalogo/aparelhos/modelos", { headers: H, data: { manufacturer: "Apple", brand: "iPhone", name: "7" } })
+    expect(dup.status()).toBe(409)
+    expect((await dup.json()).existing).toMatchObject({ modelKey: "apple_iphone_7", source: "global" })
+  })
+
+  await test.step('Cadastro: nome de 1 caractere em marca própria grava; repetido é bloqueado; "-" é inválido', async () => {
+    const painel = page.getByRole("region", { name: "Modelos cadastrados pela loja" })
+    await painel.getByRole("button", { name: "Cadastrar novo modelo" }).click()
+    await expect(await cadastrarModelo(page, { marca: MARCA, nome: "Z" })).toHaveCount(0)
+    await expect.poll(() => modeloDb("MARCA SINTETICA E2E", "Z")).toBeTruthy()
+    await painel.getByRole("button", { name: "Cadastrar novo modelo" }).click()
+    const dialog = await cadastrarModelo(page, { marca: MARCA, nome: "z" })
+    await expect(dialog.getByRole("alert")).toContainText("já está cadastrado nesta loja")
+    await dialog.getByRole("button", { name: "Cancelar" }).click()
+    expect(await db.catalogoAparelhoLojaModelo.count({ where: { storeId: D, nameKey: "Z" } })).toBe(1)
+    const invalido = await page.request.post("/api/catalogo/aparelhos/modelos", { headers: H, data: { brand: MARCA, name: "-" } })
+    expect(invalido.status()).toBe(400)
   })
 })
