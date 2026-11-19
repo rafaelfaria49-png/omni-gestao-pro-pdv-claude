@@ -79,6 +79,7 @@ import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { useOperationsStore } from "@/lib/operations-store"
 import { PDV_KEYMAP, consumePdvShortcut, hasPdvShortcutOverlay, isPdvRepeatedOrHandled, isPdvTyping } from "@/lib/pdv-keymap"
 import { useStoreSettings } from "@/lib/store-settings-provider"
@@ -2264,6 +2265,9 @@ export function PdvClassic({
         lojaNome={(empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "").trim() || undefined}
         hotkeyLabel="F5"
       />
+
+      {/* Avisos dos diálogos de aparelhos (sonner): a tela usa o toast shadcn, sem Toaster sonner próprio. */}
+      {aparelhosHabilitado && <SonnerToaster position="top-center" richColors closeButton />}
 
       {aparelhosHabilitado && lojaKey && (
         <VendaAparelhoDialog
