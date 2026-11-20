@@ -27,7 +27,7 @@ try{
   run(process.execPath,["node_modules/prisma/build/index.js","db","push","--skip-generate"])
   await mkdir(evidence,{recursive:true})
   await writeFile(path.join(evidence,"local-qa-session.json"),JSON.stringify({url,qaPassword,authSecret,sessionRevocation:"on",target:"fresh loopback CI PostgreSQL",productionWrites:0,schemaSourceChanged:false}))
-  run(process.execPath,["node_modules/vitest/vitest.mjs","run","lib/relatorios/enterprise.pg.test.ts","lib/relatorios/session-revocation.pg.test.ts","--maxWorkers=1"])
+  run(process.execPath,["node_modules/vitest/vitest.mjs","run","lib/relatorios/enterprise.pg.test.ts","lib/relatorios/session-revocation.pg.test.ts","lib/relatorios/geral.pg.test.ts","--maxWorkers=1"])
   run(process.execPath,["scripts/vercel-build.mjs"])
   run(process.execPath,["--test","scripts/relatorios/inspect-enterprise-pwa.test.mjs"])
   log=await open(path.join(evidence,"ci-server.log"),"w")

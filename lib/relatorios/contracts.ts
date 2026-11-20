@@ -1,6 +1,6 @@
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 
-export const REPORT_KINDS = ["produtos", "fluxo-caixa", "dre", "clientes", "os", "tecnicos", "whatsapp"] as const
+export const REPORT_KINDS = ["produtos", "fluxo-caixa", "dre", "clientes", "os", "tecnicos", "whatsapp", "geral"] as const
 export type ReportKind = typeof REPORT_KINDS[number]
 export type Cell = string | number | null
 export type Column = { key: string; label: string; format?: "money" | "number" | "percent" | "date" | "hours" }
@@ -9,14 +9,20 @@ export type ReportQuery = {
   from: string; to: string; start: Date; end: Date; page: number; pageSize: number
   search: string; category: string; brand: string; status: string; technician: string; wallet: string
   entity: string; source: string
+  /** Relatório Geral: origem e tipo de registro do detalhamento. Vazio nos demais. */
+  origin: string; record: string
   sort: "value" | "quantity" | "name"; grain: "day" | "week" | "month"; compare: "previous" | "year"
 }
 export type Report = {
   kind: ReportKind; title: string; basis: string; source: string; limitations: string[]
   metrics: Metric[]; columns: Column[]; rows: Record<string, Cell>[]; total: number
   trend: { label: string; value: number; secondary?: number }[]
-  options?: { categories?: { value: string; label: string }[]; brands?: string[]; wallets?: { value: string; label: string }[] }
+  options?: { categories?: { value: string; label: string }[]; brands?: string[]; wallets?: { value: string; label: string }[]
+    origins?: { value: string; label: string }[]; statuses?: { value: string; label: string }[]; records?: { value: string; label: string }[] }
+  /** Blocos consolidados (Relatório Geral). Cada bloco é completo para loja/período, independente da paginação. */
+  sections?: ReportSection[]
 }
+export type ReportSection = { key: string; title: string; note?: string; metrics: Metric[]; columns?: Column[]; rows?: Record<string, Cell>[] }
 export type ReportResponse = Report & {
   storeId: string; generatedAt: string; period: { from: string; to: string }; previousPeriod: { from: string; to: string }
   previousMetrics: Metric[]; page: number; pageSize: number; durationMs: number
@@ -24,6 +30,7 @@ export type ReportResponse = Report & {
 export const REPORT_TITLES: Record<ReportKind, string> = {
   produtos: "Produtos mais vendidos", "fluxo-caixa": "Fluxo de caixa", dre: "DRE gerencial parcial",
   clientes: "Clientes", os: "Ordens de serviço", tecnicos: "Desempenho de técnicos", whatsapp: "WhatsApp HUB",
+  geral: "Relatório Geral da Loja",
 }
 export function isReportKind(value: string): value is ReportKind {
   return REPORT_KINDS.includes(value as ReportKind)
@@ -36,6 +43,8 @@ export function canReadReport(p: EnterprisePermissions, kind: ReportKind): boole
     case "fluxo-caixa": case "dre": return p.hubs.financeiro && p.financeiro.view
     case "os": case "tecnicos": return p.hubs.operacoes
     case "whatsapp": return p.hubs.whatsapp
+    // Consolida vendas e caixa: exige os dois módulos de origem e visão financeira.
+    case "geral": return p.hubs.vendas && p.hubs.financeiro && p.financeiro.view
   }
 }
 const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" })
@@ -78,7 +87,7 @@ export function parseReportQuery(params: URLSearchParams): ReportQuery {
   const compare = params.get("compare") ?? "previous"
   if (!["value", "quantity", "name"].includes(sort) || !["day", "week", "month"].includes(grain) || !["previous", "year"].includes(compare)) throw new Error("Ordenação ou agrupamento inválido.")
   return { from, to, start, end, page: integer("page", 1, 10000), pageSize: integer("pageSize", 20, 100),
-    search: filter("q"), category: filter("category"), brand: filter("brand"), status: filter("status"), technician: filter("technician"), wallet: filter("wallet"), entity: filter("entity"), source: filter("source",512),
+    search: filter("q"), category: filter("category"), brand: filter("brand"), status: filter("status"), technician: filter("technician"), wallet: filter("wallet"), entity: filter("entity"), source: filter("source",512), origin: filter("origin",40), record: filter("record",40),
     sort: sort as ReportQuery["sort"], grain: grain as ReportQuery["grain"], compare: compare as ReportQuery["compare"] }
 }
 export function previousQuery(q: ReportQuery): ReportQuery {

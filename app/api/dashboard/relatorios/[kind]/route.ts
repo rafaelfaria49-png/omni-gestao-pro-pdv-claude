@@ -7,13 +7,14 @@ import { storeIdFromAssistecRequestForRead,activeStoreIdFromCookieHeader } from 
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { canReadReport,isReportKind,parseReportQuery,type ReportKind } from "@/lib/relatorios/contracts"
 import { buildReport } from "@/lib/relatorios/service"
-import { csvReport,pdfReport } from "@/lib/relatorios/export"
+import { csvReport,pdfReport,pdfGeneralReport } from "@/lib/relatorios/export"
 
 export const runtime="nodejs"
 export const dynamic="force-dynamic"
 export const revalidate=0
 const PRIVATE={"Cache-Control":"private, no-store, max-age=0","Vary":`Cookie, ${ASSISTEC_LOJA_HEADER}`,"X-Content-Type-Options":"nosniff"}
-const modules:Record<ReportKind,AccessModule[]>={produtos:["sales"],"fluxo-caixa":["finance"],dre:["finance"],clientes:["catalog","sales"],os:["service"],tecnicos:["service"],whatsapp:["whatsapp"]}
+const modules:Record<ReportKind,AccessModule[]>={produtos:["sales"],"fluxo-caixa":["finance"],dre:["finance"],clientes:["catalog","sales"],os:["service"],tecnicos:["service"],whatsapp:["whatsapp"],geral:["sales","finance"]}
+const EXPORT_CAP_GERAL=5000
 const fail=(error:string,status:number)=>NextResponse.json({ok:false,error},{status,headers:PRIVATE})
 
 export async function GET(req:Request,context:{params:Promise<{kind:string}>}) {
@@ -34,12 +35,15 @@ export async function GET(req:Request,context:{params:Promise<{kind:string}>}) {
   const format=url.searchParams.get("format")
   if(format&&!['csv','pdf'].includes(format))return fail("Formato de exportação inválido.",400)
   try {
-    const report=await buildReport(prisma,kind,storeId,format?{...query,page:1,pageSize:500}:query,{compare:!format,financial:permissions.financeiro.view&&canUseModule(session,"finance",storeId)})
+    // Relatório Geral: exportação maior (blocos + detalhamento), sempre completa ou recusada.
+    const cap=kind==="geral"?EXPORT_CAP_GERAL:500
+    const report=await buildReport(prisma,kind,storeId,format?{...query,page:1,pageSize:cap}:query,{compare:!format,financial:permissions.financeiro.view&&canUseModule(session,"finance",storeId),
+      service:permissions.hubs.operacoes&&canUseModule(session,"service",storeId)})
     if(format){
-      if(report.total>500)return fail("O recorte tem mais de 500 registros. Refine o período ou os filtros para exportar o recorte completo.",422)
+      if(report.total>cap)return fail(`O recorte tem mais de ${cap} registros. Refine o período ou os filtros para exportar o recorte completo.`,422)
       const filename=`relatorio-${kind}-${query.from}-${query.to}.${format}`
       const headers={...PRIVATE,"Content-Type":format==="csv"?"text/csv; charset=utf-8":"application/pdf","Content-Disposition":`attachment; filename="${filename}"`}
-      return format==="csv"?new Response(csvReport(report),{headers}):new Response(pdfReport(report) as BodyInit,{headers})
+      return format==="csv"?new Response(csvReport(report),{headers}):new Response((kind==="geral"?pdfGeneralReport(report):pdfReport(report)) as BodyInit,{headers})
     }
     return NextResponse.json({ok:true,...report},{headers:PRIVATE})
   }catch{
