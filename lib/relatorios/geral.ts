@@ -102,7 +102,7 @@ const ledgerClass = Prisma.sql`CASE
   ELSE 'nao_classificado' END`
 
 function ledgerCte(storeId: string, q: ReportQuery) {
-  return Prisma.sql`${movementCtes(storeId, { ...q, wallet: "", category: "" })}, rt AS (
+  return Prisma.sql`${movementCtes(storeId, { ...q, wallet: "", category: "" }, { fromStart: true })}, rt AS (
     SELECT t.id, ${receivableOrigin("t")} AS orig, sv.at AS venda_at FROM contas_receber_titulos t ${saleOfTitle(storeId, "t")}
     WHERE t."storeId"=${storeId} AND t.id IN (SELECT "referenciaId" FROM m WHERE "createdAt">=${q.start} AND tipo='entrada' AND lower(origem) ~ '^receber')
   ), cls AS (
@@ -134,8 +134,11 @@ export async function generalAggregates(db: ReportDb, storeId: string, q: Report
       SELECT count(*)::int AS documentos, coalesce(sum(total),0)::float8 AS total, coalesce(sum(itens),0)::float8 AS itens,
         count(*) FILTER(WHERE venda_id IS NULL)::int AS "semVenda", count(*) FILTER(WHERE abs(total-itens)>=0.01)::int AS divergentes FROM docs`),
     db.$queryRaw<GeneralRaw["split"][]>(Prisma.sql`WITH ${salesCte(storeId, q)}, pay AS (
-        SELECT v.total, coalesce((v.payload->>'origem')='os',false) AS os_doc, jsonb_typeof(v.payload->'paymentBreakdown')='object' AS has_pb,
-          (SELECT coalesce(sum(m.valor),0) FROM movimentacoes_financeiras m WHERE m."storeId"=${storeId} AND m."referenciaId"=v."pedidoId" AND m.origem='venda' AND m.tipo='entrada')::numeric AS avista,
+        SELECT v.total, coalesce((v.payload->>'origem')='os',false) AND EXISTS(SELECT 1 FROM contas_receber_titulos ot WHERE ot."storeId"=${storeId}
+            AND (ot."localKey" IN ('os-faturamento:'||${storeId}||':'||(v.payload->>'origemRefId'),'receber:os:'||${storeId}||':'||(v.payload->>'origemRefId'))
+              OR (jsonb_typeof(ot.payload)='object' AND (ot.payload->>'ordemServicoId'=v.payload->>'origemRefId' OR ot.payload->>'osId'=v.payload->>'origemRefId')))) AS os_doc,
+          jsonb_typeof(v.payload->'paymentBreakdown')='object' AS has_pb,
+          (SELECT coalesce(sum(m.valor),0) FROM movimentacoes_financeiras m WHERE m."storeId"=${storeId} AND m."referenciaId"=v."pedidoId" AND lower(m.origem) IN ('venda','pdv') AND m.tipo='entrada')::numeric AS avista,
           (SELECT coalesce(sum(t.valor),0) ${saleTitles(storeId, Prisma.sql`v."pedidoId"`, Prisma.sql`v.crt`)})::numeric AS aprazo,
           ${pb("dinheiro")} AS dinheiro, ${pb("pix")} AS pix, ${pb("cartaoDebito")} AS debito, ${pb("cartaoCredito")} AS credito_cartao,
           ${pb("carne")} AS carne, ${pb("aPrazo")} AS aprazo_decl, ${pb("creditoVale")} AS credito
@@ -165,7 +168,7 @@ export async function generalAggregates(db: ReportDb, storeId: string, q: Report
       FROM o GROUP BY 1,2 HAVING count(*) FILTER(WHERE aberto IS NULL OR aberto>0)>0 ORDER BY 1,2`),
     cashFlowReport(db, storeId, { ...q, wallet: "", category: "", search: "", page: 1, pageSize: 1 }),
     db.$queryRaw<GeneralRaw["conference"][]>(Prisma.sql`WITH ${salesCte(storeId, q)}, ${linesCte(storeId)}, osl AS (
-        SELECT DISTINCT substr(i."inventoryId", CASE WHEN starts_with(i."inventoryId",'__os_servico__') THEN 15 ELSE 13 END) AS os_id, i."lineTotal" AS valor
+        SELECT i.id, substr(i."inventoryId", CASE WHEN starts_with(i."inventoryId",'__os_servico__') THEN 15 ELSE 13 END) AS os_id, i."lineTotal" AS valor
         FROM venda_itens i JOIN v ON v.id=i."vendaId" WHERE v.status<>'cancelada' AND (starts_with(coalesce(i."inventoryId",''),'__os_servico__') OR starts_with(coalesce(i."inventoryId",''),'__os_pecas__'))
       ), osdup AS (SELECT os_id, sum(valor) AS valor FROM osl WHERE EXISTS(
           SELECT 1 FROM contas_receber_titulos t JOIN movimentacoes_financeiras mm ON mm."storeId"=${storeId} AND mm."referenciaId"=t.id AND mm.tipo='entrada' AND lower(mm.origem) ~ '^receber'
@@ -186,14 +189,14 @@ export async function generalAggregates(db: ReportDb, storeId: string, q: Report
         coalesce((SELECT sum(av."precoVenda") FROM aparelhos_vendas av JOIN v ON v.id=av."vendaId" WHERE av."storeId"=${storeId} AND v.status<>'cancelada'),0)::float8 AS "aparelhosValor"`),
   ])
   // Em aberto de títulos a prazo das vendas deste período: mesma regra de saldo dos títulos.
-  const [cohort] = await db.$queryRaw<{ valor: number }[]>(Prisma.sql`${titles(storeId)}
-    SELECT coalesce(sum(o.aberto),0)::float8 AS valor FROM outstanding o ${saleOfTitle(storeId, "o")}
+  const [cohort] = await db.$queryRaw<{ valor: number; indeterminados: number }[]>(Prisma.sql`${titles(storeId)}
+    SELECT coalesce(sum(o.aberto),0)::float8 AS valor, count(*) FILTER(WHERE o.aberto IS NULL)::int AS indeterminados FROM outstanding o ${saleOfTitle(storeId, "o")}
     WHERE o.lado='receber' AND sv.at>=${q.start} AND sv.at<${q.end}`)
   const metric = (key: string) => flowReport.metrics.find(x => x.key === key)?.value ?? null
   return {
     salesTypes, salesTotals: salesTotals[0], returnTypes, returnTotals: returnTotals[0], split: split[0], ledger, open,
     flow: { initial: metric("initial"), incoming: metric("incoming") ?? 0, outgoing: metric("outgoing") ?? 0, openingAdjustments: metric("openingAdjustments"), final: metric("final") },
-    conference: { ...conference[0], aprazoAbertoCoorte: cohort.valor },
+    conference: { ...conference[0], aprazoAbertoCoorte: cohort.indeterminados ? null : cohort.valor },
   }
 }
 
@@ -260,10 +263,9 @@ type DetailRow = { id: string; date: string; record: string; origin: string; cat
 export async function generalReport(db: ReportDb, storeId: string, q: ReportQuery, options: { service: boolean }): Promise<Report> {
   const cte = detailCte(storeId, q)
   const raw = await generalAggregates(db, storeId, q, options)
-  const [rows, count] = await Promise.all([
-    db.$queryRaw<DetailRow[]>(Prisma.sql`${cte} SELECT id, date, record, origin, cats, status, reference, amount, open, link FROM f ORDER BY ts DESC NULLS LAST, id ${paginate(q)}`),
-    db.$queryRaw<{ total: number }[]>(Prisma.sql`${cte} SELECT count(*)::int AS total FROM f`),
-  ])
+  // Uma leitura só: a contagem vem da janela; página além do fim (sem linhas) recorre ao count.
+  const rows = await db.$queryRaw<(DetailRow & { total: number })[]>(Prisma.sql`${cte} SELECT id, date, record, origin, cats, status, reference, amount, open, link, count(*) OVER()::int AS total FROM f ORDER BY ts DESC NULLS LAST, id ${paginate(q)}`)
+  const count = rows.length ? [{ total: rows[0].total }] : q.page === 1 ? [{ total: 0 }] : await db.$queryRaw<{ total: number }[]>(Prisma.sql`${cte} SELECT count(*)::int AS total FROM f`)
   const built = buildGeneralSections(raw, options)
   const expenseCats = [...new Set([...raw.ledger.filter(r => r.categoria).map(r => r.categoria!), ...raw.open.filter(o => o.lado === "pagar").map(o => o.grupo)])].sort()
   const href = (r: DetailRow) => !r.link ? null
@@ -289,6 +291,7 @@ export async function generalReport(db: ReportDb, storeId: string, q: ReportQuer
       categories: [...SALE_TYPES.map(t => ({ value: `tipo:${t}`, label: `Venda: ${SALE_TYPE_LABEL[t]}` })),
         ...Object.entries(LEDGER_LABEL).map(([k, l]) => ({ value: `classe:${k}`, label: `Ledger: ${l}` })),
         ...Object.entries(RECEIPT_SUB_LABEL).map(([k, l]) => ({ value: `sub:${k}`, label: `Recebimento: ${l}` })),
+        ...Object.entries(RECEIVABLE_ORIGIN_LABEL).map(([k, l]) => ({ value: `receber:${k}`, label: `Título a receber: ${l}` })),
         ...expenseCats.map(c => ({ value: `despesa:${c}`, label: `Despesa: ${c}` }))],
     },
   }
@@ -308,8 +311,10 @@ export async function generalOriginReport(db: ReportDb, storeId: string, q: Repo
   const detail = (title: string, source: string, rows: Row[], limitations: string[]): Report => ({
     kind: "geral", title, basis: "Registro individual e seus vínculos na loja autorizada, em qualquer data.", source,
     limitations: ["Identificador consultado somente na loja ativa. Não há comparação temporal de um registro individual.",
-      ...(rows.length >= ORIGIN_LIMIT ? [`Vínculos limitados a ${ORIGIN_LIMIT} linhas: este detalhe está INCOMPLETO.`] : []), ...limitations],
-    metrics: [{ key: "records", label: "Registros vinculados", value: rows.length, format: "number" }], columns: originColumns, rows, total: rows.length, trend: [] })
+      ...(rows.length > ORIGIN_LIMIT ? [`Mais de ${ORIGIN_LIMIT} vínculos: a tela mostra os primeiros ${ORIGIN_LIMIT}; este detalhe está INCOMPLETO e não pode ser exportado.`] : []), ...limitations],
+    // total > linhas exibidas sinaliza corte; a rota recusa exportar recorte incompleto.
+    metrics: [{ key: "records", label: "Registros vinculados", value: rows.length > ORIGIN_LIMIT ? null : rows.length, format: "number", reason: `Mais de ${ORIGIN_LIMIT}.` }],
+    columns: originColumns, rows: rows.slice(0, ORIGIN_LIMIT), total: rows.length, trend: [] })
   const finish = (rows: OriginRaw[]): Row[] => rows.map(r => ({
     id: `${r.record}:${r.reference}`, record: r.record, reference: r.reference, date: r.date, label: r.label,
     type: r.kind === "tipo" ? label(SALE_TYPE_LABEL, r.type) : r.kind === "classe" ? label(LEDGER_LABEL, r.type) : r.kind === "status" ? label(STATUS_LABEL, r.type) : r.type,
@@ -330,12 +335,12 @@ export async function generalOriginReport(db: ReportDb, storeId: string, q: Repo
       mv AS (${movementRows(storeId, Prisma.sql`SELECT "pedidoId" FROM v UNION ALL SELECT id FROM st UNION ALL SELECT id FROM dv`)}),
       o AS (
         SELECT 'Venda' AS record, v."pedidoId" AS reference, ${utcText(Prisma.sql`v.at`)} AS date, NULL::text AS label, v.status AS type, NULL::float8 AS quantity, v.total::float8 AS amount, NULL::text AS link, 'status'::text AS kind, 0 AS ord FROM v
-        UNION ALL SELECT 'Linha da venda', i.id, NULL, i.nome, ${lineType(storeId, Prisma.sql`i."inventoryId"`, Prisma.sql`i."vendaId"`, Prisma.sql`(v.payload->>'origem')='os'`)},
+        UNION ALL SELECT 'Linha da venda', i.id, NULL, CASE WHEN starts_with(coalesce(i."inventoryId",''),'__') THEN NULL ELSE i.nome END, ${lineType(storeId, Prisma.sql`i."inventoryId"`, Prisma.sql`i."vendaId"`, Prisma.sql`(v.payload->>'origem')='os'`)},
           i.quantidade::float8, i."lineTotal"::float8, NULL, 'tipo', 1 FROM venda_itens i JOIN v ON v.id=i."vendaId"
         UNION ALL SELECT 'Título a receber', st.id, CASE WHEN st.vencimento ~ '^20[0-9]{2}-[0-9]{2}-[0-9]{2}' THEN left(st.vencimento,10) END, NULL, st.status, NULL, st.valor::float8, 'titulo:receber:'||st.id, NULL, 2 FROM st
         UNION ALL SELECT 'Devolução', dv."localId", ${utcText(Prisma.sql`dv.at`)}, NULL, NULL, NULL, -dv."valorTotal"::float8, NULL, NULL, 3 FROM dv
         UNION ALL ${movementSelect})
-      SELECT record, reference, date, label, type, quantity, amount, link, kind FROM o ORDER BY ord, date NULLS FIRST, reference LIMIT ${ORIGIN_LIMIT}`)
+      SELECT record, reference, date, label, type, quantity, amount, link, kind FROM o ORDER BY ord, date NULLS FIRST, reference LIMIT ${ORIGIN_LIMIT + 1}`)
     return detail(rows.length ? `Venda ${pedido}` : "Venda não encontrada nesta loja", "Venda.pedidoId + ItemVenda + títulos pdv-aprazo / FK + DevolucaoVenda + MovimentacaoFinanceira.referenciaId.",
       finish(rows), ["Linhas com valores gravados na venda, sem rateio de desconto geral. Movimentos listados em qualquer data: a parcela paga aparece no mês em que foi recebida.",
         "Venda cancelada é exibida com seus estornos, para conferência. Nome do item é o texto gravado na linha; não há dados do cliente."])
@@ -355,7 +360,7 @@ export async function generalOriginReport(db: ReportDb, storeId: string, q: Repo
           FROM t CROSS JOIN LATERAL jsonb_array_elements(${emptyArray(Prisma.sql`t.payload->'historico'`)}) WITH ORDINALITY h(e,n)
         UNION ALL SELECT 'Venda de origem', sv0."pedidoId", NULL, NULL, NULL, NULL, NULL, 'venda:'||sv0."pedidoId", NULL, 3 FROM sv0
         UNION ALL ${movementSelect})
-      SELECT record, reference, date, label, type, quantity, amount, link, kind FROM o ORDER BY ord, date NULLS FIRST, reference LIMIT ${ORIGIN_LIMIT}`)
+      SELECT record, reference, date, label, type, quantity, amount, link, kind FROM o ORDER BY ord, date NULLS FIRST, reference LIMIT ${ORIGIN_LIMIT + 1}`)
     return detail(rows.length ? `Título a ${lado} ${id}` : "Título não encontrado nesta loja", "ContaReceberTitulo/ContaPagarTitulo.id + payload.historico (tipo e valor) + MovimentacaoFinanceira.referenciaId.",
       finish(rows), ["Histórico mostra apenas tipo e valor do evento. Observações, usuários, cliente e descrição livre não são retornados.",
         "Saldo em aberto pelo mesmo contrato do Fluxo de Caixa; quando o histórico não comprova os pagamentos, aparece Indisponível."])

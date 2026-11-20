@@ -76,7 +76,8 @@ export function pdfGeneralReport(report: ReportResponse): Uint8Array {
   }
   keep(["", "== LIMITAÇÕES ==", ...report.limitations.flatMap(l => wrapText(`- ${l}`, WIDTH))])
   const detail = textTable(report.columns, report.rows)
-  const detailLead = ["", `== DETALHAMENTO: ${report.total} registro(s) — exportação completa do recorte ==`]
+  const complete = report.rows.length === report.total
+  const detailLead = ["", complete ? `== DETALHAMENTO: ${report.total} registro(s) — exportação completa do recorte ==` : `== DETALHAMENTO PARCIAL: ${report.rows.length} de ${report.total} registro(s) — NÃO é o recorte completo ==`]
   if (report.rows.length) table(detail, "Detalhamento", detailLead)
   else keep([...detailLead, "Nenhum registro corresponde aos filtros do detalhamento."])
 

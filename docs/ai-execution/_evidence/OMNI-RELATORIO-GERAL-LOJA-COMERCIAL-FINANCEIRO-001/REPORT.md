@@ -56,8 +56,10 @@ financeiro), Electron ou POS-80 alterado.
 
 - `npm run typecheck`: 0 erros. ESLint dos arquivos alterados: limpo.
 - Vitest (mesmo comando do job `relatorios-qa`, sem `.pg`): 8 arquivos, 105/105.
-- PostgreSQL 17 descartável loopback (`scripts/relatorios/run-local-qa.mjs`): 3 arquivos, **40/40** — inclui `geral.pg.test.ts` (8 testes) em banco próprio `omni_reports_qa_geral`: venda à vista, a prazo, parcela recebida em outro mês, pagamento parcial, OS (inclusive cobrança dupla), aparelho com IMEI, serviço, item sem produto, contas pagas/parciais/pendentes, devolução, cancelamento com e sem estorno, transferência, sangria/suprimento, lançamento manual, recebimento órfão e duas lojas.
-- `npm run build`, CI e revisão independente: ver PR.
+- PostgreSQL 17 descartável loopback (`scripts/relatorios/run-local-qa.mjs`): 3 arquivos, **41/41** — inclui `geral.pg.test.ts` (9 testes) em banco próprio `omni_reports_qa_geral`: venda à vista, a prazo, parcela recebida em outro mês, pagamento parcial, OS (inclusive cobrança dupla), aparelho com IMEI, serviço, item sem produto, contas pagas/parciais/pendentes, devolução, cancelamento com e sem estorno, transferência, sangria/suprimento, lançamento manual, recebimento órfão três lojas, venda de OS sem título da OS e rastreio com mais de 2.000 vínculos (marcado incompleto, exportação recusada).
+- `npm run build` (local, antes das correções da revisão): Compiled successfully, exit 0. CI: ver PR.
+- Revisão independente (subagente, somente leitura): **APPROVE_WITH_FIXES**, sem P0/P1. Corrigidos: rastreio cortado não é mais exportado nem dito completo (LIMIT+1, 422); vencido/a vencer/coorte viram Indisponível quando há título sem saldo comprovado; venda gerada de OS só conta como acompanhada na OS se existir título da OS; ledger do Geral limitado ao período e detalhamento numa só leitura (`count(*) OVER()`); duplicidade de OS sem DISTINCT; sem texto livre de linhas virtuais no rastreio; base única de devolução (documento); à vista aceita origem `pdv`; filtro por origem do título a receber; nota sobre saídas manuais sem título.
+- **Risco remanescente (P2 da revisão):** desempenho em lojas com histórico grande não foi medido — a validação foi com dados sintéticos. Medir na homologação (tempo por consulta < 12 s, transação < 30 s).
 
 ## 6. Pendências para homologação com dados reais da RAFACELL
 

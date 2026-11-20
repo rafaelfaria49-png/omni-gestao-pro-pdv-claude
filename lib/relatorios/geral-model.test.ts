@@ -48,6 +48,9 @@ describe("Relatório Geral — regras de conciliação", () => {
     const r = buildGeneralSections(raw({ open: [{ lado: "receber", grupo: "titulo_nao_classificado", titulos: 1, aberto: 0, vencido: 0, noPeriodo: 0, indeterminados: 2 }] }), { service: true })
     expect(val(r, "resumo", "receivableOpen")).toBeNull()
     expect(sec(r, "resumo").metrics.find(m => m.key === "receivableOpen")?.reason).toContain("2 título")
+    expect(val(r, "receber", "receivableOverdue")).toBeNull()
+    expect(val(r, "receber", "receivableDue")).toBeNull()
+    expect(val(buildGeneralSections(raw({ conference: { ...raw().conference, aprazoAbertoCoorte: null } }), { service: true }), "receber", "receivableCohort")).toBeNull()
   })
   it("sem acesso a Operações, contagem de OS fica indisponível", () => {
     expect(val(buildGeneralSections(raw(), { service: false }), "os", "osCreated")).toBeNull()

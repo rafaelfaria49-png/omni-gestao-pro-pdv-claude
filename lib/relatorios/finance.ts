@@ -5,7 +5,7 @@ import { money, type Report, type ReportQuery } from "./contracts"
 import { dreClass,originHref } from "./origins"
 
 /** CTE `m` sem WITH, para compor com outros CTEs (Relatório Geral). */
-export function movementCtes(storeId: string, q: ReportQuery) {
+export function movementCtes(storeId: string, q: ReportQuery, opts: { fromStart?: boolean } = {}) {
   return Prisma.sql`m AS (
     SELECT m.id, m.tipo, m.origem, m.valor::numeric AS valor, m."createdAt", m."carteiraId", m."referenciaId",
       coalesce(c.nome,'Sem carteira') AS carteira, coalesce(nullif(p.payload->>'categoria',''),'Sem categoria') AS categoria,
@@ -13,7 +13,7 @@ export function movementCtes(storeId: string, q: ReportQuery) {
     FROM movimentacoes_financeiras m
     LEFT JOIN carteiras_financeiras c ON c.id=m."carteiraId" AND c."storeId"=${storeId}
     LEFT JOIN contas_pagar_titulos p ON p.id=m."referenciaId" AND p."storeId"=${storeId}
-    WHERE m."storeId"=${storeId} AND m."createdAt"<${q.end}
+    WHERE m."storeId"=${storeId} AND m."createdAt"<${q.end}${opts.fromStart ? Prisma.sql` AND m."createdAt">=${q.start}` : Prisma.empty}
       AND (${q.wallet}='' OR m."carteiraId"=${q.wallet})
       AND (${q.category}='' OR coalesce(nullif(p.payload->>'categoria',''),'Sem categoria')=${q.category})
   )`

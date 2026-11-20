@@ -76,7 +76,7 @@ export type OpenRow = { lado: "receber" | "pagar"; grupo: string; titulos: numbe
 export type FlowMetrics = { initial: number | null; incoming: number; outgoing: number; openingAdjustments: number | null; final: number | null }
 export type Conference = {
   cancelSemEstorno: number; cancelSemEstornoValor: number; osDupla: number; osDuplaValor: number
-  caixaRecebimentos: number; caixaEstornos: number; aprazoAbertoCoorte: number
+  caixaRecebimentos: number; caixaEstornos: number; aprazoAbertoCoorte: number | null
   osCriadas: number | null; aparelhosUnidades: number; aparelhosValor: number
 }
 export type GeneralRaw = {
@@ -122,6 +122,7 @@ export function buildGeneralSections(raw: GeneralRaw, options: { service: boolea
   const receivable = open.filter(o => o.lado === "receber"), payable = open.filter(o => o.lado === "pagar")
   const openSum = (rows: OpenRow[], k: "aberto" | "vencido" | "noPeriodo") => money(rows.reduce((s, r) => s + r[k], 0))
   const indet = (rows: OpenRow[]) => rows.reduce((s, r) => s + r.indeterminados, 0)
+  const unknown = (rows: OpenRow[]) => `${indet(rows)} título(s) sem saldo comprovado: total indisponível.`
   const receiptRows = ledger.filter(r => r.classe === "recebimento_titulo")
   const receiptBySub = new Map<string, LedgerRow[]>()
   for (const r of receiptRows) receiptBySub.set(r.sub ?? "titulo_nao_encontrado", [...receiptBySub.get(r.sub ?? "titulo_nao_encontrado") ?? [], r])
@@ -160,10 +161,10 @@ export function buildGeneralSections(raw: GeneralRaw, options: { service: boolea
         return { id: t, tipo: SALE_TYPE_LABEL[t], vendas: s?.vendas ?? 0, quantidade: s?.quantidade ?? 0, bruto: money(s?.bruto ?? 0),
           devolvidoQtd: d?.quantidade ?? 0, devolvido: money(d?.valor ?? 0), liquido: money((s?.bruto ?? 0) - (d?.valor ?? 0)) }
       }), { id: "ajuste", tipo: "Ajuste geral não rateado", vendas: NA, quantidade: NA, bruto: adjustment, devolvidoQtd: NA, devolvido: NA, liquido: adjustment },
-      { id: "total", tipo: "Total (Venda.total)", vendas: st.vendas, quantidade: NA, bruto: money(st.total), devolvidoQtd: NA, devolvido: money(rt.itens), liquido: money(st.total - rt.itens) }] },
+      { id: "total", tipo: "Total (Venda.total)", vendas: st.vendas, quantidade: NA, bruto: money(st.total), devolvidoQtd: NA, devolvido: money(rt.total), liquido: money(st.total - rt.total) }] },
     { key: "vista-prazo", title: "Vendas à vista e a prazo", note: "Comprovado: entrada do ledger vinculada à venda (à vista) e títulos a receber da venda (a prazo, principal). Declarado: formas gravadas pelo PDV, não comprovam recebimento.",
       metrics: [m("avista", "À vista comprovado no ledger", sp.avista), m("aprazo", "A prazo comprovado em títulos", sp.aprazo),
-        m("credito", "Crédito/vale utilizado (não é dinheiro novo)", sp.credito), m("osDoc", "Vendas geradas de OS (pagamento registrado na OS)", sp.osDoc),
+        m("credito", "Crédito/vale utilizado (não é dinheiro novo)", sp.credito), m("osDoc", "Vendas geradas de OS com título da OS (pagamento acompanhado na OS)", sp.osDoc),
         m("semComprovacao", "Sem pagamento comprovado vinculado", sp.semComprovacao)],
       columns: cols(["forma", "Forma declarada no PDV"], ["valor", "Valor declarado", "money"]),
       rows: ([["dinheiro", "Dinheiro", sp.dinheiro], ["pix", "PIX", sp.pix], ["debito", "Cartão de débito", sp.debito], ["credito", "Cartão de crédito", sp.creditoCartao],
@@ -179,18 +180,18 @@ export function buildGeneralSections(raw: GeneralRaw, options: { service: boolea
       ] },
     { key: "receber", title: "Contas a receber e saldo devedor", note: "Posição atual dos títulos (principal menos pagamentos/estornos do histórico), sem reconstrução histórica. Vencido: vencimento anterior a hoje (São Paulo).",
       metrics: [m("receivableOpen2", "Saldo devedor total", indet(receivable) ? null : openSum(receivable, "aberto"), `${indet(receivable)} título(s) sem saldo comprovado.`),
-        m("receivableOverdue", "Vencido", openSum(receivable, "vencido")), m("receivableDue", "Vence no período", openSum(receivable, "noPeriodo")),
-        m("receivableCohort", "Em aberto de vendas a prazo deste período", cf.aprazoAbertoCoorte), m("receivableUnknown", "Títulos sem saldo comprovado", indet(receivable), undefined, "number")],
+        m("receivableOverdue", "Vencido", indet(receivable) ? null : openSum(receivable, "vencido"), unknown(receivable)), m("receivableDue", "Vence no período", indet(receivable) ? null : openSum(receivable, "noPeriodo"), unknown(receivable)),
+        m("receivableCohort", "Em aberto de vendas a prazo deste período", cf.aprazoAbertoCoorte, "Há título dessas vendas sem saldo comprovado."), m("receivableUnknown", "Títulos sem saldo comprovado", indet(receivable), undefined, "number")],
       columns: cols(["grupo", "Origem do título"], ["titulos", "Títulos em aberto", "number"], ["aberto", "Em aberto", "money"], ["vencido", "Vencido", "money"], ["noPeriodo", "Vence no período", "money"], ["indeterminados", "Sem saldo comprovado", "number"]),
       rows: receivable.map(r => ({ id: r.grupo, grupo: label(RECEIVABLE_ORIGIN_LABEL, r.grupo), titulos: r.titulos, aberto: money(r.aberto), vencido: money(r.vencido), noPeriodo: money(r.noPeriodo), indeterminados: r.indeterminados })) },
-    { key: "despesas", title: "Despesas e pagamentos efetivos", note: "Pagamentos efetivos do ledger, por categoria atual do título. Categorias de compra/insumo são compras de estoque, não CMV do período.",
+    { key: "despesas", title: "Despesas e pagamentos efetivos", note: "Pagamentos efetivos do ledger, por categoria atual do título. Categorias de compra/insumo são compras de estoque, não CMV do período. Saídas manuais sem título não têm categoria comprovada: ficam em Não classificado (fora destes totais) e na conferência.",
       metrics: [m("paymentsNet", "Pagamentos líquidos", lt.payments), m("purchases", "Compras/insumos pagos (não é CMV)", purchases),
         m("expenses", "Demais despesas pagas", lt.payments - purchases), m("unclassifiedOut", "Saídas não classificadas (fora dos totais)", lt.unclassifiedOut)],
       columns: cols(["categoria", "Categoria do título"], ["natureza", "Natureza"], ["registros", "Lançamentos", "number"], ["valor", "Pago líquido", "money"]),
       rows: [...paymentCats.entries()].sort((a, b) => b[1].valor - a[1].valor).map(([categoria, c]) => ({ id: categoria, categoria, natureza: c.compra ? "Compra/insumo (não é CMV)" : "Despesa", registros: c.registros, valor: money(c.valor) })) },
     { key: "pagar", title: "Contas a pagar", note: "Títulos pendentes separados dos pagos. Posição atual do título, sem reconstrução histórica.",
       metrics: [m("payableOpen2", "Total a pagar em aberto", indet(payable) ? null : openSum(payable, "aberto"), `${indet(payable)} título(s) sem saldo comprovado.`),
-        m("payableOverdue", "Vencido", openSum(payable, "vencido")), m("payableDue", "Vence no período", openSum(payable, "noPeriodo")), m("payableUnknown", "Títulos sem saldo comprovado", indet(payable), undefined, "number")],
+        m("payableOverdue", "Vencido", indet(payable) ? null : openSum(payable, "vencido"), unknown(payable)), m("payableDue", "Vence no período", indet(payable) ? null : openSum(payable, "noPeriodo"), unknown(payable)), m("payableUnknown", "Títulos sem saldo comprovado", indet(payable), undefined, "number")],
       columns: cols(["grupo", "Categoria"], ["titulos", "Títulos em aberto", "number"], ["aberto", "Em aberto", "money"], ["vencido", "Vencido", "money"], ["noPeriodo", "Vence no período", "money"], ["indeterminados", "Sem saldo comprovado", "number"]),
       rows: payable.map(r => ({ id: r.grupo, grupo: r.grupo, titulos: r.titulos, aberto: money(r.aberto), vencido: money(r.vencido), noPeriodo: money(r.noPeriodo), indeterminados: r.indeterminados })) },
     { key: "fluxo", title: "Fluxo de entradas, saídas e saldos", note: "Mesmo cálculo do relatório Fluxo de Caixa (consolidado). Transferências são neutras; sangria/suprimento são tesouraria.",

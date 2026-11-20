@@ -33,5 +33,6 @@ describe("report route with real enterprise guards",()=>{
     h.auth.mockResolvedValue(session())
     h.build.mockResolvedValueOnce({total:5001});expect((await GET(request("a","format=pdf"),context("geral"))).status).toBe(422)
     expect(h.build).toHaveBeenLastCalledWith(expect.anything(),"geral","a",expect.objectContaining({pageSize:5000,page:1}),expect.objectContaining({compare:false}))
+    h.build.mockResolvedValueOnce({total:2001,rows:Array.from({length:2000},()=>({})),columns:[],metrics:[],limitations:[],period:{from:"2026-11-01",to:"2026-11-10"}});expect((await GET(request("a","format=csv&source=venda:X"),context("geral"))).status).toBe(422)
   })
 })

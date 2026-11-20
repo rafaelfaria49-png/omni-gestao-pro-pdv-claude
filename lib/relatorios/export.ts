@@ -11,7 +11,7 @@ export function csvReport(report: ReportResponse): string {
   const rows: Cell[][] = [[report.title], ["Loja",report.storeId], ["Período São Paulo",report.period.from,report.period.to], ["Gerado em",report.generatedAt],
     ["Regime / base",report.basis], ["Fontes",report.source], ...report.limitations.map(x=>["Limitação",x]), [],
     ["Indicador","Valor","Motivo"], ...report.metrics.map(m=>[m.label,m.value,m.value===null?m.reason??"Sem cobertura suficiente":""]), [],
-    ...(report.sections?.length?csvSectionRows(report.sections):[]), ...(report.sections?.length?[["Detalhamento",`${report.total} registro(s) — recorte completo`]]:[]),
+    ...(report.sections?.length?csvSectionRows(report.sections):[]), ...(report.sections?.length?[["Detalhamento",report.rows.length===report.total?`${report.total} registro(s) — recorte completo`:`PARCIAL: ${report.rows.length} de ${report.total} registro(s)`]]:[]),
     report.columns.map(c=>c.label), ...report.rows.map(r=>report.columns.map(c=>r[c.key]??null))]
   return "\ufeff"+rows.map(r=>r.map(csvCell).join(";")).join("\r\n")+"\r\n"
 }

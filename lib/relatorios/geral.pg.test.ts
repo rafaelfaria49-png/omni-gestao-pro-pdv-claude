@@ -189,6 +189,23 @@ describe.skipIf(!base)("Relatório Geral — PostgreSQL descartável", () => {
     expect(foreign.rows).toHaveLength(0)
   })
 
+  it("venda gerada de OS sem título da OS não é tratada como paga; rastreio grande é marcado incompleto", async () => {
+    const C = "geral-qa-c"
+    await db.store.create({ data: { id: C, name: "QA Geral C" } })
+    await db.venda.create({ data: { id: "gvc-os", storeId: C, pedidoId: "QA-C-OS", total: 400, at: nov(3), payload: { origem: "os", origemRefId: "os-sem-titulo" },
+      itens: { create: { inventoryId: "peca-c", nome: "QA", quantidade: 1, lineTotal: 400 } } } })
+    await db.venda.create({ data: { id: "gvc-big", storeId: C, pedidoId: "QA-C-BIG", total: 2001, at: nov(3), payload: { origem: "os", origemRefId: "os-sem-titulo" } } })
+    await db.itemVenda.createMany({ data: Array.from({ length: 2001 }, (_, i) => ({ vendaId: "gvc-big", inventoryId: "__servico__x", nome: "Texto livre do caixa " + i, quantidade: 1, lineTotal: 1 })) })
+    const r = await report("", C)
+    expect(metric(r, "vista-prazo", "osDoc")).toBe(0)
+    expect(metric(r, "vista-prazo", "semComprovacao")).toBe(2401)
+    const trace = await buildReport(db, "geral", C, query("source=venda:QA-C-BIG"), { compare: false, financial: true })
+    expect(trace.rows).toHaveLength(2000)
+    expect(trace.total).toBeGreaterThan(trace.rows.length)
+    expect(trace.limitations.join(" ")).toContain("INCOMPLETO")
+    expect(JSON.stringify(trace)).not.toContain("Texto livre do caixa")
+  })
+
   it("é estritamente somente leitura", async () => {
     const before = await db.movimentacaoFinanceira.count()
     await report()

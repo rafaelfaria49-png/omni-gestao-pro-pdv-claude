@@ -41,6 +41,8 @@ export async function GET(req:Request,context:{params:Promise<{kind:string}>}) {
       service:permissions.hubs.operacoes&&canUseModule(session,"service",storeId)})
     if(format){
       if(report.total>cap)return fail(`O recorte tem mais de ${cap} registros. Refine o período ou os filtros para exportar o recorte completo.`,422)
+      // Rastreio de origem do Geral com vínculos além do limite: nunca exportar como completo.
+      if(report.rows.length<report.total)return fail("O detalhe tem mais vínculos do que o limite exportável. Consulte na tela ou refine o recorte.",422)
       const filename=`relatorio-${kind}-${query.from}-${query.to}.${format}`
       const headers={...PRIVATE,"Content-Type":format==="csv"?"text/csv; charset=utf-8":"application/pdf","Content-Disposition":`attachment; filename="${filename}"`}
       return format==="csv"?new Response(csvReport(report),{headers}):new Response((kind==="geral"?pdfGeneralReport(report):pdfReport(report)) as BodyInit,{headers})
