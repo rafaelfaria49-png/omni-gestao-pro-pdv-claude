@@ -6,6 +6,7 @@ import { FirstAccessWizard } from "@/components/onboarding/first-access-wizard"
 import { AppShell } from "@/components/painel-inicial/AppShell"
 import { PwaUpdatePrompt } from "@/components/pwa/pwa-update-prompt"
 import { WorkspaceAccessBoundary } from "@/components/auth/WorkspaceAccessBoundary"
+import { ReportProviders } from "@/components/dashboard/relatorios/report-providers"
 
 export default function DashboardSegmentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -58,5 +59,6 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     </AppShell>
   )
 
+  if(pathname==="/dashboard/relatorios"||pathname?.startsWith("/dashboard/relatorios/"))return <ReportProviders><WorkspaceAccessBoundary>{shell}</WorkspaceAccessBoundary></ReportProviders>
   return <AppOpsProviders><WorkspaceAccessBoundary>{shell}</WorkspaceAccessBoundary></AppOpsProviders>
 }
