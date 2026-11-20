@@ -102,11 +102,11 @@ function shell(title: string, body: string, formato: DocFormato, rascunho: boole
        th, td { display: inline; padding: 0; text-align: left; }
        th { font-weight: 700; } th::after { content: ": "; }
        .muted { font-size: 8pt; }
-       .cover > div { border: 0.3mm solid #000; padding: 1.2mm 1.6mm; margin: 0 0 1.4mm; break-inside: avoid; }
+       .cover > div { border: 0.3mm solid #000; padding: 1.2mm 1.6mm; margin: 0 0 1.4mm; }
        .cover .rot, .cover b, .cover .muted { display: block; }
        .cover b { font-size: 10pt; margin: 0.3mm 0; }
        ol { padding-left: 5mm; margin: 0; } li { margin-bottom: 1.2mm; }
-       .sign div { break-inside: avoid; border-top: 0.3mm solid #000; margin-top: 12mm; padding-top: 1mm; text-align: center; font-size: 8pt; }`
+       .sign div { border-top: 0.3mm solid #000; margin-top: 12mm; padding-top: 1mm; text-align: center; font-size: 8pt; }`
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(title)}</title>
 <style>
