@@ -1,5 +1,12 @@
 # Changelog — OmniGestão Pro
 
+## 2026-11-15 — Central de Relatórios: implementação em revisão, sem merge
+
+- Consultas reais de produtos, caixa, DRE gerencial parcial, clientes, OS/técnicos e registros WhatsApp, com filtros, comparação e exportação autorizada.
+- Cobertura e métricas indisponíveis explícitas; privacidade de páginas HTML/RSC e APIs; providers sem sincronização financeira automática nas páginas de relatório.
+- Detalhes rastreáveis até registros persistidos. Compatibilidade com revogação por sessão da PR350 preservada; QA cobre replay recusado sem encerrar outros dispositivos ou alterar a versão da conta.
+- Evidências, fontes, limites e gates em `docs/ai-execution/_evidence/OMNI-RELATORIOS-HUB-ENTERPRISE-REAL-001/`. Sem deploy ou migration Production.
+
 ## 2026-08-19 — Operações V4: documentos, assinatura, fotos e anexos
 
 - Termo de Garantia, Termo de Entrega, OS cliente, via interna, etiqueta e orçamento imprimem/reimprimem pelo motor V3 já existente.
