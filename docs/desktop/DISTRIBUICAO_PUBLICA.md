@@ -108,6 +108,10 @@ nunca foi testado** — a página diz "em validação". A máquina de desenvolvi
 
 ### 6.1 Certificado de assinatura de código (Authenticode)
 
+> Decisão de fornecedor, integração SSL.com eSigner no workflow, plano do R2/domínio e matriz de
+> homologação: ver `RELEASE_PUBLICA_CONFIGURACAO.md` (**suspenso** — orçamento R$ 0). Estratégia
+> vigente (navegador + instalação assistida, Microsoft Store no futuro): `DISTRIBUICAO_CUSTO_ZERO.md`.
+
 Desde 2023 a chave de certificados de code signing precisa ficar em hardware certificado (token
 USB ou HSM em nuvem). Para CI, use **assinatura em nuvem**:
 
