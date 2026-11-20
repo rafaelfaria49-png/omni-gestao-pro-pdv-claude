@@ -50,6 +50,7 @@ function SolicitacoesTeste({ onUsar, versao }: { onUsar: (s: Solicitacao) => voi
     } catch (e) { setErro(e instanceof Error ? e.message : "Não foi possível atualizar.") } finally { setOcupado("") }
   }
 
+  const wa = (s: Solicitacao) => linkWhatsappInteressado(s.whatsapp)
   const abertas = lista?.filter((s) => s.status === "recebida" || s.status === "em_contato") ?? []
   return <section aria-labelledby="solicitacoes-titulo" className="mx-auto w-full max-w-4xl space-y-4">
     <header>
@@ -67,7 +68,7 @@ function SolicitacoesTeste({ onUsar, versao }: { onUsar: (s: Solicitacao) => voi
         </div>
         <p className="mt-1 break-all text-sm">{s.email} · WhatsApp {s.whatsapp}</p>
         <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {linkWhatsappInteressado(s.whatsapp) && <a className="text-primary underline-offset-4 hover:underline" href={linkWhatsappInteressado(s.whatsapp)!} target="_blank" rel="noopener noreferrer">Abrir conversa no WhatsApp</a>}
+          {wa(s) && <a className="text-primary underline-offset-4 hover:underline" href={wa(s) ?? undefined} target="_blank" rel="noopener noreferrer">Abrir conversa no WhatsApp</a>}
           <a className="text-primary underline-offset-4 hover:underline" href={`mailto:${s.email}?subject=${encodeURIComponent(`Pedido de teste ${s.protocolo} — OmniGestão Pro`)}`}>Responder por email</a>
         </p>
         <p className="mt-1 text-sm text-muted-foreground">{RAMOS_SOLICITACAO[s.ramo as keyof typeof RAMOS_SOLICITACAO] ?? s.ramo}{s.planoInteresse ? ` · interesse: ${PLANOS_GESTAO_LOJAS.find((p) => p.id === s.planoInteresse)?.nome ?? s.planoInteresse}` : ""}</p>

@@ -17,6 +17,13 @@ export async function POST(req: Request) {
   if (!parsed.success || (solicitacaoId !== undefined && (typeof solicitacaoId !== "string" || !solicitacaoId || solicitacaoId.length > 64))) {
     return NextResponse.json({ ok: false, error: "Dados de provisionamento inválidos." }, { status: 400 })
   }
+  // Pedido ligado precisa estar aberto ANTES de criar a conta: não nasce loja para pedido descartado ou já atendido.
+  if (typeof solicitacaoId === "string") {
+    const pedido = await prisma.solicitacaoTesteComercial.findUnique({ where: { id: solicitacaoId }, select: { status: true } })
+    if (!pedido || (pedido.status !== "recebida" && pedido.status !== "em_contato")) {
+      return NextResponse.json({ ok: false, error: "O pedido ligado já foi encerrado ou não existe. Nada foi criado. Recarregue a lista." }, { status: 409 })
+    }
+  }
   let created: Awaited<ReturnType<typeof provisionClient>>
   try {
     created = await provisionClient(parsed.data)

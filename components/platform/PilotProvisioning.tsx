@@ -20,7 +20,7 @@ export function PilotProvisioning({ prefill, onProvisionado }: { prefill?: Provi
   const [message, setMessage] = useState("")
   const [credential, setCredential] = useState("")
   /** Pedido de `/gestao-lojas` ligado a este provisionamento (vai para o histórico do pedido). */
-  const [vinculo, setVinculo] = useState<{ id: string; protocolo: string } | null>(null)
+  const [vinculo, setVinculo] = useState<{ id: string; protocolo: string; email: string } | null>(null)
   const [instrucoes, setInstrucoes] = useState("")
   const [busy, setBusy] = useState(false)
   const [stores, setStores] = useState<Array<{ id: string; name: string; moduleAccess: unknown }>>([])
@@ -35,7 +35,7 @@ export function PilotProvisioning({ prefill, onProvisionado }: { prefill?: Provi
   useEffect(() => {
     if (!prefill) return
     setStoreName(prefill.storeName); setName(prefill.name); setEmail(prefill.email); setBranch(prefill.branch)
-    setVinculo(prefill.solicitacaoId && prefill.protocolo ? { id: prefill.solicitacaoId, protocolo: prefill.protocolo } : null)
+    setVinculo(prefill.solicitacaoId && prefill.protocolo ? { id: prefill.solicitacaoId, protocolo: prefill.protocolo, email: prefill.email.trim().toLowerCase() } : null)
     setMessage("Dados da solicitação copiados para o formulário. Confira antes de provisionar.")
   }, [prefill])
   return <div className="mx-auto w-full max-w-4xl space-y-8 pb-8">
@@ -43,17 +43,19 @@ export function PilotProvisioning({ prefill, onProvisionado }: { prefill?: Provi
     <form id="provisionar-cliente" className="space-y-4 rounded-lg border border-border bg-card p-5" onSubmit={async (e) => {
       e.preventDefault(); setBusy(true); setMessage(""); setCredential(""); setInstrucoes("")
       try {
-        const r = await fetch("/api/platform/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeName, name, email, branch, ...(vinculo ? { solicitacaoId: vinculo.id } : {}) }) })
+        // Email trocado = outra pessoa: o pedido não recebe a loja de outro cliente.
+        const ligado = vinculo && vinculo.email === email.trim().toLowerCase() ? vinculo : null
+        const r = await fetch("/api/platform/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeName, name, email, branch, ...(ligado ? { solicitacaoId: ligado.id } : {}) }) })
         const data = await r.json()
         if (!r.ok) throw new Error(data.error)
         setCredential(data.temporaryPassword)
         setInstrucoes(instrucoesDeAcesso({ loginUrl: `${window.location.origin}/login`, email: data.user.email, nomeLoja: data.store.name }))
-        const pedido = vinculo ? (data.solicitacao?.ok ? ` Pedido ${vinculo.protocolo} marcado como acesso liberado.` : ` Atenção: o pedido ${vinculo.protocolo} não foi marcado (${data.solicitacao?.erro ?? "erro"}). Marque na lista acima.`) : ""
+        const pedido = ligado ? (data.solicitacao?.ok ? ` Pedido ${ligado.protocolo} marcado como acesso liberado.` : ` Atenção: o pedido ${ligado.protocolo} não foi marcado (${data.solicitacao?.erro ?? "erro"}). Marque na lista acima.`) : vinculo ? ` O email foi alterado, então o pedido ${vinculo.protocolo} não foi marcado. Marque na lista acima se for a mesma pessoa.` : ""
         setMessage(`Loja e conta criadas. A senha deverá ser trocada no primeiro acesso.${pedido}`); setVinculo(null); onProvisionado?.(); await refresh()
       } catch (e) { setMessage(e instanceof Error ? e.message : "Falha de conexão.") } finally { setBusy(false) }
     }}>
       <h2 className="font-semibold">Provisionar cliente com acesso básico</h2>
-      {vinculo && <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">Ligado ao pedido <strong className="text-foreground">{vinculo.protocolo}</strong>: ao provisionar, o pedido fica como acesso liberado, com a loja criada no histórico.<Button type="button" size="sm" variant="ghost" onClick={() => setVinculo(null)}>Desligar do pedido</Button></p>}
+      {vinculo && <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">Ligado ao pedido <strong className="text-foreground">{vinculo.protocolo}</strong>: ao provisionar, o pedido fica como acesso liberado, com a loja criada no histórico (só se o email continuar o do pedido).<Button type="button" size="sm" variant="ghost" onClick={() => setVinculo(null)}>Desligar do pedido</Button></p>}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2"><Label htmlFor="pilot-store">Nome da loja</Label><Input id="pilot-store" value={storeName} onChange={(e) => setStoreName(e.target.value)} required /></div>
         <div className="space-y-2"><Label htmlFor="pilot-owner">Responsável da loja</Label><Input id="pilot-owner" value={name} onChange={(e) => setName(e.target.value)} required /></div>
