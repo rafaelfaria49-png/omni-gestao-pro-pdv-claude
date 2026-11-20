@@ -100,6 +100,12 @@ describe("registrarSolicitacaoTeste", () => {
     expect(rows[0]).toMatchObject({ status: "provisionada", emailAberto: null })
     expect((rows[0].historico as unknown[]).at(-1)).toMatchObject({ evento: "provisionada", storeId: "cliente-1", userId: "u-1" })
 
+    // Repetir o status atual não regrava o histórico.
+    const repetido = fakeDb()
+    await registrarSolicitacaoTeste(repetido.db, valido, { ipHash: "x", agora })
+    expect(await atualizarStatusSolicitacao(repetido.db, { id: repetido.rows[0].id, status: "recebida", por: "p" })).toEqual({ ok: true })
+    expect(repetido.rows[0].historico).toHaveLength(1)
+
     const outro = fakeDb()
     await registrarSolicitacaoTeste(outro.db, valido, { ipHash: "x", agora })
     outro.rows[0].status = "descartada"

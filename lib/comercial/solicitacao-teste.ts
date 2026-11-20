@@ -158,6 +158,9 @@ export async function atualizarStatusSolicitacao(
   const atual = await tabela.findUnique({ where: { id: args.id }, select: { id: true, protocolo: true, status: true, historico: true } })
   if (!atual) return { ok: false, erro: "Solicitação não encontrada." }
   if (STATUS_ENCERRADOS.has(atual.status as StatusSolicitacao)) return { ok: false, erro: "Solicitação já encerrada." }
+  // Repetir o status atual não grava: toda gravação muda o status, e o compare-and-set por status
+  // basta para não sobrescrever o histórico de outra mudança simultânea.
+  if (atual.status === args.status) return { ok: true }
   const historico = Array.isArray(atual.historico) ? atual.historico : []
   const gravado = await tabela.updateMany({
     where: { id: args.id, status: atual.status },

@@ -228,14 +228,19 @@ test("provisionamento ligado ao pedido é atômico: corrida, pedido encerrado, m
   expect((await local.post("/api/platform/provision", { data: conta(`x-${tag}@pilot.invalid`, `Local ${tag}`, p1.id) })).status()).toBe(403)
   expect((await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe("recebida")
 
-  // Dois operadores no MESMO pedido ao mesmo tempo (até com emails diferentes): uma conta só, um vínculo só.
+  // Email diferente do pedido: o servidor recusa ligar, nada é criado e o pedido segue aberto.
+  const outroEmail = `outro-${tag}@pilot.invalid`
+  expect((await owner.post("/api/platform/provision", { data: conta(outroEmail, `Outro ${tag}`, p1.id) })).status()).toBe(400)
+  expect(await db.adminUser.count({ where: { email: outroEmail } })).toBe(0)
+  expect((await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe("recebida")
+
+  // Dois operadores no MESMO pedido ao mesmo tempo: uma conta só, um vínculo só.
   const nomeLoja = `Corrida Loja ${tag}`
-  const emails = [`op1-${tag}@pilot.invalid`, `op2-${tag}@pilot.invalid`]
-  const rs = await Promise.all(emails.map((e) => owner.post("/api/platform/provision", { data: conta(e, nomeLoja, p1.id) })))
+  const emailPedido = `corrida-1-${tag}@pilot.invalid`
+  const rs = await Promise.all([0, 1].map(() => owner.post("/api/platform/provision", { data: conta(emailPedido, nomeLoja, p1.id) })))
   expect(rs.map((r) => r.status()).sort()).toEqual([201, 409])
   expect(await db.store.count({ where: { name: nomeLoja } })).toBe(1)
-  expect(await db.adminUser.count({ where: { email: { in: emails } } })).toBe(1)
-  const criado = await db.adminUser.findFirstOrThrow({ where: { email: { in: emails } }, select: { id: true, lojaId: true } })
+  const criado = await db.adminUser.findUniqueOrThrow({ where: { email: emailPedido }, select: { id: true, lojaId: true } })
   const fechado = await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })
   expect({ status: fechado.status, aberto: fechado.emailAberto }).toEqual({ status: "provisionada", aberto: null })
   const eventos = (fechado.historico as Array<Record<string, unknown>>).filter((h) => h.evento === "provisionada")
@@ -245,10 +250,10 @@ test("provisionamento ligado ao pedido é atômico: corrida, pedido encerrado, m
   // Pedido descartado: nada é criado.
   const p2 = await pedir("2")
   expect((await owner.patch("/api/platform/solicitacoes-teste", { data: { id: p2.id, status: "descartada" } })).status()).toBe(200)
-  const r2 = await owner.post("/api/platform/provision", { data: conta(`desc-${tag}@pilot.invalid`, `Descartado ${tag}`, p2.id) })
+  const r2 = await owner.post("/api/platform/provision", { data: conta(`corrida-2-${tag}@pilot.invalid`, `Descartado ${tag}`, p2.id) })
   expect(r2.status()).toBe(409)
   expect(await db.store.count({ where: { name: `Descartado ${tag}` } })).toBe(0)
-  expect(await db.adminUser.count({ where: { email: `desc-${tag}@pilot.invalid` } })).toBe(0)
+  expect(await db.adminUser.count({ where: { email: `corrida-2-${tag}@pilot.invalid` } })).toBe(0)
 
   // Marcação manual ("Marcar acesso liberado") segue funcionando, sem vínculo inventado.
   const p3 = await pedir("3")

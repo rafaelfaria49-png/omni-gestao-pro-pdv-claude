@@ -50,7 +50,7 @@ export function PilotProvisioning({ prefill, onProvisionado }: { prefill?: Provi
         if (!r.ok) throw new Error(data.error)
         setCredential(data.temporaryPassword)
         setInstrucoes(instrucoesDeAcesso({ loginUrl: `${window.location.origin}/login`, email: data.user.email, nomeLoja: data.store.name }))
-        const pedido = ligado ? (data.solicitacao?.ok ? ` Pedido ${ligado.protocolo} marcado como acesso liberado.` : ` Atenção: o pedido ${ligado.protocolo} não foi marcado (${data.solicitacao?.erro ?? "erro"}). Marque na lista acima.`) : vinculo ? ` O email foi alterado, então o pedido ${vinculo.protocolo} não foi marcado. Marque na lista acima se for a mesma pessoa.` : ""
+        const pedido = ligado ? ` Pedido ${ligado.protocolo} marcado como acesso liberado.` : vinculo ? ` O email foi alterado, então o pedido ${vinculo.protocolo} não foi marcado. Marque na lista acima se for a mesma pessoa.` : ""
         setMessage(`Loja e conta criadas. A senha deverá ser trocada no primeiro acesso.${pedido}`); setVinculo(null); onProvisionado?.(); await refresh()
       } catch (e) { setMessage(e instanceof Error ? e.message : "Falha de conexão.") } finally { setBusy(false) }
     }}>

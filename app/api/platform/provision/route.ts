@@ -23,14 +23,18 @@ export async function POST(req: Request) {
   }
   // Checagem rápida antes do bcrypt; a garantia de verdade é o vínculo dentro da transação, abaixo.
   if (typeof solicitacaoId === "string") {
-    const pedido = await prisma.solicitacaoTesteComercial.findUnique({ where: { id: solicitacaoId }, select: { status: true } })
+    const pedido = await prisma.solicitacaoTesteComercial.findUnique({ where: { id: solicitacaoId }, select: { status: true, email: true } })
     if (!pedido || (pedido.status !== "recebida" && pedido.status !== "em_contato")) {
       return NextResponse.json({ ok: false, error: "O pedido ligado já foi encerrado ou não existe. Nada foi criado. Recarregue a lista." }, { status: 409 })
     }
+    // Conta ligada ao pedido é a da pessoa do pedido: o servidor garante, não só a tela.
+    if (pedido.email.trim().toLowerCase() !== parsed.data.email.toLowerCase()) {
+      return NextResponse.json({ ok: false, error: "O email não é o do pedido ligado. Nada foi criado. Desligue do pedido para usar outro email." }, { status: 400 })
+    }
   }
   // Loja, usuário e fechamento do pedido numa só transação: ou os três gravam, ou nenhum.
-  // Dois operadores no mesmo pedido usam o mesmo email (a UI só liga se o email for o do pedido):
-  // o UNIQUE de email barra a segunda conta, e o pedido só fecha uma vez.
+  // Dois operadores no mesmo pedido usam o mesmo email (garantido acima): o UNIQUE de email
+  // barra a segunda conta, e o compare-and-set do pedido só fecha uma vez.
   const vincular = typeof solicitacaoId === "string"
     ? async (tx: Prisma.TransactionClient, c: { store: { id: string }; user: { id: string } }) => {
         const r = await vincularProvisionamento(tx as unknown as SolicitacaoDb, { id: solicitacaoId, por: session?.user?.email ?? "plataforma", storeId: c.store.id, userId: c.user.id })
@@ -42,7 +46,9 @@ export async function POST(req: Request) {
     created = await provisionClient(parsed.data, vincular ? { aoCriar: vincular } : undefined)
   } catch (e) {
     if (e instanceof PedidoNaoVinculado) return NextResponse.json({ ok: false, error: "O pedido ligado já foi encerrado ou mudou. Nada foi criado. Recarregue a lista." }, { status: 409 })
-    return NextResponse.json({ ok: false, error: "Não foi possível provisionar. Confira se o email já está cadastrado." }, { status: 409 })
+    // Mapear por `code`: `instanceof` de erro do Prisma falha no bundle do Next.
+    if ((e as { code?: unknown })?.code === "P2002") return NextResponse.json({ ok: false, error: "Não foi possível provisionar. Confira se o email já está cadastrado." }, { status: 409 })
+    return NextResponse.json({ ok: false, error: "Não foi possível provisionar agora. Nada foi criado. Tente de novo." }, { status: 503 })
   }
   return NextResponse.json({ ok: true, ...created, ...(vincular ? { solicitacao: { ok: true } } : {}) }, { status: 201, headers: { "Cache-Control": "no-store" } })
 }
