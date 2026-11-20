@@ -16,6 +16,9 @@ import { isSerializedDeviceProduct } from "./serialized-product"
 import { sanitizeAcessorios } from "./checklist"
 import { getPoliticaTx, nextSequenceTx } from "./policy"
 import { buildGarantiaSnapshot } from "./snapshot"
+import { resolveStoreModules } from "@/lib/auth/access-policy"
+import { resolveBusinessResource } from "@/lib/store-business-capabilities"
+import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
 
 import type { DeviceSaleLineV1 } from "./device-sale-line"
 export type { DeviceSaleLineV1 }
@@ -129,8 +132,15 @@ export async function applyDeviceSaleLinesTx(
   assertDeviceSaleLinesShape(lines, ctx.clienteId)
 
   const politica = await getPoliticaTx(tx, ctx.storeId)
-  const store = await tx.store.findUnique({ where: { id: ctx.storeId }, select: { name: true, cnpj: true, phone: true, address: true } })
-  const settings = await tx.storeSettings.findUnique({ where: { storeId: ctx.storeId }, select: { contactEmail: true, contactWhatsapp: true } })
+  const store = await tx.store.findUnique({ where: { id: ctx.storeId }, select: { name: true, cnpj: true, phone: true, address: true, moduleAccess: true } })
+  const settings = await tx.storeSettings.findUnique({ where: { storeId: ctx.storeId }, select: { contactEmail: true, contactWhatsapp: true, printerConfig: true } })
+  if (!store || !resolveStoreModules(store.moduleAccess).includes("deviceCatalog")) {
+    throw new DeviceSaleError("APARELHO_MODULO_NAO_LIBERADO", "Venda de aparelhos não contratada nesta unidade.")
+  }
+  const config = settings?.printerConfig as { capabilities?: StoreCapabilitiesV1 } | null
+  if (!resolveBusinessResource(config?.capabilities ?? null, "catalog.serializedDevices").requested) {
+    throw new DeviceSaleError("APARELHO_RECURSO_DESATIVADO", "Aparelhos por IMEI está desligado nesta unidade. Confira Configurações → Ramo e recursos.")
+  }
   const cliente = ctx.clienteId
     ? await tx.cliente.findFirst({ where: { id: ctx.clienteId, storeId: ctx.storeId }, select: { id: true, name: true, document: true, phone: true } })
     : null

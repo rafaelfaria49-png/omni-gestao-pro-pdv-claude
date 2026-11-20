@@ -1,4 +1,5 @@
-import { AparelhoCancelamentoBloqueadoError, cancelarAparelhosDaVendaTx } from "@/lib/aparelhos/sale-reversal"
+import { AparelhoCancelamentoBloqueadoError, cancelarAparelhosDaVendaTx, linhasAparelhoDoPayload } from "@/lib/aparelhos/sale-reversal"
+import { cancelarTitulosAparelhosTx, titulosDaVendaAparelhoWhere } from "@/lib/aparelhos/sale-reversal-finance"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
  * POST /api/vendas/[id]/cancelar
@@ -133,6 +134,7 @@ export async function POST(
     if (!venda) {
       return NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 })
     }
+    const vendaComAparelho = linhasAparelhoDoPayload(venda.payload).length > 0
 
     if (venda.status === "cancelada") {
       return NextResponse.json(
@@ -181,7 +183,8 @@ export async function POST(
     // (`localKey LIKE 'pdv-aprazo-<pedido>%'`), então o guard e o efeito olham o mesmo
     // conjunto. Parcialmente pago NÃO bloqueia — esse caminho reconcilia.
     const titulosDaVenda = await prisma.contaReceberTitulo.findMany({
-      where: { storeId, localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
+      where: vendaComAparelho ? titulosDaVendaAparelhoWhere(storeId, pedidoId, venda.contaReceberTituloId)
+        : { storeId, localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
       select: { status: true, valor: true, payload: true },
     })
     const veredito = avaliarRecebiveisParaEstorno(
@@ -249,6 +252,7 @@ export async function POST(
 
     let estoqueRepostoCount = 0
     let estornoVendaRealizado = false
+    let titulosCancelados = 0
     /** Trilha do estorno de Crédito/Vale (lida na resposta e persistida no payload). */
     const estornoCreditoTrail: Array<{
       usoId: string
@@ -259,6 +263,10 @@ export async function POST(
     }> = []
 
     await prisma.$transaction(async (tx) => {
+      if (vendaComAparelho) {
+        titulosCancelados = await cancelarTitulosAparelhosTx(tx, { storeId, pedidoId, tituloId: venda.contaReceberTituloId,
+          motivo: motivo.trim(), operador: operadorLedger })
+      }
       // 0. Estorno do Crédito/Vale consumido (PDV-TROCAS-VALE-HARDENING-PRE-PUBLISH-002).
       // Restaura EXATAMENTE a soma dos `UsoCreditoCliente` desta venda — numa compra
       // mista, somente a parcela de crédito/vale. Nada entra nem sai do caixa: vale
@@ -326,9 +334,10 @@ export async function POST(
       })
 
       // 1b. Aparelho por IMEI (OMNI-APARELHOS-ENDTOEND-001): garantia cancelada e a unidade
-      // volta a disponível — casa com o estorno de +1 do produto logo abaixo. Vendas sem
+      // volta a revisão, sem reposição comercial automática. Vendas sem
       // aparelho não consultam as tabelas de aparelhos.
       await cancelarAparelhosDaVendaTx(tx, { storeId, vendaId: venda.id, pedidoId, operador: operadorLedger, payload: venda.payload })
+      const produtosEmRevisao = new Set(linhasAparelhoDoPayload(venda.payload).map((l) => l.produtoId))
 
       // Resolução de produto (id|sku|barcode) com cache por inventoryId.
       const resolveCache = new Map<string, string | null>()
@@ -353,6 +362,8 @@ export async function POST(
         if (q <= 0) continue
         const pid = await resolveProdutoId(raw)
         if (!pid) continue
+        // Unidade por IMEI só retorna ao saldo após conferência e liberação no módulo.
+        if (produtosEmRevisao.has(pid)) continue
         soldByProdutoId.set(pid, (soldByProdutoId.get(pid) ?? 0) + q)
       }
       const returnedByProdutoId = new Map<string, number>()
@@ -449,11 +460,11 @@ export async function POST(
     // primeiro título). Cobre venda 1 parcela e N parcelas com o mesmo código.
     // Mantido fora da transação por reaproveitar o recálculo de saldo de carteira.
     let estornoReceber = false
-    let titulosCancelados = 0
     /** Títulos que o serviço financeiro recusou cancelar — reportados, nunca silenciados. */
     const titulosRecusados: Array<{ localKey: string; reason: string }> = []
     try {
-      const titulosAprazo = await prisma.contaReceberTitulo.findMany({
+      // Aparelhos já cancelaram os títulos sem recebimento dentro do mesmo commit.
+      const titulosAprazo = vendaComAparelho ? [] : await prisma.contaReceberTitulo.findMany({
         where: {
           storeId,
           localKey: { startsWith: `pdv-aprazo-${pedidoId}` },

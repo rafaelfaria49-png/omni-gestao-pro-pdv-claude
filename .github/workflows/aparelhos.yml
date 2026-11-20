@@ -4,8 +4,11 @@ on:
   pull_request:
     paths:
       - "lib/aparelhos/**"
+      - "lib/estoque/stock-ledger-*.ts"
+      - "lib/cadastros/product-write-service.ts"
       - "components/aparelhos/**"
       - "app/api/aparelhos/**"
+      - "app/api/vendas/**"
       - "lib/ops-upsert-venda*"
       - "lib/operations-sale-*"
       - "lib/pdv-catalog*"
@@ -65,7 +68,23 @@ jobs:
           lib/ops-upsert-venda.test.ts lib/ops-upsert-venda-fractional.test.ts lib/ops-upsert-venda-lines-integrity.test.ts
           lib/ops-upsert-venda-safety.test.ts lib/ops-upsert-venda-produto-identidade.test.ts
           lib/vendas/pending-sync-classification.test.ts --maxWorkers=2
+      - name: Regressões de estoque e cancelamento
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          lib/estoque/stock-ledger-service.test.ts lib/cadastros/product-write-service.test.ts app/api/vendas --maxWorkers=2
       - name: Migration aditiva em PostgreSQL 17 descartável (baseline main + drift zero)
         run: APARELHOS_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/aparelhos/prepare-pg.mjs
       - name: Integração PG real (serviço + motor canônico de venda)
         run: node node_modules/vitest/vitest.mjs run test/aparelhos --testTimeout=60000 --maxWorkers=1
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Build com migrations desabilitadas
+        run: npm run build
+      - name: Chromium para E2E autenticado
+        run: npx playwright install --with-deps chromium
+      - name: E2E autenticado com banco sintético separado
+        run: |
+          PGPASSWORD=isolated_ci_only createdb -h 127.0.0.1 -U aparelhos aparelhos_e2e
+          APARELHOS_TEST_DATABASE_URL=postgresql://aparelhos:isolated_ci_only@127.0.0.1:5432/aparelhos_e2e node scripts/aparelhos/run-aparelhos-e2e.mjs

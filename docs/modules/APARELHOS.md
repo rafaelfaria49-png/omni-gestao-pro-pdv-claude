@@ -34,7 +34,8 @@ nenhum ramo ou loja legada recebe por sugestão). A loja também precisa do mód
 - CHECKs: `legalDias >= 90`, contratual ≥ 0, estados/condições válidos, unidade vendável só com
   `propriedade = 'loja'`.
 
-Reversão: `down.sql` na pasta da migration (só sem dados reais). **Não aplicada em Production.**
+Reversão: `down.sql` na pasta da migration (só sem dados reais). Aplicação em Production
+confirmada em leitura somente em 17/11/2026: aplicada em 14/11/2026, banco `omnigestao_prod`.
 Atenção: o build de Production da Vercel roda `prisma migrate deploy` quando o guard de autoridade
 libera — o merge na `main` aplicaria esta migration. O merge é decisão humana.
 
@@ -87,9 +88,15 @@ do proprietário). IMEI completo só para gerente/proprietário na lista
   com o contador se deve ser tratado como estoque (CMV) para não contar duas vezes.
 - **Consulta oficial de restrição de IMEI**: sem integração autorizada. Só conferência manual
   registrada (fonte, data, operador). O sistema nunca afirma "limpo" sem registro.
-- **Cancelamento de venda**: integrado. Na mesma transação do cancelamento, a garantia vira
-  `cancelada` e a unidade volta a `disponivel` (casa com o estorno de +1 do produto). Se o aparelho
-  precisar de avaliação, mude para "Em revisão" (retira do saldo pelo ledger).
+- **Cancelamento de venda**: na mesma transação, a garantia vira `cancelada` e a unidade vai
+  para `em_revisao`, sem saldo comercial. Acessórios de uma venda mista continuam com reposição
+  canônica. Só a liberação posterior pelo gerente/proprietário devolve a unidade ao saldo.
+  Títulos a prazo sem recebimento são cancelados pelo serviço financeiro canônico no mesmo commit;
+  a busca usa o vínculo exato da venda. Títulos com recebimento parcial/pago bloqueiam a operação:
+  regularizar no Financeiro antes de cancelar. Não há estorno automático de recebimentos de aparelho.
+- **Correção genérica de venda, parcelas, título ou metadados de item**: bloqueada para venda
+  com aparelho (`APARELHO_CORRECAO_NAO_INTEGRADA`), preservando snapshot e evitando corrida com
+  cancelamento/recebimento. Requer contrato transacional próprio antes de ser liberada.
 - **Devolução (F8) e correção de itens**: NÃO integradas → fail-closed para vendas com aparelho
   (`APARELHO_DEVOLUCAO_NAO_INTEGRADA`, nada é gravado). O bloqueio vale no servidor E no terminal:
   `registrarDevolucao` (troca e devolução, `lib/operations-store.tsx`) recusa a linha com `deviceSale`
@@ -104,11 +111,16 @@ do proprietário). IMEI completo só para gerente/proprietário na lista
   nunca pior ao cliente); depois disso é recusada (`APARELHO_DATA_VENDA`) e precisa ser refeita online.
 - **Gerente** pode cadastrar diretamente um usado e liberá-lo (é aprovador). Segregação estrita para
   o gerente só existe no fluxo "Comprar de cliente". Decisão de produto; revisar com o proprietário.
-- **Cancelamento devolve a unidade a `disponivel`**; se o cliente já levou o aparelho, mova para
-  "Em revisão" antes de revender. Alternativa (ir direto para revisão) é decisão de produto.
-- **Ajuste manual, inventário e OS** ainda podem mexer no saldo de um modelo serializado fora deste
-  módulo; a invariante de estoque só é garantida pelos fluxos de aparelhos.
-- **Impressora física 80 mm**: preview validado no navegador; papel/térmica não testados.
+- **Ajuste manual, inventário, OS e devolução genérica**: o boundary de estoque recusa movimentar
+  modelos serializados (`APARELHO_ESTOQUE_INDIVIDUAL`). O cadastro genérico também não pode criar,
+  remover ou reinterpretar `metadata.serializedDevice`. Edições usuais preservam o marcador.
+- **Ativação na venda**: o motor relê capability e contratação `deviceCatalog` dentro da transação
+  de cada nova venda com aparelho. Desligar o recurso bloqueia payload direto; retry de venda já
+  concluída preserva o caminho idempotente canônico.
+- **Impressão 80 mm no Electron 1.0.3**: usa a mesma `omniDesktopPrint` dos cupons, na janela
+  principal. Falhas ficam visíveis e permitem reemitir somente o documento. A4 e prévias usam a
+  janela de documentos. Há teste sintético de documento no painel, sem cadastro/venda/API.
+  Envio ao spooler não comprova saída física: a homologação depende do operador.
 
 ## Publicação e rollback
 
