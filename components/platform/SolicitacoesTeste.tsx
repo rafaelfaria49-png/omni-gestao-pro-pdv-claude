@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { PilotProvisioning, type ProvisioningPrefill } from "@/components/platform/PilotProvisioning"
 import { RAMOS_SOLICITACAO, PLANOS_GESTAO_LOJAS } from "@/lib/comercial/gestao-lojas-oferta"
+import { linkWhatsappInteressado } from "@/lib/comercial/atendimento"
 
 type Solicitacao = {
   id: string; protocolo: string; nome: string; nomeLoja: string; email: string; whatsapp: string
@@ -18,16 +19,17 @@ const STATUS_LABEL: Record<string, string> = { recebida: "Nova", em_contato: "Em
  */
 export function PlataformaComercial() {
   const [prefill, setPrefill] = useState<ProvisioningPrefill | null>(null)
+  const [versao, setVersao] = useState(0)
   return <div className="space-y-10">
-    <SolicitacoesTeste onUsar={(s) => {
-      setPrefill({ key: s.id + Date.now(), storeName: s.nomeLoja, name: s.nome, email: s.email, branch: s.ramo })
+    <SolicitacoesTeste versao={versao} onUsar={(s) => {
+      setPrefill({ key: s.id + Date.now(), storeName: s.nomeLoja, name: s.nome, email: s.email, branch: s.ramo, solicitacaoId: s.id, protocolo: s.protocolo })
       document.getElementById("provisionar-cliente")?.scrollIntoView({ behavior: "smooth", block: "start" })
     }} />
-    <PilotProvisioning prefill={prefill} />
+    <PilotProvisioning prefill={prefill} onProvisionado={() => setVersao((v) => v + 1)} />
   </div>
 }
 
-function SolicitacoesTeste({ onUsar }: { onUsar: (s: Solicitacao) => void }) {
+function SolicitacoesTeste({ onUsar, versao }: { onUsar: (s: Solicitacao) => void; versao: number }) {
   const [lista, setLista] = useState<Solicitacao[] | null>(null)
   const [erro, setErro] = useState("")
   const [ocupado, setOcupado] = useState("")
@@ -36,7 +38,7 @@ function SolicitacoesTeste({ onUsar }: { onUsar: (s: Solicitacao) => void }) {
     if (!r.ok) throw new Error()
     setLista((await r.json()).solicitacoes)
   }, [])
-  useEffect(() => { void carregar().catch(() => setErro("Não foi possível consultar as solicitações.")) }, [carregar])
+  useEffect(() => { void carregar().catch(() => setErro("Não foi possível consultar as solicitações.")) }, [carregar, versao])
 
   async function mudarStatus(id: string, status: string) {
     setOcupado(id); setErro("")
@@ -64,6 +66,10 @@ function SolicitacoesTeste({ onUsar }: { onUsar: (s: Solicitacao) => void }) {
           <p className="text-xs text-muted-foreground">{s.protocolo} · {STATUS_LABEL[s.status] ?? s.status} · {new Date(s.createdAt).toLocaleString("pt-BR")}</p>
         </div>
         <p className="mt-1 break-all text-sm">{s.email} · WhatsApp {s.whatsapp}</p>
+        <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {linkWhatsappInteressado(s.whatsapp) && <a className="text-primary underline-offset-4 hover:underline" href={linkWhatsappInteressado(s.whatsapp)!} target="_blank" rel="noopener noreferrer">Abrir conversa no WhatsApp</a>}
+          <a className="text-primary underline-offset-4 hover:underline" href={`mailto:${s.email}?subject=${encodeURIComponent(`Pedido de teste ${s.protocolo} — OmniGestão Pro`)}`}>Responder por email</a>
+        </p>
         <p className="mt-1 text-sm text-muted-foreground">{RAMOS_SOLICITACAO[s.ramo as keyof typeof RAMOS_SOLICITACAO] ?? s.ramo}{s.planoInteresse ? ` · interesse: ${PLANOS_GESTAO_LOJAS.find((p) => p.id === s.planoInteresse)?.nome ?? s.planoInteresse}` : ""}</p>
         {s.mensagem && <p className="mt-2 whitespace-pre-wrap text-sm">{s.mensagem}</p>}
         <div className="mt-3 flex flex-wrap gap-2">

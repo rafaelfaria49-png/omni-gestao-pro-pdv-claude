@@ -70,6 +70,21 @@ describe("registrarSolicitacaoTeste", () => {
     expect(a.ok && b.ok && a.protocolo === b.protocolo).toBe(true)
   })
 
+  it("provisionamento ligado ao pedido grava loja e usuário no histórico e encerra o pedido", async () => {
+    const { db, rows } = fakeDb()
+    await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })
+    const r = await atualizarStatusSolicitacao(db, { id: rows[0].id, status: "provisionada", por: "plataforma@x", agora, vinculo: { storeId: "cliente-1", userId: "u-1" } })
+    expect(r).toEqual({ ok: true })
+    expect(rows[0].status).toBe("provisionada")
+    expect(rows[0].emailAberto).toBeNull()
+    expect(rows[0].historico).toEqual([
+      { em: agora.toISOString(), evento: "recebida", por: "visitante" },
+      { em: agora.toISOString(), evento: "provisionada", por: "plataforma@x", storeId: "cliente-1", userId: "u-1" },
+    ])
+    // Pedido já encerrado não é marcado de novo (segunda conta não reescreve o vínculo).
+    expect(await atualizarStatusSolicitacao(db, { id: rows[0].id, status: "provisionada", por: "p", vinculo: { storeId: "cliente-2", userId: "u-2" } })).toEqual({ ok: false, erro: "Solicitação já encerrada." })
+  })
+
   it("depois de encerrada, o mesmo email pode pedir de novo (novo protocolo)", async () => {
     const { db, rows } = fakeDb()
     const a = await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })

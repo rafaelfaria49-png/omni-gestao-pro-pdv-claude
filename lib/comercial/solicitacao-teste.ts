@@ -146,7 +146,11 @@ export async function registrarSolicitacaoTeste(
 
 export async function atualizarStatusSolicitacao(
   db: SolicitacaoDb,
-  args: { id: string; status: StatusSolicitacao; por: string; agora?: Date },
+  args: {
+    id: string; status: StatusSolicitacao; por: string; agora?: Date
+    /** Rastreabilidade do provisionamento: loja e usuário criados a partir deste pedido. */
+    vinculo?: { storeId: string; userId: string }
+  },
 ): Promise<{ ok: true } | { ok: false; erro: string }> {
   // Compare-and-set: só grava se o status ainda for o que foi lido. Sem isso, "descartada"
   // e "em_contato" simultâneos deixavam um pedido aberto com emailAberto=NULL.
@@ -160,7 +164,7 @@ export async function atualizarStatusSolicitacao(
     data: {
       status: args.status,
       ...(STATUS_ENCERRADOS.has(args.status) ? { emailAberto: null } : {}),
-      historico: [...historico, { em: (args.agora ?? new Date()).toISOString(), evento: args.status, por: args.por }],
+      historico: [...historico, { em: (args.agora ?? new Date()).toISOString(), evento: args.status, por: args.por, ...(args.vinculo ?? {}) }],
     },
   })
   if (gravado.count !== 1) return { ok: false, erro: "A solicitação mudou enquanto você atualizava. Recarregue a lista." }
