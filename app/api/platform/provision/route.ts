@@ -3,7 +3,11 @@ import { auth } from "@/auth"
 import { isPlatformSession } from "@/lib/auth/access-policy"
 import { provisionClient, provisionClientSchema } from "@/lib/auth/provision-client"
 import { prisma } from "@/lib/prisma"
-import { atualizarStatusSolicitacao, type SolicitacaoDb } from "@/lib/comercial/solicitacao-teste"
+import type { Prisma } from "@/generated/prisma"
+import { vincularProvisionamento, type SolicitacaoDb } from "@/lib/comercial/solicitacao-teste"
+
+/** Pedido ligado não pôde ser fechado: a transação é desfeita e nenhuma conta nasce. */
+class PedidoNaoVinculado extends Error {}
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -17,25 +21,28 @@ export async function POST(req: Request) {
   if (!parsed.success || (solicitacaoId !== undefined && (typeof solicitacaoId !== "string" || !solicitacaoId || solicitacaoId.length > 64))) {
     return NextResponse.json({ ok: false, error: "Dados de provisionamento inválidos." }, { status: 400 })
   }
-  // Pedido ligado precisa estar aberto ANTES de criar a conta: não nasce loja para pedido descartado ou já atendido.
+  // Checagem rápida antes do bcrypt; a garantia de verdade é o vínculo dentro da transação, abaixo.
   if (typeof solicitacaoId === "string") {
     const pedido = await prisma.solicitacaoTesteComercial.findUnique({ where: { id: solicitacaoId }, select: { status: true } })
     if (!pedido || (pedido.status !== "recebida" && pedido.status !== "em_contato")) {
       return NextResponse.json({ ok: false, error: "O pedido ligado já foi encerrado ou não existe. Nada foi criado. Recarregue a lista." }, { status: 409 })
     }
   }
+  // Loja, usuário e fechamento do pedido numa só transação: ou os três gravam, ou nenhum.
+  // Dois operadores no mesmo pedido usam o mesmo email (a UI só liga se o email for o do pedido):
+  // o UNIQUE de email barra a segunda conta, e o pedido só fecha uma vez.
+  const vincular = typeof solicitacaoId === "string"
+    ? async (tx: Prisma.TransactionClient, c: { store: { id: string }; user: { id: string } }) => {
+        const r = await vincularProvisionamento(tx as unknown as SolicitacaoDb, { id: solicitacaoId, por: session?.user?.email ?? "plataforma", storeId: c.store.id, userId: c.user.id })
+        if (!r.ok) throw new PedidoNaoVinculado(r.erro)
+      }
+    : undefined
   let created: Awaited<ReturnType<typeof provisionClient>>
   try {
-    created = await provisionClient(parsed.data)
-  } catch { return NextResponse.json({ ok: false, error: "Não foi possível provisionar. Confira se o email já está cadastrado." }, { status: 409 }) }
-
-  // A conta já existe: falhar ao marcar o pedido não desfaz nada, só avisa a equipe.
-  let solicitacao: { ok: true } | { ok: false; erro: string } | undefined
-  if (typeof solicitacaoId === "string") {
-    solicitacao = await atualizarStatusSolicitacao(prisma as unknown as SolicitacaoDb, {
-      id: solicitacaoId, status: "provisionada", por: session?.user?.email ?? "plataforma",
-      vinculo: { storeId: created.store.id, userId: created.user.id },
-    }).catch(() => ({ ok: false as const, erro: "Não foi possível marcar o pedido." }))
+    created = await provisionClient(parsed.data, vincular ? { aoCriar: vincular } : undefined)
+  } catch (e) {
+    if (e instanceof PedidoNaoVinculado) return NextResponse.json({ ok: false, error: "O pedido ligado já foi encerrado ou mudou. Nada foi criado. Recarregue a lista." }, { status: 409 })
+    return NextResponse.json({ ok: false, error: "Não foi possível provisionar. Confira se o email já está cadastrado." }, { status: 409 })
   }
-  return NextResponse.json({ ok: true, ...created, ...(solicitacao ? { solicitacao } : {}) }, { status: 201, headers: { "Cache-Control": "no-store" } })
+  return NextResponse.json({ ok: true, ...created, ...(vincular ? { solicitacao: { ok: true } } : {}) }, { status: 201, headers: { "Cache-Control": "no-store" } })
 }

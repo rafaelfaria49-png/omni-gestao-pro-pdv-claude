@@ -167,6 +167,26 @@ export async function atualizarStatusSolicitacao(
       historico: [...historico, { em: (args.agora ?? new Date()).toISOString(), evento: args.status, por: args.por, ...(args.vinculo ?? {}) }],
     },
   })
-  if (gravado.count !== 1) return { ok: false, erro: "A solicitação mudou enquanto você atualizava. Recarregue a lista." }
+  if (gravado.count !== 1) return { ok: false, erro: ERRO_MUDOU }
   return { ok: true }
+}
+
+const ERRO_MUDOU = "A solicitação mudou enquanto você atualizava. Recarregue a lista."
+
+/**
+ * Fecha o pedido como `provisionada` com a loja e o usuário criados. Feito para rodar na MESMA
+ * transação que cria a conta: se o pedido já estiver encerrado, a criação é desfeita.
+ * Uma troca concorrente de status ainda aberta (recebida → em_contato) não derruba o vínculo:
+ * relê e tenta de novo.
+ */
+export async function vincularProvisionamento(
+  db: SolicitacaoDb,
+  args: { id: string; por: string; storeId: string; userId: string; agora?: Date },
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  let r: { ok: true } | { ok: false; erro: string } = { ok: false, erro: ERRO_MUDOU }
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    r = await atualizarStatusSolicitacao(db, { id: args.id, status: "provisionada", por: args.por, agora: args.agora, vinculo: { storeId: args.storeId, userId: args.userId } })
+    if (r.ok || r.erro !== ERRO_MUDOU) return r
+  }
+  return r
 }

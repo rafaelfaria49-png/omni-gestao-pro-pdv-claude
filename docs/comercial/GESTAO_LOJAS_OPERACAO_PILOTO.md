@@ -68,7 +68,7 @@ FROM solicitacoes_teste_comercial WHERE protocolo = 'GL-XXXX-XXXX';
 | Equipe consulta os dados | mesmo cartão: loja, nome, email, WhatsApp, ramo, mensagem | — |
 | Equipe entra em contato | "Abrir conversa no WhatsApp" / "Responder por email"; depois "Marcar em contato" | `em_contato` + quem marcou + quando |
 | Equipe aprova | decisão humana no contato (impressora, ramo, tamanho da loja) | — |
-| Provisiona acesso assistido | "Usar no provisionamento" → "Provisionar cliente" | loja + ADMIN local com `mustChangePassword`; pedido vira `provisionada` com `storeId` e `userId` no histórico |
+| Provisiona acesso assistido | "Usar no provisionamento" → "Provisionar cliente" | loja + ADMIN local com `mustChangePassword`; pedido vira `provisionada` com `storeId` e `userId` no histórico, na mesma transação da loja (pedido já encerrado = nada é criado; dois operadores no mesmo pedido = uma conta só) |
 | Cliente recebe instruções | "Copiar instruções" (sem senha) + senha temporária em mensagem separada | — |
 | Cliente acessa | `/login` → troca obrigatória de senha → assistente de primeiro acesso | — |
 | Descartar | "Descartar" | `descartada`; o mesmo email pode pedir de novo (protocolo novo) |
