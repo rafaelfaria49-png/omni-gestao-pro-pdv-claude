@@ -17,7 +17,10 @@ export function fragmentoAparelho80mm(html: string): { html: string; title: stri
   }
   const css = Array.from(doc.querySelectorAll("style:not(#page-size)")).map((el) => el.textContent ?? "").join("\n")
   // A ponte existente já aplica a área útil medida na POS-80. Não somar outra largura de 72 mm.
-  return { title: doc.title, html: `<style>${css}\n.doc { width: auto; max-width: 100%; margin: 0; padding: 0; overflow-wrap: anywhere; } th { white-space: normal; }</style>${main.outerHTML}` }
+  // `break-word` (não `anywhere`, herdado da ponte): `anywhere` zera a largura mínima do texto e
+  // deixa o Chromium partir rótulos no meio ("Nom/e", "Acessóri/os"); `break-word` só quebra o
+  // que realmente não cabe na linha.
+  return { title: doc.title, html: `<style>${css}\n.doc { width: auto; max-width: 100%; margin: 0; padding: 0; overflow-wrap: break-word; }</style>${main.outerHTML}` }
 }
 
 export async function exigirEstacao80mm(): Promise<void> {
@@ -34,9 +37,9 @@ export async function imprimirDocumentoAparelho80mm(html: string): Promise<void>
   if (!result.ok) throw new Error(`${result.error} A venda permanece registrada; tente imprimir o documento novamente.`)
 }
 
-/** Documento sintético local: não cadastra aparelho, não cria venda e não chama API. */
-export async function imprimirTesteDocumentoAparelho(): Promise<void> {
-  const hoje = localDateKey(new Date())
+/** HTML do documento sintético (mesmo renderizador do termo real); nada é persistido. */
+export function documentoTesteAparelho80mm(agora: Date = new Date()): string {
+  const hoje = localDateKey(agora)
   const snapshot: GarantiaSnapshot = {
     versao: "TESTE", numeroGarantia: "SEM VALIDADE", politicaVersao: 0,
     loja: { nome: "TESTE DE DOCUMENTO — OMNIGESTÃO PRO", cnpj: "", telefone: "", email: "", endereco: null },
@@ -49,5 +52,10 @@ export async function imprimirTesteDocumentoAparelho(): Promise<void> {
     condicoes: ["Documento sintético para conferir largura, acentuação e leitura na POS-80.", "Nenhuma operação comercial, cobrança ou garantia foi registrada."],
     observacoes: "Confirme a saída no papel. Envio ao spooler não comprova impressão física.",
   }
-  await imprimirDocumentoAparelho80mm(renderTermoGarantia(snapshot, "80mm", "TESTE DE IMPRESSÃO — SEM VALIDADE COMERCIAL"))
+  return renderTermoGarantia(snapshot, "80mm", "TESTE DE IMPRESSÃO — SEM VALIDADE COMERCIAL")
+}
+
+/** Documento sintético local: não cadastra aparelho, não cria venda e não chama API. */
+export async function imprimirTesteDocumentoAparelho(): Promise<void> {
+  await imprimirDocumentoAparelho80mm(documentoTesteAparelho80mm())
 }

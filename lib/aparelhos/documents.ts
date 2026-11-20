@@ -55,6 +55,9 @@ export function esc(s: unknown): string {
     .replace(/'/g, "&#39;")
 }
 
+/** Identificador (garantia, venda, IMEI, documento): não parte no hífen; só quebra se exceder a linha inteira. */
+const nw = (v: unknown) => `<span class="nw">${esc(v)}</span>`
+
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
 function enderecoTexto(e: unknown): string {
@@ -87,18 +90,28 @@ function shell(title: string, body: string, formato: DocFormato, rascunho: boole
        ol { padding-left: 5mm; margin: 0; } li { margin-bottom: 1.5mm; }
        .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 14mm; margin-top: 18mm; }
        .sign div { border-top: 0.3mm solid #000; padding-top: 1.5mm; font-size: 9.5pt; text-align: center; }`
-    : `body { font: 9pt/1.35 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #000; background: #fff; margin: 0; }
+    : // Bobina: ~33 colunas úteis. Sem tabela de 2 colunas (espreme o rótulo e parte palavras):
+      // cada linha vira "Rótulo: valor" com recuo pendente; cobertura em blocos empilhados.
+      `body { font: 9pt/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #000; background: #fff; margin: 0; overflow-wrap: break-word; word-break: normal; hyphens: manual; }
        .doc { width: 72mm; margin: 0 auto; padding: 2mm 0 4mm; }
-       h1 { font-size: 10.5pt; margin: 0 0 1mm; text-align: center; } h2 { font-size: 9pt; margin: 2.5mm 0 1mm; border-top: 0.3mm dashed #000; padding-top: 1.5mm; }
-       table { width: 100%; border-collapse: collapse; } td, th { text-align: left; vertical-align: top; padding: 0.4mm 0; }
-       th { font-weight: 700; padding-right: 1.5mm; white-space: nowrap; } .muted { font-size: 8pt; }
-       .cover div { margin: 0.6mm 0; } .cover b { font-weight: 700; }
-       ol { padding-left: 4mm; margin: 0; } li { margin-bottom: 0.8mm; }
-       .sign div { border-top: 0.3mm solid #000; margin-top: 10mm; padding-top: 1mm; text-align: center; font-size: 8pt; }`
+       h1 { font-size: 10.5pt; line-height: 1.25; margin: 0 0 1.5mm; text-align: center; }
+       h2 { font-size: 9pt; margin: 3mm 0 1.2mm; border-top: 0.3mm dashed #000; padding-top: 1.5mm; text-transform: uppercase; letter-spacing: 0.03em; }
+       p { margin: 1mm 0; }
+       table, tbody, tr { display: block; width: auto; }
+       tr { margin: 0 0 0.9mm; padding-left: 3mm; text-indent: -3mm; }
+       th, td { display: inline; padding: 0; text-align: left; }
+       th { font-weight: 700; } th::after { content: ": "; }
+       .muted { font-size: 8pt; }
+       .cover > div { border: 0.3mm solid #000; padding: 1.2mm 1.6mm; margin: 0 0 1.4mm; break-inside: avoid; }
+       .cover .rot, .cover b, .cover .muted { display: block; }
+       .cover b { font-size: 10pt; margin: 0.3mm 0; }
+       ol { padding-left: 5mm; margin: 0; } li { margin-bottom: 1.2mm; }
+       .sign div { break-inside: avoid; border-top: 0.3mm solid #000; margin-top: 12mm; padding-top: 1mm; text-align: center; font-size: 8pt; }`
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(title)}</title>
 <style>
 ${css}
+.nw { display: inline-block; max-width: 100%; text-indent: 0; }
 .rascunho { border: 0.6mm solid #000; padding: 2mm; text-align: center; font-weight: 700; margin-bottom: 3mm; letter-spacing: 0.02em; }
 .toolbar { position: sticky; top: 0; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #f4f4f5; border-bottom: 1px solid #d4d4d8; font-family: system-ui, sans-serif; }
 .toolbar button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #a1a1aa; background: #fff; cursor: pointer; }
@@ -134,10 +147,10 @@ function tabelaAparelho(s: GarantiaSnapshot): string {
   return `<table>
 <tr><th>Aparelho</th><td>${esc(descricaoAparelho(a))}</td></tr>
 <tr><th>Condição</th><td>${esc(a.condicaoLabel)}</td></tr>
-${a.imei1 ? `<tr><th>IMEI 1</th><td>${esc(a.imei1)}</td></tr>` : ""}
-${a.imei2 ? `<tr><th>IMEI 2</th><td>${esc(a.imei2)}</td></tr>` : ""}
-${a.serial ? `<tr><th>Série</th><td>${esc(a.serial)}</td></tr>` : ""}
-<tr><th>Código interno</th><td>${esc(a.codigoInterno)}</td></tr>
+${a.imei1 ? `<tr><th>IMEI 1</th><td>${nw(a.imei1)}</td></tr>` : ""}
+${a.imei2 ? `<tr><th>IMEI 2</th><td>${nw(a.imei2)}</td></tr>` : ""}
+${a.serial ? `<tr><th>Série</th><td>${nw(a.serial)}</td></tr>` : ""}
+<tr><th>Código interno</th><td>${nw(a.codigoInterno)}</td></tr>
 ${a.estadoFisico ? `<tr><th>Estado</th><td>${esc(a.estadoFisico)}</td></tr>` : ""}
 ${a.bateriaSaude !== null && a.bateriaSaude !== undefined ? `<tr><th>Bateria</th><td>${esc(a.bateriaSaude)}% de saúde (informada na conferência)</td></tr>` : ""}
 <tr><th>Acessórios</th><td>${esc(a.acessoriosEntregues)}</td></tr>
@@ -146,22 +159,24 @@ ${a.bateriaSaude !== null && a.bateriaSaude !== undefined ? `<tr><th>Bateria</th
 
 function blocoCobertura(s: GarantiaSnapshot): string {
   const g = s.garantia
+  // Rótulo, valor e nota em elementos próprios e separados por espaço: nunca colam no texto,
+  // mesmo sem CSS (80 mm empilha os três; A4 mantém o rótulo inline e o valor em bloco).
   return `<div class="cover">
-<div>Garantia legal<b>${g.legalDias} dias</b><span class="muted">CDC art. 26, II — sempre garantida</span></div>
-<div>Garantia contratual adicional<b>${g.contratualDias > 0 ? `${esc(rotuloPrazo(g.contratualDias))} (${g.contratualDias} dias)` : "Sem adicional"}</b><span class="muted">${g.contratualFim ? `de ${formatDateKeyBr(g.dataEntrega)} a ${formatDateKeyBr(g.contratualFim)}` : "—"}</span></div>
-<div>Cobertura total até<b>${formatDateKeyBr(g.coberturaFim)}</b><span class="muted">contratual + legal, a partir da entrega em ${formatDateKeyBr(g.dataEntrega)}</span></div>
+<div><span class="rot">Garantia legal</span> <b>${g.legalDias} dias</b> <span class="muted">CDC art. 26, II — sempre garantida</span></div>
+<div><span class="rot">Garantia contratual adicional</span> <b>${g.contratualDias > 0 ? `${esc(rotuloPrazo(g.contratualDias))} (${g.contratualDias} dias)` : "Sem adicional"}</b> <span class="muted">${g.contratualFim ? `de ${formatDateKeyBr(g.dataEntrega)} a ${formatDateKeyBr(g.contratualFim)}` : "—"}</span></div>
+<div><span class="rot">Cobertura total até</span> <b>${formatDateKeyBr(g.coberturaFim)}</b> <span class="muted">contratual + legal, a partir da entrega em ${formatDateKeyBr(g.dataEntrega)}</span></div>
 </div>`
 }
 
 export function renderTermoGarantia(s: GarantiaSnapshot, formato: DocFormato, rascunho: boolean | string = false): string {
-  const body = `<h1>Termo de garantia ${esc(s.numeroGarantia)}</h1>
+  const body = `<h1>Termo de garantia ${nw(s.numeroGarantia)}</h1>
 ${cabecalhoLoja(s.loja)}
 <h2>Cliente</h2>
-<table><tr><th>Nome</th><td>${esc(s.cliente.nome)}</td></tr>${s.cliente.documentoMascarado ? `<tr><th>CPF/CNPJ</th><td>${esc(s.cliente.documentoMascarado)}</td></tr>` : ""}</table>
+<table><tr><th>Nome</th><td>${esc(s.cliente.nome)}</td></tr>${s.cliente.documentoMascarado ? `<tr><th>CPF/CNPJ</th><td>${nw(s.cliente.documentoMascarado)}</td></tr>` : ""}</table>
 <h2>Produto</h2>
 ${tabelaAparelho(s)}
 <h2>Venda e entrega</h2>
-<table><tr><th>Venda</th><td>${esc(s.venda.pedidoId)} — ${formatDateKeyBr(s.venda.dataVenda)}</td></tr>
+<table><tr><th>Venda</th><td>${nw(s.venda.pedidoId)} — ${formatDateKeyBr(s.venda.dataVenda)}</td></tr>
 <tr><th>Valor</th><td>${brl(s.venda.preco)}</td></tr>
 <tr><th>Entrega</th><td>${formatDateKeyBr(s.garantia.dataEntrega)}</td></tr></table>
 <h2>Cobertura</h2>
@@ -177,17 +192,17 @@ ${s.observacoes ? `<p class="muted">Observações: ${esc(s.observacoes)}</p>` : 
 export function renderComprovanteVenda(s: GarantiaSnapshot, pagamentos: PagamentoResumo, formato: DocFormato, rascunho: boolean | string = false): string {
   const body = `<h1>Comprovante de venda</h1>
 ${cabecalhoLoja(s.loja)}
-<p><b>${esc(s.venda.pedidoId)}</b> — ${formatDateKeyBr(s.venda.dataVenda)}</p>
-<p>Documento comercial sem valor fiscal. Não substitui NFC-e/NF-e.</p>
-<h2>Cliente</h2><p>${esc(s.cliente.nome)}${s.cliente.documentoMascarado ? ` — ${esc(s.cliente.documentoMascarado)}` : ""}</p>
+<p><b>${nw(s.venda.pedidoId)}</b> — ${formatDateKeyBr(s.venda.dataVenda)}</p>
+<p>Documento comercial sem valor fiscal. Não substitui <span class="nw">NFC-e/NF-e</span>.</p>
+<h2>Cliente</h2><p>${esc(s.cliente.nome)}${s.cliente.documentoMascarado ? ` — ${nw(s.cliente.documentoMascarado)}` : ""}</p>
 <h2>Aparelho</h2>
 ${tabelaAparelho(s)}
 <h2>Valores</h2>
 <table><tr><th>Aparelho</th><td>${brl(s.venda.preco)}</td></tr>
 ${pagamentos.map((p) => `<tr><th>${esc(p.label)}</th><td>${brl(p.valor)}</td></tr>`).join("")}</table>
 <h2>Garantia</h2>
-<p>Termo ${esc(s.numeroGarantia)}: legal de ${s.garantia.legalDias} dias${s.garantia.contratualDias > 0 ? ` + contratual de ${s.garantia.contratualDias} dias` : ""}. Cobertura até ${formatDateKeyBr(s.garantia.coberturaFim)}.</p>
-${formato === "80mm" ? `<p class="muted">Termo completo em A4: ${esc(s.numeroGarantia)}.</p>` : ""}
+<p>Termo ${nw(s.numeroGarantia)}: legal de ${s.garantia.legalDias} dias${s.garantia.contratualDias > 0 ? ` + contratual de ${s.garantia.contratualDias} dias` : ""}. Cobertura até ${formatDateKeyBr(s.garantia.coberturaFim)}.</p>
+${formato === "80mm" ? `<p class="muted">Termo completo em A4: ${nw(s.numeroGarantia)}.</p>` : ""}
 <div class="sign"><div>${esc(s.cliente.nome)}</div></div>`
   return shell(`Comprovante ${s.venda.pedidoId}`, body, formato, rascunho)
 }
@@ -195,9 +210,9 @@ ${formato === "80mm" ? `<p class="muted">Termo completo em A4: ${esc(s.numeroGar
 export function renderTermoEntrega(s: GarantiaSnapshot, formato: DocFormato, rascunho: boolean | string = false): string {
   const body = `<h1>Termo de entrega e recebimento</h1>
 ${cabecalhoLoja(s.loja)}
-<p>Eu, <b>${esc(s.cliente.nome)}</b>${s.cliente.documentoMascarado ? `, ${esc(s.cliente.documentoMascarado)}` : ""}, declaro que recebi em ${formatDateKeyBr(s.garantia.dataEntrega)} o aparelho abaixo, referente à venda ${esc(s.venda.pedidoId)}, e que conferi o estado e os acessórios descritos.</p>
+<p>Eu, <b>${esc(s.cliente.nome)}</b>${s.cliente.documentoMascarado ? `, ${nw(s.cliente.documentoMascarado)}` : ""}, declaro que recebi em ${formatDateKeyBr(s.garantia.dataEntrega)} o aparelho abaixo, referente à venda ${nw(s.venda.pedidoId)}, e que conferi o estado e os acessórios descritos.</p>
 ${tabelaAparelho(s)}
-<p>Recebi também o termo de garantia ${esc(s.numeroGarantia)}, com garantia legal de ${s.garantia.legalDias} dias${s.garantia.contratualDias > 0 ? ` e garantia contratual adicional de ${s.garantia.contratualDias} dias` : ""}. Este termo não reduz nenhum direito previsto no Código de Defesa do Consumidor.</p>
+<p>Recebi também o termo de garantia ${nw(s.numeroGarantia)}, com garantia legal de ${s.garantia.legalDias} dias${s.garantia.contratualDias > 0 ? ` e garantia contratual adicional de ${s.garantia.contratualDias} dias` : ""}. Este termo não reduz nenhum direito previsto no Código de Defesa do Consumidor.</p>
 <div class="sign"><div>${esc(s.cliente.nome)}<br />Cliente</div><div>${esc(s.venda.operador || s.loja.nome)}<br />Responsável pela entrega</div></div>`
   return shell(`Entrega ${s.venda.pedidoId}`, body, formato, rascunho)
 }
@@ -207,16 +222,16 @@ const FORMA: Record<string, string> = { dinheiro: "Dinheiro", pix: "Pix", transf
 
 export function renderProtocoloAquisicao(a: AquisicaoDoc, formato: DocFormato): string {
   const pendente = a.status !== "confirmada"
-  const body = `<h1>Protocolo de aquisição ${esc(a.protocolo)}</h1>
+  const body = `<h1>Protocolo de aquisição ${nw(a.protocolo)}</h1>
 ${cabecalhoLoja(a.loja)}
 ${pendente ? `<div class="rascunho">${a.status === "recusada" ? "AQUISIÇÃO RECUSADA — sem efeito" : "AGUARDANDO APROVAÇÃO — ainda sem efeito"}</div>` : ""}
 <table><tr><th>Operação</th><td>${esc(TIPO_AQ[a.tipo] ?? a.tipo)} — ${formatDateKeyBr(a.dataKey)}</td></tr>
-<tr><th>Vendedor</th><td>${esc(a.vendedor.nome)}${a.vendedor.documentoMascarado ? ` — ${esc(a.vendedor.documentoMascarado)}` : ""}</td></tr>
+<tr><th>Vendedor</th><td>${esc(a.vendedor.nome)}${a.vendedor.documentoMascarado ? ` — ${nw(a.vendedor.documentoMascarado)}` : ""}</td></tr>
 <tr><th>Origem</th><td>${esc(a.documentoOrigem)}</td></tr>
 <tr><th>Valor</th><td>${brl(a.valorTotal)} — ${esc(FORMA[a.formaPagamento] ?? a.formaPagamento)} (${esc(SITUACAO_PAGAMENTO_LABEL[a.pagamentoStatus as SituacaoPagamentoAquisicao] ?? "pagamento pendente")})</td></tr></table>
 <h2>Aparelhos</h2>
-${a.aparelhos.map((x) => `<table><tr><th>${esc(x.codigoInterno)}</th><td>${esc(x.descricao)} — ${esc(x.condicao)}</td></tr>
-${x.imei1 ? `<tr><th>IMEI 1</th><td>${esc(x.imei1)}</td></tr>` : ""}${x.imei2 ? `<tr><th>IMEI 2</th><td>${esc(x.imei2)}</td></tr>` : ""}${x.serial ? `<tr><th>Série</th><td>${esc(x.serial)}</td></tr>` : ""}
+${a.aparelhos.map((x) => `<table><tr><th>${nw(x.codigoInterno)}</th><td>${esc(x.descricao)} — ${esc(x.condicao)}</td></tr>
+${x.imei1 ? `<tr><th>IMEI 1</th><td>${nw(x.imei1)}</td></tr>` : ""}${x.imei2 ? `<tr><th>IMEI 2</th><td>${nw(x.imei2)}</td></tr>` : ""}${x.serial ? `<tr><th>Série</th><td>${nw(x.serial)}</td></tr>` : ""}
 <tr><th>Checklist</th><td>${esc(x.checklist)}</td></tr></table>`).join("")}
 <h2>Declaração do vendedor</h2>
 <p>Declaro ser o legítimo proprietário do(s) aparelho(s) acima, que não possui(em) restrição de roubo, furto ou bloqueio de que eu tenha conhecimento, e que os vendo à loja pelo valor informado.</p>
