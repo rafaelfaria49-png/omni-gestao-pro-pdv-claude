@@ -21,6 +21,9 @@ on:
       - "test/aparelhos/**"
       - "e2e/aparelhos/**"
       - "e2e/aparelhos.playwright.config.ts"
+      - "e2e/aparelhos-80mm/**"
+      - "e2e/aparelhos-80mm.playwright.config.ts"
+      - "apps/desktop/src/shared/print-protocol.ts"
       - ".github/workflows/aparelhos.yml"
   workflow_dispatch:
 
@@ -84,6 +87,15 @@ jobs:
         run: npm run build
       - name: Chromium para E2E autenticado
         run: npx playwright install --with-deps chromium
+      - name: Layout real 80 mm dos documentos (fragmento da ponte Windows em Chromium)
+        run: npx playwright test -c e2e/aparelhos-80mm.playwright.config.ts
+      - name: Evidências 80 mm (PNG + PDF)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aparelhos-80mm-evidencias
+          path: test-results/aparelhos-80mm/depois
+          if-no-files-found: warn
       - name: E2E autenticado com banco sintético separado
         run: |
           PGPASSWORD=isolated_ci_only createdb -h 127.0.0.1 -U aparelhos aparelhos_e2e
