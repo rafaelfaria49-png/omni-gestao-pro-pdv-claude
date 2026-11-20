@@ -2,8 +2,8 @@
  * Reversões de venda com aparelho individualizado (OMNI-APARELHOS-ENDTOEND-001).
  *
  * - Cancelamento (rota canônica de cancelar venda): na MESMA transação, a garantia vira
- *   `cancelada` e a unidade volta a `disponivel` — casando com o estorno de +1 que o próprio
- *   cancelamento faz no produto (invariante Produto.stock = disponíveis + reservados).
+ *   `cancelada` e a unidade volta a `em_revisao`. O cancelamento canônico exclui essas
+ *   linhas da reposição comercial; somente a liberação posterior credita a unidade.
  * - Devolução / correção de itens: ainda não integradas (F8 em andamento) → fail-closed para
  *   linhas de aparelho, em vez de devolver saldo sem tocar a unidade e a garantia.
  *
@@ -32,6 +32,11 @@ export const APARELHO_REVERSAO_NAO_INTEGRADA = {
   code: "APARELHO_DEVOLUCAO_NAO_INTEGRADA",
   message:
     "Esta venda tem aparelho por IMEI. Devolução e correção de itens de aparelho ainda não estão integradas: cancele a venda inteira ou procure o gerente.",
+} as const
+
+export const APARELHO_CORRECAO_NAO_INTEGRADA = {
+  code: "APARELHO_CORRECAO_NAO_INTEGRADA",
+  message: "Correção e reparcelamento de venda com aparelho por IMEI ainda não possuem integração transacional. Procure o gerente para regularizar a operação com segurança.",
 } as const
 
 /** Algum item tocado pela operação é linha de aparelho? (comparação por inventoryId OU produtoId). */
@@ -70,8 +75,8 @@ export async function cancelarAparelhosDaVendaTx(
     where: { storeId: args.storeId, vendaId: args.vendaId },
     select: { id: true, aparelhoId: true, numeroGarantia: true, status: true },
   })
-  // Pré-validação de TODAS as unidades antes de qualquer escrita: o cancelamento devolve +1 ao
-  // produto de cada linha, então cada unidade precisa estar vendida, ativa e no mesmo produto.
+  // Pré-validação de TODAS as unidades antes de qualquer escrita. O retorno preserva a
+  // identidade, mas exige nova liberação do gerente antes de voltar ao saldo comercial.
   const travadas: Array<{ v: (typeof vinculos)[number]; de: string }> = []
   for (const linha of linhas) {
     const v = vinculos.find((x) => x.aparelhoId === linha.aparelhoId)
@@ -87,14 +92,14 @@ export async function cancelarAparelhosDaVendaTx(
   }
   for (const { v, de } of travadas) {
     await tx.aparelhoVenda.update({ where: { id: v.id }, data: { status: "cancelada" } })
-    await tx.aparelhoFisico.update({ where: { id: v.aparelhoId }, data: { status: "disponivel", version: { increment: 1 } } })
+    await tx.aparelhoFisico.update({ where: { id: v.aparelhoId }, data: { status: "em_revisao", version: { increment: 1 } } })
     await tx.aparelhoEvento.create({
       data: {
         storeId: args.storeId,
         aparelhoId: v.aparelhoId,
         tipo: "venda_cancelada",
         deStatus: de,
-        paraStatus: "disponivel",
+        paraStatus: "em_revisao",
         operador: args.operador,
         idempotencyKey: `venda-cancelada:${args.vendaId}:${v.aparelhoId}`,
         dados: { pedidoId: args.pedidoId, numeroGarantia: v.numeroGarantia },

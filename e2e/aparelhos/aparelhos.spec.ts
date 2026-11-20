@@ -288,6 +288,29 @@ test("03 Venda Completa — cliente obrigatório, unidade pelo IMEI, garantia 6 
   await cupom.screenshot({ path: shot("11-comprovante-80mm.png"), fullPage: true })
   await cupom.close()
 
+  // Ponte Windows simulada no QA: emissão real pelo endpoint autenticado, sem popup
+  // e sem qualquer reenvio comercial quando a impressora falha e o operador reimprime.
+  const vendasAntes = await d.venda.count({ where: { storeId: STORE } })
+  await page.evaluate(() => {
+    const control = { calls: [] as string[], fail: true }
+    Object.assign(window, { aparelhoPrintQa: control, omniDesktopPrint: {
+      version: 1,
+      getStation: async () => ({ deviceName: "POS-80 QA", bobina: "80mm" }),
+      print: async (request: { html: string }) => {
+        control.calls.push(request.html)
+        return control.fail ? { ok: false, status: "printer-missing", error: "POS-80 QA desconectada" }
+          : { ok: true, status: "queued", deviceName: "POS-80 QA" }
+      },
+    } })
+  })
+  await docs.getByRole("button", { name: "Comprovante 80 mm" }).click()
+  await expect(page.getByText(/POS-80 QA desconectada/)).toBeVisible()
+  await page.evaluate(() => { (window as unknown as { aparelhoPrintQa: { fail: boolean } }).aparelhoPrintQa.fail = false })
+  await docs.getByRole("button", { name: "Comprovante 80 mm" }).click()
+  await expect(page.getByText("Documento enviado à impressora. Confira a saída no papel.")).toBeVisible()
+  expect(await page.evaluate(() => (window as unknown as { aparelhoPrintQa: { calls: string[] } }).aparelhoPrintQa.calls.length)).toBe(2)
+  expect(await d.venda.count({ where: { storeId: STORE } })).toBe(vendasAntes)
+
   const av = await d.aparelhoVenda.findFirstOrThrow({ where: { aparelhoId: unit.id } })
   expect([av.status, av.legalDias, av.contratualDias, av.clienteId]).toEqual(["ativa", 90, 180, "e2e-apa-cliente"])
   expect((await d.aparelhoFisico.findUniqueOrThrow({ where: { id: unit.id } })).status).toBe("vendido")
