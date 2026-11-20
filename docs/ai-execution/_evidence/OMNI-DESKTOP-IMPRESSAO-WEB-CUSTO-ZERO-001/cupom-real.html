@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Recibo PDV</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    color: #000;
+    background: #fff;
+  }
+  .wrap {
+    box-sizing: border-box;
+    width: 72mm;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 2mm 3mm 4mm;
+  }
+  @media print {
+    @page { size: 80mm auto; margin: 0; }
+    html, body { background: #fff; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+      <div style="text-align:center;font-weight:700;margin-bottom:6px">Assistência Técnica São João — TESTE</div>
+      <div style="text-align:center;font-size:11px;margin-bottom:4px">CNPJ 00.000.000/0000-00</div>
+      <div style="font-size:10px;margin-bottom:8px">Rua Ação &amp; Coração, 123 — Centro, Jundiaí/SP</div>
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      
+      <div style="text-align:center;margin:6px 0;break-inside:avoid">
+    <div style="font-size:11px;font-weight:700">NÃO É DOCUMENTO FISCAL</div>
+    <div style="font-size:9px">NÃO SUBSTITUI NFC-e OU NF-e</div>
+  </div>
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <div style="font-size:11px"><div style="display:flex;justify-content:space-between;gap:8px"><span>Venda:</span><span style="text-align:right">TESTE-0001</span></div><div style="display:flex;justify-content:space-between;gap:8px"><span>Data:</span><span style="text-align:right">20/11/2026 10:00</span></div><div style="display:flex;justify-content:space-between;gap:8px"><span>Operador:</span><span style="text-align:right">Operador Teste</span></div><div style="display:flex;justify-content:space-between;gap:8px"><span>Cliente:</span><span style="text-align:right">José Antônio Conceição</span></div></div>
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <p>1x Película de vidro 3D — iPhone 15 — R$ 39,90</p><p>2x Capa magnética ação/coração çãõéíú — R$ 49,00</p><p>1x Cabo USB-C 2 m reforçado (nome bem comprido para quebrar a linha da bobina) — R$ 29,90</p>
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <p>Subtotal: R$ 118,80</p>
+      
+      <p>Desconto: R$ 8,80</p>
+      <p style="font-weight:700">Total: R$ 110,00</p>
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <p style="font-size:10px;font-weight:600;margin:0 0 2px">PAGAMENTO</p>
+      <div style="display:flex;justify-content:space-between"><span>Pix</span><span>R$ 60,00</span></div><div style="display:flex;justify-content:space-between"><span>Dinheiro</span><span>R$ 50,00</span></div>
+      <p>Dinheiro recebido: R$ 100,00</p>
+      <p style="font-weight:700">Troco: R$ 50,00</p>
+      
+    </div>
+<p class="no-print" style="padding:8px;font-size:11px;color:#666">
+  Desative &quot;Cabeçalhos e rodapés&quot; na impressão para ocultar data e URL.
+</p>
+<script>
+  window.onafterprint = function () { window.close(); };
+  window.onload = function () {
+    window.setTimeout(function () {
+      window.print();
+    }, 200);
+  };
+</script>
+</body>
+</html>
