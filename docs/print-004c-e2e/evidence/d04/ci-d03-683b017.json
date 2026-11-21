@@ -1,0 +1,142 @@
+{
+  "status": "PASS",
+  "headSha": "683b0178ad844d10191e7fb2a0c96d28270297b1",
+  "checkoutSha": "387d02e6b170401cdc2047169dd39916a94ca544",
+  "runId": 41946614583,
+  "runAttempt": 1,
+  "artifactId": 13379127882,
+  "artifactName": "omni-print-d03-evidence",
+  "artifactDigest": "sha256:f3a882d8b2f9ddc50cf6ba2cad99662ac2b32f0c53c0008d3c28bc7c32ca35f6",
+  "platform": "linux",
+  "steps": [
+    {
+      "step": "generator",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "514d418684675f4df7db4e73921ddda85fb98a7676b1b92ddff9f9ff8fa81421"
+    },
+    {
+      "step": "d02-generator",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "d093662a9b07a9a75722658642531c22f1c746090be143cc53af55ef43995297"
+    },
+    {
+      "step": "unit",
+      "status": "PASS",
+      "tests": "74 passed | 4 skipped (78)",
+      "sha256": "ec5b50fd7f55ce3181908215050a2255237205e973d8443a1bdc4fccae8ecbcd"
+    },
+    {
+      "step": "offline-regression",
+      "status": "PASS",
+      "tests": "135 passed (135)",
+      "sha256": "3a7b75c7fe2fdffd783426f3535429900a8cadce11396c885722d70942292b55"
+    },
+    {
+      "step": "retention-pg",
+      "status": "PASS",
+      "tests": "17 passed (17)",
+      "sha256": "0898c369404560984579903797843bea4459522d90efb169428229a6d77f6657"
+    },
+    {
+      "step": "offline-pg",
+      "status": "PASS",
+      "tests": "10 passed (10)",
+      "sha256": "92a5abca14ef9f6fc669dbcd9e0c3bf5d2f6da47626d36d7c5ffba504805a8aa"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PASS",
+      "tests": "35 passed (35)",
+      "sha256": "5f69dc8a339911f22de7e3325c2e8989f28ee2882def185c02fd94cb3d762cbe"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "PASS",
+      "tests": "1 passed (1)",
+      "sha256": "89f326f4fb9dc017b12358aef15741fc75099f7f89564f7086f04ec274a9299e"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PASS",
+      "tests": "3 passed (3)",
+      "sha256": "dcd6461f6486762363bf2965a0b12a731873fbe680ae58d0abc1a692009b1822"
+    },
+    {
+      "step": "d02-pg",
+      "status": "PASS",
+      "tests": "8 passed (8)",
+      "sha256": "93377a44d41b65cc27a7baeccc42d790cd163606dca57d65c559e8388a94cea2"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PASS",
+      "tests": "5 passed (5)",
+      "sha256": "49e5798bd7994ad2362363efb1649cf29f88587c29f64655e333b70e2f9b013e"
+    },
+    {
+      "step": "playwright",
+      "status": "PASS",
+      "tests": "19 passed (59.1s)",
+      "sha256": "8328d937d443efd867c6f75f6f137054b873cda1df7c579cc893f346400a9cb8"
+    },
+    {
+      "step": "typecheck",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "eslint",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "build",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "933db61b2b9a4464e24a83f654061499ab4e01762d75bb647ab1f673690db7ad"
+    },
+    {
+      "step": "mutation",
+      "status": "PASS",
+      "mutations": [
+        {
+          "mutant": "seven-days",
+          "sha256": "9d3c303571c7ed4dd21c2ee856be8dc2433e8228ff5bd1dea382e172a3af6bcf"
+        },
+        {
+          "mutant": "held-egress",
+          "sha256": "e7392e26f118cee42b034bb8587bee7cd092f3750b0f5351b94de7fff67f2e82"
+        },
+        {
+          "mutant": "evidence-details",
+          "sha256": "de70dca8a872342406ecd5936193b20429e7d1c81f8e1cc56ec2053d8bcfa62c"
+        },
+        {
+          "mutant": "idempotent",
+          "sha256": "c34ba8217f0e3a3bf0f4768889a11faace64af23bb2d019a6eccdecaf6985123"
+        },
+        {
+          "mutant": "document-lock",
+          "sha256": "859c4dd7989848d45f195fa216dd9170220f2204c2ab6e4c8eb3bba771307474"
+        },
+        {
+          "mutant": "unknown-is-not-final",
+          "sha256": "6362ab8fb499554d374469b4e5812dd55e0cf93e1d04391901351ba4b145e7e2"
+        },
+        {
+          "mutant": "key-reference",
+          "sha256": "733b448940668c3d9276553052f3da424f4097a558601c9c7da37237e52b7ff3"
+        },
+        {
+          "mutant": "exact-cancellation-date",
+          "sha256": "b40675268561eb17e470732ae414f5eb4f1233ce0360190b3731f68f5e85b13e"
+        }
+      ]
+    }
+  ],
+  "physicalHomologation": "PENDING"
+}

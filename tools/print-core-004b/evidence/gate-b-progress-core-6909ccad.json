@@ -1,0 +1,288 @@
+{
+  "run": "core-6909ccad",
+  "results": [
+    {
+      "id": "CORE-AUTHORITY",
+      "status": "PASS",
+      "milliseconds": 100,
+      "detail": {
+        "pureCanonicalGuardsUsed": true,
+        "actualSessionEndpoint": false
+      }
+    },
+    {
+      "id": "CORE-INPUT",
+      "status": "PASS",
+      "milliseconds": 21,
+      "detail": null
+    },
+    {
+      "id": "CORE-POSITIVE",
+      "status": "PASS",
+      "milliseconds": 138,
+      "detail": {
+        "jobId": "62366536-5f7a-491a-a3bd-e3dcbfbe744f",
+        "copies": 2,
+        "resultLevel": "TRANSPORT_ACCEPTED"
+      }
+    },
+    {
+      "id": "CORE-CONCURRENT-INITIAL",
+      "status": "PASS",
+      "milliseconds": 98,
+      "detail": {
+        "jobId": "7c128dd5-8a34-4a64-a633-7e073d4a6705",
+        "independentRuntimeClients": 2,
+        "controlledBarrier": true,
+        "authorPreserved": true
+      }
+    },
+    {
+      "id": "CORE-SEMANTIC-CONFLICT",
+      "status": "PASS",
+      "milliseconds": 31,
+      "detail": null
+    },
+    {
+      "id": "CORE-REPLAY-LOST-RESPONSE",
+      "status": "PASS",
+      "milliseconds": 84,
+      "detail": {
+        "persistedReceiptAfterNewClient": true,
+        "sendCalls": 0
+      }
+    },
+    {
+      "id": "CORE-ATOMIC-T1",
+      "status": "PASS",
+      "milliseconds": 43,
+      "detail": null
+    },
+    {
+      "id": "CORE-TWO-EXECUTORS",
+      "status": "PASS",
+      "milliseconds": 33,
+      "detail": null
+    },
+    {
+      "id": "CORE-LEASE-FENCING",
+      "status": "PASS",
+      "milliseconds": 136,
+      "detail": null
+    },
+    {
+      "id": "CORE-CRASH-UNKNOWN",
+      "status": "PASS",
+      "milliseconds": 1633,
+      "detail": {
+        "attemptId": "cb671afc-5330-4bd0-b4e0-df948b342dd7",
+        "sendCalls": 1,
+        "lateAcceptanceNeverDowngraded": true
+      }
+    },
+    {
+      "id": "CORE-PARTIAL-COPIES",
+      "status": "PASS",
+      "milliseconds": 5149,
+      "detail": null
+    },
+    {
+      "id": "CORE-HISTORICAL-CLOSURE",
+      "status": "PASS",
+      "milliseconds": 68,
+      "detail": null
+    },
+    {
+      "id": "CORE-HISTORICAL-INITIAL-RACE",
+      "status": "PASS",
+      "milliseconds": 121,
+      "detail": null
+    },
+    {
+      "id": "CORE-A4-THERMAL-SLOT",
+      "status": "PASS",
+      "milliseconds": 59,
+      "detail": {
+        "browserOpened": false,
+        "logicalSlotOnly": true
+      }
+    },
+    {
+      "id": "CORE-REPRINT-COALESCENCE",
+      "status": "PASS",
+      "milliseconds": 272,
+      "detail": null
+    },
+    {
+      "id": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+      "status": "PASS",
+      "milliseconds": 264,
+      "detail": {
+        "suppressionSurvivesProof": true,
+        "externalExposureRequiresNewAcknowledgement": true,
+        "explicitReconfirmationAllowsProgress": true
+      }
+    },
+    {
+      "id": "CORE-RISK-NOT-SELF-INVALIDATING",
+      "status": "PASS",
+      "milliseconds": 459,
+      "detail": null
+    },
+    {
+      "id": "CORE-SHARED-DESTINATION",
+      "status": "PASS",
+      "milliseconds": 1687,
+      "detail": {
+        "sharedDestination": "632c2c81-6c68-4cc5-87f0-97d79f66f1bd",
+        "differentStores": true,
+        "leaseNeverFreedGate": true
+      }
+    },
+    {
+      "id": "CORE-REVOCATION",
+      "status": "PASS",
+      "milliseconds": 88,
+      "detail": {
+        "actualLogoutChangedOrCertified": false,
+        "syntheticDelegationOnly": true
+      }
+    },
+    {
+      "id": "CORE-CROSS-SCOPE",
+      "status": "PASS",
+      "milliseconds": 107,
+      "detail": null
+    },
+    {
+      "id": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+      "status": "PASS",
+      "milliseconds": 60,
+      "detail": null
+    },
+    {
+      "id": "CORE-SYNTHETIC-TEST",
+      "status": "PASS",
+      "milliseconds": 43,
+      "detail": null
+    },
+    {
+      "id": "CORE-MISSING-COPY-COMMIT",
+      "status": "PASS",
+      "milliseconds": 34,
+      "detail": null
+    },
+    {
+      "id": "CORE-CRASH-BEFORE-CALL",
+      "status": "PASS",
+      "milliseconds": 1578,
+      "detail": {
+        "noCallObserved": true,
+        "absenceOfCallAloneNotAReleaseProof": true
+      }
+    },
+    {
+      "id": "CORE-STALE-RISK-T0-T1",
+      "status": "PASS",
+      "milliseconds": 93,
+      "detail": null
+    },
+    {
+      "id": "CORE-REVOCATION-CONCURRENT-T3",
+      "status": "PASS",
+      "milliseconds": 137,
+      "detail": {
+        "observedWait": [
+          {
+            "pid": 28920,
+            "wait_event_type": "Lock",
+            "wait_event": "transactionid"
+          }
+        ],
+        "noPhysicalRecallClaim": true
+      }
+    },
+    {
+      "id": "CORE-AUDIT-FAILURE-AFTER-T3",
+      "status": "PASS",
+      "milliseconds": 1587,
+      "detail": null
+    },
+    {
+      "id": "CORE-A4-LOGICAL-ONLY",
+      "status": "PASS",
+      "milliseconds": 100,
+      "detail": {
+        "browserOpened": false,
+        "transportAcceptanceFabricated": false
+      }
+    },
+    {
+      "id": "CORE-NORMALIZATION",
+      "status": "PASS",
+      "milliseconds": 127,
+      "detail": null
+    },
+    {
+      "id": "CORE-ELIGIBILITY",
+      "status": "PASS",
+      "milliseconds": 37,
+      "detail": null
+    },
+    {
+      "id": "CORE-FINGERPRINT",
+      "status": "PASS",
+      "milliseconds": 109,
+      "detail": {
+        "exactFloatBits": true,
+        "quantityType": "Int",
+        "kgCertified": false,
+        "postSELECTDeviceAtomicityClaimed": false
+      }
+    },
+    {
+      "id": "CORE-REVIEW-REGRESSIONS",
+      "status": "PASS",
+      "milliseconds": 194,
+      "detail": {
+        "reviewFindings": [
+          "missing-session-column",
+          "inactive-terminal",
+          "invalid-payment-discount",
+          "legacy-store-fallback"
+        ],
+        "adversarialChecksExecuted": true
+      }
+    },
+    {
+      "id": "CORE-PURGE-REQUEST-EXPIRY",
+      "status": "PASS",
+      "milliseconds": 2256,
+      "detail": {
+        "hashesAndSlotsRemain": true,
+        "noRegeneration": true
+      }
+    },
+    {
+      "id": "CORE-PURE-CRYPTO-AND-CANONICAL",
+      "status": "PASS",
+      "milliseconds": 3,
+      "detail": null
+    },
+    {
+      "id": "CORE-COMMERCIAL-INTEGRITY",
+      "status": "PASS",
+      "milliseconds": 1,
+      "detail": {
+        "comparison": "per-table sorted row identities plus digest, not counts",
+        "changedOnlyByOwnerFixture": [
+          "pdv_terminais",
+          "venda_itens",
+          "vendas"
+        ],
+        "runtimeCommercialDmlPrivileges": false,
+        "commercialMutationsByPrintCore": 0
+      }
+    }
+  ]
+}

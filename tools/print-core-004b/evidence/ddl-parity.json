@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "uniqueConstraintAndIndexFormsComparedSemantically": true,
+  "columns": 154,
+  "foreignKeys": 36,
+  "checkConstraints": 60,
+  "customFunctions": 6,
+  "customTriggers": 45,
+  "customIndexes": 5
+}

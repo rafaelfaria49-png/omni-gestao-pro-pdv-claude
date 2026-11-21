@@ -143,3 +143,14 @@ describe("mapVendaDetalheToCupom · venda estornada", () => {
     expect(mapVendaDetalheToCupom(venda({ status: "cancelada" }), loja).status).toBe("cancelada")
   })
 })
+
+describe("mapVendaDetalheToCupom · identidade no registro de impressões (D01-A1)", () => {
+  it("leva o id técnico da venda (Venda.id) para a reimpressão registrada; o número comercial continua no cupom", () => {
+    const c = mapVendaDetalheToCupom(venda(), loja)
+    expect(c.vendaId).toBe("ck1")
+    expect(c.numeroPedido).toBe("VDA-L01-2026-000407")
+  })
+  it("sem id técnico, não há identidade: a reimpressão segue o fluxo antigo", () => {
+    expect(mapVendaDetalheToCupom(venda({ dbId: "" }), loja).vendaId).toBeUndefined()
+  })
+})

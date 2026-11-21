@@ -1,0 +1,8 @@
+== db push schema anterior (derivado como o piloto, mesmo comando)
+
+Your database is now in sync with your Prisma schema. Done in 2.39s
+
+== migration do piloto
+Script executed successfully.
+== diff banco -> schema candidato (esperado vazio)
+[fim]

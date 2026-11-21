@@ -1,0 +1,361 @@
+{
+  "goal": "OMNI-PRINT-004B-EVIDENCE-CLOSEOUT-001",
+  "reviewer": "/root/independent_contract_review",
+  "status": "COMPLETED",
+  "mode": "READ_ONLY_INDEPENDENT_EXECUTOR",
+  "authorship": "Structured preservation by primary agent of the independent executor's delivered conclusion and inventory; not a review by external ChatGPT.",
+  "capacityError112Observed": false,
+  "runtimeExecuted": false,
+  "testsExecuted": false,
+  "databaseAccessed": false,
+  "humanApprovalGranted": false,
+  "conclusion": "Existing local/synthetic evidence is coherent with the coverage caveats below. No new material implementation defect identified in this supplemental reading.",
+  "journal": {
+    "entriesRead": 795,
+    "distinctHashes": 44,
+    "printTargets": 794,
+    "nullTargets": 1,
+    "nullTargetSQL": "SET CONSTRAINTS ALL IMMEDIATE",
+    "nullTargetSource": "tools/print-core-004b/gate-b-run.ts:468",
+    "staticCandidatesIndependentlyRehashed": 46,
+    "literalCandidates": 32,
+    "builderCandidates": 14,
+    "entryIndexCoverage": "0..794 exactly once",
+    "semantics": "Candidates were checked against source/builder and sql-v1+NUL digest. A hash alone does not reveal SQL, parameters, executed branch or commit.",
+    "limits": [
+      "exec() is journaled before executeRawUnsafe",
+      "query() is not journaled",
+      "No transaction IDs, parameters, commit or rollback outcomes",
+      "Trigger-internal SQL is not separately journaled",
+      "Deliberate negative attempts appear in journal",
+      "Some hashes have multiple possible source sites"
+    ]
+  },
+  "ownerVsRuntime": {
+    "source": "tools/print-core-004b/gate-b-run.ts:51",
+    "runtimeClients": 3,
+    "ownerSeedSeparate": true,
+    "ownerCorrections": 15,
+    "declaredCorrectionTables": {
+      "vendas": 11,
+      "venda_itens": 3,
+      "pdv_terminais": 1
+    },
+    "qualification": "Calls corresponding to owner corrections exist in source; the owner journal alone is not server-side attribution of each row delta."
+  },
+  "commercialSnapshots": {
+    "tables": 108,
+    "excludedTable": "admin_users",
+    "checkpointToFinal": "BYTE_IDENTICAL",
+    "beforeToCheckpointChangedTables": [
+      "vendas",
+      "venda_itens",
+      "pdv_terminais"
+    ],
+    "assertionLimit": "Before to checkpoint compares changed table set, not every row delta/writer. Complete content equality starts at checkpoint after owner corrections. Other period relies additionally on source, grants and runtime exec journal.",
+    "source": "tools/print-core-004b/gate-b-run.ts:683",
+    "privilegeNegative": "42501 for runtime UPDATE vendas"
+  },
+  "transport": {
+    "enumeratedInstrumentedSurfaces": [
+      "fetch",
+      "WebSocket",
+      "net.Socket.connect",
+      "HTTP/HTTPS",
+      "UDP",
+      "child_process"
+    ],
+    "attemptsRecorded": 0,
+    "limit": "Covers instrumented points during recorded run, not packet capture or surveillance of all native OS channels."
+  },
+  "priorFindings": [
+    {
+      "id": "REV-A-01",
+      "status": "RESOLVED_LOCAL",
+      "proof": "gate-b.mjs:7, column REVOKE/GRANT and42501 password denial"
+    },
+    {
+      "id": "REV-B-01",
+      "status": "RESOLVED_SOURCE_AND_READER_EXECUTION",
+      "proof": "sale.ts:8 payload sessaoId alias; no non-null sessaoId value assertion"
+    },
+    {
+      "id": "REV-B-02",
+      "status": "RESOLVED_LOCAL",
+      "proof": "target ACTIVE and gate-b-run.ts:605 inactivation negatives"
+    },
+    {
+      "id": "REV-B-03",
+      "status": "RESOLVED_LOCAL",
+      "proof": "sale.ts:21 strict values and gate-b-run.ts:610 INVALID_PAYMENT/INVALID_MONEY"
+    },
+    {
+      "id": "REV-B-04",
+      "status": "RESOLVED_LOCAL",
+      "proof": "authority.ts:16 lojaId fallback, legacy accepted/unbound denied"
+    },
+    {
+      "id": "REV-B-05",
+      "status": "RESOLVED_LOCAL",
+      "proof": "core.ts:268 A4_LOGICAL_ONLY, zero attempts/calls, READY"
+    }
+  ],
+  "B12Correction": "Reviewer now confirms the controlled barrier at gate-b-run.ts:626–636 with owner commit before final SELECT. It proves this specific window, not universal writer/device atomicity.",
+  "matrix": {
+    "uniqueIds": 80,
+    "recorded": {
+      "PASS": 53,
+      "FAIL": 0,
+      "DEFERRED": 27
+    },
+    "recordedKernelTests": 35,
+    "distinctKernelBlocksReferencedByPASS": 33,
+    "originalChanged": false,
+    "noDeferredPromoted": true
+  },
+  "coverageCaveats": [
+    {
+      "id": "P01",
+      "unexercised": "Accepted UI envelope uiContextId excluded from semantic identity; strict core shapes omit/reject it",
+      "demonstrated": "defaults, order, admitted fields"
+    },
+    {
+      "id": "P06",
+      "unexercised": "two independent equal renders of same snapshot/renderer/profile",
+      "demonstrated": "payload byte hash, ordinal difference, immutability"
+    },
+    {
+      "id": "P07",
+      "unexercised": "mixed ACCEPT+UNKNOWN vector",
+      "demonstrated": "ACCEPT+NO_EFFECT partial with manual retry of second copy only"
+    },
+    {
+      "id": "P11",
+      "unexercised": "specific SNAPSHOT_LIMIT and PAYLOAD_LIMIT negatives",
+      "demonstrated": "copy/item/command limits; maxBytes1 stops at COMMAND_LIMIT"
+    },
+    {
+      "id": "B19",
+      "unexercised": "complete retirement/archiving and atomic eligibility closure",
+      "demonstrated": "purge/expired request cleanup preserves slots and historical closure"
+    },
+    {
+      "id": "I17",
+      "unexercised": "adapter query returning not found",
+      "demonstrated": "expired lease, pre-call crash, retained gate, no blind retry"
+    },
+    {
+      "id": "I25",
+      "limit": "full snapshot equality is checkpoint-to-final; earlier window compares changed table set and uses additional role/source/journal evidence"
+    },
+    {
+      "id": "P13",
+      "limit": "fixture snapshot/DTO assertions do not certify all production logging"
+    }
+  ],
+  "sqlCatalog": {
+    "columnsEqualToDerived": 154,
+    "foreignKeys": 36,
+    "checks": 60,
+    "triggers": 45,
+    "functionBodiesEqual": 6,
+    "functionsInvoker": true,
+    "fixedSearchPath": true,
+    "limit": "Counts/check catalog definitions are not behavioral tests of each individual custom rule. Direct function-body comparison independently repeated; diff-chain reconstruction was read as primary-agent complement."
+  },
+  "prisma": {
+    "newRecordRead": true,
+    "executedByReviewer": false,
+    "result": "PASS",
+    "node": "24.19.0",
+    "prisma": "6.19.3",
+    "elapsedApproxSeconds": 26,
+    "causeOfEarlierTimeout": "NOT_DETERMINED"
+  },
+  "sourceReadInventory": [
+    {
+      "path": "tools/print-core-004b/gate-b-run.ts",
+      "linesRead": [
+        1,
+        701
+      ],
+      "sha256": "4B138B4A76EC59CD4E14C71B750922A7040B90F482E0CE6694FA051527F84A1C"
+    },
+    {
+      "path": "lib/print-core-synthetic/core.ts",
+      "linesRead": [
+        1,
+        426
+      ],
+      "sha256": "722044B2760683F4624149102263CC4337181EDF814709AFB4C4D053E9D3E560"
+    },
+    {
+      "path": "lib/print-core-synthetic/db.ts",
+      "linesRead": [
+        1,
+        28
+      ],
+      "sha256": "F8223440DDAC689944882724B17F05CEF88B7B9CC520D35AAF938EE70984028E"
+    },
+    {
+      "path": "lib/print-core-synthetic/authority.ts",
+      "linesRead": [
+        1,
+        22
+      ],
+      "sha256": "12605D1B289CCC6623CA124A559A0BC306E8D3F12DFF86FE25907CE65E43E980"
+    },
+    {
+      "path": "lib/print-core-synthetic/sale.ts",
+      "linesRead": [
+        1,
+        45
+      ],
+      "sha256": "2DEC67E55144F085426B4D60932BC695A3C6F06017EBF27A893B6A1BFAE1B442"
+    },
+    {
+      "path": "lib/print-core-synthetic/simulator.ts",
+      "linesRead": [
+        1,
+        33
+      ],
+      "sha256": "EA5AA1535AE88B90B3AB74C975077117D1D4BA7CE0DF4A6B6EB97C7A806B4FFE"
+    },
+    {
+      "path": "lib/print-core-synthetic/codec.ts",
+      "linesRead": [
+        1,
+        64
+      ],
+      "sha256": "1161FC9828E0E5256BCE376B498F3A88B7685F54F7ECE44F8C22C21FD2FB25D4"
+    },
+    {
+      "path": "tools/print-core-004b/boundary-guard.mjs",
+      "linesRead": [
+        1,
+        22
+      ],
+      "sha256": "7F78D567A7BF80759311EEA0DDD5934E8FBE452DDACCBEA2348E13EE85605D12"
+    },
+    {
+      "path": "tools/print-core-004b/gate-a.mjs",
+      "linesRead": [
+        1,
+        159
+      ],
+      "sha256": "C16BF4B36E0E567E7224FE27B53E86EA55CA17893416867E1FC25678B6EA78F7"
+    },
+    {
+      "path": "tools/print-core-004b/gate-b.mjs",
+      "linesRead": [
+        1,
+        25
+      ],
+      "sha256": "E1158BC5DF8F48DA324F2351634B7EDD55B010457D90956C2F9AC7B25B5DE230"
+    }
+  ],
+  "artifactReadInventory": [
+    {
+      "path": "tools/print-core-004b/evidence/runtime-sql-journal-core-6909ccad.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "7B274741006F3EE590B4199FF36AF9DF42F5311BD811C16FFCB38135C0ADD5FA"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/fixture-mutation-journal-core-6909ccad.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "B2A387417E6AE334C80881C807B2F1CD10F19DBE9BDCE20A127FB6CFC006401D"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/gate-b-results.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "7F137ADDD0EED7F9352D9376279339B3D7A726E91B7F667AF5C90DF5700BDA79"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/case-results-80.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "01480134DFD3A552878451B0BADE8D41D7C407631ECAE5CFAF670D4BD0112B90"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/real-transport-boundary.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "36916C05F059ACA5660E179CF481A7A92C899C0710AADCE66ED2C9D4EB06F192"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/commercial-before-core-6909ccad.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "26BF81C2EE696AD519F349109E06BC1D82597132420CAE8BE246CC27C0A0A70A"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/commercial-after-owner-corrections-core-6909ccad.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "8740A76D5C7A8770F6B5B8DC483E977413EB322E9837856D6090E7FB138C32E7"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/commercial-after-core-6909ccad.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "8740A76D5C7A8770F6B5B8DC483E977413EB322E9837856D6090E7FB138C32E7"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/catalog-actual.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "D844E22E9D09039AF5C030BD0968FBA1975836B6AF4FECDCCC26100E8DF99D57"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/catalog-prisma-derived.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "5A9999C0F4FA8981ACCF607A6628C16A1CA6DBA58BBEA63D497473AC5A3934F3"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/ddl-parity.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "8C6FA9C0187EE9595EEEA490A68B812CDA6A87778408E2A0CBB4EC44AE82240C"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/sql-corrections.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "6384685DB65A8D9AB76DE55CE81672E16CD92FE4659A9559BDDD15E449F420EB"
+    },
+    {
+      "path": "tools/print-core-004b/evidence/independent-review-A-remediation.json",
+      "coverage": "PARSED_IN_FULL",
+      "sha256": "468BB8FFAADE3436C0A6031562A3198D9E1DA6E7F53A50660D092195AE68D72C"
+    }
+  ],
+  "newComplementInventory": [
+    {
+      "path": "JOURNAL_STATIC_CORRELATION.json",
+      "sha256": "1575B2FFF16042B5629C640E7373B836F7EFA6E0C2DCBA1B31DCDA22B3258A68",
+      "coverage": "READ_IN_FULL"
+    },
+    {
+      "path": "CASE_PROOF_SOURCE_INDEX.json",
+      "sha256": "97279EF28D41B53036B00EDBA1F3DE33353F052345248DCD4157E1BA0C937F3E",
+      "coverage": "READ_IN_FULL"
+    },
+    {
+      "path": "HASH_CHAIN_AND_CATALOG_REVIEW.json",
+      "sha256": "8056C282EFBAC4EB96F7860A87C90F058CF9A87607164D1A0F4DBC320DCEC940",
+      "coverage": "READ_IN_FULL"
+    },
+    {
+      "path": "PRISMA_EXTRA_RECHECK.json",
+      "sha256": "AC3AF17FDCF59F389EFB66EDDC3164F65CBDC956F62F3FC5B7826E7A4A201A63",
+      "coverage": "READ_IN_FULL"
+    },
+    {
+      "path": "ARTIFACT_HASH_COMPARISON_BEFORE.json",
+      "sha256": "774911DEAC1A880F4BD8FA02E7F10BDA5029F71B7DD2B04E5BC2A1CBCEEE1297",
+      "coverage": "READ_IN_FULL"
+    },
+    {
+      "path": "PREFLIGHT.json",
+      "sha256": "388EF947C30E8BC82D44C9EF70158806DF53F2C8F2D686A6BFE3D92D341A275E",
+      "coverage": "READ_IN_FULL"
+    }
+  ],
+  "remainingLimits": [
+    "Independent rehashes concentrated on inventoried files, not all193 again",
+    "Evidence review only; no new execution of35 tests",
+    "No application integration, physical/transport/pairing, NextAuth/logout, productive keys or policy approval"
+  ]
+}

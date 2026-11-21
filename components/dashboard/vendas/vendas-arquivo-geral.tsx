@@ -3000,6 +3000,7 @@ export function VendasArquivoGeral() {
           isOpen={cupomOpen}
           onClose={() => setCupomOpen(false)}
           data={cupomData}
+          reprintStoreId={storeId}
         />
       )}
 

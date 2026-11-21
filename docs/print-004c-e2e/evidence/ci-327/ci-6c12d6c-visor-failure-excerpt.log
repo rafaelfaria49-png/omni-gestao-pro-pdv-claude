@@ -1,0 +1,4 @@
+validate	UNKNOWN STEP	2026-11-03T10:13:21.1148638Z ^[[31m⎯⎯⎯⎯⎯⎯^[[39m^[[1m^[[41m Failed Tests 39 ^[[49m^[[22m^[[31m⎯⎯⎯⎯⎯⎯⎯^[[39m
+validate	UNKNOWN STEP	2026-11-03T10:13:21.1194340Z ^[[31m^[[1mTypeError^[[22m: watchCatalogSync is not a function^[[39m
+validate	UNKNOWN STEP	2026-11-03T10:13:21.1204110Z ^[[2m Test Files ^[[22m ^[[1m^[[31m2 failed^[[39m^[[22m^[[2m | ^[[22m^[[1m^[[32m47 passed^[[39m^[[22m^[[90m (49)^[[39m
+validate	UNKNOWN STEP	2026-11-03T10:13:21.1204572Z ^[[2m      Tests ^[[22m ^[[1m^[[31m39 failed^[[39m^[[22m^[[2m | ^[[22m^[[1m^[[32m838 passed^[[39m^[[22m^[[90m (877)^[[39m

@@ -1,0 +1,8 @@
+{
+  "platform": "win32",
+  "node": "v24.22.1",
+  "githubRunId": null,
+  "githubRunAttempt": null,
+  "commit": "683b0178ad844d10191e7fb2a0c96d28270297b1",
+  "localChanges": true
+}

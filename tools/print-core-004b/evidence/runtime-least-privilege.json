@@ -1,0 +1,11 @@
+{
+  "name": "omni_004b_runtime_bf24468d",
+  "superuser": false,
+  "bypassrls": false,
+  "createrole": false,
+  "createdb": false,
+  "ownerMembership": false,
+  "schemaCreate": false,
+  "temporary": false,
+  "commercialUpdate": false
+}

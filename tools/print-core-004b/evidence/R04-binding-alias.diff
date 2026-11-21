@@ -1,0 +1,17 @@
+diff --git a/qualified-through-R03.sql b/qualified.sql
+index c26ce27..77d23a3 100644
+--- a/qualified-through-R03.sql
++++ b/qualified.sql
+@@ -589,9 +589,9 @@ BEGIN
+     (j.delivery_mode = 'THERMAL_BOUND' AND NEW.destination_id IS DISTINCT FROM (SELECT destination_id FROM "public"."print_bindings" WHERE id = j.binding_version_id)) OR
+     (j.delivery_mode = 'BROWSER_A4' AND NEW.destination_id IS NOT NULL) OR
+     (j.delivery_mode = 'THERMAL_BOUND' AND NOT EXISTS (
+-     SELECT 1 FROM "public"."print_bindings" b JOIN "public"."print_installations" i ON i.id = b.installation_id
+-     JOIN "public"."print_destinations" q ON q.id = b.destination_id WHERE b.id = j.binding_version_id
+-     AND b.state = 'ACTIVE' AND i.revoked_at IS NULL AND i.proof_mode = 'SYNTHETIC' AND q.serialization_mode = 'SYNTHETIC'
++     SELECT 1 FROM "public"."print_bindings" candidate_binding JOIN "public"."print_installations" i ON i.id = candidate_binding.installation_id
++     JOIN "public"."print_destinations" q ON q.id = candidate_binding.destination_id WHERE candidate_binding.id = j.binding_version_id
++     AND candidate_binding.state = 'ACTIVE' AND i.revoked_at IS NULL AND i.proof_mode = 'SYNTHETIC' AND q.serialization_mode = 'SYNTHETIC'
+     )) THEN
+    RAISE EXCEPTION 'p004 invalid attempt start';
+   END IF;

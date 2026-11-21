@@ -1,0 +1,6 @@
+authenticated	UNKNOWN STEP	2026-11-03T10:15:47.6243753Z     if ([...before.matchAll(regex)].length !== 1) throw new Error("PILOT_SCHEMA_BASELINE_MISMATCH")
+authenticated	UNKNOWN STEP	2026-11-03T10:15:47.6245023Z                                                         ^
+authenticated	UNKNOWN STEP	2026-11-03T10:15:47.6245607Z 
+authenticated	UNKNOWN STEP	2026-11-03T10:15:47.6246089Z Error: PILOT_SCHEMA_BASELINE_MISMATCH
+authenticated	UNKNOWN STEP	2026-11-03T10:15:47.6247326Z     at file:///home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/scripts/platform/run-pilot-e2e.mjs:35:57
+authenticated	UNKNOWN STEP	2026-11-03T10:15:47.6248345Z 

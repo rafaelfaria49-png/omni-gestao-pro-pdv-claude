@@ -1,0 +1,1096 @@
+{
+  "sourcePackage": "004A/R2",
+  "idsPreserved": true,
+  "sourceCaseCount": 80,
+  "rows": [
+    {
+      "id": "P01",
+      "originalLayer": "PURO",
+      "scenario": "Normalização de comando equivalente",
+      "structure": "PrintRequest.commandHash/canonicalVersion; PrintJob.documentVersion/snapshotHash; PrintCopy.payloadHash",
+      "environment": "PURO",
+      "transaction": "T0/T1",
+      "proof": "Defaults selados, ordem de campos e uiContextId não alteram commandHash semântico; payloadHash tem domínio separado.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-NORMALIZATION"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P02",
+      "originalLayer": "PURO",
+      "scenario": "Mesmo key com comando diferente",
+      "structure": "PrintRequest imutável + comparação server-side de commandHash",
+      "environment": "PURO",
+      "transaction": "T1/replay",
+      "proof": "Mudar documento, versão, destino, vias ou confirmação gera conflito; key não substitui autorização.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-NORMALIZATION",
+        "CORE-REPLAY-LOST-RESPONSE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P03",
+      "originalLayer": "PURO",
+      "scenario": "Texto com ESC/GS/DLE/NUL, C0/C1 e DEL",
+      "structure": "DTO/renderer futuro; PrintCopy.payloadHash/cipher",
+      "environment": "PURO",
+      "transaction": "geração antes de T1",
+      "proof": "Nenhum byte comercial consegue produzir comando de corte, gaveta, rede ou shell; controles recusados/sanitizados pela política definida.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PURE-CRYPTO-AND-CANONICAL",
+        "CORE-POSITIVE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P04",
+      "originalLayer": "PURO",
+      "scenario": "HTML, atributos, logo e rodapé maliciosos",
+      "structure": "allowlist/renderer futuro, snapshotCipher e conteúdo A4 só lógico",
+      "environment": "PURO",
+      "transaction": "geração antes de T1",
+      "proof": "Escape/allowlist impedem execução, URL livre e conteúdo ativo; campos internos também são tratados como dados.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "HTML, atributos, logo e rodapé dos renderers reais ainda precisam de revisão. O renderer novo emite somente JSON de fixture; nenhum HTML é executado."
+    },
+    {
+      "id": "P05",
+      "originalLayer": "PURO",
+      "scenario": "Encoding e largura 58/80 mm",
+      "structure": "canonicalVersion=1; snapshotHash/payloadHash; perfil de PrintBinding",
+      "environment": "PURO",
+      "transaction": "geração/T1/T3",
+      "proof": "Renderer determinístico por perfil; tratamento explícito de caracteres sem representação; total/quantidade não são truncados.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "58/80 mm e encoding térmico exigem renderer/driver/perfil reais. JSON UTF-8 de fixture não homologa largura ou caracteres do equipamento."
+    },
+    {
+      "id": "P06",
+      "originalLayer": "PURO",
+      "scenario": "Snapshot imutável por via",
+      "structure": "p004_immutable; snapshot/payload purga unidirecional",
+      "environment": "PURO",
+      "transaction": "T1/CLEANUP",
+      "proof": "Mesmo snapshot/renderer/perfil gera mesmos bytes/hash; marcação ordinal gera hash específico quando muda conteúdo.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-POSITIVE",
+        "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P07",
+      "originalLayer": "PURO",
+      "scenario": "Agregação de vias aceitas/incertas/falhas",
+      "structure": "PrintCopy.state; resumo derivado, sem estado físico no Job",
+      "environment": "PURO",
+      "transaction": "T4/consulta",
+      "proof": "Resumo PARCIAL não esconde a via incerta; ações calculadas por via nunca incluem repetir tudo.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PARTIAL-COPIES"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P08",
+      "originalLayer": "PURO",
+      "scenario": "Matriz de transições inválidas",
+      "structure": "p004_lifecycle; p004_attempt_effect_uq; gate do destino",
+      "environment": "PURO",
+      "transaction": "T2–T4",
+      "proof": "Lease vencido, timeout, cancelamento pós-envio ou ausência de query não produzem FALHA_ANTES_ENVIO ou sucesso físico.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-LEASE-FENCING",
+        "CORE-CRASH-UNKNOWN",
+        "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P09",
+      "originalLayer": "PURO",
+      "scenario": "Segunda via e teste versus gaveta",
+      "structure": "renderer futuro sem gaveta; PrintJob.kind",
+      "environment": "PURO",
+      "transaction": "geração",
+      "proof": "Payload de todo job documental não contém pulso de gaveta; marcações de segunda via/teste preservadas.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-POSITIVE",
+        "CORE-SYNTHETIC-TEST"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P10",
+      "originalLayer": "PURO",
+      "scenario": "Documentos PENDING/quarentena e estado comercial",
+      "structure": "reader MVCC scoped; PrintDocument SALE XOR SYNTHETIC",
+      "environment": "PURO",
+      "transaction": "T0/T1/T3",
+      "proof": "Referência local não vira confirmada; status servidor não elegível é recusado; flags locais antigas não inventam nova elegibilidade.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-ELIGIBILITY",
+        "CORE-REVIEW-REGRESSIONS"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P11",
+      "originalLayer": "PURO",
+      "scenario": "Limites de comando, itens, vias e payload",
+      "structure": "CHECKs de forma/positividade e política D03 obrigatória",
+      "environment": "PURO",
+      "transaction": "admissão/T1",
+      "proof": "Excedente falha antes do efeito sem truncar valores comerciais; uma via padrão e teto duas.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-INPUT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P12",
+      "originalLayer": "PURO",
+      "scenario": "Grant expirado/revogado e replay após cleanup",
+      "structure": "PrintRequest emissão/expiry/revokedAt; Create não insere keys",
+      "environment": "PURO",
+      "transaction": "T0/T1/replay",
+      "proof": "Grant sem recibo e sem validade produz REQUEST_EXPIRED; nunca é tratado como nova key livre.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PURGE-REQUEST-EXPIRY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P13",
+      "originalLayer": "PURO",
+      "scenario": "Minimização e logs",
+      "structure": "DTO mínimo/cipher; PrintEvent.details por allowlist",
+      "environment": "PURO",
+      "transaction": "geração/auditoria",
+      "proof": "DTO/logs excluem OS, senha/padrão, CPF desnecessário, token, bytes e erro bruto; contexto técnico permanece correlacionável.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-POSITIVE",
+        "CORE-AUTHORITY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P14",
+      "originalLayer": "PURO",
+      "scenario": "Venda histórica sem job anterior",
+      "structure": "PrintDocument.closedByIntentId e HISTORICAL_CLOSED; Job REPRINT",
+      "environment": "PURO",
+      "transaction": "T1",
+      "proof": "REPRINT com sourceOriginal UNKNOWN e previousJobId null; nenhum sucesso/job anterior é fabricado.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-HISTORICAL-CLOSURE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "P15",
+      "originalLayer": "PURO",
+      "scenario": "Ações permitidas com payload expirado",
+      "structure": "snapshot/payloadPurgedAt imutáveis, hashes retidos",
+      "environment": "PURO",
+      "transaction": "CLEANUP/consulta",
+      "proof": "Consultar metadados continua possível quando autorizado; retry/regeneração do mesmo job bloqueados.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PURGE-REQUEST-EXPIRY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B01",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Duas criações INITIAL concorrentes, keys distintas",
+      "structure": "PrintDocument lock + UNIQUE Job.intentId + p004_job_initial_uq",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T0/T1",
+      "proof": "Barreira sincroniza transações reais; somente um slot e job; perdedor relê vencedor, sem duas outboxes efetivas.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CONCURRENT-INITIAL"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B02",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Duas abas, manual versus automático e dois usuários",
+      "structure": "mesma guarda/initialIntentId entre abas/principais",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T0/T1",
+      "proof": "Concorrência converge ao mesmo slot loja/documento/família; origem UI e principal não abrem outro inicial.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CONCURRENT-INITIAL"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B03",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Dois terminais/destinos ou versão/vias diferentes",
+      "structure": "binding/deliveryMode/copies imutáveis; slot inicial único",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T1",
+      "proof": "Conflito semântico explícito; não imprime silenciosamente em ambos os destinos.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-SEMANTIC-CONFLICT",
+        "CORE-NORMALIZATION"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B04",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Replay idêntico, resposta perdida após commit",
+      "structure": "PrintRequest jobId/consumedAt imutáveis; recibo scoped",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T1/replay",
+      "proof": "Mesma key encontra job/hash/estado; contagem de jobs/vias/tentativas não aumenta.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REPLAY-LOST-RESPONSE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B05",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Replay alterado e outra identidade com key conhecida",
+      "structure": "key/principal/loja + commandHash; FKs não substituem guards",
+      "environment": "PG_E_INTEGRACAO_AUTH",
+      "transaction": "T1/replay",
+      "proof": "Conflito ou negação de acesso após guard; nenhum job/dado de outra loja é revelado.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REPLAY-LOST-RESPONSE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B06",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Crash/rollback antes do commit T1",
+      "structure": "commit guard exige conjunto completo de vias e slot fechado",
+      "environment": "PG_DESCARTAVEL",
+      "transaction": "T1 rollback",
+      "proof": "Nenhum efeito/outbox visível e nenhum snapshot parcial elegível para envio.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-ATOMIC-T1"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B07",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Crash após T1 e antes de T2/T3",
+      "structure": "Job/vias selados, READY é outbox e leaseEpoch",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T1/T2/recovery",
+      "proof": "Job selado recuperável; autorização reavaliada; só vias sem tentativa podem ser assumidas por CAS.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-ATOMIC-T1"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B08",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Dois executores disputam uma via",
+      "structure": "PrintCopy lock/CAS; Attempt UNIQUE e índice potencial",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T2/T3",
+      "proof": "Só um CAS inicia tentativa; epoch cresce; outro executor não entra no adaptador.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-TWO-EXECUTORS"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B09",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Lease expira antes de T3 e executor antigo acorda",
+      "structure": "leaseEpoch e trigger de mudança de posse; sem retorno UNKNOWN→READY",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T2/T3",
+      "proof": "Epoch antigo falha no CAS; nova posse não deixa duas tentativas potencialmente efetivas.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-LEASE-FENCING"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B10",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Crash após T3 antes da chamada e após envio antes de T4",
+      "structure": "Attempt STARTED; copy SENDING; destino heldAttemptId",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T3/retorno perdido",
+      "proof": "Ambos ficam incertos sem prova; recuperação nunca reenvia só por ausência de recibo.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CRASH-UNKNOWN",
+        "CORE-CRASH-BEFORE-CALL"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B11",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Revogação concorre com T3",
+      "structure": "delegação/binding/instalação revogados; locks na ordem",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "REVOKE × T3",
+      "proof": "Commit de revogação anterior bloqueia; tentativa já autorizada preserva possibilidade de efeito, bloqueando vias futuras.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REVOCATION",
+        "CORE-REVOCATION-CONCURRENT-T3"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B12",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Correção/cancelamento da venda concorre com criação/envio",
+      "structure": "SELECT único/fingerprint; job snapshot imutável",
+      "environment": "PG_E_READER",
+      "transaction": "T1/T3 × correção",
+      "proof": "Leitura/versão consistente aborta snapshot desatualizado; após ponto de ordenação registra janela e bloqueia vias posteriores.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-FINGERPRINT",
+        "CORE-REVIEW-REGRESSIONS"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B13",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Bindings e previousJobId de outra loja",
+      "structure": "36 FKs + CHECKs de cadeia e XOR; anteriores da mesma guarda/loja",
+      "environment": "PG_DESCARTAVEL",
+      "transaction": "T0/T1/evento",
+      "proof": "Constraints/relações e autorização impedem cruzamento inclusive por inserção concorrente; referência inválida não liga cadeia.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CROSS-SCOPE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B14",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Duas confirmações concorrentes de segunda via",
+      "structure": "PrintDocument.activeReprintIntentId/Until + lock/CAS",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T0/T1",
+      "proof": "Uma intenção ativa por documento; outra preparação conflita ou encontra a mesma; risco incerto exige confirmação adicional.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REPRINT-COALESCENCE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B15",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Múltiplas vias com aceite/falha/incerteza parcial",
+      "structure": "UNIQUE(job,ordinal), via/tentativa/prova própria",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T3/T4 parcial",
+      "proof": "Cada copyId tem progresso próprio; retry seguro somente da via comprovadamente não enviada; aceitas/incertas intactas.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PARTIAL-COPIES"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B16",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Evidência/callback duplicado e atrasado",
+      "structure": "UNIQUE(attempt,evidenceKey) e evento append-only",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T4",
+      "proof": "Evento deduplicado por tentativa; evidência preservada, sem nova outbox ou downgrade de aceite conhecido.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CRASH-UNKNOWN"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B17",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Retenção de payload sem remoção de dedup",
+      "structure": "cipher→NULL e purgedAt; hashes/slot/supressão retidos",
+      "environment": "PG_DESCARTAVEL",
+      "transaction": "CLEANUP/replay",
+      "proof": "Apagar bytes não remove slot/recibo; replay autorizado retorna metadados/expiração; sem reconstrução automática.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PURGE-REQUEST-EXPIRY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B18",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Remoção posterior de tombstone de requisição",
+      "structure": "DELETE Request somente expirada; key inexistente sempre negada",
+      "environment": "PG_DESCARTAVEL",
+      "transaction": "CLEANUP/T1",
+      "proof": "Grant antigo continua expirado/inválido; requestKey velha não é reemitida nem aceita como comando novo.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PURGE-REQUEST-EXPIRY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B19",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Retenção/arquivamento de marca inicial",
+      "structure": "PrintDocument não é apagado; fechamento monotônico",
+      "environment": "PG_DESCARTAVEL",
+      "transaction": "CLEANUP/retirada",
+      "proof": "Documento ainda imprimível mantém slot; cleanup não reabre INITIAL; eventual fechamento de elegibilidade é atômico.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PURGE-REQUEST-EXPIRY",
+        "CORE-HISTORICAL-CLOSURE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B20",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Auditoria e falha de persistência",
+      "structure": "Event + transição no mesmo commit; tentativa precede efeito simulado",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T1/T3/T4 rollback",
+      "proof": "Transição e auditoria duráveis no mesmo commit; erro do banco antes de T3 impede efeito; falha depois preserva incerteza.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-ATOMIC-T1",
+        "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+        "CORE-AUDIT-FAILURE-AFTER-T3"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B21",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Dois jobs compartilham fila física",
+      "structure": "PrintDestination global e gateEpoch, não apenas terminal",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T3/T4",
+      "proof": "Exclusão por destino impede intercalar vias; autorização e conteúdo permanecem separados por loja.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-SHARED-DESTINATION"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I01",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "A01/PLATFORM com loja explícita",
+      "structure": "guards A01 reais + loja explícita + FKs do documento/destino",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "T0–T4",
+      "proof": "Autoridade vem da sessão real; documento/terminal/binding da loja validados; ausência de loja recusada.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Contexto A01 confiável de fixture usa guards reais; integração com endpoint/sessão de autenticação real não foi autorizada."
+    },
+    {
+      "id": "I02",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "STORE autorizado com módulo/papel efetivos",
+      "structure": "requireEnterpriseWith/hubs.vendas e scoped reader",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "T0/T1/consulta",
+      "proof": "Guards enterprise reais permitem somente escopo e ação autorizados; não depender de mocks de auth para este aceite.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Papéis, módulos e vínculos STORE de fixture exercitam os guards reais; requireEnterprise/rotas/sessão real continuam fora do núcleo."
+    },
+    {
+      "id": "I03",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Usuário sem permissão, módulo ou de outra loja",
+      "structure": "auth atual/canAccessStore/canUseModule; input estrito",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "admissão/consulta",
+      "proof": "403/404 sanitizado, nenhum job elegível nem dado do recurso; role/storeId fornecidos no corpo não concedem acesso.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-AUTHORITY",
+        "CORE-REPLAY-LOST-RESPONSE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I04",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Reader canônico PDV/sales e propriedade da venda",
+      "structure": "extração do reader canônico; SELECT único; guard existente preservado",
+      "environment": "INTEGRACAO_READER",
+      "transaction": "T0/T1",
+      "proof": "Leitura por loja + identidade; extrair reader sem relaxar rota sales existente nem ACL paralela; projeção mínima.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Reader isolado usa SELECT coerente, projeção e mapper existentes. Não foi extraído/conectado o reader da rota canônica nem alterada sua ACL."
+    },
+    {
+      "id": "I05",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Documento inexistente, pendente, cancelado ou em quarentena",
+      "structure": "SALE persistida elegível; XOR teste sem venda",
+      "environment": "INTEGRACAO_READER",
+      "transaction": "T0/T1/T3",
+      "proof": "Pedido recusado; impressão não cria/recupera/confirma venda nem resolve status comercial.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-ELIGIBILITY",
+        "CORE-REVIEW-REGRESSIONS"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I06",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Terminal/impressora incompatíveis e deviceId forjado",
+      "structure": "Binding FK terminal/loja, Installation própria; deviceId não prova",
+      "environment": "INTEGRACAO_AUTH_E_GATE_ADAPTADOR",
+      "transaction": "CONFIG/T3",
+      "proof": "Recusa por associação/prova; deviceId e lock lógico isolados não autorizam instalação/destino.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Vínculos e terminal ACTIVE são testados no banco. Identidade/prova real de instalação, computador ou impressora requer gate de adaptador."
+    },
+    {
+      "id": "I07",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Pareamento, desafio repetido e segredo compartilhado",
+      "structure": "identidade/proofMode do Installation; pareamento real fora do núcleo",
+      "environment": "GATE_ADAPTADOR",
+      "transaction": "pareamento futuro",
+      "proof": "Somente configurador autorizado e prova de instalação; replay/expiração/challenge cruzado negados; segredo não aparece no browser/logs.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Pareamento/challenge/segredos por instalação reais fora do 004B. HMAC de fixture não certifica esse mecanismo."
+    },
+    {
+      "id": "I08",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Duas lojas no computador e dois terminais na loja",
+      "structure": "bindings scoped; destino global; FKs cruzadas rejeitadas",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "CONFIG/T3",
+      "proof": "Isolamento por binding/loja, concessões restritas e comportamento compartilhado somente quando explicitamente configurado.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "O banco usa duas lojas e terminais com destino compartilhado sintético; o cenário de duas lojas no computador com pareamento real está pendente."
+    },
+    {
+      "id": "I09",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Substituição/renomeação de computador ou fila",
+      "structure": "Binding imutável/versionado, grupo preserva loja/terminal/família",
+      "environment": "GATE_ADAPTADOR",
+      "transaction": "CONFIG/REVOKE",
+      "proof": "Novo binding/prova; jobs antigos preservam destino/versionamento; nenhuma seleção da padrão do Windows.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Provisionamento, substituição e renomeação de fila/computador exigem instalação/prova reais. Nenhuma fila Windows foi consultada."
+    },
+    {
+      "id": "I10",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Binding revogado antes e depois de início",
+      "structure": "revogação unidirecional + consulta de tentativa já iniciada",
+      "environment": "INTEGRACAO_AUTH_E_SIM",
+      "transaction": "REVOKE/T3/T4",
+      "proof": "Antes: cancelamento seguro; depois: consulta/possível incerteza e bloqueio de vias futuras, sem alegar recolher papel.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Revalidação de binding existe no núcleo, mas o workflow completo de revogação/configuração por instalação não foi integrado/homologado. Delegação sintética tem prova separada."
+    },
+    {
+      "id": "I11",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Troca de loja/configuração durante solicitação",
+      "structure": "loja/destino/versão fixos; uiContext na futura camada de API",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "T1/consulta/UI",
+      "proof": "Resposta original não atua no novo contexto; conteúdo/destino antigos não são alterados ou reenviados.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Loja e destino são fixos no ledger; troca de contexto da UI, descarte de resposta e handlers reais não foram conectados."
+    },
+    {
+      "id": "I12",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Logout/revogação e ACK atrasado",
+      "structure": "PrintDelegation + AdminUser.sessionVersion; G-AUTH-PRINT-LOGOUT",
+      "environment": "GATE_AUTH_LOGOUT",
+      "transaction": "logout/T3/T4",
+      "proof": "Jobs sem tentativa ficam bloqueados; recibo autenticado antigo somente registra evidência, não renova sessão nem inicia via.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Revogação de delegação/sessionVersion sintéticas testadas; logout global e ACK de instalação real não foram alterados nem certificados."
+    },
+    {
+      "id": "I13",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Input de bytes, HTML, host/porta/URL/path/credenciais",
+      "structure": "comando allowlist sem bytes/host/path; /raw inalterada",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "T0/T1",
+      "proof": "Shape estrito recusa campos livres e não encaminha /api/print/raw para STORE.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-INPUT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I14",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Origin/CSRF e consultas/replays sem autorização",
+      "structure": "guards/CSRF/Origin/cache da futura API, recibo não é autorização",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "admissão/consulta",
+      "proof": "Operações de criação, consulta e configuração protegidas; key conhecida não concede acesso; headers de cache não expõem conteúdo.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Não há API pública nova. Origin/CSRF/cache/headers e sessão de consulta real requerem gate de integração."
+    },
+    {
+      "id": "I15",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Adaptador aceita; conexão/resposta HTTP se perde",
+      "structure": "STARTED durável, T4 perdido, sem retry implícito",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T3/T4",
+      "proof": "Via desconhecida ou aceita conforme prova; consulta usa tentativa original; sem retry implícito do SDK/HTTP.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CRASH-UNKNOWN",
+        "CORE-AUDIT-FAILURE-AFTER-T3"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I16",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Falha comprovada antes de envio",
+      "structure": "Event SYNTHETIC_NO_EFFECT + PRE_SEND_FAILED, retry por via",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T4/T2",
+      "proof": "Nova tentativa manual só daquela via, com payload/destino iguais e reautorização; prova ausente mantém desconhecido.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PARTIAL-COPIES"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I17",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Timeout, lease vencido e consulta não encontrado",
+      "structure": "UNKNOWN, potencial UNIQUE e gate conservado",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "recovery",
+      "proof": "Nenhum deles isoladamente autoriza reenvio; negar retorno a PRONTO sem prova de invalidar envio tardio.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CRASH-BEFORE-CALL",
+        "CORE-SHARED-DESTINATION"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I18",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Cancelamento solicitado após aceite/spooler",
+      "structure": "gate só libera por prova; cancelar não altera ACK físico",
+      "environment": "SIM_EXECUTOR_E_GATE_ADAPTADOR",
+      "transaction": "T4/cancel",
+      "proof": "Registro distingue pedido de cancelamento e efeito; eventual exclusão da fila não prova ausência de papel.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Cancelamento seguro de vias locais não comprova cancelamento de fila/spooler nem ausência de papel."
+    },
+    {
+      "id": "I19",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Capacidades ausentes/limitadas do adaptador",
+      "structure": "serializationMode/proofMode UNVERIFIED ou SYNTHETIC",
+      "environment": "SIM_EXECUTOR_E_GATE_ADAPTADOR",
+      "transaction": "pré-T3/T4",
+      "proof": "UNSUPPORTED/UNKNOWN explícitos; sem spooler/availability/query fictícios; dedup respeita prazo/escopo documentado.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Não existe adaptador real neste GOAL; capacidades, prazos de dedup e consultas de fornecedor precisam de evidência própria."
+    },
+    {
+      "id": "I20",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Fila offline com entrega tardia",
+      "structure": "egresso tardio simulado; capacidade offline real em gate próprio",
+      "environment": "SIM_EXECUTOR_E_GATE_ADAPTADOR",
+      "transaction": "T3/T4/revogação",
+      "proof": "Aceite interno já significa possível efeito; nenhuma nova autorização offline; revogação e risco tardio demonstrados.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Pausa/egresso tardio simulados não homologam fila offline, autenticação ou entrega real após revogação."
+    },
+    {
+      "id": "I21",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Segundo job de reimpressão e venda histórica sem anterior",
+      "structure": "REPRINT + marca histórica + previousJob FK opcional scoped",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "T1",
+      "proof": "Nova intenção ligada quando há job; histórico usa null/UNKNOWN; ambos autorizam documento/loja e marcam segunda via.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-HISTORICAL-CLOSURE",
+        "CORE-RISK-NOT-SELF-INVALIDATING"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I22",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Segunda via após resultado incerto",
+      "structure": "riskRevision/riskSetHash/confirmedExposureHash e reconhecimento server-side",
+      "environment": "INTEGRACAO_AUTH_E_SIM",
+      "transaction": "T0/T1/T3",
+      "proof": "Ato explícito e reconhecimento do risco de cópia adicional; estado anterior não é apagado nem marcado sucesso.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REPLACEMENT-LATE-NO-EFFECT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I23",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Fallback explícito antes/depois de envio possível",
+      "structure": "fallback só nova intenção lógica, cancela via segura/suprime incerta",
+      "environment": "INTEGRACAO_AUTH_E_GATE_UI",
+      "transaction": "T1/substituição",
+      "proof": "Antes cancela disputa térmica; depois nova intenção com risco; não abre HTML e baixa .bin em paralelo.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Substituição lógica e supressão são testadas; UI/handoff/fallback reais não foram habilitados."
+    },
+    {
+      "id": "I24",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Gaveta em inicial, segunda via e teste",
+      "structure": "kind/perfil e renderer futuro sem gaveta",
+      "environment": "PURO_E_INTEGRACAO",
+      "transaction": "geração",
+      "proof": "Nenhum job documental dispara gaveta; nenhuma resposta genérica de cupom representa essa ação.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-SYNTHETIC-TEST",
+        "CORE-POSITIVE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I25",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Integridade comercial em sucesso, erro, retry e crash",
+      "structure": "nenhum writer comercial; domínio novo e auditoria somente",
+      "environment": "INTEGRACAO_READER",
+      "transaction": "todos fluxos",
+      "proof": "Spies/ledger isolado provam zero chamadas/escritas a venda, pagamento, caixa, recebimento e estoque; só domínio de impressão/auditoria muda.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-COMMERCIAL-INTEGRITY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I26",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Rate limit, payload expirado e grant invalidado",
+      "structure": "política D03, Request expirada/purgada, bytes ausentes bloqueiam",
+      "environment": "INTEGRACAO_AUTH",
+      "transaction": "admissão/CLEANUP",
+      "proof": "Respostas preservam recibos/slots e não provocam fallback, novo comando ou bypass; consulta continua autorizada.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Limites, rate limit e retenção são somente fixtures finitas. D03 produtivo, incluindo composição loja/terminal, não está aprovado."
+    },
+    {
+      "id": "I27",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Concessão adulterada, callback falso e replay entre instalações",
+      "structure": "prova de fixture controlada/escopo FK; assinatura real em gate adaptador",
+      "environment": "SIM_EXECUTOR_E_GATE_ADAPTADOR",
+      "transaction": "T3/T4",
+      "proof": "Assinatura/prova, destino/hash/epoch/TTL e vínculo negam efeito e evidência falsos; sem segredos no erro.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "MAC/AAD/correlação de fixture são testados; assinatura, segredo e replay entre instalações reais requerem gate de adaptador."
+    },
+    {
+      "id": "F01",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "scenario": "Windows + Chrome e Windows + Edge",
+      "structure": "fora da prova do schema; transporte/navegador real",
+      "environment": "GATE_HARDWARE",
+      "transaction": "homologação posterior",
+      "proof": "Executar separadamente cada navegador na versão registrada, com mecanismo real de transporte/pareamento e políticas de acesso local; mock não vale.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real."
+    },
+    {
+      "id": "F02",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "scenario": "Perfil térmico 58 mm e 80 mm",
+      "structure": "perfil versionado; não prova largura/driver/corte",
+      "environment": "GATE_HARDWARE",
+      "transaction": "homologação posterior",
+      "proof": "Cada combinação impressora/driver/perfil registra instalação sanitizada, legibilidade, corte, largura, acentos e totais; sem pressupor POS-80/USB005.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real."
+    },
+    {
+      "id": "F03",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "scenario": "Frio/quente, reinício, desligamento e falta de papel",
+      "structure": "estados/recovery podem ser simulados; papel exige hardware",
+      "environment": "GATE_HARDWARE",
+      "transaction": "homologação posterior",
+      "proof": "Massa sintética; observar ACEITO_* versus papel, incerteza e retomada sem duplicação cega; medir sem usar 63 testes históricos.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real."
+    },
+    {
+      "id": "F04",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "scenario": "Duas vias, falha parcial e resposta perdida real",
+      "structure": "via/attempt separado; efeito físico só em gate próprio",
+      "environment": "GATE_HARDWARE",
+      "transaction": "homologação posterior",
+      "proof": "Progresso por via corresponde à evidência; não repetir conjunto após incerteza; risco/segunda via visíveis.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real."
+    },
+    {
+      "id": "F05",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "scenario": "Fila padrão trocada/removida e binding revogado",
+      "structure": "binding fixo/gate; identidade/padrão reais não simuláveis como prova",
+      "environment": "GATE_HARDWARE",
+      "transaction": "homologação posterior",
+      "proof": "Nenhum documento aparece na fila substituta/padrão; registrar janela de envio já autorizado sem prometer interromper papel.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real."
+    },
+    {
+      "id": "F06",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "scenario": "Gaveta desligada e teste sintético",
+      "structure": "payload sem pulso; comprovação física em gate próprio",
+      "environment": "GATE_HARDWARE",
+      "transaction": "homologação posterior",
+      "proof": "Verificar fisicamente ausência de pulso em inicial/segunda via/teste e inexistência de dados reais; comando só em GOAL próprio.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real."
+    },
+    {
+      "id": "F07",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "scenario": "A4 e fallback em Chrome/Edge",
+      "structure": "A4 legado permanece; popup/diálogo requer navegador real",
+      "environment": "GATE_HARDWARE",
+      "transaction": "homologação posterior",
+      "proof": "Diálogo permite escolha explícita; cancelamento, múltiplas cópias e popup não são contabilizados como impressão física pelo Omni.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real."
+    },
+    {
+      "id": "P16",
+      "originalLayer": "PURO",
+      "scenario": "Equivalência de intenção entre principais autorizados",
+      "structure": "projeção de equivalência de intenção separada de commandHash por principal",
+      "environment": "PURO",
+      "transaction": "T1/coalescência",
+      "proof": "commandHash por recibo inclui principal, mas projeção de equivalência inicial exclui autor; coalescer não transfere responsabilidade.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-CONCURRENT-INITIAL"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B22",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "REPRINT histórico concorre com INITIAL",
+      "structure": "doc lock + HISTORICAL_CLOSED + commit guard",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T1 INITIAL × REPRINT",
+      "proof": "Mesma guarda/constraint fecha slot atomicamente; marca histórica não inventa job anterior; perdedor reavalia exposição ou recebe conflito.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-HISTORICAL-INITIAL-RACE"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B23",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "INITIAL após REPRINT histórico e após cleanup",
+      "structure": "marca inicial sem FK permanente; Delete guard preserva guarda",
+      "environment": "PG_DESCARTAVEL",
+      "transaction": "T1/CLEANUP",
+      "proof": "INITIAL_CLOSED_BY_HISTORICAL_REPRINT sobrevive à retenção; aceite/incerteza da segunda via não abre novo caminho inicial.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-PURGE-REQUEST-EXPIRY"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B24",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Emissão substituta seguida de reconciliação antiga como não enviada",
+      "structure": "PrintCopy.retrySuppressedByJobId FK à mesma guarda/loja",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T1 substituição/T4 tardio",
+      "proof": "RETRY_SUPPRESSED_BY_ADDITIONAL_INTENT impede retry da via antiga mesmo após prova posterior; outra emissão exige novo ato.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REPLACEMENT-LATE-NO-EFFECT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B25",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "Executor A pausa após T3, posse do destino vence, B de outro job/loja disputa e A retorna",
+      "structure": "destino heldAttemptId sem expiração de gate; proofKind pertinente",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T3 expirado × outro job",
+      "proof": "Gate não libera B sem prova/fila serializadora; nenhum intercalamento, aliases físicos compartilham a exclusão.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-SHARED-DESTINATION"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "B26",
+      "originalLayer": "BANCO_ISOLADO",
+      "scenario": "INITIAL A4 concorre com INITIAL térmico",
+      "structure": "slot de PrintDocument não inclui deliveryMode",
+      "environment": "PG_CONCORRENTE",
+      "transaction": "T1 A4 lógico × térmico",
+      "proof": "Mesmo slot documental entre deliveryModes; destino/modo diferente retorna conflito, sem dois jobs iniciais.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-A4-THERMAL-SLOT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I28",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Segunda via/fallback omite previousJobId com job incerto conhecido",
+      "structure": "descoberta por guarda, sem depender de previousJobId",
+      "environment": "INTEGRACAO_AUTH_E_SIM",
+      "transaction": "T0/T1",
+      "proof": "Servidor descobre toda exposição por loja/documento; omissão não dispensa reconhecimento do risco.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REPLACEMENT-LATE-NO-EFFECT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I29",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Risco muda entre preparação, T1 e T3; reconhecimento aponta outra via/revisão",
+      "structure": "comparação R/hash T1 e digest excluindo própria intenção T3",
+      "environment": "INTEGRACAO_AUTH_E_SIM",
+      "transaction": "T0/T1/T3",
+      "proof": "riskRevision e confirmação server-side são revalidadas; mudança relevante exige nova confirmação e impede efeito adicional.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-STALE-RISK-T0-T1",
+        "CORE-RISK-NOT-SELF-INVALIDATING",
+        "CORE-REPLACEMENT-LATE-NO-EFFECT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I30",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "Via substituta autorizada e resposta antiga reconciliada depois",
+      "structure": "supressão monotônica não removida por reconciliação antiga",
+      "environment": "SIM_EXECUTOR_PG",
+      "transaction": "T1/T4",
+      "proof": "Evidência antiga é preservada, mas supressão de retry não é removida; não resulta em duas entregas por recuperação tardia.",
+      "status": "NOT_RUN",
+      "tests": [
+        "CORE-REPLACEMENT-LATE-NO-EFFECT"
+      ],
+      "deferredReason": null
+    },
+    {
+      "id": "I31",
+      "originalLayer": "INTEGRACAO",
+      "scenario": "A4/fallback com destino lógico e replay de criação",
+      "structure": "deliveryMode A4 lógico; sem handoff real/alteração de legado no 004B",
+      "environment": "GATE_UI_A4",
+      "transaction": "T1/consulta/handoff futuro",
+      "proof": "deliveryMode BROWSER_A4 aceita somente contexto lógico, uma via; nenhuma fila física é atestada, popup/reentrega não ocorre no replay.",
+      "status": "NOT_RUN",
+      "tests": [],
+      "deferredReason": "A4 tem somente identidade/slot/replay lógico. Execução é bloqueada com A4_LOGICAL_ONLY antes de T3; navegador legado não foi alterado."
+    }
+  ]
+}

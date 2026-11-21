@@ -1,0 +1,16 @@
+{
+  "node": "v26.12.1",
+  "postgres": "postgres (PostgreSQL) 17.10",
+  "prisma": "6.19.3",
+  "platform": "win32",
+  "engineBinaries": [
+    {
+      "name": "schema-engine-windows.exe",
+      "sha256": "F2B48E3CE8DE8712C9DCE6C71F952BEC383FA472830B91BCA8E64B4B51BF0DD7"
+    },
+    {
+      "name": "query_engine-windows.dll.node",
+      "sha256": "263946105F428384D2318DC3241B85B1C3DD98FBB1BFAC62D3E81F513AB35897"
+    }
+  ]
+}
