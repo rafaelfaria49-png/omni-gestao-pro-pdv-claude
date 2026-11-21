@@ -42,7 +42,11 @@ export function titleCtes(storeId: string) {
         ELSE greatest(0,valor-pago) END AS aberto,
         CASE WHEN vencimento ~ '^20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])($|T)' THEN
           CASE WHEN substring(vencimento,9,2)::int <= extract(day from make_date(substring(vencimento,1,4)::int,substring(vencimento,6,2)::int,1)+interval '1 month - 1 day')
-            THEN left(vencimento,10) END END AS dia
+            THEN left(vencimento,10) END
+        -- pt-BR dd/mm/aaaa: formato gravado pelo PDV a prazo (toLocaleDateString) e aceito por parseDateStringSafe.
+        WHEN vencimento ~ '^(0?[1-9]|[12][0-9]|3[01])/(0?[1-9]|1[0-2])/20[0-9]{2}$' THEN
+          CASE WHEN split_part(vencimento,'/',1)::int <= extract(day from make_date(split_part(vencimento,'/',3)::int,split_part(vencimento,'/',2)::int,1)+interval '1 month - 1 day')
+            THEN to_char(make_date(split_part(vencimento,'/',3)::int,split_part(vencimento,'/',2)::int,split_part(vencimento,'/',1)::int),'YYYY-MM-DD') END END AS dia
       FROM payments
     )`
 }
