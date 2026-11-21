@@ -52,6 +52,7 @@ import { useGarantirSessaoCaixa } from "../caixa/use-atualizar-caixa"
 // useCaixa removido no Lote 4 — sangria/suprimento vivem no CaixaStatusBar.
 import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { manualKgTaxSnapshot } from "@/lib/vendas/manual-kg-tax"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import {
   getActiveFormasPagamento,
@@ -90,6 +91,8 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { MANUAL_KG_SALE, parseManualKg, saleLineTotalCents, moneyCents, manualKgDiscountCents } from "@/lib/vendas/manual-kg-contract"
+import { formatStockQuantity, toStockUnits } from "@/lib/estoque/stock-quantity"
 import { pdvWeightSaleBlockedNotice } from "@/lib/pdv-weight-sale-guard"
 import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { isRecord, safeCategoryLower } from "@/lib/pdv-mount-guards"
@@ -296,8 +299,15 @@ export function PdvClassic({
   // `vendaPorPeso` vem da projeção comercial canônica do servidor. Saldo e
   // quantidade inteira não tornam um produto KG/G operacional no PDV.
   const blockWeightSale = useCallback(
-    (...sources: ({ vendaPorPeso?: boolean } | null | undefined)[]) => {
-      if (!sources.some((source) => source?.vendaPorPeso === true)) return false
+    (...sources: ({ vendaPorPeso?: boolean; id?: string; inventoryId?: string; manualKgSaleAvailable?: boolean } | null | undefined)[]) => {
+      const blocked = sources.some((source) => {
+        if (!source) return false
+        const id = source.id ?? source.inventoryId
+        const inv = inventory.find((p) => p.id === id || p.dbId === id)
+        if (!source.vendaPorPeso && !inv?.vendaPorPeso) return false
+        return inv?.manualKgSaleAvailable !== true
+      })
+      if (!blocked) return false
       toast({
         title: "Venda por peso ainda não disponível",
         description: "Cadastro ou saldo em KG/G não libera a venda por peso. Não venda este produto como UN nem como Item Avulso.",
@@ -305,7 +315,7 @@ export function PdvClassic({
       })
       return true
     },
-    [toast]
+    [toast, inventory]
   )
   // N5-B1 R2 (P2-06): identidade PENDING já criada — reconfirmar pelo modal
   // geraria novo clientSaleId (segunda venda). Orienta para Reenviar sync.
@@ -618,7 +628,7 @@ export function PdvClassic({
     category: "Atalho",
   }))
 
-  const products = mergePdvCatalogWithInventory([], inventory)
+  const products = mergePdvCatalogWithInventory([], inventory).map((p) => p.manualKgSaleAvailable ? { ...p, vendaPesoIndisponivel: undefined } : p)
   // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
   // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
   usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: products, notify: (n) => toast({ ...n, variant: "destructive" }), paused: isPaymentModalOpen })
@@ -831,7 +841,7 @@ export function PdvClassic({
 
   const qtyEditDefault = useMemo(() => {
     const line = cart.find((i) => i.lineId === selectedCartLineId)
-    return line ? String(line.quantity) : "1"
+    return line ? line.vendaPorPeso ? formatStockQuantity(line.quantity, "KG") : String(line.quantity) : "1"
   }, [cart, selectedCartLineId])
 
   useEffect(() => {
@@ -920,7 +930,7 @@ export function PdvClassic({
   const addToCart = (product: Product, presetQty?: number) => {
     // Peso antes do estoque: "sem saldo" mandaria repor um produto que não pode ser vendido.
     const pesoBloqueado = pdvWeightSaleBlockedNotice(product)
-    if (pesoBloqueado) {
+    if (pesoBloqueado && !product.manualKgSaleAvailable) {
       toast({ ...pesoBloqueado, variant: "destructive" })
       return false
     }
@@ -1052,6 +1062,11 @@ export function PdvClassic({
   const addItemAvulso = (payload: ItemAvulsoPayload) => {
     // Avulso continua unitário; um SKU/EAN de produto KG/G não vira atalho de venda.
     if (payload.codigo && blockWeightSale(findPdvProductByScan(payload.codigo, products))) return
+    const avulsoCatalogProduct = payload.codigo ? findPdvProductByScan(payload.codigo, products) : null
+    if (avulsoCatalogProduct?.vendaPorPeso || avulsoCatalogProduct?.vendaPesoIndisponivel) {
+      toast({ title: "Produto por peso", description: "Selecione o cadastro KG e informe o peso; não registre como item avulso.", variant: "destructive" })
+      return
+    }
     const lineId = newPdvLineId("avulso")
     const inventoryId = avulsoInventoryId(lineId)
     const quantity = Math.max(1, Math.round(payload.quantity))
@@ -1126,7 +1141,7 @@ export function PdvClassic({
         setBipeCode("")
         setShellNextQty("1")
         const _newCount = cart.length + 1
-        const _newSub = cart.reduce((s, i) => s + i.price * i.quantity, 0) + product.price * q
+        const _newSub = cart.reduce((s, i) => s + ((saleLineTotalCents(i.quantity, i.price) ?? Math.round(i.price * i.quantity * 100)) / 100), 0) + product.price * q
         setShellInfo(
           `✓ ${product.name} · ${_newCount} ${_newCount === 1 ? "item" : "itens"} · R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(_newSub)}`
         )
@@ -1204,7 +1219,7 @@ export function PdvClassic({
       setBipeCode("")
       setShellNextQty("1")
       const _newCount = cart.length + 1
-      const _newSub = cart.reduce((s, i) => s + i.price * i.quantity, 0) + product.price * q
+      const _newSub = cart.reduce((s, i) => s + ((saleLineTotalCents(i.quantity, i.price) ?? Math.round(i.price * i.quantity * 100)) / 100), 0) + product.price * q
       setShellInfo(
         `✓ ${product.name} · ${_newCount} ${_newCount === 1 ? "item" : "itens"} · R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(_newSub)}`
       )
@@ -1232,7 +1247,7 @@ export function PdvClassic({
     }
     if (blockWeightSale(current, getCartStockProduct(current))) return
     const step = current.vendaPorPeso ? 0.05 : 1
-    const newQty = current.quantity + delta * step
+    const newQty = current.vendaPorPeso ? ((toStockUnits(current.quantity, "KG") ?? 0) + delta * 50) / 1000 : current.quantity + delta * step
     if (newQty > 0) {
       const product = getCartStockProduct(current)
       if (product && !validateAggregatedStockForProduct(product, newQty, lineId)) return
@@ -1319,11 +1334,12 @@ export function PdvClassic({
   const confirmWeightDialog = () => {
     if (!weightProduct) return
     if (blockWeightSale(weightProduct)) return
-    const kg = parseFloat(weightKgInput.replace(",", "."))
-    if (!Number.isFinite(kg) || kg <= 0) {
-      toast({ title: "Peso inválido", description: "Informe o peso em kg.", variant: "destructive" })
+    const parsedKg = parseManualKg(weightKgInput)
+    if (!parsedKg.ok) {
+      toast({ title: "Peso inválido", description: parsedKg.reason, variant: "destructive" })
       return
     }
+    const kg = parsedKg.value
     // N5-B1 R2 (GAP-P2-05): preço efetivo do peso precisa existir e ser > 0 —
     // 0/negativo/NaN/ausente rejeita a linha (sem inferir preço, sem tocar no
     // cadastro). O diálogo permanece aberto para correção ou cancelamento.
@@ -1331,7 +1347,7 @@ export function PdvClassic({
       precoPorKg: weightProduct.precoPorKg,
       price: weightProduct.price,
     })
-    if (!pesoPreco.ok) {
+    if (!pesoPreco.ok || moneyCents(pesoPreco.unitPrice) === null) {
       toast({
         title: WEIGHT_PRICE_INVALID_FEEDBACK.title,
         description: WEIGHT_PRICE_INVALID_FEEDBACK.description,
@@ -1347,7 +1363,7 @@ export function PdvClassic({
     const baseName = parts.length > 0 ? `${weightProduct.name} (${parts.join(" · ")})` : weightProduct.name
     pushCartLine({
       inventoryId: weightProduct.id,
-      name: `${baseName} — ${kg.toFixed(3)} kg`,
+      name: baseName,
       price: pKg,
       quantity: kg,
       vendaPorPeso: true,
@@ -1360,7 +1376,7 @@ export function PdvClassic({
   }
 
   const handleLerBalança = async () => {
-    if (!weightProduct || blockWeightSale(weightProduct)) return
+    if (!weightProduct || weightProduct.manualKgSaleAvailable || blockWeightSale(weightProduct)) return
     if (!isWebSerialSupported()) {
       toast({
         title: "Web Serial",
@@ -1399,12 +1415,22 @@ export function PdvClassic({
     }
   }
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const subtotal = cart.some((item) => item.vendaPorPeso)
+    ? cart.reduce((sum, item) => sum + (saleLineTotalCents(item.quantity, item.price) ?? Math.round(item.price * item.quantity * 100)), 0) / 100
+    : cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const pctRaw = Math.min(100, Math.max(0, discountPercent || 0))
-  const discountTotal = Math.min(+(subtotal * (pctRaw / 100)).toFixed(2) + Math.max(0, discountReais || 0), subtotal)
-  const { impostoEstimado, total } = useMemo(
-    () => computePdvCartTotals(subtotal, discountTotal, pdvParams),
-    [subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
+  const discountTotal = cart.some((item) => item.vendaPorPeso)
+    ? (manualKgDiscountCents(moneyCents(subtotal) ?? 0, pctRaw, Math.max(0, discountReais || 0)) ?? 0) / 100
+    : Math.min(+(subtotal * (pctRaw / 100)).toFixed(2) + Math.max(0, discountReais || 0), subtotal)
+  const { impostoEstimado, total, kgTaxError } = useMemo(
+    () => {
+      if (!cart.some((item) => item.vendaPorPeso)) return { ...computePdvCartTotals(subtotal, discountTotal, pdvParams), kgTaxError: false }
+      try {
+        const tax = manualKgTaxSnapshot(moneyCents(subtotal) ?? 0, pdvParams)
+        return { impostoEstimado: tax.taxCents / 100, total: ((moneyCents(subtotal) ?? 0) + tax.taxCents - (moneyCents(discountTotal) ?? 0)) / 100, kgTaxError: false }
+      } catch { return { impostoEstimado: 0, total: Math.max(0, subtotal - discountTotal), kgTaxError: true } }
+    },
+    [cart, subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
   )
 
   const formasPagamentoClassic = useMemo(() => {
@@ -1428,7 +1454,8 @@ export function PdvClassic({
         name: i.name,
         quantity: i.quantity,
         unitPrice: i.price,
-        lineTotal: i.price * i.quantity,
+        lineTotal: ((saleLineTotalCents(i.quantity, i.price) ?? Math.round(i.price * i.quantity * 100)) / 100),
+        quantityUnit: i.vendaPorPeso ? ("KG" as const) : undefined,
       })),
     }
   }, [
@@ -2143,12 +2170,15 @@ export function PdvClassic({
                 if (!open) focusShellBipe()
               }}
               qtyEditDefault={qtyEditDefault}
+              qtyEditUnit={cart.find((i) => i.lineId === selectedCartLineId)?.vendaPorPeso ? "KG" : "UN"}
               onQtyEditConfirm={(raw) => {
-                const v = Number(String(raw).replace(",", "."))
+                const currentLine = cart.find((i) => i.lineId === selectedCartLineId)
+                const parsedWeight = currentLine?.vendaPorPeso ? parseManualKg(String(raw)) : null
+                const v = currentLine?.vendaPorPeso ? (parsedWeight?.ok ? parsedWeight.value : NaN) : /^\d+$/.test(String(raw).trim()) ? Number(raw) : NaN
                 if (!Number.isFinite(v) || v <= 0) {
                   toast({
                     title: "Quantidade inválida",
-                    description: "Informe um número maior que zero.",
+                    description: currentLine?.vendaPorPeso ? "Informe o peso em kg, com vírgula e até 3 casas decimais." : "Informe uma quantidade inteira maior que zero.",
                     variant: "destructive",
                   })
                   return false
@@ -2331,6 +2361,7 @@ export function PdvClassic({
         }}
       />
 
+      {kgTaxError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">Venda KG bloqueada: revise a alíquota do imposto estimado nas configurações da loja.</p>}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         twoColumn
@@ -2367,6 +2398,12 @@ export function PdvClassic({
         requireExplicitResult
         cashierId={cashierId}
         onConfirm={async (payments, meta) => {
+          if (kgTaxError) { toast({ title: "Imposto estimado inválido", description: "Revise a alíquota nas configurações da loja antes de vender KG.", variant: "destructive" }); return false }
+          if (cart.some((item) => item.vendaPorPeso) && manualKgDiscountCents(moneyCents(subtotal) ?? 0, pctRaw, Math.max(0, discountReais || 0)) === null) {
+            toast({ title: "Desconto inválido", description: "Informe centavos exatos e percentual com até 4 casas decimais.", variant: "destructive" })
+            return false
+          }
+
           // Carrinhos importados/retomados também respeitam a classificação atual.
           if (cart.some((item) => blockWeightSale(item, getCartStockProduct(item)))) return false
           // N5-B1 R2 (P2-06) / GOAL 002: defesa em profundidade — venda PENDING
@@ -2491,6 +2528,7 @@ export function PdvClassic({
             }
           }
           const result = await finalizeSaleTransaction({
+            manualKgSale: cart.some((item) => item.vendaPorPeso) ? MANUAL_KG_SALE : undefined,
             lines: saleLines,
             total,
             linkedOsId,
@@ -2503,6 +2541,7 @@ export function PdvClassic({
               aPrazo,
               creditoVale,
             },
+            discountTotal,
             auditMeta: {
               cashierId: meta?.cashierId ?? cashierId,
               discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,
@@ -2688,6 +2727,7 @@ export function PdvClassic({
           if (!open) setWeightProduct(null)
         }}
         product={weightProduct}
+        manualOnly
         weightKgInput={weightKgInput}
         onWeightKgInputChange={setWeightKgInput}
         onConfirm={confirmWeightDialog}

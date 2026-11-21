@@ -1,0 +1,9 @@
+{
+  "baseline": "104d768d7b7497fe34e2872f4253c4fd97feb5bb",
+  "baselineFailures": 35,
+  "currentFailures": 35,
+  "identical": true,
+  "newFailures": [],
+  "passed": 940,
+  "skipped": 50
+}

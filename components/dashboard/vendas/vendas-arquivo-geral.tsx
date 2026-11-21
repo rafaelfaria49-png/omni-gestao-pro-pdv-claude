@@ -716,8 +716,8 @@ export function VendasArquivoGeral() {
       }
       setReenviandoId(vendaId)
       // Identidade estável: o id provisório muda para o VDA na confirmação.
-      const res = await retrySyncSale(pendingSale?.clientSaleId || pendingSale?.id || vendaId)
-      setReenviandoId(null)
+      // `finally`: uma exceção inesperada não pode deixar o botão preso em "reenviando".
+      const res = await retrySyncSale(pendingSale?.clientSaleId || pendingSale?.id || vendaId).finally(() => setReenviandoId(null))
       if (res.ok) {
         toast({
           title: res.reconciled ? "Venda já estava no servidor" : "Venda sincronizada",

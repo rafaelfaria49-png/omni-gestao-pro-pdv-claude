@@ -11,6 +11,7 @@
  * modelo server-side de outbox no schema que justificaria exceção. Compatibilidade é
  * feita na leitura: nenhum registro histórico é reescrito.
  */
+import { itemCommercialQuantity, isKgItem } from "@/lib/vendas/item-quantity"
 import type { PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 import { stripClientSyncFlags } from "@/lib/vendas/sale-sync-flags"
 import { resolveSaleLineItemType } from "@/lib/sale-line-classification"
@@ -35,9 +36,11 @@ export type VendaDbRow = {
   clientSaleId?: string | null
   serverId?: string | null
   itens: Array<{
+    id?: string
     inventoryId: string | null
     nome: string
-    quantidade: number
+    quantidade: number | null
+    quantidadeKg?: unknown
     precoUnitario: number
     lineTotal: number
   }>
@@ -57,6 +60,10 @@ export function saleFromDbRow(r: VendaDbRow): SaleRecord {
         typeof o.clientSaleId === "string" && o.clientSaleId.trim() ? o.clientSaleId.trim() : undefined
       return {
         ...stripClientSyncFlags(o as SaleRecord),
+        ...(o.manualKgSale === "classic-manual-kg-v1" ? { at: r.at.toISOString(), total: r.total, paymentBreakdown: { ...zeroPb, ...o.paymentBreakdown }, lines: r.itens.map((item, index) => {
+          const snapshot = o.lines?.find((line) => item.id && line.itemId === item.id) ?? o.lines?.[index]
+          return { ...snapshot, inventoryId: item.inventoryId ?? "", itemId: item.id, name: item.nome, quantity: itemCommercialQuantity(item), unitPrice: item.precoUnitario, lineTotal: item.lineTotal, ...(isKgItem(item) ? { quantityUnit: "KG" as const, weightSource: "manual" as const } : {}) }
+        }) } : {}),
         status: dbStatus,
         serverId: technicalId,
         clientSaleId: clientSaleId ?? payloadClientSaleId,
@@ -69,7 +76,8 @@ export function saleFromDbRow(r: VendaDbRow): SaleRecord {
     return {
       inventoryId,
       name: it.nome,
-      quantity: it.quantidade,
+      quantity: itemCommercialQuantity(it),
+      ...(isKgItem(it) ? { quantityUnit: "KG" as const, weightSource: "manual" as const } : {}),
       unitPrice: it.precoUnitario,
       lineTotal: it.lineTotal,
       qtyReturned: 0,

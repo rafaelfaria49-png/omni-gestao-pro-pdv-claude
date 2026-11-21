@@ -1,0 +1,13 @@
+# Auditoria do caminho de venda
+
+Base confirmada no GitHub em 29/10/2026: PR315 aberta, head 104d768. A worktree/branch concorrentes de estoque e documentos A1–A5 não foram alterados. O protocolo AEP não estava ativo na worktree original nem na nova.
+
+O produto canônico usa metadata.comercial; catálogo e lookup projetam peso e capacidade. O guard original bloqueava todos os produtos de peso antes do saldo, inclusive restauração de carrinho. O Clássico tinha modal de peso e fluxo de pagamento, mas aceitava parseFloat parcial, não mostrava total calculado e tinha bloqueios adicionais no push, validação de saldo, edição e pagamento. O finalize local só aceitava inteiros. O writer compartilhado V1/V2 normalizava quantidades inteiras e a fingerprint também arredondava quantidade. ItemVenda era Int, embora as cinco colunas de estoque da #315 já fossem Float.
+
+A implementação evolui só ItemVenda para Float, conserva UN inteiro por contrato e adiciona um protocolo opt-in manual Clássico. Autorização de loja/módulo e Caixa Seguro não foram substituídos. A autoridade vem de Produto no banco; unidade e preço são lidos sob lock estável e validados em todas as linhas, inclusive aliases. Preflight de centavos e precisão protege o replay antes do primeiro retorno. Novo create valida capacidade, schema, itens, descontos e pagamento e usa a mesma transação para venda/itens/financeiro/estoque/depósito/livro. Somar KG ocorre em milésimos; total por item em centavos usa BigInt.
+
+O cancelamento arredondava ItemVenda.quantidade; agora usa unidades mínimas exatas e repõe o líquido pelo boundary canônico, preservando step-up e guardas financeiros. DevolucaoVenda possui ItemDevolucaoVenda Int e o fluxo local antecipava efeitos: a venda KG é recusada explicitamente nesses caminhos. Correção de itens e recuperação histórica também permanecem bloqueadas para evitar conversão inteira e duplicação. Reenvio normal conserva identidade e é validado pelo mesmo writer.
+
+O serviço canônico de cadastro já proíbe reinterpretar unidade/base de preço de produto existente (lib/cadastros/product-write-service.ts). Nenhuma conversão KG→UN foi introduzida. Outros PDVs continuam recebendo vendaPesoIndisponivel e não removem essa marca; apenas o Clássico usa a capacidade manual validada do catálogo. Dispositivos e o visor #322 não são fonte de peso transacional.
+
+Direção de interface: refinamento funcional do PDV existente, mantendo tipografia, paleta, tokens e componentes. O elemento de conferência é o total do item ao lado do peso manual; vírgula, três casas, label, aria-invalid, orientação textual e aria-live foram adicionados ao diálogo existente. Relatórios e runbooks de outras frentes permaneceram fora do diff.

@@ -1,3 +1,4 @@
+import { enterManualKgTransaction } from "@/lib/vendas/manual-kg-server"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 import type { ContaReceberTitulo } from "@/generated/prisma"
@@ -250,7 +251,8 @@ export function naTransacaoDoTituloContaReceber<T>(
   db: ContaReceberDbClient | undefined,
   fn: (tx: ContaReceberDbClient) => Promise<T>,
 ): Promise<T> {
-  return db ? fn(db) : prisma.$transaction(fn, TX_TITULO_CONTA_RECEBER)
+  const compatible = async (tx: ContaReceberDbClient) => { await enterManualKgTransaction(tx); return fn(tx) }
+  return db ? compatible(db) : prisma.$transaction(compatible, TX_TITULO_CONTA_RECEBER)
 }
 
 /** `SELECT … FOR UPDATE` do título desta loja (por id OU localKey). `false` = não existe. */

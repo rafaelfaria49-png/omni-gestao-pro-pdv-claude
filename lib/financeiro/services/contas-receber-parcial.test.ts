@@ -125,6 +125,7 @@ const h = vi.hoisted(() => {
     // `SELECT … FOR UPDATE` do título (em memória não há concorrência): devolve a linha, se existir.
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join("?")
+      if (sql.includes("set_config('omni.manual_kg_writer'")) return [{ set_config: "additive-v2" }]
       if (!sql.includes("contas_receber_titulos")) throw new Error(`query raw não simulada: ${sql}`)
       const porId = sql.includes('"id" = ?')
       const row = porId ? byId.get(String(values[0])) : titulos.get(ck(String(values[0]), String(values[1])))

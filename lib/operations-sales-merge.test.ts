@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { SaleRecord } from "@/lib/operations-sale-types"
-import { mergeSalesById } from "./operations-sales-merge"
+import { mergeSalesById, kgCashProjectionDelta } from "./operations-sales-merge"
 
 /** Venda mínima para o merge (só os campos que a função lê/preserva). */
 function venda(opts: Partial<SaleRecord> & { id: string }): SaleRecord {
@@ -164,5 +164,47 @@ describe("mergeSalesById — marcadores client-only nunca voltam do servidor", (
       status: "cancelada",
     })
     expect(remoteRow!.syncPending).toBeUndefined()
+  })
+})
+
+
+describe("manual KG authoritative correction projection", () => {
+  it.each([false, true])("reconciles V2=%s facts and revision even without a monetary change", (v2) => {
+    const local = venda({ id: v2 ? "PEND-local" : "VDA-KG", clientSaleId: v2 ? "client-kg" : undefined, manualKgSale: "classic-manual-kg-v1", manualKgRevision: 0, localEffectsApplied: true, total: .35, lines: [{ inventoryId: "kg", name: "KG", quantity: .35, unitPrice: 1, lineTotal: .35, quantityUnit: "KG" }], paymentBreakdown: { dinheiro: .35, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: 0 } })
+    const remote = { ...local, id: "VDA-KG", serverId: "db", manualKgRevision: 1, lines: [{ ...local.lines[0], quantity: .351 }], localEffectsApplied: false }
+    const merged = mergeSalesById([local], [remote])
+    expect(merged[0]).toMatchObject({ id: "VDA-KG", manualKgRevision: 1, localEffectsApplied: true, lines: [{ quantity: .351 }] })
+    expect(mergeSalesById(merged, [remote])).toBe(merged)
+    expect(kgCashProjectionDelta([local], [remote])).toBe(0)
+  })
+  it("reflects the monetary correction once for cash this terminal already applied", () => {
+    const local = venda({ id: "VDA-KG", manualKgSale: "classic-manual-kg-v1", total: 7, paymentBreakdown: { dinheiro: 7, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: 0 }, localEffectsApplied: true })
+    const remote = { ...local, total: 6, manualKgRevision: 1, paymentBreakdown: { ...local.paymentBreakdown, dinheiro: 6 } }
+    expect(kgCashProjectionDelta([local], [remote])).toBe(-1)
+    const merged = mergeSalesById([local], [remote])
+    expect(kgCashProjectionDelta(merged, [remote])).toBe(0)
+    expect(kgCashProjectionDelta([{ ...local, localEffectsApplied: false }], [remote])).toBe(0)
+    expect(kgCashProjectionDelta(merged, [{ ...remote, status: "cancelada" }])).toBe(-6)
+  })
+})
+
+
+describe("KG delayed response isolation", () => {
+  it.each([false, true])("V2=%s ignores lower revisions and terminal status regressions", (v2) => {
+    const current = venda({ id: "VDA-KG", clientSaleId: v2 ? "kg-client" : undefined, manualKgSale: "classic-manual-kg-v1", manualKgRevision: 1, localEffectsApplied: true, status: "concluida", total: 6, paymentBreakdown: { dinheiro: 6, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: 0 } })
+    const old = { ...current, manualKgRevision: 0, total: 7, paymentBreakdown: { ...current.paymentBreakdown, dinheiro: 7 } }
+    expect(mergeSalesById([current], [old])[0]).toBe(current)
+    expect(kgCashProjectionDelta([current], [old])).toBe(0)
+    const canceled = { ...current, status: "cancelada" as const, manualKgRevision: 2 }
+    expect(mergeSalesById([canceled], [current])[0]).toBe(canceled)
+    expect(kgCashProjectionDelta([canceled], [current])).toBe(0)
+  })
+  it("cash corrections respect the original session and ledger date", () => {
+    const previous = venda({ id: "VDA-KG", sessaoId: "cash-yesterday", at: "2026-10-28T12:00:00Z", manualKgSale: "classic-manual-kg-v1", manualKgRevision: 0, localEffectsApplied: true, total: 7, paymentBreakdown: { dinheiro: 7, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: 0 } })
+    const current = { ...previous, manualKgRevision: 1, total: 6, paymentBreakdown: { ...previous.paymentBreakdown, dinheiro: 6 } }
+    expect(kgCashProjectionDelta([previous], [current], { sessaoId: "cash-today" })).toBe(0)
+    expect(kgCashProjectionDelta([previous], [current], { ledgerDate: "2026-10-29" })).toBe(0)
+    expect(kgCashProjectionDelta([previous], [current], { sessaoId: "cash-yesterday" })).toBe(-1)
+    expect(kgCashProjectionDelta([previous], [current], { ledgerDate: "2026-10-28" })).toBe(-1)
   })
 })

@@ -1,3 +1,5 @@
+import { correctManualKgWeight, KgCorrectionError } from "@/lib/vendas/manual-kg-correction-service"
+import { itemCommercialQuantity } from "@/lib/vendas/item-quantity"
 import { APARELHO_REVERSAO_NAO_INTEGRADA, linhasAparelhoDoPayload } from "@/lib/aparelhos/sale-reversal"
 import { requireModuleApi } from "@/lib/auth/module-access"
 /**
@@ -49,8 +51,10 @@ type CorrigirItensBody = {
   motivo?: string
   supervisorPin?: string
   /** Total atual conhecido pelo cliente (concorrência otimista). */
+  commandId?: string
+  expectedRevision?: number
   expectedTotal?: number
-  itens?: CorrecaoLineInput[]
+  itens?: (CorrecaoLineInput & { id?: string })[]
 }
 
 function describePayment(pb: Partial<PaymentBreakdownFull>): string {
@@ -122,15 +126,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ ok: false, error: fiscalGate.error, code: fiscalGate.code }, { status: fiscalGate.status })
     }
 
-    // Concorrência otimista: o draft foi montado sobre um total específico.
-    if (typeof body.expectedTotal === "number" && Math.abs(round2(body.expectedTotal) - round2(venda.total)) > 0.01) {
-      return NextResponse.json(
-        { ok: false, error: "A venda foi alterada por outro processo. Recarregue o Workspace e refaça a correção.", code: "stale" },
-        { status: 409 },
-      )
-    }
-
     const payload = (venda.payload && typeof venda.payload === "object" ? venda.payload : {}) as Record<string, unknown>
+    if (payload.manualKgSale === "classic-manual-kg-v1") {
+      if (!session?.user) return NextResponse.json({ ok: false, error: "Correção KG exige sessão autenticada.", code: "MANUAL_KG_CORRECTION_BLOCKED" }, { status: 403 })
+      const supervisor = body.supervisorPin?.trim() ? await authenticateSupervisorPin(body.supervisorPin.trim()) : null
+      if (!supervisor) return NextResponse.json({ ok: false, error: "PIN de supervisor inválido.", code: "pin_invalid" }, { status: 403 })
+      const result = await correctManualKgWeight({ storeId, pedidoId, commandId: body.commandId ?? "", expectedRevision: body.expectedRevision ?? -1, itens: body.itens, motivo, operador: getOperatorLabelFromSession(session), supervisorNome: supervisor.name || "Supervisor" })
+      return NextResponse.json(result)
+    }
+    if (venda.itens.some((item) => item.quantidade === null || !Number.isInteger(item.quantidade))) {
+      return NextResponse.json({ ok: false, error: "Contrato de quantidade incompatível.", code: "MANUAL_KG_CORRECTION_BLOCKED" }, { status: 409 })
+    }
+    if (typeof body.expectedTotal === "number" && Math.abs(round2(body.expectedTotal) - round2(venda.total)) > 0.01) {
+      return NextResponse.json({ ok: false, error: "A venda foi alterada. Recarregue o Workspace.", code: "stale" }, { status: 409 })
+    }
     const oldPb = (payload.paymentBreakdown ?? {}) as Partial<PaymentBreakdownFull>
 
     // Linhas antigas: fonte única = ItemVenda (mesma base que o GET expõe e o draft do
@@ -139,7 +148,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const oldLines: CorrecaoLineInput[] = venda.itens.map((it) => ({
       inventoryId: it.inventoryId ?? "",
       nome: it.nome,
-      quantidade: it.quantidade,
+      quantidade: itemCommercialQuantity(it),
       precoUnitario: it.precoUnitario,
     }))
 
@@ -380,6 +389,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       estoqueNaoResolvido: naoResolvidos,
     })
   } catch (e) {
+    if (e instanceof KgCorrectionError || (e && typeof e === "object" && "code" in e && e.code === "P2034")) return NextResponse.json({ ok: false, error: e instanceof KgCorrectionError ? e.message : "Venda alterada durante a correção. Recarregue e tente novamente.", code: "MANUAL_KG_CORRECTION_BLOCKED" }, { status: 409 })
     if (e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError) {
       return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: 409 })
     }

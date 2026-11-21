@@ -1,3 +1,4 @@
+import { MANUAL_KG_SALE } from "@/lib/vendas/manual-kg-contract"
 import { createHash } from "node:crypto"
 import { sanitizeSaleLinesPayload } from "@/lib/vendas/sanitize-sale-line-payload"
 
@@ -75,11 +76,11 @@ function stableJsonValue(value: unknown): unknown {
   return normalized
 }
 
-function normalizeLines(value: unknown): unknown[] {
+function normalizeLines(value: unknown, manualKg = false): unknown[] {
   const { lines } = sanitizeSaleLinesPayload(value)
   return lines
     .map((line) => {
-      const quantity = normalizeQuantity(line.quantity)
+      const quantity = manualKg && typeof line.quantity === "number" ? line.quantity : normalizeQuantity(line.quantity)
       const unitPrice = normalizeMoney(line.unitPrice)
       const explicitLineTotal =
         typeof line.lineTotal === "number" && Number.isFinite(line.lineTotal)
@@ -271,7 +272,8 @@ export function canonicalizeLegacySaleFacts(value: unknown) {
       document: normalizeDocument(sale.customerCpf),
       name: normalizeText(sale.customerName),
     },
-    lines: normalizeLines(sale.lines),
+    lines: normalizeLines(sale.lines, sale.manualKgSale === MANUAL_KG_SALE),
+    ...(sale.manualKgSale === MANUAL_KG_SALE ? { manualKgSale: MANUAL_KG_SALE } : {}),
     total: normalizeMoney(sale.total),
     payments,
     discounts: {

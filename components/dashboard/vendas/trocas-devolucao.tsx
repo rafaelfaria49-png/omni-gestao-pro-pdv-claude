@@ -1,5 +1,6 @@
 "use client"
 
+import { kgReturnBlocked as saleKgReturnBlocked } from "@/lib/vendas/manual-kg-contract"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Search, Package, Wallet, RotateCcw, Printer, Plus, Minus, X, ShoppingCart } from "lucide-react"
@@ -130,6 +131,8 @@ export function TrocasDevolucao({
     if (!fresh) return
     if (JSON.stringify(fresh.lines) !== JSON.stringify(sale.lines)) setSale(fresh)
   }, [sales, sale])
+
+  const kgReturnBlocked = !!sale && saleKgReturnBlocked(sale, inventory)
 
   const nomeLoja =
     (config.empresa.nomeFantasia || "").trim() || configPadrao.empresa.nomeFantasia
@@ -776,6 +779,7 @@ export function TrocasDevolucao({
 
       {sale && (
         <div className="w-full space-y-4">
+          {kgReturnBlocked && <p role="alert" className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">Devolução parcial e troca de venda KG indisponíveis. O contrato de crédito e reposição por peso depende de validação própria. Use o cancelamento integral autorizado.</p>}
           {/* Cabeçalho Compacto da Venda de Origem */}
           <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border border-border bg-muted/15">
             <div className="flex items-center gap-3">
@@ -1111,8 +1115,8 @@ export function TrocasDevolucao({
                         type="button"
                         size="sm"
                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold h-8.5 px-4 rounded-md text-xs"
-                        onClick={handleRegistrar}
-                        disabled={valorDevolvido <= 0}
+                        onClick={() => { if (!kgReturnBlocked) handleRegistrar() }}
+                        disabled={kgReturnBlocked || valorDevolvido <= 0}
                       >
                         Confirmar Devolução
                       </Button>
@@ -1204,8 +1208,8 @@ export function TrocasDevolucao({
                         type="button"
                         size="sm"
                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold flex-1 h-8.5 text-xs"
-                        onClick={handleFinalizarTroca}
-                        disabled={trocaCart.length === 0 || valorDevolvido <= 0}
+                        onClick={() => { if (!kgReturnBlocked) handleFinalizarTroca() }}
+                        disabled={kgReturnBlocked || trocaCart.length === 0 || valorDevolvido <= 0}
                       >
                         Finalizar Troca Imediata
                       </Button>

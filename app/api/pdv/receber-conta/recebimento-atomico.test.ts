@@ -84,6 +84,8 @@ const h = vi.hoisted(() => {
           )
           return r ? [{ id: r.id }] : []
         }
+        // Barreira de versão transaction-local do writer KG aditivo (não é dado de negócio).
+        if (sql.includes("set_config('omni.manual_kg_writer'")) return [{ set_config: "additive-v2" }]
         throw new Error("query raw não suportada no harness singular")
       },
       contaReceberTitulo: {

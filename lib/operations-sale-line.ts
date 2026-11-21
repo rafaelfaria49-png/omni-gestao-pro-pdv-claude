@@ -1,3 +1,4 @@
+import { saleLineTotalCents } from "@/lib/vendas/manual-kg-contract"
 import type { SaleLineRecord } from "@/lib/operations-sale-types"
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import type { DeviceSaleLineV1 } from "@/lib/aparelhos/device-sale-line"
@@ -56,7 +57,7 @@ export function saleLineRecordFromFinalizeInput(
     name: (typeof line.name === "string" && line.name.trim()) || product?.name || fallbackName,
     quantity: line.quantity,
     unitPrice: unit,
-    lineTotal: Math.round(unit * line.quantity * 100) / 100,
+    lineTotal: (saleLineTotalCents(line.quantity, unit) ?? Math.round(unit * line.quantity * 100)) / 100,
     qtyReturned: 0,
     itemType,
     ...(itemType === "avulso" ? { isAvulso: true } : {}),

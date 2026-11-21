@@ -1,0 +1,12 @@
+{
+  "sourceCommit": "9d5716d0dd559ec16fffed6495fa5b202d06a7cd",
+  "main": "35a3971c31f62e6e802b7dd8763be81475334780",
+  "mergeTree": "1a7d0ce82e38c8af116bcfe23f7283dc756e288c",
+  "conflicts": 0,
+  "filesCompared": 4864,
+  "differences": [],
+  "mergePerformed": false,
+  "productionWrites": 0,
+  "eolOnlyDifferences": 43,
+  "comparison": "Bytewise; text differences accepted only when CRLF-to-LF yields identical UTF-8 bytes"
+}

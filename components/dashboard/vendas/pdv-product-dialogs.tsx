@@ -1,5 +1,6 @@
 "use client"
 
+import { parseManualKg, saleLineTotalCents } from "@/lib/vendas/manual-kg-contract"
 import { Scale } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -95,6 +96,7 @@ type WeightProductDialogProps = {
   onConfirm: () => void
   onReadScale: () => void
   scaleBusy: boolean
+  manualOnly?: boolean
 }
 
 export function WeightProductDialog({
@@ -106,8 +108,12 @@ export function WeightProductDialog({
   onConfirm,
   onReadScale,
   scaleBusy,
+  manualOnly = false,
 }: WeightProductDialogProps) {
   const pKg = product ? product.precoPorKg ?? product.price : 0
+  const parsed = parseManualKg(weightKgInput)
+  const cents = parsed.ok ? saleLineTotalCents(parsed.value, pKg) : null
+  const formatMoney = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-card border-border">
@@ -118,7 +124,7 @@ export function WeightProductDialog({
           </DialogTitle>
           <DialogDescription>
             {product
-              ? `${product.name} — informe o peso em kg ou leia na balança (USB/Web Serial).`
+              ? manualOnly ? `${product.name} — digite o peso em quilogramas indicado na balança.` : `${product.name} — informe o peso em kg ou leia na balança (USB/Web Serial).`
               : ""}
           </DialogDescription>
         </DialogHeader>
@@ -126,13 +132,17 @@ export function WeightProductDialog({
           <p className="text-sm text-muted-foreground">
             Preço:{" "}
             <span className="font-medium text-foreground">
-              R$ {pKg.toFixed(2)} / kg
+              R$ {formatMoney(pKg)} / kg
             </span>
           </p>
           <div className="space-y-2">
             <Label htmlFor="pdv-peso-kg">Peso (kg)</Label>
             <Input
               id="pdv-peso-kg"
+              autoFocus
+              aria-invalid={!!weightKgInput && !parsed.ok}
+              aria-describedby="pdv-peso-orientacao"
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onConfirm() } }}
               inputMode="decimal"
               placeholder="0,000"
               value={weightKgInput}
@@ -140,7 +150,11 @@ export function WeightProductDialog({
               className="bg-secondary border-border text-lg"
             />
           </div>
-          <Button
+          <p id="pdv-peso-orientacao" className="text-sm text-muted-foreground">
+            {weightKgInput && !parsed.ok ? parsed.reason : "Use vírgula e até 3 casas decimais. Ex.: 0,350 kg."}
+          </p>
+          <p className="text-lg font-semibold tabular-nums" aria-live="polite">Total do item: R$ {cents !== null ? formatMoney(cents / 100) : "0,00"}</p>
+          {!manualOnly && <Button
             type="button"
             variant="secondary"
             className="w-full"
@@ -148,7 +162,7 @@ export function WeightProductDialog({
             onClick={onReadScale}
           >
             {scaleBusy ? "Lendo balança…" : "Ler balança (USB)"}
-          </Button>
+          </Button>}
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>

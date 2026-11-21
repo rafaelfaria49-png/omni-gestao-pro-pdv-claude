@@ -15,7 +15,7 @@ const h = vi.hoisted(() => {
     return { ...state.row }
   })
   const db = {
-    $queryRaw: vi.fn(async () => (state.row ? [{ id: state.row.id }] : [])),
+    $queryRaw: vi.fn(async (_strings: TemplateStringsArray) => (state.row ? [{ id: state.row.id }] : [])),
     contaReceberTitulo: {
       findUnique: vi.fn(async () => (state.row ? { ...state.row } : null)),
       findFirst: vi.fn(async () => (state.row ? { ...state.row } : null)),
@@ -69,7 +69,9 @@ describe("cancelContaReceber · título já cancelado × exigirSemRecebimento", 
     expect(h.update).not.toHaveBeenCalled()
     expect(h.state.row).toEqual(antes)
     // Decisão sobre a linha travada: a trava precede a leitura.
-    expect(h.db.$queryRaw).toHaveBeenCalledTimes(1)
+    expect(h.db.$queryRaw).toHaveBeenCalledTimes(2)
+    expect(String(h.db.$queryRaw.mock.calls[0]?.[0])).toContain("set_config")
+    expect(String(h.db.$queryRaw.mock.calls[1]?.[0])).toContain("FOR UPDATE")
   })
 
   it("cancelado com recebido + flag, na transação do chamador (db): mesma recusa, sem escrita", async () => {

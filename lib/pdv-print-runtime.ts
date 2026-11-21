@@ -2,6 +2,7 @@ import {
   buildOsTicketEscPos,
   buildPdvReceiptEscPos,
   escposDrawerKick,
+  formatReceiptQuantity,
   type OsTicketInput,
   type PdvReceiptInput,
 } from "@/lib/escpos"
@@ -163,7 +164,9 @@ export async function printPdvSaleReceipt(params: {
       : i.itens
           .map(
             (it) =>
-              `<p>${escapeHtml(String(it.quantity))}x ${escapeHtml(it.name)} — ${br.format(it.lineTotal)}</p>`,
+              it.quantityUnit === "KG"
+                ? `<p>${escapeHtml(formatReceiptQuantity(it.quantity, "KG"))} ${escapeHtml(it.name)} — ${br.format(it.unitPrice)}/kg = ${br.format(it.lineTotal)}</p>`
+                : `<p>${escapeHtml(String(it.quantity))}x ${escapeHtml(it.name)} — ${br.format(it.lineTotal)}</p>`,
           )
           .join("")
 

@@ -92,7 +92,8 @@ const h = vi.hoisted(() => {
   const tx = {
     venda: {
       findFirst: async ({ where }: { where: Row }) =>
-        db.vendas.find((v) => v.pedidoId === where.pedidoId && v.storeId === where.storeId) ?? null,
+        // Releitura sob lock da F8/KG busca por `id`; o PDV busca por `pedidoId`.
+        db.vendas.find((v) => (where.id !== undefined ? v.id === where.id : v.pedidoId === where.pedidoId) && v.storeId === where.storeId) ?? null,
       update: async ({ where, data }: { where: { id: string }; data: Row }) => {
         const v = db.vendas.find((x) => x.id === where.id)
         if (v) Object.assign(v, data)

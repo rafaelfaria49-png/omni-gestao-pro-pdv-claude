@@ -1,3 +1,5 @@
+import { MANUAL_KG_SALE, ManualKgSaleError } from "@/lib/vendas/manual-kg-contract"
+import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
 import { APARELHO_REVERSAO_NAO_INTEGRADA, AparelhoDevolucaoBloqueadaError, operacaoTocaAparelho } from "@/lib/aparelhos/sale-reversal"
 import { isSerializedDeviceProduct } from "@/lib/aparelhos/serialized-product"
 import { requireModuleApi } from "@/lib/auth/module-access"
@@ -140,14 +142,18 @@ export async function POST(req: Request) {
       if (data.vendaLocalId) {
         const vendaOrigem = await tx.venda.findFirst({
           where: { pedidoId: data.vendaLocalId, storeId: lojaId },
-          select: { itens: { select: { inventoryId: true, quantidade: true, lineTotal: true } } },
+          select: { payload: true, itens: { select: { inventoryId: true, quantidade: true, lineTotal: true } } },
         })
         if (vendaOrigem) {
+          const originPayload = vendaOrigem.payload as Record<string, unknown> | null
+          if (originPayload?.manualKgSale === MANUAL_KG_SALE || vendaOrigem.itens.some((item) => !Number.isInteger(item.quantidade))) {
+            throw new ManualKgSaleError("Devolução de venda em KG indisponível. Solicite cancelamento integral autorizado.")
+          }
           let totalCalc = 0
           let todasResolvidas = true
           for (const it of data.itens) {
             const orig = vendaOrigem.itens.find((iv) => iv.inventoryId === it.inventoryId)
-            if (!orig || orig.quantidade <= 0) {
+            if (!orig || orig.quantidade === null || orig.quantidade <= 0) {
               todasResolvidas = false
               break
             }
@@ -222,6 +228,7 @@ export async function POST(req: Request) {
           select: { id: true, metadata: true },
         })
         if (!produto) continue
+        assertProductCommercialSaleSupported(produto.metadata)
         // Modelo de aparelho por IMEI: saldo só volta pela unidade (devolução não integrada) — fail-closed.
         if (isSerializedDeviceProduct(produto.metadata)) throw new AparelhoDevolucaoBloqueadaError()
 
@@ -327,7 +334,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, devolucaoId: devolucao.id, devolucao })
   } catch (e) {
-    if (e instanceof AparelhoDevolucaoBloqueadaError) {
+    if (e instanceof ManualKgSaleError || e instanceof ProductWeightNotOperationalError || e instanceof ProductCommercialInvalidError || e instanceof AparelhoDevolucaoBloqueadaError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
     }
     const msg = e instanceof Error ? e.message : String(e)
