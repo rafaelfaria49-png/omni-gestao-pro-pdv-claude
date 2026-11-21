@@ -43,6 +43,7 @@
  *   silêncio; aqui explícito-mas-inválido é `VALIDATION` (fail-closed).
  */
 import "server-only"
+import { isDeepStrictEqual } from "node:util"
 
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
@@ -391,6 +392,13 @@ function resolveMetadata(
     return { ok: false, error: productWriteInvalid("metadata deve ser objeto JSON ou null.", "metadata") }
   }
   const incoming = isRecord(rawMetadata) ? rawMetadata : null
+  const oldMetadata = isRecord(existingMetadata) ? existingMetadata : null
+  const hadSerializedMarker = !!oldMetadata && Object.hasOwn(oldMetadata, "serializedDevice")
+  if ((hadSerializedMarker && opts.clearMetadata && rawMetadata === null) ||
+      (incoming && Object.hasOwn(incoming, "serializedDevice") &&
+        (opts.isCreate || !hadSerializedMarker || !isDeepStrictEqual(incoming.serializedDevice, oldMetadata?.serializedDevice)))) {
+    return { ok: false, error: productWriteInvalid("A identidade do modelo por IMEI é administrada pelo módulo Aparelhos e não pode ser criada, removida ou alterada pelo cadastro genérico.", "metadata") }
+  }
   if (incoming && Object.hasOwn(incoming, "comercial") && !validateProductCommercial(incoming.comercial)) {
     return { ok: false, error: productWriteInvalid("Unidade, modo de venda ou base de preço inválidos.", "metadata") }
   }

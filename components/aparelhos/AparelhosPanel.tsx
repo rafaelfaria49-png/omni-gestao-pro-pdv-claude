@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from "@/lib/utils"
 import { APARELHO_CONDICOES, APARELHO_CONDICAO_LABEL, APARELHO_ORIGENS, APARELHO_STATUS, APARELHO_STATUS_LABEL } from "@/lib/aparelhos/lifecycle"
 import { dbToDateKey, formatDateKeyBr, rotuloPrazo } from "@/lib/aparelhos/warranty"
+import { imprimirTesteDocumentoAparelho } from "@/lib/aparelhos/print-client"
 import {
   abrirDocumento, apiAparelhos, ApiError, type AparelhoDTO, type AquisicaoItem, type Detalhe, type GarantiaItem, type HistoricoItem, type Lista, type Resumo,
 } from "./api"
@@ -46,6 +47,16 @@ export function AparelhosPanel({ storeId }: { storeId: string }) {
   const [ficha, setFicha] = useState<string | null>(null)
   const [compra, setCompra] = useState(false)
   const [politicaOpen, setPoliticaOpen] = useState(false)
+  const [imprimindoTeste, setImprimindoTeste] = useState(false)
+
+  async function testarImpressao() {
+    if (imprimindoTeste) return
+    setImprimindoTeste(true)
+    try {
+      await imprimirTesteDocumentoAparelho()
+      toast.success("Teste enviado à impressora. Confira a saída no papel.")
+    } catch (e) { toast.error((e as Error).message) } finally { setImprimindoTeste(false) }
+  }
 
   const refresh = useCallback(() => setReload((n) => n + 1), [])
   useEffect(() => {
@@ -90,6 +101,14 @@ export function AparelhosPanel({ storeId }: { storeId: string }) {
           })}
         </nav>
       </header>
+
+      {perms.configurarGarantia && <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+        <Button variant="outline" size="sm" disabled={imprimindoTeste} onClick={() => void testarImpressao()}>
+          {imprimindoTeste ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden /> : <Printer className="mr-1.5 h-4 w-4" aria-hidden />}
+          Testar documento 80 mm (Windows)
+        </Button>
+        <p className="text-xs text-muted-foreground">Documento sintético, sem venda ou cadastro. Confira a leitura no papel.</p>
+      </div>}
 
       {sub === "visao" && (
         <VisaoGeral resumo={resumo} storeId={storeId} reload={reload}

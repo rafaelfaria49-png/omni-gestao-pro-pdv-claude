@@ -8,7 +8,10 @@ import { Label } from "@/components/ui/label"
 
 const MODULE_LABELS: Record<AccessModule, string> = { home: "Início", pdv: "PDV Clássico", sales: "Vendas", cash: "Caixa e histórico", catalog: "Cadastros", stock: "Estoque", reports: "Relatórios", settings: "Configurações", service: "Assistência técnica", deviceCatalog: "Catálogo de aparelhos", ai: "IA Mestre", agent: "Omni Agent", marketing: "Marketing", marketplace: "Marketplace", accountant: "Contador", whatsapp: "WhatsApp", finance: "Financeiro completo", fiscal: "Fiscal", experiments: "Experimentos" }
 
-export function PilotProvisioning() {
+/** Pré-preenchimento vindo de uma solicitação da página comercial (`/gestao-lojas`). */
+export type ProvisioningPrefill = { key: string; storeName: string; name: string; email: string; branch: string }
+
+export function PilotProvisioning({ prefill }: { prefill?: ProvisioningPrefill | null } = {}) {
   const [storeName, setStoreName] = useState("")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -25,9 +28,14 @@ export function PilotProvisioning() {
     setStores((await r.json()).stores)
   }
   useEffect(() => { void refresh().catch(() => setMessage("Falha ao consultar lojas.")) }, [])
+  useEffect(() => {
+    if (!prefill) return
+    setStoreName(prefill.storeName); setName(prefill.name); setEmail(prefill.email); setBranch(prefill.branch)
+    setMessage("Dados da solicitação copiados para o formulário. Confira antes de provisionar.")
+  }, [prefill])
   return <div className="mx-auto w-full max-w-4xl space-y-8 pb-8">
     <header><p className="text-xs uppercase tracking-wide text-muted-foreground">Administração da plataforma</p><h1 className="mt-2 text-2xl font-semibold">Clientes piloto</h1><p className="mt-2 text-sm text-muted-foreground">Provisionamento controlado. A liberação piloto não confirma assinatura paga.</p></header>
-    <form className="space-y-4 rounded-lg border border-border bg-card p-5" onSubmit={async (e) => {
+    <form id="provisionar-cliente" className="space-y-4 rounded-lg border border-border bg-card p-5" onSubmit={async (e) => {
       e.preventDefault(); setBusy(true); setMessage(""); setCredential("")
       try {
         const r = await fetch("/api/platform/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeName, name, email, branch }) })

@@ -1,5 +1,17 @@
 name: Desktop Windows (Electron)
 
+# Gera e testa o INSTALADOR real (Setup.exe) do OmniGestão Pro para Windows.
+#
+# - pull_request / push na main: typecheck, unitários, E2E, make (Setup.exe), fuses, verificação
+#   dos artefatos + SHA-256, e instalação REAL no runner (instalar, atalhos, abrir, fechar,
+#   reabrir, reinstalar, atualizar para versão maior, desinstalar).
+# - workflow_dispatch na main com internal_release=true: repete o mesmo build e anexa o Setup.exe a
+#   um RASCUNHO de release (visível só para quem tem acesso de escrita ao repositório).
+#
+# O repositório é público: o Setup.exe NÃO é enviado como artefato do Actions (qualquer pessoa
+# logada poderia baixar). Como artefato vão só os hashes e os relatórios de verificação.
+# Sem certificado de assinatura o instalador é NÃO ASSINADO e serve só para instalação interna.
+
 on:
   pull_request:
     paths:
@@ -9,19 +21,32 @@ on:
     branches: [main]
     paths:
       - "apps/desktop/**"
+      - ".github/workflows/desktop-windows.yml"
+  workflow_dispatch:
+    inputs:
+      internal_release:
+        description: "Criar rascunho de release interna com o Setup.exe (somente na main)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: desktop-windows-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   desktop:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: apps/desktop
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -30,13 +55,120 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Baixar binário do Electron (checksum verificado pelo pacote)
         run: node node_modules/electron/install.js
+      - name: Preparar 7-Zip do Squirrel (sem depender de script de instalação do npm)
+        run: node scripts/prepare-installer-tools.mjs
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:e2e
-      - name: Empacotar (canal production, sem instalar e sem assinar)
+
+      - name: Gerar instalador (canal production, electron-forge make)
+        shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          npm run build
           node scripts/write-build-config.mjs --channel production
-          npx electron-forge package
+          npx electron-forge make
       - name: Conferir fuses do executável
-        run: >
-          node -e "const f=require('@electron/fuses');f.getCurrentFuseWire('out/OmniGestaoPro-win32-x64/OmniGestaoPro.exe').then(w=>{const o=f.FuseV1Options;const want={RunAsNode:48,EnableNodeOptionsEnvironmentVariable:48,EnableNodeCliInspectArguments:48,EnableCookieEncryption:49,EnableEmbeddedAsarIntegrityValidation:49,OnlyLoadAppFromAsar:49,GrantFileProtocolExtraPrivileges:48};for(const [k,v] of Object.entries(want)){if(w[o[k]]!==v){console.error('fuse',k,w[o[k]]);process.exit(1)}}console.log('fuses ok')})"
+        run: node scripts/check-fuses.mjs out/OmniGestaoPro-win32-x64/OmniGestaoPro.exe
+      - name: Verificar artefatos e calcular SHA-256
+        run: node scripts/verify-artifacts.mjs
+      - name: Guardar o instalador desta versão
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force out/release | Out-Null
+          Copy-Item out/make/squirrel.windows/x64/* out/release/
+          Get-Content out/release/SHA256SUMS.txt
+
+      - name: Gerar instalador de versão maior (só para testar atualização; descartado)
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $v = [version]$pkg.version
+          $next = "{0}.{1}.{2}" -f $v.Major, $v.Minor, ($v.Build + 1)
+          npm pkg set version=$next
+          npm run build
+          node scripts/write-build-config.mjs --channel production
+          npx electron-forge make
+          New-Item -ItemType Directory -Force out/upgrade | Out-Null
+          Copy-Item out/make/squirrel.windows/x64/OmniGestaoPro-Setup.exe out/upgrade/
+          git checkout -- package.json
+
+      - name: Instalação real no Windows (instalar, abrir, reabrir, reinstalar, atualizar, desinstalar)
+        run: node tests/packaged/install-test.mjs --channel production --setup out/release/OmniGestaoPro-Setup.exe --upgrade-setup out/upgrade/OmniGestaoPro-Setup.exe
+
+      - name: Publicar hashes e relatórios (sem o executável)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-verificacao
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            apps/desktop/out/release/SHA256SUMS.txt
+            apps/desktop/out/release/artifacts.json
+            apps/desktop/test-results/install-test-production.json
+
+  internal-release:
+    # Rascunho de release = visível só para quem tem escrita no repositório. Nunca publicado
+    # automaticamente; publicar ou distribuir é decisão humana (instalador não assinado).
+    if: github.event_name == 'workflow_dispatch' && inputs.internal_release && github.ref == 'refs/heads/main'
+    needs: desktop
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: node node_modules/electron/install.js
+      - run: node scripts/prepare-installer-tools.mjs
+      - name: Gerar instalador (canal production)
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          npm run build
+          node scripts/write-build-config.mjs --channel production
+          npx electron-forge make
+      - run: node scripts/check-fuses.mjs out/OmniGestaoPro-win32-x64/OmniGestaoPro.exe
+      - run: node scripts/verify-artifacts.mjs
+      - name: Instalação real do Setup.exe que vai para a release
+        run: node tests/packaged/install-test.mjs --channel production --setup out/make/squirrel.windows/x64/OmniGestaoPro-Setup.exe
+      - name: Criar rascunho de release interna
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $ErrorActionPreference = "Stop"
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $short = "${{ github.sha }}".Substring(0, 7)
+          $tag = "desktop-v$($pkg.version)-$short"
+          $dir = "out/make/squirrel.windows/x64"
+          $sums = Get-Content "$dir/SHA256SUMS.txt" -Raw
+          $notes = @"
+          OmniGestão Pro para Windows $($pkg.version) — canal Produção (https://omni-gestao-pro.vercel.app)
+          Commit: ${{ github.sha }} · build: GitHub Actions run ${{ github.run_id }}
+
+          NÃO ASSINADO — somente instalação interna. O Windows SmartScreen pode avisar "editor desconhecido".
+          Confira o SHA-256 antes de instalar:
+
+          $sums
+          Instalação: baixe OmniGestaoPro-Setup.exe, confira o hash (PowerShell: Get-FileHash .\OmniGestaoPro-Setup.exe) e execute.
+          Instala por usuário em %LocalAppData%\OmniGestaoPro, com atalhos na Área de Trabalho e no Menu Iniciar.
+          "@
+          gh release create $tag --draft --prerelease --target "${{ github.sha }}" --title "OmniGestão Pro Desktop $($pkg.version) (interno, não assinado)" --notes $notes "$dir/OmniGestaoPro-Setup.exe" "$dir/SHA256SUMS.txt" "$dir/artifacts.json"

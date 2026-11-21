@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
 const aqui = dirname(fileURLToPath(import.meta.url))
-const ler = (p: string) => readFileSync(resolve(aqui, p), "utf8")
+const ler = (p: string) => readFileSync(resolve(aqui, p), "utf8").replace(/\r\n/g, "\n")
 
 const rota = ler("./route.ts")
 const guardStepUp = ler("../../../../../lib/vendas/guard-estorno-venda.ts")
