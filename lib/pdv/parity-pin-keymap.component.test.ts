@@ -384,6 +384,14 @@ describe("N5-B2 — colisões e modo rápido", () => {
       expect(subtotal()).toBe(before)
       expect(runtime.finalize).not.toHaveBeenCalled()
     })
+    it(surface + ": F9 não abre recebimento por cima do pagamento aberto (F12)", async () => {
+      await mount(surface)
+      key("F12")
+      expect(runtime.payment!.isOpen).toBe(true)
+      key("F9")
+      expect(runtime.receipt?.open ?? false).toBe(false)
+      expect(runtime.finalize).not.toHaveBeenCalled()
+    })
     it(surface + ": F12 continua múltiplo, sem finalizar", async () => {
       await mount(surface)
       key("F12")
@@ -392,6 +400,14 @@ describe("N5-B2 — colisões e modo rápido", () => {
       expect(runtime.finalize).not.toHaveBeenCalled()
     })
   }
+  it("Classic F9 com caixa fechado tenta recuperar a sessão e não abre o recebimento", async () => {
+    runtime.caixa.isOpen = false
+    await mount("classic")
+    key("F9")
+    expect(runtime.garantir).toHaveBeenCalled()
+    expect(runtime.receipt?.open ?? false).toBe(false)
+  })
+
   it("Classic F5 continua recebimento, sem PIN nem remoção", async () => {
     await mount("classic")
     const before = subtotal()

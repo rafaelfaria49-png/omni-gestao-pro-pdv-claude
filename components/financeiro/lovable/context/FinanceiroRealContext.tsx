@@ -9,6 +9,11 @@ import {
   type ReactNode,
 } from "react"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import {
+  enviarRecebimentoHub,
+  type EnvioRecebimentoHub,
+  type RecebimentoHubPedido,
+} from "@/lib/financeiro/recebimento-hub-client"
 import { toast } from "sonner"
 
 // ── Shared types (hub + context) ──────────────────────────────────────────────
@@ -25,6 +30,8 @@ export type ContaReceber = {
   venc: string
   status: StatusReceber
   parcela?: string
+  /** `Cliente.id` do dono (quando a origem gravou) — agrupar sem casar homônimos. */
+  clienteId?: string
 }
 
 export type ContaPagar = {
@@ -406,6 +413,13 @@ type FinanceiroRealState = {
   criarCarteira: (data: NovaCarteiraInput) => Promise<CarteiraPublica>
   transferirEntreCarteiras: (data: TransferenciaCarteiraInput) => Promise<void>
   liquidarReceber: (id: string, observacao?: string, formaPagamento?: string) => Promise<void>
+  /**
+   * Recebimento atômico e idempotente de 1..N títulos do mesmo cliente
+   * (`POST /api/financeiro/receber-lote`). Nunca lança: devolve o desfecho para a UI.
+   */
+  receberTitulos: (pedido: RecebimentoHubPedido) => Promise<EnvioRecebimentoHub>
+  /** Nomes normalizados com 2+ cadastros na loja (não agrupar títulos só por nome). */
+  nomesAmbiguos: ReadonlySet<string>
   receberParcial: (id: string, valor: number, observacao?: string, formaPagamento?: string) => Promise<void>
   estornarReceber: (id: string, motivo?: string) => Promise<void>
   criarReceber: (data: NovoReceberInput) => Promise<void>
@@ -507,8 +521,12 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
   const auditMap = new Map<string, AuditR>()
   for (const a of audit) {
     const item = a as AuditR
-    const key = safeStr(item.id ?? item.localKey)
-    if (key) auditMap.set(key, item)
+    // A linha usa `localKey` como id; o audit traz o id do banco E o localKey. Indexar só
+    // pelo id do banco fazia todo título parcial aparecer como "nada recebido / saldo cheio".
+    const lk = safeStr(item.localKey).trim()
+    const dbId = safeStr(item.id).trim()
+    if (lk) auditMap.set(lk, item)
+    if (dbId && !auditMap.has(dbId)) auditMap.set(dbId, item)
   }
   const result: ContaReceber[] = []
   for (const r of rows) {
@@ -535,6 +553,7 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
       venc: safeStr(row.vencimento),
       status,
       parcela: parcelaRaw || undefined,
+      clienteId: safeStr(row.clienteId).trim() || undefined,
     })
   }
   return result
@@ -580,6 +599,7 @@ function normalizePagarRows(rows: unknown[], audit: unknown[]): ContaPagar[] {
 
 export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [receber, setReceber] = useState<ContaReceber[]>([])
+  const [nomesAmbiguos, setNomesAmbiguos] = useState<ReadonlySet<string>>(new Set())
   const [pagar, setPagar] = useState<ContaPagar[]>([])
   const [summaryR, setSummaryR] = useState<SummaryReceber | null>(null)
   const [summaryP, setSummaryP] = useState<SummaryPagar | null>(null)
@@ -606,8 +626,12 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  /**
+   * `silent`: recarga de fundo (após um recebimento) — não liga `loading`, senão a aba
+   * inteira desmonta e leva junto a tela de sucesso/comprovante que o operador está vendo.
+   */
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (opts?.silent !== true) setLoading(true)
     setError(null)
     if (!readActiveStoreIdFromBrowser()) {
       setReceber([])
@@ -636,6 +660,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         const rRows = Array.isArray(rJson.rows) ? rJson.rows : []
         const rAudit = Array.isArray(rJson.audit) ? rJson.audit : []
         setReceber(normalizeReceberRows(rRows, rAudit))
+        setNomesAmbiguos(new Set(Array.isArray(rJson.nomesAmbiguos) ? (rJson.nomesAmbiguos as unknown[]).map(String) : []))
         const sr = rJson.summary as Record<string, unknown> | undefined
         if (sr) setSummaryR({ quantidade: safeNum(sr.quantidade), totalAberto: safeNum(sr.totalAberto), totalVencido: safeNum(sr.totalVencido), totalPago: safeNum(sr.totalPago) })
       }
@@ -973,6 +998,23 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     await fetchData()
   }, [callApi, fetchData])
 
+  const receberTitulos = useCallback(async (pedido: RecebimentoHubPedido): Promise<EnvioRecebimentoHub> => {
+    const lojaId = readActiveStoreIdFromBrowser()
+    if (!lojaId) {
+      return { kind: "recusado", status: 400, code: "store_missing", mensagem: "Nenhuma loja ativa. Selecione uma unidade no OmniGestão." }
+    }
+    const out = await enviarRecebimentoHub({ fetchImpl: fetch, storeId: lojaId, lojaHeader: ASSISTEC_LOJA_HEADER, pedido })
+    // Recarregar a lista é cauda: falha aqui nunca transforma uma baixa confirmada em erro.
+    if (out.kind !== "incerto") {
+      try {
+        await fetchData({ silent: true })
+      } catch {
+        /* lista atualiza na próxima carga */
+      }
+    }
+    return out
+  }, [fetchData])
+
   const receberParcial = useCallback(async (id: string, valor: number, observacao?: string, formaPagamento?: string) => {
     await callApi("/api/financeiro/receber", { op: "parcial", localKey: id, valor, observacao, formaPagamento }, "PATCH")
     await fetchData()
@@ -1095,6 +1137,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         refreshFluxoCaixa, refreshCarteiras, refreshDRE,
         criarCarteira, transferirEntreCarteiras,
         liquidarReceber, receberParcial, estornarReceber, criarReceber,
+        receberTitulos, nomesAmbiguos,
         liquidarPagar, pagarParcial, estornarPagar, criarPagar,
       }}
     >
