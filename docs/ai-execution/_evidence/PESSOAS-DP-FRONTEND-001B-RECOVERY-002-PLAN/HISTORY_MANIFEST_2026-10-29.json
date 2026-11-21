@@ -1,0 +1,223 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "measured_at": "2026-10-29T13:38:07.895Z",
+  "main_base": "aaab27505a03903d9fb8333baef5b52424821093",
+  "source_ref": "refs/remotes/origin/goal/pessoas-001b-recovery-002",
+  "source_commit": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+  "blocked_commit": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+  "blocked_parent": "29afd1007ff83cd5ca40b67ede547b34dbaef6ec",
+  "human_authorization": "Mensagem direta: PRE-FLIGHT FINAL E REVISAO 10 - MESMO GOAL, 29/10/2026; preservar e transportar literalmente o arquivo fechado especifico r9-a2.md.",
+  "source_push": {
+    "previous_remote": "8bb2cb9019df2620d7ee7edfbf268b6ae2982be3",
+    "local_commits_published": 10,
+    "mode": "normal-fast-forward",
+    "remote_verified": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+    "source_tree_clean": true
+  },
+  "blocked_events": [
+    {
+      "attempt": 1,
+      "previous_attempts": [],
+      "result": "BLOCKED",
+      "timestamp": "2026-10-28T09:50:58.457Z"
+    },
+    {
+      "attempt": 2,
+      "previous_attempts": [],
+      "result": "BLOCKED",
+      "timestamp": "2026-10-29T12:56:49.636Z"
+    }
+  ],
+  "blocked_event_2_sha256_including_lf": "4f75060747a106f0a1cd555a303ee26f2dc67ba9144907a43a5c12b58258ec84",
+  "ledger": {
+    "path": "docs/execution-tracks/pessoas/LEDGER.jsonl",
+    "git_blob": "44e5beb256029588c98b61acb3c4dc08445902df",
+    "bytes": 9206,
+    "sha256": "7ddff39011b28d6fa34568988ba9e59bbc0e619fe51b73f3188ea0fc8983745c",
+    "source_worktree_sha256": "e637ecc2d752a1e4ae20749c937ca02ae70839fd4bf069a4ffa3c4c29a44bd82",
+    "source_worktree_git_eol_equal": true
+  },
+  "archives": [
+    {
+      "path": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md",
+      "git_blob": "95807306788d58ec842dd992edf2df2ab9932622",
+      "bytes": 29412,
+      "sha256": "b8f51cdd9446a52eae07cb8b3f9aed030917c3ab015c9921c8d7558e4224f41b",
+      "source_worktree_sha256": "5a3200a07795cdcb71347d8462d94f4350732cabb16fd30f92df19ec025f9f1b",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-r9-a2.md",
+      "git_blob": "b86c8a26afcf4be481f74fb5c0c088696877db5f",
+      "bytes": 33161,
+      "sha256": "c8807aae37811c8ba451e53b9a11c6bb4a124c9921998d559e97ef96d204bc5c",
+      "source_worktree_sha256": "c8807aae37811c8ba451e53b9a11c6bb4a124c9921998d559e97ef96d204bc5c",
+      "source_worktree_git_eol_equal": true
+    }
+  ],
+  "cli_inspection": {
+    "path": "scripts/track.mjs",
+    "git_blob": "66f70129f05077181da4cc649b0799169b36a5f1",
+    "reconcile_reads_legacy_closed_path": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md",
+    "reconcile_transports_event_goal_archive": false,
+    "core_change_required": false
+  },
+  "official_dry_run_before_transport": {
+    "result": "PASS",
+    "source_commit": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+    "events_to_append": 1,
+    "historical_attempt": 2,
+    "writes": false
+  },
+  "literal_transport": {
+    "path": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-r9-a2.md",
+    "method": "git cat-file blob <source>:<path> -> Buffer -> fs.writeFileSync(..., {flag: wx}); sem decodificacao, normalizacao, edicao ou reserializacao do arquivo",
+    "expected_git_blob": "b86c8a26afcf4be481f74fb5c0c088696877db5f",
+    "expected_sha256": "c8807aae37811c8ba451e53b9a11c6bb4a124c9921998d559e97ef96d204bc5c",
+    "bytes": 33161,
+    "committed_before_reconcile": true,
+    "ledger_or_derivatives_manually_edited": false
+  },
+  "source_artifacts": [
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/GATE_AUTH_CONSUMER_2026-10-28.md",
+      "git_blob": "cec3f38fd156d6f0102792d2c451e2f578ec2e87",
+      "bytes": 6450,
+      "sha256": "ebaf92603327780e240175530ea67132646395c3690f2672876039e2dbe3dcc5",
+      "source_worktree_sha256": "9a340818edc6f0db37eb022807c32a1060a996cb0fd918c1aa2a9bae9f6f50cf",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/GATE_PREFLIGHT_2026-10-29.md",
+      "git_blob": "090e1a3097bfc93631d053eddc74495c90c7482b",
+      "bytes": 3809,
+      "sha256": "77347ad01349b0cdaea229c449c546f57ec4d184e62963a52478ea55046180ab",
+      "source_worktree_sha256": "77347ad01349b0cdaea229c449c546f57ec4d184e62963a52478ea55046180ab",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/PREFLIGHT_GATE_2026-10-29.json",
+      "git_blob": "a13f9cb132b949018431758c574d1796b0af5eb3",
+      "bytes": 3337,
+      "sha256": "2a86f86deb9331e37dd3a3943826467f8abc0657bf91284a33b72834456cdf0d",
+      "source_worktree_sha256": "2a86f86deb9331e37dd3a3943826467f8abc0657bf91284a33b72834456cdf0d",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/PROPOSED_AUTH_CONSUMER.patch",
+      "git_blob": "5ed6c01a19150338556eb1cbff128b2e9834ff7c",
+      "bytes": 288,
+      "sha256": "c693c9b7a5335ce7bb78a0e5ac2ca2201eb321661de4ef731ce449c8eda642ed",
+      "source_worktree_sha256": "3340354a47650ba86c09b8821d601dd5ba44228ee02799cf20b8a69c75877baa",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/auth-consumer-diagnostic.json",
+      "git_blob": "3567da8657b3baf876763d16304ccaa618666398",
+      "bytes": 1446,
+      "sha256": "f3ea3a16cac517e9251ef153926c0effbd4fee335374a5e401151d40d43c6d60",
+      "source_worktree_sha256": "f3ea3a16cac517e9251ef153926c0effbd4fee335374a5e401151d40d43c6d60",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/auth-focused-bb573fdf9a89.json",
+      "git_blob": "9299b5a62cf0e815b430520dce0def585d4222a6",
+      "bytes": 16006,
+      "sha256": "e2e84fd0ce978f9d2dca3b99c736860056c5fd9043b05c18ac16cc170691608a",
+      "source_worktree_sha256": "e2e84fd0ce978f9d2dca3b99c736860056c5fd9043b05c18ac16cc170691608a",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/auth-focused-bb573fdf9a89.meta.json",
+      "git_blob": "0559c06730ea32c47d23fc0fa3a8870e8aa34895",
+      "bytes": 944,
+      "sha256": "8faea807061ec47e89b3aa4df1b7c2b1b32421f46aede7913578cec0ede63da9",
+      "source_worktree_sha256": "8faea807061ec47e89b3aa4df1b7c2b1b32421f46aede7913578cec0ede63da9",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/auth-lint-bb573fdf9a89.json",
+      "git_blob": "7323097bc1c58feb9072a0031945c1ebc36d7969",
+      "bytes": 1603,
+      "sha256": "41bf14ae09e8e2ea4dff185264e744f075c48827dfad1b1c9b12e7c4724c9166",
+      "source_worktree_sha256": "41bf14ae09e8e2ea4dff185264e744f075c48827dfad1b1c9b12e7c4724c9166",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/diagnose-auth.mjs",
+      "git_blob": "10dc4d100ef24e7c2857abb3bcef98d6ffbfdcf5",
+      "bytes": 2786,
+      "sha256": "cc8d1034caac0e19eb35e81d0419eed7740b6641ab000322ebe24dd408b299e9",
+      "source_worktree_sha256": "cc8d1034caac0e19eb35e81d0419eed7740b6641ab000322ebe24dd408b299e9",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/final-gate-status.json",
+      "git_blob": "aa32fa09e9a3d6a0067df2322335261e3e6a5c7d",
+      "bytes": 1405,
+      "sha256": "e8e4136e7ff929b6f2859ce30fa3f1c52b0e778f6c78949e875d87f4c4c48f73",
+      "source_worktree_sha256": "3597e765098ee2f6d99df3d0038af2af34f2159a4174d0b8447923a3e08c3116",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002/transport.json",
+      "git_blob": "d2c2cbe82362dbb31d7daeadee4e1571646e458d",
+      "bytes": 1811,
+      "sha256": "7b3cb68132938fdd3f202f624b56466bf42d20655f50d737e6278f3b36ca4f76",
+      "source_worktree_sha256": "d53d5e4281bad5862b7185cf367d434e9f2efe8b802324fc46d34e0d91916ec7",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "lib/auth/page-access.test.ts",
+      "git_blob": "a06b8ef12bfea319003e8768d5855699ed43a02a",
+      "bytes": 949,
+      "sha256": "a56b614a38474f8a8c5b7d04f3276e2121fb466ae019c437d9253d38967f4a9e",
+      "source_worktree_sha256": "1e18cd167c385b781301db893e937128b12dbd7b24afd29ecd6694abc8484814",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "lib/auth/page-access.ts",
+      "git_blob": "9259736c2654d5889dd436553bca22b1469a4be7",
+      "bytes": 3143,
+      "sha256": "ea3ecc3d993e719e066d0079dbb0c5e97343a04e6e17c7e1a7f6a995257a8b44",
+      "source_worktree_sha256": "ea3ecc3d993e719e066d0079dbb0c5e97343a04e6e17c7e1a7f6a995257a8b44",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "lib/auth/proxy-enterprise-dashboard.test.ts",
+      "git_blob": "eb288160ba31a40bbc8474a87f5de55ca19bea14",
+      "bytes": 7557,
+      "sha256": "a7f3c18eb165c5df9872fe3d026dcc2a36ce3f350734576b77e72b5625806418",
+      "source_worktree_sha256": "a7f3c18eb165c5df9872fe3d026dcc2a36ce3f350734576b77e72b5625806418",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "lib/auth/proxy-enterprise-dashboard.ts",
+      "git_blob": "694f52cc4d239df0ecd5d900a801fc5058cf374d",
+      "bytes": 5128,
+      "sha256": "910532102d097b2fcdfaed530cffebe0b8ab3fa2135947623970547c31f6634f",
+      "source_worktree_sha256": "99e37b7f7273ed77fe5ee37736b653d82b3d4b47e9734098f6c100208afdfc24",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "scripts/pessoas/run-frontend-tests.mjs",
+      "git_blob": "1208686db0ea3684d5173d15dc05d96ee98b73e2",
+      "bytes": 517,
+      "sha256": "955b359ae543d29119336c6b2c05143e5df6bbfeb0adb7f1d017c80e0a681210",
+      "source_worktree_sha256": "955b359ae543d29119336c6b2c05143e5df6bbfeb0adb7f1d017c80e0a681210",
+      "source_worktree_git_eol_equal": true
+    },
+    {
+      "path": "scripts/pessoas/run-official-tests.mjs",
+      "git_blob": "69f928b8b848cc34c03237561bfc40c1eeaf1ddc",
+      "bytes": 24234,
+      "sha256": "207c09dfe773394e338b3c578483c2f59209f9744a6889109aeee7ad0502597a",
+      "source_worktree_sha256": "207c09dfe773394e338b3c578483c2f59209f9744a6889109aeee7ad0502597a",
+      "source_worktree_git_eol_equal": true
+    }
+  ],
+  "functional_changes_in_this_mission": false,
+  "runner_invoked": false,
+  "qa_invoked": false,
+  "attempt_3_opened": false
+}

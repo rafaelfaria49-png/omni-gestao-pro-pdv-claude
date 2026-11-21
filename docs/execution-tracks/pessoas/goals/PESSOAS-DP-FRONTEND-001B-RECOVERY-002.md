@@ -60,7 +60,7 @@
   "gates_liberados": [],
   "read_budget": 85,
   "plan_ref": "OMNIGESTAO_PESSOAS_DP_RH_MASTERPLAN_2026-09-15",
-  "plan_rev": 9,
+  "plan_rev": 10,
   "familia_executor": "openai",
   "revisao_independente": true,
   "preferencia_humana_revisao": {
@@ -83,7 +83,7 @@
   "autorizacao_humana_execucao": {
     "aprovado": true,
     "authorization_id": "HUMAN-RECOVERY-002-2026-10-25",
-    "condicao_previa": "Merge humano da PR documental da revisao 9 e rito oficial AEP de retomada cumulativa aprovado e integrado; preservar BLOCKED 1/3 e continuar somente em abertura legitima, sem reset de tentativas.",
+    "condicao_previa": "Merge humano da PR documental da revisao 10; integrar legitimamente plano, reconciliacao 2/3 e mecanismo oficial na branch/worktree originais. Retomada 3/3 somente por resume-blocked, em missao posterior expressamente autorizada. Esta preparacao nao executa nem autoriza a aplicacao de resume-blocked 3/3.",
     "auth_scope": "Escopo da revisao 8 preservado; autorizacao humana de 28/10/2026 acrescenta exclusivamente lib/auth/proxy-enterprise-dashboard.ts para reconhecer /dashboard/pessoas e subrotas delimitadas somente depois de canAccessPage aprovar. Guards DP e cookie/Store preservados; sem liberar Unidades nem elevar STORE a PLATFORM.",
     "commit_push_functional_pr": true,
     "merge_automatico": false
@@ -96,16 +96,19 @@
   },
   "retomada_aep": {
     "status": "BLOCKED_PENDING_OFFICIAL_RITE",
-    "source_commit": "8bb2cb9019df2620d7ee7edfbf268b6ae2982be3",
-    "blocked_commit": "437abb4d4dc523865710cabf8a281f43dfda1fd9",
-    "reconciliation_commit": "bc9275307fff9df390c0ef02b1fb6e8d4ff55057",
-    "historical_attempt": 1,
+    "source_commit": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+    "blocked_commit": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+    "reconciliation_commit": "8f57f0433ea4773e75aced9bd376b23d5011a225",
+    "historical_attempt": 2,
     "historical_previous_attempts": [],
     "max_attempts": 3,
-    "next_corrective_attempt_required": 2,
+    "next_corrective_attempt_required": 3,
     "current_cli_supported": false,
     "G_AEP_CORE": "REQUESTED_NOT_AUTHORIZED",
-    "nota": "Metadados documentais, nao consumidos pela CLI e sem efeito sobre marcador ou contagem. Plano permanece BLOCKED, sem READY e sem tentativa nova."
+    "nota": "source_commit/blocked_commit/reconciliation_commit e contagem correspondem ao BLOCKED 2/3 real. previous_attempts=[] e literal; os eventos 1/3 e 2/3 nao sao falhas attempt --fail. Campos current_cli_supported=false e G_AEP_CORE=REQUESTED_NOT_AUTHORIZED preservam a evidencia da epoca da revisao 9. O rito oficial foi integrado depois na main aaab275 pela PR #321; nenhum nucleo e alterado nesta missao. Estado continua BLOCKED e proxima corretiva 3/3 depende de merge humano e retomada oficial posterior.",
+    "historical_archive_r8": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md",
+    "historical_archive_r9_a2": "docs/execution-tracks/pessoas/_closed/goals/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-r9-a2.md",
+    "historical_archive_transport_commit": "0917a253febb0c0f43ca480037d0bc9ffb38b7e7"
   },
   "autorizacao_humana_qa": {
     "authorization_id": "HUMAN-RECOVERY-002-2026-10-25",
@@ -122,7 +125,15 @@
   "gate_humano": {
     "requerido": true,
     "pendente": true,
-    "motivo": "HUMAN_MERGE_SCOPE_PLAN_REV_9 e G-AEP-CORE para rito oficial de retomada cumulativa pendentes. CLI atual sem suporte para retomar BLOCKED sem zerar a sessao; manter status BLOCKED. Autorizacoes anteriores de execucao/QA e dispensa externa condicional preservadas, sem novo PASS, close ou merge funcional automatico. Producao nao autorizada."
+    "motivo": "HUMAN_MERGE_SCOPE_PLAN_REV_10 pendente. Preservar BLOCKED 1/3 e 2/3 e os dois arquivos historicos. Node 24 isolado, reserva de disco e integridade historica sao pre-condicoes para a tentativa final. Nao executar resume-blocked 3/3 nesta missao; depois do merge humano, exigir autorizacao expressa e rito oficial na origem. Allowlist, QA e dispensa externa condicional preservadas; sem merge funcional automatico ou producao."
+  },
+  "preflight_final": {
+    "evidence": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/PREFLIGHT_FINAL_2026-10-29.json",
+    "history_manifest": "docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/HISTORY_MANIFEST_2026-10-29.json",
+    "node_24": "READY_EXISTING_RUNTIME_SESSION_ONLY",
+    "disk": "PENDING_HUMAN_CLEANUP_AND_STABILITY_MEASUREMENT",
+    "history": "TWO_LITERAL_BLOCKED_EVENTS_AND_BOTH_CLOSED_ARCHIVES_PRESERVED",
+    "attempt_3": "NOT_STARTED_PENDING_HUMAN_MERGE_AND_LATER_OFFICIAL_RESUMPTION"
   }
 }
 -->
@@ -131,15 +142,13 @@
 
 ## Mandato e ponto de parada
 
-Concluir a entrega cadastral 001B existente, preservando telas, contratos, correções e testes. O backend 001A e o hardening P2 continuam DONE; frontend original e Recovery 001 continuam BLOCKED. Este é o **mesmo Recovery 002**, agora também BLOCKED por gate na tentativa **1/3**; não é novo GOAL, tentativa zero ou quarta tentativa do Recovery 001.
+Concluir a preparação do **mesmo Recovery 002**, preservando o frontend 001B, a correção auth e seus 39 testes focados. Backend 001A e hardening P2 continuam DONE; os predecessores continuam BLOCKED. Recovery 002 está **BLOCKED na tentativa 2/3**; a próxima corretiva cumulativa será **3/3**. Não criar Recovery 003 nem reiniciar contagem.
 
-A revisão 8 entrou na main pela PR #316, merge `745fb55cc65644e2be70bc963c72401ec4352015`, ancestral da main conferida `34b70a15583db7608437f04b3ba7779582f4eeb9`. A execução posterior transportou os 32 arquivos e parou oficialmente em AUTH-CONSUMER-01. A autorização humana de **28/10/2026** permite publicar a origem, reconciliar o BLOCKED e acrescentar exclusivamente `lib/auth/proxy-enterprise-dashboard.ts` à allowlist. Registro: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/AUTHORIZATION_2026-10-28.md`.
+Esta é a **revisão 10**, na branch documental `codex/pessoas-001b-recovery-002-rev10`, worktree `C:/Projetos/omni-gestao/.worktrees/pessoas-001b-recovery-002-rev10`, criada da main verificada `aaab27505a03903d9fb8333baef5b52424821093`. A origem permanece `goal/pessoas-001b-recovery-002` / `C:/Projetos/omni-gestao-pessoas-001b-recovery-002`, sem marcador. A autorização humana desta missão limita-se a pré-flight, preservação, reconciliação 2/3 e planejamento; a terceira tentativa não foi aberta.
 
-Esta PR documental prepara a **revisão 9** na branch `codex/pessoas-001b-recovery-002-rev9`, worktree `C:/Projetos/omni-gestao/.worktrees/pessoas-001b-recovery-002-rev9`, criada limpa da main acima. Não há sessão AEP ativa. Publicação da implementação preserva os commits existentes, sem incorporá-los à main. PR #273 permanece aberta/draft e os WIPs externos permanecem preservados.
+**AEP_RESUMPTION_SUPPORTED=true na main aaab275**, após merge humano da PR #321 (implementação `b590b6bc7661abef11179f34a9c042663f8de22e`). A retomada oficial 2/3 já foi realizada na origem e terminou no BLOCKED de infraestrutura. Os campos legados `current_cli_supported` e `G_AEP_CORE` no META registram a época da revisão 9 e permanecem preservados. Nenhuma nova alteração do núcleo AEP foi necessária nesta preparação.
 
-**AEP_RESUMPTION_SUPPORTED=false.** O plano proposto fica em `goals/` com `status: BLOCKED`, sem GOAL elegível: a CLI atual não reconstrói a contagem cumulativa de um bloqueio ratificado. A revisão 8 fechada e o evento literal continuam intocados. Os metadados `retomada_aep` são registro documental, não mecanismo implementado. Relatório e pedido objetivo de G-AEP-CORE: `RECONCILIATION_AND_RESUMPTION_2026-10-28.md` no mesmo subtree de planejamento.
-
-**NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_9_AND_AUTHORIZE_G_AEP_CORE_OFFICIAL_RESUMPTION.** Merge do plano sozinho não autoriza `open` nem resolve a limitação do núcleo. Não executar `open`, `attempt`, `check`, `block`, `close`, patch ou testes de produto nesta fase. Não editar/remover/criar manualmente marcador, ledger ou núcleo. Após autorização específica, implementação e ratificação humana do rito oficial, integrar legitimamente o plano e o mecanismo à branch original antes da abertura. Dispensa condicional, QA e decisão humana de merge funcional permanecem exigidos. Folha/holerites, GOAL funcional 002 e produção continuam fora do recorte.
+**NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_10.** Após o merge humano, integrar legitimamente main/plano/histórico na origem, conferir Node 24, disco e hashes e executar o rito oficial somente em missão posterior expressamente autorizada. Não utilizar `open`, fabricar falhas, editar `.aep-active`, ledger ou derivados. Não executar `resume-blocked` 3/3, runner, QA ou `close` nesta missão. PR #273 e WIPs externos preservados; merge funcional, produção e folha/GOAL funcional 002 permanecem fora desta preparação.
 
 ## Histórico preservado — Recovery 001
 
@@ -158,28 +167,39 @@ A origem estava limpa, sem `.aep-active`, seis commits à frente do remoto e sem
 
 Estado histórico da revisão 8 antes da execução: dois DONE, dois BLOCKED, cinco linhas de ledger e Recovery 002 READY. A reconciliação do Recovery 001 já integra a main pela PR #305 e não foi repetida. Os eventos e arquivos fechados anteriores permanecem intactos.
 
-## Recovery 002 preservado e reconciliação atual
+## Recovery 002 — histórico 1/3 e 2/3 preservado
 
-| Referência | Valor conferido em 28/10/2026 |
+| Referência | Valor conferido em 29/10/2026 |
 | --- | --- |
-| Branch/worktree de execução já existente | `goal/pessoas-001b-recovery-002` / `C:/Projetos/omni-gestao-pessoas-001b-recovery-002` |
-| SOURCE_SHA local e remoto publicado | `8bb2cb9019df2620d7ee7edfbf268b6ae2982be3` |
-| Commit de transporte/diagnóstico | `acd4362eb93bc36cbf2f8bbd2bf8586fba78319a` |
-| BLOCKED oficial por gate, 1/3 | `437abb4d4dc523865710cabf8a281f43dfda1fd9` |
-| Reconciliação oficial desta origem | `bc9275307fff9df390c0ef02b1fb6e8d4ff55057` |
-| Relatório gerado pela CLI | `_closed/reports/RECONCILE-BLOCKED-8bb2cb9019df.json` |
+| SOURCE_HEAD local e remoto após push normal | `efd34ae4f0f575408975ed7f9776bacbb62adc04` |
+| Remoto anterior, ancestral da origem | `8bb2cb9019df2620d7ee7edfbf268b6ae2982be3`; dez commits publicados por fast-forward |
+| BLOCKED oficial 1/3 | `437abb4d4dc523865710cabf8a281f43dfda1fd9`; reconciliação `bc9275307fff9df390c0ef02b1fb6e8d4ff55057` |
+| Auth corrigido e 39 testes focados preservados | `bb573fdf9a892c870cdc5d238c1cc8395b4cb9b5` |
+| BLOCKED oficial 2/3, pai único | `efd34ae4f0f575408975ed7f9776bacbb62adc04`; pai `29afd1007ff83cd5ca40b67ede547b34dbaef6ec` |
+| Transporte literal do arquivo r9-a2 antes da CLI | `0917a253febb0c0f43ca480037d0bc9ffb38b7e7` |
+| Reconciliação oficial 2/3 | `8f57f0433ea4773e75aced9bd376b23d5011a225` |
+| Relatório oficial 2/3 | `_closed/reports/RECONCILE-BLOCKED-efd34ae4f0f5.json` |
 
-Árvore/índice de execução limpos, três commits sobre a base `34b70a1`, BLOCKED ancestral do HEAD e `.aep-active` ausente. A branch remota não existia; dry-run e push normal criaram a ref no SHA exato, sem force/rebase/reset/amend. Fetch confirmou a origem para o `reconcile-blocked` oficial. Dry-run PASS e aplicação anexaram **um evento literal**, `attempt=1`, `previous_attempts=[]`, com motivo, timestamp e base intactos; GOAL revisão 8 BLOCKED arquivado integralmente. Nenhuma tentativa foi aberta ou consumida nesta missão.
+O ledger da main era prefixo literal da origem; o commit BLOCKED acrescentou exatamente um evento. Dry-run oficial PASS antes e depois do transporte, aplicação PASS, **um evento literal anexado**, sem duplicação. Recovery 002 conserva exatamente dois BLOCKED, tentativas **1/3 e 2/3**, ambos com `previous_attempts=[]`. Esse array contém somente falhas reais registradas por `attempt --fail`; não inserir bloqueios históricos como falhas artificiais. Sete linhas totais; projeção por GOAL: dois DONE/três BLOCKED, `current_goal=null`, `next_goal=null`. Revisão 10 permanece BLOCKED, sem evento de abertura ou terceira tentativa.
 
-Estado atual derivado: **dois DONE, três BLOCKED, seis linhas de ledger, current_goal=null e next_goal=null**. A proposta revisão 9 permanece BLOCKED; não cria evento novo. O histórico de 1/3 já conta: a próxima tentativa corretiva deverá ser **2/3**, pelo rito oficial ainda pendente, sem fabricar uma falha `attempt --fail` retroativa.
+Arquivos fechados preservados integralmente:
+
+| Arquivo em `_closed/goals/` | Blob Git | SHA-256 do blob |
+| --- | --- | --- |
+| `PESSOAS-DP-FRONTEND-001B-RECOVERY-002.md` — revisão 8 | `95807306788d58ec842dd992edf2df2ab9932622` | `b8f51cdd9446a52eae07cb8b3f9aed030917c3ab015c9921c8d7558e4224f41b` |
+| `PESSOAS-DP-FRONTEND-001B-RECOVERY-002-r9-a2.md` — revisão 9, tentativa 2 | `b86c8a26afcf4be481f74fb5c0c088696877db5f` | `c8807aae37811c8ba451e53b9a11c6bb4a124c9921998d559e97ef96d204bc5c` |
+
+A inspeção de `cmdReconcileBlocked` confirmou que a CLI transporta somente `<ID>.md`, sem consultar `goal_archive`. Por isso o arquivo `r9-a2.md` foi transportado antes por `git cat-file blob` → Buffer → escrita exclusiva, sem reescrever bytes, e commitado com manifesto auditável. A CLI oficial anexou o evento e regenerou derivados; nenhum ledger/derivado foi editado manualmente. Hash do evento 2/3 incluindo LF: `4f75060747a106f0a1cd555a303ee26f2dc67ba9144907a43a5c12b58258ec84`. Manifesto e hashes dos 17 artefatos de origem: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/HISTORY_MANIFEST_2026-10-29.json`. Conversão CRLF local do Git é identificada separadamente; blobs históricos não mudam.
 
 ## Transporte já preservado e integração futura
 
 O manifesto da revisão 7 `transport-manifest.json` continua literal, com 32 arquivos funcionais/testes e origem `7a6df145e68bfea7eac14bf057a0904bb985dc02`. A evidência de transporte no SOURCE_SHA registra 29 caminhos diretos e três consumidores de navegação integrados por trechos. Não repetir transporte, reconstruir telas, restaurar diretórios inteiros ou criar outra branch/worktree de produto.
 
-Preservar os três commits na branch original publicada. Após merge humano do plano e ratificação do mecanismo oficial de retomada, fazer fetch e integrar legitimamente a main que contém ambos à branch original, preservando os commits e resolvendo qualquer conflito de GOAL/derivados somente pelo rito oficial. GOAL deve coincidir com HEAD, main e base comum. Não copiar metadados para simular merge, importar estado AEP de outra worktree ou reutilizar `refresh-active`, exclusivo do Recovery 001.
+Preservar todos os commits na branch original publicada. Após merge humano da revisão 10, com o mecanismo oficial já ratificado, fazer fetch e integrar legitimamente a main que contém ambos à branch original, preservando os commits e resolvendo qualquer conflito de GOAL/derivados somente pelo rito oficial. GOAL deve coincidir com HEAD, main e base comum. Não copiar metadados para simular merge, importar estado AEP de outra worktree ou reutilizar `refresh-active`, exclusivo do Recovery 001.
 
-Somente depois de abertura AEP legítima e cumulativa aplicar o patch cirúrgico autorizado. Manter saídas do runner no subtree de execução Recovery 002 e o relatório `docs/pessoas/VALIDACAO_FRONTEND_001B_RECOVERY_002.md`. PASS, imagens e contagens históricas não comprovam o novo HEAD. Qualquer colisão ou divergência no histórico exige parada humana, sem reescrita de eventos.
+Na integração futura, conferir separadamente o GOAL quente revisão 10, o arquivo legado revisão 8 e o arquivo fechado `r9-a2.md`. O detector de renames do Git pode aplicar a revisão nova ao arquivo fechado mesmo sem conflito textual, como já ocorreu na integração anterior. Antes do commit de merge, cada caminho deve coincidir com seu blob canônico aprovado na main; preservar ambos os arquivos fechados e o ledger literal. Essa conferência pertence à integração Git legítima e não permite editar eventos, derivados ou o núcleo AEP.
+
+A correção cirúrgica auth já está no commit bb573fdf9a892c870cdc5d238c1cc8395b4cb9b5; preservá-la. Somente depois de retomada oficial 3/3 posterior continuar as correções restantes e a validação. Manter saídas do runner no subtree de execução Recovery 002 e o relatório `docs/pessoas/VALIDACAO_FRONTEND_001B_RECOVERY_002.md`. PASS, imagens e contagens históricas não comprovam o novo HEAD. Qualquer colisão ou divergência no histórico exige parada humana, sem reescrita de eventos.
 
 ## Implementação a reutilizar e limites estreitos
 
@@ -203,7 +223,7 @@ Na main observada a política mudou: novas contas têm `accessScope=STORE`; o JW
 
 **Dependência concreta de integração na main, detectada por leitura estática:** `lib/auth/page-access.ts:12` nega `/dashboard/unidades` para quem não tem `platformAuthority`; `/dashboard/pessoas` e seus filhos não estão mapeados e caem no `return false` da linha 31. `lib/auth/proxy-enterprise-dashboard.ts:18` e `app/dashboard/layout.tsx:18` consomem essa decisão e redirecionam. Acrescentar memberships A/B não resolve essa negação de rota. Isso descreve o código da main `0adec212...`, não uma reprodução da falha histórica.
 
-**Decisões humanas de 25 e 28/10/2026: HUMAN_AUTHORIZE_AUTH_INTEGRATION_SCOPE=AUTHORIZED_RESTRICTED; ALLOWLIST_REPLAN=REV_9_PENDING_HUMAN_MERGE_AND_OFFICIAL_AEP_RESUMPTION.** A revisão 8 já mergeada autorizou page-access e dois testes; a revisão 9 acrescenta somente o consumidor identificado no gate real AUTH-CONSUMER-01. A passagem externa não concede capacidade DP: cada página/action/API continua sujeita aos guards reais do domínio. Preservar negação de sessão inválida, Store não autorizada, flag OFF, grants ausentes/revogados e acesso direto por URL; testar cada camada na camada responsável. Preservar Unidades, Plataforma, Financeiro e demais módulos sem relação. G-AUTH mecânico continua fechado, pois cobre `auth.ts`, `auth.config.ts` e `proxy.ts`, todos excluídos. Se outro consumidor exigir edição ou outro gate for atingido, apresentar evidência e parar; não promover STORE a PLATFORM/ADMIN legado nem enfraquecer asserts.
+**Decisões humanas de 25 e 28/10/2026 preservadas: HUMAN_AUTHORIZE_AUTH_INTEGRATION_SCOPE=AUTHORIZED_RESTRICTED; ALLOWLIST_REV_9_PRESERVED_IN_REV_10.** A revisão 8 já mergeada autorizou page-access e dois testes; a revisão 9 acrescenta somente o consumidor identificado no gate real AUTH-CONSUMER-01. A passagem externa não concede capacidade DP: cada página/action/API continua sujeita aos guards reais do domínio. Preservar negação de sessão inválida, Store não autorizada, flag OFF, grants ausentes/revogados e acesso direto por URL; testar cada camada na camada responsável. Preservar Unidades, Plataforma, Financeiro e demais módulos sem relação. G-AUTH mecânico continua fechado, pois cobre `auth.ts`, `auth.config.ts` e `proxy.ts`, todos excluídos. Se outro consumidor exigir edição ou outro gate for atingido, apresentar evidência e parar; não promover STORE a PLATFORM/ADMIN legado nem enfraquecer asserts.
 
 Seleção de Store: reutilizar o mecanismo canônico de loja ativa, com a lista de Stores autorizadas pela sessão e validação real server-side. A missão permite seletor **local em Pessoas**, se necessário, dentro dos componentes já autorizados; não depender da página administrativa `/dashboard/unidades` nem liberar essa rota. Os testes oficiais devem incluir os dois arquivos auth adicionados, usando o runner existente na allowlist.
 
@@ -215,15 +235,24 @@ Ordem futura obrigatória:
 4. Executar E2E ON/OFF completos com runner oficial, processos separados, dados sintéticos e relatórios de ambos; concluir a matriz visual/acessibilidade, corrigindo somente regressões concretas na allowlist.
 5. Atender revisão/preview e demais gates, executar fechamento oficial deste sucessor e conferir cleanup. Não chamar `close` para tentar ratificar uma aceitação visual, revisão ou prova R2 ainda pendente.
 
-## AUTH-CONSUMER-01 — evidência e correção futura autorizada
+## AUTH-CONSUMER-01 — correção preservada e validação restante
 
-No SOURCE_SHA publicado, o diagnóstico real de funções puras aprovou `canAccessPage` para `/dashboard/pessoas/configuracoes`, mas `enterpriseDashboardRedirect` redirecionou para `/dashboard?access=denied` pelo filtro `pathname.includes("configuracoes")` (linhas 105–106 do consumidor). Sessão sintética STORE/OPERADOR, sem autoridade de plataforma e sem Configurações Enterprise. Fontes imutáveis: `GATE_AUTH_CONSUMER_2026-10-28.md`, `auth-consumer-diagnostic.json` e `PROPOSED_AUTH_CONSUMER.patch` no subtree de execução do SOURCE_SHA. Não é E2E nem prova da causa histórica A3; nenhuma nova execução desse diagnóstico nesta PR.
+Na origem histórica 8bb2cb9019df2620d7ee7edfbf268b6ae2982be3, o diagnóstico real de funções puras aprovou `canAccessPage` para `/dashboard/pessoas/configuracoes`, mas `enterpriseDashboardRedirect` redirecionou para `/dashboard?access=denied` pelo filtro `pathname.includes("configuracoes")` (linhas 105–106 do consumidor). Sessão sintética STORE/OPERADOR, sem autoridade de plataforma e sem Configurações Enterprise. Fontes imutáveis: `GATE_AUTH_CONSUMER_2026-10-28.md`, `auth-consumer-diagnostic.json` e `PROPOSED_AUTH_CONSUMER.patch` no subtree de execução do SOURCE_SHA. Não é E2E nem prova da causa histórica A3; nenhuma nova execução desse diagnóstico nesta PR.
 
-Após regularização, o teste `lib/auth/proxy-enterprise-dashboard.test.ts` deve provar raiz Pessoas, filhos (incluindo configuracoes), negação quando `canAccessPage` negar, as cinco rotas negativas acima e cookie/Store guard. Dados e operações continuam submetidos aos guards DP atuais; autorização de rota não cria capacidades DP. O patch proposto permanece somente evidência na branch publicada, sem aplicação nesta missão. A bateria, preflight, QA e demais critérios abaixo continuam integrais.
+A retomada oficial 2/3 integrou o patch em `bb573fdf9a892c870cdc5d238c1cc8395b4cb9b5`: passagem específica de Pessoas somente após `canAccessPage` aprovar. A evidência preservada registra 13 testes page-access e 26 testes do consumidor, 39 PASS e lint auth PASS com dependências existentes/Node 26. Isso não equivale à instalação limpa ou ao runner oficial. Preservar raiz/filhos, negações, fronteira de prefixo, cookie/Store e revogação; dados/operações continuam sujeitos aos guards DP. Nenhum código funcional ou teste foi alterado/reexecutado nesta preparação; a bateria, preflight, QA e demais critérios abaixo continuam integrais.
+
+## Pré-condições para a tentativa final 3/3
+
+- **Runtime:** instalação existente Node **24.19.0 x64**, npm **11.17.0**, assinatura Authenticode válida OpenJS Foundation e ZIP correspondente ao SHASUMS256 local. Caminho absoluto do executável: `C:/Users/rafae/.codex/visualizations/2026/10/24/01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b/PDV-N5C-PR299-FINAL-RELEASE-011/node-v24.19.0-win-x64/node.exe`. Selecionar somente no processo da sessão por PATH ou caminho absoluto; Node global **26.12.1** preservado. `node_modules/npm/bin/npm-cli.js` ao lado do executável foi resolvido e executado no ambiente sanitizado esperado. Não é necessário instalar ou substituir o Node global.
+- **Disco:** pelo menos **24 GiB livres antes do runner**, preferencialmente **30 GiB**; manter o mínimo oficial de **12 GiB por volume em todas as etapas**, incluindo reserva ampliada pelo consumo observado após instalação. Worktree, TEMP, workspace/cache descartável e evidência foram identificados no C:. O estado final, autorização de limpeza, caminhos, medições e estabilidade estão em `PREFLIGHT_FINAL_2026-10-29.json`; reconferir imediatamente antes de qualquer execução. Não reduzir limites, excluir worktrees/node_modules/Docker/bancos/arquivos pessoais/WIPs ou limpar outros caches sem autorização específica.
+- **Histórico:** ledger e ambos os arquivos fechados devem coincidir com os blobs/hashes acima, inclusive `r9-a2.md`, com exatamente os eventos BLOCKED 1/3 e 2/3. Conferir o relatório oficial e a proveniência desta revisão 10 após integração; `historical_attempt=2`, `historical_previous_attempts=[]`, `next_corrective_attempt_required=3`, teto 3. Qualquer lacuna que exija nova alteração do núcleo AEP é gate específico de parada; não criar workaround.
+- **Retomada:** merge humano da PR documental, fetch e integração legítima na origem; plano/script/protocolo idênticos em main, HEAD e base comum, árvore limpa e nenhuma sessão concorrente. Somente em missão posterior expressamente autorizada usar `resume-blocked` oficial (primeiro dry-run), sem `open` nem edição do marcador. Esta preparação não executa sequer o dry-run de retomada 3/3.
+
+Registros desta missão: `HISTORY_MANIFEST_2026-10-29.json`, `PREFLIGHT_FINAL_2026-10-29.json` e `DOCUMENTATION_CHECKS_2026-10-29.json` no subtree de planejamento. Runner integral, instalação limpa, QA, build, E2E e close permanecem para depois da retomada legítima; nenhuma versão ou prova histórica os substitui.
 
 ## Validação técnica e aceite futuro
 
-Histórico reutilizável, sem novo PASS: 162/162 testes, typecheck, integração PostgreSQL, lint focado, dois builds e duas inspeções PWA passaram no HEAD A3; E2E ON falhou, OFF não executou e matriz visual/acessibilidade ficou pendente. O lint global saiu 1 como diagnóstico do runner, não PASS; reclassificar qualquer achado novo no HEAD futuro. Disco teve 39,374 GiB livres após cleanup histórico; isso não dispensa novas medições. Nenhuma limpeza adicional é autorizada pelo plano.
+Histórico reutilizável, sem novo PASS: 162/162 testes, typecheck, integração PostgreSQL, lint focado, dois builds e duas inspeções PWA passaram no HEAD A3; E2E ON falhou, OFF não executou e matriz visual/acessibilidade ficou pendente. O lint global saiu 1 como diagnóstico do runner, não PASS; reclassificar qualquer achado novo no HEAD futuro. O BLOCKED 2/3 ratificou C: com 11,706 GiB e Node padrão 26. As medições e a seleção Node 24 desta preparação ficam no pré-flight final abaixo; histórico não dispensa novas medições. Limpeza de caches externos depende de autorização humana com caminhos exatos e prova de inatividade.
 
 Runner obrigatório: `node scripts/pessoas/run-frontend-tests.mjs`, delegando a `run-official-tests.mjs`. Não criar runner alternativo, reduzir testes/asserts, ignorar erro, aumentar tentativas AEP, omitir suíte ou baixar guard para obter PASS.
 
@@ -244,18 +273,18 @@ Preflight obrigatório: Node 24 compatível com o runner/lockfile, npm/versões/
 
 ## Revisão, preview e entrega
 
-- Classe C3, risco ALTO, família executora openai e requisito padrão `revisao_independente=true` preservados, com **exceção humana específica e condicional deste sucessor** no META. Nenhum gate de caminho liberado: G-AUTH, G-DADOS-SCHEMA, G-DADOS-SEED, G-CI, G-CONFIG-DEPLOY e G-AEP-CORE continuam fechados. As autorizações restritas de `page-access.ts` e do consumidor Pessoas não alteram a política global nem abrem esses gates. G-AEP-CORE foi solicitado para o rito de retomada e permanece NÃO AUTORIZADO.
-- A integração auth/rotas mantém o recorte da revisão 8 e a única ampliação da revisão 9. Aplicar o patch somente após merge humano desta revisão e abertura AEP legítima pelo rito cumulativo ratificado. Consumidores fora da allowlist exigem prova sem edição; necessidade de outro path é ponto de parada.
+- Classe C3, risco ALTO, família executora openai e requisito padrão `revisao_independente=true` preservados, com **exceção humana específica e condicional deste sucessor** no META. Nenhum gate de caminho liberado: G-AUTH, G-DADOS-SCHEMA, G-DADOS-SEED, G-CI, G-CONFIG-DEPLOY e G-AEP-CORE continuam fechados. As autorizações restritas de `page-access.ts` e do consumidor Pessoas não alteram a política global nem abrem esses gates. O pedido histórico de G-AEP-CORE foi atendido em manutenção separada já integrada pela PR #321; nenhuma nova alteração do núcleo é autorizada nesta missão.
+- A integração auth/rotas mantém o recorte da revisão 8 e a única ampliação da revisão 9. Preservar o patch já aplicado na tentativa 2/3 e retomar trabalho restante somente após merge humano desta revisão e rito cumulativo oficial posterior. Consumidores fora da allowlist exigem prova sem edição; necessidade de outro path é ponto de parada.
 - **Decisão formal do sucessor em 25/10/2026: INDEPENDENT_REVIEW=WAIVED_BY_HUMAN_DECISION; SELF_REVIEW=CODEX; HUMAN_MERGE_AUTHORIZATION=PENDING.** A dispensa é nova, exclusiva deste GOAL; não herda a de 18/10 da PR #273 nem modifica governança global. Exige autorrevisão integral do diff final com cobertura/achados/SHA, sem bloqueadores, testes completos e regularização do gate AEP. Autorrevisão é **SELF_REVIEW_NOT_INDEPENDENT**, nunca R executada. `condicao_satisfeita=false` registra que as condições ainda não foram demonstradas no planejamento; comprovar seu cumprimento nas novas evidências antes do close, sem editar META/GOAL na execução. Não solicitar outra IA autonomamente.
 - QA privado autorizado: reutilizar somente Neon `pessoas_001b_qa`, projeto `orange-voice-83394974`; bucket R2 privado `omni-gestao-pessoas-001b-qa`; projeto Vercel `omni-gestao-pessoas-001b-qa`. Não contratar serviços adicionais pagos. Conferir o token R2 com expiração informada em **23/10/2026**; se inválido, renovar/rotacionar somente credencial QA limitada ao bucket. Manter bucket privado; não tocar bucket Contador produtivo, DNS ou produção. Não copiar `.env` da origem nem registrar segredos, cookies ou URLs assinadas.
 - Implantar o HEAD funcional em **Preview privado**, com `PESSOAS_DP_ENABLED=on` somente no QA, e validar cadastro, reload, contrato, histórico, upload-intent→PUT exclusivo→complete→list/reload→download de bytes reais, integridade por hash e isolamento A/B/empregador/capacidade. Registrar URL privada real e evidências saneadas vinculadas ao novo HEAD. Smokes de 15/16 de outubro e quaisquer outros PASS históricos não substituem esta prova. Sem prova, o gate continua pendente; PASS local sozinho não conclui o GOAL.
-- Depois de todas as provas e gates, `verify --all`, `git diff --check` e `close pessoas` oficiais, preservando o BLOCKED 1/3 e respeitando a continuação corretiva 2/3–3/3 deste mesmo GOAL, pelo rito oficial ainda não implementado, e seu veredito de contexto. Ledger/state/REGISTRY/GATES apenas pela CLI; GOAL/meta não são alterados na execução para forçar fechamento.
+- Depois de todas as provas e gates, `verify --all`, `git diff --check` e `close pessoas` oficiais, preservando os BLOCKED 1/3 e 2/3 e respeitando exclusivamente a última corretiva 3/3 deste mesmo GOAL, pelo rito oficial já integrado, e seu veredito de contexto. Ledger/state/REGISTRY/GATES apenas pela CLI; GOAL/meta não são alterados na execução para forçar fechamento.
 - Commit/push normais na branch de execução e PR funcional exclusiva para main foram autorizados em 25/10/2026, após validação/fechamento completos. Merge de qualquer PR continua humano. PR #273 permanece aberta/draft e sem merge. Não habilitar Pessoas em produção, fazer deploy produtivo, usar dados reais ou iniciar a folha/GOAL funcional 002.
 
 ## Conferência deste planejamento
 
-Reconciliação oficial já concluída, sem produto, seguida de proposta para este mesmo GOAL com `plan_rev=9` e `status=BLOCKED`. Preservar literalmente o evento e GOAL revisão 8 fechados, os predecessores, manifesto, testes, classe/risco, QA, dispensa condicional e contratos. Única inclusão na allowlist: `lib/auth/proxy-enterprise-dashboard.ts`; nenhum gate liberado. TRACK e registro da autorização descrevem o estado real e o pedido de rito oficial.
+Revisão **10** do mesmo GOAL, `status=BLOCKED`. Allowlist integralmente igual à revisão 9, sem novo path ou gate. Autenticação aprovada, runner, QA, dispensa externa condicional e todos os critérios técnicos permanecem. A origem publicou dez commits por push normal; a branch documental contém somente planejamento, transporte histórico e saídas oficiais da CLI. Nenhum código funcional foi integrado à main por esta preparação.
 
-Executar `registry`, `verify --all` e `git diff --check`; conferir dois DONE/três BLOCKED/seis eventos, nenhum READY, nenhum marcador e nenhum novo evento de tentativa. Derivados somente pela CLI; staging por caminhos explícitos; commit/push normais e uma única PR documental para main. Typecheck/build/E2E não se aplicam à documentação; testes de produto continuam pendentes.
+Executar `registry`, `verify --all` e `git diff --check`; conferir dois DONE/três BLOCKED/sete linhas, eventos Recovery 002 1/3 e 2/3 sem duplicação, hashes/arquivos fechados e ausência de marcador. Derivados somente pela CLI; staging por caminhos explícitos; commit/push normais e **uma única PR documental para main**, sem merge automático. Typecheck/build/E2E não se aplicam à documentação e não foram executados nesta missão.
 
-Ponto de parada: **REVISÃO 9 DOCUMENTADA PARA MERGE HUMANO, COM GATE G-AEP-CORE OBJETIVO PARA RETOMADA CUMULATIVA**. Solicitar autorização restrita ao mecanismo oficial antes de qualquer alteração de núcleo. Merge do plano não autoriza abertura pela CLI atual. Não fabricar comando nem sessão; a próxima ação depende de decisão humana sobre esse gate. Próximo GOAL funcional, fora da missão: **PESSOAS-002 — FOLHA MENSAL CALCULÁVEL**.
+Ponto de parada desejado: **INFRAESTRUTURA PRONTA E REVISÃO 10 AGUARDANDO MERGE HUMANO**. Se alguma pré-condição permanecer pendente, registrar o bloqueio objetivo e manter BLOCKED; nunca declarar infraestrutura pronta por previsão de espaço. A tentativa 3/3 não começa nesta missão. Após merge humano, a próxima missão deve conferir novamente os pré-requisitos e obter autorização expressa para a retomada oficial. Próximo GOAL funcional fora do recorte: **PESSOAS-002 — FOLHA MENSAL CALCULÁVEL**.

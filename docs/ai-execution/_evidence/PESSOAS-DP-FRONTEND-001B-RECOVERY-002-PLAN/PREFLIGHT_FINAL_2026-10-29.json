@@ -1,0 +1,274 @@
+{
+  "goal": "PESSOAS-DP-FRONTEND-001B-RECOVERY-002",
+  "measured_at": "2026-10-29T13:41:16.614Z",
+  "source_commit": "efd34ae4f0f575408975ed7f9776bacbb62adc04",
+  "node_24_ready": true,
+  "runtime_path": "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\24\\01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b\\PDV-N5C-PR299-FINAL-RELEASE-011\\node-v24.19.0-win-x64\\node.exe",
+  "runtime_root": "C:/Users/rafae/.codex/visualizations/2026/10/24/01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b/PDV-N5C-PR299-FINAL-RELEASE-011/node-v24.19.0-win-x64",
+  "node_version": "v24.19.0",
+  "npm_version": "11.17.0",
+  "architecture": "x64",
+  "npm_cli": "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\24\\01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b\\PDV-N5C-PR299-FINAL-RELEASE-011\\node-v24.19.0-win-x64\\node_modules\\npm\\bin\\npm-cli.js",
+  "npm_cli_sha256": "3ce7cba6f5128dd5f54c98b6a5036b0f850496878cc2e21044b675fe3c594e3e",
+  "node_exe_sha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237",
+  "existing_runtime": true,
+  "installation_performed": false,
+  "global_node_modified": false,
+  "selection": "PATH somente no processo da sessao; runner invocado futuramente pelo caminho absoluto deste node.exe",
+  "runner_npm_resolution": {
+    "candidates": [
+      "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\24\\01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b\\PDV-N5C-PR299-FINAL-RELEASE-011\\node-v24.19.0-win-x64\\node_modules\\npm\\bin\\npm-cli.js",
+      "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\24\\01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b\\PDV-N5C-PR299-FINAL-RELEASE-011\\lib\\node_modules\\npm\\bin\\npm-cli.js"
+    ],
+    "selected": "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\24\\01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b\\PDV-N5C-PR299-FINAL-RELEASE-011\\node-v24.19.0-win-x64\\node_modules\\npm\\bin\\npm-cli.js",
+    "method": "mesma ordem de candidatos de npmCli() do runner; process.execPath + node_modules/npm/bin/npm-cli.js"
+  },
+  "safe_environment": {
+    "source": "scripts/pessoas/runner-environment.mjs: safeEnvironment",
+    "version_probes_exit": 0,
+    "node_from_path": {
+      "version": "v24.19.0",
+      "execPath": "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\24\\01a16e07-9c6a-7cc0-ad3c-e9bb6139d57b\\PDV-N5C-PR299-FINAL-RELEASE-011\\node-v24.19.0-win-x64\\node.exe"
+    },
+    "npm_config_files": "dois arquivos vazios temporarios proprios",
+    "authority_inherited": false
+  },
+  "binary_verification": {
+    "authenticode_status": "Valid",
+    "signer": "OpenJS Foundation",
+    "authenticode_command": "Get-AuthenticodeSignature -LiteralPath <runtime>/node.exe",
+    "local_distribution_zip_sha256": "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
+    "local_SHASUMS256_match": true,
+    "downloaded_in_this_mission": false
+  },
+  "os": {
+    "platform": "win32",
+    "release": "10.0.26200",
+    "arch": "x64"
+  },
+  "disk_before_cleanup": [
+    {
+      "directory": "C:/Projetos/omni-gestao-pessoas-001b-recovery-002",
+      "volume": "C:\\",
+      "dev": 3255495063,
+      "free_bytes": 9484533760,
+      "free_gib": 8.833160400390625
+    },
+    {
+      "directory": "C:\\Users\\rafae\\AppData\\Local\\Packages\\sandbox.{0442bc31-3201-4e41-a07a-554eacdebd5d}\\AC\\Temp",
+      "volume": "C:\\",
+      "dev": 3255495063,
+      "free_bytes": 9484533760,
+      "free_gib": 8.833160400390625
+    },
+    {
+      "directory": "C:/Users/rafae/AppData/Local/Temp",
+      "volume": "C:\\",
+      "dev": 3255495063,
+      "free_bytes": 9484533760,
+      "free_gib": 8.833160400390625
+    },
+    {
+      "directory": "C:\\Projetos\\omni-gestao\\.worktrees\\pessoas-001b-recovery-002-rev10\\docs\\ai-execution\\_evidence\\PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN",
+      "volume": "C:\\",
+      "dev": 3255495063,
+      "free_bytes": 9484533760,
+      "free_gib": 8.833160400390625
+    }
+  ],
+  "recommended_free_gib": 24,
+  "preferred_free_gib": 30,
+  "official_minimum_free_gib_per_volume": 12,
+  "cache_cleanup": {
+    "status": "PENDING_HUMAN_AUTHORIZATION",
+    "performed": false,
+    "authorized_own_temporaries_found": false,
+    "candidates": [
+      {
+        "path": "C:\\Projetos\\work\\pdv-stock-drift-residual-p0-002\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\work\\pdv-stock-drift-residual-p0-002\\.next",
+        "worktree": "C:/Projetos/work/pdv-stock-drift-residual-p0-002",
+        "bytes": 2179032520,
+        "gib": 2.029382176697254,
+        "files": 3155,
+        "newest_file_at": "2026-09-19T12:32:49.282Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:06.660Z"
+      },
+      {
+        "path": "C:\\Projetos\\work\\pdv-stock-drift-residual-p0-002-finish\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\work\\pdv-stock-drift-residual-p0-002-finish\\.next",
+        "worktree": "C:/Projetos/work/pdv-stock-drift-residual-p0-002-finish",
+        "bytes": 2152266820,
+        "gib": 2.0044546760618687,
+        "files": 3188,
+        "newest_file_at": "2026-09-19T16:05:26.494Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:07.854Z"
+      },
+      {
+        "path": "C:\\Projetos\\work\\pdv-scan-inline-feedback-autofocus-006\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\work\\pdv-scan-inline-feedback-autofocus-006\\.next",
+        "worktree": "C:/Projetos/work/pdv-scan-inline-feedback-autofocus-006",
+        "bytes": 2084062223,
+        "gib": 1.9409341951832175,
+        "files": 3239,
+        "newest_file_at": "2026-09-17T19:06:50.515Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:09.608Z"
+      },
+      {
+        "path": "C:\\Projetos\\omni-gestao-pdv-n5b1-current-main-correction-r4\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\omni-gestao-pdv-n5b1-current-main-correction-r4\\.next",
+        "worktree": "C:/Projetos/omni-gestao-pdv-n5b1-current-main-correction-r4",
+        "bytes": 2079411984,
+        "gib": 1.9366033226251602,
+        "files": 2168,
+        "newest_file_at": "2026-10-08T21:56:41.396Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:10.701Z"
+      },
+      {
+        "path": "C:\\Projetos\\work\\pdv-rafacell-load-crash-p0-001\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\work\\pdv-rafacell-load-crash-p0-001\\.next",
+        "worktree": "C:/Projetos/work/pdv-rafacell-load-crash-p0-001",
+        "bytes": 2063866550,
+        "gib": 1.9221255090087652,
+        "files": 3146,
+        "newest_file_at": "2026-09-18T04:04:17.942Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:14.018Z"
+      },
+      {
+        "path": "C:\\Projetos\\omni-gestao-ops-v4-frg-002\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\omni-gestao-ops-v4-frg-002\\.next",
+        "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-002",
+        "bytes": 1881234311,
+        "gib": 1.7520359819754958,
+        "files": 2865,
+        "newest_file_at": "2026-10-15T22:38:19.884Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:15.261Z"
+      },
+      {
+        "path": "C:\\Projetos\\omni-gestao-ops-v4-frg-001\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\omni-gestao-ops-v4-frg-001\\.next",
+        "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-001",
+        "bytes": 1804569563,
+        "gib": 1.680636371485889,
+        "files": 2852,
+        "newest_file_at": "2026-10-09T22:59:52.535Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:16.265Z"
+      },
+      {
+        "path": "C:\\Projetos\\omni-gestao-ops-v4-frg-002-base\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\omni-gestao-ops-v4-frg-002-base\\.next",
+        "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-002-base",
+        "bytes": 1788667200,
+        "gib": 1.665826141834259,
+        "files": 2842,
+        "newest_file_at": "2026-10-11T03:02:32.180Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:17.257Z"
+      },
+      {
+        "path": "C:\\Users\\rafae\\.codex\\worktrees\\cad-r2-020-privacy\\omni-gestao\\.next",
+        "resolved_absolute_target": "C:\\Users\\rafae\\.codex\\worktrees\\cad-r2-020-privacy\\omni-gestao\\.next",
+        "worktree": "C:/Users/rafae/.codex/worktrees/cad-r2-020-privacy/omni-gestao",
+        "bytes": 1776571151,
+        "gib": 1.654560818336904,
+        "files": 2864,
+        "newest_file_at": "2026-10-15T16:06:35.208Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:20.403Z"
+      },
+      {
+        "path": "C:\\Projetos\\omni-gestao-ops-v4-frg-003\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\omni-gestao-ops-v4-frg-003\\.next",
+        "worktree": "C:/Projetos/omni-gestao-ops-v4-frg-003",
+        "bytes": 1769755540,
+        "gib": 1.6482132859528065,
+        "files": 2845,
+        "newest_file_at": "2026-10-16T08:01:14.067Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:23.930Z"
+      },
+      {
+        "path": "C:\\Projetos\\omni-gestao\\.worktrees\\cad-r2-020-final\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\omni-gestao\\.worktrees\\cad-r2-020-final\\.next",
+        "worktree": "C:/Projetos/omni-gestao/.worktrees/cad-r2-020-final",
+        "bytes": 1621569091,
+        "gib": 1.5102039007470012,
+        "files": 2846,
+        "newest_file_at": "2026-10-16T15:07:25.764Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:25.508Z"
+      },
+      {
+        "path": "C:\\Projetos\\omni-gestao-ops-v4-datas-ui-001\\.next",
+        "resolved_absolute_target": "C:\\Projetos\\omni-gestao-ops-v4-datas-ui-001\\.next",
+        "worktree": "C:/Projetos/omni-gestao-ops-v4-datas-ui-001",
+        "bytes": 1172194955,
+        "gib": 1.091691623441875,
+        "files": 1250,
+        "newest_file_at": "2026-10-12T04:34:09.686Z",
+        "session_active": false,
+        "git_tracked_files": 0,
+        "git_ignored": true,
+        "links": [],
+        "measured_at": "2026-10-29T13:48:26.737Z"
+      }
+    ],
+    "candidate_total_gib": 20.836668003350496,
+    "active_build_excluded": "C:/Users/rafae/.codex/worktrees/pdv-padaria-venda-manual-kg-mvp-001/omni-gestao/.next",
+    "no_deletion_before_human_authorization": true
+  },
+  "runner_invoked": false,
+  "build_invoked": false,
+  "npm_ci_invoked": false,
+  "qa_invoked": false,
+  "attempt_3_opened": false,
+  "version_probe_temporary_cleanup": "PASS",
+  "disk_latest": {
+    "measured_at": "2026-10-29T13:51:20.047Z",
+    "volume": "C:/",
+    "free_bytes": 8333500416,
+    "free_gib": 7.761177062988281
+  },
+  "disk_target_met": false,
+  "disk_official_minimum_met": false
+}

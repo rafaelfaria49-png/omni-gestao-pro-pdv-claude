@@ -12,7 +12,7 @@ Entregar o domínio Pessoas de forma incremental, com identidade do empregador s
 
 ## Escopo histórico 001A — paths_base
 
-Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META da proposta Recovery 002 revisão 9, que permanece BLOCKED até regularização formal.
+Os paths abaixo registram o recorte inicial. Não ampliam a allowlist do sucessor atual, enumerada exclusivamente no META da proposta Recovery 002 revisão 10, que permanece BLOCKED até regularização formal.
 
 - lib/pessoas/**
 - app/actions/pessoas/**
@@ -188,7 +188,7 @@ O bloco abaixo registra a PR #264, já mergeada em main no commit 857e24d. Refer
 - Registro da autorização e verificações documentais: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/AUTHORIZATION_2026-10-25.md`. Gerar derivados por `registry`, `verify --all` e diff check; ledger/arquivos fechados/manifesto preservados. Histórico não vira PASS novo.
 - **NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_8**. Depois do merge humano, continuar a missão já autorizada até PR funcional pronta para decisão humana ou gate real. PR #273 permanece draft; sem merge automático, Pessoas em produção ou folha neste GOAL. Próximo GOAL funcional: PESSOAS-002 — FOLHA MENSAL CALCULÁVEL.
 
-## Revisão atual 9 — auth consumer e retomada cumulativa — 28/10/2026
+## Histórico — revisão 9 — auth consumer e retomada cumulativa — 28/10/2026
 
 - Mesmo GOAL `PESSOAS-DP-FRONTEND-001B-RECOVERY-002`, C3/ALTO, openai, read_budget 85 e runner inalterado. Todos os demais paths, testes, contratos 001A/P2, QA e dispensa externa condicional de 25/10 são preservados. Nenhum sucessor novo, tentativa zero ou nova execução.
 - Main atual conferida por fetch: `34b70a15583db7608437f04b3ba7779582f4eeb9`. Branch/worktree documental limpa: `codex/pessoas-001b-recovery-002-rev9` / `C:/Projetos/omni-gestao/.worktrees/pessoas-001b-recovery-002-rev9`. WIPs externos e worktree documental anterior preservados; PR #273 aberta/draft.
@@ -201,3 +201,13 @@ O bloco abaixo registra a PR #264, já mergeada em main no commit 857e24d. Refer
 - G-AEP-CORE solicitado e NÃO AUTORIZADO: rito oficial mínimo em scripts/track.mjs e regressões em scripts/track.test.mjs, com documentação, sem alterar hooks/protocol.json ou produto. Exigir contagem cumulativa/proveniência e teto, dry-run inerte, plano integrado na main/base comum, histórico fechado preservado, rejeições seguras e idempotência; implementação e integração somente após autorização específica e ratificação humana. Não adicionar G-AEP-CORE a gates_liberados deste GOAL de produto.
 - Registros: `docs/ai-execution/_evidence/PESSOAS-DP-FRONTEND-001B-RECOVERY-002-PLAN/AUTHORIZATION_2026-10-28.md` e `RECONCILIATION_AND_RESUMPTION_2026-10-28.md`. Registry/verify --all/diff check oficiais; commit/push normais e uma PR documental. Sem runner/QA/close de produto; nenhuma alteração de estado de entrega em CURRENT_STATUS/CHANGELOG/memória global.
 - **NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_9_AND_AUTHORIZE_G_AEP_CORE_OFFICIAL_RESUMPTION**. Ponto de parada: revisão 9 documental pronta para merge humano com gate AEP objetivo documentado. Aplicar patch somente após plano e rito ratificados e abertura legítima; sem merge automático, produção ou folha/GOAL funcional 002.
+
+## Revisão atual 10 — pré-flight final e histórico 2/3 — 29/10/2026
+
+- Mesmo GOAL Recovery 002, status BLOCKED, plan_rev=10, próxima corretiva 3/3. Allowlist revisão 9, auth restrita, runner, QA e dispensa externa condicional preservados integralmente. Nenhum Recovery 003, open, marcador, runner/QA/close ou retomada 3/3 nesta missão.
+- Main conferida aaab27505a03903d9fb8333baef5b52424821093; worktree documental isolada `C:/Projetos/omni-gestao/.worktrees/pessoas-001b-recovery-002-rev10`, branch `codex/pessoas-001b-recovery-002-rev10`. Origem limpa/sem marcador no HEAD efd34ae4f0f575408975ed7f9776bacbb62adc04, dez commits publicados por fast-forward normal sobre o remoto 8bb2cb9019df2620d7ee7edfbf268b6ae2982be3.
+- BLOCKED 2/3 oficial efd34ae4f0f575408975ed7f9776bacbb62adc04; previous_attempts=[] literal, preservando evento 1/3. Arquivos fechados revisão 8 e r9-a2 íntegros. CLI transporta somente o caminho legado; cópia literal auditável de r9-a2 em 0917a253febb0c0f43ca480037d0bc9ffb38b7e7, antes do reconcile oficial dry-run/aplicação PASS 8f57f0433ea4773e75aced9bd376b23d5011a225. Sete linhas, dois eventos Recovery 002 sem duplicação; projeção dois DONE/três BLOCKED.
+- O rito oficial já integra main pela PR #321; a tentativa 2/3 aplicou auth em bb573fdf9a892c870cdc5d238c1cc8395b4cb9b5 e preservou evidência de 39 testes focados PASS com Node26/dependências existentes. Não equivale ao runner integral. Próxima tentativa exige plano/histórico legitimamente integrados e resume-blocked oficial posterior expressamente autorizado. Nenhuma nova alteração do núcleo nesta preparação.
+- Node24.19.0/npm11.17.0 existentes validados, npm-cli ao lado do executável, seleção exclusiva por processo; global Node26.12.1 preservado. Disco: alvo antes do runner >=24 GiB, preferível30; mínimo oficial12 GiB por volume e reserva ampliada intactos. Estado final/limpeza autorizada/estabilidade em PREFLIGHT_FINAL_2026-10-29.json.
+- Manifesto HISTORY_MANIFEST_2026-10-29.json registra todos os hashes; DOCUMENTATION_CHECKS_2026-10-29.json registra registry/verify/diff. Código funcional, CURRENT_STATUS/CHANGELOG/memória global e artefatos históricos anteriores intactos.
+- **NEXT_GATE=HUMAN_MERGE_SCOPE_PLAN_REV_10**; depois do merge humano, nova conferência de infraestrutura/histórico e autorização expressa da retomada 3/3 em missão posterior. Uma única PR documental; nenhum merge automático ou execução da terceira tentativa.
