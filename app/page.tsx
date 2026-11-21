@@ -14,6 +14,6 @@ export default function PilotEntryPage() {
       </div>
       <p className="text-sm text-muted-foreground">Já recebeu seu acesso? Use o email e a senha individual fornecidos pelo responsável.</p>
     </section>
-    <footer className="text-xs text-muted-foreground"><Link href="/privacy" className="underline">Privacidade</Link></footer>
+    <footer className="flex flex-wrap gap-4 text-xs text-muted-foreground"><Link href="/privacy" className="underline">Privacidade</Link><Link href="/baixar" className="underline">Programa para Windows</Link></footer>
   </main>
 }

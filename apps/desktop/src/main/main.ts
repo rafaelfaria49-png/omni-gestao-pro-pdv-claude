@@ -15,6 +15,7 @@ import { loadBuildConfig } from "./config-loader"
 import { guardWebContents, openExternalSafely, remoteWebPreferences, type NavigationContext } from "./navigation"
 import { handleLocalScheme, registerLocalScheme, STATUS_URL } from "./local-protocol"
 import { installPermissionPolicy } from "./permissions"
+import { installDirectPrint } from "./direct-print"
 import { isAuthSessionCookie, LogoutGuard } from "./privacy"
 import { handleSquirrelEvent } from "./squirrel"
 import { checkDesktopUpdate, type UpdateStatus } from "./updates"
@@ -226,7 +227,8 @@ function run(config: DesktopBuildConfig) {
       show: false,
       backgroundColor: "#f5f9fc",
       autoHideMenuBar: true,
-      webPreferences: remoteWebPreferences(ctx),
+      // Só a janela principal recebe o preload de impressão (4 operações); popups seguem sem preload.
+      webPreferences: { ...remoteWebPreferences(ctx), preload: path.join(__dirname, "..", "preload", "print-preload.js") },
     })
     win.removeMenu()
     if (config.channel !== "production") {
@@ -385,6 +387,7 @@ function run(config: DesktopBuildConfig) {
     if (!ok) log("ipc-rejected")
     return ok
   }
+  installDirectPrint({ appOrigin: config.origin, getMainContents: () => (win && !win.isDestroyed() ? win.webContents : null), log })
   ipcMain.on(STATUS_CHANNEL.retry, (e) => {
     if (fromStatusView(e)) retryLoad()
   })

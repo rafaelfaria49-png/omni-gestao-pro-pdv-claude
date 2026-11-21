@@ -40,6 +40,9 @@ describe("SW · NetworkOnly para relatórios, financeiro e caixa", () => {
     "/api/ops/caixa/sessao-detalhe?id=s1",
     "/api/dashboard/elite",
     "/api/dashboard/resumo",
+    "/api/dashboard/relatorios/produtos?format=pdf",
+    "/dashboard/relatorios",
+    "/dashboard/relatorios/produtos?_rsc=private-session",
     // Loja só no header: a mesma URL serviria a lista de outra loja.
     "/api/ops/contas-pagar-list",
     "/api/ops/contas-receber-list",
@@ -85,6 +88,7 @@ describe("SW · limpeza na ativação remove respostas antigas dessas rotas", ()
       "/api/financeiro/receber",
       "/api/ops/caixa/sessoes?take=50",
       "/api/dashboard/elite",
+      "/dashboard/relatorios/produtos?_rsc=private-session",
       "/api/ops/contas-pagar-list",
       "/api/ops/contas-receber-list",
       "/api/finance/accounts",
@@ -108,7 +112,7 @@ describe("SW · limpeza na ativação remove respostas antigas dessas rotas", ()
     await work
     expect(removed.sort()).toEqual(
       [
-        "/api/dashboard/elite", "/api/financeiro/receber", "/api/ops/caixa/sessoes", "/api/vendas/historico",
+        "/api/dashboard/elite", "/dashboard/relatorios/produtos", "/api/financeiro/receber", "/api/ops/caixa/sessoes", "/api/vendas/historico",
         "/api/ops/contas-pagar-list", "/api/ops/contas-receber-list", "/api/finance/accounts",
       ].sort(),
     )

@@ -1,3 +1,5 @@
+import { desktopPrintHtml, getCachedDesktopStation, getDesktopPrintBridge } from "@/lib/desktop-print-bridge"
+
 /**
  * Envio de ESC/POS para impressora raw (localhost:9100) via proxy Next.js,
  * download de .bin para QZ Tray / utilitários, ou impressão HTML mínima (80mm).
@@ -69,8 +71,18 @@ export function downloadEscPosFile(bytes: Uint8Array, filename = "cupom-escpos.b
 export function openThermalHtmlPrint(
   htmlBodyInner: string,
   title = "Cupom",
-  opts?: { bobina?: "58mm" | "80mm" },
+  opts?: { bobina?: "58mm" | "80mm"; browserOnly?: boolean },
 ): boolean {
+  // App Windows com impressora escolhida nesta estação: direto no spooler, sem janela nem diálogo.
+  if (!opts?.browserOnly && getDesktopPrintBridge() && getCachedDesktopStation()) {
+    void desktopPrintHtml(htmlBodyInner, { bobina: opts?.bobina, title }).then((res) => {
+      if (!res.ok) {
+        console.warn("[impressao-direta] falhou; contingência do navegador:", res.error)
+        openThermalHtmlPrint(htmlBodyInner, title, { ...opts, browserOnly: true })
+      }
+    })
+    return true
+  }
   const w = window.open("", "_blank")
   if (!w) return false
   const bobina = opts?.bobina === "58mm" ? "58mm" : "80mm"

@@ -24,6 +24,7 @@ const auth = vi.hoisted(() => ({
   sessao: { user: { id: "operador-1" } } as { user: { id: string } } | null,
   permissao: { ok: true } as { ok: true } | { ok: false; status: number; error: string },
   cookies: new Map<string, string>(),
+  moduleDenied: null as Response | null,
 }))
 
 const h = vi.hoisted(() => {
@@ -42,6 +43,9 @@ const h = vi.hoisted(() => {
     produtoDepositos: [] as Row[],
     // 007B: sessões de caixa, para a guarda de elegibilidade.
     sessoes: [] as Row[],
+    aparelhos: [] as Row[],
+    garantias: [] as Row[],
+    eventosAparelhos: [] as Row[],
   }
   const estornosReceber: Array<Row> = []
   let seq = 0
@@ -58,6 +62,9 @@ const h = vi.hoisted(() => {
     db.depositos.length = 0
     db.produtoDepositos.length = 0
     db.sessoes.length = 0
+    db.aparelhos.length = 0
+    db.garantias.length = 0
+    db.eventosAparelhos.length = 0
     estornosReceber.length = 0
     seq = 0
   }
@@ -148,7 +155,22 @@ const h = vi.hoisted(() => {
         return hit ?? {}
       },
     },
-    $queryRaw: async () => [] as unknown[],
+    $queryRaw: async (query: TemplateStringsArray, ...values: unknown[]) => {
+      if (query.join(" ").includes('"aparelhos_fisicos"')) {
+        return db.aparelhos.filter((a) => a.id === values[0] && a.storeId === values[1])
+      }
+      return [] as unknown[]
+    },
+    aparelhoVenda: {
+      findMany: async ({ where }: { where: Row }) => db.garantias.filter((a) => a.storeId === where.storeId && a.vendaId === where.vendaId),
+      update: async ({ where, data }: { where: Row; data: Row }) => Object.assign(db.garantias.find((a) => a.id === where.id)!, data),
+    },
+    aparelhoFisico: {
+      update: async ({ where, data }: { where: Row; data: Row }) => Object.assign(db.aparelhos.find((a) => a.id === where.id)!, data),
+    },
+    aparelhoEvento: {
+      create: async ({ data }: { data: Row }) => { db.eventosAparelhos.push(data); return data },
+    },
     deposito: {
       findFirst: async ({ where }: { where: Row }) =>
         db.depositos.find((d) => d.storeId === where.storeId) ?? null,
@@ -265,6 +287,9 @@ vi.mock("@/lib/ops-api-gate", () => ({
 // O step-up é vinculado a um utilizador, então o caminho legado (sem sessão
 // NextAuth) deixa de poder estornar por esta rota — comportamento deliberado do 007A.
 vi.mock("@/auth", () => ({ auth: vi.fn(async () => auth.sessao) }))
+// Gate de módulo tem cenários próprios abaixo; as demais provas exercitam o
+// handler após esse gate, preservando as verificações reais de step-up.
+vi.mock("@/lib/auth/module-access", () => ({ requireModuleApi: vi.fn(async () => auth.moduleDenied) }))
 vi.mock("@/lib/auth/guard-enterprise", () => ({
   requireEnterpriseWith: vi.fn(async () => auth.permissao),
 }))
@@ -341,10 +366,19 @@ beforeEach(async () => {
   auth.sessao = { user: { id: "operador-1" } }
   auth.permissao = { ok: true }
   auth.cookies.clear()
+  auth.moduleDenied = null
   await autorizarSupervisor()
 })
 
 describe("POST /api/vendas/[id]/cancelar — estorno do crédito/vale", () => {
+  it("módulo negado encerra antes de qualquer efeito mesmo com step-up válido", async () => {
+    h.addVenda("VDA-1")
+    auth.moduleDenied = new Response(JSON.stringify({ ok: false, error: "Módulo não autorizado" }), { status: 403 })
+    expect((await post("VDA-1")).status).toBe(403)
+    expect(h.db.vendas[0].status).toBe("concluida")
+    expect(h.db.movEstoque).toHaveLength(0)
+    expect(h.db.movFinanceira).toHaveLength(0)
+  })
   it("vale 40 usado integralmente → cancelar devolve o saldo a 40 e reativa o vale, sem caixa", async () => {
     h.addVenda("VDA-1", { payload: { paymentBreakdown: { creditoVale: 40 } } })
     h.addCredito("c1", 0, "zerado")
@@ -444,6 +478,30 @@ describe("POST /api/vendas/[id]/cancelar — estorno do crédito/vale", () => {
 })
 
 describe("POST /api/vendas/[id]/cancelar — reposição de estoque (CAD-R2-009)", () => {
+  it("venda mista: aparelho vai para revisão sem saldo; acessório e dinheiro são estornados uma vez", async () => {
+    h.db.produtos.push({ id: "modelo", storeId: h.STORE, name: "Modelo IMEI", stock: 0, precoCusto: 100 },
+      { id: "capa", storeId: h.STORE, name: "Capa", stock: 3, precoCusto: 5 })
+    h.db.aparelhos.push({ id: "unidade", storeId: h.STORE, produtoId: "modelo", status: "vendido" })
+    h.addVenda("VDA-MISTA-IMEI", {
+      payload: { lines: [{ inventoryId: "modelo", produtoId: "modelo", deviceSale: { version: 1, aparelhoId: "unidade" } }] },
+      itens: [{ inventoryId: "modelo", quantidade: 1 }, { inventoryId: "capa", quantidade: 2 }],
+    })
+    h.db.garantias.push({ id: "garantia", storeId: h.STORE, aparelhoId: "unidade", vendaId: h.db.vendas[0].id, status: "ativa", numeroGarantia: "GAR-QA" })
+    h.db.movFinanceira.push({ storeId: h.STORE, referenciaId: "VDA-MISTA-IMEI", origem: "venda", tipo: "entrada", valor: 120 })
+    const response = await post("VDA-MISTA-IMEI")
+    expect(response.status).toBe(200)
+    expect((await response.json()).estoqueReposto).toBe(1)
+    expect(h.db.aparelhos[0].status).toBe("em_revisao")
+    expect(h.db.garantias[0].status).toBe("cancelada")
+    expect(h.db.produtos.find((p) => p.id === "modelo")!.stock).toBe(0)
+    expect(h.db.produtos.find((p) => p.id === "capa")!.stock).toBe(5)
+    expect(h.db.movEstoque).toHaveLength(1)
+    expect(h.db.movEstoque[0].produtoId).toBe("capa")
+    expect(h.db.movFinanceira.filter((m) => m.origem === "cancelamento_pdv")).toEqual([expect.objectContaining({ tipo: "saida", valor: 120 })])
+    expect((await post("VDA-MISTA-IMEI")).status).toBe(409)
+    expect(h.db.movEstoque).toHaveLength(1)
+    expect(h.db.eventosAparelhos).toHaveLength(1)
+  })
   it("cancela com entrada compensatória: stock + depósito + ledger, sem PATCH direto", async () => {
     h.db.produtos.push({
       id: "p1",
