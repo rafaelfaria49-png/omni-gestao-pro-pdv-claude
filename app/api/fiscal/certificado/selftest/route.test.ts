@@ -34,12 +34,20 @@ const h = vi.hoisted(() => {
   }
 })
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Admin da loja-1 com módulos fiscal + settings (exigidos por requireModuleApi(req, "fiscal")).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["fiscal", "settings"] })) }
+})
 vi.mock("@/lib/prisma", () => ({
   prisma: h.prisma,
   prismaEnsureConnected: h.prismaEnsureConnected,
 }))
 vi.mock("@/lib/store-id-from-request", () => ({
   storeIdFromAssistecRequestForWrite: vi.fn(() => STORE),
+  storeIdFromAssistecRequestForRead: vi.fn(() => STORE),
+  activeStoreIdFromCookieHeader: vi.fn(() => null),
 }))
 vi.mock("@/lib/fiscal/guard-fiscal-admin", () => ({
   requireFiscalAdmin: h.requireFiscalAdmin,
@@ -52,6 +60,8 @@ vi.mock("@/lib/fiscal/certificate/a1-deployment-loopback-selftest", () => ({
 }))
 
 import { POST } from "./route"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 
 function config(overrides: Record<string, unknown> = {}) {
   return {
@@ -330,8 +340,20 @@ describe("POST /api/fiscal/certificado/selftest", () => {
   })
 
   it("recusa seletores de loja conflitantes mesmo quando a ACL resolveu outra loja", async () => {
+    // Usuário legítimo das duas lojas: o guard de módulo passa e a própria rota recusa a ambiguidade.
+    vi.mocked(auth).mockResolvedValueOnce(
+      storeSession({ stores: ["loja-1", "loja-2"], modules: ["fiscal", "settings"] }) as never,
+    )
     const res = await POST(request(undefined, "?storeId=loja-1&lojaId=loja-2"))
     expect(res.status).toBe(400)
+    expect(h.resolveActiveCertificate).not.toHaveBeenCalled()
+    expect(h.runSelftest).not.toHaveBeenCalled()
+  })
+
+  it("seletor de loja fora da membership é negado pelo guard de módulo (403) antes da rota", async () => {
+    const res = await POST(request(undefined, "?storeId=loja-1&lojaId=loja-2"))
+    expect(res.status).toBe(403)
+    expect(h.requireFiscalAdmin).not.toHaveBeenCalled()
     expect(h.resolveActiveCertificate).not.toHaveBeenCalled()
     expect(h.runSelftest).not.toHaveBeenCalled()
   })

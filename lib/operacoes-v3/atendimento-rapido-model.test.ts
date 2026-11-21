@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { validarNovaOSDraftV3, computeTotaisNovaOSV3 } from "./nova-os-model";
 import {
   SERVICOS_RAPIDOS_V3,
@@ -8,6 +8,10 @@ import {
   validarAtendimentoRapidoV3,
   type AtendimentoRapidoInputV3,
 } from "./atendimento-rapido-model";
+
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+vi.mock("@/auth", () => ({ auth: vi.fn(async () => null) }));
+
 
 const baseInput = (over: Partial<AtendimentoRapidoInputV3> = {}): AtendimentoRapidoInputV3 => ({
   cliente: { modo: "balcao" },

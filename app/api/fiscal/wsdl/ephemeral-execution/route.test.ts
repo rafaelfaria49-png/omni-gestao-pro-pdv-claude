@@ -34,9 +34,17 @@ const h = vi.hoisted(() => {
   }
 })
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Admin da loja-1 com módulos fiscal + settings (exigidos por requireModuleApi(req, "fiscal")).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["fiscal", "settings"] })) }
+})
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: h.prismaEnsureConnected }))
 vi.mock("@/lib/store-id-from-request", () => ({
   storeIdFromAssistecRequestForWrite: h.storeResolver,
+  storeIdFromAssistecRequestForRead: h.storeResolver,
+  activeStoreIdFromCookieHeader: vi.fn(() => null),
 }))
 vi.mock("@/lib/fiscal/guard-fiscal-admin", () => ({ requireFiscalAdmin: h.requireFiscalAdmin }))
 vi.mock("@/lib/fiscal/certificate/resolve-active-certificate", () => ({
@@ -61,6 +69,14 @@ vi.mock("@/lib/fiscal/provider/sefaz/wsdl/wsdl-ephemeral-batch", () => ({
 }))
 
 import { POST } from "./route"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
+
+/** Usuário legítimo da piloto e de outra loja: o guard de módulo passa e a rota decide sozinha. */
+const membroDeDuasLojas = () =>
+  vi.mocked(auth).mockResolvedValueOnce(
+    storeSession({ stores: ["loja-1", "loja-2"], modules: ["fiscal", "settings"] }) as never,
+  )
 
 function fiscalConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -289,7 +305,11 @@ describe("POST /api/fiscal/wsdl/ephemeral-execution", () => {
       storeId: "loja-2",
       session: { user: { id: "admin" } },
     })
+    membroDeDuasLojas()
     expect((await POST(request("?storeId=loja-2"))).status).toBe(400)
+    expect(h.prismaEnsureConnected).not.toHaveBeenCalled()
+    // Sem membership em loja-2, o guard de módulo nega antes da rota.
+    expect((await POST(request("?storeId=loja-2"))).status).toBe(403)
     expect(h.prismaEnsureConnected).not.toHaveBeenCalled()
   })
 
@@ -327,6 +347,7 @@ describe("POST /api/fiscal/wsdl/ephemeral-execution", () => {
     "?storeId=loja-1&storeId=loja-1",
     "?storeId=loja-2",
   ])("rejeita query controlável/ambígua antes de Prisma e consumo: %s", async (query) => {
+    if (query.includes("loja-2")) membroDeDuasLojas()
     const response = await POST(request(query))
     expect(response.status).toBe(400)
     expect(await json(response)).toEqual({ ok: false, code: "request_not_allowed" })
