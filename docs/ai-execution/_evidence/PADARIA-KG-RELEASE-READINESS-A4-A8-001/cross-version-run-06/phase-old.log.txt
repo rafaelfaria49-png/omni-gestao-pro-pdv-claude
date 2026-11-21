@@ -1,0 +1,12 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/kg-readiness-old-main
+
+ ✓ test-results/kg-readiness/old.cross-version.test.ts:64:28 > cross-version old > old: seed + v1 + v2 with lost responses 400ms
+ ↓ test-results/kg-readiness/old.cross-version.test.ts:88:31 > cross-version old > replay: no confirmed sale is written twice across versions
+ ↓ test-results/kg-readiness/old.cross-version.test.ts:147:34 > cross-version old > old-after: Int client with the new credential (forbidden Redeploy)
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 2 skipped (3)
+   Start at  23:12:50
+   Duration  2.81s (transform 785ms, setup 0ms, import 1.87s, tests 406ms, environment 0ms)
+

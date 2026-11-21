@@ -1,0 +1,15 @@
+{
+ "capturedAt": "2026-11-08T11:10Z",
+ "method": "GET /api/v2/projects/{id}, /branches, /endpoints no Console Neon (sessão já autenticada do dono no painel do navegador); somente leitura; nenhuma credencial lida",
+ "project": { "id": "dry-mouse-36002471", "name": "omnigestao-migracao", "created_at": "2026-07-27T15:49:12Z", "region": "aws-sa-east-1", "pg": 17 },
+ "branches": [
+  { "id": "br-muddy-meadow-ac7ah2wl", "name": "production", "default": true, "protected": false, "created_at": "2026-07-27T15:49:12Z" },
+  { "id": "br-wispy-mountain-accw2a7p", "name": "kg-rehearsal-002-temp", "parent": "br-muddy-meadow-ac7ah2wl", "created_at": "2026-10-26T12:18:21Z" }
+ ],
+ "endpoints": [
+  { "id": "ep-summer-tooth-acltc6wi", "branch": "br-muddy-meadow-ac7ah2wl", "type": "read_write", "state": "idle", "created_at": "2026-07-27T15:49:12Z" },
+  { "id": "ep-damp-dew-ac4qr1e2", "branch": "br-wispy-mountain-accw2a7p", "type": "read_write", "state": "idle", "created_at": "2026-10-26T12:18:21Z" }
+ ],
+ "v1_conclusion": "As envs DATABASE_URL/DIRECT_URL do projeto Vercel omni-gestao foram criadas e alteradas pela última vez em 2026-05-08T17:56Z (06/05-vercel-*). O endpoint ep-summer-tooth-acltc6wi só passou a existir em 2026-07-27T15:49:12Z; portanto nenhum valor gravado em maio contém esse host e esse projeto não alcança omnigestao_prod.",
+ "note": "Branch kg-rehearsal-002-temp (ensaio 002) segue existindo; não removida (regra: não modificar branches Neon). Remoção só com autorização própria."
+}

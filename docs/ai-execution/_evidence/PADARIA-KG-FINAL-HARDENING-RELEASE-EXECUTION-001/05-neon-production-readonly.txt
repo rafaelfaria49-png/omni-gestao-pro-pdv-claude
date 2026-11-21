@@ -1,0 +1,115 @@
+host ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech db /omnigestao_prod user neondb_owner
+== identidade Neon
+       db        |     usr      | ro | replica |       ver       |    neon_project    |      neon_endpoint       |          neon_timeline           |             agora
+-----------------+--------------+----+---------+-----------------+--------------------+--------------------------+----------------------------------+-------------------------------
+ omnigestao_prod | neondb_owner | on | f       | 17.11 (9045acd) | dry-mouse-36002471 | ep-summer-tooth-acltc6wi | 917bebec2f4d28fdac429bd6029b87b6 | 2026-11-08 11:17:41.144949+00
+
+== migrations: total / nao finalizadas / todas com checksum completo
+ total | nao_finalizadas
+-------+-----------------
+    24 |               0
+
+                     migration_name                     |                             checksum                             | finished | rolled_back
+--------------------------------------------------------+------------------------------------------------------------------+----------+-------------
+ 0001_init_clientes_produtos                            | 7ae4e7dc14fc4beb552a65ac6f1fddaea543767fc6931810039ef2319b6bea8a | t        | f
+ 0002_product_price_cost                                | eb8c41b2420b3da96da3d1124f4054b2a31af0cdb8eac9b7d1778cd4571ceb1b | t        | f
+ 0003_aux_ledger_audit_whatsapp_app_settings            | b38bc52d75ed6ec6c74e49fcbce5bd5aa519ff10748d85a0b8f23eb31e127df2 | t        | f
+ 0004_multistore_stores_units                           | 4f531066bcf87d59a098f208d73463d0fad5bc81205bd6627e2b50e50bd0ddc1 | t        | f
+ 0005_multitenant_product_sku_composite                 | 6ea8fd3f9c0ce40256d7fd0df5e0c14c668bd20d555a49560859b6c31f37a97c | t        | f
+ 0006_store_settings_contact_per_store                  | 808ae27d1fe2cb5996f69c9f39e09e751f726798720ad50ce6b0f5c02af1e416 | t        | f
+ 0007_ledger_per_store_conta_receber_composite_localkey | 61d1a106d333bad7af32a88a5c5278a99def64dbe60116c86da7af494ee26d26 | t        | f
+ 0008_fornecedores_contas_pagar                         | fe72697d666d228c5f96863e46c6413e16267878427a7a77d03b39f05781343e | t        | f
+ 0009_produto_barcode                                   | 027942a22d921b7e43253be80485bea2f217475be00abe9078206492acfe6749 | t        | f
+ 0010_whatsapp_phone_number                             | d90b69c402c7e0bfdd5e11c459168a763fa405be94050bfeea9167f63bb33e1d | t        | f
+ 0011_deposito_produto_deposito                         | f082df8cf43e0fdfe5f2d78b429dc711696dcfa3eecf423855c723c83b8ed378 | t        | f
+ 0012_inventario_assistido                              | 734a458a9548ac6eebea411870b5df1ac366c8878f61bea2d08ebb2d36639008 | t        | f
+ 0013_fiscal_foundation                                 | caad4da0213d15b1a0a015f22d85cbb82db0fc809c4862a583773e62cfe64448 | t        | f
+ 0014_contador_hub_nucleo                               | 764422842e151e12db22021cdea4fd16ac92406dc4f566a59037c19702ffd6d7 | t        | f
+ 0015_contador_identidade_externa                       | 8b24ce37d6d2f4d299de7f6cdd3a6c7fb5492d03f7335aa8e885c1c223ab9c5f | t        | f
+ 0016_add_sale_numbering_infrastructure                 | 92b0401a6c195b359a6f9be6facc859089a9b30d2e4a64131ed2edaf3927a675 | t        | f
+ 0017_contador_agenda                                   | b1ef1aa9106f63ea44bc629d2808179550a845bc7bfbf688cad3766cf89b4ae6 | t        | f
+ 0018_user_pin_hash                                     | 78b3dfe82b5df03297919e70312cc69f01dda4c6579fb8824efcddcf72383992 | t        | f
+ 0019_movimentacao_estoque_idempotency                  | 642cecfd1fef82b687448f396261678002efd4db1d8468b59fd9b31f4a5996d3 | t        | f
+ 0020_cliente_document_key                              | 7f2a7450b70cdea334be787ee350974352cdff90a9e5923d0f72c98ba0b7b74f | t        | f
+ 0021_cliente_document_key_unique                       | 409d7aeaf6d1a127abcab737583d90015e279a1aa3a4b7cb2edd96f075ab8853 | t        | f
+ 0022_pessoas_cadastro_backend                          | f4d1f09f47e7d70bedab9ec8983aac3e1ea46f992a95d9d1dea12cb9d341ab71 | t        | f
+ 20261022120000_platform_pilot_access                   | 6583bb30dc008aa5c8f418e2f4cb8911f2a4c69c641149ae6f70cd34bd38c123 | t        | f
+ 20261107120000_catalogo_aparelhos_loja                 | 57b3914343f26652fd5269ae9cc4fa09f8faa922153575792850f830911a6e45 | t        | f
+
+== colunas KG
+      table_name       |  column_name  | data_type
+-----------------------+---------------+-----------
+ estoque_produtos      | stock         | integer
+ movimentacoes_estoque | estoqueAntes  | integer
+ movimentacoes_estoque | estoqueDepois | integer
+ movimentacoes_estoque | quantidade    | integer
+ produto_depositos     | quantidade    | integer
+ venda_itens           | quantidade    | integer
+
+== CHECKs nas tabelas de estoque e venda_itens
+ tabela | conname | def
+--------+---------+-----
+
+== objetos manual_kg
+ funcoes_manual_kg
+-------------------
+                 0
+
+ gatilhos_manual_kg
+--------------------
+                  0
+
+== donos e grants das tabelas de estoque
+             relname             |     dono     |                                  acl
+---------------------------------+--------------+------------------------------------------------------------------------
+ catalogo_aparelhos_loja_compat  | neondb_owner | {neondb_owner=arwdDxtm/neondb_owner,omni_runtime_v2=arwd/neondb_owner}
+ catalogo_aparelhos_loja_modelos | neondb_owner | {neondb_owner=arwdDxtm/neondb_owner,omni_runtime_v2=arwd/neondb_owner}
+ estoque_produtos                | neondb_owner | {neondb_owner=arwdDxtm/neondb_owner,omni_runtime_v2=arwd/neondb_owner}
+ movimentacoes_estoque           | neondb_owner | {neondb_owner=arwdDxtm/neondb_owner,omni_runtime_v2=arwd/neondb_owner}
+ produto_depositos               | neondb_owner | {neondb_owner=arwdDxtm/neondb_owner,omni_runtime_v2=arwd/neondb_owner}
+ venda_itens                     | neondb_owner | {neondb_owner=arwdDxtm/neondb_owner,omni_runtime_v2=arwd/neondb_owner}
+
+== papeis e CONNECT no banco
+            rolname            | rolcanlogin | rolsuper | pode_connect |                                             membro_de
+-------------------------------+-------------+----------+--------------+----------------------------------------------------------------------------------------------------
+ cloud_admin                   | t           | t        | t            |
+ neon_service                  | t           | f        | t            | neon_superuser
+ neon_superuser                | f           | f        | t            | pg_read_all_data,pg_write_all_data,pg_monitor,pg_signal_backend,pg_maintain,pg_create_subscription
+ neondb_owner                  | t           | f        | t            | neon_superuser,omnigestao_candidate_audit_ro,omni_owner,omni_migrator,omni_runtime_v2
+ omni_migrator                 | t           | f        | t            | omni_owner
+ omni_owner                    | f           | f        | t            |
+ omni_runtime_v2               | t           | f        | t            |
+ omnigestao_candidate_audit_ro | t           | f        | t            |
+ token_roles                   | f           | f        | t            |
+
+     datname     |                                                    datacl
+-----------------+--------------------------------------------------------------------------------------------------------------
+ omnigestao_prod | {=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omni_runtime_v2=c/neondb_owner,omni_migrator=c/neondb_owner}
+
+== sessoes de caixa por status (contagem)
+ status  | count
+---------+-------
+ ABERTA  |     1
+ FECHADA |   242
+
+== conexoes por papel/aplicacao/banco (sem texto de query nem IP)
+     datname     |   usename    |      application_name       | state  | count
+-----------------+--------------+-----------------------------+--------+-------
+ omnigestao_prod | neondb_owner | psql                        | active |     1
+ postgres        | cloud_admin  | compute_ctl:compute_monitor | idle   |     1
+
+== extensoes
+ extname | extversion
+---------+------------
+ plpgsql | 1.0
+
+ cron_job_existe
+-----------------
+ f
+
+== dados KG: linhas com quantidade nao inteira (deve ser 0 antes do J8)
+ ep_frac | pd_frac
+---------+---------
+       0 |       0
+
+PSQL_EXIT 0

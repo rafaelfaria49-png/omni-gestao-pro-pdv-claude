@@ -1,0 +1,11 @@
+Prisma schema loaded from test-results\manual-kg\schema-before.prisma
+Datasource "db": PostgreSQL database "manual_kg_sale_isolated", schema "public" at "127.0.0.1:55479"
+
+Your database is now in sync with your Prisma schema. Done in 1.28s
+
+Script executed successfully.
+Script executed successfully.
+Script executed successfully.
+Script executed successfully.
+Migration / Prisma315 / RLS compatibility: 35 checks PASS
+JSON report written to C:/Projetos/omni-gestao/.worktrees/kg-stack-rec-001/test-results/manual-kg/integration.json

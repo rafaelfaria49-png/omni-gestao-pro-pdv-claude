@@ -1,0 +1,27 @@
+{
+  "identity": {
+    "db": "manual_kg_sale_isolated",
+    "role": "manual_kg",
+    "host": "127.0.0.1",
+    "port": 55479
+  },
+  "before": [
+    {
+      "stock": "2147483647",
+      "quantity": "2147483647"
+    }
+  ],
+  "after": [
+    {
+      "stock": "2147483647",
+      "quantity": "2147483647"
+    }
+  ],
+  "historicalUnPreserved": true,
+  "newMigrations": [
+    "20261029120000_manual_kg_sale_quantity",
+    "20261106120000_manual_kg_title_guard_indexed",
+    "20261108120000_f8_devolucao_kg_fracionada"
+  ],
+  "productionWrites": 0
+}

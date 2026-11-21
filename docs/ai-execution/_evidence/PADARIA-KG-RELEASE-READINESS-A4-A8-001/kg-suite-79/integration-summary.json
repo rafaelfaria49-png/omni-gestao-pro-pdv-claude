@@ -1,0 +1,348 @@
+{
+ "numTotalTests": 79,
+ "numPassedTests": 79,
+ "numFailedTests": 0,
+ "files": [
+  {
+   "file": "lib/vendas/manual-kg-contract.test.ts",
+   "tests": [
+    [
+     "passed",
+     "manual KG commercial contract parses 0,350 as 0.35 kg"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract parses 1,250 as 1.25 kg"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract parses 10 as 10 kg"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract parses 0,001 as 0.001 kg"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects  without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects 0 without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects 0,000 without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects -1 without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects 0.350 without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects 0,3501 without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects 1,2x without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects NaN without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects Infinity without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects 1e2 without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract rejects 1,2,3 without conversion"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract uses exact cents including ties and multiple item rounding"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract combines discounts in exact cents, including percentage ties"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract fingerprints distinguish grams even when prices round to the same cent"
+    ],
+    [
+     "passed",
+     "manual KG commercial contract never enables G or an invalid declaration"
+    ]
+   ]
+  },
+  {
+   "file": "lib/vendas/manual-kg-hardening.test.ts",
+   "tests": [
+    [
+     "passed",
+     "additive KG operational contract reads exact KG including integer weights without treating NULL as zero"
+    ],
+    [
+     "passed",
+     "additive KG operational contract calculates estimated surcharge in cents before discount, half-up"
+    ],
+    [
+     "passed",
+     "additive KG operational contract plans exact weight delta and cash reconciliation with original frozen rate"
+    ],
+    [
+     "passed",
+     "additive KG operational contract blocks product/price changes, ambiguous lines, fractional precision and noncash domains"
+    ],
+    [
+     "passed",
+     "additive KG operational contract weight can change while monetary total stays the same"
+    ],
+    [
+     "passed",
+     "additive KG operational contract historical KG 0.35 is blocked before integer planning; confirmed reconciliation remains read-only"
+    ],
+    [
+     "passed",
+     "additive KG operational contract historical KG 1 is blocked before integer planning; confirmed reconciliation remains read-only"
+    ],
+    [
+     "passed",
+     "KG read-model always supplies database time when an API sale omitted payload.at"
+    ]
+   ]
+  },
+  {
+   "file": "lib/vendas/manual-kg-padaria-flow.pg.test.ts",
+   "tests": [
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) estoque: 2,500 kg + 0,750 kg = 3,250 kg no produto, depósito e livro (texto do PostgreSQL)"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) queijo R$ 20,00/kg: entrada 5,000 kg, venda 0,350 kg = R$ 7,00, saldo 4,650 kg, histórico e financeiro exatos"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso 0.001 kg × R$ 20,00 = R$ 0.02; saldo 9.999 kg"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso 0.125 kg × R$ 20,00 = R$ 2.5; saldo 9.875 kg"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso 1.25 kg × R$ 20,00 = R$ 25; saldo 8.75 kg"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso 2.35 kg × R$ 20,00 = R$ 47; saldo 7.65 kg"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso 9.999 kg × R$ 20,00 = R$ 199.98; saldo 0.001 kg"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) carrinho misto KG + UN e dois caixas concorrentes somam gramas exatas sem venda duplicada"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) SKU alterado após o carrinho: a linha com Produto.id baixa o produto certo"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) falha de pagamento, preço divergente e produto de outra loja não baixam estoque"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) KG: produto excluído durante a venda (SKU antigo + Produto.id) aborta com PRODUTO_NAO_RESOLVIDO"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) UN ao vivo: NOT_FOUND na baixa (produto excluído após a resolução) aborta sem venda nem financeiro"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso inválido 0 é recusado sem escrita (total coerente R$ 0)"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso inválido -0.35 é recusado sem escrita (total coerente R$ 0)"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso inválido 0.0005 é recusado sem escrita (total coerente R$ 0.01)"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) peso inválido 0.3505 é recusado sem escrita (total coerente R$ 7.01)"
+    ],
+    [
+     "passed",
+     "padaria — estoque KG + venda manual por peso (PostgreSQL real) produto sem preço válido é recusado"
+    ]
+   ]
+  },
+  {
+   "file": "lib/vendas/manual-kg-sale.pg.test.ts",
+   "tests": [
+    [
+     "passed",
+     "real PostgreSQL manual KG sales persists 0.35 kg, exact item, payments, deposits and ledger; fresh reread"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales persists 1.25 kg, exact item, payments, deposits and ledger; fresh reread"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales percent discount and exact half-cent pricing remain coherent"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales mixed KG + UN and repeated KG lines sum exact grams"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales insufficient stock rolls back sale, items, deposits, ledger and money"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales rejects invalid weight 0 without writes"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales rejects invalid weight -1 without writes"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales rejects invalid weight 0.0001 without writes"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales rejects invalid weight 0.3501 without writes"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales rejects invalid weight NaN without writes"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales rejects invalid weight Infinity without writes"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales rejects price, line total, sale total, exact payment cents, avulso and UN fractions"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales same sale retries after a lost response do not duplicate stock, items or payments"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales writer V2 allocates once and concurrent replay uses one stable clientSaleId"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales competing sales cannot oversell the last grams"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales server refuses another store, G, invalid declaration, implicit KG-as-UN and unavailable capability"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales UN sale remains compatible with the original writer and historical values survive"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales historical KG recovery stays blocked without truncating or bypassing stock"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales server tax snapshot is authoritative and remains frozen when store configuration changes"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales weight correction keeps line identity and retries once after a lost acknowledgement"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales revision prevents stale commands even if the monetary total did not change"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales concurrent corrections cannot both apply the same revision"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales financial failure after stock delta rolls the correction back completely"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales correction refuses insufficient stock, closed session, noncash and cross-store requests"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales capability refuses disabled triggers and drifted check constraints"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales confirmation snapshots use corrected facts and authoritative stock"
+    ],
+    [
+     "passed",
+     "real PostgreSQL manual KG sales release OFF preserves original replay, committed correction ACK and UN while refusing new KG"
+    ]
+   ]
+  },
+  {
+   "file": "pdv/devolucao/f8-venda-kg.pg.test.ts",
+   "tests": [
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real venda KG mista (KG + UN): troca, vale ou reembolso de qualquer linha é recusado sem alterar a venda KG confirmada"
+    ],
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real defesa em profundidade: escrita direta de devolução numa venda KG é recusada pelo trigger do banco"
+    ],
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real troca UN gera vale, nova venda KG paga com o vale; cancelar a venda KG restaura vale e estoque KG exatos"
+    ],
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real corrida: cancelamento × 5 devoluções simultâneas da venda KG — estoque reposto uma vez, nenhuma devolução gravada"
+    ],
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real SKU alterado depois da venda UN numa loja KG: o SKU antigo devolve o produto certo; o KG não é tocado"
+    ],
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real declaração comercial inválida após a venda UN: recusa 409 sem vale nem estoque"
+    ],
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real encaminhamento ao Financeiro de devolução de venda KG: referência = valor pago da linha KG, nunca zero, sem efeito (R1 P2)"
+    ],
+    [
+     "passed",
+     "F8 × venda manual KG — integração em PostgreSQL real isolamento entre lojas: a venda KG da loja A não é vista nem devolvida pela loja B"
+    ]
+   ]
+  }
+ ]
+}

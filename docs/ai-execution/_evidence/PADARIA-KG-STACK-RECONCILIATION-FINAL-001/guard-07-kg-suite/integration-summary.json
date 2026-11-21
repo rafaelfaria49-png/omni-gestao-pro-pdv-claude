@@ -1,0 +1,33 @@
+{
+ "numTotalTests": 79,
+ "numPassedTests": 79,
+ "numFailedTests": 0,
+ "success": true,
+ "files": [
+  {
+   "file": "lib/vendas/manual-kg-contract.test.ts",
+   "status": "passed",
+   "tests": 19
+  },
+  {
+   "file": "lib/vendas/manual-kg-hardening.test.ts",
+   "status": "passed",
+   "tests": 8
+  },
+  {
+   "file": "lib/vendas/manual-kg-padaria-flow.pg.test.ts",
+   "status": "passed",
+   "tests": 17
+  },
+  {
+   "file": "lib/vendas/manual-kg-sale.pg.test.ts",
+   "status": "passed",
+   "tests": 27
+  },
+  {
+   "file": "lib/pdv/devolucao/f8-venda-kg.pg.test.ts",
+   "status": "passed",
+   "tests": 8
+  }
+ ]
+}

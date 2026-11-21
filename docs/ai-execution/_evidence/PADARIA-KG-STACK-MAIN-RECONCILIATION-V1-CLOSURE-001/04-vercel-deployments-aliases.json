@@ -1,0 +1,162 @@
+{
+ "capturedAt": "2026-11-08T06:16:28.246Z",
+ "method": "vercel api GET (metadata only, no decrypt)",
+ "projects": {
+  "omni-gestao-pro": {
+   "id": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+   "nodeVersion": "20.x",
+   "ssoProtection": null,
+   "passwordProtection": false,
+   "commandForIgnoringBuildStep": null,
+   "productionBranch": "main",
+   "productionDeployments": [
+    {
+     "id": "dpl_GhyK8LebaGHAUjVBB5F4aT89gf8L",
+     "url": "omni-gestao-ajsc53tqg-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "ce9228c57617f72e9c350cc0232f973fb57a0eaa",
+     "ref": "main",
+     "created": "2026-11-08T05:32:26.513Z",
+     "aliases": [
+      "omni-gestao-pro-rafaelfaria49-4373s-projects.vercel.app",
+      "omni-gestao-pro-git-main-rafaelfaria49-4373s-projects.vercel.app",
+      "omni-gestao-pro.vercel.app"
+     ]
+    },
+    {
+     "id": "dpl_BtbfbnoAMBt3dauihEr9e4dpTL8x",
+     "url": "omni-gestao-3frhbad1o-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "7cac3d8020472a01b208c5bb3f278c5e7de0a707",
+     "ref": "main",
+     "created": "2026-11-07T22:48:44.731Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_2aNaisN5cRS6e8eBttGhgkbLKVGc",
+     "url": "omni-gestao-66v97j9p3-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+     "ref": "main",
+     "created": "2026-11-04T00:23:28.468Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_A5QFFpq4G1BtUMJ3tomewdb1Xmod",
+     "url": "omni-gestao-fpuyj9n3n-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "8cbd551419798091db5402a038a41be9a4f3648a",
+     "ref": "main",
+     "created": "2026-11-03T17:15:31.237Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_CAGHeFeL3LGEiKHbzVQrsGUqsZ3N",
+     "url": "omni-gestao-jvb1ymmi7-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "a07e0676909f4683c9ba697822ef4b104c1d6e95",
+     "ref": "main",
+     "created": "2026-11-02T22:01:20.226Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_8jUppiZtpS1Yzpvxv4dSvCQ6EhRw",
+     "url": "omni-gestao-88isa3svg-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "49466887164960b8064124646e62f1c63db6dc86",
+     "ref": "main",
+     "created": "2026-11-02T20:44:41.109Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_9ixMLdNTZQzwA3eWZTLCVj2ujTcP",
+     "url": "omni-gestao-h1o0wcmvv-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "aaab27505a03903d9fb8333baef5b52424821093",
+     "ref": "main",
+     "created": "2026-10-29T12:34:44.596Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_7UqN8Rrkz9Vi7ezB3ArkL6TDcvvW",
+     "url": "omni-gestao-7dq6cvmmh-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "ba010ace89e2513aac2eb4ca274d52cbaac6abb4",
+     "ref": "main",
+     "created": "2026-10-28T23:32:13.521Z",
+     "aliases": []
+    }
+   ]
+  },
+  "omni-gestao": {
+   "id": "prj_IbJi32rh4TsQwWFYYVVjs133fw3H",
+   "nodeVersion": "24.x",
+   "ssoProtection": {
+    "deploymentType": "all_except_custom_domains"
+   },
+   "passwordProtection": false,
+   "commandForIgnoringBuildStep": "node -e \"process.exit(process.env.VERCEL_ENV === 'production' ? 0 : 1)\"",
+   "productionBranch": "main",
+   "productionDeployments": [
+    {
+     "id": "dpl_DeTRqmthRZB54v6CWQSbnCjZLPFQ",
+     "url": "omni-gestao-rk1dkfhb0-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "CANCELED",
+     "sha": "ce9228c57617f72e9c350cc0232f973fb57a0eaa",
+     "ref": "main",
+     "created": "2026-11-08T05:32:27.236Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_27dEZFSRjLqvWWyo5oyosydN9yxQ",
+     "url": "omni-gestao-5ig0ywdgi-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "CANCELED",
+     "sha": "7cac3d8020472a01b208c5bb3f278c5e7de0a707",
+     "ref": "main",
+     "created": "2026-11-07T22:48:44.862Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_2bUodD6L5t9fpwA9tocindb6pqx4",
+     "url": "omni-gestao-bh3mzuza9-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "CANCELED",
+     "sha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+     "ref": "main",
+     "created": "2026-11-04T00:23:29.046Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_H9sR4GHi2zrnspBHZVSWVCVP1hUM",
+     "url": "omni-gestao-a5opb4c49-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "e9eb98498bf4f637e5a9cfb8f3eb9b5339d698b6",
+     "ref": "main",
+     "created": "2026-10-15T21:29:13.842Z",
+     "aliases": [
+      "omni-gestao-git-main-rafaelfaria49-4373s-projects.vercel.app",
+      "omni-gestao-pi.vercel.app",
+      "omni-gestao-rafaelfaria49-4373s-projects.vercel.app"
+     ]
+    },
+    {
+     "id": "dpl_Ar1XfZ3U7GJrKrR5GobCbyTFvzJ5",
+     "url": "omni-gestao-krxyjwaax-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "466c397e4ff44a1f82c93c8ba92057d07136d67f",
+     "ref": "main",
+     "created": "2026-10-15T14:39:21.972Z",
+     "aliases": []
+    },
+    {
+     "id": "dpl_D2xKQ3v7BiSw3wN9wJHpJFeP1vRQ",
+     "url": "omni-gestao-5ppeifvt4-rafaelfaria49-4373s-projects.vercel.app",
+     "state": "READY",
+     "sha": "4a85dd95202b56873487b31c318fc2d751fc26f5",
+     "ref": "main",
+     "created": "2026-10-15T02:56:32.517Z",
+     "aliases": []
+    }
+   ]
+  }
+ }
+}

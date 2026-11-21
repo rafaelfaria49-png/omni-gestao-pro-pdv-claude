@@ -1,0 +1,12 @@
+head files 947 tests 3924 passed 3737 failed 97 skipped 90
+main files 912 tests 3765 passed 3570 failed 105 skipped 90
+failures head 106 main 114 NEW 0 onlyMain 8
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real gera ClienteCredito uma única vez, vinculado à devolução e à venda de origem
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real replay do mesmo localId é idempotente: sem segundo crédito nem estoque duplicado
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real devolução parcial: valor e crédito recalculados da venda original (proporcional)
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real somente_estoque: devolve estoque, sem crédito e sem saída financeira
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real Vale-Troca NÃO é dinheiro novo: nada entra no caixa (só saída da devolução real)
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real estoque volta com ledger auditável dedupe por documento (origem devolução)
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real venda de outra loja não é usada como origem (storeId isola o recompute)
+ONLYMAIN app/api/ops/devolucao/route.test.ts :: POST /api/ops/devolucao — vale-troca real venda original sai do banco como parcialmente_devolvida
+failing files head 20 main 21

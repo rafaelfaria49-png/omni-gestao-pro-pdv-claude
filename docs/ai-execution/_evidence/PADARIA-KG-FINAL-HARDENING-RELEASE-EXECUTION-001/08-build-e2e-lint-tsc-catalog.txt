@@ -1,0 +1,13 @@
+Árvore final da #337 (28ef9e2; este commit só acrescenta docs/evidências).
+npm run typecheck                         TSC=0
+ESLint (ignores do CI)                    0 errors, 85 warnings (igual à baseline)
+git diff --check                          limpo
+prisma validate                           válido
+prisma migrate status (clone KG+catálogo) 27 migrations, "Database schema is up to date!"
+prisma migrate diff banco × schema        vazio
+scripts/vercel-build.mjs                  MIGRATION_SKIPPED · Compiled successfully in 4.9min · PROXY_PRISMA_ARTIFACT_VERIFIED · exit 0
+E2E KG autenticado (run-manual-kg-e2e)    13 passed (1.1m)
+Catálogo PG (loja-catalogo-store.integration, banco migrado KG→catálogo)  12/12
+app/api/vendas/[id]/cancelar/route.test.ts  27 falhas IDÊNTICAS na main ce9228c ("Sem permissão para este módulo ou unidade.") → pré-existente, fora do escopo KG
+
+sha256 LF: 20261025 f07242c4… · 20261029 8757ee99… · 20261106 56ac126a… · 20261107 57b39143… · 07 dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935 · estoque-kg-migration-apply.sql 35aa9a92…

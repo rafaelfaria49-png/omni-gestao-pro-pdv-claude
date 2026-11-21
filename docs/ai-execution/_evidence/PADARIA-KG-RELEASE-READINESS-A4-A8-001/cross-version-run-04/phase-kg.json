@@ -1,0 +1,29 @@
+{
+  "phase": "kg",
+  "summary": {
+    "first": false,
+    "replay": true,
+    "v2": [
+      false,
+      true,
+      true
+    ],
+    "v2Pedidos": 1,
+    "stock": 3.4,
+    "items": [
+      [
+        null,
+        0.35
+      ],
+      [
+        null,
+        1.25
+      ]
+    ],
+    "ledger": [
+      -0.35,
+      -1.25
+    ],
+    "tamperRefused": true
+  }
+}

@@ -1,0 +1,200 @@
+[
+ {
+  "key": "AUTH_SECRET",
+  "id": "0CDB8CwX0dkNhY8g",
+  "type": "sensitive",
+  "target": "preview+production",
+  "branch": "",
+  "created": "2026-05-09T03:04",
+  "updated": "2026-05-09T03:04"
+ },
+ {
+  "key": "AUTH_SECRET",
+  "id": "Q2oqJg5cvc62ddjX",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "codex/omni-print-d05-homologacao-fisica-001",
+  "created": "2026-11-05T23:21",
+  "updated": "2026-11-05T23:21"
+ },
+ {
+  "key": "AUTH_SECRET",
+  "id": "E4knCfqjyON0WTjo",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "codex/ops-v4-goal003-family-regularization",
+  "created": "2026-10-15T21:22",
+  "updated": "2026-10-15T21:22"
+ },
+ {
+  "key": "AUTH_SECRET",
+  "id": "7a4BTs3TZahrv6RV",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "codex/release-ops-v4-datas",
+  "created": "2026-10-15T02:20",
+  "updated": "2026-10-15T02:20"
+ },
+ {
+  "key": "AUTH_SECRET",
+  "id": "TjXXGqHyjq825EDr",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "codex/release-ops-v4-vercel",
+  "created": "2026-10-14T22:07",
+  "updated": "2026-10-14T22:07"
+ },
+ {
+  "key": "AUTH_SECRET",
+  "id": "XNw1C7bLygRv6OK2",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+  "created": "2026-10-15T02:20",
+  "updated": "2026-10-15T02:20"
+ },
+ {
+  "key": "DATABASE_URL",
+  "id": "CAgFUTJYNOJb64j1",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "",
+  "created": "2026-07-27T23:27",
+  "updated": "2026-10-27T22:05"
+ },
+ {
+  "key": "DATABASE_URL",
+  "id": "p2OLtFuiyUymtIRA",
+  "type": "sensitive",
+  "target": "production",
+  "branch": "",
+  "created": "2026-07-27T23:26",
+  "updated": "2026-07-27T23:26"
+ },
+ {
+  "key": "DATABASE_URL",
+  "id": "VUjVxPk2VgPGdjEW",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "claude/estoque-manual-kg-001",
+  "created": "2026-10-27T22:05",
+  "updated": "2026-10-27T22:05"
+ },
+ {
+  "key": "DATABASE_URL",
+  "id": "SNSzT9lD8FGpE2BN",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "codex/omni-print-d05-homologacao-fisica-001",
+  "created": "2026-11-05T23:21",
+  "updated": "2026-11-05T23:21"
+ },
+ {
+  "key": "DIRECT_URL",
+  "id": "vFJN2RB2PQHJairQ",
+  "type": "encrypted",
+  "target": "development",
+  "branch": "",
+  "created": "2026-07-27T23:30",
+  "updated": "2026-07-27T23:30"
+ },
+ {
+  "key": "DIRECT_URL",
+  "id": "WfY0iLLQ8cbQOXHd",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "",
+  "created": "2026-07-27T23:30",
+  "updated": "2026-10-27T22:05"
+ },
+ {
+  "key": "DIRECT_URL",
+  "id": "38TkKDEr1OIgsxy0",
+  "type": "sensitive",
+  "target": "production",
+  "branch": "",
+  "created": "2026-07-27T23:28",
+  "updated": "2026-07-27T23:28"
+ },
+ {
+  "key": "DIRECT_URL",
+  "id": "BWFYesLFr0hAJWjT",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "claude/estoque-manual-kg-001",
+  "created": "2026-10-27T22:05",
+  "updated": "2026-10-27T22:05"
+ },
+ {
+  "key": "DIRECT_URL",
+  "id": "iAUnSaOSvL9rcNDR",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "codex/omni-print-d05-homologacao-fisica-001",
+  "created": "2026-11-05T23:21",
+  "updated": "2026-11-05T23:21"
+ },
+ {
+  "key": "MIGRATION_AUTHORITY_ENABLED",
+  "id": "PzB5wlYjCWplArw7",
+  "type": "sensitive",
+  "target": "production",
+  "branch": "",
+  "created": "2026-08-04T19:12",
+  "updated": "2026-10-16T15:19"
+ },
+ {
+  "key": "MIGRATION_AUTHORITY_ENABLED",
+  "id": "Nt5jlUQfhgHA0php",
+  "type": "sensitive",
+  "target": "preview",
+  "branch": "codex/omni-print-d05-homologacao-fisica-001",
+  "created": "2026-11-05T23:22",
+  "updated": "2026-11-05T23:22"
+ },
+ {
+  "key": "MIGRATION_AUTHORITY_ENABLED",
+  "id": "zJjt19tOSjDWSeSf",
+  "type": "encrypted",
+  "target": "preview",
+  "branch": "codex/ops-v4-goal003-family-regularization",
+  "created": "2026-10-15T21:22",
+  "updated": "2026-10-15T21:22"
+ },
+ {
+  "key": "MIGRATION_AUTHORITY_ENABLED",
+  "id": "Nyrimdl2qphpsyD3",
+  "type": "encrypted",
+  "target": "preview",
+  "branch": "codex/release-ops-v4-datas",
+  "created": "2026-10-15T02:21",
+  "updated": "2026-10-15T02:21"
+ },
+ {
+  "key": "MIGRATION_AUTHORITY_ENABLED",
+  "id": "ozupokmR0AdYxskZ",
+  "type": "encrypted",
+  "target": "preview",
+  "branch": "codex/release-ops-v4-vercel",
+  "created": "2026-10-14T22:01",
+  "updated": "2026-10-14T22:07"
+ },
+ {
+  "key": "MIGRATION_AUTHORITY_ENABLED",
+  "id": "3YscDDy5kIBiLBjV",
+  "type": "encrypted",
+  "target": "preview",
+  "branch": "goal/ops-v4-financeiro-retirada-garantia-002",
+  "created": "2026-10-15T02:20",
+  "updated": "2026-10-15T02:20"
+ },
+ {
+  "key": "SALE_SERVER_NUMBERING_ENABLED",
+  "id": "c0XM97qFUmrleaLB",
+  "type": "encrypted",
+  "target": "production",
+  "branch": "",
+  "created": "2026-08-18T02:38",
+  "updated": "2026-08-18T02:38"
+ }
+]

@@ -1,0 +1,120 @@
+O uso do paginador est� desativado.
+BEGIN
+       db        |     usr      | ro |        proj        |          branch          |            ep            |              now              
+-----------------+--------------+----+--------------------+--------------------------+--------------------------+-------------------------------
+ omnigestao_prod | neondb_owner | on | dry-mouse-36002471 | br-muddy-meadow-ac7ah2wl | ep-summer-tooth-acltc6wi | 2026-11-16 16:42:37.054594+00
+(1 linha)
+
+ identidade_ok 
+---------------
+             1
+(1 linha)
+
+== migrations
+ total | nao_finalizadas | rolled 
+-------+-----------------+--------
+    29 |               0 |      0
+(1 linha)
+
+                     migration_name                     |                             checksum                             |          finished_at          
+--------------------------------------------------------+------------------------------------------------------------------+-------------------------------
+ 0001_init_clientes_produtos                            | 7ae4e7dc14fc4beb552a65ac6f1fddaea543767fc6931810039ef2319b6bea8a | 2026-08-02 00:26:30.494229+00
+ 0002_product_price_cost                                | eb8c41b2420b3da96da3d1124f4054b2a31af0cdb8eac9b7d1778cd4571ceb1b | 2026-08-02 00:26:34.995867+00
+ 0003_aux_ledger_audit_whatsapp_app_settings            | b38bc52d75ed6ec6c74e49fcbce5bd5aa519ff10748d85a0b8f23eb31e127df2 | 2026-08-02 00:26:39.474962+00
+ 0004_multistore_stores_units                           | 4f531066bcf87d59a098f208d73463d0fad5bc81205bd6627e2b50e50bd0ddc1 | 2026-08-02 00:26:44.048235+00
+ 0005_multitenant_product_sku_composite                 | 6ea8fd3f9c0ce40256d7fd0df5e0c14c668bd20d555a49560859b6c31f37a97c | 2026-08-02 00:26:48.578614+00
+ 0006_store_settings_contact_per_store                  | 808ae27d1fe2cb5996f69c9f39e09e751f726798720ad50ce6b0f5c02af1e416 | 2026-08-02 00:26:53.08523+00
+ 0007_ledger_per_store_conta_receber_composite_localkey | 61d1a106d333bad7af32a88a5c5278a99def64dbe60116c86da7af494ee26d26 | 2026-08-02 00:26:57.578425+00
+ 0008_fornecedores_contas_pagar                         | fe72697d666d228c5f96863e46c6413e16267878427a7a77d03b39f05781343e | 2026-08-02 00:27:02.102644+00
+ 0009_produto_barcode                                   | 027942a22d921b7e43253be80485bea2f217475be00abe9078206492acfe6749 | 2026-08-02 00:27:06.573822+00
+ 0010_whatsapp_phone_number                             | d90b69c402c7e0bfdd5e11c459168a763fa405be94050bfeea9167f63bb33e1d | 2026-08-02 00:27:11.057932+00
+ 0011_deposito_produto_deposito                         | f082df8cf43e0fdfe5f2d78b429dc711696dcfa3eecf423855c723c83b8ed378 | 2026-08-02 00:27:15.532396+00
+ 0012_inventario_assistido                              | 734a458a9548ac6eebea411870b5df1ac366c8878f61bea2d08ebb2d36639008 | 2026-08-02 00:27:19.999114+00
+ 0013_fiscal_foundation                                 | caad4da0213d15b1a0a015f22d85cbb82db0fc809c4862a583773e62cfe64448 | 2026-08-02 00:27:24.415112+00
+ 0014_contador_hub_nucleo                               | 764422842e151e12db22021cdea4fd16ac92406dc4f566a59037c19702ffd6d7 | 2026-08-02 00:27:28.889911+00
+ 0015_contador_identidade_externa                       | 8b24ce37d6d2f4d299de7f6cdd3a6c7fb5492d03f7335aa8e885c1c223ab9c5f | 2026-08-02 00:27:34.307029+00
+ 0016_add_sale_numbering_infrastructure                 | 92b0401a6c195b359a6f9be6facc859089a9b30d2e4a64131ed2edaf3927a675 | 2026-08-03 20:19:07.578282+00
+ 0017_contador_agenda                                   | b1ef1aa9106f63ea44bc629d2808179550a845bc7bfbf688cad3766cf89b4ae6 | 2026-08-19 15:54:07.170345+00
+ 0018_user_pin_hash                                     | 78b3dfe82b5df03297919e70312cc69f01dda4c6579fb8824efcddcf72383992 | 2026-08-20 02:01:37.212674+00
+ 0019_movimentacao_estoque_idempotency                  | 642cecfd1fef82b687448f396261678002efd4db1d8468b59fd9b31f4a5996d3 | 2026-09-16 10:43:05.163792+00
+ 0020_cliente_document_key                              | 7f2a7450b70cdea334be787ee350974352cdff90a9e5923d0f72c98ba0b7b74f | 2026-09-18 01:50:47.306789+00
+ 0021_cliente_document_key_unique                       | 409d7aeaf6d1a127abcab737583d90015e279a1aa3a4b7cb2edd96f075ab8853 | 2026-09-18 01:50:48.107794+00
+ 0022_pessoas_cadastro_backend                          | f4d1f09f47e7d70bedab9ec8983aac3e1ea46f992a95d9d1dea12cb9d341ab71 | 2026-10-01 23:02:42.386305+00
+ 20261022120000_platform_pilot_access                   | 6583bb30dc008aa5c8f418e2f4cb8911f2a4c69c641149ae6f70cd34bd38c123 | 2026-10-22 23:26:26.148371+00
+ 20261107120000_catalogo_aparelhos_loja                 | 57b3914343f26652fd5269ae9cc4fa09f8faa922153575792850f830911a6e45 | 2026-11-08 05:46:22.425012+00
+ 20261110120000_aparelhos_fisicos_serializados          | 0d474a4e4ce1da7b3e9010ca9a0f40ebf4a3eb0b89de0ca50b1860b5248a659a | 2026-11-14 11:20:53.596124+00
+ 20261113120000_admin_session_revocation                | fb96b1dff3f09f02d4b37505df1761335bbe143fbf4e71b517ac9605778b8ce7 | 2026-11-15 22:44:08.602221+00
+ 20261113120000_compat_profissional                     | a995d46952f472023acb89ea5a427e2d81f1838a33f1015554971964b165f57b | 2026-11-14 11:20:54.407435+00
+ 20261114120000_compat_catalogo_marcas_lancamento       | 1754f8effca7e6c12040295cf624194fc5a8e1bba95e681749cfab1cb6779d8c | 2026-11-14 16:17:38.5064+00
+ 20261115120000_vestuario_p02_grades_catalogo           | 604f70442501f1253e52bbd7976db4bd69eeff0adc435e8c4829e3bce66d31df | 2026-11-15 23:16:42.161641+00
+(29 linhas)
+
+== colunas KG
+      table_name       |  column_name  | data_type 
+-----------------------+---------------+-----------
+ estoque_produtos      | stock         | integer
+ itens_devolucao_venda | quantidade    | integer
+ movimentacoes_estoque | estoqueAntes  | integer
+ movimentacoes_estoque | estoqueDepois | integer
+ movimentacoes_estoque | quantidade    | integer
+ produto_depositos     | quantidade    | integer
+ venda_itens           | quantidade    | integer
+(7 linhas)
+
+== objetos manual_kg
+ funcs | trig | checks07 
+-------+------+----------
+     0 |    0 |        0
+(1 linha)
+
+== caixas abertos
+ storeId | count |           min           
+---------+-------+-------------------------
+ loja-1  |     1 | 2026-11-16 13:28:41.066
+ loja-2  |     1 | 2026-11-16 11:57:15.087
+(2 linhas)
+
+== lojas
+                      id                      |             name             
+----------------------------------------------+------------------------------
+ cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e | Padaria TESTE
+ loja-1                                       | RAFACELL ASSISTEC
+ loja-10                                      | 123teste
+ loja-11                                      | RAFA BRINQUEDOS E VARIEDADES
+ loja-2                                       | RAFA BRINQUEDOS E VARIEDADES
+ loja-5                                       | TESTE 123
+ loja-6                                       | smart
+ loja-7                                       | teste produtos gestao
+ loja-8                                       | smart teste 500
+ loja-9                                       | gestao teste 239
+ loja-teste-caixa                             | 🧪 LOJA TESTE CAIXA
+(11 linhas)
+
+== sessoes no db
+   usename    | application_name | state  | count 
+--------------+------------------+--------+-------
+ neondb_owner | pgbouncer        | idle   |     1
+ neondb_owner | psql             | active |     1
+(2 linhas)
+
+== acl db e extensoes
+                                                    datacl                                                    
+--------------------------------------------------------------------------------------------------------------
+ {=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omni_runtime_v2=c/neondb_owner,omni_migrator=c/neondb_owner}
+(1 linha)
+
+ extname 
+---------
+ plpgsql
+(1 linha)
+
+== donos tabelas estoque
+        relname        | pg_get_userbyid 
+-----------------------+-----------------
+ estoque_produtos      | neondb_owner
+ movimentacoes_estoque | neondb_owner
+ produto_depositos     | neondb_owner
+ venda_itens           | neondb_owner
+(4 linhas)
+
+ROLLBACK

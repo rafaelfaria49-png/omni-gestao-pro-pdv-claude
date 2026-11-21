@@ -1,0 +1,10 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/kg-release-readiness-001
+
+ ✓ test-results/kg-readiness/kg.kg-topology.test.ts:29:3 > KG under real role topology > runtime sells KG once per identity; direct SQL tamper is refused by the version barrier 824ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  22:33:12
+   Duration  4.49s (transform 1.29s, setup 0ms, import 2.54s, tests 837ms, environment 0ms)
+
