@@ -31,7 +31,7 @@ import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { logAuditoriaFinanceira, extractAuditoriaActor } from "@/lib/financeiro/services/auditoria-actor"
 import { PAY_EPS } from "@/lib/financeiro/contracts/valores"
-import { momentoDaOperacao } from "@/lib/financeiro/recibo-recebimento"
+import { momentoDaOperacao, operacaoEstornadaNoLedger } from "@/lib/financeiro/recibo-recebimento"
 import type { Prisma } from "@/generated/prisma"
 
 export const runtime = "nodejs"
@@ -209,6 +209,10 @@ export async function POST(request: Request) {
         select: { id: true, valor: true },
       })
       if (jaRegistrada) {
+        // Estornada depois de gravada: o retry não pode devolver "recebido" nem comprovante.
+        if (operacaoEstornadaNoLedger(atual.payload, parsed.data.idempotencyKey)) {
+          return { kind: "erro" as const, code: "operacao_estornada", status: 409 }
+        }
         return { kind: "replay" as const, titulo: atual, valorMov: jaRegistrada.valor }
       }
 

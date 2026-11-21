@@ -526,6 +526,51 @@ describe("PDV F5/F9 · ledger com forma e operação, lista inicial e busca", ()
   })
 })
 
+// ─── OMNI-FINANCEIRO-F9-HUB-RECONCILIACAO-MAIN-001: revisão P2 — replay do PDV após estorno ──
+
+describe("PDV · retry de operação estornada depois (revisão P2)", () => {
+  it("singular: estorno no HUB e retry com a MESMA chave = 409 operacao_estornada, sem nova baixa nem caixa", async () => {
+    const s = await novaLoja()
+    const sessaoId = (await prisma.sessaoCaixa.create({ data: { storeId: s, operador: "QA", status: "ABERTA" } })).id
+    const lk = await novoTitulo(s, { cliente: "Edu QA", valor: 80 })
+    const op = chave()
+    const corpo = { op: "parcial", localKey: lk, valor: 30, formaPagamento: "dinheiro", sessaoId, idempotencyKey: op }
+    expect((await pdvReceberConta(req("/api/pdv/receber-conta", s, corpo))).status).toBe(200)
+    const est = await receberPatch(req("/api/financeiro/receber", s, { op: "estornar", localKey: lk, modo: "ultimo_pagamento" }, "PATCH"))
+    expect(est.status).toBe(200)
+    const antes = { hist: (await titulo(s, lk)).hist.length, movs: (await movs(s)).length, caixa: await prisma.caixaOperacao.count({ where: { storeId: s } }) }
+    const r = await json(await pdvReceberConta(req("/api/pdv/receber-conta", s, corpo)))
+    expect(r.status).toBe(409)
+    expect(r.body).toMatchObject({ ok: false, code: "operacao_estornada" })
+    expect((await titulo(s, lk)).hist.length).toBe(antes.hist)
+    expect((await movs(s)).length).toBe(antes.movs)
+    expect(await prisma.caixaOperacao.count({ where: { storeId: s } })).toBe(antes.caixa)
+  })
+
+  it("lote: estorno de um dos títulos e retry com a MESMA chave = 409 titulo_alterado (operacao_estornada), nada gravado", async () => {
+    const s = await novaLoja()
+    const sessaoId = (await prisma.sessaoCaixa.create({ data: { storeId: s, operador: "QA", status: "ABERTA" } })).id
+    const c = await novoCliente(s, "Ivo QA")
+    const a = await novoTitulo(s, { cliente: "Ivo QA", valor: 40, clienteId: c.id })
+    const b = await novoTitulo(s, { cliente: "Ivo QA", valor: 30, clienteId: c.id })
+    const op = chave()
+    const corpo = {
+      sessaoId, formaPagamento: "pix", idempotencyKey: op,
+      itens: [{ localKey: a, saldoEsperado: 40, valorReceber: 40 }, { localKey: b, saldoEsperado: 30, valorReceber: 10 }],
+    }
+    expect((await pdvReceberLote(req("/api/pdv/receber-conta-lote", s, corpo))).status).toBe(200)
+    expect((await receberPatch(req("/api/financeiro/receber", s, { op: "estornar", localKey: b, modo: "ultimo_pagamento" }, "PATCH"))).status).toBe(200)
+    const antesMovs = (await movs(s)).length
+    const antesCaixa = await prisma.caixaOperacao.count({ where: { storeId: s } })
+    const r = await json(await pdvReceberLote(req("/api/pdv/receber-conta-lote", s, corpo)))
+    expect(r.status).toBe(409)
+    expect(r.body.code).toBe("titulo_alterado")
+    expect(r.body.detalhes).toEqual([{ localKey: b, motivo: "operacao_estornada" }])
+    expect((await movs(s)).length).toBe(antesMovs)
+    expect(await prisma.caixaOperacao.count({ where: { storeId: s } })).toBe(antesCaixa)
+  })
+})
+
 // ─── OMNI-FINANCEIRO-F9-HUB-RECONCILIACAO-MAIN-001: Financeiro × Caixa × Relatório Geral ──
 
 describe("sem duplicidade entre Financeiro, Caixa e Relatório Geral (consulta real da main)", () => {

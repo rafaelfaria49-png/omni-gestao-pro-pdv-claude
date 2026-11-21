@@ -628,6 +628,17 @@ export function PdvRecebimentoModal({
         if (code === "ja_pago" || code === "nada_em_aberto" || code === "ja_quitado") {
           return { ok: false as const, error: "Este título já está quitado." }
         }
+        if (code === "operacao_estornada" || code === "titulo_alterado") {
+          // Desfecho definitivo: a próxima tentativa nasce com chave nova.
+          dropIdempotencyKey(row, op, valor)
+          return {
+            ok: false as const,
+            error:
+              code === "operacao_estornada"
+                ? "Este recebimento foi estornado depois de registrado. Atualize a lista antes de receber de novo."
+                : "O título mudou enquanto você recebia. Atualize a lista e confira o saldo.",
+          }
+        }
         if (code === "valor_maior_que_aberto") {
           return {
             ok: false as const,

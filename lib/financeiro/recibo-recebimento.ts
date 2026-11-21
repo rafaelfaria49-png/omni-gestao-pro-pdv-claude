@@ -191,4 +191,14 @@ export function momentoDaOperacao(payload: unknown, loteId: string | null | unde
   return ats.sort()[0] ?? null
 }
 
+/**
+ * A operação `loteId` foi estornada (total, parcial ou de forma ambígua) neste título?
+ * Base do replay: retry de uma operação estornada depois NÃO pode devolver "recebido".
+ */
+export function operacaoEstornadaNoLedger(payload: unknown, loteId: string | null | undefined): boolean {
+  const key = str(loteId)
+  if (!key) return false
+  return pagamentosDoLedger(payload, 0).some((p) => p.loteId === key && p.estornado)
+}
+
 export const RECIBO_EPS = EPS
