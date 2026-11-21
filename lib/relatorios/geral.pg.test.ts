@@ -206,6 +206,36 @@ describe.skipIf(!base)("Relatório Geral — PostgreSQL descartável", () => {
     expect(JSON.stringify(trace)).not.toContain("Texto livre do caixa")
   })
 
+  it("RAFACELL: vencimento dd/mm/aaaa do PDV a prazo tem saldo comprovado; acessório pela configuração do produto", async () => {
+    const D = "geral-qa-d"
+    await db.store.create({ data: { id: D, name: "QA Geral D" } })
+    // Categoria de texto livre sem "acess" (como "Capinha silicone" em produção); a configuração de acessório é a prova.
+    await db.produto.createMany({ data: [
+      { id: "gd-capa", storeId: D, name: "QA Capinha", category: "Capinha silicone", metadata: { acessorios: { version: 1, tipo: "capinha", exigeModelo: false, exigeCor: false, usaCoresPadrao: true } } },
+      { id: "gd-cabo", storeId: D, name: "QA Cabo", category: "Cabos de celular" }] })
+    await db.venda.create({ data: { id: "gvd1", storeId: D, pedidoId: "QA-D1", total: 150, at: nov(3), payload: { paymentBreakdown: { dinheiro: 30, aPrazo: 120 } },
+      itens: { create: [{ inventoryId: "gd-capa", nome: "QA", quantidade: 1, lineTotal: 25 }, { inventoryId: "gd-cabo", nome: "QA", quantidade: 1, lineTotal: 5 },
+        { inventoryId: "__servico__svc-d", nome: "QA", quantidade: 1, lineTotal: 120 }] } } })
+    // Mesmo formato gravado por ops-upsert-venda (toLocaleDateString("pt-BR")).
+    await db.contaReceberTitulo.createMany({ data: [
+      { id: "gd-t1", storeId: D, localKey: "pdv-aprazo-QA-D1-1", valor: 60, vencimento: "05/11/2026", status: "pendente" },
+      { id: "gd-t2", storeId: D, localKey: "pdv-aprazo-QA-D1-2", valor: 60, vencimento: "20/12/2099", status: "parcial", payload: { historico: [{ tipo: "pagamento", valor: 20 }] } }] })
+    const r = await report("", D)
+    expect(row(r, "vendas-tipo", "acessorio")).toMatchObject({ bruto: 25 })
+    expect(row(r, "vendas-tipo", "produto")).toMatchObject({ bruto: 5 })
+    expect(row(r, "vendas-tipo", "servico")).toMatchObject({ bruto: 120 })
+    expect(metric(r, "receber", "receivableUnknown")).toBe(0)
+    expect(metric(r, "receber", "receivableOpen2")).toBe(100)
+    expect(metric(r, "receber", "receivableOverdue")).toBe(60)
+    expect(metric(r, "receber", "receivableDue")).toBe(60)
+    expect(metric(r, "resumo", "receivableOpen")).toBe(100)
+    // Data impossível continua sem comprovação (nunca vira zero nem data estimada).
+    await db.contaReceberTitulo.create({ data: { id: "gd-t3", storeId: D, localKey: "pdv-aprazo-QA-D1-3", valor: 10, vencimento: "31/02/2026", status: "pendente" } })
+    const bad = await report("", D)
+    expect(metric(bad, "receber", "receivableUnknown")).toBe(1)
+    expect(metric(bad, "receber", "receivableOpen2")).toBeNull()
+  })
+
   it("é estritamente somente leitura", async () => {
     const before = await db.movimentacaoFinanceira.count()
     await report()
