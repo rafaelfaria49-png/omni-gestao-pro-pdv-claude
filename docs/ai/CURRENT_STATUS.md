@@ -60,14 +60,19 @@
 
 ---
 
-## Página comercial "Vendas e Estoque" `/gestao-lojas` (`OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001`) · 18/11/2026
+## Página comercial "Vendas e Estoque" `/gestao-lojas` (`OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001`) · 18/11/2026 · atualizado 19/11/2026
 
-- **Real, em PR, sem merge**: página pública `/gestao-lojas` (sem IA), pedido de teste gravado em
+- **19/11/2026:** #374 mergeada (`fbc7bba`) e publicada; migration comercial **aplicada em Production** antes do
+  merge (30/30, tabela vazia; backup Neon `br-delicate-sky-acgab3g9`). Nenhum pedido real validado ainda.
+  `CAPTACAO-COMERCIAL-PILOTO-002`: provisionar a partir de um pedido fecha o pedido e grava `storeId`/`userId`
+  no histórico; caixa com links de contato; instruções de entrada sem senha. Operação, roteiro de teste real,
+  preços e proposta de limite por plano: `docs/comercial/GESTAO_LOJAS_OPERACAO_PILOTO.md`.
+- **Real**: página pública `/gestao-lojas` (sem IA), pedido de teste gravado em
   `solicitacoes_teste_comercial` com protocolo, consentimento, histórico, idempotência por email aberto
   (UNIQUE `emailAberto`) e limite por origem/global no banco; caixa de entrada em `/dashboard/plataforma`
   ligada ao provisionamento assistido existente. Pedido **não** cria conta, loja, trial nem cobrança.
-- **Migration aditiva `20261118120000_solicitacoes_teste_comercial` NÃO aplicada em Production**
-  (merge na `main` pode disparar `migrate deploy` no `omni-gestao-pro`). Exige autorização do proprietário.
+- **Limite de pessoas por plano não existe** (os 3 planos são idênticos); contato comercial direto só com
+  `GESTAO_LOJAS_CONTATO_WHATSAPP`/`GESTAO_LOJAS_CONTATO_EMAIL` (não configurados).
 - **Fail-closed por env**: preços propostos (R$ 39,90/69,90/99,90 — **não aprovados**) só com
   `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1`; download Windows só com `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` https.
 - `/` (acesso piloto) e a landing antiga de IA (`/dashboard/landing-preview`) **inalteradas**. Stripe intocado.
