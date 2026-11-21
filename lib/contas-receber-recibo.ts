@@ -1,3 +1,5 @@
+import { desktopPrintHtml, getDesktopPrintBridge, isDesktopDirectPrintReady } from "@/lib/desktop-print-bridge"
+
 /** Nome exibido no recibo térmico (80 mm). */
 export const RECIBO_LOJA_NOME_PADRAO = "Minha Loja"
 
@@ -478,6 +480,28 @@ function medirAlturaReciboMm(root: HTMLElement, larguraMm: number): number | nul
  * reimpressão. Falha aqui nunca toca no recebimento já gravado.
  */
 function printReciboInnerHtml(inner: string, opts?: ImprimirReciboOpts, extraCss = ""): Promise<boolean> {
+  // App Windows com impressora escolhida nesta estação: mesmo caminho do cupom de venda
+  // (`lib/desktop-print-bridge`), direto no spooler, sem diálogo. Falha cai no navegador.
+  if (getDesktopPrintBridge()) return printReciboDesktopOuNavegador(inner, opts, extraCss)
+  return printReciboNoNavegador(inner, opts, extraCss)
+}
+
+async function printReciboDesktopOuNavegador(
+  inner: string,
+  opts: ImprimirReciboOpts | undefined,
+  extraCss: string,
+): Promise<boolean> {
+  if (await isDesktopDirectPrintReady()) {
+    const bobina = opts?.bobina === "58mm" ? "58mm" : "80mm"
+    const html = `<div class="recibo-print-root"><style>${RECIBO_THERMAL_CSS}${extraCss}</style>${inner}</div>`
+    const res = await desktopPrintHtml(html, { bobina, title: "Comprovante de recebimento" })
+    if (res.ok) return true
+    console.warn("[impressao-direta] comprovante falhou; contingência do navegador:", res.error)
+  }
+  return printReciboNoNavegador(inner, opts, extraCss)
+}
+
+function printReciboNoNavegador(inner: string, opts?: ImprimirReciboOpts, extraCss = ""): Promise<boolean> {
   if (typeof document === "undefined" || typeof window === "undefined") return Promise.resolve(false)
   if (typeof window.print !== "function") return Promise.resolve(false)
   const bobina = opts?.bobina === "58mm" ? "58mm" : "80mm"
