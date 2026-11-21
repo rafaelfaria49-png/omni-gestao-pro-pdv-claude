@@ -1,0 +1,1940 @@
+{
+  "started_at": "2026-10-29T14:16:35.212Z",
+  "finished_at": "2026-10-29T14:20:49.564Z",
+  "postgres": "17.10",
+  "script_sha256": "dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935",
+  "migration_sha256": "f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e",
+  "synthetic_only": true,
+  "production_connections": 0,
+  "vercel_operations": 0,
+  "pass": true,
+  "results": [
+    {
+      "name": "Original migration hash preserved",
+      "pass": true
+    },
+    {
+      "name": "Original migration preserves all synthetic int4 values",
+      "pass": true
+    },
+    {
+      "name": "Five Float NOT NULL fields match Prisma contracts",
+      "pass": true
+    },
+    {
+      "name": "Apply exact corrected script to valid UN/KG",
+      "pass": true,
+      "elapsed_ms": 133
+    },
+    {
+      "name": "Five expected validated CHECK constraints exist",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=0",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=-0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=-0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=0.3",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=3.96",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=-1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=-999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=2147483647",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=-2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid estoque_produtos.stock=-999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=NaN",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=-Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=-1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=-0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=-1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=-0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=1.0000000000000002",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=999999999999.9989",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=999999999999998.5",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid estoque_produtos.stock=-5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "estoque_produtos_stock_kg_milesimos"
+    },
+    {
+      "name": "NOT NULL estoque_produtos.stock",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=0",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=-0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=-0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=0.3",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=3.96",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=-1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=-999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=2147483647",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=-2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid produto_depositos.quantidade=-999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=NaN",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=-Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=-1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=-0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=-1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=-0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=1.0000000000000002",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=999999999999.9989",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=999999999999998.5",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid produto_depositos.quantidade=-5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "produto_depositos_quantidade_kg_milesimos"
+    },
+    {
+      "name": "NOT NULL produto_depositos.quantidade",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=0",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=-0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=-0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=0.3",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=3.96",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=-1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=-999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=2147483647",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=-2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.quantidade=-999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=NaN",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=-Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=-1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=-0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=-1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=-0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=1.0000000000000002",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=999999999999.9989",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=999999999999998.5",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.quantidade=-5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+    },
+    {
+      "name": "NOT NULL movimentacoes_estoque.quantidade",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=0",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=-0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=-0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=0.3",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=3.96",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=-1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=-999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=2147483647",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=-2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueAntes=-999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=NaN",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=-Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=-1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=-0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=-1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=-0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=1.0000000000000002",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=999999999999.9989",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=999999999999998.5",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueAntes=-5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+    },
+    {
+      "name": "NOT NULL movimentacoes_estoque.estoqueAntes",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=0",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=-0.001",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=-0.1",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=0.3",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=3.96",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=-1234.567",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=-999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=2147483647",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=-2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=2147483648",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL valid movimentacoes_estoque.estoqueDepois=-999999999999999",
+      "pass": true
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=NaN",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=-Infinity",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=-1000000000000000",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=-0.0001",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=-1.2345",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=-0.30000000000000004",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=1.0000000000000002",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=999999999999.9989",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=999999999999998.5",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "SQL invalid movimentacoes_estoque.estoqueDepois=-5e-324",
+      "pass": true,
+      "sqlstate": "23514",
+      "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+    },
+    {
+      "name": "NOT NULL movimentacoes_estoque.estoqueDepois",
+      "pass": true
+    },
+    {
+      "name": "NULL CHECK semantics documented",
+      "pass": true
+    },
+    {
+      "name": "Canonical KG sweep no false positives",
+      "pass": true,
+      "tested": 220003,
+      "rejected": 0
+    },
+    {
+      "name": "Known scalar/unit limitation UN",
+      "pass": true,
+      "accepted": 1.001,
+      "semantic_unit_domain": "must be rejected by application boundary"
+    },
+    {
+      "name": "Known scalar/unit limitation KG",
+      "pass": true,
+      "accepted": 1000000000000,
+      "semantic_unit_domain": "must be rejected by application boundary"
+    },
+    {
+      "name": "UN integer upper/lower boundary sweep",
+      "pass": true,
+      "tested": 20002,
+      "rejected": 0
+    },
+    {
+      "name": "Generate isolated Prisma old",
+      "pass": true,
+      "output": "Prisma schema loaded from schema.prisma\n\n✔ Generated Prisma Client (v6.19.3) to .\\client in 3.84s",
+      "stderr": ""
+    },
+    {
+      "name": "Generate isolated Prisma new",
+      "pass": true,
+      "output": "Prisma schema loaded from schema.prisma\n\n✔ Generated Prisma Client (v6.19.3) to .\\client in 1.06s",
+      "stderr": ""
+    },
+    {
+      "name": "Prisma identity old",
+      "pass": true,
+      "local_database": "a6_final_04",
+      "local_host": "127.0.0.1",
+      "local_port": 54045
+    },
+    {
+      "name": "Prisma identity new",
+      "pass": true,
+      "local_database": "a6_final_04",
+      "local_host": "127.0.0.1",
+      "local_port": 54045
+    },
+    {
+      "name": "Canonical helper rejects counterexamples",
+      "pass": true
+    },
+    {
+      "name": "Old Prisma absolute 12",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "Old Prisma absolute -1",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "Old Prisma absolute 2147483647",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "Old Prisma zero remains a known bypass",
+      "pass": true
+    },
+    {
+      "name": "Old Prisma increment silent no-op reproduced",
+      "pass": true,
+      "actual_stock": "13",
+      "intended_stock": 14
+    },
+    {
+      "name": "Old Prisma decrement silent no-op reproduced",
+      "pass": true,
+      "actual_stock": "13",
+      "intended_stock": 12
+    },
+    {
+      "name": "Old increment from zero yields denormal and is blocked",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "Old Prisma deposit absolute",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "Old Prisma ledger binary Int",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "Old Prisma whole sale transaction rollback",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "New Prisma KG 0",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG 0.001",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG -0.001",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG 0.1",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG 0.3",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG 1.234",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG -1.234",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG 3.96",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG 999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "New Prisma KG -999999999999.999",
+      "pass": true
+    },
+    {
+      "name": "New Prisma UN 0",
+      "pass": true
+    },
+    {
+      "name": "New Prisma UN 1",
+      "pass": true
+    },
+    {
+      "name": "New Prisma UN -1",
+      "pass": true
+    },
+    {
+      "name": "New Prisma UN 2147483648",
+      "pass": true
+    },
+    {
+      "name": "New Prisma UN -2147483648",
+      "pass": true
+    },
+    {
+      "name": "New Prisma UN 999999999999999",
+      "pass": true
+    },
+    {
+      "name": "New Prisma UN -999999999999999",
+      "pass": true
+    },
+    {
+      "name": "New Prisma precision: blocked or normalized before DB 0.30000000000000004",
+      "pass": true,
+      "javascript_input": "0.30000000000000004",
+      "returned": 0.3,
+      "stored": 0.3,
+      "error": null,
+      "normalized_before_constraint": true
+    },
+    {
+      "name": "New Prisma precision: blocked or normalized before DB 1.0000000000000002",
+      "pass": true,
+      "javascript_input": "1.0000000000000002",
+      "returned": 1,
+      "stored": 1,
+      "error": null,
+      "normalized_before_constraint": true
+    },
+    {
+      "name": "New Prisma precision: blocked or normalized before DB 0.0005",
+      "pass": true,
+      "javascript_input": "0.0005",
+      "returned": null,
+      "stored": 1,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "sqlstate": "23514"
+      },
+      "normalized_before_constraint": false
+    },
+    {
+      "name": "Canonical KG entry/exit/reversal preserves stock-deposit-ledger",
+      "pass": true
+    },
+    {
+      "name": "New Prisma invalid later ledger rolls back prior sale/stock/deposit",
+      "pass": true,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "code": null,
+        "sqlstate": "23514"
+      },
+      "unchanged": true
+    },
+    {
+      "name": "Prisma diff ignores CHECK and otherwise matches synthetic schema",
+      "pass": true,
+      "output": "No difference detected.",
+      "stderr": ""
+    },
+    {
+      "name": "Duplicate application refuses without state change",
+      "pass": true
+    },
+    {
+      "name": "Explicit local guard removal preserves values/types",
+      "pass": true
+    },
+    {
+      "name": "Guard reapplication after explicit local removal",
+      "pass": true
+    },
+    {
+      "name": "Guard refuses old integer schema atomically",
+      "pass": true
+    },
+    {
+      "name": "Preexisting corruption causes whole DDL rollback stock",
+      "pass": true
+    },
+    {
+      "name": "Recovery after synthetic correction 0",
+      "pass": true
+    },
+    {
+      "name": "Preexisting corruption causes whole DDL rollback quantidade",
+      "pass": true
+    },
+    {
+      "name": "Recovery after synthetic correction 1",
+      "pass": true
+    },
+    {
+      "name": "Preexisting corruption causes whole DDL rollback quantidade",
+      "pass": true
+    },
+    {
+      "name": "Recovery after synthetic correction 2",
+      "pass": true
+    },
+    {
+      "name": "Preexisting corruption causes whole DDL rollback estoqueAntes",
+      "pass": true
+    },
+    {
+      "name": "Recovery after synthetic correction 3",
+      "pass": true
+    },
+    {
+      "name": "Preexisting corruption causes whole DDL rollback estoqueDepois",
+      "pass": true
+    },
+    {
+      "name": "Recovery after synthetic correction 4",
+      "pass": true
+    },
+    {
+      "name": "Guard refuses nullable schema atomically",
+      "pass": true
+    },
+    {
+      "name": "Lock timeout rolls back earlier constraints",
+      "pass": true,
+      "elapsed_ms": 5240,
+      "sqlstate": "55P03"
+    },
+    {
+      "name": "Owned blocker released cleanly",
+      "pass": true
+    },
+    {
+      "name": "ACCESS EXCLUSIVE held on all three until rollback",
+      "pass": true,
+      "exclusive_relations": 3,
+      "role_restored": true,
+      "lock_timeout_restored": true,
+      "statement_timeout_restored": true
+    },
+    {
+      "name": "Role and local timeouts restored after rollback",
+      "pass": true
+    },
+    {
+      "name": "Statement failure rolls back whole guard transaction",
+      "pass": true,
+      "sqlstate": "57014"
+    },
+    {
+      "name": "Retry after lock/failure works",
+      "pass": true
+    },
+    {
+      "name": "Owned local PostgreSQL stopped",
+      "pass": true
+    }
+  ],
+  "detail": {
+    "catalog": [
+      {
+        "name": "estoque_produtos_stock_kg_milesimos",
+        "validated": true,
+        "definition": "CHECK (((stock <> 'NaN'::double precision) AND (abs(stock) <= ('999999999999999'::bigint)::double precision) AND ((round((stock)::numeric, 3))::double precision = stock)))"
+      },
+      {
+        "name": "movimentacoes_estoque_estoqueAntes_kg_milesimos",
+        "validated": true,
+        "definition": "CHECK (((\"estoqueAntes\" <> 'NaN'::double precision) AND (abs(\"estoqueAntes\") <= ('999999999999999'::bigint)::double precision) AND ((round((\"estoqueAntes\")::numeric, 3))::double precision = \"estoqueAntes\")))"
+      },
+      {
+        "name": "movimentacoes_estoque_estoqueDepois_kg_milesimos",
+        "validated": true,
+        "definition": "CHECK (((\"estoqueDepois\" <> 'NaN'::double precision) AND (abs(\"estoqueDepois\") <= ('999999999999999'::bigint)::double precision) AND ((round((\"estoqueDepois\")::numeric, 3))::double precision = \"estoqueDepois\")))"
+      },
+      {
+        "name": "movimentacoes_estoque_quantidade_kg_milesimos",
+        "validated": true,
+        "definition": "CHECK (((quantidade <> 'NaN'::double precision) AND (abs(quantidade) <= ('999999999999999'::bigint)::double precision) AND ((round((quantidade)::numeric, 3))::double precision = quantidade)))"
+      },
+      {
+        "name": "produto_depositos_quantidade_kg_milesimos",
+        "validated": true,
+        "definition": "CHECK (((quantidade <> 'NaN'::double precision) AND (abs(quantidade) <= ('999999999999999'::bigint)::double precision) AND ((round((quantidade)::numeric, 3))::double precision = quantidade)))"
+      }
+    ],
+    "matrix": [
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "NaN",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "-Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "-1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "-0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "-1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "-0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "1.0000000000000002",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "999999999999.9989",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "999999999999998.5",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "estoque_produtos",
+        "column": "stock",
+        "value": "-5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "estoque_produtos_stock_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "NaN",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "-Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "-1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "-0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "-1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "-0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "1.0000000000000002",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "999999999999.9989",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "999999999999998.5",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "produto_depositos",
+        "column": "quantidade",
+        "value": "-5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "produto_depositos_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "NaN",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "-Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "-1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "-0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "-1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "-0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "1.0000000000000002",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "999999999999.9989",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "999999999999998.5",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "quantidade",
+        "value": "-5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_quantidade_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "NaN",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "-Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "-1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "-0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "-1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "-0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "1.0000000000000002",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "999999999999.9989",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "999999999999998.5",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueAntes",
+        "value": "-5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueAntes_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "NaN",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "-Infinity",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "-1000000000000000",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "-0.0001",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "-1.2345",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "-0.30000000000000004",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "1.0000000000000002",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "999999999999.9989",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "999999999999998.5",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      },
+      {
+        "table": "movimentacoes_estoque",
+        "column": "estoqueDepois",
+        "value": "-5e-324",
+        "rejected": true,
+        "sqlstate": "23514",
+        "constraint": "movimentacoes_estoque_estoqueDepois_kg_milesimos"
+      }
+    ],
+    "kg_sweep": {
+      "tested": 220003,
+      "rejected": 0
+    },
+    "un_sweep": {
+      "tested": 20002,
+      "rejected": 0
+    },
+    "prisma_versions": {
+      "cli": "6.19.3",
+      "client_package": "6.19.3"
+    },
+    "helper_limits": {
+      "un_fraction_rejected": true,
+      "kg_unit_limit_rejected": true
+    },
+    "old_prisma": {
+      "absolute_nonzero": "blocked",
+      "zero": "accepted",
+      "increment_decrement": "silent no-op at nonzero balance",
+      "operations": [
+        "increment",
+        "decrement"
+      ]
+    },
+    "new_prisma_precision": [
+      {
+        "javascript_input": "0.30000000000000004",
+        "returned": 0.3,
+        "stored": 0.3,
+        "error": null,
+        "normalized_before_constraint": true
+      },
+      {
+        "javascript_input": "1.0000000000000002",
+        "returned": 1,
+        "stored": 1,
+        "error": null,
+        "normalized_before_constraint": true
+      },
+      {
+        "javascript_input": "0.0005",
+        "returned": null,
+        "stored": 1,
+        "error": {
+          "name": "PrismaClientUnknownRequestError",
+          "sqlstate": "23514"
+        },
+        "normalized_before_constraint": false
+      }
+    ],
+    "future_manual_kg": {
+      "stock_transaction_scenario": "PASS",
+      "entries_exits_reversals": true,
+      "parallel_feature_code_not_inspected": true,
+      "actual_sale_model_integration_certified": false,
+      "requirement": "integer smallest-unit arithmetic and one atomic transaction"
+    }
+  }
+}

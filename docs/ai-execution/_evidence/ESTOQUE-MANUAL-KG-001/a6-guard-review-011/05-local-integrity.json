@@ -1,0 +1,122 @@
+{
+  "finished_at": "2026-10-29T14:35:36.753Z",
+  "pass": true,
+  "checks": [
+    {
+      "name": "Exactly script 07 changed among baseline tracked files",
+      "pass": true,
+      "tracked_count": 6041,
+      "changed": [
+        "docs/padaria/pesagem/rollout/07-guard-check-opcional.sql"
+      ]
+    },
+    {
+      "name": "All earlier evidence bytes preserved",
+      "pass": true,
+      "files": 164,
+      "changed": []
+    },
+    {
+      "name": "HEAD and index preserved",
+      "pass": true,
+      "head": "104d768d7b7497fe34e2872f4253c4fd97feb5bb",
+      "index": ""
+    },
+    {
+      "name": "Original migration bytes and hash preserved",
+      "pass": true,
+      "sha256": "f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e",
+      "bytes": 1041
+    },
+    {
+      "name": "Complete proof matches current script: 03-proof-04.json",
+      "pass": true,
+      "checks": 235,
+      "failed": []
+    },
+    {
+      "name": "Complete proof matches current script: 04-scale-edge-proof-01.json",
+      "pass": true,
+      "checks": 161,
+      "failed": []
+    },
+    {
+      "name": "No default application Prisma client generated",
+      "pass": true,
+      "baseline_client_files": 0
+    },
+    {
+      "name": "Owned disposable cluster has no postmaster.pid",
+      "pass": true
+    },
+    {
+      "name": "All A6 Node harnesses parse",
+      "pass": true,
+      "files": [
+        {
+          "file": "probe-original.cjs",
+          "pass": true,
+          "error": null
+        },
+        {
+          "file": "run-proof.cjs",
+          "pass": true,
+          "error": null
+        },
+        {
+          "file": "sandbox.cjs",
+          "pass": true,
+          "error": null
+        },
+        {
+          "file": "scale-edge-proof.cjs",
+          "pass": true,
+          "error": null
+        },
+        {
+          "file": "verify-artifacts.cjs",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "A6 Markdown local references and code fences",
+      "pass": true,
+      "files": [
+        {
+          "file": "README.md",
+          "pass": true,
+          "local_links": 20,
+          "missing": []
+        },
+        {
+          "file": "06-independent-review.md",
+          "pass": true,
+          "local_links": 3,
+          "missing": []
+        }
+      ]
+    },
+    {
+      "name": "git diff --check",
+      "pass": true,
+      "output": "warning: in the working copy of 'docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/preview-isolation-003/README.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/padaria/pesagem/ESTOQUE_MANUAL_KG_PREVIEW_ISOLAMENTO.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'docs/padaria/pesagem/rollout/07-guard-check-opcional.sql', LF will be replaced by CRLF the next time Git touches it"
+    }
+  ],
+  "script_sha256": "dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935",
+  "migration_sha256": "f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e",
+  "status": " M docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/preview-isolation-003/README.md\n M docs/padaria/pesagem/ESTOQUE_MANUAL_KG_CHECKLIST_LOJAS.md\n M docs/padaria/pesagem/ESTOQUE_MANUAL_KG_PREVIEW_ISOLAMENTO.md\n M docs/padaria/pesagem/ESTOQUE_MANUAL_KG_ROLLOUT_REMEDIACAO.md\n M docs/padaria/pesagem/ESTOQUE_MANUAL_KG_RUNBOOK.md\n M docs/padaria/pesagem/rollout/07-guard-check-opcional.sql\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a1-1-loja5-fechamento-007/\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a1-production-baseline-006/\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a3-production-roles-grants-008/\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a4-production-login-readonly-009/\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a5-runbook-consolidation-010/\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/a6-guard-review-011/\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/preview-isolation-003/13-p5-runtime-db.md\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/preview-isolation-003/harness/p5-prova-runtime.cjs\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/rollout-readiness-004/\n?? docs/ai-execution/_evidence/ESTOQUE-MANUAL-KG-001/runbook-hardening-005/\n?? docs/ai-execution/_evidence/PADARIA-GO-LIVE-FASTTRACK-002/\n",
+  "source_hashes": {
+    "harness/fixture-old.sql": "d79f55696a6553707e25d82e41127796df063772a2732233f2a29ec461895e1a",
+    "harness/probe-original.cjs": "e09442141faa6b4248fd0dbb46792b7ed3017378d4d73745f785b0bb3a92c449",
+    "harness/run-proof.cjs": "ece91e02e9042564d8fa6ad46fbfaf094f382ac5025490a840d9806b0c6dcea6",
+    "harness/sandbox.cjs": "0d69e645f709222c8a121a799413c4c9204736b724b76d462d7573a515aace72",
+    "harness/scale-edge-proof.cjs": "5ca8f3fd8658fe067055e5da97177395966d0271b0a3b7b899cedaa7b90f20e3",
+    "harness/verify-artifacts.cjs": "02201a7670e59f747f0150a733f10a09f7595d88d158bb7a6c0f24497261ffb5",
+    "baseline/07-original.sql": "a407ff7f568df94e26129c1990cfe4b35f6384aa532d7da3450d70ae38db1b27"
+  },
+  "commit": "NONE",
+  "push": false,
+  "merge": false
+}

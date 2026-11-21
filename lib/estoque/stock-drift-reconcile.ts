@@ -12,6 +12,8 @@
  * Qualquer outro desacordo permanece bloqueado.
  */
 
+import { fromStockUnits, toStockUnits, type StockUnit } from "@/lib/estoque/stock-quantity"
+
 export const STOCK_DRIFT_REASON = {
   ALIGNED: "aligned",
   UNMATERIALIZED_ZERO: "unmaterialized_zero",
@@ -394,4 +396,56 @@ export function parseStockDriftDetails(input: unknown): StockDriftDetails | unde
         : num(o.lastLedgerEstoqueDepois),
     authority: typeof o.authority === "string" ? o.authority : "",
   }
+}
+
+// ─── Classificação por unidade (ESTOQUE-MANUAL-KG-001) ───────────────────────
+
+export type ScaledStockDrift = {
+  /** Em unidades mínimas inteiras — para decisão. */
+  classification: StockDriftClassification
+  /** Mesma classificação na unidade do produto — para mensagens e payload público. */
+  display: StockDriftClassification
+}
+
+function descaleClassification(c: StockDriftClassification, unit: StockUnit): StockDriftClassification {
+  const out = (n: number) => fromStockUnits(n, unit)
+  return {
+    ...c,
+    stock: out(c.stock),
+    soma: out(c.soma),
+    gap: out(c.gap),
+    targetQty: out(c.targetQty),
+    lastLedgerEstoqueDepois: c.lastLedgerEstoqueDepois === null ? null : out(c.lastLedgerEstoqueDepois),
+    alignedTargetQty: c.alignedTargetQty === null ? null : out(c.alignedTargetQty),
+    alignedStock: c.alignedStock === null ? null : out(c.alignedStock),
+  }
+}
+
+/**
+ * Classifica em unidades mínimas inteiras (UN = 1, KG = milésimo), sem soma em
+ * ponto flutuante. `null` = algum valor gravado tem precisão incompatível com a
+ * unidade: falhar fechado, nunca truncar.
+ */
+export function classifyStockDriftForUnit(
+  input: ClassifyStockDriftInput & { unit: StockUnit },
+): ScaledStockDrift | null {
+  const stock = toStockUnits(input.stock, input.unit)
+  const deposits: StockDriftDepositRow[] = []
+  for (const row of input.deposits) {
+    const quantidade = toStockUnits(row.quantidade, input.unit)
+    if (quantidade === null) return null
+    deposits.push({ depositoId: row.depositoId, quantidade })
+  }
+  const ledger =
+    input.lastLedgerEstoqueDepois === null || input.lastLedgerEstoqueDepois === undefined
+      ? null
+      : toStockUnits(input.lastLedgerEstoqueDepois, input.unit)
+  if (stock === null || (input.lastLedgerEstoqueDepois != null && ledger === null)) return null
+  const classification = classifyStockDrift({
+    stock,
+    deposits,
+    targetDepositoId: input.targetDepositoId,
+    lastLedgerEstoqueDepois: ledger,
+  })
+  return { classification, display: descaleClassification(classification, input.unit) }
 }

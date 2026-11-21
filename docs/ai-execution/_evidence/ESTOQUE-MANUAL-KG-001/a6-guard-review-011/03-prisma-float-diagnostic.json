@@ -1,0 +1,56 @@
+{
+  "driver_normalization_investigation": true,
+  "rows": [
+    {
+      "input": 0.30000000000000004,
+      "input_binary": "3fd3333333333334",
+      "returned": 0.3,
+      "error": null,
+      "stored": {
+        "text": "0.3",
+        "binary": "3fd3333333333333"
+      },
+      "raw_prisma_parameter": {
+        "text": "0.3",
+        "binary": "3fd3333333333333"
+      },
+      "direct_sql_blocked": true,
+      "direct_sql_state": null
+    },
+    {
+      "input": 1.0000000000000002,
+      "input_binary": "3ff0000000000001",
+      "returned": 1,
+      "error": null,
+      "stored": {
+        "text": "1",
+        "binary": "3ff0000000000000"
+      },
+      "raw_prisma_parameter": {
+        "text": "1",
+        "binary": "3ff0000000000000"
+      },
+      "direct_sql_blocked": true,
+      "direct_sql_state": null
+    },
+    {
+      "input": 0.0005,
+      "input_binary": "3f40624dd2f1a9fc",
+      "returned": null,
+      "error": {
+        "name": "PrismaClientUnknownRequestError",
+        "sqlstate": "23514"
+      },
+      "stored": {
+        "text": "1",
+        "binary": "3ff0000000000000"
+      },
+      "raw_prisma_parameter": {
+        "text": "0.0005",
+        "binary": "3f40624dd2f1a9fc"
+      },
+      "direct_sql_blocked": true,
+      "direct_sql_state": null
+    }
+  ]
+}

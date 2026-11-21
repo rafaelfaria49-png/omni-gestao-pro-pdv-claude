@@ -1,0 +1,7 @@
+BEGIN READ ONLY;
+SELECT 'db=' || current_database() || ' user=' || current_user || ' ro=' || current_setting('transaction_read_only') || ' pg=' || current_setting('server_version');
+SELECT 'database ' || datname || ' owner=' || pg_get_userbyid(datdba) || ' acl=' || coalesce(datacl::text, 'NULL(default: PUBLIC CONNECT)') FROM pg_database WHERE datname NOT IN ('template0','template1') ORDER BY datname;
+SELECT 'role ' || rolname || ' login=' || rolcanlogin || ' super=' || rolsuper || ' createrole=' || rolcreaterole || ' createdb=' || rolcreatedb || ' bypassrls=' || rolbypassrls || ' connect_prod=' || has_database_privilege(oid, 'omnigestao_prod', 'CONNECT') FROM pg_roles WHERE rolname !~ '^pg_' ORDER BY rolname;
+SELECT 'member ' || r.rolname || ' IN ' || g.rolname || ' admin=' || m.admin_option || ' inherit=' || m.inherit_option || ' set=' || m.set_option FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.member JOIN pg_roles g ON g.oid=m.roleid WHERE r.rolname !~ '^pg_' OR g.rolname IN ('pg_write_all_data','pg_read_all_data','pg_signal_backend','pg_read_all_stats') ORDER BY 1;
+SELECT 'sessions db=' || coalesce(datname,'-') || ' role=' || coalesce(usename,'-') || ' n=' || count(*) FROM pg_stat_activity WHERE backend_type = 'client backend' GROUP BY datname, usename ORDER BY 1;
+ROLLBACK;

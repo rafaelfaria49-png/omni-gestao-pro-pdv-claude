@@ -1,0 +1,127 @@
+# ESTOQUE-MANUAL-KG-001 - arquivos do runbook (rollout/*.sql) executados no PG descartavel - 2026-10-26T02:01:24.354Z
+# topologia Neon: neondb_owner_sim ∈ neon_superuser_sim (pg_write_all_data, pg_signal_backend); schema public de pg_database_owner
+  old-deploy-A le (pool aberto): SUCESSO -> 3
+  old-script le (pool aberto): SUCESSO -> 3
+
+## PRE-JANELA
+  01-papeis.sql [neondb_owner_sim@omnigestao_prod_candidate] sem senha no ambiente (deve recusar): exit=3 63ms KG_SENHA_AUSENTE"
+  01-papeis.sql [neondb_owner_sim@omnigestao_prod_candidate] papeis: exit=0 128ms KG_PAPEIS_OK
+  02-grants-runtime.sql [neondb_owner_sim@omnigestao_prod] grants do runtime: exit=0 93ms KG_RUNTIME_GRANTS_OK
+  06-verificacao.sql [neondb_owner_sim@omnigestao_prod] verificacao: exit=0 80ms 
+    ?column?                                                                                       
+    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     database=omnigestao_prod dono=neondb_owner_sim acl={=Tc/neondb_owner_sim,neondb_owner_sim=CTc/neondb_owner_sim,omni_runtime_v2=c/neondb_owner_sim,omni_migrator=c/neondb_owner_sim}
+    (1 linha)
+    
+                                                    ?column?                                                
+    --------------------------------------------------------------------------------------------------------
+     papel neondb_owner_sim connect=true escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+     papel omni_migrator connect=true escreve_estoque=false pg_write_all_data=false dono_por_heranca=true
+     papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    (3 linhas)
+    
+                          ?column?                       
+    -----------------------------------------------------
+     sessoes papel=neondb_owner_sim app=old-deploy-A n=1
+     sessoes papel=neondb_owner_sim app=old-script n=1
+     sessoes papel=neondb_owner_sim app=psql n=1
+    (3 linhas)
+    
+              ?column?           
+    -----------------------------
+     objetos do papel antigo=529
+    (1 linha)
+    
+                                                                                                      ?column?                                                                                                   
+    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     colunas estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+    (1 linha)
+  deployment novo (runtime v2) grava p-un-13 -> 12: SUCESSO -> 12
+
+## JANELA (trava ligada; loja fechada)
+  03-corte-posse.sql [neondb_owner_sim@omnigestao_prod] corte 1/3 posse (espera a venda em voo): exit=0 2746ms KG_CORTE_POSSE_OK (papel antigo ainda escreve se herdar pg_write_all_data: t; residuos aceitos: nenhum)
+  venda em voo aberta antes do corte: COMMITOU (regime integer, valor correto)
+  old-deploy-A grava com sessao aberta apos 03 (esperado: ainda grava, pg_write_all_data): SUCESSO -> 5
+  04-corte-conexao.sql [omni_migrator@omnigestao_prod] corte 2/3 CONNECT: exit=0 102ms KG_CORTE_CONEXAO_OK
+  deployment antigo em cold start: FALHOU -> FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  05-encerrar-sessoes.sql [neondb_owner_sim@omnigestao_prod_candidate] corte 3/3 sessoes: exit=0 6137ms KG_SESSOES_ENCERRADAS rodada=1 n=2 | KG_SESSOES_ENCERRADAS rodada=2 n=0 | KG_SESSOES_ENCERRADAS rodada=3 n=0 | KG_SESSOES_ANTIGAS_ZERO
+  old-deploy-A tentativa 1: FALHOU -> Server has closed the connection. [P1017]
+  old-deploy-A tentativa 2: FALHOU -> FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  old-script tentativa: FALHOU -> Server has closed the connection. [P1017]
+  06-verificacao.sql [omni_migrator@omnigestao_prod] verificacao pos-corte: exit=0 117ms 
+    ?column?                                                             
+    ----------------------------------------------------------------------------------------------------------------------------------
+     database=omnigestao_prod dono=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+    (1 linha)
+    
+                                                    ?column?                                                 
+    ---------------------------------------------------------------------------------------------------------
+     papel neondb_owner_sim connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+     papel omni_migrator connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=true
+     papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    (3 linhas)
+    
+                              ?column?                           
+    -------------------------------------------------------------
+     sessoes papel=omni_migrator app=psql n=1
+     sessoes papel=omni_runtime_v2 app=new-deploy-runtime-v2 n=1
+    (2 linhas)
+    
+             ?column?          
+    ---------------------------
+     objetos do papel antigo=0
+    (1 linha)
+    
+                                                                                                      ?column?                                                                                                   
+    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     colunas estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+    (1 linha)
+  estoque: p-pao=2 p-un-13=12 p-un-7=5
+
+## RECUPERACAO antes da migration (99) e corte refeito
+  99-desfazer-corte.sql [omni_migrator@postgres] desfazer rodado do database ERRADO (deve recusar): exit=3 127ms KG_DATABASE_ERRADO: conectado em postgres
+  99-desfazer-corte.sql [omni_migrator@omnigestao_prod] desfazer corte: exit=0 90ms 
+  cold start antigo depois do 99 grava p-un-7 -> 7: SUCESSO -> 7
+  04-corte-conexao.sql [omni_migrator@omnigestao_prod] corte 2/3 refeito: exit=0 85ms KG_CORTE_CONEXAO_OK
+  05-encerrar-sessoes.sql [neondb_owner_sim@omnigestao_prod_candidate] corte 3/3 refeito: exit=0 6129ms KG_SESSOES_ENCERRADAS rodada=1 n=1 | KG_SESSOES_ENCERRADAS rodada=2 n=0 | KG_SESSOES_ENCERRADAS rodada=3 n=0 | KG_SESSOES_ANTIGAS_ZERO
+  o mesmo cliente depois do corte refeito: FALHOU -> Server has closed the connection. [P1017]
+
+## MIGRATION + barreira opcional
+  estoque-kg-migration-apply.sql [omni_migrator]: exit=0 NOTICE: KG_MIGRATION_OK produtos=3 depositos=0 livro=0 produtos_md5=2aabe95b2303831ffc1c8fda70fa4046
+  99-desfazer-corte.sql [omni_migrator@omnigestao_prod] desfazer DEPOIS da migration (deve recusar): exit=3 76ms KG_DESFAZER_PROIBIDO_MIGRATION_JA_APLICADA (colunas int4 encontradas: 0 de 5)
+  07-guard-check-opcional.sql [omni_migrator@omnigestao_prod] guard CHECK: exit=0 80ms 
+  runtime v2 (Float) grava 3,96 kg: SUCESSO -> 3.96
+  script da main (Int) com a credencial de admin grava p-un-7 -> 13 (barreira deve recusar): FALHOU -> ERROR", detail: Some("Failing row contains (p-un-7, loja-2, null, null, p-un-7, , , 6.4e-323, 0, 1, null, 0, Ativo, t, null, 2026-10-26 02:01:24.062, 2026-10-26 02:01:42.621)."), column: None, hint: N
+  R1 P1: build Int com a credencial NOVA grava p-un-13 -> 13 (com o 07: recusado; sem o 07 corromperia): FALHOU -> ERROR", detail: Some("Failing row contains (p-un-13, loja-1, null, null, p-un-13, , , 6.4e-323, 0, 1, null, 0, Ativo, t, null, 2026-10-26 02:01:24.049, 2026-10-26 02:01:42.721)."), column: None, hint:
+  old-deploy-A (Int) tenta gravar: FALHOU -> FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  06-verificacao.sql [omni_migrator@omnigestao_prod] verificacao final: exit=0 102ms 
+    ?column?                                                             
+    ----------------------------------------------------------------------------------------------------------------------------------
+     database=omnigestao_prod dono=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+    (1 linha)
+    
+                                                    ?column?                                                 
+    ---------------------------------------------------------------------------------------------------------
+     papel neondb_owner_sim connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+     papel omni_migrator connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=true
+     papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    (3 linhas)
+    
+                             ?column?                         
+    ----------------------------------------------------------
+     sessoes papel=omni_migrator app=admin-script-da-main n=1
+     sessoes papel=omni_migrator app=psql n=1
+     sessoes papel=omni_runtime_v2 app=new-deploy-float n=1
+    (3 linhas)
+    
+             ?column?          
+    ---------------------------
+     objetos do papel antigo=0
+    (1 linha)
+    
+                                                                                                                             ?column?                                                                                                                         
+    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     colunas estoque_produtos.stock:double precision movimentacoes_estoque.estoqueAntes:double precision movimentacoes_estoque.estoqueDepois:double precision movimentacoes_estoque.quantidade:double precision produto_depositos.quantidade:double precision
+    (1 linha)
+  estoque: p-pao=3.96 p-un-13=12 p-un-7=7
+  linhas fora do contrato: 0

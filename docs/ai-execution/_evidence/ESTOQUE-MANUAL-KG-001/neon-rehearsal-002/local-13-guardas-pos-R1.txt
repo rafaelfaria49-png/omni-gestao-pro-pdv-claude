@@ -1,0 +1,10 @@
+# contraprovas das guardas pos-R1 - 2026-10-26T02:02:38.649Z
+01: exit=0 KG_PAPEIS_OK
+02 com tabela de outro dono: exit=3 KG_RUNTIME_SEM_DML: tabela_de_outro_dono
+02 normal: exit=0 KG_RUNTIME_GRANTS_OK
+03 com large object do papel antigo: exit=3 KG_POSSE_NAO_SUPORTADA: large object 424242
+   dono do database depois da recusa: neondb_owner_sim
+03 com composto avulso: exit=0 KG_CORTE_POSSE_OK (papel antigo ainda escreve se herdar pg_write_all_data: t; residuos aceitos: nenhum)
+   dono do composto: omni_owner
+   papel antigo consegue SET ROLE omni_owner: f · tem ADMIN (criador): t
+04 conectado em outro database: exit=3 KG_DATABASE_ERRADO: conectado em postgres

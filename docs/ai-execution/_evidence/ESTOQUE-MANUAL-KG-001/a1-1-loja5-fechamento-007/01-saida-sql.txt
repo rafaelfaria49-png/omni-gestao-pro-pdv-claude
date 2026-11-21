@@ -1,0 +1,45 @@
+url: OK sem conectar · endpoint=ep-summer-tooth-acltc6wi pooler=off usuário=neondb_owner db=omnigestao_prod sslmode=require channel_binding=require senha_presente=true
+## 0. identidade
+     project_id     |        branch_id         |       endpoint_id        |       db        | tx_read_only | default_ro |         agora          
+--------------------+--------------------------+--------------------------+-----------------+--------------+------------+------------------------
+ dry-mouse-36002471 | br-muddy-meadow-ac7ah2wl | ep-summer-tooth-acltc6wi | omnigestao_prod | on           | on         | 2026-10-28 13:52:15+00
+
+IDENTIDADE_OK
+## 1. loja-5: sessão antiga (aberta em 2026-05-28 15:46:59Z no A1) — só status e datas
+ status  |       aberta_em        |       fechada_em       
+---------+------------------------+------------------------
+ FECHADA | 2026-05-28 15:46:59+00 | 2026-10-28 13:34:37+00
+
+## 2. loja-5: sessões por status
+ status  | n 
+---------+---
+ FECHADA | 1
+
+## 3. caixas ABERTA por loja (loja-1, loja-2, loja-5 sempre listadas)
+ storeId |             loja             | abertas |      mais_antiga       
+---------+------------------------------+---------+------------------------
+ loja-1  | RAFACELL ASSISTEC            |       0 | -
+ loja-2  | RAFA BRINQUEDOS E VARIEDADES |       1 | 2026-10-27 12:05:46+00
+ loja-5  | TESTE 123                    |       0 | -
+
+ outras_abertas | total_abertas 
+----------------+---------------
+              0 |             1
+
+## 4. cadastro de lojas (id e nome; classificação vem do proprietário)
+                      id                      |             name             
+----------------------------------------------+------------------------------
+ cliente-bc1c8ad5-5c08-4aaa-b125-7c1076a72f2e | Padaria TESTE
+ loja-1                                       | RAFACELL ASSISTEC
+ loja-10                                      | 123teste
+ loja-11                                      | RAFA BRINQUEDOS E VARIEDADES
+ loja-2                                       | RAFA BRINQUEDOS E VARIEDADES
+ loja-5                                       | TESTE 123
+ loja-6                                       | smart
+ loja-7                                       | teste produtos gestao
+ loja-8                                       | smart teste 500
+ loja-9                                       | gestao teste 239
+ loja-teste-caixa                             | 🧪 LOJA TESTE CAIXA
+
+A1_1_ROLLBACK_OK
+exit=0

@@ -30,6 +30,8 @@ const email = (k: UserKey) => `cc-${k.toLowerCase()}@pilot.invalid`
 const PRODUCTS = {
   un: { id: "cc-bolo-un", name: "Bolo Sintético CC por unidade", metadata: {} },
   kg: { id: "cc-queijo-kg", name: "Queijo Sintético CC por peso", metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } } },
+  // Peso em G segue bloqueado; KG ganhou Entrada manual (ESTOQUE-MANUAL-KG-001).
+  g: { id: "cc-fermento-g", name: "Fermento Sintético CC por grama", metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "G", basePreco: "G" } } },
   invalid: { id: "cc-invalido", name: "Produto Sintético CC declaração inválida", metadata: { comercial: { version: 2, modoVenda: "unidade", unidade: "UN", basePreco: "UN" } } },
 } as const
 
@@ -354,20 +356,28 @@ test("estoque UN: movimentação pelo writer canônico, ficha e lista releem; sa
   await reopened.getByRole("button", { name: "Cancelar" }).click()
 })
 
-test("estoque bloqueado: KG em preparação e declaração inválida explicam o motivo e não gravam", async ({ page }) => {
+test("estoque bloqueado: G em preparação e declaração inválida explicam o motivo e não gravam; KG tem Entrada", async ({ page }) => {
   await setupPage(page, await login("adminA"))
   await openProdutos(page)
   const writes: string[] = []
   page.on("request", (r) => { const d = r.postData() ?? ""; if (r.method() === "POST" && r.headers()["next-action"] && /"(quantidade|novoSaldo)"/.test(d)) writes.push(d) })
 
-  let { editor, row } = await openExisting(page, PRODUCTS.kg.name)
+  // KG: Entrada manual liberada — botão habilitado e sem motivo de bloqueio.
+  const kgEditor = (await openExisting(page, PRODUCTS.kg.name)).editor
+  await expect(kgEditor.getByRole("button", { name: "Movimentar estoque" })).toBeEnabled()
+  await expect(kgEditor.locator("[data-estoque-bloqueio]")).toHaveCount(0)
+  await expect(kgEditor.locator("#produto-estoque-unidade")).toHaveText("KG")
+  await kgEditor.getByRole("button", { name: "Cancelar" }).click()
+  await page.getByPlaceholder("Buscar em produtos…").fill("")
+
+  let { editor, row } = await openExisting(page, PRODUCTS.g.name)
   const move = editor.getByRole("button", { name: "Movimentar estoque" })
   await expect(move).toBeDisabled()
   const reason = editor.locator('[data-estoque-bloqueio="peso_em_preparacao"]')
   await expect(reason).toBeVisible()
   await expect(reason).toContainText("Movimentação indisponível: venda por peso em preparação.")
   await expect(move).toHaveAttribute("aria-describedby", "produto-estoque-bloqueio")
-  await expect(editor.locator("#produto-estoque-unidade")).toHaveText("KG")
+  await expect(editor.locator("#produto-estoque-unidade")).toHaveText("G")
   await expect(editor).not.toContainText("Use Movimentar estoque para entrada")
   await move.click({ force: true })
   await expect(page.getByRole("heading", { name: "Movimentação de estoque" })).toHaveCount(0)
@@ -390,10 +400,10 @@ test("estoque bloqueado: KG em preparação e declaração inválida explicam o 
   await editor.getByRole("button", { name: "Cancelar" }).click()
 
   expect(writes).toEqual([])
-  expect(await db.movimentacaoEstoque.count({ where: { storeId: A, produtoId: { in: [PRODUCTS.kg.id, PRODUCTS.invalid.id] } } })).toBe(0)
-  const stocks = await db.produto.findMany({ where: { id: { in: [PRODUCTS.kg.id, PRODUCTS.invalid.id] } }, select: { stock: true, metadata: true } })
+  expect(await db.movimentacaoEstoque.count({ where: { storeId: A, produtoId: { in: [PRODUCTS.g.id, PRODUCTS.invalid.id] } } })).toBe(0)
+  const stocks = await db.produto.findMany({ where: { id: { in: [PRODUCTS.g.id, PRODUCTS.invalid.id] } }, select: { stock: true, metadata: true } })
   expect(stocks.map((p) => p.stock)).toEqual([0, 0])
-  expect(stocks.map((p) => p.metadata)).toEqual(expect.arrayContaining([PRODUCTS.kg.metadata, PRODUCTS.invalid.metadata]))
+  expect(stocks.map((p) => p.metadata)).toEqual(expect.arrayContaining([PRODUCTS.g.metadata, PRODUCTS.invalid.metadata]))
 })
 
 test("visão interna (proprietário/A01) preservada: sem botão novo, criação histórica continua", async ({ page }) => {
@@ -437,14 +447,14 @@ test("visual: 320/390/1440 com foco e sem recorte nas janelas de categoria e est
     await expect(button).toBeFocused()
     await editor.getByRole("button", { name: "Cancelar" }).click()
 
-    const { editor: kg } = await openExisting(page, PRODUCTS.kg.name)
+    const { editor: kg } = await openExisting(page, PRODUCTS.g.name)
     const reason = kg.locator('[data-estoque-bloqueio="peso_em_preparacao"]')
     await reason.scrollIntoViewIfNeeded()
     await expect(reason).toBeVisible()
     const r = await reason.boundingBox()
     expect(r && r.x >= 0 && r.x + r.width <= width).toBeTruthy()
     await noHorizontalOverflow(page)
-    await page.screenshot({ path: `${out}/cc-estoque-kg-${width}.png`, animations: "disabled" })
+    await page.screenshot({ path: `${out}/cc-estoque-g-${width}.png`, animations: "disabled" })
     await kg.getByRole("button", { name: "Cancelar" }).click()
     await page.getByPlaceholder("Buscar em produtos…").fill("")
   }

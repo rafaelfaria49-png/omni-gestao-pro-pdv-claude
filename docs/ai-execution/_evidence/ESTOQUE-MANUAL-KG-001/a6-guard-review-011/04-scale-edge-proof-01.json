@@ -1,0 +1,2349 @@
+{
+  "script_sha256": "dea40868a5458e1cceeeae90c9db5ff91a7e291432326269fca932fca5d51935",
+  "finished_at": "2026-10-29T14:28:55.790Z",
+  "pass": true,
+  "synthetic_only": true,
+  "production_connections": 0,
+  "vercel_operations": 0,
+  "results": [
+    {
+      "name": "Main proof complete at the same candidate hash",
+      "pass": true
+    },
+    {
+      "name": "Physical validation of 300000 additional canonical rows",
+      "pass": true,
+      "elapsed_ms": 627,
+      "added_rows_per_table": 100000,
+      "projected_production_duration": false,
+      "error": null
+    },
+    {
+      "name": "No data change during scaled validation",
+      "pass": true
+    },
+    {
+      "name": "All five CHECKs validated at synthetic scale",
+      "pass": true
+    },
+    {
+      "name": "Canonical input independent of extra_float_digits=-15",
+      "pass": true
+    },
+    {
+      "name": "Invalid precision independent of extra_float_digits=-15",
+      "pass": true
+    },
+    {
+      "name": "Canonical input independent of extra_float_digits=0",
+      "pass": true
+    },
+    {
+      "name": "Invalid precision independent of extra_float_digits=0",
+      "pass": true
+    },
+    {
+      "name": "Canonical input independent of extra_float_digits=1",
+      "pass": true
+    },
+    {
+      "name": "Invalid precision independent of extra_float_digits=1",
+      "pass": true
+    },
+    {
+      "name": "Canonical input independent of extra_float_digits=3",
+      "pass": true
+    },
+    {
+      "name": "Invalid precision independent of extra_float_digits=3",
+      "pass": true
+    },
+    {
+      "name": "Finite magnitude edge 1e100",
+      "pass": true,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "Finite magnitude edge -1e100",
+      "pass": true,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "Finite magnitude edge 1.7976931348623157e308",
+      "pass": true,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "Finite magnitude edge -1.7976931348623157e308",
+      "pass": true,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "Finite magnitude edge 1e-300",
+      "pass": true,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "Finite magnitude edge -1e-300",
+      "pass": true,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "Negative zero is allowed as numeric zero",
+      "pass": true,
+      "equals_zero": true,
+      "binary": "8000000000000000"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=1",
+      "pass": true,
+      "value": "5e-324",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=2",
+      "pass": true,
+      "value": "1e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=4",
+      "pass": true,
+      "value": "2e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=8",
+      "pass": true,
+      "value": "4e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=1",
+      "pass": true,
+      "value": "-5e-324",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=2",
+      "pass": true,
+      "value": "-1e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=4",
+      "pass": true,
+      "value": "-2e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=8",
+      "pass": true,
+      "value": "-4e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=1",
+      "pass": true,
+      "value": "5e-324",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=2",
+      "pass": true,
+      "value": "1e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=4",
+      "pass": true,
+      "value": "2e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=1 steps=8",
+      "pass": true,
+      "value": "4e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=1",
+      "pass": true,
+      "value": "-5e-324",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=2",
+      "pass": true,
+      "value": "-1e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=4",
+      "pass": true,
+      "value": "-2e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0 direction=-1 steps=8",
+      "pass": true,
+      "value": "-4e-323",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=1 steps=1",
+      "pass": true,
+      "value": "0.0010000000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=1 steps=2",
+      "pass": true,
+      "value": "0.0010000000000000005",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=1 steps=4",
+      "pass": true,
+      "value": "0.0010000000000000009",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=1 steps=8",
+      "pass": true,
+      "value": "0.0010000000000000018",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=-1 steps=1",
+      "pass": true,
+      "value": "0.0009999999999999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=-1 steps=2",
+      "pass": true,
+      "value": "0.0009999999999999996",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=-1 steps=4",
+      "pass": true,
+      "value": "0.0009999999999999992",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.001 direction=-1 steps=8",
+      "pass": true,
+      "value": "0.0009999999999999983",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=1 steps=1",
+      "pass": true,
+      "value": "-0.0009999999999999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=1 steps=2",
+      "pass": true,
+      "value": "-0.0009999999999999996",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=1 steps=4",
+      "pass": true,
+      "value": "-0.0009999999999999992",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=1 steps=8",
+      "pass": true,
+      "value": "-0.0009999999999999983",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=-1 steps=1",
+      "pass": true,
+      "value": "-0.0010000000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=-1 steps=2",
+      "pass": true,
+      "value": "-0.0010000000000000005",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=-1 steps=4",
+      "pass": true,
+      "value": "-0.0010000000000000009",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.001 direction=-1 steps=8",
+      "pass": true,
+      "value": "-0.0010000000000000018",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=1 steps=1",
+      "pass": true,
+      "value": "0.10000000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=1 steps=2",
+      "pass": true,
+      "value": "0.10000000000000003",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=1 steps=4",
+      "pass": true,
+      "value": "0.10000000000000006",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=1 steps=8",
+      "pass": true,
+      "value": "0.10000000000000012",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=-1 steps=1",
+      "pass": true,
+      "value": "0.09999999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=-1 steps=2",
+      "pass": true,
+      "value": "0.09999999999999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=-1 steps=4",
+      "pass": true,
+      "value": "0.09999999999999995",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.1 direction=-1 steps=8",
+      "pass": true,
+      "value": "0.0999999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=1 steps=1",
+      "pass": true,
+      "value": "-0.09999999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=1 steps=2",
+      "pass": true,
+      "value": "-0.09999999999999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=1 steps=4",
+      "pass": true,
+      "value": "-0.09999999999999995",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=1 steps=8",
+      "pass": true,
+      "value": "-0.0999999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=-1 steps=1",
+      "pass": true,
+      "value": "-0.10000000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=-1 steps=2",
+      "pass": true,
+      "value": "-0.10000000000000003",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=-1 steps=4",
+      "pass": true,
+      "value": "-0.10000000000000006",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.1 direction=-1 steps=8",
+      "pass": true,
+      "value": "-0.10000000000000012",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=1 steps=1",
+      "pass": true,
+      "value": "0.30000000000000004",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=1 steps=2",
+      "pass": true,
+      "value": "0.3000000000000001",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=1 steps=4",
+      "pass": true,
+      "value": "0.3000000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=1 steps=8",
+      "pass": true,
+      "value": "0.30000000000000043",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=-1 steps=1",
+      "pass": true,
+      "value": "0.29999999999999993",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=-1 steps=2",
+      "pass": true,
+      "value": "0.2999999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=-1 steps=4",
+      "pass": true,
+      "value": "0.29999999999999977",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 0.3 direction=-1 steps=8",
+      "pass": true,
+      "value": "0.29999999999999954",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=1 steps=1",
+      "pass": true,
+      "value": "-0.29999999999999993",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=1 steps=2",
+      "pass": true,
+      "value": "-0.2999999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=1 steps=4",
+      "pass": true,
+      "value": "-0.29999999999999977",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=1 steps=8",
+      "pass": true,
+      "value": "-0.29999999999999954",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=-1 steps=1",
+      "pass": true,
+      "value": "-0.30000000000000004",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=-1 steps=2",
+      "pass": true,
+      "value": "-0.3000000000000001",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=-1 steps=4",
+      "pass": true,
+      "value": "-0.3000000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -0.3 direction=-1 steps=8",
+      "pass": true,
+      "value": "-0.30000000000000043",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=1 steps=1",
+      "pass": true,
+      "value": "1.2340000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=1 steps=2",
+      "pass": true,
+      "value": "1.2340000000000004",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=1 steps=4",
+      "pass": true,
+      "value": "1.2340000000000009",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=1 steps=8",
+      "pass": true,
+      "value": "1.2340000000000018",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=-1 steps=1",
+      "pass": true,
+      "value": "1.2339999999999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=-1 steps=2",
+      "pass": true,
+      "value": "1.2339999999999995",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=-1 steps=4",
+      "pass": true,
+      "value": "1.233999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1.234 direction=-1 steps=8",
+      "pass": true,
+      "value": "1.2339999999999982",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=1 steps=1",
+      "pass": true,
+      "value": "-1.2339999999999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=1 steps=2",
+      "pass": true,
+      "value": "-1.2339999999999995",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=1 steps=4",
+      "pass": true,
+      "value": "-1.233999999999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=1 steps=8",
+      "pass": true,
+      "value": "-1.2339999999999982",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=-1 steps=1",
+      "pass": true,
+      "value": "-1.2340000000000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=-1 steps=2",
+      "pass": true,
+      "value": "-1.2340000000000004",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=-1 steps=4",
+      "pass": true,
+      "value": "-1.2340000000000009",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1.234 direction=-1 steps=8",
+      "pass": true,
+      "value": "-1.2340000000000018",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=1 steps=1",
+      "pass": true,
+      "value": "123456.78900000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=1 steps=2",
+      "pass": true,
+      "value": "123456.78900000003",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=1 steps=4",
+      "pass": true,
+      "value": "123456.78900000006",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=1 steps=8",
+      "pass": true,
+      "value": "123456.78900000012",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=-1 steps=1",
+      "pass": true,
+      "value": "123456.78899999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=-1 steps=2",
+      "pass": true,
+      "value": "123456.78899999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=-1 steps=4",
+      "pass": true,
+      "value": "123456.78899999995",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456.789 direction=-1 steps=8",
+      "pass": true,
+      "value": "123456.78899999989",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=1 steps=1",
+      "pass": true,
+      "value": "-123456.78899999999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=1 steps=2",
+      "pass": true,
+      "value": "-123456.78899999998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=1 steps=4",
+      "pass": true,
+      "value": "-123456.78899999995",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=1 steps=8",
+      "pass": true,
+      "value": "-123456.78899999989",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=-1 steps=1",
+      "pass": true,
+      "value": "-123456.78900000002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=-1 steps=2",
+      "pass": true,
+      "value": "-123456.78900000003",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=-1 steps=4",
+      "pass": true,
+      "value": "-123456.78900000006",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456.789 direction=-1 steps=8",
+      "pass": true,
+      "value": "-123456.78900000012",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=1 steps=1",
+      "pass": true,
+      "value": "1000000000.0010002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=1 steps=2",
+      "pass": true,
+      "value": "1000000000.0010003",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=1 steps=4",
+      "pass": true,
+      "value": "1000000000.0010005",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=1 steps=8",
+      "pass": true,
+      "value": "1000000000.001001",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=-1 steps=1",
+      "pass": true,
+      "value": "1000000000.0009999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=-1 steps=2",
+      "pass": true,
+      "value": "1000000000.0009998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=-1 steps=4",
+      "pass": true,
+      "value": "1000000000.0009996",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 1000000000.001 direction=-1 steps=8",
+      "pass": true,
+      "value": "1000000000.0009991",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=1 steps=1",
+      "pass": true,
+      "value": "-1000000000.0009999",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=1 steps=2",
+      "pass": true,
+      "value": "-1000000000.0009998",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=1 steps=4",
+      "pass": true,
+      "value": "-1000000000.0009996",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=1 steps=8",
+      "pass": true,
+      "value": "-1000000000.0009991",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=-1 steps=1",
+      "pass": true,
+      "value": "-1000000000.0010002",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=-1 steps=2",
+      "pass": true,
+      "value": "-1000000000.0010003",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=-1 steps=4",
+      "pass": true,
+      "value": "-1000000000.0010005",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -1000000000.001 direction=-1 steps=8",
+      "pass": true,
+      "value": "-1000000000.001001",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=1 steps=1",
+      "pass": true,
+      "value": "123456789012.34502",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=1 steps=2",
+      "pass": true,
+      "value": "123456789012.34503",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=1 steps=4",
+      "pass": true,
+      "value": "123456789012.34506",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=1 steps=8",
+      "pass": true,
+      "value": "123456789012.34512",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=-1 steps=1",
+      "pass": true,
+      "value": "123456789012.34499",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=-1 steps=2",
+      "pass": true,
+      "value": "123456789012.34497",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=-1 steps=4",
+      "pass": true,
+      "value": "123456789012.34494",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 123456789012.345 direction=-1 steps=8",
+      "pass": true,
+      "value": "123456789012.34488",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=1 steps=1",
+      "pass": true,
+      "value": "-123456789012.34499",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=1 steps=2",
+      "pass": true,
+      "value": "-123456789012.34497",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=1 steps=4",
+      "pass": true,
+      "value": "-123456789012.34494",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=1 steps=8",
+      "pass": true,
+      "value": "-123456789012.34488",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=-1 steps=1",
+      "pass": true,
+      "value": "-123456789012.34502",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=-1 steps=2",
+      "pass": true,
+      "value": "-123456789012.34503",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=-1 steps=4",
+      "pass": true,
+      "value": "-123456789012.34506",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -123456789012.345 direction=-1 steps=8",
+      "pass": true,
+      "value": "-123456789012.34512",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 999999999999.999 direction=-1 steps=1",
+      "pass": true,
+      "value": "999999999999.9989",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 999999999999.999 direction=-1 steps=2",
+      "pass": true,
+      "value": "999999999999.9988",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 999999999999.999 direction=-1 steps=4",
+      "pass": true,
+      "value": "999999999999.9985",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG 999999999999.999 direction=-1 steps=8",
+      "pass": true,
+      "value": "999999999999.998",
+      "expected_by_helper": true,
+      "accepted": true,
+      "sqlstate": null
+    },
+    {
+      "name": "ULP KG -999999999999.999 direction=1 steps=1",
+      "pass": true,
+      "value": "-999999999999.9989",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -999999999999.999 direction=1 steps=2",
+      "pass": true,
+      "value": "-999999999999.9988",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -999999999999.999 direction=1 steps=4",
+      "pass": true,
+      "value": "-999999999999.9985",
+      "expected_by_helper": false,
+      "accepted": false,
+      "sqlstate": "23514"
+    },
+    {
+      "name": "ULP KG -999999999999.999 direction=1 steps=8",
+      "pass": true,
+      "value": "-999999999999.998",
+      "expected_by_helper": true,
+      "accepted": true,
+      "sqlstate": null
+    },
+    {
+      "name": "Every canonical ledger delta/before/after matches integer oracle",
+      "pass": true
+    },
+    {
+      "name": "Synthetic sale amount is exactly 125 thousandths",
+      "pass": true,
+      "quantity": 0.125
+    },
+    {
+      "name": "Physical types and NOT NULL unchanged after local guard removal",
+      "pass": true
+    },
+    {
+      "name": "Scaled guard recovery after removal",
+      "pass": true
+    },
+    {
+      "name": "All edge-case transactions leave scaled rows unchanged",
+      "pass": true
+    },
+    {
+      "name": "Owned synthetic cluster stopped",
+      "pass": true
+    }
+  ],
+  "details": {
+    "scale": {
+      "rows_added": 300000,
+      "added_rows_per_table": 100000,
+      "elapsed_ms": 627,
+      "canonical_kg_stratified": 50000,
+      "canonical_un_stratified": 50000,
+      "catalog": [
+        {
+          "name": "estoque_produtos_stock_kg_milesimos",
+          "validated": true
+        },
+        {
+          "name": "movimentacoes_estoque_estoqueAntes_kg_milesimos",
+          "validated": true
+        },
+        {
+          "name": "movimentacoes_estoque_estoqueDepois_kg_milesimos",
+          "validated": true
+        },
+        {
+          "name": "movimentacoes_estoque_quantidade_kg_milesimos",
+          "validated": true
+        },
+        {
+          "name": "produto_depositos_quantidade_kg_milesimos",
+          "validated": true
+        }
+      ]
+    },
+    "ulps": {
+      "vectors": 136,
+      "excluded_beyond_kg_specific_bound": 8,
+      "oracle": "actual toStockUnits(value, KG)",
+      "cases": [
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 1,
+          "value": "5e-324",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 2,
+          "value": "1e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 4,
+          "value": "2e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 8,
+          "value": "4e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 1,
+          "value": "-5e-324",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 2,
+          "value": "-1e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 4,
+          "value": "-2e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 8,
+          "value": "-4e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 1,
+          "value": "5e-324",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 2,
+          "value": "1e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 4,
+          "value": "2e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": 1,
+          "steps": 8,
+          "value": "4e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 1,
+          "value": "-5e-324",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 2,
+          "value": "-1e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 4,
+          "value": "-2e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0",
+          "direction": -1,
+          "steps": 8,
+          "value": "-4e-323",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": 1,
+          "steps": 1,
+          "value": "0.0010000000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": 1,
+          "steps": 2,
+          "value": "0.0010000000000000005",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": 1,
+          "steps": 4,
+          "value": "0.0010000000000000009",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": 1,
+          "steps": 8,
+          "value": "0.0010000000000000018",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": -1,
+          "steps": 1,
+          "value": "0.0009999999999999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": -1,
+          "steps": 2,
+          "value": "0.0009999999999999996",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": -1,
+          "steps": 4,
+          "value": "0.0009999999999999992",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.001",
+          "direction": -1,
+          "steps": 8,
+          "value": "0.0009999999999999983",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": 1,
+          "steps": 1,
+          "value": "-0.0009999999999999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": 1,
+          "steps": 2,
+          "value": "-0.0009999999999999996",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": 1,
+          "steps": 4,
+          "value": "-0.0009999999999999992",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": 1,
+          "steps": 8,
+          "value": "-0.0009999999999999983",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": -1,
+          "steps": 1,
+          "value": "-0.0010000000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": -1,
+          "steps": 2,
+          "value": "-0.0010000000000000005",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": -1,
+          "steps": 4,
+          "value": "-0.0010000000000000009",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.001",
+          "direction": -1,
+          "steps": 8,
+          "value": "-0.0010000000000000018",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": 1,
+          "steps": 1,
+          "value": "0.10000000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": 1,
+          "steps": 2,
+          "value": "0.10000000000000003",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": 1,
+          "steps": 4,
+          "value": "0.10000000000000006",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": 1,
+          "steps": 8,
+          "value": "0.10000000000000012",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": -1,
+          "steps": 1,
+          "value": "0.09999999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": -1,
+          "steps": 2,
+          "value": "0.09999999999999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": -1,
+          "steps": 4,
+          "value": "0.09999999999999995",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.1",
+          "direction": -1,
+          "steps": 8,
+          "value": "0.0999999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": 1,
+          "steps": 1,
+          "value": "-0.09999999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": 1,
+          "steps": 2,
+          "value": "-0.09999999999999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": 1,
+          "steps": 4,
+          "value": "-0.09999999999999995",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": 1,
+          "steps": 8,
+          "value": "-0.0999999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": -1,
+          "steps": 1,
+          "value": "-0.10000000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": -1,
+          "steps": 2,
+          "value": "-0.10000000000000003",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": -1,
+          "steps": 4,
+          "value": "-0.10000000000000006",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.1",
+          "direction": -1,
+          "steps": 8,
+          "value": "-0.10000000000000012",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": 1,
+          "steps": 1,
+          "value": "0.30000000000000004",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": 1,
+          "steps": 2,
+          "value": "0.3000000000000001",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": 1,
+          "steps": 4,
+          "value": "0.3000000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": 1,
+          "steps": 8,
+          "value": "0.30000000000000043",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": -1,
+          "steps": 1,
+          "value": "0.29999999999999993",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": -1,
+          "steps": 2,
+          "value": "0.2999999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": -1,
+          "steps": 4,
+          "value": "0.29999999999999977",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "0.3",
+          "direction": -1,
+          "steps": 8,
+          "value": "0.29999999999999954",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": 1,
+          "steps": 1,
+          "value": "-0.29999999999999993",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": 1,
+          "steps": 2,
+          "value": "-0.2999999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": 1,
+          "steps": 4,
+          "value": "-0.29999999999999977",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": 1,
+          "steps": 8,
+          "value": "-0.29999999999999954",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": -1,
+          "steps": 1,
+          "value": "-0.30000000000000004",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": -1,
+          "steps": 2,
+          "value": "-0.3000000000000001",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": -1,
+          "steps": 4,
+          "value": "-0.3000000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-0.3",
+          "direction": -1,
+          "steps": 8,
+          "value": "-0.30000000000000043",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": 1,
+          "steps": 1,
+          "value": "1.2340000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": 1,
+          "steps": 2,
+          "value": "1.2340000000000004",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": 1,
+          "steps": 4,
+          "value": "1.2340000000000009",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": 1,
+          "steps": 8,
+          "value": "1.2340000000000018",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": -1,
+          "steps": 1,
+          "value": "1.2339999999999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": -1,
+          "steps": 2,
+          "value": "1.2339999999999995",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": -1,
+          "steps": 4,
+          "value": "1.233999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1.234",
+          "direction": -1,
+          "steps": 8,
+          "value": "1.2339999999999982",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": 1,
+          "steps": 1,
+          "value": "-1.2339999999999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": 1,
+          "steps": 2,
+          "value": "-1.2339999999999995",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": 1,
+          "steps": 4,
+          "value": "-1.233999999999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": 1,
+          "steps": 8,
+          "value": "-1.2339999999999982",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": -1,
+          "steps": 1,
+          "value": "-1.2340000000000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": -1,
+          "steps": 2,
+          "value": "-1.2340000000000004",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": -1,
+          "steps": 4,
+          "value": "-1.2340000000000009",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1.234",
+          "direction": -1,
+          "steps": 8,
+          "value": "-1.2340000000000018",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": 1,
+          "steps": 1,
+          "value": "123456.78900000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": 1,
+          "steps": 2,
+          "value": "123456.78900000003",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": 1,
+          "steps": 4,
+          "value": "123456.78900000006",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": 1,
+          "steps": 8,
+          "value": "123456.78900000012",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": -1,
+          "steps": 1,
+          "value": "123456.78899999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": -1,
+          "steps": 2,
+          "value": "123456.78899999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": -1,
+          "steps": 4,
+          "value": "123456.78899999995",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456.789",
+          "direction": -1,
+          "steps": 8,
+          "value": "123456.78899999989",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": 1,
+          "steps": 1,
+          "value": "-123456.78899999999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": 1,
+          "steps": 2,
+          "value": "-123456.78899999998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": 1,
+          "steps": 4,
+          "value": "-123456.78899999995",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": 1,
+          "steps": 8,
+          "value": "-123456.78899999989",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": -1,
+          "steps": 1,
+          "value": "-123456.78900000002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": -1,
+          "steps": 2,
+          "value": "-123456.78900000003",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": -1,
+          "steps": 4,
+          "value": "-123456.78900000006",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456.789",
+          "direction": -1,
+          "steps": 8,
+          "value": "-123456.78900000012",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": 1,
+          "steps": 1,
+          "value": "1000000000.0010002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": 1,
+          "steps": 2,
+          "value": "1000000000.0010003",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": 1,
+          "steps": 4,
+          "value": "1000000000.0010005",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": 1,
+          "steps": 8,
+          "value": "1000000000.001001",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": -1,
+          "steps": 1,
+          "value": "1000000000.0009999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": -1,
+          "steps": 2,
+          "value": "1000000000.0009998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": -1,
+          "steps": 4,
+          "value": "1000000000.0009996",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "1000000000.001",
+          "direction": -1,
+          "steps": 8,
+          "value": "1000000000.0009991",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": 1,
+          "steps": 1,
+          "value": "-1000000000.0009999",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": 1,
+          "steps": 2,
+          "value": "-1000000000.0009998",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": 1,
+          "steps": 4,
+          "value": "-1000000000.0009996",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": 1,
+          "steps": 8,
+          "value": "-1000000000.0009991",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": -1,
+          "steps": 1,
+          "value": "-1000000000.0010002",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": -1,
+          "steps": 2,
+          "value": "-1000000000.0010003",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": -1,
+          "steps": 4,
+          "value": "-1000000000.0010005",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-1000000000.001",
+          "direction": -1,
+          "steps": 8,
+          "value": "-1000000000.001001",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": 1,
+          "steps": 1,
+          "value": "123456789012.34502",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": 1,
+          "steps": 2,
+          "value": "123456789012.34503",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": 1,
+          "steps": 4,
+          "value": "123456789012.34506",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": 1,
+          "steps": 8,
+          "value": "123456789012.34512",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": -1,
+          "steps": 1,
+          "value": "123456789012.34499",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": -1,
+          "steps": 2,
+          "value": "123456789012.34497",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": -1,
+          "steps": 4,
+          "value": "123456789012.34494",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "123456789012.345",
+          "direction": -1,
+          "steps": 8,
+          "value": "123456789012.34488",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": 1,
+          "steps": 1,
+          "value": "-123456789012.34499",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": 1,
+          "steps": 2,
+          "value": "-123456789012.34497",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": 1,
+          "steps": 4,
+          "value": "-123456789012.34494",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": 1,
+          "steps": 8,
+          "value": "-123456789012.34488",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": -1,
+          "steps": 1,
+          "value": "-123456789012.34502",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": -1,
+          "steps": 2,
+          "value": "-123456789012.34503",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": -1,
+          "steps": 4,
+          "value": "-123456789012.34506",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-123456789012.345",
+          "direction": -1,
+          "steps": 8,
+          "value": "-123456789012.34512",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "999999999999.999",
+          "direction": -1,
+          "steps": 1,
+          "value": "999999999999.9989",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "999999999999.999",
+          "direction": -1,
+          "steps": 2,
+          "value": "999999999999.9988",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "999999999999.999",
+          "direction": -1,
+          "steps": 4,
+          "value": "999999999999.9985",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "999999999999.999",
+          "direction": -1,
+          "steps": 8,
+          "value": "999999999999.998",
+          "expected_by_helper": true,
+          "accepted": true
+        },
+        {
+          "seed": "-999999999999.999",
+          "direction": 1,
+          "steps": 1,
+          "value": "-999999999999.9989",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-999999999999.999",
+          "direction": 1,
+          "steps": 2,
+          "value": "-999999999999.9988",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-999999999999.999",
+          "direction": 1,
+          "steps": 4,
+          "value": "-999999999999.9985",
+          "expected_by_helper": false,
+          "accepted": false
+        },
+        {
+          "seed": "-999999999999.999",
+          "direction": 1,
+          "steps": 8,
+          "value": "-999999999999.998",
+          "expected_by_helper": true,
+          "accepted": true
+        }
+      ]
+    },
+    "ledger": {
+      "checked": 4,
+      "integer_deltas": [
+        2500,
+        750,
+        -125,
+        125
+      ],
+      "final_thousandths": 3250,
+      "sale_thousandths": 125,
+      "feature_parallel_not_certified": true
+    }
+  }
+}

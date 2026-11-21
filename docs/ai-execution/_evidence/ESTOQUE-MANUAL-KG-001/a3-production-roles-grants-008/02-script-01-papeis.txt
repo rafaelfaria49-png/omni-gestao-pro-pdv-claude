@@ -1,0 +1,16 @@
+url: OK sem conectar · endpoint=ep-summer-tooth-acltc6wi pooler=off usuário=neondb_owner dbs=neondb,omnigestao_prod senhas_a2=2 (formato ok, distintas)
+fase=s01 início=2026-10-29T09:39:15.488Z
+script=01-papeis.sql database=neondb transação=única (-1) trava=identidade na mesma transação
+  ?column?   
+-------------
+ A3_GUARD_OK
+(1 linha)
+
+CREATE ROLE
+CREATE ROLE
+GRANT ROLE
+CREATE ROLE
+DO
+[stderr] psql:C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/docs/padaria/pesagem/rollout/01-papeis.sql:55: NOTICE:  KG_PAPEIS_OK
+exit=0
+KG_PAPEIS_OK=YES fim=2026-10-29T09:39:15.938Z

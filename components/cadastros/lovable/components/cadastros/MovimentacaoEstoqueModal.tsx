@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PackagePlus, AlertTriangle } from "lucide-react";
 import { Modal } from "./ui-kit";
 import { productStockMovementAvailability } from "@/lib/cadastros/product-commercial-contract";
+import { formatStockQuantity, fromStockUnits, parseKgQuantityInput, toStockUnits } from "@/lib/estoque/stock-quantity";
 import {
   registrarEntradaEstoque,
   registrarAjusteEstoque,
@@ -94,6 +95,9 @@ export function MovimentacaoEstoqueModal({
 }) {
   const disponibilidade = produto && produto.metadata !== undefined ? productStockMovementAvailability(produto.metadata) : null;
   const bloqueio = disponibilidade && !disponibilidade.disponivel ? disponibilidade : null;
+  // KG: Entrada com até 3 casas; Ajuste segue indisponível (inventário ainda conta inteiros).
+  const kg = disponibilidade && disponibilidade.disponivel && disponibilidade.unidade === "KG" ? disponibilidade : null;
+  const fmtQtd = (n: number) => formatStockQuantity(n, kg ? "KG" : "UN");
   const [saldoConfirmado, setSaldoConfirmado] = useState<number | null>(null);
   const [aba, setAba] = useState<Aba>(bloqueio ? "historico" : "entrada");
   const [qtd, setQtd] = useState("");
@@ -162,7 +166,22 @@ export function MovimentacaoEstoqueModal({
   const submitEntrada = () => {
     setErro(null);
     setOkMsg(null);
-    const q = Math.trunc(parseNum(qtd));
+    let q: number;
+    if (kg) {
+      const lido = parseKgQuantityInput(qtd);
+      if (!lido.ok) {
+        setErro(lido.reason);
+        return;
+      }
+      q = lido.value;
+    } else {
+      // UN é inteiro: 2,5 é recusado, nunca truncado para 2.
+      q = parseNum(qtd);
+      if (!Number.isInteger(q)) {
+        setErro("Quantidade em unidades deve ser um número inteiro.");
+        return;
+      }
+    }
     if (q <= 0) {
       setErro("Quantidade deve ser maior que zero.");
       return;
@@ -188,8 +207,8 @@ export function MovimentacaoEstoqueModal({
       if (res.ok) {
         setOkMsg(
           res.reconciliado
-            ? `Reconciliação e entrada registradas. Saldo: ${res.estoqueDepois} · custo médio ${fmtMoney(res.custoMedioDepois)}.`
-            : `Entrada registrada. Saldo: ${res.estoqueDepois} · custo médio ${fmtMoney(res.custoMedioDepois)}.`,
+            ? `Reconciliação e entrada registradas. Saldo: ${fmtQtd(res.estoqueDepois)}${kg ? " kg" : ""} · custo médio ${fmtMoney(res.custoMedioDepois)}.`
+            : `Entrada registrada. Saldo: ${fmtQtd(res.estoqueDepois)}${kg ? " kg" : ""} · custo médio ${fmtMoney(res.custoMedioDepois)}.`,
         );
         setSaldoConfirmado(res.estoqueDepois);
         setQtd("");
@@ -226,7 +245,11 @@ export function MovimentacaoEstoqueModal({
       setErro("Informe o motivo do ajuste.");
       return;
     }
-    const s = Math.trunc(parseNum(novoSaldo));
+    const s = parseNum(novoSaldo);
+    if (!Number.isInteger(s)) {
+      setErro("Novo saldo em unidades deve ser um número inteiro.");
+      return;
+    }
     if (s < 0) {
       setErro("Novo saldo não pode ser negativo.");
       return;
@@ -271,9 +294,14 @@ export function MovimentacaoEstoqueModal({
   const estoqueAtual = saldoConfirmado ?? produto.estoque;
   const custoMedioAtual = produto.custo ?? 0;
   // Entrada
-  const qtdNum = Math.max(0, Math.trunc(parseNum(qtd)));
+  const qtdKg = kg ? parseKgQuantityInput(qtd) : null;
+  const qtdNum = kg ? (qtdKg?.ok ? qtdKg.value : 0) : Math.max(0, Math.trunc(parseNum(qtd)));
   const custoNum = Math.max(0, parseNum(custo));
-  const novoSaldoEntrada = estoqueAtual + qtdNum;
+  // KG soma em milésimos inteiros, como o servidor (sem 2,5 + 0,75 em ponto flutuante).
+  const estoqueAtualKg = kg ? toStockUnits(estoqueAtual, "KG") : null;
+  const novoSaldoEntrada = kg && estoqueAtualKg !== null
+    ? fromStockUnits(estoqueAtualKg + (toStockUnits(qtdNum, "KG") ?? 0), "KG")
+    : estoqueAtual + qtdNum;
   const valorEntrada = qtdNum * custoNum;
   const custoMedioEstimado =
     custoNum > 0 && novoSaldoEntrada > 0
@@ -299,7 +327,7 @@ export function MovimentacaoEstoqueModal({
             SKU <span className="font-mono text-foreground" title={produto.sku && displaySku(produto.sku) !== produto.sku ? `Código no banco: ${produto.sku}` : undefined}>{displaySku(produto.sku) || "—"}</span>
           </span>
           <span className="min-w-0 text-muted-foreground">
-            Saldo atual <span className="font-semibold text-foreground">{diag && !diag.aligned ? diag.stock : estoqueAtual}</span>
+            Saldo atual <span className="font-semibold text-foreground" data-saldo-atual>{fmtQtd(diag && !diag.aligned ? diag.stock : estoqueAtual)}</span>
             {disponibilidade && <span className="ml-1 text-xs" data-unidade={disponibilidade.unidade ?? "revisar"}>{disponibilidade.unidade ?? "unidade a revisar"}</span>}
           </span>
           <span className="text-muted-foreground">
@@ -325,9 +353,11 @@ export function MovimentacaoEstoqueModal({
               <button type="button" className={tabCls(aba === "entrada")} onClick={() => setAba("entrada")} title="Registrar compra ou reposição">
                 Entrada
               </button>
-              <button type="button" className={tabCls(aba === "ajuste")} onClick={() => setAba("ajuste")} title="Corrigir saldo após contagem ou perda">
-                Ajuste
-              </button>
+              {!kg && (
+                <button type="button" className={tabCls(aba === "ajuste")} onClick={() => setAba("ajuste")} title="Corrigir saldo após contagem ou perda">
+                  Ajuste
+                </button>
+              )}
             </>
           )}
           <button type="button" className={tabCls(aba === "historico")} onClick={() => setAba("historico")} title="Ver movimentações deste produto">
@@ -341,20 +371,22 @@ export function MovimentacaoEstoqueModal({
             <p className="font-medium">{bloqueio ? "Saldo do cadastro e dos depósitos divergem." : diag.operatorMessage || "Estoque precisa de reconciliação."}</p>
             <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
               <span className="min-w-0">
-                Saldo do cadastro: <span className="font-semibold tabular-nums text-foreground">{diag.stock}</span>
+                Saldo do cadastro: <span className="font-semibold tabular-nums text-foreground">{fmtQtd(diag.stock)}</span>
               </span>
               <span className="min-w-0">
-                Saldo nos depósitos: <span className="font-semibold tabular-nums text-foreground">{diag.somaDepositos}</span>
+                Saldo nos depósitos: <span className="font-semibold tabular-nums text-foreground">{fmtQtd(diag.somaDepositos)}</span>
               </span>
             </div>
             {bloqueio ? (
               <p>A correção fica disponível quando a movimentação for liberada para este produto. Nada é alterado agora.</p>
             ) : diag.entradaPodeReconciliar ? (
               <p>Esta divergência pode ser corrigida automaticamente junto com a operação.</p>
+            ) : kg ? (
+              <p>O ajuste de saldo em KG ainda não está disponível. Nada é alterado agora.</p>
             ) : (
               <p>Confirme primeiro o saldo físico na aba Ajuste.</p>
             )}
-            {!bloqueio && !diag.entradaPodeReconciliar && aba === "entrada" && (
+            {!bloqueio && !kg && !diag.entradaPodeReconciliar && aba === "entrada" && (
               <button
                 type="button"
                 className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-accent"
@@ -399,15 +431,22 @@ export function MovimentacaoEstoqueModal({
           <div className="space-y-3">
             <div className="flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
               <PackagePlus className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>Use para compra, reposição ou devolução de fornecedor. Soma unidades ao saldo e recalcula o custo médio.</span>
+              <span>
+                {kg
+                  ? "Use para compra, reposição ou produção recebida. Soma o peso ao saldo (até 3 casas: 0,750 kg) e recalcula o custo médio por kg."
+                  : "Use para compra, reposição ou devolução de fornecedor. Soma unidades ao saldo e recalcula o custo médio."}
+              </span>
             </div>
+            {kg && (
+              <p data-estoque-ajuste-kg className="text-[11px] text-muted-foreground">{kg.ajusteOrientacao}</p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-[11px] uppercase text-muted-foreground">Quantidade a entrar *</label>
-                <input className={inputCls} inputMode="numeric" value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder="0" />
+                <label htmlFor="mov-estoque-qtd" className="mb-1 block text-[11px] uppercase text-muted-foreground">{kg ? "Quantidade a entrar (kg) *" : "Quantidade a entrar *"}</label>
+                <input id="mov-estoque-qtd" className={inputCls} inputMode={kg ? "decimal" : "numeric"} value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder={kg ? "0,000" : "0"} />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] uppercase text-muted-foreground">Custo unitário (R$)</label>
+                <label className="mb-1 block text-[11px] uppercase text-muted-foreground">{kg ? "Custo por kg (R$)" : "Custo unitário (R$)"}</label>
                 <input className={inputCls} inputMode="decimal" value={custo} onChange={(e) => setCusto(e.target.value)} placeholder="0,00" />
               </div>
               <div>
@@ -425,9 +464,9 @@ export function MovimentacaoEstoqueModal({
             </div>
             {qtdNum > 0 && (
               <div className="space-y-1 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm">
-                {linhaResumo("Saldo atual", estoqueAtual)}
-                {linhaResumo("Entrada", <span className="text-emerald-600 dark:text-emerald-400">+{qtdNum}</span>)}
-                {linhaResumo("Novo saldo", novoSaldoEntrada, true)}
+                {linhaResumo("Saldo atual", fmtQtd(estoqueAtual))}
+                {linhaResumo("Entrada", <span className="text-emerald-600 dark:text-emerald-400">+{fmtQtd(qtdNum)}</span>)}
+                {linhaResumo("Novo saldo", `${fmtQtd(novoSaldoEntrada)}${kg ? " kg" : ""}`, true)}
                 <div className="my-1 border-t border-border" />
                 {linhaResumo("Valor da entrada", custoNum > 0 ? fmtMoney(valorEntrada) : "—")}
                 {linhaResumo("Custo médio atual", custoMedioAtual > 0 ? fmtMoney(custoMedioAtual) : "—")}
@@ -543,12 +582,12 @@ export function MovimentacaoEstoqueModal({
                         <td className="px-2 py-2 text-muted-foreground">{fmtData(m.createdAt)}</td>
                         <td className={`px-2 py-2 font-medium ${tipoCor(m.tipo)}`}>{tipoLabel(m.tipo)}</td>
                         <td className="px-2 py-2 text-muted-foreground">{origemLabel(m.origem)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-foreground">
+                        <td className="px-2 py-2 text-right tabular-nums text-foreground" data-mov-qtd>
                           {m.quantidade > 0 ? "+" : ""}
-                          {m.quantidade}
+                          {fmtQtd(m.quantidade)}
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
-                          {m.estoqueAntes}→<span className="font-medium text-foreground">{m.estoqueDepois}</span>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground" data-mov-saldo>
+                          {fmtQtd(m.estoqueAntes)}→<span className="font-medium text-foreground">{fmtQtd(m.estoqueDepois)}</span>
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{fmtMoney(m.custoMedioDepois)}</td>
                         <td className="px-2 py-2 text-muted-foreground">

@@ -176,7 +176,8 @@ export async function backfillLojaDepositoPrincipal(
 
   let processados = 0
   for (const p of produtos) {
-    const qtd = Math.trunc(Number(p.stock)) || 0
+    // Cópia exata do saldo: truncar criaria drift em produto KG (UN já é inteiro).
+    const qtd = Number(p.stock) || 0
     await client.produtoDeposito.upsert({
       where: { produtoId_depositoId: { produtoId: p.id, depositoId: principal.id } },
       create: { storeId: sid, produtoId: p.id, depositoId: principal.id, quantidade: qtd },

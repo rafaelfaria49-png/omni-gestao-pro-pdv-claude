@@ -1,0 +1,11 @@
+VEREDITO: APPROVE
+
+Nenhum achado P0–P3 introduzido pela resolução de `02bed64`.
+
+- **Classificação preservada:** KG/G recebem os dois indicadores; UN permanece liberado. O lookup conserva `vendaPesoIndisponivel`, `vendaPorPeso` e `precoPorKg` ([pdv-scan-lookup.ts:58](C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/lib/pdv-scan-lookup.ts:58)).
+- **Cinco superfícies não Clássico:** os guards antecedem a inclusão, os diálogos de peso e as decisões operacionais baseadas em `vendaPorPeso`. Os mapeadores preservam a marca de bloqueio. Carrinhos restaurados continuam cobertos pelo [guard compartilhado](C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/lib/use-pdv-weight-blocked-cart-guard.ts:32), inclusive quando o catálogo chega depois.
+- **Clássico:** a duplicação é cosmética. O primeiro guard retorna `false` antes do segundo; não produz dois toasts no `addToCart`. O fallback da main permanece antes do estoque, e as dependências dos callbacks contemplam suas novas referências ([pdv-classic.tsx:900](C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/components/dashboard/vendas/pdv-classic.tsx:900)).
+- **Servidor:** frações continuam recusadas no início da função; quantidades inteiras de KG/G continuam recusadas pelo metadata autoritativo ([ops-upsert-venda.ts:635](C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/lib/ops-upsert-venda.ts:635), [linha 987](C:/Projetos/omni-gestao/.worktrees/estoque-manual-kg-001/lib/ops-upsert-venda.ts:987)). A transação externa preserva a atomicidade e traduz a rejeição para 409. O teste fracionário ficou idêntico ao da main.
+- **Fora dos quatro conflitos:** conferi 40 caminhos não documentais; todos coincidem integralmente com um dos pais. As alterações de estoque/schema em relação à main são herdadas da branch, sem edição adicional da resolução.
+
+Validação independente: leitura dos diffs e sete cenários executados em memória com `fetch` simulado, todos aprovados. Não reexecutei Vitest/typecheck nem a suíte completa. Sem alterações de arquivos, rede ou banco.

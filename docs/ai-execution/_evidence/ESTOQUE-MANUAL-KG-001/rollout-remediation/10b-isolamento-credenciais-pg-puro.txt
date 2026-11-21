@@ -1,0 +1,81 @@
+# ESTOQUE-MANUAL-KG-001 - prova de isolamento de credenciais - 2026-10-25T18:42:57.262Z
+# PG 17.10 descartavel 127.0.0.1:55447 - papel antigo=neondb_owner_sim (dono de tudo, simula neondb_owner; usado por Production, Preview, candidate e .env locais)
+# clientes: "old" = Prisma 6.19.3 gerado do schema da main a288ea2 (Int); "new" = schema da PR #315 cdb1d19 (Float)
+
+## 0. Escritores antigos com pool aberto (codigo da main)
+  old-deploy-A le: SUCESSO -> {"stock":7}
+  old-script le: SUCESSO -> 3
+  sessoes do papel antigo em omnigestao_prod: 2
+
+## 1. Trocar so a SENHA do papel antigo nao basta
+  [pgadmin@postgres] ALTER ROLE ... PASSWORD (rotacao): OK
+  old-deploy-A grava com a sessao ja autenticada (p-un-7 -> 8): SUCESSO -> 8
+  deployment antigo em cold start (senha velha) conecta: FALHOU -> .produto.count( Authentication failed against database server, the provided database credentials for `neondb_owner_sim` are not valid. Please make sure to provide valid database credentials for the database server at the configured address.
+  sessoes do papel antigo ainda abertas: 2 (pool persistente segue gravando ate ser encerrado)
+  [pgadmin@postgres] senha original restaurada (o resto da prova nao depende de senha): OK
+
+## 2. PRE-JANELA (sem efeito nos antigos): papeis novos criados pelo papel antigo, como no Neon via SQL
+  [neondb_owner_sim@omnigestao_prod_candidate] CREATE ROLE omni_owner NOLOGIN (dono novo dos objetos de prod): OK
+  [neondb_owner_sim@omnigestao_prod_candidate] CREATE ROLE omni_migrator LOGIN (admin/janela): OK
+  [neondb_owner_sim@omnigestao_prod_candidate] CREATE ROLE omni_runtime_v2 LOGIN (runtime de Production): OK
+  [neondb_owner_sim@omnigestao_prod_candidate] GRANT omni_owner TO omni_migrator: OK
+  [neondb_owner_sim@omnigestao_prod] GRANT DML ao runtime v2 (pelo dono atual): OK
+  matriz antes do deploy: neondb_owner_sim: connect=true update_estoque=true dono_por_heranca=true | omni_migrator: connect=true update_estoque=false dono_por_heranca=false | omni_runtime_v2: connect=true update_estoque=true dono_por_heranca=false
+
+## 3. PRE-JANELA: deployment NOVO (runtime v2) convive com os antigos
+  runtime v2 le: SUCESSO -> 3
+  runtime v2 grava venda simulada (p-un-13 -> 12): SUCESSO -> 12
+  runtime v2 tenta DDL (nao deve): FALHOU ->  Invalid `prisma.$executeRawUnsafe()` invocation: Raw query failed. Code: `42501`. Message: `ERROR: must be owner of table estoque_produtos` [P2010 pg:42501]
+  old-deploy-A ainda grava (antes do corte): SUCESSO -> 7
+
+## 4. CORTE 1/3 (janela): posse de prod -> omni_owner e papel antigo fora, NUMA transacao
+  cut-ownership.sql como papel antigo (psql -1): exit=0 em 3811 ms NOTICE: KG_CORTE_POSSE_OK
+  dono do candidate (nao pode mudar): neondb_owner_sim
+  matriz depois da posse: neondb_owner_sim: connect=true update_estoque=false dono_por_heranca=false | omni_migrator: connect=true update_estoque=true dono_por_heranca=true | omni_runtime_v2: connect=true update_estoque=true dono_por_heranca=false
+  old-deploy-A grava com a sessao ABERTA, logo apos a troca de posse (p-un-7 -> 6): FALHOU -> nectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "42501", message: "permission denied for table estoque_produtos", severity: "ERROR", detail: None, column: None, hint: None }), transient: false })
+  old-deploy-A ainda LE com a sessao aberta: FALHOU -> nectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "42501", message: "permission denied for table estoque_produtos", severity: "ERROR", detail: None, column: None, hint: None }), transient: false })
+  venda em voo (transacao aberta antes do corte): COMMITOU -> commit
+  sessoes do papel antigo em omnigestao_prod: 2 (ainda conectadas: so perderam privilegio)
+
+## 5. CORTE 2/3: nenhuma conexao NOVA do papel antigo (inclui pooler reconectando e cold starts)
+  [omni_migrator@omnigestao_prod] REVOKE CONNECT, TEMPORARY FROM PUBLIC (agora como dono via omni_owner): OK
+  [omni_migrator@omnigestao_prod] REVOKE ALL ON DATABASE FROM papel antigo: OK
+  deployment antigo em cold start conecta: FALHOU ->  "old-cold-start-2") → 150 await tryOp("deployment antigo em cold start conecta", () => fresh2.produto.count( Error querying the database: FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  sessoes antigas ainda abertas (REVOKE CONNECT nao derruba ninguem): 2
+
+## 6. CORTE 3/3: encerrar as sessoes do papel antigo em prod (executado pelo proprio papel antigo, a partir do candidate)
+  [neondb_owner_sim@omnigestao_prod_candidate] pg_terminate_backend: OK -> encerradas=2
+  sessoes do papel antigo em omnigestao_prod: 0
+  old-deploy-A tentativa 1 (Prisma reconecta sozinho): FALHOU -> kend") 156 out(` sessoes do papel antigo em ${PROD}: ${sessoesAntigas()}`) → 157 for (let i = 1; i <= 3; i++) await tryOp(`old-deploy-A tentativa ${i} (Prisma reconecta sozinho)`, () => oldA.produto.update( Server has closed the connection. [P1017]
+  old-deploy-A tentativa 2 (Prisma reconecta sozinho): FALHOU -> ryOp(`old-deploy-A tentativa ${i} (Prisma reconecta sozinho)`, () => oldA.produto.update( Error in connector: Error querying the database: FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  old-deploy-A tentativa 3 (Prisma reconecta sozinho): FALHOU -> ryOp(`old-deploy-A tentativa ${i} (Prisma reconecta sozinho)`, () => oldA.produto.update( Error in connector: Error querying the database: FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  old-script le: FALHOU -> tentativa ${i} (Prisma reconecta sozinho)`, () => oldA.produto.update({ where: { id: "p-un-7" }, data: { stock: 5 } }).then((p) => p.stock)) → 158 await tryOp("old-script le", () => oldScript.produto.count( Server has closed the connection. [P1017]
+  psql com a credencial antiga em omnigestao_prod: RECUSADO -> FATAL: permission denied for database "omnigestao_prod" DETALHE: User does not have CONNECT privilege.
+  credencial antiga no candidate (Preview/local seguem ate migrarem): CONECTOU -> omnigestao_prod_candidate
+  runtime v2 no candidate: SEM PRIVILEGIO -> ERROR: permission denied for table estoque_produtos
+  sessoes do papel antigo em omnigestao_prod 5 s depois: 0
+  runtime v2 segue gravando (p-un-13 -> 10): SUCESSO -> 10
+  estoque real: p-pao=2 p-un-13=10 p-un-7=7
+  matriz depois do corte: neondb_owner_sim: connect=false update_estoque=false dono_por_heranca=false | omni_migrator: connect=true update_estoque=true dono_por_heranca=true | omni_runtime_v2: connect=true update_estoque=true dono_por_heranca=false
+
+## 7. Recuperacao do corte ANTES da migration (reabrir o papel antigo e cortar de novo)
+  [omni_migrator@omnigestao_prod] undo-cut.sql (como omni_migrator): ERRO -> psql:C:/Users/rafae/AppData/Local/Temp/claude/C--Projetos-omni-gestao/77a8b525-5552-4070-a3e7-20b7afd69972/scratchpad/kgproof/undo-cut.sql:3: ERROR: permission denied to grant role "omni_owner" DETALHE: Only roles with t
+  [neondb_owner_sim@omnigestao_prod_candidate] fallback: o papel antigo se re-adiciona (tem ADMIN OPTION sobre omni_owner por ter criado o papel): OK
+  cold start antigo depois da reversao grava (p-un-7 -> 7): SUCESSO -> 7
+  [neondb_owner_sim@omnigestao_prod] corte refeito: membro fora: OK
+  [omni_migrator@omnigestao_prod] corte refeito: CONNECT fora: OK
+  [neondb_owner_sim@omnigestao_prod_candidate] corte refeito: sessoes: OK -> encerradas=0
+  matriz depois do corte refeito: neondb_owner_sim: connect=false update_estoque=false dono_por_heranca=false | omni_migrator: connect=true update_estoque=true dono_por_heranca=true | omni_runtime_v2: connect=true update_estoque=true dono_por_heranca=false
+
+## 8. Migration KG aplicada pelo omni_migrator com o script verificado
+  apply: exit=0 NOTICE: KG_MIGRATION_OK produtos=3 depositos=0 livro=0 produtos_md5=7fbf57c1233e4f4a6c7876f84bb9466d
+  tipos: estoque_produtos.stock:double precision movimentacoes_estoque.estoqueAntes:double precision movimentacoes_estoque.estoqueDepois:double precision movimentacoes_estoque.quantidade:double precision produto_depositos.quantidade:double precision
+  runtime v2 ainda com DML depois do ALTER TYPE: t
+
+## 9. Depois da migration: codigo novo grava fracao; codigo antigo nao alcanca o banco
+  runtime v2 (Float) grava 3,96 kg em p-pao: SUCESSO -> 3.96
+  old-deploy-A (Int) tenta gravar p-un-7 -> 13: FALHOU -> ]) { → 197 await tryOp(`${nome} (Int) tenta gravar p-un-7 -> 13`, () => c.produto.update( Error in connector: Error querying the database: FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  old-script (Int) tenta gravar p-un-7 -> 13: FALHOU -> ]) { → 197 await tryOp(`${nome} (Int) tenta gravar p-un-7 -> 13`, () => c.produto.update( Error in connector: Error querying the database: FATAL: permission denied for database "omnigestao_prod" DETAIL: User does not have CONNECT privilege.
+  estoque real: p-pao=3.96 p-un-13=10 p-un-7=7
+  linhas corrompidas (NaN, denormal ou fora de milesimos): 0
+  sessoes do papel antigo em omnigestao_prod: 0

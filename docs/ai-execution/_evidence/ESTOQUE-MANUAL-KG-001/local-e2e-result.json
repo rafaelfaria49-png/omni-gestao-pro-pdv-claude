@@ -1,0 +1,32 @@
+{
+  "account": {
+    "scope": "STORE",
+    "role": "ADMIN",
+    "store": "kg-padaria-a"
+  },
+  "product": "Pão Francês Sintético KG",
+  "unit": "KG",
+  "entries": [
+    "2,500",
+    "0,750"
+  ],
+  "produtoStock": 3.25,
+  "depositos": [
+    3.25
+  ],
+  "ledger": [
+    {
+      "quantidade": 2.5,
+      "estoqueAntes": 0,
+      "estoqueDepois": 2.5
+    },
+    {
+      "quantidade": 0.75,
+      "estoqueAntes": 2.5,
+      "estoqueDepois": 3.25
+    }
+  ],
+  "reopenedFicha": "3,250",
+  "salePath": "not exercised (venda por peso bloqueada)",
+  "productionWrites": 0
+}

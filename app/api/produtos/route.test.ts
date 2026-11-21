@@ -139,6 +139,12 @@ describe("POST /api/produtos — boundary canônico (CAD-R2-007)", () => {
     expect(h.createProduct).not.toHaveBeenCalled()
   })
 
+  it.each([2.5, "2.5", "7un"])("POST com stock fracionado/inválido é 400, nunca truncado: %s", async (stock) => {
+    const res = await POST(postReq({ name: "X", stock, price: 10 }))
+    expect(res.status).toBe(400)
+    expect(h.createProduct).not.toHaveBeenCalled()
+  })
+
   it("POST sem price continua 400", async () => {
     const res = await POST(postReq({ name: "X", stock: 1 }))
     expect(res.status).toBe(400)

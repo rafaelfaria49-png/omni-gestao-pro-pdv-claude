@@ -269,17 +269,34 @@ describe("Estoque na ficha: unidade, motivo do bloqueio e releitura", () => {
     expect(h.upsertProduto.mock.calls[0][1]).not.toHaveProperty("estoque")
   })
 
-  it("KG em preparação: botão desabilitado com motivo visível e associado, sem abrir gravação", () => {
-    editor({ ...base, metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } } })
+  it("G em preparação: botão desabilitado com motivo visível e associado, sem abrir gravação", () => {
+    editor({ ...base, metadata: { comercial: { version: 1, modoVenda: "peso", unidade: "G", basePreco: "G" } } })
     const move = screen.getByRole("button", { name: "Movimentar estoque" }) as HTMLButtonElement
     expect(move.disabled).toBe(true)
     const reason = document.querySelector('[data-estoque-bloqueio="peso_em_preparacao"]')
     expect(reason?.textContent).toMatch(/Movimentação indisponível: venda por peso em preparação/)
     expect(move.getAttribute("aria-describedby")).toBe(reason?.id)
-    expect(document.querySelector("#produto-estoque-unidade")?.getAttribute("data-unidade")).toBe("KG")
+    expect(document.querySelector("#produto-estoque-unidade")?.getAttribute("data-unidade")).toBe("G")
     expect(document.body.textContent).not.toMatch(/Use Movimentar estoque para entrada/)
     fireEvent.click(move)
     expect(screen.queryByTestId("movimentacao")).toBeNull()
+  })
+
+  it("KG: movimentação abre para entrada e a ficha mostra o saldo em milésimos (3,250)", async () => {
+    const metadata = { comercial: { version: 1, modoVenda: "peso", unidade: "KG", basePreco: "KG" } }
+    render(React.createElement(ProductAIModal, { open: true, onClose: vi.fn(), storeId: "loja-a", productId: "p-1", initial: { ...base, estoque: 2.5, metadata } }))
+    const saldo = screen.getByRole("textbox", { name: "Estoque atual" }) as HTMLInputElement
+    expect(saldo.value).toBe("2,500")
+    expect(document.querySelector("#produto-estoque-unidade")?.getAttribute("data-unidade")).toBe("KG")
+    expect(document.querySelector("[data-estoque-bloqueio]")).toBeNull()
+    expect(document.body.textContent).toMatch(/Use Movimentar estoque para entrada em kg \(até 3 casas\)/)
+    const move = screen.getByRole("button", { name: "Movimentar estoque" }) as HTMLButtonElement
+    expect(move.disabled).toBe(false)
+    fireEvent.click(move)
+    expect(h.movementProps?.produto).toMatchObject({ estoque: 2.5, metadata })
+    await act(async () => { h.movementProps?.onSaved?.({ estoqueDepois: 3.25 }) })
+    expect(saldo.value).toBe("3,250")
+    expect(screen.getByText("Movimentação registrada. Saldo atual: 3,250 KG.")).toBeTruthy()
   })
 
   it("declaração comercial inválida recebe orientação própria e unidade a revisar", () => {
