@@ -25,6 +25,7 @@ describe("IMEI", () => {
     expect(validateImei("12345")).toMatchObject({ ok: false, reason: "TAMANHO" })
     expect(validateImei("000000000000000")).toMatchObject({ ok: false, reason: "SEQUENCIA_INVALIDA" })
     expect(validateImei("")).toMatchObject({ ok: false, reason: "VAZIO" })
+    expect(validateImei(`ABC${ok}`)).toMatchObject({ ok: false, reason: "CARACTERES" })
   })
   it("formata e mascara sem expor o número completo", () => {
     const imei = imeiValido("35678912345678")
@@ -153,6 +154,27 @@ describe("Documentos (33–35)", () => {
     expect(html).not.toMatch(/size:\s*80mm\s+auto/)
     expect(html).toMatch(/size: 80mm 200mm/)
     expect(html).toContain("sem valor fiscal")
+  })
+  it("80 mm: adicional contratual, datas, valor, nomes longos e acentos preservados; IDs não partem no hífen", () => {
+    const longo = { ...snap, cliente: { ...snap.cliente, nome: "Maria Aparecida da Conceição Albuquerque Gonçalves" },
+      aparelho: { ...snap.aparelho, marca: "Samsung Electrônica da Amazônia", modelo: "Galaxy S24 Ultra Edição Titânio" } }
+    const html = renderTermoGarantia(longo, "80mm")
+    expect(html).toContain(`<span class="rot">Garantia contratual adicional</span> <b>6 meses (180 dias)</b> <span class="muted">de 10/11/2026 a 09/05/2027</span>`)
+    expect(html).toContain(`<span class="rot">Cobertura total até</span> <b>07/08/2027</b>`)
+    expect(html).toMatch(/<th>Valor<\/th><td>R\$\s4\.999,00<\/td>/)
+    expect(html).toContain("Maria Aparecida da Conceição Albuquerque Gonçalves")
+    expect(html).toContain("Samsung Electrônica da Amazônia · Galaxy S24 Ultra Edição Titânio")
+    expect(html).toContain(`<h1>Termo de garantia <span class="nw">GAR-2026-00001</span></h1>`)
+    expect(html).toContain(`<td><span class="nw">35 678912 345678 9</span></td>`)
+    expect(html).toContain(".nw { display: inline-block; max-width: 100%; text-indent: 0; }")
+    // Condições em várias linhas continuam como itens da lista, uma por <li>.
+    expect((html.match(/<li>/g) ?? []).length).toBe(snap.condicoes.length)
+  })
+  it("A4 mantém grade de 3 colunas e tabela (formatação 80 mm não vaza para A4)", () => {
+    const html = renderTermoGarantia(snap, "a4")
+    expect(html).toContain(".cover { display: grid; grid-template-columns: repeat(3, 1fr)")
+    expect(html).toContain("th { width: 38mm; font-weight: 600; }")
+    expect(html).not.toContain('th::after')
   })
   it("garantia cancelada/recomprada reimprime com aviso de sem efeito", () => {
     expect(renderTermoGarantia(snap, "a4", "SEM EFEITO — garantia cancelada com a venda.")).toContain("SEM EFEITO")

@@ -27,6 +27,7 @@ import { sendEscPosViaProxy } from "@/lib/thermal-print";
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime";
 import { configPadrao } from "@/lib/config-empresa";
 import { changedFields } from "./settings-patch";
+import { DesktopPrintStationPanel, useDesktopPrintAvailable } from "./DesktopPrintStationPanel";
 
 /**
  * Preferências consumidas pela impressão do navegador (`openBrowserFallback`/HTML).
@@ -35,6 +36,12 @@ import { changedFields } from "./settings-patch";
  * é preservado.
  */
 const BROWSER_SWITCHES = [
+  ["logoNoCupom", "Exibir logo no cupom", "Usa a logo da unidade quando disponível"],
+] as const;
+
+/** App Windows com impressão direta: a impressão automática passa a funcionar também para a loja. */
+const DESKTOP_SWITCHES = [
+  ["imprimirAutomatico", "Imprimir cupom automaticamente", "Após confirmar a venda, direto na impressora desta estação"],
   ["logoNoCupom", "Exibir logo no cupom", "Usa a logo da unidade quando disponível"],
 ] as const;
 
@@ -71,6 +78,7 @@ export function ImpressaoPdvSettingsCard({ browserOnly = false }: { browserOnly?
   const [snapshot, setSnapshot] = useState<PdvImpressaoConfig>(() => defaultPdvImpressaoConfig());
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const desktopPrint = useDesktopPrintAvailable();
   const dirty = useMemo(() => changedFields(snapshot, form) !== null, [form, snapshot]);
   const dirtyRef = useRef(false);
 
@@ -212,7 +220,7 @@ export function ImpressaoPdvSettingsCard({ browserOnly = false }: { browserOnly?
     }
   };
 
-  const switches = browserOnly ? BROWSER_SWITCHES : PLATFORM_SWITCHES;
+  const switches = browserOnly ? (desktopPrint ? DESKTOP_SWITCHES : BROWSER_SWITCHES) : PLATFORM_SWITCHES;
 
   return (
     <SettingsCard
@@ -221,6 +229,7 @@ export function ImpressaoPdvSettingsCard({ browserOnly = false }: { browserOnly?
         ? "O cupom é impresso pela impressão do navegador do computador do caixa. Estas preferências valem para esta unidade."
         : "Preferências da estação/unidade consumidas pelo PDV, OS e crediário. O cupom usa ESC/POS pela API /api/print/raw (TCP 9100 ou bridge HTTP)."}
     >
+      {desktopPrint ? <DesktopPrintStationPanel /> : null}
       <div className="grid gap-5 sm:grid-cols-2">
         {!browserOnly ? (
           <>
@@ -333,7 +342,7 @@ export function ImpressaoPdvSettingsCard({ browserOnly = false }: { browserOnly?
         ))}
       </ul>
 
-      {browserOnly ? (
+      {browserOnly && !desktopPrint ? (
         <p className="mt-4 text-xs text-muted-foreground">
           Impressão automática após a venda, impressora térmica conectada diretamente (rede ou USB), vias automáticas e gaveta de dinheiro dependem de
           equipamento homologado e não são configuradas por esta tela.

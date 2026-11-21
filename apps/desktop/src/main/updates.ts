@@ -22,6 +22,10 @@ export async function checkDesktopUpdate(config: DesktopBuildConfig, currentVers
   }
   try {
     const res = await net.fetch(config.updateManifestUrl, { cache: "no-store", redirect: "error" })
+    // 404 = nenhuma release pública aprovada no canal oficial (estado normal antes da 1ª publicação).
+    if (res.status === 404) {
+      return { available: false, message: `Programa na versão ${currentVersion}. Nenhuma versão nova publicada no canal oficial.` }
+    }
     if (!res.ok) return { available: false, message: `Não foi possível verificar atualização (HTTP ${res.status}).` }
     const manifest = parseUpdateManifest(await res.json(), config.channel)
     if (!isUpdateAvailable(manifest, currentVersion)) {

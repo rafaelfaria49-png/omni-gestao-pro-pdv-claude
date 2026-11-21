@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { consumePdvShortcut, hasPdvShortcutOverlay, isPdvRepeatedOrHandled } from "@/lib/pdv-keymap"
 import { useToast } from "@/hooks/use-toast"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { configPadrao } from "@/lib/config-empresa"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
@@ -2278,6 +2279,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         onResume={handleResumeSale}
         onDiscard={handleDiscardHold}
       />
+
+      {/* Avisos dos diálogos de aparelhos (sonner): a tela usa o toast shadcn, sem Toaster sonner próprio. */}
+      {aparelhosHabilitado && <SonnerToaster position="top-center" richColors closeButton />}
 
       {/* ── Aparelho individualizado (IMEI + garantia) ── */}
       {aparelhosHabilitado && (

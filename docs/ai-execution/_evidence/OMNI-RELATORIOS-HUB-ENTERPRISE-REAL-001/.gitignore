@@ -1,0 +1,8 @@
+# Generated QA artifacts remain local; publish source and sanitized Markdown only.
+*.json
+*.log
+*.png
+*.pdf
+*.csv
+*.zip
+*.html

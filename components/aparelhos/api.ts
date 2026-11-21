@@ -4,6 +4,9 @@
 import type { AparelhoDTO } from "@/lib/aparelhos/service"
 import type { PoliticaAparelhos } from "@/lib/aparelhos/policy"
 import type { AparelhoPermissions } from "@/lib/aparelhos/permissions"
+import { getDesktopPrintBridge } from "@/lib/desktop-print-bridge"
+import { exigirEstacao80mm, imprimirDocumentoAparelho80mm } from "@/lib/aparelhos/print-client"
+import { toast } from "sonner"
 
 export type { AparelhoDTO, PoliticaAparelhos, AparelhoPermissions }
 
@@ -72,8 +75,25 @@ export type HistoricoItem = { id: string; tipo: string; deStatus: string | null;
  * Abre o documento numa janela própria navegando direto para a URL do servidor: a resposta
  * traz CSP restritiva (sem herdar o contexto do app). Erros aparecem na própria janela.
  */
+const documentosEmImpressao = new Map<string, Promise<void>>()
+
 export async function abrirDocumento(storeId: string, params: Record<string, string>, canal: "hub" | "venda" = "hub"): Promise<void> {
   const q = new URLSearchParams({ ...params, storeId, ...(canal === "venda" ? { canal: "venda" } : {}) })
+  if (params.formato === "80mm" && params.previa !== "1" && getDesktopPrintBridge()) {
+    const key = q.toString()
+    const pending = documentosEmImpressao.get(key)
+    if (pending) return pending
+    const job = (async () => {
+      await exigirEstacao80mm()
+      const res = await fetch(`/api/aparelhos/documentos?${key}`, { credentials: "same-origin", cache: "no-store" })
+      if (!res.ok) throw new ApiError("Não foi possível emitir o documento. Confira a sessão e a loja antes de tentar novamente.", "DOCUMENTO", res.status)
+      await imprimirDocumentoAparelho80mm(await res.text())
+      toast.success("Documento enviado à impressora. Confira a saída no papel.")
+    })()
+    documentosEmImpressao.set(key, job)
+    try { await job } finally { documentosEmImpressao.delete(key) }
+    return
+  }
   const w = window.open(`/api/aparelhos/documentos?${q.toString()}`, "_blank")
   if (!w) throw new ApiError("O navegador bloqueou a janela de impressão. Permita pop-ups para este site.", "POPUP", 0)
   w.opener = null
