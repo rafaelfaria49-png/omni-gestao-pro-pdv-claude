@@ -65,12 +65,19 @@ Invariante verificada em cada cenário: ledger líquido = movimentações (entra
 |---|---|
 | `test/fin-estorno-p1` (PG) | 24/24 |
 | `test/ops-v3-recebimento-misto` (PG, inclui estorno V3 e estorno pelo Financeiro) | 18/18 |
-| `test/ops-v4-fluxo-curto-006/retirada.pg.test.ts` (PG) | 6/6 |
+| `test/ops-v4-fluxo-curto-006/retirada.pg.test.ts` (PG) | 18/18 |
 | `recebimento-lote-lock.postgres.test.ts` (PG) | 6/6 |
 | Vitest das áreas Financeiro/PDV/Caixa/Vendas/Relatórios/Operações V3 | 1962 passed / 298 failed / 57 skipped — **idêntico** a `origin/main` teste a teste (0 novas falhas; as 298 são pré-existentes, ex. mock sem `storeIdFromAssistecRequestForRead` em `recebimento-lote.test.ts`) |
 | `npm run typecheck` | exit 0 |
 | ESLint (arquivos alterados) | 0 erros (1 warning pré-existente em linha não tocada) |
-| `npm run build` | ver PR |
+| `npm run build` | exit 0 — "Compiled successfully" |
+
+### Isolamento do Preview (somente leitura, metadados Vercel — nenhum valor de credencial lido)
+A branch não tem env própria → usa `DATABASE_URL` `CAgFUTJYNOJb64j1` / `DIRECT_URL` `WfY0iLLQ8cbQOXHd`
+(target só `preview`, *sensitive*). `updatedAt` 2026-10-27T22:05:32Z = o segundo da aplicação P3 registrada
+(Neon QA `nameless-frost` · papel `preview_runtime` · `omnigestao_preview`), mesma prova da
+`PADARIA-KG-STACK-PUSH-SEGURO-002` (hoje). As envs de Production (`p2OLtFuiyUymtIRA`/`38TkKDEr1OIgsxy0`)
+são distintas e só `production`. Nenhuma migration nesta branch.
 
 ## Compatibilidade com a #341
 Mesmo contrato `refHistoricoIndex`/`loteId`; `operacaoEstornadaNoLedger` e `pagamentosDoLedger` da #341 continuam corretos (estornos agora sempre referenciados). Conflitos de merge esperados: `app/api/pdv/receber-conta/route.ts` (hunks vizinhos, mesma região) e `FinanceiroRealContext.tsx` (hunk do audit é idêntico ao da #341). O `receber-lote` novo da #341 grava `loteId` no ledger e no caixa → coberto pela regra 1.
