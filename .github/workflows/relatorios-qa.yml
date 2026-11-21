@@ -1,0 +1,45 @@
+name: Relatórios - QA sintética
+on:
+  pull_request:
+    paths:
+      - "lib/relatorios/**"
+      - "app/api/dashboard/relatorios/**"
+      - "app/dashboard/relatorios/**"
+      - "components/dashboard/relatorios/**"
+      - "components/dashboard/DashboardClientLayout.tsx"
+      - "scripts/relatorios/**"
+      - "e2e/reports/**"
+      - "e2e/reports.config.ts"
+      - "next.config.mjs"
+      - "public/client-privacy-cache.js"
+      - "auth.ts"
+      - "auth.config.ts"
+      - "lib/auth/**"
+      - "lib/loja-ativa.tsx"
+      - "prisma/schema.prisma"
+      - ".github/workflows/relatorios-qa.yml"
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  reports:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      DATABASE_URL: postgresql://omni_qa@127.0.0.1:55432/omni_reports_qa
+      DIRECT_URL: postgresql://omni_qa@127.0.0.1:55432/omni_reports_qa
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - run: npm ci --no-audit --no-fund
+      - name: Contratos, fontes, guards e compatibilidade PR350
+        run: node node_modules/vitest/vitest.mjs run lib/relatorios app/api/dashboard/relatorios lib/auth/admin-session.test.ts --exclude '**/*.pg.test.ts' --maxWorkers=1
+      - run: npm run typecheck
+      - run: npx playwright install --with-deps chromium
+      - name: PostgreSQL descartável, build, PWA e E2E de navegador/mobile
+        run: node scripts/relatorios/run-ci-qa.mjs

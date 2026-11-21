@@ -1750,3 +1750,892 @@ realme_c21__realme_c21,realme_c21,Realme C21,REALME C21,canonical,false,false,al
 tecno_spark_10__spark_10,tecno_spark_10,Spark 10,SPARK 10,short,false,false,alta,Alias curto da linha Tecno Spark; nao inclui variantes Pro/C.
 tecno_spark_10__spark10,tecno_spark_10,Spark10,SPARK10,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes Pro/C.
 tecno_spark_10__tecno_spark_10,tecno_spark_10,Tecno Spark 10,TECNO SPARK 10,canonical,false,false,alta,Nome canonico do modelo base.
+apple_iphone_se_2020__iphone_se_2_geracao,apple_iphone_se_2020,iPhone SE 2ª geração,IPHONE SE 2ª GERACAO,official_name,false,false,alta,Nome oficial Apple.
+apple_iphone_se_2020__iphone_se_2,apple_iphone_se_2020,iPhone SE 2,IPHONE SE 2,commercial_variant,false,false,alta,
+apple_iphone_se_2022__iphone_se_3_geracao,apple_iphone_se_2022,iPhone SE 3ª geração,IPHONE SE 3ª GERACAO,official_name,false,false,alta,Nome oficial Apple.
+apple_iphone_se_2022__iphone_se_3,apple_iphone_se_2022,iPhone SE 3,IPHONE SE 3,commercial_variant,false,false,alta,
+apple_iphone_6__apple_iphone_6,apple_iphone_6,Apple iPhone 6,APPLE IPHONE 6,canonical,false,false,alta,Nome canônico.
+apple_iphone_6__iphone_6,apple_iphone_6,iPhone 6,IPHONE 6,commercial_variant,false,false,alta,Nome comercial sem a marca.
+apple_iphone_6__6,apple_iphone_6,6,6,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+apple_iphone_6__iphone6,apple_iphone_6,iPhone6,IPHONE6,common_typo,false,false,alta,Grafia sem espaços.
+apple_iphone_6s__apple_iphone_6s,apple_iphone_6s,Apple iPhone 6s,APPLE IPHONE 6S,canonical,false,false,alta,Nome canônico.
+apple_iphone_6s__iphone_6s,apple_iphone_6s,iPhone 6s,IPHONE 6S,commercial_variant,false,false,alta,Nome comercial sem a marca.
+apple_iphone_6s__6s,apple_iphone_6s,6s,6S,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+apple_iphone_6s__iphone6s,apple_iphone_6s,iPhone6s,IPHONE6S,common_typo,false,false,alta,Grafia sem espaços.
+apple_iphone_6s_plus__apple_iphone_6s_plus,apple_iphone_6s_plus,Apple iPhone 6s Plus,APPLE IPHONE 6S PLUS,canonical,false,false,alta,Nome canônico.
+apple_iphone_6s_plus__iphone_6s_plus,apple_iphone_6s_plus,iPhone 6s Plus,IPHONE 6S PLUS,commercial_variant,false,false,alta,Nome comercial sem a marca.
+apple_iphone_6s_plus__6s_plus,apple_iphone_6s_plus,6s Plus,6S PLUS,short,false,false,alta,
+apple_iphone_6s_plus__iphone6splus,apple_iphone_6s_plus,iPhone6sPlus,IPHONE6SPLUS,common_typo,false,false,alta,Grafia sem espaços.
+apple_iphone_18_pro__apple_iphone_18_pro,apple_iphone_18_pro,Apple iPhone 18 Pro,APPLE IPHONE 18 PRO,canonical,false,false,alta,Nome canônico.
+apple_iphone_18_pro__iphone_18_pro,apple_iphone_18_pro,iPhone 18 Pro,IPHONE 18 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+apple_iphone_18_pro__18_pro,apple_iphone_18_pro,18 Pro,18 PRO,short,false,false,alta,
+apple_iphone_18_pro__iphone18pro,apple_iphone_18_pro,iPhone18Pro,IPHONE18PRO,common_typo,false,false,alta,Grafia sem espaços.
+apple_iphone_18_pro_max__apple_iphone_18_pro_max,apple_iphone_18_pro_max,Apple iPhone 18 Pro Max,APPLE IPHONE 18 PRO MAX,canonical,false,false,alta,Nome canônico.
+apple_iphone_18_pro_max__iphone_18_pro_max,apple_iphone_18_pro_max,iPhone 18 Pro Max,IPHONE 18 PRO MAX,commercial_variant,false,false,alta,Nome comercial sem a marca.
+apple_iphone_18_pro_max__18_pro_max,apple_iphone_18_pro_max,18 Pro Max,18 PRO MAX,short,false,false,alta,
+apple_iphone_18_pro_max__iphone18promax,apple_iphone_18_pro_max,iPhone18ProMax,IPHONE18PROMAX,common_typo,false,false,alta,Grafia sem espaços.
+apple_iphone_duo__apple_iphone_duo,apple_iphone_duo,Apple iPhone Duo,APPLE IPHONE DUO,canonical,false,false,alta,Nome canônico.
+apple_iphone_duo__iphone_duo,apple_iphone_duo,iPhone Duo,IPHONE DUO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+apple_iphone_duo__duo,apple_iphone_duo,Duo,DUO,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+apple_iphone_duo__iphoneduo,apple_iphone_duo,iPhoneDuo,IPHONEDUO,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_s20__samsung_galaxy_s20,samsung_galaxy_s20,Samsung Galaxy S20,SAMSUNG GALAXY S20,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_s20__galaxy_s20,samsung_galaxy_s20,Galaxy S20,GALAXY S20,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_s20__s20,samsung_galaxy_s20,S20,S20,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_s20__galaxys20,samsung_galaxy_s20,GalaxyS20,GALAXYS20,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_s20_plus__samsung_galaxy_s20_plus,samsung_galaxy_s20_plus,Samsung Galaxy S20+,SAMSUNG GALAXY S20+,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_s20_plus__galaxy_s20_plus,samsung_galaxy_s20_plus,Galaxy S20+,GALAXY S20+,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_s20_plus__s20_plus,samsung_galaxy_s20_plus,S20+,S20+,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_s20_plus__galaxy_s20_plus_2,samsung_galaxy_s20_plus,Galaxy S20 Plus,GALAXY S20 PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+samsung_galaxy_s20_plus__galaxys20_plus,samsung_galaxy_s20_plus,GalaxyS20+,GALAXYS20+,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_s20_ultra__samsung_galaxy_s20_ultra,samsung_galaxy_s20_ultra,Samsung Galaxy S20 Ultra,SAMSUNG GALAXY S20 ULTRA,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_s20_ultra__galaxy_s20_ultra,samsung_galaxy_s20_ultra,Galaxy S20 Ultra,GALAXY S20 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_s20_ultra__s20_ultra,samsung_galaxy_s20_ultra,S20 Ultra,S20 ULTRA,short,false,false,alta,
+samsung_galaxy_s20_ultra__galaxys20ultra,samsung_galaxy_s20_ultra,GalaxyS20Ultra,GALAXYS20ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_s21_ultra__samsung_galaxy_s21_ultra,samsung_galaxy_s21_ultra,Samsung Galaxy S21 Ultra,SAMSUNG GALAXY S21 ULTRA,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_s21_ultra__galaxy_s21_ultra,samsung_galaxy_s21_ultra,Galaxy S21 Ultra,GALAXY S21 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_s21_ultra__s21_ultra,samsung_galaxy_s21_ultra,S21 Ultra,S21 ULTRA,short,false,false,alta,
+samsung_galaxy_s21_ultra__galaxys21ultra,samsung_galaxy_s21_ultra,GalaxyS21Ultra,GALAXYS21ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_s25_edge__samsung_galaxy_s25_edge,samsung_galaxy_s25_edge,Samsung Galaxy S25 Edge,SAMSUNG GALAXY S25 EDGE,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_s25_edge__galaxy_s25_edge,samsung_galaxy_s25_edge,Galaxy S25 Edge,GALAXY S25 EDGE,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_s25_edge__s25_edge,samsung_galaxy_s25_edge,S25 Edge,S25 EDGE,short,false,false,alta,
+samsung_galaxy_s25_edge__galaxys25edge,samsung_galaxy_s25_edge,GalaxyS25Edge,GALAXYS25EDGE,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_s26_fe__samsung_galaxy_s26_fe,samsung_galaxy_s26_fe,Samsung Galaxy S26 FE,SAMSUNG GALAXY S26 FE,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_s26_fe__galaxy_s26_fe,samsung_galaxy_s26_fe,Galaxy S26 FE,GALAXY S26 FE,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_s26_fe__s26_fe,samsung_galaxy_s26_fe,S26 FE,S26 FE,short,false,false,alta,
+samsung_galaxy_s26_fe__galaxys26fe,samsung_galaxy_s26_fe,GalaxyS26FE,GALAXYS26FE,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a14_5g__samsung_galaxy_a14_5g,samsung_galaxy_a14_5g,Samsung Galaxy A14 5G,SAMSUNG GALAXY A14 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a14_5g__galaxy_a14_5g,samsung_galaxy_a14_5g,Galaxy A14 5G,GALAXY A14 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a14_5g__a14_5g,samsung_galaxy_a14_5g,A14 5G,A14 5G,short,false,false,alta,
+samsung_galaxy_a14_5g__galaxya145g,samsung_galaxy_a14_5g,GalaxyA145G,GALAXYA145G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a15_5g__samsung_galaxy_a15_5g,samsung_galaxy_a15_5g,Samsung Galaxy A15 5G,SAMSUNG GALAXY A15 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a15_5g__galaxy_a15_5g,samsung_galaxy_a15_5g,Galaxy A15 5G,GALAXY A15 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a15_5g__a15_5g,samsung_galaxy_a15_5g,A15 5G,A15 5G,short,false,false,alta,
+samsung_galaxy_a15_5g__galaxya155g,samsung_galaxy_a15_5g,GalaxyA155G,GALAXYA155G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a06_5g__samsung_galaxy_a06_5g,samsung_galaxy_a06_5g,Samsung Galaxy A06 5G,SAMSUNG GALAXY A06 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a06_5g__galaxy_a06_5g,samsung_galaxy_a06_5g,Galaxy A06 5G,GALAXY A06 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a06_5g__a06_5g,samsung_galaxy_a06_5g,A06 5G,A06 5G,short,false,false,alta,
+samsung_galaxy_a06_5g__galaxya065g,samsung_galaxy_a06_5g,GalaxyA065G,GALAXYA065G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a16_5g__samsung_galaxy_a16_5g,samsung_galaxy_a16_5g,Samsung Galaxy A16 5G,SAMSUNG GALAXY A16 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a16_5g__galaxy_a16_5g,samsung_galaxy_a16_5g,Galaxy A16 5G,GALAXY A16 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a16_5g__a16_5g,samsung_galaxy_a16_5g,A16 5G,A16 5G,short,false,false,alta,
+samsung_galaxy_a16_5g__galaxya165g,samsung_galaxy_a16_5g,GalaxyA165G,GALAXYA165G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a07_5g__samsung_galaxy_a07_5g,samsung_galaxy_a07_5g,Samsung Galaxy A07 5G,SAMSUNG GALAXY A07 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a07_5g__galaxy_a07_5g,samsung_galaxy_a07_5g,Galaxy A07 5G,GALAXY A07 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a07_5g__a07_5g,samsung_galaxy_a07_5g,A07 5G,A07 5G,short,false,false,alta,
+samsung_galaxy_a07_5g__galaxya075g,samsung_galaxy_a07_5g,GalaxyA075G,GALAXYA075G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a07s__samsung_galaxy_a07s,samsung_galaxy_a07s,Samsung Galaxy A07s,SAMSUNG GALAXY A07S,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a07s__galaxy_a07s,samsung_galaxy_a07s,Galaxy A07s,GALAXY A07S,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a07s__a07s,samsung_galaxy_a07s,A07s,A07S,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_a07s__galaxya07s,samsung_galaxy_a07s,GalaxyA07s,GALAXYA07S,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a17_5g__samsung_galaxy_a17_5g,samsung_galaxy_a17_5g,Samsung Galaxy A17 5G,SAMSUNG GALAXY A17 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a17_5g__galaxy_a17_5g,samsung_galaxy_a17_5g,Galaxy A17 5G,GALAXY A17 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a17_5g__a17_5g,samsung_galaxy_a17_5g,A17 5G,A17 5G,short,false,false,alta,
+samsung_galaxy_a17_5g__galaxya175g,samsung_galaxy_a17_5g,GalaxyA175G,GALAXYA175G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a27_5g__samsung_galaxy_a27_5g,samsung_galaxy_a27_5g,Samsung Galaxy A27 5G,SAMSUNG GALAXY A27 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a27_5g__galaxy_a27_5g,samsung_galaxy_a27_5g,Galaxy A27 5G,GALAXY A27 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a27_5g__a27_5g,samsung_galaxy_a27_5g,A27 5G,A27 5G,short,false,false,alta,
+samsung_galaxy_a27_5g__galaxya275g,samsung_galaxy_a27_5g,GalaxyA275G,GALAXYA275G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a08__samsung_galaxy_a08,samsung_galaxy_a08,Samsung Galaxy A08,SAMSUNG GALAXY A08,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a08__galaxy_a08,samsung_galaxy_a08,Galaxy A08,GALAXY A08,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a08__a08,samsung_galaxy_a08,A08,A08,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_a08__galaxya08,samsung_galaxy_a08,GalaxyA08,GALAXYA08,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_a18__samsung_galaxy_a18,samsung_galaxy_a18,Samsung Galaxy A18,SAMSUNG GALAXY A18,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_a18__galaxy_a18,samsung_galaxy_a18,Galaxy A18,GALAXY A18,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_a18__a18,samsung_galaxy_a18,A18,A18,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_a18__galaxya18,samsung_galaxy_a18,GalaxyA18,GALAXYA18,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m05__samsung_galaxy_m05,samsung_galaxy_m05,Samsung Galaxy M05,SAMSUNG GALAXY M05,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m05__galaxy_m05,samsung_galaxy_m05,Galaxy M05,GALAXY M05,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m05__m05,samsung_galaxy_m05,M05,M05,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_m05__galaxym05,samsung_galaxy_m05,GalaxyM05,GALAXYM05,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m55s_5g__samsung_galaxy_m55s_5g,samsung_galaxy_m55s_5g,Samsung Galaxy M55s 5G,SAMSUNG GALAXY M55S 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m55s_5g__galaxy_m55s_5g,samsung_galaxy_m55s_5g,Galaxy M55s 5G,GALAXY M55S 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m55s_5g__m55s,samsung_galaxy_m55s_5g,M55s,M55S,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_m55s_5g__galaxym55s5g,samsung_galaxy_m55s_5g,GalaxyM55s5G,GALAXYM55S5G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m06_5g__samsung_galaxy_m06_5g,samsung_galaxy_m06_5g,Samsung Galaxy M06 5G,SAMSUNG GALAXY M06 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m06_5g__galaxy_m06_5g,samsung_galaxy_m06_5g,Galaxy M06 5G,GALAXY M06 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m06_5g__m06_5g,samsung_galaxy_m06_5g,M06 5G,M06 5G,short,false,false,alta,
+samsung_galaxy_m06_5g__galaxym065g,samsung_galaxy_m06_5g,GalaxyM065G,GALAXYM065G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m36_5g__samsung_galaxy_m36_5g,samsung_galaxy_m36_5g,Samsung Galaxy M36 5G,SAMSUNG GALAXY M36 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m36_5g__galaxy_m36_5g,samsung_galaxy_m36_5g,Galaxy M36 5G,GALAXY M36 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m36_5g__m36_5g,samsung_galaxy_m36_5g,M36 5G,M36 5G,short,false,false,alta,
+samsung_galaxy_m36_5g__galaxym365g,samsung_galaxy_m36_5g,GalaxyM365G,GALAXYM365G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m07__samsung_galaxy_m07,samsung_galaxy_m07,Samsung Galaxy M07,SAMSUNG GALAXY M07,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m07__galaxy_m07,samsung_galaxy_m07,Galaxy M07,GALAXY M07,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m07__m07,samsung_galaxy_m07,M07,M07,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_m07__galaxym07,samsung_galaxy_m07,GalaxyM07,GALAXYM07,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m17__samsung_galaxy_m17,samsung_galaxy_m17,Samsung Galaxy M17,SAMSUNG GALAXY M17,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m17__galaxy_m17,samsung_galaxy_m17,Galaxy M17,GALAXY M17,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m17__m17,samsung_galaxy_m17,M17,M17,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_m17__galaxym17,samsung_galaxy_m17,GalaxyM17,GALAXYM17,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m17e__samsung_galaxy_m17e,samsung_galaxy_m17e,Samsung Galaxy M17e,SAMSUNG GALAXY M17E,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m17e__galaxy_m17e,samsung_galaxy_m17e,Galaxy M17e,GALAXY M17E,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m17e__m17e,samsung_galaxy_m17e,M17e,M17E,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_m17e__galaxym17e,samsung_galaxy_m17e,GalaxyM17e,GALAXYM17E,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_m47__samsung_galaxy_m47,samsung_galaxy_m47,Samsung Galaxy M47,SAMSUNG GALAXY M47,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_m47__galaxy_m47,samsung_galaxy_m47,Galaxy M47,GALAXY M47,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_m47__m47,samsung_galaxy_m47,M47,M47,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_m47__galaxym47,samsung_galaxy_m47,GalaxyM47,GALAXYM47,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f14_5g__samsung_galaxy_f14_5g,samsung_galaxy_f14_5g,Samsung Galaxy F14 5G,SAMSUNG GALAXY F14 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f14_5g__galaxy_f14_5g,samsung_galaxy_f14_5g,Galaxy F14 5G,GALAXY F14 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f14_5g__f14_5g,samsung_galaxy_f14_5g,F14 5G,F14 5G,short,false,false,alta,
+samsung_galaxy_f14_5g__galaxyf145g,samsung_galaxy_f14_5g,GalaxyF145G,GALAXYF145G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f34_5g__samsung_galaxy_f34_5g,samsung_galaxy_f34_5g,Samsung Galaxy F34 5G,SAMSUNG GALAXY F34 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f34_5g__galaxy_f34_5g,samsung_galaxy_f34_5g,Galaxy F34 5G,GALAXY F34 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f34_5g__f34_5g,samsung_galaxy_f34_5g,F34 5G,F34 5G,short,false,false,alta,
+samsung_galaxy_f34_5g__galaxyf345g,samsung_galaxy_f34_5g,GalaxyF345G,GALAXYF345G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f15_5g__samsung_galaxy_f15_5g,samsung_galaxy_f15_5g,Samsung Galaxy F15 5G,SAMSUNG GALAXY F15 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f15_5g__galaxy_f15_5g,samsung_galaxy_f15_5g,Galaxy F15 5G,GALAXY F15 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f15_5g__f15_5g,samsung_galaxy_f15_5g,F15 5G,F15 5G,short,false,false,alta,
+samsung_galaxy_f15_5g__galaxyf155g,samsung_galaxy_f15_5g,GalaxyF155G,GALAXYF155G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f55_5g__samsung_galaxy_f55_5g,samsung_galaxy_f55_5g,Samsung Galaxy F55 5G,SAMSUNG GALAXY F55 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f55_5g__galaxy_f55_5g,samsung_galaxy_f55_5g,Galaxy F55 5G,GALAXY F55 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f55_5g__f55_5g,samsung_galaxy_f55_5g,F55 5G,F55 5G,short,false,false,alta,
+samsung_galaxy_f55_5g__galaxyf555g,samsung_galaxy_f55_5g,GalaxyF555G,GALAXYF555G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f05__samsung_galaxy_f05,samsung_galaxy_f05,Samsung Galaxy F05,SAMSUNG GALAXY F05,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f05__galaxy_f05,samsung_galaxy_f05,Galaxy F05,GALAXY F05,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f05__f05,samsung_galaxy_f05,F05,F05,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+samsung_galaxy_f05__galaxyf05,samsung_galaxy_f05,GalaxyF05,GALAXYF05,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f06_5g__samsung_galaxy_f06_5g,samsung_galaxy_f06_5g,Samsung Galaxy F06 5G,SAMSUNG GALAXY F06 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f06_5g__galaxy_f06_5g,samsung_galaxy_f06_5g,Galaxy F06 5G,GALAXY F06 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f06_5g__f06_5g,samsung_galaxy_f06_5g,F06 5G,F06 5G,short,false,false,alta,
+samsung_galaxy_f06_5g__galaxyf065g,samsung_galaxy_f06_5g,GalaxyF065G,GALAXYF065G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f36_5g__samsung_galaxy_f36_5g,samsung_galaxy_f36_5g,Samsung Galaxy F36 5G,SAMSUNG GALAXY F36 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f36_5g__galaxy_f36_5g,samsung_galaxy_f36_5g,Galaxy F36 5G,GALAXY F36 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f36_5g__f36_5g,samsung_galaxy_f36_5g,F36 5G,F36 5G,short,false,false,alta,
+samsung_galaxy_f36_5g__galaxyf365g,samsung_galaxy_f36_5g,GalaxyF365G,GALAXYF365G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f56_5g__samsung_galaxy_f56_5g,samsung_galaxy_f56_5g,Samsung Galaxy F56 5G,SAMSUNG GALAXY F56 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f56_5g__galaxy_f56_5g,samsung_galaxy_f56_5g,Galaxy F56 5G,GALAXY F56 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f56_5g__f56_5g,samsung_galaxy_f56_5g,F56 5G,F56 5G,short,false,false,alta,
+samsung_galaxy_f56_5g__galaxyf565g,samsung_galaxy_f56_5g,GalaxyF565G,GALAXYF565G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_f17_5g__samsung_galaxy_f17_5g,samsung_galaxy_f17_5g,Samsung Galaxy F17 5G,SAMSUNG GALAXY F17 5G,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_f17_5g__galaxy_f17_5g,samsung_galaxy_f17_5g,Galaxy F17 5G,GALAXY F17 5G,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_f17_5g__f17_5g,samsung_galaxy_f17_5g,F17 5G,F17 5G,short,false,false,alta,
+samsung_galaxy_f17_5g__galaxyf175g,samsung_galaxy_f17_5g,GalaxyF175G,GALAXYF175G,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_fold5__samsung_galaxy_z_fold5,samsung_galaxy_z_fold5,Samsung Galaxy Z Fold5,SAMSUNG GALAXY Z FOLD5,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_fold5__galaxy_z_fold5,samsung_galaxy_z_fold5,Galaxy Z Fold5,GALAXY Z FOLD5,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_fold5__z_fold5,samsung_galaxy_z_fold5,Z Fold5,Z FOLD5,short,false,false,alta,
+samsung_galaxy_z_fold5__galaxyzfold5,samsung_galaxy_z_fold5,GalaxyZFold5,GALAXYZFOLD5,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_flip5__samsung_galaxy_z_flip5,samsung_galaxy_z_flip5,Samsung Galaxy Z Flip5,SAMSUNG GALAXY Z FLIP5,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_flip5__galaxy_z_flip5,samsung_galaxy_z_flip5,Galaxy Z Flip5,GALAXY Z FLIP5,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_flip5__z_flip5,samsung_galaxy_z_flip5,Z Flip5,Z FLIP5,short,false,false,alta,
+samsung_galaxy_z_flip5__galaxyzflip5,samsung_galaxy_z_flip5,GalaxyZFlip5,GALAXYZFLIP5,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_fold6__samsung_galaxy_z_fold6,samsung_galaxy_z_fold6,Samsung Galaxy Z Fold6,SAMSUNG GALAXY Z FOLD6,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_fold6__galaxy_z_fold6,samsung_galaxy_z_fold6,Galaxy Z Fold6,GALAXY Z FOLD6,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_fold6__z_fold6,samsung_galaxy_z_fold6,Z Fold6,Z FOLD6,short,false,false,alta,
+samsung_galaxy_z_fold6__galaxyzfold6,samsung_galaxy_z_fold6,GalaxyZFold6,GALAXYZFOLD6,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_flip6__samsung_galaxy_z_flip6,samsung_galaxy_z_flip6,Samsung Galaxy Z Flip6,SAMSUNG GALAXY Z FLIP6,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_flip6__galaxy_z_flip6,samsung_galaxy_z_flip6,Galaxy Z Flip6,GALAXY Z FLIP6,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_flip6__z_flip6,samsung_galaxy_z_flip6,Z Flip6,Z FLIP6,short,false,false,alta,
+samsung_galaxy_z_flip6__galaxyzflip6,samsung_galaxy_z_flip6,GalaxyZFlip6,GALAXYZFLIP6,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_fold7__samsung_galaxy_z_fold7,samsung_galaxy_z_fold7,Samsung Galaxy Z Fold7,SAMSUNG GALAXY Z FOLD7,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_fold7__galaxy_z_fold7,samsung_galaxy_z_fold7,Galaxy Z Fold7,GALAXY Z FOLD7,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_fold7__z_fold7,samsung_galaxy_z_fold7,Z Fold7,Z FOLD7,short,false,false,alta,
+samsung_galaxy_z_fold7__galaxyzfold7,samsung_galaxy_z_fold7,GalaxyZFold7,GALAXYZFOLD7,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_flip7__samsung_galaxy_z_flip7,samsung_galaxy_z_flip7,Samsung Galaxy Z Flip7,SAMSUNG GALAXY Z FLIP7,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_flip7__galaxy_z_flip7,samsung_galaxy_z_flip7,Galaxy Z Flip7,GALAXY Z FLIP7,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_flip7__z_flip7,samsung_galaxy_z_flip7,Z Flip7,Z FLIP7,short,false,false,alta,
+samsung_galaxy_z_flip7__galaxyzflip7,samsung_galaxy_z_flip7,GalaxyZFlip7,GALAXYZFLIP7,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_flip7_fe__samsung_galaxy_z_flip7_fe,samsung_galaxy_z_flip7_fe,Samsung Galaxy Z Flip7 FE,SAMSUNG GALAXY Z FLIP7 FE,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_flip7_fe__galaxy_z_flip7_fe,samsung_galaxy_z_flip7_fe,Galaxy Z Flip7 FE,GALAXY Z FLIP7 FE,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_flip7_fe__z_flip7_fe,samsung_galaxy_z_flip7_fe,Z Flip7 FE,Z FLIP7 FE,short,false,false,alta,
+samsung_galaxy_z_flip7_fe__galaxyzflip7fe,samsung_galaxy_z_flip7_fe,GalaxyZFlip7FE,GALAXYZFLIP7FE,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_trifold__samsung_galaxy_z_trifold,samsung_galaxy_z_trifold,Samsung Galaxy Z TriFold,SAMSUNG GALAXY Z TRIFOLD,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_trifold__galaxy_z_trifold,samsung_galaxy_z_trifold,Galaxy Z TriFold,GALAXY Z TRIFOLD,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_trifold__z_trifold,samsung_galaxy_z_trifold,Z TriFold,Z TRIFOLD,short,false,false,alta,
+samsung_galaxy_z_trifold__galaxyztrifold,samsung_galaxy_z_trifold,GalaxyZTriFold,GALAXYZTRIFOLD,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_fold8__samsung_galaxy_z_fold8,samsung_galaxy_z_fold8,Samsung Galaxy Z Fold8,SAMSUNG GALAXY Z FOLD8,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_fold8__galaxy_z_fold8,samsung_galaxy_z_fold8,Galaxy Z Fold8,GALAXY Z FOLD8,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_fold8__z_fold8,samsung_galaxy_z_fold8,Z Fold8,Z FOLD8,short,false,false,alta,
+samsung_galaxy_z_fold8__galaxyzfold8,samsung_galaxy_z_fold8,GalaxyZFold8,GALAXYZFOLD8,common_typo,false,false,alta,Grafia sem espaços.
+samsung_galaxy_z_flip8__samsung_galaxy_z_flip8,samsung_galaxy_z_flip8,Samsung Galaxy Z Flip8,SAMSUNG GALAXY Z FLIP8,canonical,false,false,alta,Nome canônico.
+samsung_galaxy_z_flip8__galaxy_z_flip8,samsung_galaxy_z_flip8,Galaxy Z Flip8,GALAXY Z FLIP8,commercial_variant,false,false,alta,Nome comercial sem a marca.
+samsung_galaxy_z_flip8__z_flip8,samsung_galaxy_z_flip8,Z Flip8,Z FLIP8,short,false,false,alta,
+samsung_galaxy_z_flip8__galaxyzflip8,samsung_galaxy_z_flip8,GalaxyZFlip8,GALAXYZFLIP8,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g04s__motorola_moto_g04s,motorola_moto_g04s,Motorola Moto G04s,MOTOROLA MOTO G04S,canonical,false,false,alta,Nome canônico.
+motorola_moto_g04s__moto_g04s,motorola_moto_g04s,Moto G04s,MOTO G04S,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g04s__g04s,motorola_moto_g04s,G04s,G04S,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+motorola_moto_g04s__motog04s,motorola_moto_g04s,MotoG04s,MOTOG04S,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g85__motorola_moto_g85,motorola_moto_g85,Motorola Moto G85,MOTOROLA MOTO G85,canonical,false,false,alta,Nome canônico.
+motorola_moto_g85__moto_g85,motorola_moto_g85,Moto G85,MOTO G85,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g85__g85,motorola_moto_g85,G85,G85,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+motorola_moto_g85__motog85,motorola_moto_g85,MotoG85,MOTOG85,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g96__motorola_moto_g96,motorola_moto_g96,Motorola Moto G96,MOTOROLA MOTO G96,canonical,false,false,alta,Nome canônico.
+motorola_moto_g96__moto_g96,motorola_moto_g96,Moto G96,MOTO G96,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g96__g96,motorola_moto_g96,G96,G96,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+motorola_moto_g96__motog96,motorola_moto_g96,MotoG96,MOTOG96,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g06_power__motorola_moto_g06_power,motorola_moto_g06_power,Motorola Moto G06 Power,MOTOROLA MOTO G06 POWER,canonical,false,false,alta,Nome canônico.
+motorola_moto_g06_power__moto_g06_power,motorola_moto_g06_power,Moto G06 Power,MOTO G06 POWER,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g06_power__g06_power,motorola_moto_g06_power,G06 Power,G06 POWER,short,false,false,alta,
+motorola_moto_g06_power__motog06power,motorola_moto_g06_power,MotoG06Power,MOTOG06POWER,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g57_power__motorola_moto_g57_power,motorola_moto_g57_power,Motorola Moto G57 Power,MOTOROLA MOTO G57 POWER,canonical,false,false,alta,Nome canônico.
+motorola_moto_g57_power__moto_g57_power,motorola_moto_g57_power,Moto G57 Power,MOTO G57 POWER,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g57_power__g57_power,motorola_moto_g57_power,G57 Power,G57 POWER,short,false,false,alta,
+motorola_moto_g57_power__motog57power,motorola_moto_g57_power,MotoG57Power,MOTOG57POWER,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g67__motorola_moto_g67,motorola_moto_g67,Motorola Moto G67,MOTOROLA MOTO G67,canonical,false,false,alta,Nome canônico.
+motorola_moto_g67__moto_g67,motorola_moto_g67,Moto G67,MOTO G67,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g67__g67,motorola_moto_g67,G67,G67,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+motorola_moto_g67__motog67,motorola_moto_g67,MotoG67,MOTOG67,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g67_power__motorola_moto_g67_power,motorola_moto_g67_power,Motorola Moto G67 Power,MOTOROLA MOTO G67 POWER,canonical,false,false,alta,Nome canônico.
+motorola_moto_g67_power__moto_g67_power,motorola_moto_g67_power,Moto G67 Power,MOTO G67 POWER,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g67_power__g67_power,motorola_moto_g67_power,G67 Power,G67 POWER,short,false,false,alta,
+motorola_moto_g67_power__motog67power,motorola_moto_g67_power,MotoG67Power,MOTOG67POWER,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g17_power__motorola_moto_g17_power,motorola_moto_g17_power,Motorola Moto G17 Power,MOTOROLA MOTO G17 POWER,canonical,false,false,alta,Nome canônico.
+motorola_moto_g17_power__moto_g17_power,motorola_moto_g17_power,Moto G17 Power,MOTO G17 POWER,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g17_power__g17_power,motorola_moto_g17_power,G17 Power,G17 POWER,short,false,false,alta,
+motorola_moto_g17_power__motog17power,motorola_moto_g17_power,MotoG17Power,MOTOG17POWER,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g37__motorola_moto_g37,motorola_moto_g37,Motorola Moto G37,MOTOROLA MOTO G37,canonical,false,false,alta,Nome canônico.
+motorola_moto_g37__moto_g37,motorola_moto_g37,Moto G37,MOTO G37,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g37__g37,motorola_moto_g37,G37,G37,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+motorola_moto_g37__motog37,motorola_moto_g37,MotoG37,MOTOG37,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g37_power__motorola_moto_g37_power,motorola_moto_g37_power,Motorola Moto G37 Power,MOTOROLA MOTO G37 POWER,canonical,false,false,alta,Nome canônico.
+motorola_moto_g37_power__moto_g37_power,motorola_moto_g37_power,Moto G37 Power,MOTO G37 POWER,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g37_power__g37_power,motorola_moto_g37_power,G37 Power,G37 POWER,short,false,false,alta,
+motorola_moto_g37_power__motog37power,motorola_moto_g37_power,MotoG37Power,MOTOG37POWER,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g47__motorola_moto_g47,motorola_moto_g47,Motorola Moto G47,MOTOROLA MOTO G47,canonical,false,false,alta,Nome canônico.
+motorola_moto_g47__moto_g47,motorola_moto_g47,Moto G47,MOTO G47,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g47__g47,motorola_moto_g47,G47,G47,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+motorola_moto_g47__motog47,motorola_moto_g47,MotoG47,MOTOG47,common_typo,false,false,alta,Grafia sem espaços.
+motorola_moto_g_max__motorola_moto_g_max,motorola_moto_g_max,Motorola Moto G Max,MOTOROLA MOTO G MAX,canonical,false,false,alta,Nome canônico.
+motorola_moto_g_max__moto_g_max,motorola_moto_g_max,Moto G Max,MOTO G MAX,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_moto_g_max__g_max,motorola_moto_g_max,G Max,G MAX,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+motorola_moto_g_max__motogmax,motorola_moto_g_max,MotoGMax,MOTOGMAX,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_40_neo__motorola_edge_40_neo,motorola_edge_40_neo,Motorola Edge 40 Neo,MOTOROLA EDGE 40 NEO,canonical,false,false,alta,Nome canônico.
+motorola_edge_40_neo__edge_40_neo,motorola_edge_40_neo,Edge 40 Neo,EDGE 40 NEO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_40_neo__edge40neo,motorola_edge_40_neo,Edge40Neo,EDGE40NEO,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_40_pro__motorola_edge_40_pro,motorola_edge_40_pro,Motorola Edge 40 Pro,MOTOROLA EDGE 40 PRO,canonical,false,false,alta,Nome canônico.
+motorola_edge_40_pro__edge_40_pro,motorola_edge_40_pro,Edge 40 Pro,EDGE 40 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_40_pro__edge40pro,motorola_edge_40_pro,Edge40Pro,EDGE40PRO,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_50__motorola_edge_50,motorola_edge_50,Motorola Edge 50,MOTOROLA EDGE 50,canonical,false,false,alta,Nome canônico.
+motorola_edge_50__edge_50,motorola_edge_50,Edge 50,EDGE 50,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_50__edge50,motorola_edge_50,Edge50,EDGE50,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_50_pro__motorola_edge_50_pro,motorola_edge_50_pro,Motorola Edge 50 Pro,MOTOROLA EDGE 50 PRO,canonical,false,false,alta,Nome canônico.
+motorola_edge_50_pro__edge_50_pro,motorola_edge_50_pro,Edge 50 Pro,EDGE 50 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_50_pro__edge50pro,motorola_edge_50_pro,Edge50Pro,EDGE50PRO,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_50_fusion__motorola_edge_50_fusion,motorola_edge_50_fusion,Motorola Edge 50 Fusion,MOTOROLA EDGE 50 FUSION,canonical,false,false,alta,Nome canônico.
+motorola_edge_50_fusion__edge_50_fusion,motorola_edge_50_fusion,Edge 50 Fusion,EDGE 50 FUSION,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_50_fusion__edge50fusion,motorola_edge_50_fusion,Edge50Fusion,EDGE50FUSION,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_50_ultra__motorola_edge_50_ultra,motorola_edge_50_ultra,Motorola Edge 50 Ultra,MOTOROLA EDGE 50 ULTRA,canonical,false,false,alta,Nome canônico.
+motorola_edge_50_ultra__edge_50_ultra,motorola_edge_50_ultra,Edge 50 Ultra,EDGE 50 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_50_ultra__edge50ultra,motorola_edge_50_ultra,Edge50Ultra,EDGE50ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_60__motorola_edge_60,motorola_edge_60,Motorola Edge 60,MOTOROLA EDGE 60,canonical,false,false,alta,Nome canônico.
+motorola_edge_60__edge_60,motorola_edge_60,Edge 60,EDGE 60,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_60__edge60,motorola_edge_60,Edge60,EDGE60,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_60_pro__motorola_edge_60_pro,motorola_edge_60_pro,Motorola Edge 60 Pro,MOTOROLA EDGE 60 PRO,canonical,false,false,alta,Nome canônico.
+motorola_edge_60_pro__edge_60_pro,motorola_edge_60_pro,Edge 60 Pro,EDGE 60 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_60_pro__edge60pro,motorola_edge_60_pro,Edge60Pro,EDGE60PRO,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_60_fusion__motorola_edge_60_fusion,motorola_edge_60_fusion,Motorola Edge 60 Fusion,MOTOROLA EDGE 60 FUSION,canonical,false,false,alta,Nome canônico.
+motorola_edge_60_fusion__edge_60_fusion,motorola_edge_60_fusion,Edge 60 Fusion,EDGE 60 FUSION,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_60_fusion__edge60fusion,motorola_edge_60_fusion,Edge60Fusion,EDGE60FUSION,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_60_stylus__motorola_edge_60_stylus,motorola_edge_60_stylus,Motorola Edge 60 Stylus,MOTOROLA EDGE 60 STYLUS,canonical,false,false,alta,Nome canônico.
+motorola_edge_60_stylus__edge_60_stylus,motorola_edge_60_stylus,Edge 60 Stylus,EDGE 60 STYLUS,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_60_stylus__edge60stylus,motorola_edge_60_stylus,Edge60Stylus,EDGE60STYLUS,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_70_fusion__motorola_edge_70_fusion,motorola_edge_70_fusion,Motorola Edge 70 Fusion,MOTOROLA EDGE 70 FUSION,canonical,false,false,alta,Nome canônico.
+motorola_edge_70_fusion__edge_70_fusion,motorola_edge_70_fusion,Edge 70 Fusion,EDGE 70 FUSION,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_70_fusion__edge70fusion,motorola_edge_70_fusion,Edge70Fusion,EDGE70FUSION,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_70_fusion_plus__motorola_edge_70_fusion_plus,motorola_edge_70_fusion_plus,Motorola Edge 70 Fusion+,MOTOROLA EDGE 70 FUSION+,canonical,false,false,alta,Nome canônico.
+motorola_edge_70_fusion_plus__edge_70_fusion_plus,motorola_edge_70_fusion_plus,Edge 70 Fusion+,EDGE 70 FUSION+,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_70_fusion_plus__edge_70_fusion_plus_2,motorola_edge_70_fusion_plus,Edge 70 Fusion Plus,EDGE 70 FUSION PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+motorola_edge_70_fusion_plus__edge70fusion_plus,motorola_edge_70_fusion_plus,Edge70Fusion+,EDGE70FUSION+,common_typo,false,false,alta,Grafia sem espaços.
+motorola_edge_70_pro__motorola_edge_70_pro,motorola_edge_70_pro,Motorola Edge 70 Pro,MOTOROLA EDGE 70 PRO,canonical,false,false,alta,Nome canônico.
+motorola_edge_70_pro__edge_70_pro,motorola_edge_70_pro,Edge 70 Pro,EDGE 70 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_edge_70_pro__edge70pro,motorola_edge_70_pro,Edge70Pro,EDGE70PRO,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_40__motorola_razr_40,motorola_razr_40,Motorola Razr 40,MOTOROLA RAZR 40,canonical,false,false,alta,Nome canônico.
+motorola_razr_40__razr_40,motorola_razr_40,Razr 40,RAZR 40,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_40__razr40,motorola_razr_40,Razr40,RAZR40,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_40_ultra__motorola_razr_40_ultra,motorola_razr_40_ultra,Motorola Razr 40 Ultra,MOTOROLA RAZR 40 ULTRA,canonical,false,false,alta,Nome canônico.
+motorola_razr_40_ultra__razr_40_ultra,motorola_razr_40_ultra,Razr 40 Ultra,RAZR 40 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_40_ultra__razr40ultra,motorola_razr_40_ultra,Razr40Ultra,RAZR40ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_50__motorola_razr_50,motorola_razr_50,Motorola Razr 50,MOTOROLA RAZR 50,canonical,false,false,alta,Nome canônico.
+motorola_razr_50__razr_50,motorola_razr_50,Razr 50,RAZR 50,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_50__razr50,motorola_razr_50,Razr50,RAZR50,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_50_ultra__motorola_razr_50_ultra,motorola_razr_50_ultra,Motorola Razr 50 Ultra,MOTOROLA RAZR 50 ULTRA,canonical,false,false,alta,Nome canônico.
+motorola_razr_50_ultra__razr_50_ultra,motorola_razr_50_ultra,Razr 50 Ultra,RAZR 50 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_50_ultra__razr50ultra,motorola_razr_50_ultra,Razr50Ultra,RAZR50ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_60__motorola_razr_60,motorola_razr_60,Motorola Razr 60,MOTOROLA RAZR 60,canonical,false,false,alta,Nome canônico.
+motorola_razr_60__razr_60,motorola_razr_60,Razr 60,RAZR 60,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_60__razr60,motorola_razr_60,Razr60,RAZR60,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_60_ultra__motorola_razr_60_ultra,motorola_razr_60_ultra,Motorola Razr 60 Ultra,MOTOROLA RAZR 60 ULTRA,canonical,false,false,alta,Nome canônico.
+motorola_razr_60_ultra__razr_60_ultra,motorola_razr_60_ultra,Razr 60 Ultra,RAZR 60 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_60_ultra__razr60ultra,motorola_razr_60_ultra,Razr60Ultra,RAZR60ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_70__motorola_razr_70,motorola_razr_70,Motorola Razr 70,MOTOROLA RAZR 70,canonical,false,false,alta,Nome canônico.
+motorola_razr_70__razr_70,motorola_razr_70,Razr 70,RAZR 70,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_70__razr70,motorola_razr_70,Razr70,RAZR70,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_70_ultra__motorola_razr_70_ultra,motorola_razr_70_ultra,Motorola Razr 70 Ultra,MOTOROLA RAZR 70 ULTRA,canonical,false,false,alta,Nome canônico.
+motorola_razr_70_ultra__razr_70_ultra,motorola_razr_70_ultra,Razr 70 Ultra,RAZR 70 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_70_ultra__razr70ultra,motorola_razr_70_ultra,Razr70Ultra,RAZR70ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+motorola_razr_fold__motorola_razr_fold,motorola_razr_fold,Motorola Razr Fold,MOTOROLA RAZR FOLD,canonical,false,false,alta,Nome canônico.
+motorola_razr_fold__razr_fold,motorola_razr_fold,Razr Fold,RAZR FOLD,commercial_variant,false,false,alta,Nome comercial sem a marca.
+motorola_razr_fold__razrfold,motorola_razr_fold,RazrFold,RAZRFOLD,common_typo,false,false,alta,Grafia sem espaços.
+motorola_signature__motorola_signature,motorola_signature,Motorola Signature,MOTOROLA SIGNATURE,canonical,false,false,alta,Nome canônico.
+motorola_signature__signature,motorola_signature,Signature,SIGNATURE,commercial_variant,false,false,alta,Nome comercial sem a marca.
+xiaomi_13_ultra__xiaomi_13_ultra,xiaomi_13_ultra,Xiaomi 13 Ultra,XIAOMI 13 ULTRA,canonical,false,false,alta,Nome canônico.
+xiaomi_13_ultra__13_ultra,xiaomi_13_ultra,13 Ultra,13 ULTRA,short,false,false,alta,
+xiaomi_13_ultra__xiaomi13ultra,xiaomi_13_ultra,Xiaomi13Ultra,XIAOMI13ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_14__xiaomi_14,xiaomi_14,Xiaomi 14,XIAOMI 14,canonical,false,false,alta,Nome canônico.
+xiaomi_14__14,xiaomi_14,14,14,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+xiaomi_14__xiaomi14,xiaomi_14,Xiaomi14,XIAOMI14,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_14_ultra__xiaomi_14_ultra,xiaomi_14_ultra,Xiaomi 14 Ultra,XIAOMI 14 ULTRA,canonical,false,false,alta,Nome canônico.
+xiaomi_14_ultra__14_ultra,xiaomi_14_ultra,14 Ultra,14 ULTRA,short,false,false,alta,
+xiaomi_14_ultra__xiaomi14ultra,xiaomi_14_ultra,Xiaomi14Ultra,XIAOMI14ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_15__xiaomi_15,xiaomi_15,Xiaomi 15,XIAOMI 15,canonical,false,false,alta,Nome canônico.
+xiaomi_15__15,xiaomi_15,15,15,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+xiaomi_15__xiaomi15,xiaomi_15,Xiaomi15,XIAOMI15,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_15_ultra__xiaomi_15_ultra,xiaomi_15_ultra,Xiaomi 15 Ultra,XIAOMI 15 ULTRA,canonical,false,false,alta,Nome canônico.
+xiaomi_15_ultra__15_ultra,xiaomi_15_ultra,15 Ultra,15 ULTRA,short,false,false,alta,
+xiaomi_15_ultra__xiaomi15ultra,xiaomi_15_ultra,Xiaomi15Ultra,XIAOMI15ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_17__xiaomi_17,xiaomi_17,Xiaomi 17,XIAOMI 17,canonical,false,false,alta,Nome canônico.
+xiaomi_17__17,xiaomi_17,17,17,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+xiaomi_17__xiaomi17,xiaomi_17,Xiaomi17,XIAOMI17,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_17_ultra__xiaomi_17_ultra,xiaomi_17_ultra,Xiaomi 17 Ultra,XIAOMI 17 ULTRA,canonical,false,false,alta,Nome canônico.
+xiaomi_17_ultra__17_ultra,xiaomi_17_ultra,17 Ultra,17 ULTRA,short,false,false,alta,
+xiaomi_17_ultra__xiaomi17ultra,xiaomi_17_ultra,Xiaomi17Ultra,XIAOMI17ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_13__xiaomi_13,xiaomi_13,Xiaomi 13,XIAOMI 13,canonical,false,false,alta,Nome canônico.
+xiaomi_13__13,xiaomi_13,13,13,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+xiaomi_13__xiaomi13,xiaomi_13,Xiaomi13,XIAOMI13,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_13_pro__xiaomi_13_pro,xiaomi_13_pro,Xiaomi 13 Pro,XIAOMI 13 PRO,canonical,false,false,alta,Nome canônico.
+xiaomi_13_pro__13_pro,xiaomi_13_pro,13 Pro,13 PRO,short,false,false,alta,
+xiaomi_13_pro__xiaomi13pro,xiaomi_13_pro,Xiaomi13Pro,XIAOMI13PRO,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_13_lite__xiaomi_13_lite,xiaomi_13_lite,Xiaomi 13 Lite,XIAOMI 13 LITE,canonical,false,false,alta,Nome canônico.
+xiaomi_13_lite__13_lite,xiaomi_13_lite,13 Lite,13 LITE,short,false,false,alta,
+xiaomi_13_lite__xiaomi13lite,xiaomi_13_lite,Xiaomi13Lite,XIAOMI13LITE,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_14t__xiaomi_14t,xiaomi_14t,Xiaomi 14T,XIAOMI 14T,canonical,false,false,alta,Nome canônico.
+xiaomi_14t__14t,xiaomi_14t,14T,14T,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+xiaomi_14t__xiaomi14t,xiaomi_14t,Xiaomi14T,XIAOMI14T,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_14t_pro__xiaomi_14t_pro,xiaomi_14t_pro,Xiaomi 14T Pro,XIAOMI 14T PRO,canonical,false,false,alta,Nome canônico.
+xiaomi_14t_pro__14t_pro,xiaomi_14t_pro,14T Pro,14T PRO,short,false,false,alta,
+xiaomi_14t_pro__xiaomi14tpro,xiaomi_14t_pro,Xiaomi14TPro,XIAOMI14TPRO,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_15t__xiaomi_15t,xiaomi_15t,Xiaomi 15T,XIAOMI 15T,canonical,false,false,alta,Nome canônico.
+xiaomi_15t__15t,xiaomi_15t,15T,15T,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+xiaomi_15t__xiaomi15t,xiaomi_15t,Xiaomi15T,XIAOMI15T,common_typo,false,false,alta,Grafia sem espaços.
+xiaomi_15t_pro__xiaomi_15t_pro,xiaomi_15t_pro,Xiaomi 15T Pro,XIAOMI 15T PRO,canonical,false,false,alta,Nome canônico.
+xiaomi_15t_pro__15t_pro,xiaomi_15t_pro,15T Pro,15T PRO,short,false,false,alta,
+xiaomi_15t_pro__xiaomi15tpro,xiaomi_15t_pro,Xiaomi15TPro,XIAOMI15TPRO,common_typo,false,false,alta,Grafia sem espaços.
+redmi_15_5g__redmi_15_5g,redmi_15_5g,Redmi 15 5G,REDMI 15 5G,canonical,false,false,alta,Nome canônico.
+redmi_15_5g__15_5g,redmi_15_5g,15 5G,15 5G,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+redmi_15_5g__redmi155g,redmi_15_5g,Redmi155G,REDMI155G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_a7__redmi_a7,redmi_a7,Redmi A7,REDMI A7,canonical,false,false,alta,Nome canônico.
+redmi_a7__a7,redmi_a7,A7,A7,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+redmi_a7__redmia7,redmi_a7,RedmiA7,REDMIA7,common_typo,false,false,alta,Grafia sem espaços.
+redmi_a7_pro__redmi_a7_pro,redmi_a7_pro,Redmi A7 Pro,REDMI A7 PRO,canonical,false,false,alta,Nome canônico.
+redmi_a7_pro__a7_pro,redmi_a7_pro,A7 Pro,A7 PRO,short,false,false,alta,
+redmi_a7_pro__redmia7pro,redmi_a7_pro,RedmiA7Pro,REDMIA7PRO,common_typo,false,false,alta,Grafia sem espaços.
+redmi_13c_5g__redmi_13c_5g,redmi_13c_5g,Redmi 13C 5G,REDMI 13C 5G,canonical,false,false,alta,Nome canônico.
+redmi_13c_5g__13c_5g,redmi_13c_5g,13C 5G,13C 5G,short,false,false,alta,
+redmi_13c_5g__redmi13c5g,redmi_13c_5g,Redmi13C5G,REDMI13C5G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_a2__redmi_a2,redmi_a2,Redmi A2,REDMI A2,canonical,false,false,alta,Nome canônico.
+redmi_a2__a2,redmi_a2,A2,A2,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+redmi_a2__redmia2,redmi_a2,RedmiA2,REDMIA2,common_typo,false,false,alta,Grafia sem espaços.
+redmi_13_5g__redmi_13_5g,redmi_13_5g,Redmi 13 5G,REDMI 13 5G,canonical,false,false,alta,Nome canônico.
+redmi_13_5g__13_5g,redmi_13_5g,13 5G,13 5G,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+redmi_13_5g__redmi135g,redmi_13_5g,Redmi135G,REDMI135G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_a3x__redmi_a3x,redmi_a3x,Redmi A3x,REDMI A3X,canonical,false,false,alta,Nome canônico.
+redmi_a3x__a3x,redmi_a3x,A3x,A3X,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+redmi_a3x__redmia3x,redmi_a3x,RedmiA3x,REDMIA3X,common_typo,false,false,alta,Grafia sem espaços.
+redmi_14c_5g__redmi_14c_5g,redmi_14c_5g,Redmi 14C 5G,REDMI 14C 5G,canonical,false,false,alta,Nome canônico.
+redmi_14c_5g__14c_5g,redmi_14c_5g,14C 5G,14C 5G,short,false,false,alta,
+redmi_14c_5g__redmi14c5g,redmi_14c_5g,Redmi14C5G,REDMI14C5G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_12_pro_plus_5g__redmi_note_12_pro_plus_5g,redmi_note_12_pro_plus_5g,Redmi Note 12 Pro+ 5G,REDMI NOTE 12 PRO+ 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_12_pro_plus_5g__note_12_pro_plus,redmi_note_12_pro_plus_5g,Note 12 Pro+,NOTE 12 PRO+,short,false,false,alta,
+redmi_note_12_pro_plus_5g__redmi_note_12_pro_plus_5g_2,redmi_note_12_pro_plus_5g,Redmi Note 12 Pro Plus 5G,REDMI NOTE 12 PRO PLUS 5G,commercial_variant,false,false,alta,Grafia com Plus.
+redmi_note_12_pro_plus_5g__redminote12pro_plus5g,redmi_note_12_pro_plus_5g,RedmiNote12Pro+5G,REDMINOTE12PRO+5G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_13_5g__redmi_note_13_5g,redmi_note_13_5g,Redmi Note 13 5G,REDMI NOTE 13 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_13_5g__note_13_5g,redmi_note_13_5g,Note 13 5G,NOTE 13 5G,short,false,false,alta,
+redmi_note_13_5g__redminote135g,redmi_note_13_5g,RedmiNote135G,REDMINOTE135G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_13_pro_5g__redmi_note_13_pro_5g,redmi_note_13_pro_5g,Redmi Note 13 Pro 5G,REDMI NOTE 13 PRO 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_13_pro_5g__note_13_pro_5g,redmi_note_13_pro_5g,Note 13 Pro 5G,NOTE 13 PRO 5G,short,false,false,alta,
+redmi_note_13_pro_5g__redminote13pro5g,redmi_note_13_pro_5g,RedmiNote13Pro5G,REDMINOTE13PRO5G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_13_pro_plus_5g__redmi_note_13_pro_plus_5g,redmi_note_13_pro_plus_5g,Redmi Note 13 Pro+ 5G,REDMI NOTE 13 PRO+ 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_13_pro_plus_5g__note_13_pro_plus,redmi_note_13_pro_plus_5g,Note 13 Pro+,NOTE 13 PRO+,short,false,false,alta,
+redmi_note_13_pro_plus_5g__redmi_note_13_pro_plus_5g_2,redmi_note_13_pro_plus_5g,Redmi Note 13 Pro Plus 5G,REDMI NOTE 13 PRO PLUS 5G,commercial_variant,false,false,alta,Grafia com Plus.
+redmi_note_13_pro_plus_5g__redminote13pro_plus5g,redmi_note_13_pro_plus_5g,RedmiNote13Pro+5G,REDMINOTE13PRO+5G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_14_5g__redmi_note_14_5g,redmi_note_14_5g,Redmi Note 14 5G,REDMI NOTE 14 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_14_5g__note_14_5g,redmi_note_14_5g,Note 14 5G,NOTE 14 5G,short,false,false,alta,
+redmi_note_14_5g__redminote145g,redmi_note_14_5g,RedmiNote145G,REDMINOTE145G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_14_pro_5g__redmi_note_14_pro_5g,redmi_note_14_pro_5g,Redmi Note 14 Pro 5G,REDMI NOTE 14 PRO 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_14_pro_5g__note_14_pro_5g,redmi_note_14_pro_5g,Note 14 Pro 5G,NOTE 14 PRO 5G,short,false,false,alta,
+redmi_note_14_pro_5g__redminote14pro5g,redmi_note_14_pro_5g,RedmiNote14Pro5G,REDMINOTE14PRO5G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_14s__redmi_note_14s,redmi_note_14s,Redmi Note 14S,REDMI NOTE 14S,canonical,false,false,alta,Nome canônico.
+redmi_note_14s__note_14s,redmi_note_14s,Note 14S,NOTE 14S,short,false,false,alta,
+redmi_note_14s__redminote14s,redmi_note_14s,RedmiNote14S,REDMINOTE14S,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_15__redmi_note_15,redmi_note_15,Redmi Note 15,REDMI NOTE 15,canonical,false,false,alta,Nome canônico.
+redmi_note_15__note_15,redmi_note_15,Note 15,NOTE 15,short,false,false,alta,
+redmi_note_15__redminote15,redmi_note_15,RedmiNote15,REDMINOTE15,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_15_5g__redmi_note_15_5g,redmi_note_15_5g,Redmi Note 15 5G,REDMI NOTE 15 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_15_5g__note_15_5g,redmi_note_15_5g,Note 15 5G,NOTE 15 5G,short,false,false,alta,
+redmi_note_15_5g__redminote155g,redmi_note_15_5g,RedmiNote155G,REDMINOTE155G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_15_pro_5g__redmi_note_15_pro_5g,redmi_note_15_pro_5g,Redmi Note 15 Pro 5G,REDMI NOTE 15 PRO 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_15_pro_5g__note_15_pro_5g,redmi_note_15_pro_5g,Note 15 Pro 5G,NOTE 15 PRO 5G,short,false,false,alta,
+redmi_note_15_pro_5g__redminote15pro5g,redmi_note_15_pro_5g,RedmiNote15Pro5G,REDMINOTE15PRO5G,common_typo,false,false,alta,Grafia sem espaços.
+redmi_note_15_pro_plus_5g__redmi_note_15_pro_plus_5g,redmi_note_15_pro_plus_5g,Redmi Note 15 Pro+ 5G,REDMI NOTE 15 PRO+ 5G,canonical,false,false,alta,Nome canônico.
+redmi_note_15_pro_plus_5g__note_15_pro_plus,redmi_note_15_pro_plus_5g,Note 15 Pro+,NOTE 15 PRO+,short,false,false,alta,
+redmi_note_15_pro_plus_5g__redmi_note_15_pro_plus_5g_2,redmi_note_15_pro_plus_5g,Redmi Note 15 Pro Plus 5G,REDMI NOTE 15 PRO PLUS 5G,commercial_variant,false,false,alta,Grafia com Plus.
+redmi_note_15_pro_plus_5g__redminote15pro_plus5g,redmi_note_15_pro_plus_5g,RedmiNote15Pro+5G,REDMINOTE15PRO+5G,common_typo,false,false,alta,Grafia sem espaços.
+poco_c85__poco_c85,poco_c85,POCO C85,POCO C85,canonical,false,false,alta,Nome canônico.
+poco_c85__c85,poco_c85,C85,C85,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_c85__pococ85,poco_c85,POCOC85,POCOC85,common_typo,false,false,alta,Grafia sem espaços.
+poco_c81_pro__poco_c81_pro,poco_c81_pro,POCO C81 Pro,POCO C81 PRO,canonical,false,false,alta,Nome canônico.
+poco_c81_pro__c81_pro,poco_c81_pro,C81 Pro,C81 PRO,short,false,false,alta,
+poco_c81_pro__pococ81pro,poco_c81_pro,POCOC81Pro,POCOC81PRO,common_typo,false,false,alta,Grafia sem espaços.
+poco_c51__poco_c51,poco_c51,POCO C51,POCO C51,canonical,false,false,alta,Nome canônico.
+poco_c51__c51,poco_c51,C51,C51,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_c51__pococ51,poco_c51,POCOC51,POCOC51,common_typo,false,false,alta,Grafia sem espaços.
+poco_c61__poco_c61,poco_c61,POCO C61,POCO C61,canonical,false,false,alta,Nome canônico.
+poco_c61__c61,poco_c61,C61,C61,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_c61__pococ61,poco_c61,POCOC61,POCOC61,common_typo,false,false,alta,Grafia sem espaços.
+poco_m8__poco_m8,poco_m8,POCO M8,POCO M8,canonical,false,false,alta,Nome canônico.
+poco_m8__m8,poco_m8,M8,M8,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_m8__pocom8,poco_m8,POCOM8,POCOM8,common_typo,false,false,alta,Grafia sem espaços.
+poco_m8_pro__poco_m8_pro,poco_m8_pro,POCO M8 Pro,POCO M8 PRO,canonical,false,false,alta,Nome canônico.
+poco_m8_pro__m8_pro,poco_m8_pro,M8 Pro,M8 PRO,short,false,false,alta,
+poco_m8_pro__pocom8pro,poco_m8_pro,POCOM8Pro,POCOM8PRO,common_typo,false,false,alta,Grafia sem espaços.
+poco_m6__poco_m6,poco_m6,POCO M6,POCO M6,canonical,false,false,alta,Nome canônico.
+poco_m6__m6,poco_m6,M6,M6,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_m6__pocom6,poco_m6,POCOM6,POCOM6,common_typo,false,false,alta,Grafia sem espaços.
+poco_m6_pro__poco_m6_pro,poco_m6_pro,POCO M6 Pro,POCO M6 PRO,canonical,false,false,alta,Nome canônico.
+poco_m6_pro__m6_pro,poco_m6_pro,M6 Pro,M6 PRO,short,false,false,alta,
+poco_m6_pro__pocom6pro,poco_m6_pro,POCOM6Pro,POCOM6PRO,common_typo,false,false,alta,Grafia sem espaços.
+poco_m7_pro_5g__poco_m7_pro_5g,poco_m7_pro_5g,POCO M7 Pro 5G,POCO M7 PRO 5G,canonical,false,false,alta,Nome canônico.
+poco_m7_pro_5g__m7_pro,poco_m7_pro_5g,M7 Pro,M7 PRO,short,false,false,alta,
+poco_m7_pro_5g__pocom7pro5g,poco_m7_pro_5g,POCOM7Pro5G,POCOM7PRO5G,common_typo,false,false,alta,Grafia sem espaços.
+poco_m7__poco_m7,poco_m7,POCO M7,POCO M7,canonical,false,false,alta,Nome canônico.
+poco_m7__m7,poco_m7,M7,M7,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_m7__pocom7,poco_m7,POCOM7,POCOM7,common_typo,false,false,alta,Grafia sem espaços.
+poco_x8_pro__poco_x8_pro,poco_x8_pro,POCO X8 Pro,POCO X8 PRO,canonical,false,false,alta,Nome canônico.
+poco_x8_pro__x8_pro,poco_x8_pro,X8 Pro,X8 PRO,short,false,false,alta,
+poco_x8_pro__pocox8pro,poco_x8_pro,POCOX8Pro,POCOX8PRO,common_typo,false,false,alta,Grafia sem espaços.
+poco_x8_pro_max__poco_x8_pro_max,poco_x8_pro_max,POCO X8 Pro Max,POCO X8 PRO MAX,canonical,false,false,alta,Nome canônico.
+poco_x8_pro_max__x8_pro_max,poco_x8_pro_max,X8 Pro Max,X8 PRO MAX,short,false,false,alta,
+poco_x8_pro_max__pocox8promax,poco_x8_pro_max,POCOX8ProMax,POCOX8PROMAX,common_typo,false,false,alta,Grafia sem espaços.
+poco_f8_pro__poco_f8_pro,poco_f8_pro,POCO F8 Pro,POCO F8 PRO,canonical,false,false,alta,Nome canônico.
+poco_f8_pro__f8_pro,poco_f8_pro,F8 Pro,F8 PRO,short,false,false,alta,
+poco_f8_pro__pocof8pro,poco_f8_pro,POCOF8Pro,POCOF8PRO,common_typo,false,false,alta,Grafia sem espaços.
+poco_f8_ultra__poco_f8_ultra,poco_f8_ultra,POCO F8 Ultra,POCO F8 ULTRA,canonical,false,false,alta,Nome canônico.
+poco_f8_ultra__f8_ultra,poco_f8_ultra,F8 Ultra,F8 ULTRA,short,false,false,alta,
+poco_f8_ultra__pocof8ultra,poco_f8_ultra,POCOF8Ultra,POCOF8ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+poco_f6__poco_f6,poco_f6,POCO F6,POCO F6,canonical,false,false,alta,Nome canônico.
+poco_f6__f6,poco_f6,F6,F6,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_f6__pocof6,poco_f6,POCOF6,POCOF6,common_typo,false,false,alta,Grafia sem espaços.
+poco_f6_pro__poco_f6_pro,poco_f6_pro,POCO F6 Pro,POCO F6 PRO,canonical,false,false,alta,Nome canônico.
+poco_f6_pro__f6_pro,poco_f6_pro,F6 Pro,F6 PRO,short,false,false,alta,
+poco_f6_pro__pocof6pro,poco_f6_pro,POCOF6Pro,POCOF6PRO,common_typo,false,false,alta,Grafia sem espaços.
+poco_f7__poco_f7,poco_f7,POCO F7,POCO F7,canonical,false,false,alta,Nome canônico.
+poco_f7__f7,poco_f7,F7,F7,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+poco_f7__pocof7,poco_f7,POCOF7,POCOF7,common_typo,false,false,alta,Grafia sem espaços.
+poco_f7_pro__poco_f7_pro,poco_f7_pro,POCO F7 Pro,POCO F7 PRO,canonical,false,false,alta,Nome canônico.
+poco_f7_pro__f7_pro,poco_f7_pro,F7 Pro,F7 PRO,short,false,false,alta,
+poco_f7_pro__pocof7pro,poco_f7_pro,POCOF7Pro,POCOF7PRO,common_typo,false,false,alta,Grafia sem espaços.
+poco_f7_ultra__poco_f7_ultra,poco_f7_ultra,POCO F7 Ultra,POCO F7 ULTRA,canonical,false,false,alta,Nome canônico.
+poco_f7_ultra__f7_ultra,poco_f7_ultra,F7 Ultra,F7 ULTRA,short,false,false,alta,
+poco_f7_ultra__pocof7ultra,poco_f7_ultra,POCOF7Ultra,POCOF7ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+realme_11__realme_11,realme_11,Realme 11,REALME 11,canonical,false,false,alta,Nome canônico.
+realme_11__11,realme_11,11,11,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_11__realme11,realme_11,Realme11,REALME11,common_typo,false,false,alta,Grafia sem espaços.
+realme_11_pro__realme_11_pro,realme_11_pro,Realme 11 Pro,REALME 11 PRO,canonical,false,false,alta,Nome canônico.
+realme_11_pro__11_pro,realme_11_pro,11 Pro,11 PRO,short,false,false,alta,
+realme_11_pro__realme11pro,realme_11_pro,Realme11Pro,REALME11PRO,common_typo,false,false,alta,Grafia sem espaços.
+realme_11_pro_plus__realme_11_pro_plus,realme_11_pro_plus,Realme 11 Pro+,REALME 11 PRO+,canonical,false,false,alta,Nome canônico.
+realme_11_pro_plus__11_pro_plus,realme_11_pro_plus,11 Pro+,11 PRO+,short,false,false,alta,
+realme_11_pro_plus__realme_11_pro_plus_2,realme_11_pro_plus,Realme 11 Pro Plus,REALME 11 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+realme_11_pro_plus__realme11pro_plus,realme_11_pro_plus,Realme11Pro+,REALME11PRO+,common_typo,false,false,alta,Grafia sem espaços.
+realme_12__realme_12,realme_12,Realme 12,REALME 12,canonical,false,false,alta,Nome canônico.
+realme_12__12,realme_12,12,12,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_12__realme12,realme_12,Realme12,REALME12,common_typo,false,false,alta,Grafia sem espaços.
+realme_12_plus__realme_12_plus,realme_12_plus,Realme 12+,REALME 12+,canonical,false,false,alta,Nome canônico.
+realme_12_plus__12_plus,realme_12_plus,12+,12+,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_12_plus__realme_12_plus_2,realme_12_plus,Realme 12 Plus,REALME 12 PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+realme_12_plus__realme12_plus,realme_12_plus,Realme12+,REALME12+,common_typo,false,false,alta,Grafia sem espaços.
+realme_12_pro__realme_12_pro,realme_12_pro,Realme 12 Pro,REALME 12 PRO,canonical,false,false,alta,Nome canônico.
+realme_12_pro__12_pro,realme_12_pro,12 Pro,12 PRO,short,false,false,alta,
+realme_12_pro__realme12pro,realme_12_pro,Realme12Pro,REALME12PRO,common_typo,false,false,alta,Grafia sem espaços.
+realme_12_pro_plus__realme_12_pro_plus,realme_12_pro_plus,Realme 12 Pro+,REALME 12 PRO+,canonical,false,false,alta,Nome canônico.
+realme_12_pro_plus__12_pro_plus,realme_12_pro_plus,12 Pro+,12 PRO+,short,false,false,alta,
+realme_12_pro_plus__realme_12_pro_plus_2,realme_12_pro_plus,Realme 12 Pro Plus,REALME 12 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+realme_12_pro_plus__realme12pro_plus,realme_12_pro_plus,Realme12Pro+,REALME12PRO+,common_typo,false,false,alta,Grafia sem espaços.
+realme_13__realme_13,realme_13,Realme 13,REALME 13,canonical,false,false,alta,Nome canônico.
+realme_13__13,realme_13,13,13,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_13__realme13,realme_13,Realme13,REALME13,common_typo,false,false,alta,Grafia sem espaços.
+realme_13_plus__realme_13_plus,realme_13_plus,Realme 13+,REALME 13+,canonical,false,false,alta,Nome canônico.
+realme_13_plus__13_plus,realme_13_plus,13+,13+,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_13_plus__realme_13_plus_2,realme_13_plus,Realme 13 Plus,REALME 13 PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+realme_13_plus__realme13_plus,realme_13_plus,Realme13+,REALME13+,common_typo,false,false,alta,Grafia sem espaços.
+realme_13_pro__realme_13_pro,realme_13_pro,Realme 13 Pro,REALME 13 PRO,canonical,false,false,alta,Nome canônico.
+realme_13_pro__13_pro,realme_13_pro,13 Pro,13 PRO,short,false,false,alta,
+realme_13_pro__realme13pro,realme_13_pro,Realme13Pro,REALME13PRO,common_typo,false,false,alta,Grafia sem espaços.
+realme_13_pro_plus__realme_13_pro_plus,realme_13_pro_plus,Realme 13 Pro+,REALME 13 PRO+,canonical,false,false,alta,Nome canônico.
+realme_13_pro_plus__13_pro_plus,realme_13_pro_plus,13 Pro+,13 PRO+,short,false,false,alta,
+realme_13_pro_plus__realme_13_pro_plus_2,realme_13_pro_plus,Realme 13 Pro Plus,REALME 13 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+realme_13_pro_plus__realme13pro_plus,realme_13_pro_plus,Realme13Pro+,REALME13PRO+,common_typo,false,false,alta,Grafia sem espaços.
+realme_14__realme_14,realme_14,Realme 14,REALME 14,canonical,false,false,alta,Nome canônico.
+realme_14__14,realme_14,14,14,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_14__realme14,realme_14,Realme14,REALME14,common_typo,false,false,alta,Grafia sem espaços.
+realme_14_pro__realme_14_pro,realme_14_pro,Realme 14 Pro,REALME 14 PRO,canonical,false,false,alta,Nome canônico.
+realme_14_pro__14_pro,realme_14_pro,14 Pro,14 PRO,short,false,false,alta,
+realme_14_pro__realme14pro,realme_14_pro,Realme14Pro,REALME14PRO,common_typo,false,false,alta,Grafia sem espaços.
+realme_14_pro_plus__realme_14_pro_plus,realme_14_pro_plus,Realme 14 Pro+,REALME 14 PRO+,canonical,false,false,alta,Nome canônico.
+realme_14_pro_plus__14_pro_plus,realme_14_pro_plus,14 Pro+,14 PRO+,short,false,false,alta,
+realme_14_pro_plus__realme_14_pro_plus_2,realme_14_pro_plus,Realme 14 Pro Plus,REALME 14 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+realme_14_pro_plus__realme14pro_plus,realme_14_pro_plus,Realme14Pro+,REALME14PRO+,common_typo,false,false,alta,Grafia sem espaços.
+realme_14x__realme_14x,realme_14x,Realme 14x,REALME 14X,canonical,false,false,alta,Nome canônico.
+realme_14x__14x,realme_14x,14x,14X,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_14x__realme14x,realme_14x,Realme14x,REALME14X,common_typo,false,false,alta,Grafia sem espaços.
+realme_15__realme_15,realme_15,Realme 15,REALME 15,canonical,false,false,alta,Nome canônico.
+realme_15__15,realme_15,15,15,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_15__realme15,realme_15,Realme15,REALME15,common_typo,false,false,alta,Grafia sem espaços.
+realme_15_pro__realme_15_pro,realme_15_pro,Realme 15 Pro,REALME 15 PRO,canonical,false,false,alta,Nome canônico.
+realme_15_pro__15_pro,realme_15_pro,15 Pro,15 PRO,short,false,false,alta,
+realme_15_pro__realme15pro,realme_15_pro,Realme15Pro,REALME15PRO,common_typo,false,false,alta,Grafia sem espaços.
+realme_16_pro__realme_16_pro,realme_16_pro,Realme 16 Pro,REALME 16 PRO,canonical,false,false,alta,Nome canônico.
+realme_16_pro__16_pro,realme_16_pro,16 Pro,16 PRO,short,false,false,alta,
+realme_16_pro__realme16pro,realme_16_pro,Realme16Pro,REALME16PRO,common_typo,false,false,alta,Grafia sem espaços.
+realme_16_pro_plus__realme_16_pro_plus,realme_16_pro_plus,Realme 16 Pro+,REALME 16 PRO+,canonical,false,false,alta,Nome canônico.
+realme_16_pro_plus__16_pro_plus,realme_16_pro_plus,16 Pro+,16 PRO+,short,false,false,alta,
+realme_16_pro_plus__realme_16_pro_plus_2,realme_16_pro_plus,Realme 16 Pro Plus,REALME 16 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+realme_16_pro_plus__realme16pro_plus,realme_16_pro_plus,Realme16Pro+,REALME16PRO+,common_typo,false,false,alta,Grafia sem espaços.
+realme_gt_6__realme_gt_6,realme_gt_6,Realme GT 6,REALME GT 6,canonical,false,false,alta,Nome canônico.
+realme_gt_6__gt_6,realme_gt_6,GT 6,GT 6,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_gt_6__realmegt6,realme_gt_6,RealmeGT6,REALMEGT6,common_typo,false,false,alta,Grafia sem espaços.
+realme_gt_6t__realme_gt_6t,realme_gt_6t,Realme GT 6T,REALME GT 6T,canonical,false,false,alta,Nome canônico.
+realme_gt_6t__gt_6t,realme_gt_6t,GT 6T,GT 6T,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_gt_6t__realmegt6t,realme_gt_6t,RealmeGT6T,REALMEGT6T,common_typo,false,false,alta,Grafia sem espaços.
+realme_gt_7_pro__realme_gt_7_pro,realme_gt_7_pro,Realme GT 7 Pro,REALME GT 7 PRO,canonical,false,false,alta,Nome canônico.
+realme_gt_7_pro__gt_7_pro,realme_gt_7_pro,GT 7 Pro,GT 7 PRO,short,false,false,alta,
+realme_gt_7_pro__realmegt7pro,realme_gt_7_pro,RealmeGT7Pro,REALMEGT7PRO,common_typo,false,false,alta,Grafia sem espaços.
+realme_gt_7__realme_gt_7,realme_gt_7,Realme GT 7,REALME GT 7,canonical,false,false,alta,Nome canônico.
+realme_gt_7__gt_7,realme_gt_7,GT 7,GT 7,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_gt_7__realmegt7,realme_gt_7,RealmeGT7,REALMEGT7,common_typo,false,false,alta,Grafia sem espaços.
+realme_gt_7t__realme_gt_7t,realme_gt_7t,Realme GT 7T,REALME GT 7T,canonical,false,false,alta,Nome canônico.
+realme_gt_7t__gt_7t,realme_gt_7t,GT 7T,GT 7T,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+realme_gt_7t__realmegt7t,realme_gt_7t,RealmeGT7T,REALMEGT7T,common_typo,false,false,alta,Grafia sem espaços.
+realme_gt_8_pro__realme_gt_8_pro,realme_gt_8_pro,Realme GT 8 Pro,REALME GT 8 PRO,canonical,false,false,alta,Nome canônico.
+realme_gt_8_pro__gt_8_pro,realme_gt_8_pro,GT 8 Pro,GT 8 PRO,short,false,false,alta,
+realme_gt_8_pro__realmegt8pro,realme_gt_8_pro,RealmeGT8Pro,REALMEGT8PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_30i__infinix_hot_30i,infinix_hot_30i,Infinix Hot 30i,INFINIX HOT 30I,canonical,false,false,alta,Nome canônico.
+infinix_hot_30i__hot_30i,infinix_hot_30i,Hot 30i,HOT 30I,short,false,false,alta,
+infinix_hot_30i__infinixhot30i,infinix_hot_30i,InfinixHot30i,INFINIXHOT30I,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_30_play__infinix_hot_30_play,infinix_hot_30_play,Infinix Hot 30 Play,INFINIX HOT 30 PLAY,canonical,false,false,alta,Nome canônico.
+infinix_hot_30_play__hot_30_play,infinix_hot_30_play,Hot 30 Play,HOT 30 PLAY,short,false,false,alta,
+infinix_hot_30_play__infinixhot30play,infinix_hot_30_play,InfinixHot30Play,INFINIXHOT30PLAY,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_40i__infinix_hot_40i,infinix_hot_40i,Infinix Hot 40i,INFINIX HOT 40I,canonical,false,false,alta,Nome canônico.
+infinix_hot_40i__hot_40i,infinix_hot_40i,Hot 40i,HOT 40I,short,false,false,alta,
+infinix_hot_40i__infinixhot40i,infinix_hot_40i,InfinixHot40i,INFINIXHOT40I,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_40_pro__infinix_hot_40_pro,infinix_hot_40_pro,Infinix Hot 40 Pro,INFINIX HOT 40 PRO,canonical,false,false,alta,Nome canônico.
+infinix_hot_40_pro__hot_40_pro,infinix_hot_40_pro,Hot 40 Pro,HOT 40 PRO,short,false,false,alta,
+infinix_hot_40_pro__infinixhot40pro,infinix_hot_40_pro,InfinixHot40Pro,INFINIXHOT40PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_50__infinix_hot_50,infinix_hot_50,Infinix Hot 50,INFINIX HOT 50,canonical,false,false,alta,Nome canônico.
+infinix_hot_50__hot_50,infinix_hot_50,Hot 50,HOT 50,short,false,false,alta,
+infinix_hot_50__infinixhot50,infinix_hot_50,InfinixHot50,INFINIXHOT50,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_50i__infinix_hot_50i,infinix_hot_50i,Infinix Hot 50i,INFINIX HOT 50I,canonical,false,false,alta,Nome canônico.
+infinix_hot_50i__hot_50i,infinix_hot_50i,Hot 50i,HOT 50I,short,false,false,alta,
+infinix_hot_50i__infinixhot50i,infinix_hot_50i,InfinixHot50i,INFINIXHOT50I,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_50_pro__infinix_hot_50_pro,infinix_hot_50_pro,Infinix Hot 50 Pro,INFINIX HOT 50 PRO,canonical,false,false,alta,Nome canônico.
+infinix_hot_50_pro__hot_50_pro,infinix_hot_50_pro,Hot 50 Pro,HOT 50 PRO,short,false,false,alta,
+infinix_hot_50_pro__infinixhot50pro,infinix_hot_50_pro,InfinixHot50Pro,INFINIXHOT50PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_50_pro_plus__infinix_hot_50_pro_plus,infinix_hot_50_pro_plus,Infinix Hot 50 Pro+,INFINIX HOT 50 PRO+,canonical,false,false,alta,Nome canônico.
+infinix_hot_50_pro_plus__hot_50_pro_plus,infinix_hot_50_pro_plus,Hot 50 Pro+,HOT 50 PRO+,short,false,false,alta,
+infinix_hot_50_pro_plus__infinix_hot_50_pro_plus_2,infinix_hot_50_pro_plus,Infinix Hot 50 Pro Plus,INFINIX HOT 50 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+infinix_hot_50_pro_plus__infinixhot50pro_plus,infinix_hot_50_pro_plus,InfinixHot50Pro+,INFINIXHOT50PRO+,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_60__infinix_hot_60,infinix_hot_60,Infinix Hot 60,INFINIX HOT 60,canonical,false,false,alta,Nome canônico.
+infinix_hot_60__hot_60,infinix_hot_60,Hot 60,HOT 60,short,false,false,alta,
+infinix_hot_60__infinixhot60,infinix_hot_60,InfinixHot60,INFINIXHOT60,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_60i__infinix_hot_60i,infinix_hot_60i,Infinix Hot 60i,INFINIX HOT 60I,canonical,false,false,alta,Nome canônico.
+infinix_hot_60i__hot_60i,infinix_hot_60i,Hot 60i,HOT 60I,short,false,false,alta,
+infinix_hot_60i__infinixhot60i,infinix_hot_60i,InfinixHot60i,INFINIXHOT60I,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_60_pro__infinix_hot_60_pro,infinix_hot_60_pro,Infinix Hot 60 Pro,INFINIX HOT 60 PRO,canonical,false,false,alta,Nome canônico.
+infinix_hot_60_pro__hot_60_pro,infinix_hot_60_pro,Hot 60 Pro,HOT 60 PRO,short,false,false,alta,
+infinix_hot_60_pro__infinixhot60pro,infinix_hot_60_pro,InfinixHot60Pro,INFINIXHOT60PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_60_pro_plus__infinix_hot_60_pro_plus,infinix_hot_60_pro_plus,Infinix Hot 60 Pro+,INFINIX HOT 60 PRO+,canonical,false,false,alta,Nome canônico.
+infinix_hot_60_pro_plus__hot_60_pro_plus,infinix_hot_60_pro_plus,Hot 60 Pro+,HOT 60 PRO+,short,false,false,alta,
+infinix_hot_60_pro_plus__infinix_hot_60_pro_plus_2,infinix_hot_60_pro_plus,Infinix Hot 60 Pro Plus,INFINIX HOT 60 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+infinix_hot_60_pro_plus__infinixhot60pro_plus,infinix_hot_60_pro_plus,InfinixHot60Pro+,INFINIXHOT60PRO+,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_70__infinix_hot_70,infinix_hot_70,Infinix Hot 70,INFINIX HOT 70,canonical,false,false,alta,Nome canônico.
+infinix_hot_70__hot_70,infinix_hot_70,Hot 70,HOT 70,short,false,false,alta,
+infinix_hot_70__infinixhot70,infinix_hot_70,InfinixHot70,INFINIXHOT70,common_typo,false,false,alta,Grafia sem espaços.
+infinix_hot_70_pro__infinix_hot_70_pro,infinix_hot_70_pro,Infinix Hot 70 Pro,INFINIX HOT 70 PRO,canonical,false,false,alta,Nome canônico.
+infinix_hot_70_pro__hot_70_pro,infinix_hot_70_pro,Hot 70 Pro,HOT 70 PRO,short,false,false,alta,
+infinix_hot_70_pro__infinixhot70pro,infinix_hot_70_pro,InfinixHot70Pro,INFINIXHOT70PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_30__infinix_note_30,infinix_note_30,Infinix Note 30,INFINIX NOTE 30,canonical,false,false,alta,Nome canônico.
+infinix_note_30__note_30,infinix_note_30,Note 30,NOTE 30,short,false,false,alta,
+infinix_note_30__infinixnote30,infinix_note_30,InfinixNote30,INFINIXNOTE30,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_30_pro__infinix_note_30_pro,infinix_note_30_pro,Infinix Note 30 Pro,INFINIX NOTE 30 PRO,canonical,false,false,alta,Nome canônico.
+infinix_note_30_pro__note_30_pro,infinix_note_30_pro,Note 30 Pro,NOTE 30 PRO,short,false,false,alta,
+infinix_note_30_pro__infinixnote30pro,infinix_note_30_pro,InfinixNote30Pro,INFINIXNOTE30PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_40__infinix_note_40,infinix_note_40,Infinix Note 40,INFINIX NOTE 40,canonical,false,false,alta,Nome canônico.
+infinix_note_40__note_40,infinix_note_40,Note 40,NOTE 40,short,false,false,alta,
+infinix_note_40__infinixnote40,infinix_note_40,InfinixNote40,INFINIXNOTE40,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_40_pro__infinix_note_40_pro,infinix_note_40_pro,Infinix Note 40 Pro,INFINIX NOTE 40 PRO,canonical,false,false,alta,Nome canônico.
+infinix_note_40_pro__note_40_pro,infinix_note_40_pro,Note 40 Pro,NOTE 40 PRO,short,false,false,alta,
+infinix_note_40_pro__infinixnote40pro,infinix_note_40_pro,InfinixNote40Pro,INFINIXNOTE40PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_40_pro_plus__infinix_note_40_pro_plus,infinix_note_40_pro_plus,Infinix Note 40 Pro+,INFINIX NOTE 40 PRO+,canonical,false,false,alta,Nome canônico.
+infinix_note_40_pro_plus__note_40_pro_plus,infinix_note_40_pro_plus,Note 40 Pro+,NOTE 40 PRO+,short,false,false,alta,
+infinix_note_40_pro_plus__infinix_note_40_pro_plus_2,infinix_note_40_pro_plus,Infinix Note 40 Pro Plus,INFINIX NOTE 40 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+infinix_note_40_pro_plus__infinixnote40pro_plus,infinix_note_40_pro_plus,InfinixNote40Pro+,INFINIXNOTE40PRO+,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_50__infinix_note_50,infinix_note_50,Infinix Note 50,INFINIX NOTE 50,canonical,false,false,alta,Nome canônico.
+infinix_note_50__note_50,infinix_note_50,Note 50,NOTE 50,short,false,false,alta,
+infinix_note_50__infinixnote50,infinix_note_50,InfinixNote50,INFINIXNOTE50,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_50_pro__infinix_note_50_pro,infinix_note_50_pro,Infinix Note 50 Pro,INFINIX NOTE 50 PRO,canonical,false,false,alta,Nome canônico.
+infinix_note_50_pro__note_50_pro,infinix_note_50_pro,Note 50 Pro,NOTE 50 PRO,short,false,false,alta,
+infinix_note_50_pro__infinixnote50pro,infinix_note_50_pro,InfinixNote50Pro,INFINIXNOTE50PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_50_pro_plus__infinix_note_50_pro_plus,infinix_note_50_pro_plus,Infinix Note 50 Pro+,INFINIX NOTE 50 PRO+,canonical,false,false,alta,Nome canônico.
+infinix_note_50_pro_plus__note_50_pro_plus,infinix_note_50_pro_plus,Note 50 Pro+,NOTE 50 PRO+,short,false,false,alta,
+infinix_note_50_pro_plus__infinix_note_50_pro_plus_2,infinix_note_50_pro_plus,Infinix Note 50 Pro Plus,INFINIX NOTE 50 PRO PLUS,commercial_variant,false,false,alta,Grafia com Plus.
+infinix_note_50_pro_plus__infinixnote50pro_plus,infinix_note_50_pro_plus,InfinixNote50Pro+,INFINIXNOTE50PRO+,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_60__infinix_note_60,infinix_note_60,Infinix Note 60,INFINIX NOTE 60,canonical,false,false,alta,Nome canônico.
+infinix_note_60__note_60,infinix_note_60,Note 60,NOTE 60,short,false,false,alta,
+infinix_note_60__infinixnote60,infinix_note_60,InfinixNote60,INFINIXNOTE60,common_typo,false,false,alta,Grafia sem espaços.
+infinix_note_60_pro__infinix_note_60_pro,infinix_note_60_pro,Infinix Note 60 Pro,INFINIX NOTE 60 PRO,canonical,false,false,alta,Nome canônico.
+infinix_note_60_pro__note_60_pro,infinix_note_60_pro,Note 60 Pro,NOTE 60 PRO,short,false,false,alta,
+infinix_note_60_pro__infinixnote60pro,infinix_note_60_pro,InfinixNote60Pro,INFINIXNOTE60PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_smart_9__infinix_smart_9,infinix_smart_9,Infinix Smart 9,INFINIX SMART 9,canonical,false,false,alta,Nome canônico.
+infinix_smart_9__smart_9,infinix_smart_9,Smart 9,SMART 9,short,false,false,alta,
+infinix_smart_9__infinixsmart9,infinix_smart_9,InfinixSmart9,INFINIXSMART9,common_typo,false,false,alta,Grafia sem espaços.
+infinix_smart_10__infinix_smart_10,infinix_smart_10,Infinix Smart 10,INFINIX SMART 10,canonical,false,false,alta,Nome canônico.
+infinix_smart_10__smart_10,infinix_smart_10,Smart 10,SMART 10,short,false,false,alta,
+infinix_smart_10__infinixsmart10,infinix_smart_10,InfinixSmart10,INFINIXSMART10,common_typo,false,false,alta,Grafia sem espaços.
+infinix_zero_30__infinix_zero_30,infinix_zero_30,Infinix Zero 30,INFINIX ZERO 30,canonical,false,false,alta,Nome canônico.
+infinix_zero_30__zero_30,infinix_zero_30,Zero 30,ZERO 30,short,false,false,alta,
+infinix_zero_30__infinixzero30,infinix_zero_30,InfinixZero30,INFINIXZERO30,common_typo,false,false,alta,Grafia sem espaços.
+infinix_zero_40__infinix_zero_40,infinix_zero_40,Infinix Zero 40,INFINIX ZERO 40,canonical,false,false,alta,Nome canônico.
+infinix_zero_40__zero_40,infinix_zero_40,Zero 40,ZERO 40,short,false,false,alta,
+infinix_zero_40__infinixzero40,infinix_zero_40,InfinixZero40,INFINIXZERO40,common_typo,false,false,alta,Grafia sem espaços.
+infinix_zero_flip__infinix_zero_flip,infinix_zero_flip,Infinix Zero Flip,INFINIX ZERO FLIP,canonical,false,false,alta,Nome canônico.
+infinix_zero_flip__zero_flip,infinix_zero_flip,Zero Flip,ZERO FLIP,short,false,false,alta,
+infinix_zero_flip__infinixzeroflip,infinix_zero_flip,InfinixZeroFlip,INFINIXZEROFLIP,common_typo,false,false,alta,Grafia sem espaços.
+infinix_gt_10_pro__infinix_gt_10_pro,infinix_gt_10_pro,Infinix GT 10 Pro,INFINIX GT 10 PRO,canonical,false,false,alta,Nome canônico.
+infinix_gt_10_pro__gt_10_pro,infinix_gt_10_pro,GT 10 Pro,GT 10 PRO,short,false,false,alta,
+infinix_gt_10_pro__infinixgt10pro,infinix_gt_10_pro,InfinixGT10Pro,INFINIXGT10PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_gt_20_pro__infinix_gt_20_pro,infinix_gt_20_pro,Infinix GT 20 Pro,INFINIX GT 20 PRO,canonical,false,false,alta,Nome canônico.
+infinix_gt_20_pro__gt_20_pro,infinix_gt_20_pro,GT 20 Pro,GT 20 PRO,short,false,false,alta,
+infinix_gt_20_pro__infinixgt20pro,infinix_gt_20_pro,InfinixGT20Pro,INFINIXGT20PRO,common_typo,false,false,alta,Grafia sem espaços.
+infinix_gt_30_pro__infinix_gt_30_pro,infinix_gt_30_pro,Infinix GT 30 Pro,INFINIX GT 30 PRO,canonical,false,false,alta,Nome canônico.
+infinix_gt_30_pro__gt_30_pro,infinix_gt_30_pro,GT 30 Pro,GT 30 PRO,short,false,false,alta,
+infinix_gt_30_pro__infinixgt30pro,infinix_gt_30_pro,InfinixGT30Pro,INFINIXGT30PRO,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_7a__google_pixel_7a,google_pixel_7a,Google Pixel 7a,GOOGLE PIXEL 7A,canonical,false,false,alta,Nome canônico.
+google_pixel_7a__pixel_7a,google_pixel_7a,Pixel 7a,PIXEL 7A,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_7a__7a,google_pixel_7a,7a,7A,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_7a__pixel7a,google_pixel_7a,Pixel7a,PIXEL7A,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_8__google_pixel_8,google_pixel_8,Google Pixel 8,GOOGLE PIXEL 8,canonical,false,false,alta,Nome canônico.
+google_pixel_8__pixel_8,google_pixel_8,Pixel 8,PIXEL 8,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_8__8,google_pixel_8,8,8,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_8__pixel8,google_pixel_8,Pixel8,PIXEL8,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_8_pro__google_pixel_8_pro,google_pixel_8_pro,Google Pixel 8 Pro,GOOGLE PIXEL 8 PRO,canonical,false,false,alta,Nome canônico.
+google_pixel_8_pro__pixel_8_pro,google_pixel_8_pro,Pixel 8 Pro,PIXEL 8 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_8_pro__8_pro,google_pixel_8_pro,8 Pro,8 PRO,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_8_pro__pixel8pro,google_pixel_8_pro,Pixel8Pro,PIXEL8PRO,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_fold__google_pixel_fold,google_pixel_fold,Google Pixel Fold,GOOGLE PIXEL FOLD,canonical,false,false,alta,Nome canônico.
+google_pixel_fold__pixel_fold,google_pixel_fold,Pixel Fold,PIXEL FOLD,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_fold__fold,google_pixel_fold,Fold,FOLD,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_fold__pixelfold,google_pixel_fold,PixelFold,PIXELFOLD,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_8a__google_pixel_8a,google_pixel_8a,Google Pixel 8a,GOOGLE PIXEL 8A,canonical,false,false,alta,Nome canônico.
+google_pixel_8a__pixel_8a,google_pixel_8a,Pixel 8a,PIXEL 8A,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_8a__8a,google_pixel_8a,8a,8A,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_8a__pixel8a,google_pixel_8a,Pixel8a,PIXEL8A,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_9__google_pixel_9,google_pixel_9,Google Pixel 9,GOOGLE PIXEL 9,canonical,false,false,alta,Nome canônico.
+google_pixel_9__pixel_9,google_pixel_9,Pixel 9,PIXEL 9,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_9__9,google_pixel_9,9,9,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_9__pixel9,google_pixel_9,Pixel9,PIXEL9,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_9_pro__google_pixel_9_pro,google_pixel_9_pro,Google Pixel 9 Pro,GOOGLE PIXEL 9 PRO,canonical,false,false,alta,Nome canônico.
+google_pixel_9_pro__pixel_9_pro,google_pixel_9_pro,Pixel 9 Pro,PIXEL 9 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_9_pro__9_pro,google_pixel_9_pro,9 Pro,9 PRO,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_9_pro__pixel9pro,google_pixel_9_pro,Pixel9Pro,PIXEL9PRO,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_9_pro_xl__google_pixel_9_pro_xl,google_pixel_9_pro_xl,Google Pixel 9 Pro XL,GOOGLE PIXEL 9 PRO XL,canonical,false,false,alta,Nome canônico.
+google_pixel_9_pro_xl__pixel_9_pro_xl,google_pixel_9_pro_xl,Pixel 9 Pro XL,PIXEL 9 PRO XL,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_9_pro_xl__9_pro_xl,google_pixel_9_pro_xl,9 Pro XL,9 PRO XL,short,false,false,alta,
+google_pixel_9_pro_xl__pixel9proxl,google_pixel_9_pro_xl,Pixel9ProXL,PIXEL9PROXL,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_9_pro_fold__google_pixel_9_pro_fold,google_pixel_9_pro_fold,Google Pixel 9 Pro Fold,GOOGLE PIXEL 9 PRO FOLD,canonical,false,false,alta,Nome canônico.
+google_pixel_9_pro_fold__pixel_9_pro_fold,google_pixel_9_pro_fold,Pixel 9 Pro Fold,PIXEL 9 PRO FOLD,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_9_pro_fold__9_pro_fold,google_pixel_9_pro_fold,9 Pro Fold,9 PRO FOLD,short,false,false,alta,
+google_pixel_9_pro_fold__pixel9profold,google_pixel_9_pro_fold,Pixel9ProFold,PIXEL9PROFOLD,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_9a__google_pixel_9a,google_pixel_9a,Google Pixel 9a,GOOGLE PIXEL 9A,canonical,false,false,alta,Nome canônico.
+google_pixel_9a__pixel_9a,google_pixel_9a,Pixel 9a,PIXEL 9A,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_9a__9a,google_pixel_9a,9a,9A,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_9a__pixel9a,google_pixel_9a,Pixel9a,PIXEL9A,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_10__google_pixel_10,google_pixel_10,Google Pixel 10,GOOGLE PIXEL 10,canonical,false,false,alta,Nome canônico.
+google_pixel_10__pixel_10,google_pixel_10,Pixel 10,PIXEL 10,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_10__10,google_pixel_10,10,10,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+google_pixel_10__pixel10,google_pixel_10,Pixel10,PIXEL10,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_10_pro__google_pixel_10_pro,google_pixel_10_pro,Google Pixel 10 Pro,GOOGLE PIXEL 10 PRO,canonical,false,false,alta,Nome canônico.
+google_pixel_10_pro__pixel_10_pro,google_pixel_10_pro,Pixel 10 Pro,PIXEL 10 PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_10_pro__10_pro,google_pixel_10_pro,10 Pro,10 PRO,short,false,false,alta,
+google_pixel_10_pro__pixel10pro,google_pixel_10_pro,Pixel10Pro,PIXEL10PRO,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_10_pro_xl__google_pixel_10_pro_xl,google_pixel_10_pro_xl,Google Pixel 10 Pro XL,GOOGLE PIXEL 10 PRO XL,canonical,false,false,alta,Nome canônico.
+google_pixel_10_pro_xl__pixel_10_pro_xl,google_pixel_10_pro_xl,Pixel 10 Pro XL,PIXEL 10 PRO XL,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_10_pro_xl__10_pro_xl,google_pixel_10_pro_xl,10 Pro XL,10 PRO XL,short,false,false,alta,
+google_pixel_10_pro_xl__pixel10proxl,google_pixel_10_pro_xl,Pixel10ProXL,PIXEL10PROXL,common_typo,false,false,alta,Grafia sem espaços.
+google_pixel_10_pro_fold__google_pixel_10_pro_fold,google_pixel_10_pro_fold,Google Pixel 10 Pro Fold,GOOGLE PIXEL 10 PRO FOLD,canonical,false,false,alta,Nome canônico.
+google_pixel_10_pro_fold__pixel_10_pro_fold,google_pixel_10_pro_fold,Pixel 10 Pro Fold,PIXEL 10 PRO FOLD,commercial_variant,false,false,alta,Nome comercial sem a marca.
+google_pixel_10_pro_fold__10_pro_fold,google_pixel_10_pro_fold,10 Pro Fold,10 PRO FOLD,short,false,false,alta,
+google_pixel_10_pro_fold__pixel10profold,google_pixel_10_pro_fold,Pixel10ProFold,PIXEL10PROFOLD,common_typo,false,false,alta,Grafia sem espaços.
+nothing_phone_2__nothing_phone_2,nothing_phone_2,Nothing Phone (2),NOTHING PHONE (2),canonical,false,false,alta,Nome canônico.
+nothing_phone_2__phone_2,nothing_phone_2,Phone (2),PHONE (2),commercial_variant,false,false,alta,Nome comercial sem a marca.
+nothing_phone_2__phone_2_2,nothing_phone_2,Phone(2),PHONE(2),common_typo,false,false,alta,Grafia sem espaços.
+nothing_phone_2a__nothing_phone_2a,nothing_phone_2a,Nothing Phone (2a),NOTHING PHONE (2A),canonical,false,false,alta,Nome canônico.
+nothing_phone_2a__phone_2a,nothing_phone_2a,Phone (2a),PHONE (2A),commercial_variant,false,false,alta,Nome comercial sem a marca.
+nothing_phone_2a__phone_2a_2,nothing_phone_2a,Phone(2a),PHONE(2A),common_typo,false,false,alta,Grafia sem espaços.
+nothing_phone_2a_plus__nothing_phone_2a_plus,nothing_phone_2a_plus,Nothing Phone (2a) Plus,NOTHING PHONE (2A) PLUS,canonical,false,false,alta,Nome canônico.
+nothing_phone_2a_plus__phone_2a_plus,nothing_phone_2a_plus,Phone (2a) Plus,PHONE (2A) PLUS,commercial_variant,false,false,alta,Nome comercial sem a marca.
+nothing_phone_2a_plus__phone_2a_plus_2,nothing_phone_2a_plus,Phone(2a)Plus,PHONE(2A)PLUS,common_typo,false,false,alta,Grafia sem espaços.
+nothing_phone_3a__nothing_phone_3a,nothing_phone_3a,Nothing Phone (3a),NOTHING PHONE (3A),canonical,false,false,alta,Nome canônico.
+nothing_phone_3a__phone_3a,nothing_phone_3a,Phone (3a),PHONE (3A),commercial_variant,false,false,alta,Nome comercial sem a marca.
+nothing_phone_3a__phone_3a_2,nothing_phone_3a,Phone(3a),PHONE(3A),common_typo,false,false,alta,Grafia sem espaços.
+nothing_phone_3a_pro__nothing_phone_3a_pro,nothing_phone_3a_pro,Nothing Phone (3a) Pro,NOTHING PHONE (3A) PRO,canonical,false,false,alta,Nome canônico.
+nothing_phone_3a_pro__phone_3a_pro,nothing_phone_3a_pro,Phone (3a) Pro,PHONE (3A) PRO,commercial_variant,false,false,alta,Nome comercial sem a marca.
+nothing_phone_3a_pro__phone_3a_pro_2,nothing_phone_3a_pro,Phone(3a)Pro,PHONE(3A)PRO,common_typo,false,false,alta,Grafia sem espaços.
+nothing_phone_3__nothing_phone_3,nothing_phone_3,Nothing Phone (3),NOTHING PHONE (3),canonical,false,false,alta,Nome canônico.
+nothing_phone_3__phone_3,nothing_phone_3,Phone (3),PHONE (3),commercial_variant,false,false,alta,Nome comercial sem a marca.
+nothing_phone_3__phone_3_2,nothing_phone_3,Phone(3),PHONE(3),common_typo,false,false,alta,Grafia sem espaços.
+cmf_phone_1__cmf_phone_1,cmf_phone_1,CMF Phone 1,CMF PHONE 1,canonical,false,false,alta,Nome canônico.
+cmf_phone_1__cmfphone1,cmf_phone_1,CMFPhone1,CMFPHONE1,common_typo,false,false,alta,Grafia sem espaços.
+cmf_phone_2_pro__cmf_phone_2_pro,cmf_phone_2_pro,CMF Phone 2 Pro,CMF PHONE 2 PRO,canonical,false,false,alta,Nome canônico.
+cmf_phone_2_pro__cmfphone2pro,cmf_phone_2_pro,CMFPhone2Pro,CMFPHONE2PRO,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_11__oneplus_11,oneplus_11,OnePlus 11,ONEPLUS 11,canonical,false,false,alta,Nome canônico.
+oneplus_11__11,oneplus_11,11,11,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+oneplus_11__oneplus11,oneplus_11,OnePlus11,ONEPLUS11,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_12__oneplus_12,oneplus_12,OnePlus 12,ONEPLUS 12,canonical,false,false,alta,Nome canônico.
+oneplus_12__12,oneplus_12,12,12,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+oneplus_12__oneplus12,oneplus_12,OnePlus12,ONEPLUS12,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_12r__oneplus_12r,oneplus_12r,OnePlus 12R,ONEPLUS 12R,canonical,false,false,alta,Nome canônico.
+oneplus_12r__12r,oneplus_12r,12R,12R,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+oneplus_12r__oneplus12r,oneplus_12r,OnePlus12R,ONEPLUS12R,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_13__oneplus_13,oneplus_13,OnePlus 13,ONEPLUS 13,canonical,false,false,alta,Nome canônico.
+oneplus_13__13,oneplus_13,13,13,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+oneplus_13__oneplus13,oneplus_13,OnePlus13,ONEPLUS13,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_13r__oneplus_13r,oneplus_13r,OnePlus 13R,ONEPLUS 13R,canonical,false,false,alta,Nome canônico.
+oneplus_13r__13r,oneplus_13r,13R,13R,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+oneplus_13r__oneplus13r,oneplus_13r,OnePlus13R,ONEPLUS13R,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_nord_3__oneplus_nord_3,oneplus_nord_3,OnePlus Nord 3,ONEPLUS NORD 3,canonical,false,false,alta,Nome canônico.
+oneplus_nord_3__nord_3,oneplus_nord_3,Nord 3,NORD 3,short,false,false,alta,
+oneplus_nord_3__oneplusnord3,oneplus_nord_3,OnePlusNord3,ONEPLUSNORD3,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_nord_4__oneplus_nord_4,oneplus_nord_4,OnePlus Nord 4,ONEPLUS NORD 4,canonical,false,false,alta,Nome canônico.
+oneplus_nord_4__nord_4,oneplus_nord_4,Nord 4,NORD 4,short,false,false,alta,
+oneplus_nord_4__oneplusnord4,oneplus_nord_4,OnePlusNord4,ONEPLUSNORD4,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_nord_ce4__oneplus_nord_ce4,oneplus_nord_ce4,OnePlus Nord CE4,ONEPLUS NORD CE4,canonical,false,false,alta,Nome canônico.
+oneplus_nord_ce4__nord_ce4,oneplus_nord_ce4,Nord CE4,NORD CE4,short,false,false,alta,
+oneplus_nord_ce4__oneplusnordce4,oneplus_nord_ce4,OnePlusNordCE4,ONEPLUSNORDCE4,common_typo,false,false,alta,Grafia sem espaços.
+oneplus_nord_5__oneplus_nord_5,oneplus_nord_5,OnePlus Nord 5,ONEPLUS NORD 5,canonical,false,false,alta,Nome canônico.
+oneplus_nord_5__nord_5,oneplus_nord_5,Nord 5,NORD 5,short,false,false,alta,
+oneplus_nord_5__oneplusnord5,oneplus_nord_5,OnePlusNord5,ONEPLUSNORD5,common_typo,false,false,alta,Grafia sem espaços.
+oppo_a79_5g__oppo_a79_5g,oppo_a79_5g,OPPO A79 5G,OPPO A79 5G,canonical,false,false,alta,Nome canônico.
+oppo_a79_5g__a79_5g,oppo_a79_5g,A79 5G,A79 5G,short,false,false,alta,
+oppo_a79_5g__oppoa795g,oppo_a79_5g,OPPOA795G,OPPOA795G,common_typo,false,false,alta,Grafia sem espaços.
+oppo_a60__oppo_a60,oppo_a60,OPPO A60,OPPO A60,canonical,false,false,alta,Nome canônico.
+oppo_a60__a60,oppo_a60,A60,A60,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+oppo_a60__oppoa60,oppo_a60,OPPOA60,OPPOA60,common_typo,false,false,alta,Grafia sem espaços.
+oppo_reno12__oppo_reno12,oppo_reno12,OPPO Reno12,OPPO RENO12,canonical,false,false,alta,Nome canônico.
+oppo_reno12__reno12,oppo_reno12,Reno12,RENO12,short,false,false,alta,
+oppo_reno12__opporeno12,oppo_reno12,OPPOReno12,OPPORENO12,common_typo,false,false,alta,Grafia sem espaços.
+oppo_reno12_pro__oppo_reno12_pro,oppo_reno12_pro,OPPO Reno12 Pro,OPPO RENO12 PRO,canonical,false,false,alta,Nome canônico.
+oppo_reno12_pro__reno12_pro,oppo_reno12_pro,Reno12 Pro,RENO12 PRO,short,false,false,alta,
+oppo_reno12_pro__opporeno12pro,oppo_reno12_pro,OPPOReno12Pro,OPPORENO12PRO,common_typo,false,false,alta,Grafia sem espaços.
+oppo_find_x8__oppo_find_x8,oppo_find_x8,OPPO Find X8,OPPO FIND X8,canonical,false,false,alta,Nome canônico.
+oppo_find_x8__find_x8,oppo_find_x8,Find X8,FIND X8,short,false,false,alta,
+oppo_find_x8__oppofindx8,oppo_find_x8,OPPOFindX8,OPPOFINDX8,common_typo,false,false,alta,Grafia sem espaços.
+oppo_find_x8_pro__oppo_find_x8_pro,oppo_find_x8_pro,OPPO Find X8 Pro,OPPO FIND X8 PRO,canonical,false,false,alta,Nome canônico.
+oppo_find_x8_pro__find_x8_pro,oppo_find_x8_pro,Find X8 Pro,FIND X8 PRO,short,false,false,alta,
+oppo_find_x8_pro__oppofindx8pro,oppo_find_x8_pro,OPPOFindX8Pro,OPPOFINDX8PRO,common_typo,false,false,alta,Grafia sem espaços.
+oppo_reno13__oppo_reno13,oppo_reno13,OPPO Reno13,OPPO RENO13,canonical,false,false,alta,Nome canônico.
+oppo_reno13__reno13,oppo_reno13,Reno13,RENO13,short,false,false,alta,
+oppo_reno13__opporeno13,oppo_reno13,OPPOReno13,OPPORENO13,common_typo,false,false,alta,Grafia sem espaços.
+oppo_reno13_pro__oppo_reno13_pro,oppo_reno13_pro,OPPO Reno13 Pro,OPPO RENO13 PRO,canonical,false,false,alta,Nome canônico.
+oppo_reno13_pro__reno13_pro,oppo_reno13_pro,Reno13 Pro,RENO13 PRO,short,false,false,alta,
+oppo_reno13_pro__opporeno13pro,oppo_reno13_pro,OPPOReno13Pro,OPPORENO13PRO,common_typo,false,false,alta,Grafia sem espaços.
+honor_magic6_pro__honor_magic6_pro,honor_magic6_pro,HONOR Magic6 Pro,HONOR MAGIC6 PRO,canonical,false,false,alta,Nome canônico.
+honor_magic6_pro__magic6_pro,honor_magic6_pro,Magic6 Pro,MAGIC6 PRO,short,false,false,alta,
+honor_magic6_pro__honormagic6pro,honor_magic6_pro,HONORMagic6Pro,HONORMAGIC6PRO,common_typo,false,false,alta,Grafia sem espaços.
+honor_200__honor_200,honor_200,HONOR 200,HONOR 200,canonical,false,false,alta,Nome canônico.
+honor_200__200,honor_200,200,200,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+honor_200__honor200,honor_200,HONOR200,HONOR200,common_typo,false,false,alta,Grafia sem espaços.
+honor_200_pro__honor_200_pro,honor_200_pro,HONOR 200 Pro,HONOR 200 PRO,canonical,false,false,alta,Nome canônico.
+honor_200_pro__200_pro,honor_200_pro,200 Pro,200 PRO,short,false,false,alta,
+honor_200_pro__honor200pro,honor_200_pro,HONOR200Pro,HONOR200PRO,common_typo,false,false,alta,Grafia sem espaços.
+honor_magic7_pro__honor_magic7_pro,honor_magic7_pro,HONOR Magic7 Pro,HONOR MAGIC7 PRO,canonical,false,false,alta,Nome canônico.
+honor_magic7_pro__magic7_pro,honor_magic7_pro,Magic7 Pro,MAGIC7 PRO,short,false,false,alta,
+honor_magic7_pro__honormagic7pro,honor_magic7_pro,HONORMagic7Pro,HONORMAGIC7PRO,common_typo,false,false,alta,Grafia sem espaços.
+honor_400__honor_400,honor_400,HONOR 400,HONOR 400,canonical,false,false,alta,Nome canônico.
+honor_400__400,honor_400,400,400,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+honor_400__honor400,honor_400,HONOR400,HONOR400,common_typo,false,false,alta,Grafia sem espaços.
+honor_400_pro__honor_400_pro,honor_400_pro,HONOR 400 Pro,HONOR 400 PRO,canonical,false,false,alta,Nome canônico.
+honor_400_pro__400_pro,honor_400_pro,400 Pro,400 PRO,short,false,false,alta,
+honor_400_pro__honor400pro,honor_400_pro,HONOR400Pro,HONOR400PRO,common_typo,false,false,alta,Grafia sem espaços.
+tecno_spark_20_pro__tecno_spark_20_pro,tecno_spark_20_pro,TECNO Spark 20 Pro,TECNO SPARK 20 PRO,canonical,false,false,alta,Nome canônico.
+tecno_spark_20_pro__spark_20_pro,tecno_spark_20_pro,Spark 20 Pro,SPARK 20 PRO,short,false,false,alta,
+tecno_spark_20_pro__tecnospark20pro,tecno_spark_20_pro,TECNOSpark20Pro,TECNOSPARK20PRO,common_typo,false,false,alta,Grafia sem espaços.
+tecno_spark_30__tecno_spark_30,tecno_spark_30,TECNO Spark 30,TECNO SPARK 30,canonical,false,false,alta,Nome canônico.
+tecno_spark_30__spark_30,tecno_spark_30,Spark 30,SPARK 30,short,false,false,alta,
+tecno_spark_30__tecnospark30,tecno_spark_30,TECNOSpark30,TECNOSPARK30,common_typo,false,false,alta,Grafia sem espaços.
+tecno_camon_30__tecno_camon_30,tecno_camon_30,TECNO Camon 30,TECNO CAMON 30,canonical,false,false,alta,Nome canônico.
+tecno_camon_30__camon_30,tecno_camon_30,Camon 30,CAMON 30,short,false,false,alta,
+tecno_camon_30__tecnocamon30,tecno_camon_30,TECNOCamon30,TECNOCAMON30,common_typo,false,false,alta,Grafia sem espaços.
+tecno_pova_6_pro__tecno_pova_6_pro,tecno_pova_6_pro,TECNO Pova 6 Pro,TECNO POVA 6 PRO,canonical,false,false,alta,Nome canônico.
+tecno_pova_6_pro__pova_6_pro,tecno_pova_6_pro,Pova 6 Pro,POVA 6 PRO,short,false,false,alta,
+tecno_pova_6_pro__tecnopova6pro,tecno_pova_6_pro,TECNOPova6Pro,TECNOPOVA6PRO,common_typo,false,false,alta,Grafia sem espaços.
+vivo_v30__vivo_v30,vivo_v30,vivo V30,VIVO V30,canonical,false,false,alta,Nome canônico.
+vivo_v30__v30,vivo_v30,V30,V30,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+vivo_v30__vivov30,vivo_v30,vivoV30,VIVOV30,common_typo,false,false,alta,Grafia sem espaços.
+vivo_v40__vivo_v40,vivo_v40,vivo V40,VIVO V40,canonical,false,false,alta,Nome canônico.
+vivo_v40__v40,vivo_v40,V40,V40,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+vivo_v40__vivov40,vivo_v40,vivoV40,VIVOV40,common_typo,false,false,alta,Grafia sem espaços.
+vivo_y28__vivo_y28,vivo_y28,vivo Y28,VIVO Y28,canonical,false,false,alta,Nome canônico.
+vivo_y28__y28,vivo_y28,Y28,Y28,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+vivo_y28__vivoy28,vivo_y28,vivoY28,VIVOY28,common_typo,false,false,alta,Grafia sem espaços.
+vivo_x200_pro__vivo_x200_pro,vivo_x200_pro,vivo X200 Pro,VIVO X200 PRO,canonical,false,false,alta,Nome canônico.
+vivo_x200_pro__x200_pro,vivo_x200_pro,X200 Pro,X200 PRO,short,false,false,alta,
+vivo_x200_pro__vivox200pro,vivo_x200_pro,vivoX200Pro,VIVOX200PRO,common_typo,false,false,alta,Grafia sem espaços.
+nokia_g42__nokia_g42,nokia_g42,Nokia G42,NOKIA G42,canonical,false,false,alta,Nome canônico.
+nokia_g42__g42,nokia_g42,G42,G42,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+nokia_g42__nokiag42,nokia_g42,NokiaG42,NOKIAG42,common_typo,false,false,alta,Grafia sem espaços.
+nokia_c32__nokia_c32,nokia_c32,Nokia C32,NOKIA C32,canonical,false,false,alta,Nome canônico.
+nokia_c32__c32,nokia_c32,C32,C32,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+nokia_c32__nokiac32,nokia_c32,NokiaC32,NOKIAC32,common_typo,false,false,alta,Grafia sem espaços.
+hmd_pulse__hmd_pulse,hmd_pulse,HMD Pulse,HMD PULSE,canonical,false,false,alta,Nome canônico.
+hmd_pulse__pulse,hmd_pulse,Pulse,PULSE,short,false,false,alta,
+hmd_pulse__hmdpulse,hmd_pulse,HMDPulse,HMDPULSE,common_typo,false,false,alta,Grafia sem espaços.
+hmd_skyline__hmd_skyline,hmd_skyline,HMD Skyline,HMD SKYLINE,canonical,false,false,alta,Nome canônico.
+hmd_skyline__skyline,hmd_skyline,Skyline,SKYLINE,short,false,false,alta,
+hmd_skyline__hmdskyline,hmd_skyline,HMDSkyline,HMDSKYLINE,common_typo,false,false,alta,Grafia sem espaços.
+asus_zenfone_10__asus_zenfone_10,asus_zenfone_10,ASUS Zenfone 10,ASUS ZENFONE 10,canonical,false,false,alta,Nome canônico.
+asus_zenfone_10__zenfone_10,asus_zenfone_10,Zenfone 10,ZENFONE 10,commercial_variant,false,false,alta,Nome comercial sem a marca.
+asus_zenfone_10__zenfone10,asus_zenfone_10,Zenfone10,ZENFONE10,common_typo,false,false,alta,Grafia sem espaços.
+asus_zenfone_11_ultra__asus_zenfone_11_ultra,asus_zenfone_11_ultra,ASUS Zenfone 11 Ultra,ASUS ZENFONE 11 ULTRA,canonical,false,false,alta,Nome canônico.
+asus_zenfone_11_ultra__zenfone_11_ultra,asus_zenfone_11_ultra,Zenfone 11 Ultra,ZENFONE 11 ULTRA,commercial_variant,false,false,alta,Nome comercial sem a marca.
+asus_zenfone_11_ultra__zenfone11ultra,asus_zenfone_11_ultra,Zenfone11Ultra,ZENFONE11ULTRA,common_typo,false,false,alta,Grafia sem espaços.
+asus_rog_phone_8__asus_rog_phone_8,asus_rog_phone_8,ASUS ROG Phone 8,ASUS ROG PHONE 8,canonical,false,false,alta,Nome canônico.
+asus_rog_phone_8__rog_phone_8,asus_rog_phone_8,ROG Phone 8,ROG PHONE 8,commercial_variant,false,false,alta,Nome comercial sem a marca.
+asus_rog_phone_8__rogphone8,asus_rog_phone_8,ROGPhone8,ROGPHONE8,common_typo,false,false,alta,Grafia sem espaços.
+asus_rog_phone_9__asus_rog_phone_9,asus_rog_phone_9,ASUS ROG Phone 9,ASUS ROG PHONE 9,canonical,false,false,alta,Nome canônico.
+asus_rog_phone_9__rog_phone_9,asus_rog_phone_9,ROG Phone 9,ROG PHONE 9,commercial_variant,false,false,alta,Nome comercial sem a marca.
+asus_rog_phone_9__rogphone9,asus_rog_phone_9,ROGPhone9,ROGPHONE9,common_typo,false,false,alta,Grafia sem espaços.
+huawei_p60_pro__huawei_p60_pro,huawei_p60_pro,Huawei P60 Pro,HUAWEI P60 PRO,canonical,false,false,alta,Nome canônico.
+huawei_p60_pro__p60_pro,huawei_p60_pro,P60 Pro,P60 PRO,short,false,false,alta,
+huawei_p60_pro__huaweip60pro,huawei_p60_pro,HuaweiP60Pro,HUAWEIP60PRO,common_typo,false,false,alta,Grafia sem espaços.
+huawei_pura_70__huawei_pura_70,huawei_pura_70,Huawei Pura 70,HUAWEI PURA 70,canonical,false,false,alta,Nome canônico.
+huawei_pura_70__pura_70,huawei_pura_70,Pura 70,PURA 70,short,false,false,alta,
+huawei_pura_70__huaweipura70,huawei_pura_70,HuaweiPura70,HUAWEIPURA70,common_typo,false,false,alta,Grafia sem espaços.
+huawei_pura_70_pro__huawei_pura_70_pro,huawei_pura_70_pro,Huawei Pura 70 Pro,HUAWEI PURA 70 PRO,canonical,false,false,alta,Nome canônico.
+huawei_pura_70_pro__pura_70_pro,huawei_pura_70_pro,Pura 70 Pro,PURA 70 PRO,short,false,false,alta,
+huawei_pura_70_pro__huaweipura70pro,huawei_pura_70_pro,HuaweiPura70Pro,HUAWEIPURA70PRO,common_typo,false,false,alta,Grafia sem espaços.
+sony_xperia_1_v__sony_xperia_1_v,sony_xperia_1_v,Sony Xperia 1 V,SONY XPERIA 1 V,canonical,false,false,alta,Nome canônico.
+sony_xperia_1_v__xperia_1_v,sony_xperia_1_v,Xperia 1 V,XPERIA 1 V,commercial_variant,false,false,alta,Nome comercial sem a marca.
+sony_xperia_1_v__1_v,sony_xperia_1_v,1 V,1 V,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+sony_xperia_1_v__xperia1v,sony_xperia_1_v,Xperia1V,XPERIA1V,common_typo,false,false,alta,Grafia sem espaços.
+sony_xperia_10_v__sony_xperia_10_v,sony_xperia_10_v,Sony Xperia 10 V,SONY XPERIA 10 V,canonical,false,false,alta,Nome canônico.
+sony_xperia_10_v__xperia_10_v,sony_xperia_10_v,Xperia 10 V,XPERIA 10 V,commercial_variant,false,false,alta,Nome comercial sem a marca.
+sony_xperia_10_v__10_v,sony_xperia_10_v,10 V,10 V,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+sony_xperia_10_v__xperia10v,sony_xperia_10_v,Xperia10V,XPERIA10V,common_typo,false,false,alta,Grafia sem espaços.
+sony_xperia_1_vi__sony_xperia_1_vi,sony_xperia_1_vi,Sony Xperia 1 VI,SONY XPERIA 1 VI,canonical,false,false,alta,Nome canônico.
+sony_xperia_1_vi__xperia_1_vi,sony_xperia_1_vi,Xperia 1 VI,XPERIA 1 VI,commercial_variant,false,false,alta,Nome comercial sem a marca.
+sony_xperia_1_vi__1_vi,sony_xperia_1_vi,1 VI,1 VI,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+sony_xperia_1_vi__xperia1vi,sony_xperia_1_vi,Xperia1VI,XPERIA1VI,common_typo,false,false,alta,Grafia sem espaços.
+sony_xperia_10_vi__sony_xperia_10_vi,sony_xperia_10_vi,Sony Xperia 10 VI,SONY XPERIA 10 VI,canonical,false,false,alta,Nome canônico.
+sony_xperia_10_vi__xperia_10_vi,sony_xperia_10_vi,Xperia 10 VI,XPERIA 10 VI,commercial_variant,false,false,alta,Nome comercial sem a marca.
+sony_xperia_10_vi__10_vi,sony_xperia_10_vi,10 VI,10 VI,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+sony_xperia_10_vi__xperia10vi,sony_xperia_10_vi,Xperia10VI,XPERIA10VI,common_typo,false,false,alta,Grafia sem espaços.
+sony_xperia_1_vii__sony_xperia_1_vii,sony_xperia_1_vii,Sony Xperia 1 VII,SONY XPERIA 1 VII,canonical,false,false,alta,Nome canônico.
+sony_xperia_1_vii__xperia_1_vii,sony_xperia_1_vii,Xperia 1 VII,XPERIA 1 VII,commercial_variant,false,false,alta,Nome comercial sem a marca.
+sony_xperia_1_vii__1_vii,sony_xperia_1_vii,1 VII,1 VII,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+sony_xperia_1_vii__xperia1vii,sony_xperia_1_vii,Xperia1VII,XPERIA1VII,common_typo,false,false,alta,Grafia sem espaços.
+tcl_40_se__tcl_40_se,tcl_40_se,TCL 40 SE,TCL 40 SE,canonical,false,false,alta,Nome canônico.
+tcl_40_se__40_se,tcl_40_se,40 SE,40 SE,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+tcl_40_se__tcl40se,tcl_40_se,TCL40SE,TCL40SE,common_typo,false,false,alta,Grafia sem espaços.
+tcl_50_se__tcl_50_se,tcl_50_se,TCL 50 SE,TCL 50 SE,canonical,false,false,alta,Nome canônico.
+tcl_50_se__50_se,tcl_50_se,50 SE,50 SE,short,true,true,alta,Alias curto; usar com contexto de marca quando ambiguo.
+tcl_50_se__tcl50se,tcl_50_se,TCL50SE,TCL50SE,common_typo,false,false,alta,Grafia sem espaços.

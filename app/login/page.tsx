@@ -1,4 +1,6 @@
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
+import { desktopVersionFromUserAgent } from "@/lib/desktop-distribution/platform"
 import { auth } from "@/auth"
 import { LoginForm } from "./login-form"
 
@@ -16,5 +18,7 @@ export default async function LoginPage() {
     redirect("/dashboard")
   }
 
-  return <LoginForm />
+  // Dentro do próprio programa Windows o link de download não faz sentido.
+  const ua = (await headers()).get("user-agent")
+  return <LoginForm showDesktopDownload={!desktopVersionFromUserAgent(ua)} />
 }

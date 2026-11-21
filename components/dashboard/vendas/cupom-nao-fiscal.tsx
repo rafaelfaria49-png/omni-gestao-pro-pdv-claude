@@ -263,10 +263,10 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
     if (result.ok) {
       setPrinted(true)
       toast({
-        title: result.via === "proxy" ? "Comprovante enviado" : "Impressão do navegador aberta",
+        title: result.via === "proxy" || result.via === "desktop" ? "Comprovante enviado" : "Impressão do navegador aberta",
         description: `Venda ${data.numeroPedido} permanece ${isCancelada ? "cancelada" : "confirmada"}.`,
       })
-      if (autoPrint && result.via === "proxy") onClose()
+      if (autoPrint && (result.via === "proxy" || result.via === "desktop")) onClose()
     } else {
       setPrintError(result.error || "Não foi possível imprimir o comprovante.")
     }
@@ -282,6 +282,7 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
   const handleBrowserPreview = useCallback(() => {
     const opened = openThermalHtmlPrint(buildHtml(data), `Cupom ${data.numeroPedido}`, {
       bobina: impressaoConfig.bobinaTamanho,
+      browserOnly: true,
     })
     if (!opened) {
       setPrintError("O navegador bloqueou a janela de impressão. Permita pop-ups para esta tela.")
@@ -472,8 +473,8 @@ export function CupomNaoFiscal({ isOpen, onClose, data, autoPrint = false }: Cup
                 disabled={printing}
                 onClick={() => void handleImprimir()}
               >
-                {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : printed ? <CheckCircle2 className="h-4 w-4" /> : <Printer className="h-4 w-4" />}
-                {printing ? "Enviando…" : printed ? "Imprimir 2ª via" : "Enviar para térmica"}
+                {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : printError ? <Printer className="h-4 w-4" /> : printed ? <CheckCircle2 className="h-4 w-4" /> : <Printer className="h-4 w-4" />}
+                {printing ? "Enviando…" : printError ? "Tentar novamente" : printed ? "Imprimir 2ª via" : "Enviar para térmica"}
               </Button>
               {printError && (
                 <Button

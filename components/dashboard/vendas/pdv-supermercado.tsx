@@ -1,5 +1,6 @@
 "use client"
 
+import { APARELHO_FORA_DO_FLUXO, isAparelhoSerializado } from "@/components/aparelhos/bloqueio-layout"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -558,6 +559,11 @@ export function PdvSupermercado({
 
   const addToCart = useCallback(
     (product: Product, qtyOverride?: number) => {
+      // OMNI-APARELHOS-ENDTOEND-001: este layout não vende unidade por IMEI — bloqueio explícito.
+      if (isAparelhoSerializado(product)) {
+        toast({ variant: "destructive", ...APARELHO_FORA_DO_FLUXO })
+        return
+      }
       const nq = normalizeQtyForProduct(product, qtyOverride)
       if (product.stock <= 0) {
         toast({ title: "Sem estoque", description: `${product.name} está sem saldo no estoque.` })

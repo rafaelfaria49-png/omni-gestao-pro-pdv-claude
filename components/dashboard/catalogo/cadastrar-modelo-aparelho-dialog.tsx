@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { LOJA_MODELO_LIMITS, lojaModeloCanonicalName, type LojaModelo } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import { criarModeloLoja, type CatalogoClientError } from "@/lib/catalogo-aparelhos/loja-catalogo-client"
+import { HierarquiaFields, type HierarquiaValue } from "./hierarquia-fields"
 
 /** Modelo pronto para uso (seleção no PDV / vínculo no produto). */
 export type ModeloAparelhoEscolhido = {
@@ -31,8 +32,6 @@ export type ModeloAparelhoEscolhido = {
   brand: string
   canonicalName: string
 }
-
-const MARCAS_SUGERIDAS = ["Samsung", "Motorola", "Apple", "Xiaomi", "Realme", "LG", "Asus", "Nokia", "Infinix", "Tecno", "Positivo", "Multilaser"]
 
 export function modeloEscolhidoFromLoja(m: LojaModelo): ModeloAparelhoEscolhido {
   return { modelKey: m.modelKey, brand: m.brand, canonicalName: lojaModeloCanonicalName(m) }
@@ -43,6 +42,7 @@ export function CadastrarModeloAparelhoDialog({
   onOpenChange,
   lojaHeader,
   initialName = "",
+  permitirAguardando = false,
   onCreated,
 }: {
   open: boolean
@@ -50,13 +50,20 @@ export function CadastrarModeloAparelhoDialog({
   lojaHeader: string | null | undefined
   /** Texto pesquisado (pré-preenche o nome; a marca nunca é presumida). */
   initialName?: string
+  /**
+   * Só a gestão de modelos registra aparelho "aguardando lançamento". Nos fluxos operacionais (PDV,
+   * produto, películas) o modelo criado é selecionado na hora — então precisa estar lançado.
+   */
+  permitirAguardando?: boolean
   onCreated: (modelo: ModeloAparelhoEscolhido, created: LojaModelo | null) => void
 }) {
   const uid = useId()
-  const [brand, setBrand] = useState("")
-  const [name, setName] = useState("")
+  const [hier, setHier] = useState<HierarquiaValue>({ manufacturer: "", brand: "", line: "", name: "" })
+  const { brand, name } = hier
   const [aliases, setAliases] = useState("")
   const [notes, setNotes] = useState("")
+  // COMPAT-CATALOGO-BRASIL-2023-2026-002: registro de aparelho ainda não lançado oficialmente.
+  const [aguardando, setAguardando] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<CatalogoClientError | null>(null)
   // Resposta que chega depois de o diálogo fechar (ex.: PDV trocou de produto) é ignorada.
@@ -67,10 +74,10 @@ export function CadastrarModeloAparelhoDialog({
 
   useEffect(() => {
     if (!open) return
-    setBrand("")
-    setName(initialName.trim().slice(0, LOJA_MODELO_LIMITS.name))
+    setHier({ manufacturer: "", brand: "", line: "", name: initialName.trim().slice(0, LOJA_MODELO_LIMITS.name) })
     setAliases("")
     setNotes("")
+    setAguardando(false)
     setFailure(null)
     setBusy(false)
   }, [open, initialName])
@@ -84,6 +91,9 @@ export function CadastrarModeloAparelhoDialog({
     const res = await criarModeloLoja(lojaHeader, {
       brand,
       name,
+      manufacturer: hier.manufacturer,
+      line: hier.line,
+      lancamento: permitirAguardando && aguardando ? "aguardando_lancamento" : "lancado",
       aliases: aliases
         .split(/[,;\n]/)
         .map((a) => a.trim())
@@ -104,7 +114,7 @@ export function CadastrarModeloAparelhoDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Cadastrar novo modelo</DialogTitle>
           <DialogDescription>
@@ -113,38 +123,13 @@ export function CadastrarModeloAparelhoDialog({
         </DialogHeader>
 
         <div className="space-y-3 min-w-0">
-          <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-marca`}>Marca do aparelho</Label>
-            <Input
-              id={`${uid}-marca`}
-              value={brand}
-              list={`${uid}-marcas`}
-              maxLength={LOJA_MODELO_LIMITS.brand}
-              onChange={(e) => setBrand(e.target.value)}
-              placeholder="Informe a marca (ex.: confira na caixa do aparelho)"
-              autoComplete="off"
-              autoFocus
-            />
-            <datalist id={`${uid}-marcas`}>
-              {MARCAS_SUGERIDAS.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-            {failure?.errors?.brand && <p className="text-xs text-destructive">{failure.errors.brand}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-nome`}>Nome comercial do modelo</Label>
-            <Input
-              id={`${uid}-nome`}
-              value={name}
-              maxLength={LOJA_MODELO_LIMITS.name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex.: G47"
-              autoComplete="off"
-            />
-            {failure?.errors?.name && <p className="text-xs text-destructive">{failure.errors.name}</p>}
-          </div>
+          <HierarquiaFields
+            value={hier}
+            onChange={setHier}
+            lojaHeader={lojaHeader}
+            errors={failure?.errors}
+            autoFocus
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor={`${uid}-alias`}>Apelidos (opcional)</Label>
@@ -169,6 +154,23 @@ export function CadastrarModeloAparelhoDialog({
               placeholder="Ex.: lançamento de novembro, conferido na caixa."
             />
           </div>
+
+          {permitirAguardando && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-primary"
+                checked={aguardando}
+                onChange={(e) => setAguardando(e.target.checked)}
+              />
+              <span>
+                Aguardando lançamento oficial
+                <span className="block text-xs text-muted-foreground">
+                  Fica só nesta lista de modelos, fora das buscas do PDV e do cadastro, até você confirmar o lançamento.
+                </span>
+              </span>
+            </label>
+          )}
 
           <p className="text-xs text-muted-foreground">
             Origem: cadastro manual da loja. Cadastrar o modelo não confirma compatibilidade de película ou capinha.

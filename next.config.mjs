@@ -14,6 +14,7 @@ function protegerWorkerPessoas() {
         url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
         url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
+        || url.pathname === "/dashboard/relatorios" || url.pathname.startsWith("/dashboard/relatorios/")
       )) return Promise.resolve()
     }
     return original.call(this, event)
@@ -75,7 +76,22 @@ const withPWA = withPWAInit({
         // Prova de venda no servidor (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001): consulta por
         // clientSaleId e capability do writer nunca do cache — offline vira erro de rede honesto.
         url.pathname === "/api/ops/vendas/by-client-sale-id" ||
-        url.pathname === "/api/ops/venda-persist/v2"
+        url.pathname === "/api/ops/venda-persist/v2" ||
+        // Relatórios, financeiro e caixa (RELATORIOS-FASE-A-001): a regra padrão `apis` do next-pwa
+        // (NetworkFirst, 24 h, timeout 10 s, chave = URL) servia números velhos sem aviso e, nas rotas
+        // que levam a loja só no header, a resposta de outra loja/sessão. Offline vira erro honesto;
+        // a sessão de caixa já trata falha de rede sem tocar no estado local (`decision: null`).
+        url.pathname.startsWith("/api/vendas/") ||
+        url.pathname.startsWith("/api/financeiro/") ||
+        url.pathname.startsWith("/api/ops/caixa/") ||
+        url.pathname.startsWith("/api/dashboard/") ||
+        // Reports HTML/RSC embeds session data in the root layout; auxiliary nav worker is guarded above too.
+        url.pathname === "/dashboard/relatorios" || url.pathname.startsWith("/dashboard/relatorios/") ||
+        // Listas de títulos (Contas a Pagar/Receber e recebimento no PDV) levam a loja só no
+        // header: mesma URL para todas as lojas. Gravar já exige rede; ler offline vira erro.
+        url.pathname === "/api/ops/contas-pagar-list" ||
+        url.pathname === "/api/ops/contas-receber-list" ||
+        url.pathname.startsWith("/api/finance/")
       ),
       handler: "NetworkOnly",
       method: "GET",

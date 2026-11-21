@@ -5,6 +5,7 @@ import { ArrowLeft, CalendarClock, Camera, CreditCard, FileText, Globe, History,
 import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSHeaderV3 } from "../components/OSHeaderV3";
+import { EdicaoCompletaOSDialog } from "../components/EdicaoCompletaOSDialog";
 import { OSCommandBarV3 } from "../components/OSCommandBarV3";
 import { OSSectionV3 } from "../components/OSSectionV3";
 import { OSCardV3 } from "../components/OSCardV3";
@@ -114,6 +115,7 @@ function Picker() {
 // ---------------------------------------------------------------------------
 
 function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => void }) {
+  const [edicaoAberta, setEdicaoAberta] = useState(false);
   const { acaoEmConstrucao, navigate, openOS, storeId, ordens, reload: reloadLista, mudarStatus, notificar } = useOperacoesV3();
   const { empresaDocumentos } = useLojaAtiva();
   const pagV3 = lerPagamentoV3(os);
@@ -191,8 +193,8 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
   // Ações rápidas do cabeçalho (item 2) — navegam dentro do próprio prontuário.
   const quickActions = (
     <>
-      <ButtonV3 variant="outline" onClick={() => irPara("checklist")}>
-        <Pencil className="h-4 w-4" aria-hidden /> Editar
+      <ButtonV3 variant="outline" onClick={() => setEdicaoAberta(true)}>
+        <Pencil className="h-4 w-4" aria-hidden /> Editar OS
       </ButtonV3>
       <ButtonV3 variant="outline" onClick={() => setPrintTipo("os_cliente")}>
         <Printer className="h-4 w-4" aria-hidden /> Imprimir
@@ -225,6 +227,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       </div>
 
       <OSHeaderV3 os={os} actions={quickActions} />
+      {edicaoAberta && storeId && <EdicaoCompletaOSDialog key={`${storeId}:${os.id}`} open storeId={storeId} osId={os.id} onClose={() => setEdicaoAberta(false)} onSaved={refresh} />}
       <OSCommandBarV3 os={os} onMudarStatus={onMudarStatus} onCancelar={onCancelarOS} onAcao={acaoEmConstrucao} />
       <OSTimelineV3 os={os} />
 
@@ -483,5 +486,5 @@ export function OSWorkspaceV3() {
       </SectionShellV3>
     );
   }
-  return <Workspace os={ordem} reloadOrdem={reload} />;
+  return <Workspace key={`${storeId}:${ordem.id}`} os={ordem} reloadOrdem={reload} />;
 }

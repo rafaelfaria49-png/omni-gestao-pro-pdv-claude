@@ -1,5 +1,6 @@
 /** Tipos compartilhados entre PDV (client) e rotas `/api/ops/vendas-*` (server). */
 
+import type { DeviceSaleLineV1 } from "@/lib/aparelhos/device-sale-line"
 import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
 import type { SaleLineItemType } from "@/lib/sale-line-classification"
 import type { PixQrKind } from "@/lib/fiscal/payment/pix-qr-kind"
@@ -63,6 +64,11 @@ export interface SaleLineRecord {
   serviceCategory?: string
   warrantyDays?: number
   serviceTerms?: string
+  /**
+   * Aparelho individualizado (OMNI-APARELHOS-ENDTOEND-001): unidade física + garantia escolhida.
+   * O servidor revalida tudo dentro da transação da venda (lib/aparelhos/sale-hook.ts).
+   */
+  deviceSale?: DeviceSaleLineV1
 }
 
 export interface SaleRecord {
