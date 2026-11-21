@@ -24,7 +24,8 @@ function salesCte(storeId: string, q: ReportQuery) {
 /**
  * Tipo da linha. Ordem: identificador virtual gravado (O.S./serviço/avulso, mesmo contrato de
  * lib/os-pdv-virtual-lines) → venda gerada da OS → unidade de aparelho vinculada à venda →
- * modelo serializado → categoria atual do catálogo. Sem produto na loja: Não classificado.
+ * modelo serializado → configuração de acessório do produto (metadata.acessorios v1) → categoria
+ * atual do catálogo. Sem produto na loja: Não classificado.
  */
 function lineType(storeId: string, inv: Prisma.Sql, venda: Prisma.Sql, osDoc: Prisma.Sql) {
   const i = Prisma.sql`coalesce(${inv},'')`
@@ -36,6 +37,7 @@ function lineType(storeId: string, inv: Prisma.Sql, venda: Prisma.Sql, osDoc: Pr
       WHERE av."storeId"=${storeId} AND av."vendaId"=${venda} AND (af."produtoId"=${i} OR af."produtoId" IN
         (SELECT p.id FROM estoque_produtos p WHERE p."storeId"=${storeId} AND (p.sku=${i} OR p.barcode=${i})))) THEN 'aparelho'
     ELSE coalesce((SELECT CASE WHEN p.metadata->'serializedDevice'->>'version'='1' THEN 'aparelho'
+        WHEN p.metadata->'acessorios'->>'version'='1' THEN 'acessorio'
         WHEN concat_ws(' ',p.category,c.nome) ~* 'acess' THEN 'acessorio' ELSE 'produto' END
       FROM estoque_produtos p LEFT JOIN categorias_produto c ON c."lojaId"=p."storeId" AND c.slug=p.category
       WHERE p."storeId"=${storeId} AND ${i}<>'' AND (p.id=${i} OR p.sku=${i} OR p.barcode=${i}) ORDER BY (p.id=${i}) DESC LIMIT 1),'nao_classificado') END`
