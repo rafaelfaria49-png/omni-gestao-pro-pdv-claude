@@ -43,6 +43,8 @@ import { GET as contasReceberList } from "@/app/api/ops/contas-receber-list/rout
 import { GET as clientesGet } from "@/app/api/clientes/route"
 import { POST as clientesSearch } from "@/app/api/clientes/search/route"
 import { PATCH as receberPatch } from "@/app/api/financeiro/receber/route"
+import { generalAggregates } from "@/lib/relatorios/geral"
+import { parseReportQuery } from "@/lib/relatorios/contracts"
 
 // ─── ambiente: só PostgreSQL loopback descartável ─────────────────────────────
 
@@ -521,5 +523,50 @@ describe("PDV F5/F9 · ledger com forma e operação, lista inicial e busca", ()
     }
     const vazio = await json(await clientesSearch(req("/api/clientes/search", s, { q: "inexistente-xyz" })))
     expect(vazio.body.clientes).toEqual([])
+  })
+})
+
+// ─── OMNI-FINANCEIRO-F9-HUB-RECONCILIACAO-MAIN-001: Financeiro × Caixa × Relatório Geral ──
+
+describe("sem duplicidade entre Financeiro, Caixa e Relatório Geral (consulta real da main)", () => {
+  it("PDV (com retry) + HUB (com clique duplo): o ledger do Relatório Geral soma cada baixa uma vez; o caixa só o PDV", async () => {
+    const s = await novaLoja()
+    const sessaoId = (await prisma.sessaoCaixa.create({ data: { storeId: s, operador: "QA", status: "ABERTA" } })).id
+    const c = await novoCliente(s, "Gil QA")
+    const a = await novoTitulo(s, { cliente: "Gil QA", valor: 40, clienteId: c.id })
+    const b = await novoTitulo(s, { cliente: "Gil QA", valor: 30, clienteId: c.id })
+    const h = await novoTitulo(s, { cliente: "Gil QA", valor: 25, clienteId: c.id })
+
+    const opPdv = chave()
+    const corpoPdv = {
+      sessaoId, formaPagamento: "pix", idempotencyKey: opPdv,
+      itens: [{ localKey: a, saldoEsperado: 40, valorReceber: 40 }, { localKey: b, saldoEsperado: 30, valorReceber: 10 }],
+    }
+    expect((await pdvReceberLote(req("/api/pdv/receber-conta-lote", s, corpoPdv))).status).toBe(200)
+    // Resposta perdida → o PDV reenvia com a MESMA chave: replay, sem nova baixa.
+    expect((await pdvReceberLote(req("/api/pdv/receber-conta-lote", s, corpoPdv))).status).toBe(200)
+
+    const opHub = chave()
+    const corpoHub = { formaPagamento: "dinheiro", idempotencyKey: opHub, itens: [{ localKey: h, saldoEsperado: 25, valorReceber: 25 }] }
+    const [r1, r2] = await Promise.all([
+      receberLoteFinanceiro(req("/api/financeiro/receber-lote", s, corpoHub)),
+      receberLoteFinanceiro(req("/api/financeiro/receber-lote", s, corpoHub)),
+    ])
+    expect([r1.status, r2.status]).toEqual([200, 200])
+
+    // Financeiro: uma movimentação por título baixado.
+    expect(await movs(s)).toHaveLength(3)
+    // Caixa: só a operação do PDV (o HUB não lança na gaveta — contrato preservado).
+    const caixa = await prisma.caixaOperacao.findMany({ where: { storeId: s } })
+    const caixaRecebido = caixa.filter((o) => o.tipo === "recebimento_cr").reduce((t, o) => t + Number(o.valor), 0)
+    expect(caixaRecebido).toBe(50)
+
+    const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())
+    const q = parseReportQuery(new URLSearchParams({ from: hoje, to: hoje }))
+    const raw = await generalAggregates(prisma, s, q, { service: false })
+    const recebidos = raw.ledger.filter((r) => r.classe === "recebimento_titulo")
+    expect(recebidos.reduce((t, r) => t + Number(r.registros), 0)).toBe(3)
+    expect(recebidos.reduce((t, r) => t + Number(r.valor), 0)).toBeCloseTo(75, 2)
+    expect(raw.conference.caixaRecebimentos).toBeCloseTo(50, 2)
   })
 })
