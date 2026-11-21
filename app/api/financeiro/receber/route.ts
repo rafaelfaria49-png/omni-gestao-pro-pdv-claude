@@ -24,13 +24,13 @@ import {
   getContaReceberByLocalKey,
   liquidarContaReceber,
   registrarPagamentoParcial,
-  estornarContaReceber,
   upsertContaReceber,
 } from "@/lib/financeiro/services"
+import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/movimentacoes-service"
 import {
-  createMovimentacaoEntradaFromReceber,
-  estornarMovimentacaoPorReferencia,
-} from "@/lib/financeiro/services/movimentacoes-service"
+  EstornoRecebimentoError,
+  estornarRecebimentoContaReceber,
+} from "@/lib/financeiro/services/estorno-recebimento-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { registrarRecebimentoCrSeCaixaAberto } from "@/lib/caixa/recebimento-cr-caixa"
 
@@ -116,6 +116,10 @@ const patchSchema = z.discriminatedUnion("op", [
     localKey: z.string().min(1).max(260),
     modo: z.enum(["titulo_completo", "ultimo_pagamento"]),
     motivo: z.string().max(2000).optional(),
+    /** Identidade do pagamento (índice no `historico`). Retry do mesmo índice = 409 sem escrita. */
+    pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(),
+    /** Recebido que o operador viu. Diferente do atual = 409 sem escrita (retry seguro). */
+    recebidoEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("cancelar"),
@@ -396,7 +400,9 @@ export async function PATCH(req: Request) {
       await createMovimentacaoEntradaFromReceber(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
         valorMov,
-        { carteiraId },
+        // O ledger é a identidade: `liquidarContaReceber` recusa o retry (`ja_pago`). Sem o
+        // flag, uma reliquidação depois de um estorno era descartada como "já gravada".
+        { carteiraId, idempotenciaDoChamador: true },
       ).catch((e) => console.error("[receber/liquidar mov]", e))
       void logAuditoriaFinanceira({
         storeId, entidade: "receber", entidadeId: res.data.id, acao: "liquidar", actor,
@@ -419,7 +425,9 @@ export async function PATCH(req: Request) {
       await createMovimentacaoEntradaFromReceber(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
         parsed.data.valor,
-        { parcial: true, carteiraId },
+        // Cada parcial aceita apendou UM pagamento ao ledger ⇒ exatamente UMA entrada. A
+        // heurística antiga ("soma gravada ≥ valor ⇒ retry") descartava a 2ª parcial menor.
+        { parcial: true, carteiraId, idempotenciaDoChamador: true },
       ).catch((e) => console.error("[receber/parcial mov]", e))
       void logAuditoriaFinanceira({
         storeId, entidade: "receber", entidadeId: res.data.id, acao: "liquidar", actor,
@@ -429,16 +437,39 @@ export async function PATCH(req: Request) {
     }
 
     if (parsed.data.op === "estornar") {
-      const res = await estornarContaReceber({ storeId, localKey: parsed.data.localKey, modo: parsed.data.modo, motivo: parsed.data.motivo, userLabel })
-      if (!res.ok) return err(res.reason, `estornar_${res.reason}`, 422)
-      // Estornar movimentação correspondente (idempotente)
-      await estornarMovimentacaoPorReferencia(storeId, res.data.id, "receber")
-        .catch((e) => console.error("[receber/estornar mov]", e))
-      void logAuditoriaFinanceira({
-        storeId, entidade: "receber", entidadeId: res.data.id, acao: "estornar", actor,
-        depois: { localKey: parsed.data.localKey, modo: parsed.data.modo, motivo: parsed.data.motivo },
+      // Ledger + movimentação (valor exato do pagamento) + compensação no Caixa numa única
+      // transação. Recusa = nada gravado; a mensagem diz por quê.
+      let r: Awaited<ReturnType<typeof estornarRecebimentoContaReceber>>
+      try {
+        r = await estornarRecebimentoContaReceber({
+          storeId,
+          localKey: parsed.data.localKey,
+          modo: parsed.data.modo,
+          pagamentoIndex: parsed.data.pagamentoIndex,
+          recebidoEsperado: parsed.data.recebidoEsperado,
+          motivo: parsed.data.motivo,
+          userLabel,
+        })
+      } catch (e) {
+        if (e instanceof EstornoRecebimentoError) return err(e.message, `estornar_${e.code}`, e.status)
+        throw e
+      }
+      if (!r.jaEstornado) {
+        void logAuditoriaFinanceira({
+          storeId, entidade: "receber", entidadeId: r.titulo.id, acao: "estornar", actor,
+          depois: {
+            localKey: parsed.data.localKey, modo: parsed.data.modo, motivo: parsed.data.motivo,
+            valorEstornado: r.valorEstornado, pagamentos: r.pagamentos, movimentacao: r.movimentacao,
+          },
+        })
+      }
+      return NextResponse.json({
+        ok: true,
+        op: "estornar",
+        jaEstornado: r.jaEstornado,
+        valorEstornado: r.valorEstornado,
+        pagamentos: r.pagamentos,
       })
-      return NextResponse.json({ ok: true, op: "estornar" })
     }
 
     // cancelar — não gera movimentação nova
