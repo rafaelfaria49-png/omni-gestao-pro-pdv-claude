@@ -6,7 +6,7 @@
  * F) reenvio não duplica venda/baixa/recebimento · G) 0,100 + 0,200 = 0,300 kg
  * H) cancelamento KG pela rota real: reversão exata em KG, idempotente
  * J) outra loja não cancela nem devolve item da loja dona
- * + junção #335 × #372: venda mista KG + aparelho por IMEI cancela pelo contrato do
+ * + junção #335 × #372: venda mista KG + aparelho por IMEI (dinheiro e a prazo) cancela pelo contrato do
  *   aparelho (fail-closed) e reverte a transação inteira.
  *
  * Handlers de PRODUÇÃO contra o banco isolado de scripts/pdv/run-manual-kg-tests.mjs;
@@ -258,14 +258,15 @@ suite("KG continuidade — reconciliação com a main 09e9764 (PostgreSQL real)"
     expect(await efeitos(sale.id!, [pao.id, cel.id])).toEqual(antes)
   })
 
-  it("junção #335 × #372 (sucesso): mista KG + aparelho real — KG volta exato, IMEI vai a revisão sem saldo, um estorno", async () => {
+  /** Unidade física real, conferida e liberada; loja A com catálogo de aparelhos ligado. */
+  async function aparelhoLiberado(modelo: string) {
     await prisma.storeSettings.upsert({ where: { storeId: A }, create: { storeId: A, printerConfig: { capabilities: { version: 1, overrides: { "catalog.serializedDevices": true } } } },
       update: { printerConfig: { capabilities: { version: 1, overrides: { "catalog.serializedDevices": true } } } } })
     // Loja sintética com todos os módulos (como em test/aparelhos): deviceCatalog liberado.
     await prisma.store.update({ where: { id: A }, data: { moduleAccess: Prisma.DbNull } })
     const ctx: aparelhos.AparelhoCtx = { storeId: A, actorId: "dono-cont", actorLabel: "Dono sintético", perms: aparelhoPermissionsForRole("ADMIN") }
-    const corpo = "3567891" + String(Date.now() % 10_000_000).padStart(7, "0")
-    const cad = await aparelhos.cadastrarAparelho(ctx, { marca: "Apple", modelo: "iPhone sintético", armazenamento: "128 GB", cor: "Preto", condicao: "seminovo",
+    const corpo = "3567891" + String((Date.now() + Math.floor(Math.random() * 1_000_000)) % 10_000_000).padStart(7, "0")
+    const cad = await aparelhos.cadastrarAparelho(ctx, { marca: "Apple", modelo, armazenamento: "128 GB", cor: "Preto", condicao: "seminovo",
       imei1: corpo + String(luhnCheckDigit(corpo)), custoAquisicao: 3000, despesas: 0, precoVenda: 900, garantiaContratualDias: 90,
       checklist: { liga: "PASS", tela: "PASS", touch: "PASS" }, acessorios: {} })
     if (!cad.ok) throw Error(cad.code)
@@ -273,22 +274,33 @@ suite("KG continuidade — reconciliação com a main 09e9764 (PostgreSQL real)"
     if (!conf.ok) throw Error(conf.code)
     const lib = await aparelhos.liberarParaVenda(ctx, cad.aparelho.id)
     if (!lib.ok) throw Error(lib.code)
-    const unit = await prisma.aparelhoFisico.findUniqueOrThrow({ where: { id: cad.aparelho.id } })
+    return prisma.aparelhoFisico.findUniqueOrThrow({ where: { id: cad.aparelho.id } })
+  }
+  /** Venda mista 0,500 kg × R$ 20 + 1 aparelho de R$ 900 = R$ 910. */
+  async function vendaMistaAparelho(modelo: string, pagamento: Pick<SalePayload, "paymentBreakdown" | "aPrazoConfig">) {
+    const unit = await aparelhoLiberado(modelo)
     const cliente = await prisma.cliente.create({ data: { storeId: A, name: NOME, document: CPF } })
-    const pao = await produto({ name: "Pão mista real", price: 20, metadata: KG, estoque: 2 })
+    const pao = await produto({ name: "Pão mista " + modelo, price: 20, metadata: KG, estoque: 2 })
     const saldoModeloAntes = await saldo(unit.produtoId)
-    const total = 10 + 900
     const sale = {
-      id: "KG-CONT-APA-" + randomUUID(), manualKgSale: MANUAL_KG_SALE, sessaoId: A + "-cash", at: new Date().toISOString(), total,
-      clienteId: cliente.id, customerName: NOME, customerCpf: CPF, paymentBreakdown: { dinheiro: total },
+      id: "KG-CONT-APA-" + randomUUID(), manualKgSale: MANUAL_KG_SALE, sessaoId: A + "-cash", at: new Date().toISOString(), total: 910,
+      clienteId: cliente.id, customerName: NOME, customerCpf: CPF, ...pagamento,
       lines: [
         { inventoryId: pao.id, produtoId: pao.id, name: pao.name, quantity: 0.5, unitPrice: 20, lineTotal: 10 },
-        { inventoryId: unit.produtoId, produtoId: unit.produtoId, name: "iPhone sintético", quantity: 1, unitPrice: 900, lineTotal: 900,
+        { inventoryId: unit.produtoId, produtoId: unit.produtoId, name: modelo, quantity: 1, unitPrice: 900, lineTotal: 900,
           deviceSale: { version: 1, aparelhoId: unit.id, contratualDias: 90 } },
       ],
     } as SalePayload
     await persist(sale)
     expect(await saldo(pao.id)).toEqual({ stock: "1.5", dep: "1.5" })
+    expect((await prisma.aparelhoFisico.findUniqueOrThrow({ where: { id: unit.id } })).status).toBe("vendido")
+    return { unit, pao, sale, saldoModeloAntes, total: 910 }
+  }
+  const titulosAprazo = (pedidoId: string) =>
+    prisma.contaReceberTitulo.findMany({ where: { storeId: A, localKey: { startsWith: `pdv-aprazo-${pedidoId}` } }, select: { id: true, status: true, valor: true, payload: true }, orderBy: { localKey: "asc" } })
+
+  it("junção #335 × #372 (sucesso): mista KG + aparelho real — KG volta exato, IMEI vai a revisão sem saldo, um estorno", async () => {
+    const { unit, pao, sale, saldoModeloAntes, total } = await vendaMistaAparelho("iPhone sintético", { paymentBreakdown: { dinheiro: 910 } })
     expect((await prisma.aparelhoFisico.findUniqueOrThrow({ where: { id: unit.id } })).status).toBe("vendido")
     const c = await cancelar(sale.id!)
     expect(c.status, JSON.stringify(c.body)).toBe(200)
@@ -302,5 +314,48 @@ suite("KG continuidade — reconciliação com a main 09e9764 (PostgreSQL real)"
     const estornos = await prisma.movimentacaoFinanceira.findMany({ where: { storeId: A, referenciaId: sale.id!, origem: "cancelamento_pdv" }, select: { valor: true } })
     expect(estornos.map((e) => e.valor)).toEqual([total])
     expect((await cancelar(sale.id!)).status).toBe(409)
+  })
+
+  it("junção #335 × #372 a prazo: mista KG + aparelho sem recebimento cancela títulos, KG e IMEI na mesma transação", async () => {
+    const { unit, pao, sale, saldoModeloAntes } = await vendaMistaAparelho("iPhone a prazo", {
+      paymentBreakdown: { aPrazo: 910 }, aPrazoConfig: { parcelas: 2, intervalDias: 30 },
+    })
+    const antes = await titulosAprazo(sale.id!)
+    expect(antes.map((t) => t.status)).toEqual(["pendente", "pendente"])
+    expect(antes.reduce((s, t) => s + Math.round(Number(t.valor) * 100), 0)).toBe(91000)
+    const c = await cancelar(sale.id!)
+    expect(c.status, JSON.stringify(c.body)).toBe(200)
+    expect((await titulosAprazo(sale.id!)).map((t) => t.status)).toEqual(["cancelado", "cancelado"])
+    expect(await saldo(pao.id)).toEqual({ stock: "2", dep: "2" })
+    expect((await livro(pao.id)).filter((m) => m.origem === "cancelamento_pdv").map((m) => m.q)).toEqual(["0.5"])
+    expect((await prisma.aparelhoFisico.findUniqueOrThrow({ where: { id: unit.id } })).status).toBe("em_revisao")
+    expect((await prisma.aparelhoVenda.findFirstOrThrow({ where: { storeId: A, aparelhoId: unit.id } })).status).toBe("cancelada")
+    expect((await livro(unit.produtoId)).filter((m) => m.origem === "cancelamento_pdv")).toHaveLength(0)
+    expect((await saldo(unit.produtoId)).stock).toBe(String(Number(saldoModeloAntes.stock) - 1))
+    // Nada entrou no caixa: cancelar a prazo não pode gerar saída de dinheiro.
+    expect(await prisma.movimentacaoFinanceira.count({ where: { storeId: A, referenciaId: sale.id!, origem: "cancelamento_pdv" } })).toBe(0)
+    const depois = await efeitos(sale.id!, [pao.id, unit.produtoId])
+    expect((await cancelar(sale.id!)).status).toBe(409)
+    expect(await efeitos(sale.id!, [pao.id, unit.produtoId])).toEqual(depois)
+    expect((await titulosAprazo(sale.id!)).map((t) => t.status)).toEqual(["cancelado", "cancelado"])
+  })
+
+  it("junção #335 × #372 a prazo com recebimento parcial: 409 e nada muda (KG, IMEI, títulos, venda)", async () => {
+    const { unit, pao, sale } = await vendaMistaAparelho("iPhone parcial", { paymentBreakdown: { aPrazo: 910 } })
+    const [titulo] = await titulosAprazo(sale.id!)
+    const payload = titulo.payload as Prisma.JsonObject
+    // Título de venda KG também é protegido por gatilho: a fixture usa o modo de escritor KG.
+    await prisma.$transaction(async (tx) => {
+      await enterManualKgTransaction(tx)
+      await tx.contaReceberTitulo.update({ where: { id: titulo.id }, data: { status: "parcial",
+        payload: { ...payload, historico: [{ tipo: "pagamento", valor: 100, at: new Date().toISOString() }] } } })
+    })
+    const antes = { ...(await efeitos(sale.id!, [pao.id, unit.produtoId])), titulos: await titulosAprazo(sale.id!) }
+    const c = await cancelar(sale.id!)
+    expect(c.status, JSON.stringify(c.body)).toBe(409)
+    expect(c.body.code).toBe("APARELHO_CANCELAMENTO_BLOQUEADO")
+    expect({ ...(await efeitos(sale.id!, [pao.id, unit.produtoId])), titulos: await titulosAprazo(sale.id!) }).toEqual(antes)
+    expect((await prisma.aparelhoFisico.findUniqueOrThrow({ where: { id: unit.id } })).status).toBe("vendido")
+    expect(await saldo(pao.id)).toEqual({ stock: "1.5", dep: "1.5" })
   })
 })
