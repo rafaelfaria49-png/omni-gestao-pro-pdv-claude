@@ -1,0 +1,19 @@
+PG 17 descartável 127.0.0.1:55479, db kg_mig_order (2026-11-21)
+1. baseline = prisma migrate diff --from-empty --to-schema-datamodel <schema de origin/main 09e9764> --script (4084 linhas), aplicado
+2. migrate resolve --applied para as 30 migrations listadas em _prisma_migrations de Production
+3. migrate status:
+   34 migrations found in prisma/migrations
+   Following migrations have not yet been applied:
+   20261025120000_estoque_quantidade_fracionada
+   20261029120000_manual_kg_sale_quantity
+   20261106120000_manual_kg_title_guard_indexed
+   20261108120000_f8_devolucao_kg_fracionada
+4. migrate deploy:
+   Applying migration `20261025120000_estoque_quantidade_fracionada`
+   Applying migration `20261029120000_manual_kg_sale_quantity`
+   Applying migration `20261106120000_manual_kg_title_guard_indexed`
+   Applying migration `20261108120000_f8_devolucao_kg_fracionada`
+   All migrations have been successfully applied.
+5. migrate diff --from-url <db> --to-schema-datamodel prisma/schema.prisma --exit-code => 0, "No difference detected."
+Ressalva: executado como superusuário local. Em Production a 20261029 exige current_user = dono das tabelas
+(ver runbook §0.2/J9); este ensaio prova ordem e drift, não o papel.

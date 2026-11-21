@@ -1,0 +1,35 @@
+# Repo x Production (_prisma_migrations), 2026-11-21T04:36:04Z
+APPLIED  0001_init_clientes_produtos
+APPLIED  0002_product_price_cost
+APPLIED  0003_aux_ledger_audit_whatsapp_app_settings
+APPLIED  0004_multistore_stores_units
+APPLIED  0005_multitenant_product_sku_composite
+APPLIED  0006_store_settings_contact_per_store
+APPLIED  0007_ledger_per_store_conta_receber_composite_localkey
+APPLIED  0008_fornecedores_contas_pagar
+APPLIED  0009_produto_barcode
+APPLIED  0010_whatsapp_phone_number
+APPLIED  0011_deposito_produto_deposito
+APPLIED  0012_inventario_assistido
+APPLIED  0013_fiscal_foundation
+APPLIED  0014_contador_hub_nucleo
+APPLIED  0015_contador_identidade_externa
+APPLIED  0016_add_sale_numbering_infrastructure
+APPLIED  0017_contador_agenda
+APPLIED  0018_user_pin_hash
+APPLIED  0019_movimentacao_estoque_idempotency
+APPLIED  0020_cliente_document_key
+APPLIED  0021_cliente_document_key_unique
+APPLIED  0022_pessoas_cadastro_backend
+APPLIED  20261022120000_platform_pilot_access
+PENDING  20261025120000_estoque_quantidade_fracionada
+PENDING  20261029120000_manual_kg_sale_quantity
+PENDING  20261106120000_manual_kg_title_guard_indexed
+APPLIED  20261107120000_catalogo_aparelhos_loja
+PENDING  20261108120000_f8_devolucao_kg_fracionada
+APPLIED  20261110120000_aparelhos_fisicos_serializados
+APPLIED  20261113120000_admin_session_revocation (checksum CRLF, conteúdo igual)
+APPLIED  20261113120000_compat_profissional
+APPLIED  20261114120000_compat_catalogo_marcas_lancamento
+APPLIED  20261115120000_vestuario_p02_grades_catalogo
+APPLIED  20261118120000_solicitacoes_teste_comercial (checksum CRLF, conteúdo igual)
