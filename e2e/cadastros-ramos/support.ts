@@ -78,7 +78,8 @@ export async function logoutViaSeguranca(page: Page) {
   const signout = page.waitForResponse((res) => res.url().includes("/api/auth/signout") && res.request().method() === "POST")
   await page.getByRole("button", { name: "Encerrar sessão" }).click()
   const response = await signout
-  await page.waitForURL(/\/login/)
+  // `/login/sair` confirma o logout no servidor e só então segue para `/login` (SEC-342).
+  await page.waitForURL((url) => url.pathname === "/login")
   await page.waitForLoadState("load")
   // Diagnóstico sem valores: somente status e nomes de cookies de sessão restantes.
   const remaining = (await page.context().cookies()).filter((cookie) => /session-token/.test(cookie.name)).map((cookie) => cookie.name)
