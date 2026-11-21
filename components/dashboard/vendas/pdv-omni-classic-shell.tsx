@@ -109,7 +109,7 @@ const shortcuts = [
   { key: "F5", label: "Receber Conta", tone: "accent" as const },
   { key: "F6", label: "Cancelar Venda", tone: "destructive" as const },
   { key: "F7", label: "Venda em Espera" },
-  { key: "F8", label: "Voltar ao Bipe" },
+  { key: "F8", label: "Troca / Devolução" },
   { key: "F9", label: "Receber Conta" },
   { key: "CTRL", label: "Funções Avançadas" },
 ]

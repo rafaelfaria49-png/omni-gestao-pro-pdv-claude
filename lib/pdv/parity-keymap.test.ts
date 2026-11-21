@@ -85,10 +85,11 @@ describe("N5-B2 — matriz aprovada e diferenças intencionais", () => {
 })
 
 describe("N5-B2 — ajuda do Clássico sem promessas mortas", () => {
-  it("não anuncia Espaço/Ctrl+L; anuncia End, F8 e Escape contextual", () => {
+  it("não anuncia Espaço/Ctrl+L; anuncia End, F8 (trocas) e Escape contextual", () => {
     expect(PDV_KEYMAP.some((r) => r.key === "Espaço" || r.key === "Ctrl+L")).toBe(false)
     expect(PDV_KEYMAP.find((r) => r.key === "End")?.desc).toContain("Ajuda")
-    expect(PDV_KEYMAP.find((r) => r.key === "F8")?.desc).toContain("bipe")
+    expect(PDV_KEYMAP.find((r) => r.key === "F8")?.desc).toContain("Troca")
+    for (const surface of ["classic", "assistencia", "supermercado"]) expect(row(surface, "F8")?.domain).toBe("trocas")
     expect(PDV_KEYMAP.find((r) => r.key === "ESC")?.desc).toContain("fora de campos e modais")
   })
 })

@@ -39,6 +39,7 @@ jobs:
       - run: git diff --check
       - run: node scripts/track.mjs verify --all
   browser:
+    # Playwright 1.52.0 não instala o Chromium no ubuntu-26.04 (imagem atual do ubuntu-latest); fixado até atualizar o Playwright.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

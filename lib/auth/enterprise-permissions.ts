@@ -50,6 +50,12 @@ export type EnterprisePermissions = {
     fecharCaixa: boolean
     cancelarVenda: boolean
     devolucao: boolean
+    /**
+     * Alterar a configuração por loja "Permitir trocas e devoluções de produtos
+     * por peso" (`StoreSettings.printerConfig.pdvTrocasPeso`) — proprietário/admin
+     * e gerente; funcionários comuns (caixa/vendedor/técnico) nunca.
+     */
+    configTrocasPeso: boolean
   }
   /** Financeiro (telas + ações sensíveis) */
   financeiro: { view: boolean; edit: boolean; fecharPeriodo: boolean; conciliacao: boolean }
@@ -84,7 +90,7 @@ const FULL: EnterprisePermissions = {
   },
   admin: { masterConsole: true, unidades: true, configuracoes: true },
   contador: { manageExternalAccess: true },
-  pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: true, devolucao: true },
+  pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: true, devolucao: true, configTrocasPeso: true },
   financeiro: { view: true, edit: true, fecharPeriodo: true, conciliacao: true },
   operacoes: {
     criarOs: true,
@@ -154,7 +160,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         contador: { manageExternalAccess: false },
-        pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },
+        pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true, configTrocasPeso: false },
         financeiro: { view: false, edit: false, fecharPeriodo: false, conciliacao: false },
         operacoes: {
           criarOs: false,
@@ -185,7 +191,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         contador: { manageExternalAccess: false },
-        pdv: { abrirCaixa: false, fecharCaixa: false, cancelarVenda: false, devolucao: false },
+        pdv: { abrirCaixa: false, fecharCaixa: false, cancelarVenda: false, devolucao: false, configTrocasPeso: false },
         financeiro: { view: false, edit: false, fecharPeriodo: false, conciliacao: false },
         operacoes: {
           criarOs: true,
@@ -217,7 +223,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         contador: { manageExternalAccess: false },
-        pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },
+        pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true, configTrocasPeso: false },
         financeiro: { view: false, edit: false, fecharPeriodo: false, conciliacao: false },
         operacoes: {
           criarOs: false,
