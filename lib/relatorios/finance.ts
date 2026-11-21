@@ -4,26 +4,29 @@ import { bucket, emptyArray, like, numeric, paginate, utcText, type ReportDb } f
 import { money, type Report, type ReportQuery } from "./contracts"
 import { dreClass,originHref } from "./origins"
 
-function movements(storeId: string, q: ReportQuery) {
-  return Prisma.sql`WITH m AS (
+/** CTE `m` sem WITH, para compor com outros CTEs (Relatório Geral). */
+export function movementCtes(storeId: string, q: ReportQuery, opts: { fromStart?: boolean } = {}) {
+  return Prisma.sql`m AS (
     SELECT m.id, m.tipo, m.origem, m.valor::numeric AS valor, m."createdAt", m."carteiraId", m."referenciaId",
       coalesce(c.nome,'Sem carteira') AS carteira, coalesce(nullif(p.payload->>'categoria',''),'Sem categoria') AS categoria,
       lower(m.origem) LIKE 'transfer%' AS transferencia
     FROM movimentacoes_financeiras m
     LEFT JOIN carteiras_financeiras c ON c.id=m."carteiraId" AND c."storeId"=${storeId}
     LEFT JOIN contas_pagar_titulos p ON p.id=m."referenciaId" AND p."storeId"=${storeId}
-    WHERE m."storeId"=${storeId} AND m."createdAt"<${q.end}
+    WHERE m."storeId"=${storeId} AND m."createdAt"<${q.end}${opts.fromStart ? Prisma.sql` AND m."createdAt">=${q.start}` : Prisma.empty}
       AND (${q.wallet}='' OR m."carteiraId"=${q.wallet})
       AND (${q.category}='' OR coalesce(nullif(p.payload->>'categoria',''),'Sem categoria')=${q.category})
   )`
 }
+export function movements(storeId: string, q: ReportQuery) { return Prisma.sql`WITH ${movementCtes(storeId, q)}` }
 
 /** Outstanding is principal minus the SAME payment/reversal event contract used by the services. */
-function titles(storeId: string) {
+/** CTEs titles/payments/outstanding sem WITH, para compor (Relatório Geral). */
+export function titleCtes(storeId: string) {
   const eventValue = numeric(Prisma.sql`h->>'valor'`)
-  return Prisma.sql`WITH titles AS (
-      SELECT id, valor::numeric, vencimento, regexp_replace(lower(trim(status)),'[[:space:]]+','_','g') AS status, payload, 'receber'::text AS lado FROM contas_receber_titulos WHERE "storeId"=${storeId}
-      UNION ALL SELECT id, valor::numeric, vencimento, regexp_replace(lower(trim(status)),'[[:space:]]+','_','g'), payload, 'pagar'::text FROM contas_pagar_titulos WHERE "storeId"=${storeId}
+  return Prisma.sql`titles AS (
+      SELECT id, valor::numeric, vencimento, regexp_replace(lower(trim(status)),'[[:space:]]+','_','g') AS status, payload, 'receber'::text AS lado, "localKey", "createdAt" FROM contas_receber_titulos WHERE "storeId"=${storeId}
+      UNION ALL SELECT id, valor::numeric, vencimento, regexp_replace(lower(trim(status)),'[[:space:]]+','_','g'), payload, 'pagar'::text, "localKey", "createdAt" FROM contas_pagar_titulos WHERE "storeId"=${storeId}
     ), payments AS (
       SELECT t.*, coalesce(h.pago,0) AS pago, coalesce(h.eventos,0) AS eventos, coalesce(h.invalidos,0) AS invalidos
       FROM titles t LEFT JOIN LATERAL (
@@ -43,6 +46,7 @@ function titles(storeId: string) {
       FROM payments
     )`
 }
+export function titles(storeId: string) { return Prisma.sql`WITH ${titleCtes(storeId)}` }
 
 export async function cashFlowReport(db: ReportDb, storeId: string, q: ReportQuery): Promise<Report> {
   const cte = movements(storeId, q)

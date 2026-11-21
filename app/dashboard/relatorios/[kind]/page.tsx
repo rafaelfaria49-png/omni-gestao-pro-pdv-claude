@@ -7,5 +7,5 @@ export default async function ReportPage({params,searchParams}:{params:Promise<{
   if(!isReportKind(kind))notFound()
   const search=await searchParams
   const text=(key:string)=>typeof search[key]==="string"?search[key] as string:undefined
-  return <EnterpriseReport kind={kind} initial={{from:text("from"),to:text("to"),entity:text("entity"),technician:text("technician"),source:text("source"),wallet:text("wallet"),category:text("category")}}/>
+  return <EnterpriseReport kind={kind} initial={{from:text("from"),to:text("to"),entity:text("entity"),technician:text("technician"),source:text("source"),wallet:text("wallet"),category:text("category"),origin:text("origin"),record:text("record"),status:text("status")}}/>
 }

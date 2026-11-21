@@ -15,7 +15,7 @@ import { canReadReport,REPORT_TITLES,saoPauloDay,type ReportKind,type ReportResp
 import { formatCell } from "@/lib/relatorios/format"
 import { purgeReportCaches } from "@/lib/relatorios/client-privacy"
 
-type Initial={from?:string;to?:string;entity?:string;technician?:string;source?:string;wallet?:string;category?:string}
+type Initial={from?:string;to?:string;entity?:string;technician?:string;source?:string;wallet?:string;category?:string;origin?:string;record?:string;status?:string}
 const fieldClass="h-10 min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring"
 export function EnterpriseReport({kind,initial}:{kind:ReportKind;initial:Initial}) {
   const {data:session,status}=useSession(),{lojaAtivaId}=useLojaAtiva(),permissions=useEnterprisePermissions()
@@ -35,7 +35,7 @@ function ReportBody({kind,storeId,initial}:{kind:ReportKind;storeId:string;initi
     const parsedTo=/^\d{4}-\d{2}-\d{2}$/.test(to)?Date.parse(`${to}T12:00:00-03:00`):NaN
     // Preserve invalid URL filters for API validation, but never format an invalid Date.
     const from=initial.from??saoPauloDay(new Date((Number.isFinite(parsedTo)?parsedTo:Date.now())-29*86400000))
-    return {from,to,q:"",category:initial.category??"",brand:"",status:"",wallet:initial.wallet??"",sort:kind==="produtos"?"quantity":"value",grain:"day",compare:"previous",pageSize:"20",entity:initial.entity??"",technician:initial.technician??"",source:initial.source??""}
+    return {from,to,q:"",category:initial.category??"",brand:"",status:initial.status??"",wallet:initial.wallet??"",origin:initial.origin??"",record:initial.record??"",sort:kind==="produtos"?"quantity":"value",grain:"day",compare:"previous",pageSize:"20",entity:initial.entity??"",technician:initial.technician??"",source:initial.source??""}
   })
   const [filters,setFilters]=useState(draft),[page,setPage]=useState(1),[version,setVersion]=useState(0)
   const [result,setResult]=useState<{key:string;report:ReportResponse}|null>(null),[error,setError]=useState<string|null>(null)
@@ -76,6 +76,7 @@ function ReportBody({kind,storeId,initial}:{kind:ReportKind;storeId:string;initi
   }
   const previous=new Map(report?.previousMetrics.map(m=>[m.key,m])??[])
   const hasOrigins=report?.rows.some(row=>typeof row.href==="string")??false
+  const general=kind==="geral"
   return <div className="mx-auto w-full min-w-0 max-w-[1500px] space-y-6 px-4 py-6 lg:px-6">
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 space-y-2">
@@ -91,7 +92,12 @@ function ReportBody({kind,storeId,initial}:{kind:ReportKind;storeId:string;initi
     <form onSubmit={apply} className="grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Filtros do relatório">
       <label className="grid min-w-0 gap-1 text-xs font-medium">Data inicial<Input aria-label="Data inicial" type="date" value={draft.from} onChange={e=>change("from",e.target.value)} required/></label>
       <label className="grid min-w-0 gap-1 text-xs font-medium">Data final<Input aria-label="Data final" type="date" value={draft.to} onChange={e=>change("to",e.target.value)} min={draft.from} required/></label>
-      {!draft.source&&<>
+      {!draft.source&&general&&<>
+      {([["record","Registro",report?.options?.records],["origin","Origem",report?.options?.origins],["category","Classificação",report?.options?.categories],["status","Situação",report?.options?.statuses]] as const).map(([name,text,options])=>
+        <label key={name} className="grid min-w-0 gap-1 text-xs font-medium">{text}<select className={fieldClass} value={draft[name]} onChange={e=>change(name,e.target.value)}><option value="">Todos</option>{options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></label>)}
+      <label className="grid min-w-0 gap-1 text-xs font-medium">Busca por referência<Input value={draft.q} onChange={e=>change("q",e.target.value)} maxLength={120} placeholder="Pedido, ID do título ou movimento"/></label>
+      </>}
+      {!draft.source&&!general&&<>
       <label className="grid min-w-0 gap-1 text-xs font-medium">Comparar com<select className={fieldClass} value={draft.compare} onChange={e=>change("compare",e.target.value)}><option value="previous">Período anterior de igual duração</option><option value="year">Mesmo período do ano anterior</option></select></label>
       <label className="grid min-w-0 gap-1 text-xs font-medium">Agrupar tendência<select className={fieldClass} value={draft.grain} onChange={e=>change("grain",e.target.value)}><option value="day">Dia</option><option value="week">Semana</option><option value="month">Mês</option></select></label>
       <label className="grid min-w-0 gap-1 text-xs font-medium">{kind==="produtos"?"Nome, SKU ou código de barras":"Busca no detalhamento"}<Input value={draft.q} onChange={e=>change("q",e.target.value)} maxLength={120} placeholder="Buscar registros"/></label>
@@ -106,24 +112,24 @@ function ReportBody({kind,storeId,initial}:{kind:ReportKind;storeId:string;initi
       <div className="flex min-w-0 items-end"><Button type="submit" className="w-full"><Search className="mr-2 h-4 w-4"/>Aplicar filtros</Button></div>
       {(draft.entity||draft.technician||draft.source)&&<div className="min-w-0 text-xs sm:col-span-2">Detalhamento por vínculo ativo. <button type="button" className="underline" onClick={()=>{const next={...draft,entity:"",technician:"",source:""};setDraft(next);setFilters(next);setPage(1)}}>Remover vínculo</button></div>}
     </form>
-    <p className="text-xs text-muted-foreground">Consulta sob demanda · máximo 366 dias · exportação completa do recorte com até 500 registros, incluindo fontes e limitações.</p>
+    <p className="text-xs text-muted-foreground">Consulta sob demanda · máximo 366 dias · exportação completa do recorte com até {general?"5.000":"500"} registros, incluindo {general?"todos os blocos consolidados, ":""}fontes e limitações.{general&&" Filtros de registro, origem, classificação e situação refinam só o detalhamento."}</p>
     {loading&&<div role="status" className="rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">Consultando dados persistidos da loja…</div>}
     {error&&<div role="alert" className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm"><span className="min-w-0">{error}</span><Button variant="outline" onClick={()=>setVersion(v=>v+1)}>Tentar novamente</Button></div>}
     {report&&<>
-      <section className="rounded-xl border border-border bg-card" aria-label="Indicadores do relatório">
-        <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">{report.basis}<span className="mt-1 block">{filters.source?"Registro individual: sem comparativo temporal.":`Comparativo: ${report.previousPeriod.from} a ${report.previousPeriod.to}. Estado atual de cadastros/OS não é reconstruído historicamente.`}</span></div>
+      {report.sections?.length?<GeneralSections report={report}/>:<section className="rounded-xl border border-border bg-card" aria-label="Indicadores do relatório">
+        <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">{report.basis}<span className="mt-1 block">{filters.source||general?"Registro individual ou consolidado: sem comparativo temporal.":`Comparativo: ${report.previousPeriod.from} a ${report.previousPeriod.to}. Estado atual de cadastros/OS não é reconstruído historicamente.`}</span></div>
         <dl className="grid min-w-0 divide-border sm:grid-cols-2 xl:grid-cols-4">{report.metrics.map(m=>{
           const prev=previous.get(m.key)
           return <div key={m.key} className="min-w-0 border-b border-border p-4"><dt className="text-xs text-muted-foreground">{m.label}</dt><dd className="mt-2 break-words text-xl font-semibold tabular-nums text-foreground">{formatCell(m.value,m.format)}</dd>
             {m.value===null?<p className="mt-1 text-xs text-muted-foreground">{m.reason}</p>:prev?.value!==null&&prev?.value!==undefined?<p className="mt-1 text-xs tabular-nums text-muted-foreground">Anterior: {formatCell(prev.value,m.format)} · Δ {formatCell(m.value-prev.value,m.format)}</p>:null}</div>
         })}</dl>
-      </section>
+      </section>}
       {report.trend.length>0&&<section className="min-w-0 rounded-xl border border-border bg-card p-4" aria-label="Tendência no período">
         <h2 className="text-sm font-semibold">{kind==="produtos"?"Receita bruta da coorte":kind==="clientes"?"Novos cadastros":kind==="fluxo-caixa"?"Entradas e saídas realizadas":kind==="whatsapp"?"Registros inbound e outbound com ID wamid":"Registros criados"}</h2>
         <div className="mt-4 h-64 min-w-0" role="img" aria-label="Gráfico de tendência; valores disponíveis na tabela e nas exportações"><ResponsiveContainer width="100%" height="100%"><LineChart data={report.trend} margin={{left:0,right:12}}><CartesianGrid stroke="var(--border)" strokeDasharray="3 3"/><XAxis dataKey="label" tick={{fontSize:10,fill:"var(--muted-foreground)"}}/><YAxis tick={{fontSize:10,fill:"var(--muted-foreground)"}} width={60}/><Tooltip contentStyle={{background:"var(--card)",borderColor:"var(--border)",color:"var(--foreground)"}}/><Line type="monotone" name={kind==="fluxo-caixa"?"Entradas":kind==="whatsapp"?"Registros inbound":"Valor"} dataKey="value" stroke="var(--primary)" dot={false} isAnimationActive={false}/>{report.trend.some(t=>t.secondary!==undefined)&&<Line type="monotone" name={kind==="fluxo-caixa"?"Saídas":"Registros outbound"} dataKey="secondary" stroke="var(--warning)" strokeDasharray="5 3" dot={false} isAnimationActive={false}/>}</LineChart></ResponsiveContainer></div>
       </section>}
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card" aria-label="Detalhamento dos registros">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-border p-4"><h2 className="text-sm font-semibold">Detalhamento</h2><p className="text-xs text-muted-foreground">{report.total.toLocaleString("pt-BR")} registros · {report.durationMs} ms</p></div>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-border p-4"><h2 className="text-sm font-semibold">{general&&!filters.source?"Detalhamento dos registros originais":"Detalhamento"}</h2><p className="text-xs text-muted-foreground">{report.total.toLocaleString("pt-BR")} registros · {report.durationMs} ms</p></div>
         {report.rows.length===0?<p className="p-8 text-center text-sm text-muted-foreground">Nenhum registro corresponde ao período e aos filtros. Amplie o recorte para uma nova consulta.</p>:<>
           <div className="hidden min-w-0 overflow-x-auto md:block">
             <table className="w-full text-left text-xs">
@@ -145,4 +151,16 @@ function ReportBody({kind,storeId,initial}:{kind:ReportKind;storeId:string;initi
       <details className="rounded-xl border border-warning/30 bg-warning/5 p-4" open><summary className="cursor-pointer text-sm font-semibold"><TriangleAlert className="mr-2 inline h-4 w-4"/>Fontes, cobertura e limitações</summary><p className="mt-3 text-xs leading-relaxed text-muted-foreground">{report.source}</p><ul className="mt-3 list-disc space-y-2 pl-5 text-xs leading-relaxed text-muted-foreground">{report.limitations.map((l,i)=><li key={i}>{l}</li>)}</ul><p className="mt-3 text-[11px] text-muted-foreground">Gerado em {formatCell(report.generatedAt,"date")}. Nenhum dado deste relatório é persistido no navegador.</p></details>
     </>}
   </div>
+}
+
+/** Blocos consolidados do Relatório Geral. Cada bloco é o total da loja no período, sem paginação. */
+function GeneralSections({report}:{report:ReportResponse}) {
+  return <div className="grid min-w-0 gap-4">{report.sections!.map(section=><section key={section.key} aria-labelledby={`sec-${section.key}`} className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+    <div className="border-b border-border px-4 py-3"><h2 id={`sec-${section.key}`} className="text-sm font-semibold text-foreground">{section.title}</h2>{section.note&&<p className="mt-1 text-xs leading-relaxed text-muted-foreground">{section.note}</p>}</div>
+    <dl className="grid min-w-0 sm:grid-cols-2 xl:grid-cols-4">{section.metrics.map(m=><div key={m.key} className="min-w-0 border-b border-border p-4"><dt className="text-xs text-muted-foreground">{m.label}</dt><dd className="mt-2 break-words text-lg font-semibold tabular-nums text-foreground">{formatCell(m.value,m.format)}</dd>{m.value===null&&<p className="mt-1 text-xs text-muted-foreground">{m.reason}</p>}</div>)}</dl>
+    {section.columns&&section.rows&&section.rows.length>0&&<div className="min-w-0 overflow-x-auto"><table className="w-full text-left text-xs"><caption className="sr-only">{section.title}</caption>
+      <thead className="border-b border-border bg-muted/30"><tr>{section.columns.map(c=><th scope="col" key={c.key} className="whitespace-nowrap px-4 py-2 font-medium text-muted-foreground">{c.label}</th>)}</tr></thead>
+      <tbody>{section.rows.map((row,i)=><tr key={String(row.id??i)} className={`border-b border-border/60 last:border-0 ${row.situacao==="Verificar"?"bg-warning/10":""}`}>{section.columns!.map(c=><td key={c.key} className="px-4 py-2 tabular-nums">{formatCell(row[c.key],c.format)}</td>)}</tr>)}</tbody>
+    </table></div>}
+  </section>)}</div>
 }

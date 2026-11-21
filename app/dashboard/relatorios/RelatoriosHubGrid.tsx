@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight,ArrowUpDown,ClipboardList,MessageCircle,Package,ReceiptText,TrendingUp,Users,Wallet,Wrench,type LucideIcon } from "lucide-react"
+import { ArrowRight,ArrowUpDown,ClipboardList,LayoutDashboard,MessageCircle,Package,ReceiptText,TrendingUp,Users,Wallet,Wrench,type LucideIcon } from "lucide-react"
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import { canAccessPage } from "@/lib/auth/page-access"
 import { EnterpriseAccessDenied } from "@/components/enterprise/EnterpriseAccessDenied"
@@ -11,6 +11,7 @@ import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 
 type Card={title:string;description:string;href:string;icon:LucideIcon;kind?:ReportKind;visible?:(p:EnterprisePermissions)=>boolean}
 const reports:Card[]=[
+  {title:"Relatório Geral da Loja",description:"Vendas por tipo, à vista e a prazo, recebimentos (inclusive parcelas antigas), despesas, contas a receber/pagar, fluxo e conferência de divergências, com rastreio até a origem.",href:"/dashboard/relatorios/geral",icon:LayoutDashboard,kind:"geral"},
   {title:"Histórico de Caixa",description:"Aberturas, fechamentos e movimentos de caixa da unidade.",href:"/dashboard/caixa/historico",icon:Wallet,visible:p=>p.hubs.caixaHistorico},
   {title:"Histórico de Vendas",description:"Vendas registradas, clientes e cupons da loja autorizada.",href:"/dashboard/vendas-arquivo-geral",icon:ReceiptText,visible:p=>p.hubs.vendas},
   {title:"Financeiro",description:"Contas a receber, contas a pagar e carteiras financeiras.",href:FINANCEIRO_HUB_PATH,icon:Wallet,visible:p=>p.hubs.financeiro&&p.financeiro.view},

@@ -138,7 +138,7 @@ test("proprietário preserva visão administrativa, módulos e telas históricas
   await page.goto("/dashboard/configuracoes?sec=vendas")
   for (const card of ["Orçamentos", "Impostos", "Mesas e consumo"]) await expect(page.getByText(card, { exact: true })).toBeVisible()
   await page.goto("/dashboard/configuracoes?sec=pdv")
-  await expect(page.getByText("Impressão operacional")).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Impressão operacional", exact: true }).first()).toBeVisible()
   await expect(page.getByLabel("Impressora de comprovante (host/IP)")).toHaveValue("10.0.0.5")
   await expect(page.getByRole("button", { name: /Testar impressão/ })).toBeVisible()
   await page.screenshot({ path: `${out}/cx-owner-config-pdv-1440.png`, fullPage: true, animations: "disabled" })

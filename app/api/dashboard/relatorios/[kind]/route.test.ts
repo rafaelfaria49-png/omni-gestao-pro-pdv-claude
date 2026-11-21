@@ -24,4 +24,15 @@ describe("report route with real enterprise guards",()=>{
   it("authorized calls pass only scoped store, safe limits and private headers",async()=>{h.auth.mockResolvedValue(session());const r=await GET(request(),context());expect(r.status).toBe(200);expect(r.headers.get("vary")).toContain("x-assistec-loja-id");expect(h.build).toHaveBeenCalledWith(expect.anything(),"produtos","a",expect.objectContaining({pageSize:20}),expect.anything())})
   it("database failures produce generic error without secrets",async()=>{h.auth.mockResolvedValue(session());h.build.mockRejectedValueOnce(new Error("password=secret DATABASE_URL private"));const r=await GET(request(),context());expect(r.status).toBe(503);expect(await r.text()).not.toContain("secret")})
   it("oversized exports fail instead of silently truncating",async()=>{h.auth.mockResolvedValue(session());h.build.mockResolvedValueOnce({total:501});expect((await GET(request("a","format=csv"),context())).status).toBe(422)})
+  it("general report requires reports, sales and finance modules and a finance viewer",async()=>{
+    for(const modules of[["reports","sales"],["reports","finance"]]){h.auth.mockResolvedValue(session(modules));expect((await GET(request(),context("geral"))).status).toBe(403)}
+    h.auth.mockResolvedValue(session(undefined,"TECNICO"));expect((await GET(request(),context("geral"))).status).toBe(403)
+    expect(h.build).not.toHaveBeenCalled()
+  })
+  it("general export is complete up to its cap and refuses larger cuts",async()=>{
+    h.auth.mockResolvedValue(session())
+    h.build.mockResolvedValueOnce({total:5001});expect((await GET(request("a","format=pdf"),context("geral"))).status).toBe(422)
+    expect(h.build).toHaveBeenLastCalledWith(expect.anything(),"geral","a",expect.objectContaining({pageSize:5000,page:1}),expect.objectContaining({compare:false}))
+    h.build.mockResolvedValueOnce({total:2001,rows:Array.from({length:2000},()=>({})),columns:[],metrics:[],limitations:[],period:{from:"2026-11-01",to:"2026-11-10"}});expect((await GET(request("a","format=csv&source=venda:X"),context("geral"))).status).toBe(422)
+  })
 })

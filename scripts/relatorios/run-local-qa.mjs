@@ -24,7 +24,7 @@ try{
   run(process.execPath,["node_modules/prisma/build/index.js","db","push","--skip-generate"])
   await mkdir(evidence,{recursive:true})
   await writeFile(path.join(evidence,process.argv.includes("--keep")?"local-qa-session.json":"last-qa-run.json"),JSON.stringify({dir,port,url,qaPassword,authSecret,sessionRevocation:"on",target:"fresh loopback PostgreSQL",productionWrites:0,schemaSourceChanged:false},null,2))
-  run(process.execPath,["node_modules/vitest/vitest.mjs","run","lib/relatorios/enterprise.pg.test.ts","lib/relatorios/session-revocation.pg.test.ts","--maxWorkers=1","--reporter=default","--reporter=json",`--outputFile=${evidence}/postgres-results.json`])
+  run(process.execPath,["node_modules/vitest/vitest.mjs","run","lib/relatorios/enterprise.pg.test.ts","lib/relatorios/session-revocation.pg.test.ts","lib/relatorios/geral.pg.test.ts","--maxWorkers=1","--reporter=default","--reporter=json",`--outputFile=${evidence}/postgres-results.json`])
   if(process.argv.includes("--keep")){console.log("QA cluster preserved for browser verification; session recorded in evidence.");started=false}
 }finally{
   if(started)run(bin("pg_ctl"),["-D",dir,"-m","fast","-w","stop"])
