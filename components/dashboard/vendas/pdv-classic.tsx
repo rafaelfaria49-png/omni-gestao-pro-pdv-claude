@@ -79,6 +79,7 @@ import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { useOperationsStore } from "@/lib/operations-store"
 import { PDV_KEYMAP, consumePdvShortcut, hasPdvShortcutOverlay, isPdvRepeatedOrHandled, isPdvTyping } from "@/lib/pdv-keymap"
 import { useStoreSettings } from "@/lib/store-settings-provider"
@@ -1467,9 +1468,11 @@ export function PdvClassic({
     })
     if (result.ok) {
       toast({
-        title: result.via === "proxy" ? "Cupom enviado" : "Cupom preparado",
+        title: result.via === "proxy" || result.via === "desktop" ? "Cupom enviado" : "Cupom preparado",
         description:
-          result.via === "proxy"
+          result.via === "desktop"
+            ? `Enviado à fila de ${result.deviceName ?? "impressora do Windows"} · ${impressaoConfig.viasCupom} via(s).`
+            : result.via === "proxy"
             ? `Impressora ${impressaoConfig.impressoraHost.trim() || "padrão do servidor"} · ${impressaoConfig.viasCupom} via(s).`
             : "Impressão HTML ou arquivo .bin gerado (fallback web).",
       })
@@ -2273,6 +2276,9 @@ export function PdvClassic({
         lojaNome={(empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "").trim() || undefined}
         hotkeyLabel="F5"
       />
+
+      {/* Avisos dos diálogos de aparelhos (sonner): a tela usa o toast shadcn, sem Toaster sonner próprio. */}
+      {aparelhosHabilitado && <SonnerToaster position="top-center" richColors closeButton />}
 
       {aparelhosHabilitado && lojaKey && (
         <VendaAparelhoDialog

@@ -35,6 +35,11 @@ try {
     if ([...before.matchAll(regex)].length !== 1) throw new Error("PILOT_SCHEMA_BASELINE_MISMATCH")
     before = before.replace(regex, "")
   }
+  // A tabela da página comercial (/gestao-lojas) também sai do baseline: ela é criada
+  // pela própria migration aditiva logo abaixo, provando o SQL que vai para produção.
+  const leadModel = /^model SolicitacaoTesteComercial \{[\s\S]*?^\}\r?$/m
+  if (!leadModel.test(before)) throw new Error("PILOT_SCHEMA_BASELINE_MISMATCH lead model")
+  before = before.replace(leadModel, "")
   const oldSchema = path.join(out, "schema-before.prisma")
   await writeFile(oldSchema, before)
   run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"])
@@ -46,6 +51,10 @@ try {
   const oldStore = await db.store.findUniqueOrThrow({ where: { id: "pilot-legacy" } })
   const legacyChecks = { scopeNull: oldUser.accessScope === null, versionZero: oldUser.sessionVersion === 0, passwordPreserved: oldUser.password === legacyHash, modulesNull: oldStore.moduleAccess === null }
   if (Object.values(legacyChecks).some((ok) => !ok)) throw new Error("PILOT_LEGACY_MIGRATION_CHANGED_AUTHORITY " + JSON.stringify(legacyChecks))
+  const [{ leadsBefore }] = await db.$queryRaw`SELECT to_regclass('public.solicitacoes_teste_comercial')::text AS "leadsBefore"`
+  if (leadsBefore !== null) throw new Error("PILOT_LEAD_TABLE_NOT_FROM_MIGRATION")
+  run(["node_modules/prisma/build/index.js", "db", "execute", "--schema", "prisma/schema.prisma", "--file", "prisma/migrations/20261118120000_solicitacoes_teste_comercial/migration.sql"])
+  if ((await db.solicitacaoTesteComercial.count()) !== 0) throw new Error("PILOT_LEAD_TABLE_NOT_EMPTY")
   await writeFile(path.join(out, "migration.json"), JSON.stringify({ applied: true, target: "fresh disposable CI PostgreSQL", legacyAuthorityPreserved: true, accountsReclassified: 0, passwordsChanged: 0, productionWrites: 0 }, null, 2))
   await db.store.createMany({ data: [
     { id: "pilot-a", name: "Padaria Piloto A" }, { id: "pilot-b", name: "Comércio Piloto B" },

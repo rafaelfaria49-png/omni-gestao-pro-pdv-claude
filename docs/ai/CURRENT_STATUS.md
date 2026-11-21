@@ -1,5 +1,9 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
+> **Adendo — 20 Nov 2026 · Relatório Geral da Loja (`OMNI-RELATORIO-GERAL-LOJA-COMERCIAL-FINANCEIRO-001`, branch `codex/relatorio-geral-loja-001`, PR DRAFT, sem merge):** novo kind `geral` na Central (`/dashboard/relatorios/geral`), somente leitura e por loja: vendas por tipo (produto/acessório/aparelho/serviço/OS/avulso/não classificado), à vista × a prazo comprovados, recebimentos efetivos (inclui parcelas antigas, sem virar venda), contas a receber/pagar na posição atual, despesas pagas × compras (sem CMV), fluxo pelo mesmo cálculo do Fluxo de Caixa e conferência de divergências (OS cobrada 2×, cancelamento sem estorno, órfãos, não classificados). Detalhamento unificado com rastreio até venda/título/movimento; CSV/PDF completos até 5.000 registros (acima: 422). Sem schema/migration. Lacunas e regras em [evidências](../ai-execution/_evidence/OMNI-RELATORIO-GERAL-LOJA-COMERCIAL-FINANCEIRO-001/REPORT.md). Homologação com dados reais da RAFACELL pendente.
+
+> **Adendo — 15 Nov 2026 · Central de Relatórios (`OMNI-RELATORIOS-HUB-ENTERPRISE-REAL-001`, branch isolada, sem merge):** sete consultas gerenciais somente leitura por loja, com contratos explícitos de origem/limitações, CSV/PDF autorizados, coortes e paginação. Produtos reaproveitam seletivamente a PR #318; financeiro separa ledger realizado de títulos previstos; DRE é gerencial parcial de caixa, sem CMV/lucro inventados. Clientes usam FK; OS preservam status V3 e precisão de datas; WhatsApp distingue registros de aceite externo sem prova. HTML/RSC e APIs protegidos contra cache privado. Validação em QA sintético e revisão independente registradas em [evidências](../ai-execution/_evidence/OMNI-RELATORIOS-HUB-ENTERPRISE-REAL-001/). Promoção comercial depende dos gates de teste/CI e dos bloqueios de fonte declarados; não confundir tela/API com relatório integral pronto. Nenhuma escrita ou migration em Production.
+
 > **Adendo — 13 Nov 2026 · Compat profissional (`COMPAT-PROFISSIONAL-001`, branch `claude/compat-profissional-001`, PR DRAFT, sem merge):** `/dashboard/catalogo-aparelhos` vira o HUB **Compat** (menu "Compat"): áreas Películas / Capinhas / Catálogo e ajustes. Novo: hierarquia Fabricante › Marca › Linha › Modelo (colunas `manufacturer`/`line` nos modelos da loja; CSV global projetado sem alteração), vínculos de **capinha** independentes de película (mesma tabela `catalogo_aparelhos_loja_compat`, categoria `capinha`), status `confirmado_loja` só com confirmação física registrada (`confirmedBy/At`, `origem`), painéis/fileiras/localizações, cores por loja e preferências (5 tabelas `compat_*` por loja), captura de modelo/cor **obrigatória/opcional/desativada** por produto (`metadata.acessorios.modoModelo/modoCor`, booleanos legados coerentes; produtos antigos sem mudança), cores próprias no PDV (viajam como `outra` + rótulo), "onde está" no PDV para capinha, relatório de capinhas (vendas por tipo/modelo/cor informados, sem inventar saldo por modelo). Migration aditiva `20261113120000_compat_profissional` **não aplicada em Production** (provada só em PG local descartável; rollback em `docs/catalogo/rollout/`). Merge = rollout. Evidências: `docs/ai-execution/_evidence/COMPAT-PROFISSIONAL-001/`.
 
 > **Adendo — 07 Nov 2026 · Cadastros/PDV · Catálogo de aparelhos por loja (`CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001`, PR #339 DRAFT, sem merge):** modelos manuais por loja (ex.: lançamento G47 ausente do CSV global) e decisões de película por loja (adicionar relação manual / suprimir relação global) em 2 tabelas novas (`catalogo_aparelhos_loja_modelos` / `catalogo_aparelhos_loja_compat`, migration aditiva `20261107120000_catalogo_aparelhos_loja`, **não aplicada em Production**; aplicada e provada só no Neon Candidate sintético `pr-acc-compat` via Preview isolado — 25/25 em runtime, evidências em `docs/ai-execution/_evidence/CADASTROS-ACESSORIOS-COMPAT-MANUAL-FINALIZACAO-001/`; merge = rollout). Busca do PDV/cadastro soma global + loja ativa a cada requisição (sem cache/redeploy); seed CSV intacto; relação manual não transitiva e nunca "confirmada". Cadastro de modelo novo direto no PDV, na ficha do produto e em `/dashboard/catalogo-aparelhos`. Sem a migration, leituras degradam para só-global e escritas dão 503. Rollout: `docs/catalogo/rollout/`; guia do operador: `docs/catalogo/COMO_CADASTRAR_MODELO_E_COMPATIBILIDADE.md`.
@@ -57,6 +61,20 @@
 > leitura obrigatória + política do Neon centralizada lá (não duplicada aqui).
 
 ---
+
+## Página comercial "Vendas e Estoque" `/gestao-lojas` (`OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001`) · 18/11/2026
+
+- **Real, em PR, sem merge**: página pública `/gestao-lojas` (sem IA), pedido de teste gravado em
+  `solicitacoes_teste_comercial` com protocolo, consentimento, histórico, idempotência por email aberto
+  (UNIQUE `emailAberto`) e limite por origem/global no banco; caixa de entrada em `/dashboard/plataforma`
+  ligada ao provisionamento assistido existente. Pedido **não** cria conta, loja, trial nem cobrança.
+- **Migration aditiva `20261118120000_solicitacoes_teste_comercial` NÃO aplicada em Production**
+  (merge na `main` pode disparar `migrate deploy` no `omni-gestao-pro`). Exige autorização do proprietário.
+- **Fail-closed por env**: preços propostos (R$ 39,90/69,90/99,90 — **não aprovados**) só com
+  `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1`; download Windows só com `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` https.
+- `/` (acesso piloto) e a landing antiga de IA (`/dashboard/landing-preview`) **inalteradas**. Stripe intocado.
+- Matriz recurso/plano/status e auditoria Stripe: `docs/comercial/GESTAO_LOJAS_MATRIZ_RECURSOS.md`;
+  design system: `docs/comercial/GESTAO_LOJAS_DESIGN_SYSTEM.md`.
 
 ## Aparelhos por IMEI — cadastro, compra, venda e garantia (`OMNI-APARELHOS-CADASTRO-COMPRAS-VENDAS-GARANTIAS-ENDTOEND-001`) · 12/11/2026
 
