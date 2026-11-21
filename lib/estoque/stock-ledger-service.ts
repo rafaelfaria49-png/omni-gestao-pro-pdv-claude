@@ -298,8 +298,8 @@ export async function applyStockMutationTx(
   // genéricos não podem criar ou consumir saldo sem identificar a unidade. Os dois
   // escritores autorizados são internos e fazem o vínculo na mesma transação.
   if (serializedDevice && !(
-    (context.source === "aparelhos" && cmd.kind !== "ajuste") ||
-    (context.source === "pdv" && cmd.kind === "saida")
+    (context.source === "aparelhos" && input.kind !== "ajuste") ||
+    (context.source === "pdv" && input.kind === "saida")
   )) {
     return stockFail("APARELHO_ESTOQUE_INDIVIDUAL", "Estoque de aparelho por IMEI deve ser movimentado pela unidade física no módulo Aparelhos.")
   }
