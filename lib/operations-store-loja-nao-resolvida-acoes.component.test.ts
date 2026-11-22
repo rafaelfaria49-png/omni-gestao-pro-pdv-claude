@@ -64,7 +64,7 @@ async function mount(storageKey: string | undefined) {
 }
 
 const venda = () => ref.ops!.finalizeSaleTransaction({
-  lines: [{ inventoryId: ITEM.id, name: ITEM.name, quantity: 1, unitPrice: 5, lineTotal: 5 }],
+  lines: [{ inventoryId: ITEM.id, name: ITEM.name, quantity: 1, unitPrice: 5 }],
   total: 5,
   paymentBreakdown: { dinheiro: 5 },
   openCaixaIfClosed: true,
