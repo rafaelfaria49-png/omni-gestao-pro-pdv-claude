@@ -23,15 +23,33 @@ Complementa: `GESTAO_LOJAS_MATRIZ_RECURSOS.md`, `GESTAO_LOJAS_OPERACAO_PILOTO.md
 | — | #345 `fix(auth)` logout verificado | Corrida no logout (SEC-342) | fora do escopo; CI verde antigo | recomendada para o mesmo ciclo |
 
 **Validação na integração (local, Windows):** `npm run typecheck` 0 erros · ESLint limpo nos arquivos tocados ·
-Vitest 283/283 (`lib/comercial`, `lib/auth`, onboarding, loja resolvida, pilot-access, `/suporte`) com Node 22
+Vitest 289/289 nas suítes da missão e 1155/1164 nas suítes de PDV/Caixa/sync (os 8 restantes:
+1 arquivo falha só por CRLF do checkout Windows, sem relação com a mudança; 2 passam quando rodados
+isoladamente), com Node 22
 (Node 26 quebra `localStorage.clear` em jsdom — limitação da máquina, não do código).
 **Build e E2E autenticado** rodam na CI (`platform-pilot.yml`, PostgreSQL descartável) — ver o PR.
 
-**Revisão independente (só leitura, 2026-11-22):** sem P0/P1. P2 em aberto na #343: ações disparadas
-pelo usuário (finalizar venda, devolução, sondagem do writer) **não** passam pela porta `lojaResolvida`;
-se a loja nunca resolver (1º acesso offline sem loja guardada), a venda iria para `loja-1` (conta STORE
-leva 403) e a pendência fica órfã na chave legada. Correção sugerida: recusar finalizar/devolver
-enquanto a loja não carregou. **Não corrigido aqui** (núcleo do PDV exige autorização) — follow-up da #343.
+**Revisão independente (só leitura, 2026-11-22):** sem P0/P1. Um P2 sobre a #343, **corrigido no #389**
+com autorização do proprietário (`CORRECAO=P2-LOJA-NAO-RESOLVIDA`):
+
+- *Problema:* ações disparadas pelo operador (finalizar venda, troca/devolução, sangria/suprimento,
+  reenvio manual) não passavam pela porta `lojaResolvida`. Se a loja nunca resolvesse (1º acesso offline
+  sem loja guardada), a venda iria para `loja-1` e a pendência ficaria órfã na chave legada.
+- *Correção (`lib/operations-store.tsx`):* com a chave legada, `finalizeSaleTransaction`,
+  `registrarDevolucao`, `registrarOperacaoCaixa` e o reenvio manual devolvem
+  `{ ok:false, reason: LOJA_NAO_RESOLVIDA_MOTIVO }` **antes de qualquer mutação**. O PDV e a tela de
+  trocas já mostram `reason` no aviso. Por defesa, `persistPendingSale`, os três envios de fila, a
+  reconciliação de quarentena e a sondagem do writer também não saem. Nada local é apagado.
+  Com loja resolvida (inclusive `loja-1` real e modo offline) o comportamento é o anterior.
+- *Testes:* `lib/operations-store-loja-nao-resolvida-acoes.component.test.ts`, 6 casos:
+  - 1º acesso sem loja (online e sem internet): venda, devolução, caixa e reenvio recusados, zero
+    chamadas de rede e fila local byte a byte igual;
+  - liberação ao resolver a loja;
+  - loja A × loja B;
+  - venda offline válida (pendente local);
+  - RAFACELL/`loja-1` sem regressão.
+
+O motor financeiro, o estoque e a idempotência não foram tocados: a porta só recusa antes de entrar neles.
 
 ## B) Fluxo completo do primeiro cliente
 
