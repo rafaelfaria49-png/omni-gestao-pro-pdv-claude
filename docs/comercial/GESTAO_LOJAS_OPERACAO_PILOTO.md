@@ -75,8 +75,9 @@ FROM solicitacoes_teste_comercial WHERE protocolo = 'GL-XXXX-XXXX';
 
 **Novo nesta entrega:** antes, provisionar e marcar o pedido eram cliques separados e o pedido
 não guardava qual loja tinha sido criada. Agora o provisionamento feito a partir de um pedido
-fecha o pedido e grava `storeId`/`userId` no histórico. Se a marcação falhar (ex.: pedido
-descartado por outra pessoa no meio), a conta continua criada e a tela avisa para marcar à mão.
+fecha o pedido e grava `storeId`/`userId` no histórico, na mesma transação da loja e do usuário.
+Se o pedido não puder ser fechado (ex.: descartado por outra pessoa no meio), **nada é criado**
+(409) e a tela pede para recarregar a lista.
 
 Contato comercial da página: só aparece com `GESTAO_LOJAS_CONTATO_WHATSAPP` (12–13 dígitos,
 com 55) e/ou `GESTAO_LOJAS_CONTATO_EMAIL` na Vercel. A página é estática: mudar a variável
