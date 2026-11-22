@@ -214,9 +214,8 @@ export default function GestaoLojasPage() {
             </div>
             <div className="gl-access__option">
               <h3>Baixar para Windows</h3>
-              {config.downloadWindowsUrl
-                ? <><p>Instalador oficial para Windows 10 e 11, com impressão direta na impressora da loja.</p><a className="gl-btn gl-btn--primary" href={config.downloadWindowsUrl} rel="noopener">Baixar para Windows</a></>
-                : <><p>O instalador para Windows está em homologação. Quando for liberado, o download oficial aparece aqui. Até lá, use pelo navegador.</p><span className="gl-btn" aria-disabled="true">Download ainda não liberado</span></>}
+              <p>Programa para Windows 10 e 11 (64 bits), com impressão direta na impressora da loja. A página oficial de download mostra a versão publicada e o que já está homologado.</p>
+              <a className="gl-btn gl-btn--primary" href="/baixar">Ver opções para Windows</a>
             </div>
           </div>
           <p className="gl-printer"><strong>Sobre a impressora:</strong> a impressora fica instalada no computador da loja. Conferimos com você se o seu modelo funciona antes de qualquer contratação.</p>

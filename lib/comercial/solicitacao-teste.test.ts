@@ -192,16 +192,14 @@ describe("utilitários", () => {
 
 describe("resolverGestaoLojasConfig (falha fechado)", () => {
   it("sem variáveis: sem preço, sem download, sem contato direto", () => {
-    expect(resolverGestaoLojasConfig({})).toEqual({ exibirPrecosPropostos: false, downloadWindowsUrl: null, contatoWhatsapp: null, contatoEmail: null })
+    expect(resolverGestaoLojasConfig({})).toEqual({ exibirPrecosPropostos: false, contatoWhatsapp: null, contatoEmail: null })
   })
   it("preço só com o valor exato 1", () => {
     for (const v of ["true", "yes", "0", " 1"]) expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS: v }).exibirPrecosPropostos).toBe(false)
     expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS: "1" }).exibirPrecosPropostos).toBe(true)
   })
-  it("download só com https válido", () => {
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "http://x/a.exe" }).downloadWindowsUrl).toBeNull()
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "javascript:alert(1)" }).downloadWindowsUrl).toBeNull()
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "https://dl.example.com/Setup.exe" }).downloadWindowsUrl).toBe("https://dl.example.com/Setup.exe")
+  it("download do Windows não tem canal próprio: URL direta configurada é ignorada", () => {
+    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "https://dl.example.com/Setup.exe" })).not.toHaveProperty("downloadWindowsUrl")
   })
   it("contatos malformados ficam ocultos", () => {
     expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_CONTATO_WHATSAPP: "(00) 00000-0000", GESTAO_LOJAS_CONTATO_EMAIL: "suporte@" })).toMatchObject({ contatoWhatsapp: null, contatoEmail: null })

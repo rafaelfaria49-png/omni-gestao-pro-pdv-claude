@@ -2,19 +2,20 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { headers } from "next/headers"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
-import { PlatformNotice } from "@/components/desktop-download/PlatformNotice"
+import { WindowsDownloadOptions } from "@/components/desktop-download/WindowsDownloadOptions"
 import { DESKTOP_COMPATIBILIDADE, DESKTOP_REQUISITOS, type CompatStatus } from "@/lib/desktop-distribution/compatibility"
+import { resolveWindowsOptions } from "@/lib/desktop-distribution/download-options"
 import { getDesktopDownloadState } from "@/lib/desktop-distribution/download-state"
 import { desktopVersionFromUserAgent } from "@/lib/desktop-distribution/platform"
 import { compareSemver } from "@/lib/desktop-distribution/semver"
 
 export const metadata: Metadata = {
-  title: `Baixar para Windows — ${APP_DISPLAY_NAME}`,
-  description: "Programa do OmniGestão Pro para Windows: download, requisitos, instalação e atualizações.",
+  title: `Baixar para Windows 10 e 11 — ${APP_DISPLAY_NAME}`,
+  description: "Programa do OmniGestão Pro para Windows 10 e Windows 11 (64 bits): download, requisitos, instalação e atualizações.",
 }
 
 const STATUS_LABEL: Record<CompatStatus, string> = {
-  verificado: "Testado",
+  verificado: "Homologado",
   "em-validacao": "Em validação",
   "nao-suportado": "Não suportado",
 }
@@ -32,6 +33,7 @@ export default async function BaixarPage() {
   const release = state.status === "available" ? state.release : null
   const desktopVersion = desktopVersionFromUserAgent(h.get("user-agent"))
   const desktopOutdated = Boolean(release && desktopVersion && compareSemver(release.version, desktopVersion) > 0)
+  const options = resolveWindowsOptions(release)
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -44,11 +46,10 @@ export default async function BaixarPage() {
         <section className="flex min-w-0 flex-col gap-4" aria-labelledby="titulo">
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Programa para Windows</p>
           <h1 id="titulo" className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
-            {APP_DISPLAY_NAME} para Windows
+            Baixe o {APP_DISPLAY_NAME} para seu computador
           </h1>
           <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
-            O programa abre o mesmo sistema da nuvem numa janela própria, com ícone na Área de Trabalho e impressão
-            direta na impressora térmica. Você entra com a sua conta e vê somente os dados da sua loja — igual ao navegador.
+            Escolha a versão do Windows e instale o sistema da sua loja.
           </p>
 
           {desktopVersion ? (
@@ -58,32 +59,26 @@ export default async function BaixarPage() {
             </p>
           ) : null}
 
+          <WindowsDownloadOptions
+            options={options}
+            release={release ? { version: release.version, sizeLabel: formatMb(release.bytes), publishedLabel: formatDate(release.publishedAt) } : null}
+          />
+
           {release ? (
-            <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground">
-              <div className="flex min-w-0 flex-wrap items-center gap-4">
-                <a
-                  href={release.installerUrl}
-                  className="inline-flex min-h-11 items-center rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
-                  download
-                >
-                  Baixar para Windows (64 bits)
-                </a>
-                <p className="text-sm text-muted-foreground">
-                  Versão {release.version} · {formatMb(release.bytes)} · publicada em {formatDate(release.publishedAt)}
-                </p>
+            <dl className="grid min-w-0 gap-2 rounded-xl border border-border bg-card p-5 text-sm text-card-foreground">
+              <div className="min-w-0">
+                <dt className="font-medium">O mesmo instalador oficial serve para Windows 10 e 11</dt>
+                <dd className="text-muted-foreground">{release.fileName} · versão {release.version} · 64 bits (x64)</dd>
               </div>
-              <PlatformNotice />
-              <dl className="grid min-w-0 gap-2 text-sm">
-                <div className="min-w-0">
-                  <dt className="font-medium">Assinado digitalmente por</dt>
-                  <dd className="break-words text-muted-foreground">{release.signer}</dd>
-                </div>
-                <div className="min-w-0">
-                  <dt className="font-medium">SHA-256 do instalador</dt>
-                  <dd className="break-all font-mono text-xs text-muted-foreground">{release.sha256}</dd>
-                </div>
-              </dl>
-            </div>
+              <div className="min-w-0">
+                <dt className="font-medium">Assinado digitalmente por</dt>
+                <dd className="break-words text-muted-foreground">{release.signer}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-medium">SHA-256 do instalador</dt>
+                <dd className="break-all font-mono text-xs text-muted-foreground">{release.sha256}</dd>
+              </div>
+            </dl>
           ) : (
             <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-5 text-card-foreground">
               <p className="font-semibold">O download público do instalador ainda não está liberado.</p>
@@ -133,19 +128,30 @@ export default async function BaixarPage() {
         <section className="flex min-w-0 flex-col gap-3" aria-labelledby="instalar">
           <h2 id="instalar" className="text-xl font-semibold">Como instalar</h2>
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
-            <li>Baixe o <span className="font-mono">OmniGestaoPro-Setup.exe</span> somente por esta página.</li>
             <li>
-              Antes de abrir, confira a assinatura: clique com o botão direito no arquivo → <em>Propriedades</em> →
-              aba <em>Assinaturas Digitais</em>. Se não houver assinatura ou o nome for outro, não execute.
+              <span className="font-medium text-foreground">Baixar.</span> Use o botão da sua versão do Windows, somente
+              por esta página. O arquivo é o <span className="font-mono">OmniGestaoPro-Setup.exe</span>.
             </li>
-            <li>Dê dois cliques no arquivo. A instalação é por usuário, não pede senha de administrador e abre o programa sozinha.</li>
-            <li>O atalho &quot;{APP_DISPLAY_NAME}&quot; fica na Área de Trabalho e no Menu Iniciar.</li>
-            <li>Entre com o e-mail e a senha que você já usa no sistema.</li>
             <li>
-              Impressora térmica: em <em>Configurações → PDV e impressão → Impressão direta neste computador</em>, escolha a
-              impressora. A escolha fica salva neste computador.
+              <span className="font-medium text-foreground">Abrir o instalador.</span> Antes, confira a assinatura: botão
+              direito no arquivo → <em>Propriedades</em> → aba <em>Assinaturas Digitais</em>. Se não houver assinatura ou o
+              nome for outro, não execute.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">Instalar o {APP_DISPLAY_NAME}.</span> A instalação é por usuário,
+              não pede senha de administrador e abre o programa sozinha. O atalho fica na Área de Trabalho e no Menu Iniciar.
+            </li>
+            <li><span className="font-medium text-foreground">Entrar com e-mail e senha</span> que você já usa no sistema.</li>
+            <li><span className="font-medium text-foreground">Selecionar a loja autorizada</span> para a sua conta.</li>
+            <li>
+              <span className="font-medium text-foreground">Configurar a impressora, se necessário:</span> em{" "}
+              <em>Configurações → PDV e impressão → Impressão direta neste computador</em>. A escolha fica salva neste computador.
             </li>
           </ol>
+          <p className="text-sm text-muted-foreground">
+            Não sabe qual é o seu Windows? Aperte as teclas <em>Windows + R</em>, digite <span className="font-mono">winver</span> e
+            confirme. Em <em>Configurações → Sistema → Sobre</em>, o &quot;Tipo de sistema&quot; precisa ser 64 bits (x64).
+          </p>
           <p className="text-sm text-muted-foreground">
             Conferência avançada (PowerShell): <span className="break-all font-mono text-xs">Get-FileHash .\OmniGestaoPro-Setup.exe</span>{" "}
             deve mostrar o SHA-256 publicado acima, e{" "}

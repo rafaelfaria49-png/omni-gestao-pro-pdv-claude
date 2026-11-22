@@ -5,6 +5,14 @@ GOAL `OMNI-DESKTOP-DISTRIBUICAO-PUBLICA-SAAS-001` · 2026-11-19
 Estado: **infraestrutura pronta, download público DESLIGADO**. Falta certificado de assinatura,
 armazenamento de downloads, teste em Windows 10 e autorização comercial (seção 6).
 
+**2026-11-22 (`OMNI-DESKTOP-WINDOWS-10-11-DOWNLOAD-RELEASE-001`)**: `/baixar` passa a mostrar duas
+opções, *Windows 10* e *Windows 11* (64 bits), que apontam para o **mesmo** instalador x64 do
+`latest.json` (um binário só: Electron 45 = "Windows 10 and up"). Cada botão só funciona com release
+pública válida **e** aquele Windows homologado em `compatibility.ts`
+(`lib/desktop-distribution/download-options.ts`). A detecção só destaca uma sugestão. `/gestao-lojas`
+deixou de ter canal próprio (`GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` removida) e aponta sempre para
+`/baixar`. Roteiro físico das duas lojas: `HOMOLOGACAO_WINDOWS_10_11.md`.
+
 ## 1. Peças
 
 ```
