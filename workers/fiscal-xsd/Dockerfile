@@ -60,11 +60,16 @@ ENV NODE_ENV=production \
 #                                     CVE-2026-103111),
 #                                     o que quebrava o build. Mesmo padrão exclusivo:
 #                                     pin exato, sem dist-upgrade, sem wildcard.
+#   - perl-base=5.36.0-7+deb12u4     → CVE-2026-13221, CVE-2026-42496, CVE-2026-8376
+#                                     (CRITICAL, Trivy). Substitui 5.36.0-7+deb12u3 da
+#                                     imagem base. Mesmo padrão exclusivo: pin exato,
+#                                     sem dist-upgrade, sem wildcard.
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends --only-upgrade \
        libgnutls30=3.7.9-2+deb12u7 \
        libcap2=1:2.66-4+deb12u3+b1 \
        libpcre2-8-0=10.42-1+deb12u2 \
+       perl-base=5.36.0-7+deb12u4 \
   && rm -rf /var/lib/apt/lists/*
 # Hardening de superfície de ataque (Trivy HIGH): remover os gerenciadores de pacote
 # não usados no runtime. O worker inicia apenas com `node /opt/fiscal-xsd/src/server.mjs`
