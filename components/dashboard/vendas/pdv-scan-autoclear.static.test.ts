@@ -34,9 +34,10 @@ const SURFACES = [
     clear: 'setBipeCode("")',
     focusRef: "shellBipeRef",
     lookup: "await lookupPdvScanRemote({ code: query",
-    rapidoEscStart: 'if (e.key === "Escape" && shellBipeRef.current?.value.trim())',
-    rapidoItemRemoval: 'e.key === "Escape" && cart.length > 0',
-    n5Markers: ['e.key === "Insert"', 'e.key === "Escape" && cart.length > 0'],
+    // Desde 21df54b o Esc tem um único ramo: só remove item com o campo VAZIO; com texto, limpa.
+    rapidoEscStart: "if (isModoRapido && !shellBipeRef.current?.value.trim() && cart.length > 0)",
+    rapidoItemRemoval: "setCart((prev) => prev.slice(0, -1))",
+    n5Markers: ['e.key === "Insert"', 'if (e.key === "Escape") {'],
     /** GOAL 006: o estado inline mora no shell; a superfície repassa. */
     inlineWiring: "bipeInlineFeedback={scanFeedback.inline}",
     inlineErrorState: "bipeInlineFeedback={scanFeedback.inline}",
@@ -47,9 +48,9 @@ const SURFACES = [
     clear: 'setSearch("")',
     focusRef: "inputRef",
     lookup: "await lookupPdvScanRemote({ code, storeId",
-    rapidoEscStart: "if (inputRef.current?.value.trim())",
-    rapidoItemRemoval: "if (cart.length === 0) return",
-    n5Markers: ['e.key === "Insert"', 'if (e.key !== "Escape") return'],
+    rapidoEscStart: "if (isModoRapido && !inputRef.current?.value.trim() && cart.length > 0)",
+    rapidoItemRemoval: "setCart((prev) => prev.slice(0, -1))",
+    n5Markers: ['e.key === "Insert"', 'if (e.key === "Escape" && !inInput) {'],
     inlineWiring: "<PdvScanInlineNotFound",
     inlineErrorState: "aria-invalid={!!scanFeedback.inline.code",
   },
@@ -59,9 +60,9 @@ const SURFACES = [
     clear: 'setSearchTerm("")',
     focusRef: "productInputRef",
     lookup: "await lookupPdvScanRemote({ code: lookupTerm",
-    rapidoEscStart: "if (productInputRef.current?.value.trim())",
-    rapidoItemRemoval: "if (cart.length === 0) return",
-    n5Markers: ['e.key === "Insert"', 'if (e.key !== "Escape") return'],
+    rapidoEscStart: "if (isModoRapido && !productInputRef.current?.value.trim() && cart.length > 0)",
+    rapidoItemRemoval: "requestRemoveLine(cart[cart.length - 1]!.lineId)",
+    n5Markers: ['e.key === "Insert"', 'if (e.key === "Escape") {'],
     inlineWiring: "<PdvScanInlineNotFound",
     inlineErrorState: "aria-invalid={!!scanFeedback.inline.code",
   },
@@ -149,11 +150,18 @@ describe.each(SURFACES)("$id — bipe → resposta → limpeza → foco", (s) =>
   })
 
   it.runIf(s.rapidoEscStart !== null)("Esc no modo rápido limpa o texto antes de remover item do carrinho", () => {
+    // A remoção só acontece sob a guarda `!campo.value.trim()`; com texto, o ramo else limpa o campo.
     const esc = src.indexOf(s.rapidoEscStart!)
-    expect(esc, "ramo de texto do Esc").toBeGreaterThan(0)
+    expect(esc, "remoção guardada por campo vazio").toBeGreaterThan(0)
     const remocao = src.indexOf(s.rapidoItemRemoval!, esc)
     expect(remocao).toBeGreaterThan(esc)
-    expect(remocao - esc, "ramo de texto vem imediatamente antes da remoção").toBeLessThan(700)
+    expect(remocao - esc, "a remoção é o corpo da guarda").toBeLessThan(200)
+    const senao = src.indexOf("} else {", remocao)
+    expect(senao, "ramo de texto (else) logo após a remoção").toBeGreaterThan(remocao)
+    expect(senao - remocao).toBeLessThan(120)
+    const ramoTexto = src.slice(senao, senao + 160)
+    expect(ramoTexto, "ramo de texto limpa o campo").toContain(s.clear)
+    expect(ramoTexto).toContain("scanFeedback.dismiss()")
   })
 
   it("marcadores congelados da paridade N5 (Insert/Esc) continuam presentes", () => {

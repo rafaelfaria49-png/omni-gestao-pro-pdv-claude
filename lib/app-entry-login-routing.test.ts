@@ -2,7 +2,7 @@
  * APP-ENTRY-LOGIN-ROUTING-001 — contrato de entrada do aplicativo.
  *
  * Separa três entradas que estavam misturadas:
- *   - "/"          → landing COMERCIAL (pública, continua existindo e não redireciona)
+ *   - "/"          → entrada PÚBLICA do acesso piloto (não redireciona; landing comercial em /gestao-lojas)
  *   - "/login"     → entrada OPERACIONAL canônica (PWA instalado, logout, sessão expirada)
  *   - "/dashboard" → painel — o "Home" de quem já está dentro do sistema
  *
@@ -14,7 +14,9 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import { renderToStaticMarkup } from "react-dom/server"
 import manifest from "../app/manifest"
+import RootPage from "../app/page"
 import { isPublicPath, resolveProxyEntry } from "@/lib/auth/proxy-session-gate"
 
 /** Rota canônica de entrada operacional do sistema. */
@@ -101,12 +103,22 @@ describe("proxy — sessão expirada e rota privada sem sessão", () => {
   })
 })
 
-describe("landing comercial — continua pública", () => {
-  it("a rota / segue renderizando a landing (não foi removida)", () => {
-    const page = read("app/page.tsx")
-    expect(page).toContain("landing-page")
-    expect(page).toContain("@/components/landing/lovable/Hero")
-    expect(page).toContain("@/components/landing/lovable/Pricing")
+describe("entrada pública — / e a landing comercial", () => {
+  // Desde 52c01c3 (#300) a rota / é a entrada do acesso piloto (pública, sem redirect) e a landing
+  // comercial mora em /gestao-lojas (#374). O invariante que importa — "/" pública e levando ao
+  // login, sem redirecionar — passa a ser verificado pela página renderizada, não por texto do fonte.
+  it("a rota / renderiza a entrada pública com acesso ao login", () => {
+    const html = renderToStaticMarkup(RootPage())
+    expect(html).toContain('href="/login"')
+    expect(html).toContain("Entrar no sistema")
+    expect(html).toContain('href="/privacy"')
+  })
+
+  it("a landing comercial /gestao-lojas é pública", () => {
+    expect(isPublicPath("/gestao-lojas")).toBe(true)
+    expect(resolveProxyEntry({ pathname: "/gestao-lojas", pageParam: null, hasSession: false })).toEqual({
+      kind: "allow",
+    })
   })
 
   it("o proxy deixa / passar — a landing NÃO é redirecionada para o login", () => {

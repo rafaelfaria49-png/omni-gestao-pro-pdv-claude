@@ -105,8 +105,11 @@ import type { V4State } from "./types"
 import type { OrdemServico } from "@/types/os"
 import type { PagamentoV3 } from "@/lib/operacoes-v3/payment-model"
 import type { FinancialProjectionOSV4 } from "@/lib/operacoes-v4/financial-projection"
+import { avaliarRecebimentoV4 } from "@/lib/operacoes-v4/receber-pagamento-form"
 
 const DIR = dirname(fileURLToPath(import.meta.url))
+/** Módulo puro do recebimento V4 (validação do rascunho), consumido pelo ReceberPagamentoV4. */
+const formV4 = readFileSync(join(DIR, "..", "..", "lib", "operacoes-v4", "receber-pagamento-form.ts"), "utf8")
 
 /** Coleta recursivamente os .ts/.tsx de origem da Preview, ignorando os próprios testes. */
 function collectSourceFiles(dir: string): string[] {
@@ -1603,7 +1606,12 @@ describe("OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — Financeiro da OS é recebimento
     const receber = readFileSync(join(DIR, "parts", "ReceberPagamentoV4.tsx"), "utf8")
     const orchestrator = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
     expect(stage).toContain("<ReceberPagamentoV4")
-    expect(receber).toContain("receberOSV3")
+    // Desde 3027772 o card recebe pelo hook V3 (pdv.receber/pdv.registrarMisto); quem chama
+    // receberOSV3 é o hook — o card não nomeia mais a action diretamente.
+    const hookV3 = readFileSync(join(DIR, "..", "operacoes-v3", "hooks", "use-pdv-servico-v3.ts"), "utf8")
+    expect(receber).toContain("await pdv.receber(inputImediato)")
+    expect(receber).toContain("await pdv.registrarMisto(")
+    expect(hookV3).toContain("await receberOSV3(")
     expect(orchestrator).toContain("receberOSV3")
     expect(orchestrator).toContain("lancarOSAPrazoV3")
     expect(stage).not.toMatch(/em breve/i)
@@ -1978,20 +1986,35 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina so
     expect((card.match(/\.receber\(/g) ?? []).length).toBe(1)
   })
 
-  it("bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)", () => {
-    const idxSemTotal = card.indexOf("if (semTotal)")
-    const idxQuitado = card.indexOf("if (quitado)")
-    const idxCaixaFechado = card.indexOf("if (!caixaAberto)")
+  // Desde #234/3027772 caixa fechado não encerra o formulário: 100% a prazo segue possível e só o
+  // valor imediato exige caixa aberto. Sem total e quitado continuam early returns, nesta ordem.
+  it("bloqueia ANTES do formulário quando sem total ou quitado (early return, nesta ordem)", () => {
+    const idxSemTotal = card.indexOf("&& semTotal) return")
+    const idxQuitado = card.indexOf("&& quitado) return")
+    const idxRascunho = card.indexOf("const rascunho = avaliarRecebimentoV4(")
     const idxConfirmar = card.indexOf("const onConfirmar")
-    for (const idx of [idxSemTotal, idxQuitado, idxCaixaFechado, idxConfirmar]) expect(idx).toBeGreaterThan(-1)
+    for (const idx of [idxSemTotal, idxQuitado, idxRascunho, idxConfirmar]) expect(idx).toBeGreaterThan(-1)
     expect(idxQuitado).toBeGreaterThan(idxSemTotal)
-    expect(idxCaixaFechado).toBeGreaterThan(idxQuitado)
-    expect(idxConfirmar).toBeGreaterThan(idxCaixaFechado)
+    expect(idxRascunho).toBeGreaterThan(idxQuitado)
+    expect(idxConfirmar).toBeGreaterThan(idxRascunho)
+  })
+
+  it("caixa fechado bloqueia o valor imediato, mas não a formalização 100% a prazo (validador real)", () => {
+    const base = { saldo: 100, vencimento: "2026-12-20", aPrazoExistente: false, hoje: "2026-11-22" } as const
+    const imediato = avaliarRecebimentoV4({ ...base, caixaAberto: false, intencao: "parcial", linhas: [{ forma: "dinheiro", valorStr: "50" }] })
+    expect(imediato.ok).toBe(false)
+    expect(imediato.erros).toContain("Abra o caixa para registrar o valor recebido agora.")
+    const aPrazo = avaliarRecebimentoV4({ ...base, caixaAberto: false, intencao: "parcial", linhas: [{ forma: "a_prazo", valorStr: "100" }] })
+    expect(aPrazo.ok).toBe(true)
+    expect(card).toContain("caixaAberto: caixaAberto && !!pdv.sessao?.sessaoId")
   })
 
   it("valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)", () => {
-    expect(card).toContain("validarSplitV3")
-    expect(card).toContain('from "@/lib/operacoes-v3/payment-model"')
+    // A validação saiu do card para o módulo puro (receber-pagamento-form), que reusa a V3.
+    expect(card).toContain('from "@/lib/operacoes-v4/receber-pagamento-form"')
+    expect(card).toContain("avaliarRecebimentoV4(")
+    expect(formV4).toContain('from "@/lib/operacoes-v3/payment-model"')
+    expect(formV4).toContain("validarSplitV3(linhas, input.saldo)")
   })
 
   it("só oferece formas já suportadas pelo contrato real (FORMAS_RECEBIMENTO_V3, sem enum novo)", () => {
@@ -2005,7 +2028,10 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina so
   })
 
   it("no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio", () => {
-    expect(card).toMatch(/if \(ok\) \{[\s\S]*?v\.openRecibo\(\)/)
+    // Os dois caminhos de sucesso (com e sem aprovação expressa) e só eles abrem o recibo.
+    expect(card).toContain('if (resultado.status === "recebido") { cancelar(); v.openRecibo(); }')
+    expect(card).toContain("if (resultado.ok) { cancelar(); v.openRecibo(); }")
+    expect(card.match(/v\.openRecibo\(\)/g)?.length).toBe(2)
   })
 
   it("FinanceiroStage usa o card real; não sobrou botão preview de 'em breve' nem v.act.pdv", () => {
@@ -2052,9 +2078,11 @@ describe("OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split i
   const card = readFileSync(join(DIR, "parts", "ReceberPagamentoV4.tsx"), "utf8")
 
   it("mantém estado de múltiplas linhas (array), não forma única", () => {
-    expect(card).toMatch(/useState<LinhaDraft\[\]>/)
-    expect(card).toContain("addLinha")
-    expect(card).toContain("removeLinha")
+    expect(card).toMatch(/useState<LinhaRecebimentoV4\[\]>/)
+    // adicionar ("+ Dividir pagamento") e remover linha
+    expect(card).toContain("setLinhas((arr) => [...arr, {")
+    expect(card).toContain("+ Dividir pagamento")
+    expect(card).toContain("setLinhas((arr) => arr.filter((_, idx) => idx !== i))")
   })
 
   it("envia o split para receberOSV3 no formato `linhas: SplitLinhaV3[]` (nunca forma/valor soltos)", () => {
@@ -2063,19 +2091,28 @@ describe("OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split i
     expect(card).not.toMatch(/pdv\.receber\(\{\s*valor:/)
   })
 
+  // Desde 3027772 a regra mora no módulo puro usado pelo card (avaliarRecebimentoV4) — verificada
+  // aqui pelo comportamento real, não por texto do componente.
+  const base = { saldo: 100, vencimento: "", caixaAberto: true, aPrazoExistente: false, hoje: "2026-11-22" } as const
+
   it("bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas", () => {
-    expect(card).toMatch(/algumaLinhaInvalida\s*=\s*linhas\.some\(\(l\)\s*=>\s*!\(num\(l\.valorStr\)\s*>\s*0\)\)/)
-    expect(card).toMatch(/podeConfirmar\s*=\s*veredito\.ok\s*&&\s*!algumaLinhaInvalida\s*&&\s*!pdv\.recebendo/)
+    const r = avaliarRecebimentoV4({ ...base, intencao: "parcial", linhas: [{ forma: "dinheiro", valorStr: "50" }, { forma: "pix", valorStr: "0" }] })
+    expect(r.ok).toBe(false)
+    expect(avaliarRecebimentoV4({ ...base, intencao: "parcial", linhas: [{ forma: "dinheiro", valorStr: "50" }] }).ok).toBe(true)
+    expect(card).toMatch(/\(!!pendencia \|\| \(rascunho\.ok && /)
+    expect(card).toContain("disabled={!podeConfirmar}")
   })
 
-  it("total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)", () => {
-    expect(card).toContain("somaSplitV3(linhasValidas)")
-    expect(card).toMatch(/saldoRestante\s*=\s*Math\.max\(0,\s*pagamento\.saldo\s*-\s*totalInformado\)/)
+  it("total informado e saldo restante derivam do rascunho V3 (mesmo cálculo do contrato, sem soma nova)", () => {
+    expect(formV4).toContain("const totalInformado = somaSplitV3(linhas)")
+    expect(card).toContain("const receberAgora = deCentavosV3(rascunho.receberAgoraCentavos)")
+    expect(card).toMatch(/saldoRestante\s*=\s*Math\.max\(0,\s*pagamento\.saldo\s*-\s*receberAgora\)/)
   })
 
   it("permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)", () => {
     expect(card).toContain("usarRestante")
-    expect(card).toMatch(/arr\.length > 1 \? arr\.filter\(\(_, idx\) => idx !== i\) : arr/)
+    // A última linha não é removível (o botão fica desabilitado), em vez do filtro condicional antigo.
+    expect(card).toContain("disabled={travado || linhas.length <= 1} onClick={() => setLinhas((arr) => arr.filter((_, idx) => idx !== i))}")
   })
 
   it("não expõe parcelado/crediário/carteira nesta tela (só formas com suportada:true)", () => {
@@ -2085,7 +2122,11 @@ describe("OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split i
   })
 
   it("veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)", () => {
-    expect(card).toContain("validarSplitV3(linhasValidas, pagamento.saldo)")
+    expect(formV4).toContain("const veredito = validarSplitV3(linhas, input.saldo)")
+    const acima = avaliarRecebimentoV4({ ...base, intencao: "parcial", linhas: [{ forma: "dinheiro", valorStr: "150" }] })
+    expect(acima.ok).toBe(false)
+    const quitacaoIncompleta = avaliarRecebimentoV4({ ...base, intencao: "quitacao", linhas: [{ forma: "dinheiro", valorStr: "50" }] })
+    expect(quitacaoIncompleta.ok).toBe(false)
   })
 })
 
@@ -2159,12 +2200,22 @@ describe("GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia re
     expect(v.entrega.garantia.fim).toBe(NI)
   })
 
-  it('"Termo de Garantia" no menu Docs abre o modal real (docPrint) em vez do toast de preview', () => {
+  it('"Termo de Garantia" no menu Docs abre o modal real (docPrint) em vez do toast de preview — só com garantia definida (OPS-V4-FLUXO-CURTO-006)', () => {
+    // Desde OPS-V4-FLUXO-CURTO-006 o termo só existe com garantia definida na OS; antes, o menu
+    // orienta (sem "indisponível") e não abre o documento. Com garantia, abre o modal real.
     const patches: Array<Record<string, unknown>> = []
     const msgs: string[] = []
-    const v = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), (m) => msgs.push(m), ctx)
-    const item = v.printItems.find((d) => /Termo de Garantia/.test(d.label))!
-    item.onClick()
+    const antes = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), (m) => msgs.push(m), ctx)
+    antes.printItems.find((d) => /Termo de Garantia/.test(d.label))!.onClick()
+    expect(patches.some((p) => p.docPrint === "termo_garantia")).toBe(false)
+    expect(msgs.at(-1)).toBe("Defina a garantia da OS antes de emitir o termo.")
+    const comGarantia = mkOS({
+      id: "os-termo-garantia",
+      status: "aberta",
+      aberturaV3: { garantiaPrevista: { modelo: "tela", label: "Troca de Tela", prazoDias: 90 } },
+    })
+    const depois = buildVals(makeState({ novaOS: false, selectedOsId: "os-termo-garantia" }), (p) => patches.push(p as Record<string, unknown>), (m) => msgs.push(m), { ...ctx, realOS: comGarantia })
+    depois.printItems.find((d) => /Termo de Garantia/.test(d.label))!.onClick()
     expect(patches.at(-1)).toMatchObject({ docPrint: "termo_garantia", menu: null })
     expect(msgs.some((m) => /indisponível/i.test(m))).toBe(false)
   })
@@ -2285,17 +2336,22 @@ describe("GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGa
     expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
   })
 
+  // Desde 7919e87 o EntregaStage delega ao editor compartilhado da V3 (GarantiaEditorV3), com o
+  // mesmo `v.salvarGarantia` — paridade por reuso, não por cópia do formulário.
+  const editorGarantia = readFileSync(join(DIR, "..", "operacoes-v3", "components", "GarantiaEditorV3.tsx"), "utf8")
+
   it("EntregaStage renderiza o form real (v.salvarGarantia) com o catálogo/prazo padrão da V3", () => {
-    expect(entregaStage).toContain("v.salvarGarantia")
-    expect(entregaStage).toContain("GARANTIA_CATALOGO_V3")
-    expect(entregaStage).toContain("prazoPadraoGarantiaV3")
+    expect(entregaStage).toContain("<GarantiaEditorV3")
+    expect(entregaStage).toContain("salvar={v.salvarGarantia}")
     expect(entregaStage).toMatch(/Definir garantia|Editar garantia/)
-    expect(entregaStage).toContain("Salvar garantia")
+    expect(editorGarantia).toContain("GARANTIA_CATALOGO_V3")
+    expect(editorGarantia).toContain("prazoPadraoGarantiaV3")
+    expect(editorGarantia).toContain("Salvar garantia")
   })
 
   it("botão de salvar tem busy-lock e fica desabilitado sem mudança (evita duplo clique / salvar sem editar)", () => {
-    expect(entregaStage).toContain("useState")
-    expect(entregaStage).toMatch(/disabled=\{busy \|\| !dirty\}/)
+    expect(editorGarantia).toContain("useState")
+    expect(editorGarantia).toMatch(/disabled=\{busy \|\| pending \|\| !dirty\}/)
   })
 
   it("não expõe termoCustom neste slice — paridade com a V3 (GarantiaOSV3.tsx só edita modelo+prazo)", () => {
@@ -2303,7 +2359,9 @@ describe("GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGa
   })
 
   it("copy honesta sobre quando a garantia passa a valer", () => {
-    expect(entregaStage).toContain("A garantia fica prevista na OS e passa a valer na entrega.")
+    expect(editorGarantia).toContain("A garantia fica prevista e começa na entrega.")
+    // Com termo já emitido, a alteração vira aditivo e preserva o início — sem reescrever o passado.
+    expect(editorGarantia).toContain("A alteração cria um aditivo e preserva as versões anteriores e o início da garantia.")
   })
 
   it("não cria rota de API nova nem referencia updateOSPayload/loja-1/openCaixaIfClosed", () => {
