@@ -570,7 +570,7 @@ function LinhaServicoEditor({
           </select>
         </label>
         <label style={atendLabel}>Motivo se alterar o padrão
-          <input aria-label="Motivo se alterar o padrão" style={atendInput} value={linha.garantiaMotivo ?? ""} onChange={(e) => onPatch({ garantiaMotivo: e.target.value })} />
+          <input aria-label="Motivo se alterar o padrão" autoComplete="off" style={atendInput} value={linha.garantiaMotivo ?? ""} onChange={(e) => onPatch({ garantiaMotivo: e.target.value })} />
         </label>
       </div>
       <p style={{ fontSize: 11, color: C.subtle, marginBottom: 0 }}>Confira o modelo e o prazo antes de confirmar o serviço. A descrição apenas sugere o modelo.</p>

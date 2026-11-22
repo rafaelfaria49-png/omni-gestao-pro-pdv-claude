@@ -101,8 +101,13 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { name: "Tester", email: "t@t.com" } })) }))
-vi.mock("@/lib/auth/enterprise-permissions", () => ({ canAccessStore: () => true }))
+// Usuário da loja-x com módulos stock + catalog: requireModuleAction(storeId, "stock") exige o
+// hub de cadastros. `canAccessStore`/`canUseModule` são os reais — o antigo mock
+// `canAccessStore: () => true` foi removido.
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-x"], modules: ["stock", "catalog"], name: "Tester", email: "t@t.com" })) }
+})
 vi.mock("@/app/actions/estoque", () => ({ registrarAjusteEstoque: h.registrarAjusteEstoque }))
 
 import {

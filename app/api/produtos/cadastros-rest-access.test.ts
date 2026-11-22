@@ -61,7 +61,12 @@ function makeSession(opts: {
   role?: string
   storeAccess?: "all" | "restricted"
   allowedStoreIds?: string[]
+  /** Módulos liberados em cada loja da membership (contrato desde 52c01c3). */
+  modules?: string[]
+  platformAuthority?: boolean
 }): Session {
+  const allowedStoreIds = opts.allowedStoreIds ?? ["loja-a"]
+  const modules = opts.modules ?? ["catalog"]
   return {
     user: {
       id: "user-1",
@@ -69,7 +74,9 @@ function makeSession(opts: {
       name: "U",
       role: opts.role ?? "VENDEDOR",
       storeAccess: opts.storeAccess ?? "restricted",
-      allowedStoreIds: opts.allowedStoreIds ?? ["loja-a"],
+      allowedStoreIds,
+      storeModules: Object.fromEntries(allowedStoreIds.map((sid) => [sid, modules])),
+      platformAuthority: opts.platformAuthority ?? false,
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session
@@ -171,14 +178,29 @@ describe("POST /api/produtos", () => {
     expect(res.status).toBe(201)
   })
 
-  it("ADMIN global + loja explícita → 201", async () => {
-    sessionAtiva({ role: "ADMIN", storeAccess: "all" })
+  // "Global" desde 52c01c3 = autoridade da plataforma; storeAccess "all" sozinho não concede loja.
+  it("ADMIN global (plataforma) + loja explícita → 201", async () => {
+    sessionAtiva({ role: "ADMIN", storeAccess: "all", allowedStoreIds: [], platformAuthority: true })
     const res = await POST(req("POST", "loja-z", body))
     expect(res.status).toBe(201)
   })
 
+  it("ADMIN com storeAccess all SEM autoridade da plataforma → 403 em loja alheia", async () => {
+    sessionAtiva({ role: "ADMIN", storeAccess: "all", allowedStoreIds: [] })
+    const res = await POST(req("POST", "loja-z", body))
+    expect(res.status).toBe(403)
+    expect(h.createProduct).not.toHaveBeenCalled()
+  })
+
+  it("VENDEDOR própria loja sem o módulo catalog liberado → 403", async () => {
+    sessionAtiva({ role: "VENDEDOR", allowedStoreIds: ["loja-a"], modules: ["pdv"] })
+    const res = await POST(req("POST", "loja-a", body))
+    expect(res.status).toBe(403)
+    expect(h.createProduct).not.toHaveBeenCalled()
+  })
+
   it("write sem store → 400", async () => {
-    sessionAtiva({ role: "ADMIN", storeAccess: "all" })
+    sessionAtiva({ role: "ADMIN", storeAccess: "all", allowedStoreIds: [], platformAuthority: true })
     const res = await POST(req("POST", undefined, body))
     expect(res.status).toBe(400)
   })

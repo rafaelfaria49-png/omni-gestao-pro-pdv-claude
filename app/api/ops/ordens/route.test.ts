@@ -47,10 +47,29 @@ vi.mock("@/lib/operacoes/services/hydration-service", () => ({
 import { GET } from "./route"
 
 function sessionRestrictedTo(ids: string[]) {
-  return { user: { id: "user-1", role: "tecnico", storeAccess: "restricted", allowedStoreIds: ids } }
+  // Membership explícita + módulo service por loja (requireModuleApi(req, "service"), desde 52c01c3).
+  return {
+    user: {
+      id: "user-1",
+      role: "tecnico",
+      storeAccess: "restricted",
+      allowedStoreIds: ids,
+      storeModules: Object.fromEntries(ids.map((sid) => [sid, ["service"]])),
+    },
+  }
 }
 function sessionFullAccess() {
-  return { user: { id: "admin-1", role: "admin" } }
+  // "Acesso pleno" de LOJA desde 52c01c3: admin membro da loja com o módulo service (nunca plataforma —
+  // a rota é de loja; o guard real de módulo precisa ser exercitado).
+  return {
+    user: {
+      id: "admin-1",
+      role: "admin",
+      storeAccess: "restricted",
+      allowedStoreIds: [LOJA_A],
+      storeModules: { [LOJA_A]: ["service"] },
+    },
+  }
 }
 function reqQuery(store: string) {
   return new Request(`http://local/api/ops/ordens?storeId=${encodeURIComponent(store)}`)
@@ -141,6 +160,24 @@ describe("GET /api/ops/ordens — ACL de loja (GOAL-004)", () => {
     const res = await GET(req)
     expect(res.status).toBe(403)
     expect(h.guard).not.toHaveBeenCalled()
+    expect(h.findMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("GET /api/ops/ordens — contrato 52c01c3 (negativos do guard de módulo real)", () => {
+  it("papel admin SEM autoridade da plataforma e sem membership → 403, sem consulta", async () => {
+    h.auth.mockResolvedValue({ user: { id: "admin-2", role: "admin", storeAccess: "all" } })
+    const res = await GET(reqQuery(LOJA_A))
+    expect(res.status).toBe(403)
+    expect(h.guard).not.toHaveBeenCalled()
+    expect(h.findMany).not.toHaveBeenCalled()
+  })
+  it("membro da loja sem o módulo service → 403, sem consulta", async () => {
+    h.auth.mockResolvedValue({
+      user: { id: "user-3", role: "tecnico", storeAccess: "restricted", allowedStoreIds: [LOJA_A], storeModules: { [LOJA_A]: ["pdv"] } },
+    })
+    const res = await GET(reqQuery(LOJA_A))
+    expect(res.status).toBe(403)
     expect(h.findMany).not.toHaveBeenCalled()
   })
 })

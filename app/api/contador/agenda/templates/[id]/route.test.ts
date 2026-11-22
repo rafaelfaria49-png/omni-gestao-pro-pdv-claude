@@ -21,6 +21,7 @@ vi.mock("@/lib/contador/documentos/http", () => ({
 }))
 
 import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 import { requireContadorScope } from "@/lib/contador/scope"
 import { resolverCapacidadesContador } from "@/lib/contador/status/permissoes"
 import { atualizarTemplate, removerTemplate } from "@/lib/contador/agenda"
@@ -41,7 +42,8 @@ function req(method: string, body?: unknown, query = "") {
 }
 
 beforeEach(() => {
-  vi.mocked(auth).mockReset().mockResolvedValue({ user: { id: "u1" } } as never)
+  // Membro da loja-1 com o módulo accountant (requireModuleApi(req, "accountant"), desde 52c01c3).
+  vi.mocked(auth).mockReset().mockResolvedValue(storeSession({ id: "u1", stores: ["loja-1"], modules: ["accountant"] }) as never)
   vi.mocked(requireContadorScope).mockReset().mockResolvedValue(SCOPE_OK as never)
   vi.mocked(resolverCapacidadesContador).mockReset().mockReturnValue(CAP_ALTO)
   vi.mocked(atualizarTemplate).mockReset().mockImplementation(async (_escopo, _id, _entrada, cap) => {

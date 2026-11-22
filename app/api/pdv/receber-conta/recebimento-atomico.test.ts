@@ -363,8 +363,16 @@ const LK = "cr-crediario-77"
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
 vi.mock("@/lib/store-id-from-request", () => ({
   storeIdFromAssistecRequestForWrite: vi.fn((req: Request) => req.headers.get("x-assistec-loja-id") ?? ""),
+  // `requireModuleApi` (module-access) resolve a loja pela leitura canônica do mesmo header.
+  storeIdFromAssistecRequestForRead: vi.fn((req: Request) => req.headers.get("x-assistec-loja-id") ?? ""),
+  activeStoreIdFromCookieHeader: vi.fn(() => null),
 }))
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "u1", name: "Tester" } })) }))
+// Usuário de loja com membership nas duas lojas do teste e módulo PDV (sharedPayment).
+// O guard real decide; os cenários cross-store seguem provando o isolamento dos dados.
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ id: "u1", stores: ["loja-1", "loja-2"], modules: ["pdv"] })) }
+})
 vi.mock("@/lib/auth/session-operator", () => ({ getOperatorLabelFromSession: vi.fn(() => "Tester") }))
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({
   apiGuardFinanceiroEditEnterpriseOrLegacy: vi.fn(async () => null),
@@ -378,6 +386,8 @@ vi.mock("@/lib/financeiro/services/auditoria-actor", () => ({
 }))
 
 import { POST } from "./route"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 import {
   upsertContaReceber,
   getContaReceberByLocalKey,
@@ -696,6 +706,26 @@ describe("G1 §8 — isolamento multi-loja no recebimento", () => {
     expect(res.status).toBe(404)
     expect(body.code).toBe("not_found")
     expect(await saldoDe(STORE)).toBe(100)
+    expect(h.db.caixaOps).toHaveLength(0)
+  })
+})
+
+describe("guard de módulo real (contrato 52c01c3) — negativos", () => {
+  it("loja fora da membership → 403 antes de qualquer efeito", async () => {
+    const res = await POST(post({ op: "liquidar", localKey: LK }, "loja-3"))
+    expect(res.status).toBe(403)
+    expect(h.db.caixaOps).toHaveLength(0)
+  })
+  it("membership sem módulo de pagamento → 403 antes de qualquer efeito", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ id: "u1", stores: ["loja-1", "loja-2"], modules: ["reports"] }) as never)
+    const res = await POST(post({ op: "liquidar", localKey: LK }))
+    expect(res.status).toBe(403)
+    expect(h.db.caixaOps).toHaveLength(0)
+  })
+  it("sem sessão → 401", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(null as never)
+    const res = await POST(post({ op: "liquidar", localKey: LK }))
+    expect(res.status).toBe(401)
     expect(h.db.caixaOps).toHaveLength(0)
   })
 })

@@ -7,6 +7,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Usuário da loja-1 com módulo accountant (requireModuleApi(req, "accountant")).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["accountant"] })) }
+})
 vi.mock("@/lib/contador/scope", () => ({ requireContadorScope: vi.fn() }))
 vi.mock("@/lib/contador/pacote", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/contador/pacote")>()
@@ -17,6 +23,12 @@ import { GET } from "./route"
 import { requireContadorScope } from "@/lib/contador/scope"
 import { gerarPacoteContador, PacoteLimiteExcedidoError, PacoteTimeoutError } from "@/lib/contador/pacote"
 import { competenciaAtual } from "@/lib/contador/competencia"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
+
+/** Membro também da loja citada: o guard de módulo passa e a regra da própria rota decide. */
+const membroTambemDe = (loja: string) =>
+  vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-1", loja], modules: ["accountant"] }) as never)
 
 const scopeOk = { ok: true, storeId: "loja-1", userId: "u1", permissaoContador: true } as const
 
@@ -47,6 +59,7 @@ beforeEach(() => {
 
 describe("GET /api/contador/pacote — validação de query", () => {
   it("storeId na query → 400 (não aceita seleção de loja por parâmetro)", async () => {
+    membroTambemDe("loja-9")
     const res = await GET(req("?storeId=loja-9"))
     expect(res.status).toBe(400)
     expect((await res.json()).mensagem).toContain("não aceita seleção de loja")
@@ -54,6 +67,7 @@ describe("GET /api/contador/pacote — validação de query", () => {
   })
 
   it("lojaId na query → 400", async () => {
+    membroTambemDe("loja-9")
     const res = await GET(req("?lojaId=loja-9"))
     expect(res.status).toBe(400)
   })
@@ -93,11 +107,23 @@ describe("GET /api/contador/pacote — escopo/ACL", () => {
     vi.mocked(requireContadorScope).mockResolvedValue({ ok: false, motivo: "sem_permissao" } as never)
     expect((await GET(req("?c=2026-06"))).status).toBe(403)
   })
-  it("header arbitrário de loja não troca o escopo (gate ignora headers)", async () => {
+  it("header de outra loja do usuário não troca o escopo (gate ignora headers)", async () => {
+    membroTambemDe("loja-999")
     const res = await GET(req("?c=2026-06", { "x-assistec-loja-id": "loja-999" }))
     expect(res.status).toBe(200)
     // O gate é chamado sem argumentos derivados do request/headers.
     expect(vi.mocked(requireContadorScope).mock.calls[0].length).toBe(0)
+  })
+  it("header/query de loja fora da membership → 403 do guard de módulo, antes do gate e do pacote", async () => {
+    expect((await GET(req("?c=2026-06", { "x-assistec-loja-id": "loja-999" }))).status).toBe(403)
+    expect((await GET(req("?storeId=loja-9"))).status).toBe(403)
+    expect(requireContadorScope).not.toHaveBeenCalled()
+    expect(gerarPacoteContador).not.toHaveBeenCalled()
+  })
+  it("membership sem módulo accountant → 403", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-1"], modules: ["finance"] }) as never)
+    expect((await GET(req("?c=2026-06"))).status).toBe(403)
+    expect(gerarPacoteContador).not.toHaveBeenCalled()
   })
 })
 

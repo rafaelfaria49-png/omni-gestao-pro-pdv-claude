@@ -8,6 +8,11 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it, vi } from "vitest"
 import { BOBINA_CHARS } from "@/lib/pdv-impressao-config"
+import {
+  PDV_NON_FISCAL_EXPLANATION,
+  PDV_NON_FISCAL_NOTICE,
+  buildPdvNonFiscalNoticeHtml,
+} from "@/lib/pdv-non-fiscal-notice"
 import type { AuthorizedXmlDocument } from "@/lib/fiscal/storage"
 import { buildPersistedDanfceFixture, type DanfceFixtureKind } from "./__fixtures__/persisted-nfce"
 import {
@@ -344,13 +349,24 @@ describe("DANFC-e · zero leitura viva, zero rede, distinção não fiscal", () 
       expect(html).toContain('data-documento="DANFCE"')
       expect(html).not.toContain("DOCUMENTO NÃO FISCAL")
       expect(html).not.toContain(DOCUMENTO_NAO_FISCAL_NAO_E_DANFCE)
+      // Nem o aviso comercial atual do PDV (8a4f2fa) pode aparecer no documento fiscal.
+      expect(html).not.toContain(PDV_NON_FISCAL_NOTICE)
+      expect(html).not.toContain(PDV_NON_FISCAL_EXPLANATION)
     }
   })
 
-  it("comprovante comercial existente declara que não é DANFC-e", () => {
+  it("comprovante comercial existente declara que não é documento fiscal nem NFC-e", () => {
+    // Desde 8a4f2fa o cupom usa o aviso compartilhado do PDV, em vez do texto literal antigo.
+    const aviso = buildPdvNonFiscalNoticeHtml()
+    expect(aviso).toContain("NÃO É DOCUMENTO FISCAL")
+    expect(aviso).toMatch(/NÃO SUBSTITUI NFC-e/)
     const cupom = readFileSync(resolve(process.cwd(), "components/dashboard/vendas/cupom-nao-fiscal.tsx"), "utf8")
-    expect(cupom).toContain("DOCUMENTO NÃO FISCAL")
-    expect(cupom).toContain(DOCUMENTO_NAO_FISCAL_NAO_E_DANFCE)
+    expect(cupom).toContain('from "@/lib/pdv-non-fiscal-notice"')
+    // Texto impresso, HTML impresso e diálogo: os três caminhos usam o aviso.
+    expect(cupom).toContain("${PDV_NON_FISCAL_NOTICE}")
+    expect(cupom).toContain("${buildPdvNonFiscalNoticeHtml()}")
+    expect(cupom).toContain("{PDV_NON_FISCAL_NOTICE}")
+    expect(cupom).toContain("{PDV_NON_FISCAL_EXPLANATION}")
     const title = cupom.match(/<DialogTitle[\s\S]*?<\/DialogTitle>/)?.[0] ?? ""
     expect(title).toContain("Cupom / Recibo Não Fiscal")
     expect(title).not.toContain("DANFC")

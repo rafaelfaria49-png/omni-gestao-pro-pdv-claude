@@ -35,6 +35,8 @@ export async function exigirAtor(): Promise<AtorPessoas> {
 }
 
 export async function exigirBootstrap(): Promise<AtorPessoas> {
+  // Flag OFF recusa antes de qualquer leitura de sessão ou banco (mesma ordem de exigirAtor).
+  exigirModulo()
   if (!isPlatformSession(await auth())) throw new PessoasError("BOOTSTRAP_NEGADO", 403)
   const ator = await exigirAtor()
   if (ator.role !== "ADMIN" && ator.role !== "SUPER_ADMIN") {

@@ -32,6 +32,8 @@ function sessionAtiva(role: string) {
       role,
       storeAccess: "restricted",
       allowedStoreIds: ["loja-a"],
+      // Módulos liberados por loja (contrato desde 52c01c3).
+      storeModules: Object.fromEntries(["loja-a"].map((sid) => [sid, ["ai", "catalog"]])),
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session
@@ -70,8 +72,17 @@ describe("POST /api/product/fiscal-classify", () => {
     expect(h.classify).not.toHaveBeenCalled()
   })
 
-  it("VENDEDOR → chama classificador", async () => {
+  // Desde 52c01c3 a rota exige requireModuleApi(req, "ai"): módulo ai liberado E papel com
+  // workspace.iaMestre. VENDEDOR não tem IA (mesmo contrato reconhecido na #308 para produto-ia).
+  it("VENDEDOR com módulo ai liberado → 403 (papel sem IA) e não chama o provider", async () => {
     sessionAtiva("VENDEDOR")
+    const res = await classify(post("/api/product/fiscal-classify", { nome: "Cabo", categoria: "peca" }))
+    expect(res.status).toBe(403)
+    expect(h.classify).not.toHaveBeenCalled()
+  })
+
+  it("ADMIN da loja com módulo ai → chama classificador", async () => {
+    sessionAtiva("ADMIN")
     const res = await classify(post("/api/product/fiscal-classify", { nome: "Cabo", categoria: "peca" }))
     expect(res.status).toBe(200)
     expect(h.classify).toHaveBeenCalled()
