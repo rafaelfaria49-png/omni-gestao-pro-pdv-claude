@@ -158,7 +158,10 @@ function expectNoDirectVendaWrites() {
 beforeEach(() => {
   vi.clearAllMocks()
   h.guard.mockResolvedValue(null)
-  h.auth.mockResolvedValue({ user: { id: "op-1" } })
+  // Rota de plataforma desde 52c01c3 (requireModuleApi(req, "platform")): o ator é a plataforma.
+  h.auth.mockResolvedValue({
+    user: { id: "op-1", role: "SUPER_ADMIN", storeAccess: "all", accessScope: "PLATFORM", platformAuthority: true },
+  })
   h.gate.mockReturnValue({ writer: "v2", reason: "enabled" })
   h.findFirst.mockResolvedValue(null)
   h.findMany.mockResolvedValue([])
@@ -383,5 +386,23 @@ describe("POST /api/ops/vendas/quarantine-recovery/auto", () => {
     for (const source of [route, service]) {
       expect(source).not.toMatch(/dispatchSaleAutomationIfCreated|handleEvent|@\/lib\/fiscal/)
     }
+  })
+})
+
+describe("POST quarantine-recovery/auto — guard de plataforma real (negativos)", () => {
+  it("usuário de loja (ADMIN membro com pdv/sales) → 403 sem persistir nem escrever", async () => {
+    h.auth.mockResolvedValueOnce({
+      user: { id: "op-2", role: "ADMIN", storeAccess: "restricted", allowedStoreIds: ["loja-1"], storeModules: { "loja-1": ["pdv", "sales"] } },
+    })
+    const res = await POST(req({ candidates: [preservada()] }))
+    expect(res.status).toBe(403)
+    expect(h.persist).not.toHaveBeenCalled()
+    expectNoDirectVendaWrites()
+  })
+  it("sem sessão → 401 sem persistir", async () => {
+    h.auth.mockResolvedValueOnce(null)
+    const res = await POST(req({ candidates: [preservada()] }))
+    expect(res.status).toBe(401)
+    expect(h.persist).not.toHaveBeenCalled()
   })
 })

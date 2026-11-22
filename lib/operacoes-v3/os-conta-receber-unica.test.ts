@@ -202,7 +202,11 @@ const h = vi.hoisted(() => {
 // Único I/O mockado: Prisma em memória. Demais mocks só evitam acoplar auth/caixa.
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "u1", name: "Tester" } })) }));
+// Usuário da loja-2 com módulo service (requireModuleAction(storeId, "service") nas actions V3).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session");
+  return { auth: vi.fn(async () => storeSession({ id: "u1", stores: ["loja-2"], modules: ["service"] })) };
+});
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/financeiro/services/fechamento-service", () => ({
   verificarPeriodoFechado: vi.fn(async () => ({ fechado: false })),

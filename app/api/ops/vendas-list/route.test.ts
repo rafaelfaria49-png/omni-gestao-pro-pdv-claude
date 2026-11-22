@@ -41,7 +41,16 @@ vi.mock("@/lib/trusted-time", () => ({ getTrustedTimeMs: async () => Date.now() 
 import { GET } from "./route"
 
 function sessionRestrictedTo(ids: string[]) {
-  return { user: { id: "user-1", role: "vendedor", storeAccess: "restricted", allowedStoreIds: ids } }
+  // Membership explícita + módulo sales por loja (requireModuleApi(req, "sales"), desde 52c01c3).
+  return {
+    user: {
+      id: "user-1",
+      role: "vendedor",
+      storeAccess: "restricted",
+      allowedStoreIds: ids,
+      storeModules: Object.fromEntries(ids.map((sid) => [sid, ["sales"]])),
+    },
+  }
 }
 function reqQuery(store: string) {
   return new Request(`http://local/api/ops/vendas-list?storeId=${encodeURIComponent(store)}`)
@@ -102,7 +111,8 @@ describe("GET /api/ops/vendas-list — ACL de loja (GOAL-004)", () => {
     const res = await GET(reqQuery(LOJA_B))
     const json = (await res.json()) as Record<string, unknown>
     expect(res.status).toBe(403)
-    expect(json).toEqual({ error: "Sem acesso à loja" })
+    // Desde 52c01c3 a negação vem do guard de módulo, antes da rota — igualmente genérica.
+    expect(json).toEqual({ ok: false, error: "Sem permissão para este módulo ou unidade." })
     expect(json.sales).toBeUndefined()
     expect(JSON.stringify(json)).not.toContain(LOJA_B)
   })
@@ -139,7 +149,9 @@ describe("GET /api/ops/vendas-list — ACL de loja (GOAL-004)", () => {
   })
 
   it("precedência intacta: header vence query/cookie; loja resolvida (header, permitida) passa por ACL → 200", async () => {
-    h.auth.mockResolvedValue(sessionRestrictedTo([LOJA_A]))
+    // Desde 52c01c3 todo seletor explícito (header, query, cookie) precisa ser autorizado; com
+    // membership nas três lojas, a precedência do header continua decidindo a loja resolvida.
+    h.auth.mockResolvedValue(sessionRestrictedTo([LOJA_A, LOJA_B, LOJA_C]))
     const req = new Request(`http://local/api/ops/vendas-list?storeId=${LOJA_B}`, {
       headers: {
         [ASSISTEC_LOJA_HEADER]: LOJA_A,
@@ -159,6 +171,28 @@ describe("GET /api/ops/vendas-list — ACL de loja (GOAL-004)", () => {
     })
     const res = await GET(req)
     expect(res.status).toBe(403) // ACL aplicada à loja RESOLVIDA (header=B), não à query
+    expect(h.findMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("GET /api/ops/vendas-list — contrato 52c01c3 (negativos do guard de módulo real)", () => {
+  it("membro da loja sem o módulo sales → 403, sem consulta", async () => {
+    h.auth.mockResolvedValue({
+      user: { id: "user-1", role: "vendedor", storeAccess: "restricted", allowedStoreIds: [LOJA_A], storeModules: { [LOJA_A]: ["cash"] } },
+    })
+    const res = await GET(reqQuery(LOJA_A))
+    expect(res.status).toBe(403)
+  })
+})
+
+describe("GET /api/ops/vendas-list — todo seletor explícito precisa de membership (52c01c3)", () => {
+  it("header permitido + query de loja proibida → 403, sem consulta", async () => {
+    h.auth.mockResolvedValue(sessionRestrictedTo([LOJA_A]))
+    const req = new Request(`http://local/api/ops/vendas-list?storeId=${LOJA_B}`, {
+      headers: { [ASSISTEC_LOJA_HEADER]: LOJA_A },
+    })
+    const res = await GET(req)
+    expect(res.status).toBe(403)
     expect(h.findMany).not.toHaveBeenCalled()
   })
 })

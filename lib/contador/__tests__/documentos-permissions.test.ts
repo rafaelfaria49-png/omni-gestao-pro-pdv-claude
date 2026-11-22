@@ -14,6 +14,11 @@ function sessao(over: Partial<Session["user"]>): Session {
   return { user: { id: "user-1", ...over }, expires: "2999-01-01" } as unknown as Session
 }
 
+/** Membro da loja-1 com o módulo accountant liberado (contrato desde 52c01c3). */
+function membro(role: string): Session {
+  return sessao({ role, storeAccess: "restricted", allowedStoreIds: ["loja-1"], storeModules: { "loja-1": ["accountant"] } })
+}
+
 describe("hubs.contador · matriz de papéis", () => {
   it("admin e gerente têm acesso; caixa/técnico/vendedor não", () => {
     expect(getEnterprisePermissions("ADMIN").hubs.contador).toBe(true)
@@ -26,17 +31,17 @@ describe("hubs.contador · matriz de papéis", () => {
 
 describe("avaliarAcessoContador · autorização por papel", () => {
   it("admin autorizado na loja acessível", () => {
-    const r = avaliarAcessoContador(sessao({ role: "ADMIN", storeAccess: "all" }), "loja-1")
+    const r = avaliarAcessoContador(membro("ADMIN"), "loja-1")
     expect(r).toEqual({ ok: true, storeId: "loja-1", userId: "user-1", permissaoContador: true })
   })
 
   it("gerente autorizado", () => {
-    const r = avaliarAcessoContador(sessao({ role: "GERENTE", storeAccess: "all" }), "loja-1")
+    const r = avaliarAcessoContador(membro("GERENTE"), "loja-1")
     expect(r.ok).toBe(true)
   })
 
   it.each(["CAIXA", "TECNICO", "VENDEDOR"])("%s → sem_permissao (403)", (role) => {
-    expect(avaliarAcessoContador(sessao({ role, storeAccess: "all" }), "loja-1")).toEqual({
+    expect(avaliarAcessoContador(membro(role), "loja-1")).toEqual({
       ok: false,
       motivo: "sem_permissao",
     })

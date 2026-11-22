@@ -67,7 +67,12 @@ function makeSession(opts: {
   id?: string
   name?: string
   email?: string
+  /** Módulos liberados em cada loja da membership (contrato desde 52c01c3). */
+  modules?: string[]
+  platformAuthority?: boolean
 }): Session {
+  const allowedStoreIds = opts.allowedStoreIds ?? ["loja-a"]
+  const modules = opts.modules ?? ["catalog"]
   return {
     user: {
       id: opts.id ?? "user-1",
@@ -75,12 +80,17 @@ function makeSession(opts: {
       name: opts.name ?? "U",
       role: opts.role ?? "VENDEDOR",
       storeAccess: opts.storeAccess ?? "restricted",
-      allowedStoreIds: opts.allowedStoreIds ?? ["loja-a"],
+      allowedStoreIds,
+      storeModules: Object.fromEntries(allowedStoreIds.map((sid) => [sid, modules])),
+      platformAuthority: opts.platformAuthority ?? false,
       lojaId: "loja-a",
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session
 }
+
+/** Autoridade da plataforma (contrato desde 52c01c3 para esta rota). */
+const PLATAFORMA = { role: "ADMIN", storeAccess: "all", allowedStoreIds: [], platformAuthority: true } as const satisfies Parameters<typeof makeSession>[0]
 
 function sessionAtiva(opts?: Parameters<typeof makeSession>[0]) {
   const s = makeSession(opts ?? {})
@@ -160,35 +170,46 @@ describe("POST /api/import/produtos/lote — ownership + ator", () => {
   })
 
   it("sem store → 400", async () => {
-    sessionAtiva({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    sessionAtiva(PLATAFORMA)
     const res = await POST(req(undefined, loteBody()))
     expect(res.status).toBe(400)
     expect(h.persistirLoteProdutos).not.toHaveBeenCalled()
   })
 
-  it("VENDEDOR própria loja → persiste na loja autorizada", async () => {
-    sessionAtiva({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+  // Desde 52c01c3 a importação em lote é provisionamento controlado: requireModuleApi(req, "platform").
+  it("usuário de loja (VENDEDOR ou ADMIN com catalog) na própria loja → 403 e não persiste", async () => {
+    for (const role of ["VENDEDOR", "ADMIN"]) {
+      sessionAtiva({ role, storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+      const res = await POST(req("loja-a", loteBody()))
+      expect(res.status, role).toBe(403)
+    }
+    expect(h.persistirLoteProdutos).not.toHaveBeenCalled()
+  })
+
+  it("ADMIN com storeAccess all sem autoridade da plataforma → 403", async () => {
+    sessionAtiva({ role: "ADMIN", storeAccess: "all", allowedStoreIds: [] })
+    const res = await POST(req("loja-z", loteBody({ lojaAtivaIdConfirmado: "loja-z" })))
+    expect(res.status).toBe(403)
+    expect(h.persistirLoteProdutos).not.toHaveBeenCalled()
+  })
+
+  it("plataforma + store explícito → persiste na loja indicada", async () => {
+    sessionAtiva(PLATAFORMA)
     const res = await POST(req("loja-a", loteBody()))
     expect(res.status).toBe(200)
     expect(h.persistirLoteProdutos).toHaveBeenCalledTimes(1)
     expect(h.persistirLoteProdutos.mock.calls.at(0)?.[0]).toBe("loja-a")
   })
 
-  it("ADMIN + store explícito → allow", async () => {
-    sessionAtiva({ role: "ADMIN", storeAccess: "all", allowedStoreIds: undefined })
+  it("plataforma + outra store explícita → allow", async () => {
+    sessionAtiva(PLATAFORMA)
     const res = await POST(req("loja-z", loteBody({ lojaAtivaIdConfirmado: "loja-z" })))
     expect(res.status).toBe(200)
     expect(h.persistirLoteProdutos.mock.calls.at(0)?.[0]).toBe("loja-z")
   })
 
   it("ator oficial é o principal da sessão; body.userLabel não spoofa", async () => {
-    sessionAtiva({
-      role: "VENDEDOR",
-      name: "Sessão Real",
-      email: "real@loja.com",
-      storeAccess: "restricted",
-      allowedStoreIds: ["loja-a"],
-    })
+    sessionAtiva({ ...PLATAFORMA, name: "Sessão Real", email: "real@loja.com" })
     const res = await POST(req("loja-a", loteBody({ userLabel: "Administrador Supremo" })))
     expect(res.status).toBe(200)
     const row = h.logsCreate.mock.calls.at(0)?.[0].data
@@ -203,6 +224,6 @@ describe("POST /api/import/produtos/lote — ownership + ator", () => {
     expect(meta.batchId).toBe("batch-123")
     expect(meta.actor.userId).toBe("user-1")
     expect(meta.actor.email).toBe("real@loja.com")
-    expect(meta.actor.role).toBe("VENDEDOR")
+    expect(meta.actor.role).toBe("ADMIN")
   })
 })
