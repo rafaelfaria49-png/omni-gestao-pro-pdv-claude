@@ -126,7 +126,7 @@ test("primeiro cliente independente: pedido → aprovação → loja → senha �
   const { sessaoId } = await abertura.json()
   const venda = { id: "VDA-JORNADA-" + randomBytes(6).toString("hex"), at: new Date().toISOString(), total: 25, sessaoId,
     lines: [{ inventoryId: sku, name: nomeProduto, quantity: 2, unitPrice: 12.5, lineTotal: 25 }], paymentBreakdown: { dinheiro: 25 } }
-  // B tenta gravar a venda de A na loja de A e na própria loja (sessão de caixa alheia).
+  // B tenta gravar a venda (com a sessão de caixa de A) na loja de A: recusado antes de qualquer escrita.
   expect((await cb.post("/api/ops/venda-persist", { headers: h(A.storeId), data: { sale: venda } })).status()).toBe(403)
   expect((await ca.post("/api/ops/venda-persist", { headers: h(A.storeId), data: { sale: venda } })).status()).toBe(200)
   expect((await db.produto.findUniqueOrThrow({ where: { id: produto.id } })).stock).toBe(3)

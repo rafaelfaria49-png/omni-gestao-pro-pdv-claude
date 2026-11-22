@@ -27,6 +27,12 @@ Vitest 283/283 (`lib/comercial`, `lib/auth`, onboarding, loja resolvida, pilot-a
 (Node 26 quebra `localStorage.clear` em jsdom — limitação da máquina, não do código).
 **Build e E2E autenticado** rodam na CI (`platform-pilot.yml`, PostgreSQL descartável) — ver o PR.
 
+**Revisão independente (só leitura, 2026-11-22):** sem P0/P1. P2 em aberto na #343: ações disparadas
+pelo usuário (finalizar venda, devolução, sondagem do writer) **não** passam pela porta `lojaResolvida`;
+se a loja nunca resolver (1º acesso offline sem loja guardada), a venda iria para `loja-1` (conta STORE
+leva 403) e a pendência fica órfã na chave legada. Correção sugerida: recusar finalizar/devolver
+enquanto a loja não carregou. **Não corrigido aqui** (núcleo do PDV exige autorização) — follow-up da #343.
+
 ## B) Fluxo completo do primeiro cliente
 
 | Passo | Quem | Onde | Coberto por E2E (PG descartável) |
