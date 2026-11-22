@@ -59,8 +59,17 @@ function sessionRestrictedTo(ids: string[]) {
   }
 }
 function sessionFullAccess() {
-  // "Acesso pleno" desde 52c01c3 = autoridade da plataforma (papel admin sozinho não concede loja).
-  return { user: { id: "admin-1", role: "admin", storeAccess: "all", platformAuthority: true } }
+  // "Acesso pleno" de LOJA desde 52c01c3: admin membro da loja com o módulo service (nunca plataforma —
+  // a rota é de loja; o guard real de módulo precisa ser exercitado).
+  return {
+    user: {
+      id: "admin-1",
+      role: "admin",
+      storeAccess: "restricted",
+      allowedStoreIds: [LOJA_A],
+      storeModules: { [LOJA_A]: ["service"] },
+    },
+  }
 }
 function reqQuery(store: string) {
   return new Request(`http://local/api/ops/ordens?storeId=${encodeURIComponent(store)}`)

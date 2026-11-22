@@ -33,10 +33,8 @@ function scopeValido(
       role: "ADMIN",
       storeAccess,
       allowedStoreIds: storeAccess === "restricted" ? [storeId] : [],
-      // Contrato desde 52c01c3: o hub Contador exige o módulo `accountant` liberado na loja, e
-      // `storeAccess: "all"` só concede loja com autoridade da plataforma.
+      // Contrato desde 52c01c3: o hub Contador exige o módulo `accountant` liberado na loja.
       storeModules: { [storeId]: ["accountant"] },
-      platformAuthority: storeAccess === "all",
     },
     expires: "2999-01-01",
   } as unknown as Session

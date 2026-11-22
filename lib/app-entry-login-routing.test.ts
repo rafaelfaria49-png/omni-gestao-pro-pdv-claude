@@ -11,7 +11,7 @@
  * vivem no `proxy.ts`, cujo import graph carrega NextAuth/Prisma; esses são cobertos por
  * asserção estática sobre o fonte — mesmo padrão de `lib/proxy-cookie-mismatch.test.ts`.
  */
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
@@ -114,7 +114,9 @@ describe("entrada pública — / e a landing comercial", () => {
     expect(html).toContain('href="/privacy"')
   })
 
-  it("a landing comercial /gestao-lojas é pública", () => {
+  it("a landing comercial /gestao-lojas existe e é pública", () => {
+    expect(existsSync(resolve(process.cwd(), "app/gestao-lojas/page.tsx"))).toBe(true)
+    expect(read("app/gestao-lojas/page.tsx")).toContain("export default")
     expect(isPublicPath("/gestao-lojas")).toBe(true)
     expect(resolveProxyEntry({ pathname: "/gestao-lojas", pageParam: null, hasSession: false })).toEqual({
       kind: "allow",

@@ -71,7 +71,7 @@ function exigirAdminLocal() {
 export function verificarCobertura(manifesto = MANIFESTO) {
   const listados = new Set(manifesto.flatMap((g) => g.arquivos))
   const ausentes = [...listados].filter((f) => !existsSync(f))
-  const versionados = execFileSync("git", ["ls-files", "*.test.ts", "*.test.tsx"]).toString().split("\n").filter(Boolean)
+  const versionados = execFileSync("git", ["ls-files", "*.test.ts", "*.test.tsx", "*.spec.ts"]).toString().split("\n").filter(Boolean)
   const exigemPg = versionados.filter((f) => readFileSync(f, "utf8").includes("BLOQUEIO_EXPLICITO_PG"))
   const foraDoManifesto = exigemPg.filter((f) => !listados.has(f))
   return { exigemPg, ausentes, foraDoManifesto }
@@ -118,7 +118,7 @@ function main() {
       } else {
         prisma(["db", "execute", "--url", url, "--file", datamodel], env)
       }
-      const r = spawnSync(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...grupo.arquivos, "--maxWorkers=1", "--testTimeout=120000"], {
+      const r = spawnSync(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...grupo.arquivos, "--maxWorkers=1", "--testTimeout=120000", "--hookTimeout=120000"], {
         env: { ...process.env, ...env },
         stdio: "inherit",
       })

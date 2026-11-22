@@ -2101,6 +2101,9 @@ describe("OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split i
     expect(avaliarRecebimentoV4({ ...base, intencao: "parcial", linhas: [{ forma: "dinheiro", valorStr: "50" }] }).ok).toBe(true)
     expect(card).toMatch(/\(!!pendencia \|\| \(rascunho\.ok && /)
     expect(card).toContain("disabled={!podeConfirmar}")
+    // Trava de envio duplo: podeConfirmar exige !busy, e busy inclui o recebimento em voo do hook.
+    expect(card).toMatch(/const podeConfirmar =\s*!busy &&/)
+    expect(card).toContain("const busy = enviando || pdv.recebendo || !!pdv.registrandoMisto;")
   })
 
   it("total informado e saldo restante derivam do rascunho V3 (mesmo cálculo do contrato, sem soma nova)", () => {

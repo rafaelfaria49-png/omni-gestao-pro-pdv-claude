@@ -6,20 +6,9 @@ name: Suítes PostgreSQL da raiz
 # Banco de serviço isolado do runner; nenhuma credencial nem banco real.
 
 on:
+  # Sem filtro de caminhos: antes estas suítes estavam dentro do `npm test` de qualquer PR; um
+  # filtro deixaria mudanças em hooks/, types/, services/, proxy.ts ou auth*.ts sem a execução PG.
   pull_request:
-    paths:
-      - "app/**"
-      - "components/**"
-      - "lib/**"
-      - "test/**"
-      - "prisma/**"
-      - "scripts/ci/**"
-      - "scripts/aparelhos/prepare-pg.mjs"
-      - "scripts/seed-contas-receber-os.mjs"
-      - "package.json"
-      - "package-lock.json"
-      - "vitest.config.ts"
-      - ".github/workflows/root-pg-suites.yml"
   push:
     branches: [main]
   workflow_dispatch:

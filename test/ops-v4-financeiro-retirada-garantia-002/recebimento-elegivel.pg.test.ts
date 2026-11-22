@@ -823,6 +823,23 @@ describe("R7 · prova autoritativa, replay e serialização real", () => {
     expect(await receberOSV3(sid, id, input)).toMatchObject({ estado: "CONFIRMADO", resultado: { jaRegistrado: true } });
     expect(await fotoFinanceira(sid, id)).toBe(antes);
   });
+  // Revisão independente (P2-3): o ramo em que o guard de MÓDULO passa mas a capacidade da
+  // pendência nega. TECNICO tem hubs.operacoes + editarOs, mas não gerarCobranca → pendência
+  // mista fica oculta e bloqueada para ele, sem efeito financeiro; o ADMIN volta a enxergá-la.
+  it("pendência MISTA lida por TECNICO (sem gerarCobranca): oculta e bloqueada, sem efeito; ADMIN a vê", async () => {
+    const { sid, id, caixa } = await cenario();
+    const input = { operacaoId: gerarOperacaoIdV3(), sessaoId: caixa, pagamentosAgora: [{ forma: "pix" as const, valor: 100 }], saldoAPrazo: { valor: 320, vencimento: VENC }, saldoEsperado: 420, confirmacaoClienteV3: true as const };
+    expect(await registrarRecebimentoMistoOSV3(sid, id, input)).toMatchObject({ ok: true });
+    const antes = await fotoFinanceira(sid, id);
+    sessao.role = "TECNICO";
+    try {
+      expect(await lerPagamentoOSV3(sid, id)).toMatchObject({ pendenciaConfirmacao: null, confirmacaoBloqueada: true });
+      expect(await fotoFinanceira(sid, id)).toBe(antes);
+    } finally {
+      sessao.role = "ADMIN";
+    }
+    expect((await lerPagamentoOSV3(sid, id)).pendenciaConfirmacao).toMatchObject({ tipo: "misto", operacaoId: input.operacaoId });
+  });
   it("prova de outra chave, outro fingerprint ou outra loja nunca reconhece a pendência original", async () => {
     const { sid, id, input } = await cenario(); const r = await receberOSV3(sid, id, input);
     if (r.estado !== "CONFIRMADO") throw Error("Sem confirmação");
