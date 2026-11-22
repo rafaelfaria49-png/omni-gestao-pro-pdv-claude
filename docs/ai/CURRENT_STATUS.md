@@ -71,7 +71,7 @@
 - **Migration aditiva `20261118120000_solicitacoes_teste_comercial` NÃO aplicada em Production**
   (merge na `main` pode disparar `migrate deploy` no `omni-gestao-pro`). Exige autorização do proprietário.
 - **Fail-closed por env**: preços propostos (R$ 39,90/69,90/99,90 — **não aprovados**) só com
-  `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1`; download Windows só com `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` https.
+  `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1`; botão Windows leva sempre a `/baixar` (canal único; `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` removida em 2026-11-22).
 - `/` (acesso piloto) e a landing antiga de IA (`/dashboard/landing-preview`) **inalteradas**. Stripe intocado.
 - Matriz recurso/plano/status e auditoria Stripe: `docs/comercial/GESTAO_LOJAS_MATRIZ_RECURSOS.md`;
   design system: `docs/comercial/GESTAO_LOJAS_DESIGN_SYSTEM.md`.

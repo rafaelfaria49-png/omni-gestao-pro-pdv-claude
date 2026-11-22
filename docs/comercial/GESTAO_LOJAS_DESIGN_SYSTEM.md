@@ -85,7 +85,7 @@ alvos de toque ≥ 40px, sem rolagem horizontal em 375px.
 | Variável | Efeito |
 |---|---|
 | `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1` | mostra os 3 planos propostos com aviso de "em avaliação" (só QA) |
-| `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` | URL `https` do instalador homologado; sem ela, botão desligado |
+| ~~`GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL`~~ | Removida (2026-11-22): o botão Windows aponta sempre para `/baixar`, canal oficial único |
 | `GESTAO_LOJAS_CONTATO_WHATSAPP` / `_EMAIL` | canais diretos; sem eles, a página não mostra número/email |
 
 A página é estática (`force-static`): as chaves são lidas **no build**. Ligar ou desligar exige redeploy.

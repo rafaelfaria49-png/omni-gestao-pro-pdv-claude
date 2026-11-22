@@ -18,7 +18,7 @@ export const DESKTOP_COMPATIBILIDADE: CompatEntry[] = [
   {
     sistema: "Windows 11 (64 bits, x64)",
     status: "verificado",
-    detalhe: "Instalação, atalhos, login, troca de loja e impressão direta POS-80 testados na loja piloto (versão 1.0.3).",
+    detalhe: "Instalação, atalhos, login, troca de loja e impressão direta POS-80 testados na loja piloto (versão 1.0.3). Cada versão nova repete o teste antes de ser publicada.",
   },
   {
     sistema: "Windows 10 22H2 (64 bits, x64)",

@@ -55,7 +55,7 @@ export default async function BaixarPage() {
           {desktopVersion ? (
             <p role="status" className="rounded-md border border-border bg-muted px-3 py-2 text-sm">
               Você está no programa, versão {desktopVersion}.
-              {desktopOutdated && release ? ` A versão ${release.version} está disponível abaixo — instale quando o caixa estiver fechado.` : ""}
+              {desktopOutdated && release ? ` A versão ${release.version} foi publicada — veja abaixo a opção do seu Windows e instale com o caixa fechado.` : ""}
             </p>
           ) : null}
 
