@@ -15,6 +15,12 @@ const h = vi.hoisted(() => ({
   findFirst: vi.fn(async () => null as unknown),
 }))
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Usuário da loja-2 com módulo catalog (POST "catalog", GET "sharedCatalog").
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-2"], modules: ["catalog"] })) }
+})
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     produto: {
@@ -39,6 +45,8 @@ vi.mock("@/lib/cadastros/product-write-service", () => ({
 }))
 
 import { POST } from "./route"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 
 function postReq(body: Record<string, unknown>) {
   return new Request("http://local/api/produtos", {
@@ -145,7 +153,24 @@ describe("POST /api/produtos — boundary canônico (CAD-R2-007)", () => {
     expect(h.createProduct).not.toHaveBeenCalled()
   })
 
+  it("payload storeId de loja fora da membership → 403 do guard de módulo, sem criar", async () => {
+    const res = await POST(postReq({ name: "Y", stock: 1, price: 5, storeId: "loja-invasora" }))
+    expect(res.status).toBe(403)
+    expect(h.createProduct).not.toHaveBeenCalled()
+  })
+
+  it("membership sem módulo catalog → 403, sem criar", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-2"], modules: ["pdv"] }) as never)
+    const res = await POST(postReq({ name: "Y", stock: 1, price: 5 }))
+    expect(res.status).toBe(403)
+    expect(h.createProduct).not.toHaveBeenCalled()
+  })
+
   it("caller storeId vira autoridade (payload storeId ignorado)", async () => {
+    // Mesmo quando o usuário também pertence à loja do payload, a loja do chamador decide.
+    vi.mocked(auth).mockResolvedValueOnce(
+      storeSession({ stores: ["loja-2", "loja-invasora"], modules: ["catalog"] }) as never,
+    )
     await POST(postReq({ name: "Y", stock: 1, price: 5, storeId: "loja-invasora" }))
     const [ctx, input] = h.createProduct.mock.calls[0] as unknown as [{ storeId: string }, Record<string, unknown>]
     expect(ctx.storeId).toBe(STORE)

@@ -9,6 +9,7 @@ vi.mock("@/auth", () => ({ auth: authMock }))
 vi.mock("next/headers", () => ({ cookies: cookiesMock }))
 
 import { requireContadorScope } from "./scope"
+import { storeSession } from "@/test/fixtures/store-session"
 
 describe("requireContadorScope", () => {
   beforeEach(() => {
@@ -18,10 +19,7 @@ describe("requireContadorScope", () => {
   })
 
   it("o gate server-side produz scope nominal com usuario, loja e permissao Contador", async () => {
-    authMock.mockResolvedValue({
-      user: { id: "user-7", role: "ADMIN", storeAccess: "all" },
-      expires: "2999-01-01",
-    })
+    authMock.mockResolvedValue(storeSession({ id: "user-7", stores: ["loja-ativa"], modules: ["accountant"] }))
 
     await expect(requireContadorScope()).resolves.toEqual({
       ok: true,
@@ -29,6 +27,11 @@ describe("requireContadorScope", () => {
       userId: "user-7",
       permissaoContador: true,
     })
+  })
+
+  it("loja ativa fora da membership não produz scope (sem_acesso_loja)", async () => {
+    authMock.mockResolvedValue(storeSession({ id: "user-7", stores: ["outra-loja"], modules: ["accountant"] }))
+    await expect(requireContadorScope()).resolves.toEqual({ ok: false, motivo: "sem_acesso_loja" })
   })
 
   it("nao cria scope sem sessao autenticada", async () => {

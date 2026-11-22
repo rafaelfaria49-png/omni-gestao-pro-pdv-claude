@@ -69,6 +69,12 @@ const h = vi.hoisted(() => {
   return { store, prisma, requireEnterpriseWith, reset }
 })
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Usuário das duas lojas com módulo agent (requireModuleAction(storeId, "agent")); os cenários A×B seguem provando isolamento de dados.
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-a", "loja-b"], modules: ["agent"] })) }
+})
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: h.requireEnterpriseWith }))
 

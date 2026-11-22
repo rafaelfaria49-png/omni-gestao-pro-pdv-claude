@@ -29,16 +29,23 @@ function makeSession(opts: {
   role?: string
   storeAccess?: "all" | "restricted"
   allowedStoreIds?: string[]
+  /** Módulos liberados em cada loja da membership (contrato desde 52c01c3). */
+  modules?: string[]
+  platformAuthority?: boolean
   id?: string
 }): Session {
+  const allowedStoreIds = opts.allowedStoreIds ?? ["loja-a"]
+  const modules = opts.modules ?? ["marketplace"]
   return {
     user: {
       id: opts.id ?? "user-1",
       email: "u@x.com",
       name: "U",
       role: opts.role ?? "ADMIN",
-      storeAccess: opts.storeAccess ?? "all",
-      allowedStoreIds: opts.allowedStoreIds,
+      storeAccess: opts.storeAccess ?? "restricted",
+      allowedStoreIds,
+      storeModules: Object.fromEntries(allowedStoreIds.map((sid) => [sid, modules])),
+      platformAuthority: opts.platformAuthority ?? false,
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session
@@ -145,17 +152,29 @@ describe("requireMarketplaceApi — membership + hubs.marketplace", () => {
 
   it("T7 — CAIXA / TECNICO / VENDEDOR não obtêm autorização", async () => {
     for (const role of ["CAIXA", "TECNICO", "VENDEDOR"] as const) {
-      sessionAtiva(makeSession({ role, storeAccess: "all" }))
+      sessionAtiva(makeSession({ role }))
       const r = await deny(await requireMarketplaceApi(req({ headerStoreId: "loja-a" })))
       expect(r, role).toEqual({ status: 403, error: MARKETPLACE_FORBIDDEN_MESSAGE })
     }
   })
 
   it("T8 — ADMIN autorizado: contrato de sucesso { ok, storeId }", async () => {
-    sessionAtiva(makeSession({ role: "ADMIN", storeAccess: "all" }))
+    sessionAtiva(makeSession({ role: "ADMIN" }))
     const r = await requireMarketplaceApi(req({ headerStoreId: "loja-a" }))
     expect(r).toEqual({ ok: true, storeId: "loja-a" })
     expect(r).not.toHaveProperty("response")
+  })
+
+  it("T8b — ADMIN membro da loja SEM o módulo marketplace liberado: 403", async () => {
+    sessionAtiva(makeSession({ role: "ADMIN", modules: ["pdv", "catalog"] }))
+    const r = await deny(await requireMarketplaceApi(req({ headerStoreId: "loja-a" })))
+    expect(r).toEqual({ status: 403, error: MARKETPLACE_FORBIDDEN_MESSAGE })
+  })
+
+  it('T8c — storeAccess="all" sem autoridade da plataforma não concede loja: 403', async () => {
+    sessionAtiva(makeSession({ role: "ADMIN", storeAccess: "all", allowedStoreIds: [] }))
+    const r = await deny(await requireMarketplaceApi(req({ headerStoreId: "loja-a" })))
+    expect(r).toEqual({ status: 403, error: "Sem permissão para esta unidade" })
   })
 
   it("T9 — storeId por header passa por membership", async () => {

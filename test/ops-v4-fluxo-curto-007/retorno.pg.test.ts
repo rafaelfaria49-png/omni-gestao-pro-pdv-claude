@@ -11,10 +11,26 @@
 // Ausência de ambiente = BLOQUEIO_EXPLICITO_PG (nunca skip). Massa sintética.
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-const sessao = vi.hoisted(() => ({
-  user: { id: "qa-007", name: "Operador QA 007", role: "ADMIN", storeAccess: "all" as string, allowedStoreIds: [] as string[] },
+// Contrato desde 52c01c3: só membership explícita (STORE) concede loja; `storeAccess: "all"` sem
+// autoridade da plataforma não basta. O admin QA é membro de toda loja criada por `novaLoja`.
+const sessao = vi.hoisted(() => {
+  const lojasCriadas: string[] = [];
+  return {
+    lojasCriadas,
+    user: { id: "qa-007", name: "Operador QA 007", role: "ADMIN", storeAccess: "restricted" as string, allowedStoreIds: lojasCriadas as string[] },
+  };
+});
+vi.mock("@/auth", () => ({
+  auth: vi.fn(async () => ({
+    user: {
+      ...sessao.user,
+      accessScope: "STORE",
+      platformAuthority: false,
+      allowedStoreIds: [...sessao.user.allowedStoreIds],
+      storeModules: Object.fromEntries(sessao.user.allowedStoreIds.map((id) => [id, ["service", "finance", "pdv", "cash", "sales"]])),
+    },
+  })),
 }));
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { ...sessao.user } })) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 type Ponto = { quando: (op: "create" | "update", args: any) => boolean; acao: "pausar" | "falhar"; chegou: () => void; barreira: Promise<void> };
@@ -98,7 +114,7 @@ afterAll(async () => {
 });
 
 function comoAdmin() {
-  sessao.user = { id: "qa-007", name: "Operador QA 007", role: "ADMIN", storeAccess: "all", allowedStoreIds: [] };
+  sessao.user = { id: "qa-007", name: "Operador QA 007", role: "ADMIN", storeAccess: "restricted", allowedStoreIds: sessao.lojasCriadas };
 }
 function comoOperadorRestrito(lojas: string[], role = "TECNICO") {
   sessao.user = { id: "qa-007-r", name: "Operador Loja A", role, storeAccess: "restricted", allowedStoreIds: lojas };
@@ -107,6 +123,7 @@ function comoOperadorRestrito(lojas: string[], role = "TECNICO") {
 async function novaLoja(): Promise<string> {
   const id = `qa-007-${SUFIXO}-${++seq}`;
   await prisma.store.create({ data: { id, name: `Loja QA 007 ${seq}` } });
+  sessao.lojasCriadas.push(id);
   return id;
 }
 

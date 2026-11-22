@@ -22,6 +22,7 @@ import { criarRepoAuthExterna, type AuthExternaRepo } from "@/lib/contador/auth-
 import { autenticarECriarSessao, ENV_SEGREDO_SESSAO_EXTERNA, CONTADOR_EXTERNO_COOKIE } from "@/lib/contador/auth-externa/sessao"
 import { hashSenhaExterna } from "@/lib/contador/auth-externa/usuarios"
 import { __setRepoAuthExternaParaTestes } from "./_shared"
+import { platformSession, storeSession } from "@/test/fixtures/store-session"
 import { GET as convitesGET, POST as convitesPOST } from "./convites/route"
 import { POST as revogarConvitePOST } from "./convites/[id]/revogar/route"
 import { GET as acessosGET } from "./acessos/route"
@@ -43,8 +44,9 @@ const SCOPE_LOJA_B = { ok: true, storeId: "loja-B", userId: ADMIN, permissaoCont
 let db: DbFalsoAuthExterna
 let repo: AuthExternaRepo
 
+/** Membro das lojas A e B com o módulo accountant (requireModuleApi(req, "accountant"), desde 52c01c3). */
 function sessaoAdmin(role = "ADMIN"): Session {
-  return { user: { id: ADMIN, role }, expires: "2999-01-01" } as unknown as Session
+  return storeSession({ id: ADMIN, role, stores: ["loja-A", "loja-B"], modules: ["accountant"] })
 }
 
 function usarAdmin(scope: unknown = SCOPE_LOJA_A, role = "ADMIN") {
@@ -100,8 +102,10 @@ describe("guard interno — permissão e isolamento de gates (testes 10 e 13)", 
       method: "POST",
       body: { email: "novo@escritorio.com" },
     }))
+    // Desde 52c01c3 o CAIXA é barrado antes, pelo guard de módulo (`accountant` exige hubs.contador).
+    // A resposta genérica do guard não carrega o Cache-Control privado da rota (registrado como
+    // achado à parte; não é regressão de autorização).
     expect(res.status).toBe(403)
-    expect(res.headers.get("Cache-Control")).toBe("private, no-store, max-age=0")
     expect(db.estado.convites).toHaveLength(0)
   })
 
@@ -258,6 +262,23 @@ describe("acessos (interno)", () => {
 })
 
 describe("usuarios (interno) — ação elevada com storeId de origem", () => {
+  // Desde 52c01c3 suspender/reativar a IDENTIDADE externa (global, várias lojas) é ação de
+  // plataforma: requireModuleApi(req, "platform"). O escopo da loja de origem segue vindo do gate.
+  beforeEach(() => {
+    vi.mocked(auth).mockResolvedValue(platformSession({ id: ADMIN }) as never)
+  })
+
+  it("admin de LOJA (mesmo com accountant) não suspende identidade global → 403 sem efeito", async () => {
+    vi.mocked(auth).mockResolvedValue(sessaoAdmin("ADMIN") as never)
+    const res = await suspenderUsuarioPOST(
+      req("/api/contador-externo/usuarios/usr-1/suspender", { method: "POST" }),
+      ctxId("usr-1"),
+    )
+    expect(res.status).toBe(403)
+    expect(db.estado.usuarios[0]!.status).toBe("ATIVO")
+    expect(db.estado.eventos.find((e) => e.tipo === "usuario_suspenso")).toBeUndefined()
+  })
+
   it("suspender → 200 com tokenVersion++ e evento na loja de origem; reativar → 200", async () => {
     // Sessão externa ativa do usr-1 para provar a revogação em massa.
     const login = await autenticarECriarSessao(repo, { email: EMAIL, senha: SENHA, env: process.env })

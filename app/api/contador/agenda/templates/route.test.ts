@@ -20,6 +20,7 @@ vi.mock("@/lib/contador/documentos/http", () => ({
 }))
 
 import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 import { requireContadorScope } from "@/lib/contador/scope"
 import { resolverCapacidadesContador } from "@/lib/contador/status/permissoes"
 import { criarTemplate, listarTemplates } from "@/lib/contador/agenda"
@@ -39,7 +40,8 @@ function req(method: string, body?: unknown, query = "") {
 }
 
 beforeEach(() => {
-  vi.mocked(auth).mockReset().mockResolvedValue({ user: { id: "u1" } } as never)
+  // Membro da loja-1 com o módulo accountant (requireModuleApi(req, "accountant"), desde 52c01c3).
+  vi.mocked(auth).mockReset().mockResolvedValue(storeSession({ id: "u1", stores: ["loja-1"], modules: ["accountant"] }) as never)
   vi.mocked(requireContadorScope).mockReset().mockResolvedValue(SCOPE_OK as never)
   vi.mocked(resolverCapacidadesContador).mockReset().mockReturnValue(CAP_ALTO)
   vi.mocked(listarTemplates).mockReset().mockResolvedValue([TPL] as never)
@@ -58,13 +60,33 @@ describe("GET /api/contador/agenda/templates", () => {
     expect(json.ok).toBe(true)
     expect(json.templates).toHaveLength(1)
     expect(listarTemplates).toHaveBeenCalledTimes(1)
-    expect(auth).not.toHaveBeenCalled()
+    // Desde 52c01c3 a sessão é lida uma vez, pelo guard de módulo; capacidades não são consultadas.
+    expect(auth).toHaveBeenCalledTimes(1)
+    expect(resolverCapacidadesContador).not.toHaveBeenCalled()
     expect(criarTemplate).not.toHaveBeenCalled()
   })
 
   it("storeId na query → 400", async () => {
+    // Membro também da loja citada: o guard de módulo passa e a regra da rota recusa o seletor.
+    vi.mocked(auth).mockResolvedValueOnce(
+      storeSession({ id: "u1", stores: ["loja-1", "loja-9"], modules: ["accountant"] }) as never,
+    )
     const res = await GET(req("GET", undefined, "?storeId=loja-9"))
     expect(res.status).toBe(400)
+    expect(listarTemplates).not.toHaveBeenCalled()
+  })
+
+  it("storeId de loja fora da membership → 403 do guard de módulo", async () => {
+    const res = await GET(req("GET", undefined, "?storeId=loja-9"))
+    expect(res.status).toBe(403)
+    expect(requireContadorScope).not.toHaveBeenCalled()
+    expect(listarTemplates).not.toHaveBeenCalled()
+  })
+
+  it("membership sem módulo accountant → 403", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ id: "u1", stores: ["loja-1"], modules: ["finance"] }) as never)
+    const res = await GET(req("GET"))
+    expect(res.status).toBe(403)
     expect(listarTemplates).not.toHaveBeenCalled()
   })
 })

@@ -194,8 +194,13 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { name: "Tester", email: "t@t.com" } })) }))
-vi.mock("@/lib/auth/enterprise-permissions", () => ({ canAccessStore: () => true }))
+// Usuário da loja-x com módulos stock + catalog: requireModuleAction(storeId, "stock") exige o
+// hub de cadastros. `canAccessStore`/`canUseModule` são os reais — o antigo mock
+// `canAccessStore: () => true` foi removido.
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-x"], modules: ["stock", "catalog"], name: "Tester", email: "t@t.com" })) }
+})
 vi.mock("@/app/actions/estoque", () => ({ registrarAjusteEstoque: h.registrarAjusteEstoque }))
 
 import {
@@ -210,6 +215,8 @@ import {
   aplicarAjusteInventario,
   getRelatorioInventario,
 } from "./inventario"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 
 function seedSessao(status: "aberta" | "finalizada" = "aberta") {
   h.store.sessoes.set("s1", {
@@ -844,5 +851,30 @@ describe("dedup — consolidação por produto (barcode / SKU / alias)", () => {
     if (res2.ok) return
     expect(res2.reason).toMatch(/já foi ajustado/i)
     expect(h.registrarAjusteEstoque).toHaveBeenCalledTimes(1) // não chamou de novo
+  })
+})
+
+describe("guard de módulo real (requireModuleAction(storeId, \"stock\")) — negativos", () => {
+  it("loja fora da membership → recusa sem tocar em contagem nem estoque", async () => {
+    seedSessao()
+    await expect(
+      registrarContagemProduto("loja-y", { sessaoId: "s1", codigo: "X", produtoId: "p1", quantidade: 1, modo: "somar" }),
+    ).rejects.toThrow("Sem permissão para esta unidade")
+    expect(h.store.contagens).toHaveLength(0)
+    expect(h.registrarAjusteEstoque).not.toHaveBeenCalled()
+  })
+  it("membership sem o hub de cadastros (só stock) → recusa", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-x"], modules: ["stock"] }) as never)
+    seedSessao()
+    await expect(
+      registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "X", produtoId: "p1", quantidade: 1, modo: "somar" }),
+    ).rejects.toThrow("Sem permissão para este módulo ou unidade.")
+    expect(h.store.contagens).toHaveLength(0)
+  })
+  it("sem sessão → recusa", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(null as never)
+    await expect(
+      registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "X", produtoId: "p1", quantidade: 1, modo: "somar" }),
+    ).rejects.toThrow("Não autenticado")
   })
 })

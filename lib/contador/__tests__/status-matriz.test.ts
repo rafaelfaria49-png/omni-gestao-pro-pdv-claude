@@ -176,8 +176,18 @@ describe("status · `vencido` é derivado, nunca persistido", () => {
 
 /* ─────────────────────────── capacidades por papel ─────────────────────────── */
 
+/** Membro da loja-1 com os módulos accountant + finance liberados (contrato desde 52c01c3); o papel decide. */
 function sessao(over: Record<string, unknown>): Session {
-  return { user: { id: "user-1", ...over }, expires: "2999-01-01" } as unknown as Session
+  return {
+    user: {
+      id: "user-1",
+      storeAccess: "restricted",
+      allowedStoreIds: ["loja-1"],
+      storeModules: { "loja-1": ["accountant", "finance"] },
+      ...over,
+    },
+    expires: "2999-01-01",
+  } as unknown as Session
 }
 
 describe("status · capacidades derivadas da sessão (nunca do cliente)", () => {
