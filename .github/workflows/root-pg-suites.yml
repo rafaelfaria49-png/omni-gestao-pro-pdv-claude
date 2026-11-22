@@ -1,0 +1,69 @@
+name: Suítes PostgreSQL da raiz
+
+# Suítes da raiz que exigem PostgreSQL descartável (BLOQUEIO_EXPLICITO_PG) e por isso ficam fora de
+# `npm run test:root:sem-pg`. O manifesto e a trava de cobertura moram em
+# scripts/ci/run-root-pg-suites.mjs: suíte PG nova sem entrada no manifesto reprova este job.
+# Banco de serviço isolado do runner; nenhuma credencial nem banco real.
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "test/**"
+      - "prisma/**"
+      - "scripts/ci/**"
+      - "scripts/aparelhos/prepare-pg.mjs"
+      - "scripts/seed-contas-receber-os.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "vitest.config.ts"
+      - ".github/workflows/root-pg-suites.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: root-pg-suites-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pg:
+    name: Suítes PG (bancos descartáveis)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: root_pg
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U root_pg" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PG_ADMIN_URL: postgresql://root_pg:isolated_ci_only@127.0.0.1:5432/postgres
+      APARELHOS_BASE_REF: origin/${{ github.base_ref || 'main' }}
+      AUTH_SECRET: isolated-root-pg-fixture-without-production-authority
+      AUTH_TRUST_HOST: "true"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # O preparador de aparelhos lê o schema da base no histórico (git show/log).
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Suítes PostgreSQL da raiz (manifesto + cobertura)
+        run: npm run test:root:pg

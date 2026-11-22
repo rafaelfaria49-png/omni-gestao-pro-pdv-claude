@@ -9,7 +9,13 @@
 // gate ok). Ausência de ambiente = BLOQUEIO_EXPLICITO_PG (nunca skip). Massa sintética.
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "qa-frg", name: "Operador QA FRG", role: "ADMIN", storeAccess: "all" } })) }));
+// Contrato desde 52c01c3: o operador é membro (STORE) de cada loja sintética criada por `novaLoja`,
+// com os módulos da operação de OS; `storeAccess: "all"` sozinho não concede loja.
+const membro = vi.hoisted(() => ({ lojas: [] as string[] }));
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session");
+  return { auth: vi.fn(async () => storeSession({ id: "qa-frg", name: "Operador QA FRG", role: "ADMIN", stores: membro.lojas, modules: ["service", "finance", "pdv", "cash", "sales"] })) };
+});
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: vi.fn(async () => ({ ok: true })) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -53,6 +59,7 @@ afterAll(async () => {
 async function novaLoja(): Promise<string> {
   const id = `qa-frg-${SUFIXO}-${++seq}`;
   await prisma.store.create({ data: { id, name: `Loja QA FRG ${seq}` } });
+  membro.lojas.push(id);
   return id;
 }
 
