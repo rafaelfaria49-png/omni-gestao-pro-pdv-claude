@@ -180,16 +180,24 @@ test("jornada: pedido → plataforma provisiona com os dados do pedido → login
   await expect(page.getByLabel("Ramo principal")).toHaveValue("acessorios")
   await page.screenshot({ path: `${out}/gestao-lojas-plataforma.png`, fullPage: true, animations: "disabled" })
   await expect(page.getByLabel("Email de acesso")).toHaveValue(email)
+  await expect(page.getByText(`Ligado ao pedido ${protocolo}`)).toBeVisible()
   await page.getByRole("button", { name: "Provisionar cliente" }).click()
   const senha = page.getByLabel("Senha temporária individual")
   await expect(senha).not.toHaveValue("")
   const temporaria = await senha.inputValue()
-  await item.getByRole("button", { name: "Marcar acesso liberado" }).click()
+  // O pedido fecha sozinho ao provisionar, com a loja e o usuário criados no histórico.
+  await expect(page.getByText(`Pedido ${protocolo} marcado como acesso liberado.`)).toBeVisible()
   await expect(item).toHaveCount(0)
+  const instrucoes = await page.getByLabel("Instruções de entrada para o cliente (sem a senha)").inputValue()
+  expect(instrucoes).toContain(`${baseURL}/login`)
+  expect(instrucoes).toContain(email)
+  expect(instrucoes).not.toContain(temporaria)
+
+  const user = await db.adminUser.findUniqueOrThrow({ where: { email }, select: { id: true, lojaId: true, role: true, accessScope: true, mustChangePassword: true } })
   const row = await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { protocolo } })
   expect({ status: row.status, aberto: row.emailAberto }).toEqual({ status: "provisionada", aberto: null })
+  expect((row.historico as Array<Record<string, unknown>>).at(-1)).toMatchObject({ evento: "provisionada", storeId: user.lojaId, userId: user.id })
 
-  const user = await db.adminUser.findUniqueOrThrow({ where: { email }, select: { lojaId: true, role: true, accessScope: true, mustChangePassword: true } })
   expect({ role: user.role, scope: user.accessScope, troca: user.mustChangePassword }).toEqual({ role: "ADMIN", scope: "STORE", troca: true })
   const cliente = await loginCredentials(email, temporaria, user.lojaId!)
   expect(new URL((await cliente.get("/dashboard")).url()).pathname).toBe("/conta/seguranca")
@@ -201,4 +209,62 @@ test("jornada: pedido → plataforma provisiona com os dados do pedido → login
   expect(new URL(painel.url()).pathname).toBe("/dashboard")
   // Cliente novo não enxerga os pedidos comerciais de outras lojas.
   expect((await dentro.get("/api/platform/solicitacoes-teste")).status()).toBe(403)
+})
+
+test("provisionamento ligado ao pedido é atômico: corrida, pedido encerrado, marcação manual e sem pedido", async () => {
+  const api = await request.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": origem() } }); contexts.add(api)
+  const tag = randomBytes(3).toString("hex")
+  const pedir = async (n: string) => {
+    const r = await api.post("/api/comercial/solicitacoes-teste", { data: { nome: "Corrida Sintética", nomeLoja: `Corrida ${n} ${tag}`, email: `corrida-${n}-${tag}@pilot.invalid`, whatsapp: "11900000004", ramo: "comercio", consentimento: true } })
+    expect(r.status()).toBe(201)
+    return db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { protocolo: (await r.json()).protocolo } })
+  }
+  const owner = await login("owner")
+  const conta = (email: string, storeName: string, solicitacaoId?: string) => ({ storeName, name: "Dono Sintético", email, branch: "comercio", ...(solicitacaoId ? { solicitacaoId } : {}) })
+
+  // Loja local não provisiona, nem ligando a um pedido; o pedido continua aberto.
+  const p1 = await pedir("1")
+  const local = await login("adminA")
+  expect((await local.post("/api/platform/provision", { data: conta(`x-${tag}@pilot.invalid`, `Local ${tag}`, p1.id) })).status()).toBe(403)
+  expect((await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe("recebida")
+
+  // Email diferente do pedido: o servidor recusa ligar, nada é criado e o pedido segue aberto.
+  const outroEmail = `outro-${tag}@pilot.invalid`
+  expect((await owner.post("/api/platform/provision", { data: conta(outroEmail, `Outro ${tag}`, p1.id) })).status()).toBe(400)
+  expect(await db.adminUser.count({ where: { email: outroEmail } })).toBe(0)
+  expect((await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe("recebida")
+
+  // Dois operadores no MESMO pedido ao mesmo tempo: uma conta só, um vínculo só.
+  const nomeLoja = `Corrida Loja ${tag}`
+  const emailPedido = `corrida-1-${tag}@pilot.invalid`
+  const rs = await Promise.all([0, 1].map(() => owner.post("/api/platform/provision", { data: conta(emailPedido, nomeLoja, p1.id) })))
+  expect(rs.map((r) => r.status()).sort()).toEqual([201, 409])
+  expect(await db.store.count({ where: { name: nomeLoja } })).toBe(1)
+  const criado = await db.adminUser.findUniqueOrThrow({ where: { email: emailPedido }, select: { id: true, lojaId: true } })
+  const fechado = await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })
+  expect({ status: fechado.status, aberto: fechado.emailAberto }).toEqual({ status: "provisionada", aberto: null })
+  const eventos = (fechado.historico as Array<Record<string, unknown>>).filter((h) => h.evento === "provisionada")
+  expect(eventos).toHaveLength(1)
+  expect(eventos[0]).toMatchObject({ storeId: criado.lojaId, userId: criado.id })
+
+  // Pedido descartado: nada é criado.
+  const p2 = await pedir("2")
+  expect((await owner.patch("/api/platform/solicitacoes-teste", { data: { id: p2.id, status: "descartada" } })).status()).toBe(200)
+  const r2 = await owner.post("/api/platform/provision", { data: conta(`corrida-2-${tag}@pilot.invalid`, `Descartado ${tag}`, p2.id) })
+  expect(r2.status()).toBe(409)
+  expect(await db.store.count({ where: { name: `Descartado ${tag}` } })).toBe(0)
+  expect(await db.adminUser.count({ where: { email: `corrida-2-${tag}@pilot.invalid` } })).toBe(0)
+
+  // Marcação manual ("Marcar acesso liberado") segue funcionando, sem vínculo inventado.
+  const p3 = await pedir("3")
+  expect((await owner.patch("/api/platform/solicitacoes-teste", { data: { id: p3.id, status: "provisionada" } })).status()).toBe(200)
+  const manual = await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p3.id } })
+  expect(manual.status).toBe("provisionada")
+  expect((manual.historico as Array<Record<string, unknown>>).at(-1)).not.toHaveProperty("storeId")
+
+  // Provisionamento manual, sem pedido, continua igual.
+  const semPedido = await owner.post("/api/platform/provision", { data: conta(`sem-${tag}@pilot.invalid`, `Sem pedido ${tag}`) })
+  expect(semPedido.status()).toBe(201)
+  expect(await semPedido.json()).not.toHaveProperty("solicitacao")
+  expect(await db.adminUser.findUniqueOrThrow({ where: { email: `sem-${tag}@pilot.invalid` }, select: { mustChangePassword: true, accessScope: true } })).toEqual({ mustChangePassword: true, accessScope: "STORE" })
 })

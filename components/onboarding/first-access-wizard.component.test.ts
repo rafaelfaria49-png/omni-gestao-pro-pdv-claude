@@ -3,15 +3,15 @@ import React from "react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 
-const h = vi.hoisted(() => ({ store: "store-a", incomplete: true }))
-vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { id: "synthetic", sessionVersion: 0 } } }) }))
+const h = vi.hoisted(() => ({ store: "store-a", incomplete: true, user: "synthetic" }))
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { id: h.user, sessionVersion: 0 } } }) }))
 vi.mock("next/link", () => ({ default: ({ href, children, onClick }: { href: string; children: React.ReactNode; onClick?: () => void }) => React.createElement("a", { href, onClick }, children) }))
 vi.mock("@/lib/loja-ativa", () => ({ ASSISTEC_STORES_SYNC_STORAGE_KEY: "store-sync", useLojaAtiva: () => ({ lojaAtivaId: h.store, lojaAtivaRaw: { nomeFantasia: h.store }, storesLoaded: true, cadastroBasicoIncompleto: h.incomplete, refreshStoresList: async () => {} }) }))
 vi.mock("@/lib/use-store-business", () => ({ useStoreBusiness: () => ({ canConfigure: true, ready: true, configured: true, branch: "padaria", resource: () => ({ enabled: false }), permissions: { hubs: { cadastros: true } } }) }))
 vi.mock("@/lib/store-settings-provider", () => ({ useStoreSettings: () => ({ refresh: async () => {} }) }))
 import { FirstAccessWizard } from "./first-access-wizard"
 
-beforeEach(() => { h.store = "store-a"; h.incomplete = true })
+beforeEach(() => { h.store = "store-a"; h.incomplete = true; h.user = "synthetic"; sessionStorage.clear() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 it("concluir e fechar não conserva confirmação antiga quando Geral torna o cadastro incompleto de novo", async () => {
@@ -62,4 +62,34 @@ it("retomar relê os dados persistidos por Geral enquanto o assistente estava fe
   fireEvent.change(screen.getByLabelText("CNPJ"), { target: { value: "Identificação sintética" } })
   fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
   expect((screen.getByLabelText("Telefone") as HTMLInputElement).value).toBe("222")
+})
+
+it("Voltar depois sobrevive a recarga e navegação completa na mesma sessão da aba (SEC-342)", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => Response.json(url.endsWith("/settings") ? { settings: null } : { store: { id: h.store, name: h.store } })))
+  render(React.createElement(FirstAccessWizard))
+  await screen.findByLabelText("Nome da loja (nome fantasia)")
+  fireEvent.click(screen.getByRole("button", { name: "Voltar depois" }))
+  expect(screen.queryByRole("dialog")).toBeNull()
+  // Recarga/navegação completa = árvore nova montada do zero, mesma aba.
+  cleanup()
+  render(React.createElement(FirstAccessWizard))
+  await screen.findByRole("button", { name: "Retomar configuração inicial" })
+  expect(screen.queryByRole("dialog")).toBeNull()
+  // Retomar reabre e desfaz o adiamento: a próxima recarga mostra o assistente de novo.
+  fireEvent.click(screen.getByRole("button", { name: "Retomar configuração inicial" }))
+  await screen.findByLabelText("Nome da loja (nome fantasia)")
+  cleanup()
+  render(React.createElement(FirstAccessWizard))
+  await screen.findByLabelText("Nome da loja (nome fantasia)")
+})
+
+it("adiamento de um usuário não vale para outro usuário na mesma aba (SEC-342)", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => Response.json(url.endsWith("/settings") ? { settings: null } : { store: { id: h.store, name: h.store } })))
+  render(React.createElement(FirstAccessWizard))
+  await screen.findByLabelText("Nome da loja (nome fantasia)")
+  fireEvent.click(screen.getByRole("button", { name: "Voltar depois" }))
+  cleanup()
+  h.user = "outro-usuario"
+  render(React.createElement(FirstAccessWizard))
+  await screen.findByLabelText("Nome da loja (nome fantasia)")
 })

@@ -1093,6 +1093,14 @@ export function OperationsProvider({
   const caixaHydratedForRef = useRef<string | null>(null)
   const storageKeyRef = useRef(storageKey)
   const caixaHydrated = caixaHydratedFor === storageKey
+  /**
+   * A chave legada só aparece enquanto a loja ativa ainda não foi resolvida (primeiro
+   * render, antes de `/api/stores`/localStorage) — `opsLojaIdFromStorageKey` a traduz para
+   * `loja-1`. Sem esta porta, toda carga de página consultava (e podia gravar ordens, livro
+   * diário e reenviar a fila) na `loja-1` com outra loja selecionada (SEC-342 · isolamento).
+   * Estado local (hidratação/persistência) continua igual; só o servidor espera a loja real.
+   */
+  const lojaResolvida = storageKey !== OPS_KEY_LEGACY
 
   useEffect(() => {
     stateRef.current = state
@@ -1343,6 +1351,7 @@ export function OperationsProvider({
   }, [])
 
   useEffect(() => {
+    if (!lojaResolvida) return
     const lj = opsLojaIdFromStorageKey(storageKey)
     // `catalogSync=1` é NetworkOnly no service worker (next.config.mjs): o cache NetworkFirst de
     // `/api/*` devolveria um catálogo velho em rede lenta. A carga inicial segue cacheável (offline).
@@ -1403,10 +1412,13 @@ export function OperationsProvider({
       unsubscribe()
       window.clearInterval(timer)
     }
-  }, [storageKey])
+  }, [storageKey, lojaResolvida])
 
   useEffect(() => {
     setOpsDbReady(false)
+    // Sem loja resolvida `opsDbReady` fica falso: PUT de ordens, flush da fila e o ciclo de
+    // reenvio (todos atrás de `opsDbReady`) não disparam contra a `loja-1`.
+    if (!lojaResolvida) return
     let cancelled = false
     async function loadDb() {
       const lj = opsLojaIdFromStorageKey(storageKey)
@@ -1548,7 +1560,7 @@ export function OperationsProvider({
     return () => {
       cancelled = true
     }
-  }, [storageKey, canReadOperations, checkCatalog])
+  }, [storageKey, canReadOperations, checkCatalog, lojaResolvida])
 
   /**
    * Reconcilia a sessão de caixa com o servidor — fonte da verdade.
@@ -1574,6 +1586,8 @@ export function OperationsProvider({
 
   const refreshCaixaSession = useCallback(async (): Promise<CaixaRefreshOutcome> => {
     const lj = opsLojaIdFromStorageKey(storageKey)
+    // Loja não resolvida: nenhuma decisão (a consulta iria para a `loja-1`).
+    if (!lojaResolvida) return { ok: false, status: "falha", reason: "nao-hidratado" }
     return caixaSyncSingleFlightRef.current(async () => {
       const local = stateRef.current
       const { outcome, decision } = await reconcileCaixaSession({
@@ -1608,13 +1622,13 @@ export function OperationsProvider({
 
       return outcome
     })
-  }, [storageKey])
+  }, [storageKey, lojaResolvida])
 
   // Reconciliação automática: montagem (só DEPOIS da hidratação), troca de loja,
   // volta do foco e retorno da rede. Cobre F5, nova aba, novo login e reinício
   // do computador. Não depende de `opsDbReady` — estoque/OS podem falhar.
   useEffect(() => {
-    if (!caixaHydrated) return
+    if (!caixaHydrated || !lojaResolvida) return
     void refreshCaixaSession()
     const onVisible = () => {
       if (document.visibilityState === "visible") void refreshCaixaSession()
@@ -1626,7 +1640,7 @@ export function OperationsProvider({
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("online", onOnline)
     }
-  }, [caixaHydrated, refreshCaixaSession])
+  }, [caixaHydrated, refreshCaixaSession, lojaResolvida])
 
   useEffect(() => {
     if (!opsDbReady || !canReadOperations) return
@@ -1661,6 +1675,7 @@ export function OperationsProvider({
 
   const ledgerKey = JSON.stringify(state.dailyLedger)
   useEffect(() => {
+    if (!lojaResolvida) return
     let cancelled = false
     const t = setTimeout(() => {
       void (async () => {
@@ -1691,7 +1706,7 @@ export function OperationsProvider({
       cancelled = true
       clearTimeout(t)
     }
-  }, [ledgerKey, storageKey])
+  }, [ledgerKey, storageKey, lojaResolvida])
 
   // Cooldown do re-sync automático por venda: rejeição de REGRA (HTTP 4xx, ex.:
   // 409 caixa fechado / produto não resolvido) não muda re-POSTando a cada 30s —
