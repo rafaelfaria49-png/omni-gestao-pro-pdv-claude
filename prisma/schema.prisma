@@ -4566,3 +4566,36 @@ model VestuarioVariante {
   @@index([storeId, gradeId, tamanhoId])
   @@map("vestuario_variantes")
 }
+
+/**
+ * Solicitação de teste/demonstração vinda da página comercial pública `/gestao-lojas`
+ * (OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001). Anterior a qualquer loja: NÃO é
+ * dado de tenant e não tem `storeId`. Só a sessão da plataforma lê/atualiza.
+ * `emailAberto` = email normalizado enquanto a solicitação está aberta; NULL quando
+ * encerrada. O UNIQUE nele é a idempotência à prova de corrida (NULLs não colidem).
+ * `ipHash` é HMAC do IP — o IP cru nunca é gravado.
+ */
+model SolicitacaoTesteComercial {
+  id                  String   @id @default(cuid())
+  protocolo           String   @unique
+  nome                String
+  nomeLoja            String
+  email               String
+  emailAberto         String?  @unique
+  whatsapp            String
+  ramo                String
+  planoInteresse      String?
+  mensagem            String?
+  consentimentoEm     DateTime
+  consentimentoVersao String
+  origem              String   @default("gestao-lojas")
+  status              String   @default("recebida")
+  ipHash              String
+  historico           Json     @default("[]")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([ipHash, createdAt])
+  @@index([status, createdAt])
+  @@map("solicitacoes_teste_comercial")
+}

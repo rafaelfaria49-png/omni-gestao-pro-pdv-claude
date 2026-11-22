@@ -22,6 +22,12 @@ const h = vi.hoisted(() => ({
   canAccessStore: vi.fn(() => true),
 }))
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// A rota é de plataforma (requireModuleApi(req, "platform")); o ator é a autoridade da plataforma.
+vi.mock("@/auth", async () => {
+  const { platformSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => platformSession()) }
+})
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     venda: {
@@ -60,6 +66,8 @@ vi.mock("@/lib/vendas/sale-numbering-runtime-gate", () => ({
 }))
 
 import { POST } from "./route"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 
 const occupant = {
   id: "venda-a",
@@ -337,5 +345,22 @@ describe("POST /api/ops/vendas/recover-quarantined", () => {
       enforceStock: false,
       requireCaixaSession: true,
     })
+  })
+})
+
+describe("guard de plataforma real (requireModuleApi(req, \"platform\")) — negativos", () => {
+  it("usuário de loja, mesmo ADMIN com todos os módulos, recebe 403 sem persistir", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(
+      storeSession({ stores: ["loja-1"], modules: ["pdv", "sales", "cash", "settings"] }) as never,
+    )
+    const res = await POST(req({}))
+    expect(res.status).toBe(403)
+    expect(h.persist).not.toHaveBeenCalled()
+  })
+  it("sem sessão → 401 sem persistir", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(null as never)
+    const res = await POST(req({}))
+    expect(res.status).toBe(401)
+    expect(h.persist).not.toHaveBeenCalled()
   })
 })

@@ -34,12 +34,20 @@ const h = vi.hoisted(() => {
   return { db, updateMany, findFirst, withPrismaSafe }
 })
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Usuário da loja-x com módulo service (requireModuleAction(lojaId, "service")).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-x"], modules: ["service"] })) }
+})
 vi.mock("@/lib/prisma", () => ({ prisma: h.db, withPrismaSafe: h.withPrismaSafe }))
 vi.mock("@/lib/operacoes/services/hydration-service", () => ({
   hydrateOSRows: (rows: unknown[]) => rows,
 }))
 
 import { getOrdem } from "./ordens"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 
 beforeEach(() => {
   h.updateMany.mockClear()
@@ -58,10 +66,23 @@ describe("getOrdem — caminho read-only da V4 Preview", () => {
     expect(h.updateMany).toHaveBeenCalledTimes(1)
   })
 
-  it("storeId/osId vazio → null sem tocar no banco (nem leitura, nem updateMany)", async () => {
-    expect(await getOrdem("", "os1", { readOnly: true })).toBeNull()
+  it("storeId vazio → recusado pelo guard; osId vazio → null; nenhum dos dois toca o banco", async () => {
+    // Desde 52c01c3 o guard de módulo roda antes da normalização: loja vazia não é autorizável.
+    await expect(getOrdem("", "os1", { readOnly: true })).rejects.toThrow("Sem permissão para esta unidade")
     expect(await getOrdem("loja-x", "", { readOnly: true })).toBeNull()
     expect(h.findFirst).not.toHaveBeenCalled()
     expect(h.updateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("getOrdem — guard de módulo real (negativos)", () => {
+  it("loja fora da membership → recusa sem tocar no banco", async () => {
+    await expect(getOrdem("loja-y", "os1", { readOnly: true })).rejects.toThrow("Sem permissão para esta unidade")
+    expect(h.findFirst).not.toHaveBeenCalled()
+  })
+  it("membership sem módulo service → recusa sem tocar no banco", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-x"], modules: ["pdv"] }) as never)
+    await expect(getOrdem("loja-x", "os1", { readOnly: true })).rejects.toThrow("Sem permissão para este módulo ou unidade.")
+    expect(h.findFirst).not.toHaveBeenCalled()
   })
 })

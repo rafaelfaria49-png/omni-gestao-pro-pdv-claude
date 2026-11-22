@@ -14,6 +14,8 @@
     "lint": "eslint .",
     "typecheck": "node --max-old-space-size=6144 ./node_modules/typescript/lib/tsc.js --noEmit",
     "test": "vitest run",
+    "test:root:sem-pg": "node scripts/ci/run-root-suite-sem-pg.mjs",
+    "test:root:pg": "node scripts/ci/run-root-pg-suites.mjs",
     "test:fiscal-xsd:unit": "vitest run workers/fiscal-xsd/test/validator.test.ts workers/fiscal-xsd/test/import-graph-purity.test.ts lib/fiscal/xsd-worker/client.test.ts lib/fiscal/dry-run/dry-run.test.ts lib/fiscal/pipeline/fiscal-pipeline.test.ts lib/fiscal/xml/nfce-xml-builder.test.ts",
     "test:fiscal-xsd:integration": "vitest run workers/fiscal-xsd/test/container.integration.test.ts",
     "test:fiscal-xsd:security": "vitest run workers/fiscal-xsd/test/container.security.test.ts",

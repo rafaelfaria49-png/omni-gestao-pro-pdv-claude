@@ -25,6 +25,10 @@ const eslintConfig = [
   ...nextCoreWebVitals,
   {
     /** Regras experimentais do React Compiler: projeto legado + IDs com Date.now / placeholders com Math.random. */
+    // Mesmo escopo em que o eslint-config-next registra os plugins (react-hooks, @next/next…).
+    // Sem `files`, este bloco valia também para `.cjs` (lintado por padrão no ESLint 9) e o ESLint
+    // abortava: "could not find plugin react-hooks" (e2e/reports/electron-main.cjs, #377).
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     rules: {
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/immutability": "off",

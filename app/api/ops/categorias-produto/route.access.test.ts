@@ -28,6 +28,8 @@ function sessionAtiva(role: string, stores: string[]) {
       role,
       storeAccess: "restricted",
       allowedStoreIds: stores,
+      // Módulos liberados por loja (contrato desde 52c01c3).
+      storeModules: Object.fromEntries(stores.map((sid) => [sid, ["catalog"]])),
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session

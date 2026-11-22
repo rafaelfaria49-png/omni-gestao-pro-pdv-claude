@@ -132,6 +132,9 @@ export function parseAparelhoInput(raw: unknown, opts: { exigeIdentificador: boo
   if (imei2 && !imei1) return fail(400, "VALIDACAO", "Preencha o IMEI 1 antes do IMEI 2.", "imei1")
   if (imei1 && imei2 && imei1 === imei2) return fail(400, "IMEI_INVALIDO", "IMEI 1 e IMEI 2 não podem ser iguais.", "imei2")
   const serial = normalizeSerial(r.serial) || null
+  if (serial && (!/^[A-Z0-9/-]+$/.test(serial) || String(r.serial).replace(/\s/g, "").length > 64)) {
+    return fail(400, "SERIAL_INVALIDO", "Número de série deve ter até 64 caracteres: letras, dígitos, hífen ou barra.", "serial")
+  }
   if (opts.exigeIdentificador && !imei1 && !serial) {
     return fail(400, "IDENTIFICADOR_OBRIGATORIO", "Informe o IMEI ou o número de série para individualizar o aparelho.", "imei1")
   }

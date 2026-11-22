@@ -14,6 +14,7 @@ function protegerWorkerPessoas() {
         url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
         url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
         url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
+        || url.pathname === "/dashboard/relatorios" || url.pathname.startsWith("/dashboard/relatorios/")
       )) return Promise.resolve()
     }
     return original.call(this, event)
@@ -86,6 +87,8 @@ const withPWA = withPWAInit({
         url.pathname.startsWith("/api/financeiro/") ||
         url.pathname.startsWith("/api/ops/caixa/") ||
         url.pathname.startsWith("/api/dashboard/") ||
+        // Reports HTML/RSC embeds session data in the root layout; auxiliary nav worker is guarded above too.
+        url.pathname === "/dashboard/relatorios" || url.pathname.startsWith("/dashboard/relatorios/") ||
         // Listas de títulos (Contas a Pagar/Receber e recebimento no PDV) levam a loja só no
         // header: mesma URL para todas as lojas. Gravar já exige rede; ler offline vira erro.
         url.pathname === "/api/ops/contas-pagar-list" ||

@@ -14,6 +14,7 @@ self.addEventListener("activate", (event) => {
           // à troca de SW (essas rotas passaram a NetworkOnly).
           url.pathname.startsWith("/api/vendas/") || url.pathname.startsWith("/api/financeiro/") ||
           url.pathname.startsWith("/api/ops/caixa/") || url.pathname.startsWith("/api/dashboard/") ||
+          url.pathname === "/dashboard/relatorios" || url.pathname.startsWith("/dashboard/relatorios/") ||
           url.pathname === "/api/ops/contas-pagar-list" || url.pathname === "/api/ops/contas-receber-list" ||
           url.pathname.startsWith("/api/finance/")
         )) await cache.delete(request)

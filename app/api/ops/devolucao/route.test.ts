@@ -251,7 +251,11 @@ vi.mock("@/lib/ops-api-gate", () => ({ opsLojaIdFromRequestForWrite: vi.fn(() =>
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({
   apiGuardEnterpriseOrOps: vi.fn(async () => null),
 }))
-vi.mock("@/auth", () => ({ auth: vi.fn(async () => null) }))
+// Operador da loja-1 com módulo pdv (requireModuleApi(req, "sharedPayment"), desde 52c01c3).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["pdv"] })) }
+})
 vi.mock("@/lib/auth/session-operator", () => ({ getOperatorLabelFromSession: vi.fn(() => "") }))
 vi.mock("@/lib/financeiro/services/movimentacoes-service", () => ({
   createSaida: vi.fn(async (data: Row) => {
@@ -264,6 +268,8 @@ vi.mock("@/lib/financeiro/services/fechamento-service", () => ({
 }))
 
 import { POST } from "./route"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 
 function postReq(body: Row) {
   return new Request("http://local/api/ops/devolucao", {
@@ -389,5 +395,30 @@ describe("POST /api/ops/devolucao — vale-troca real", () => {
     await POST(postReq(h.devolucaoBody()))
     const venda = h.db.vendas.find((v) => v.pedidoId === "VDA-2026-0100")!
     expect(venda.status).toBe("parcialmente_devolvida")
+  })
+})
+
+describe("POST /api/ops/devolucao — guard de módulo real (negativos, contrato 52c01c3)", () => {
+  it("sem sessão → 401 sem crédito, devolução nem saída financeira", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(null as never)
+    const res = await POST(postReq(h.devolucaoBody()))
+    expect(res.status).toBe(401)
+    expect(h.db.creditos).toHaveLength(0)
+    expect(h.db.devolucoes).toHaveLength(0)
+    expect(h.saidas).toHaveLength(0)
+  })
+  it("membro da loja sem módulo de pagamento → 403 sem efeito", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-1"], modules: ["reports"] }) as never)
+    const res = await POST(postReq(h.devolucaoBody()))
+    expect(res.status).toBe(403)
+    expect(h.db.creditos).toHaveLength(0)
+    expect(h.db.devolucoes).toHaveLength(0)
+  })
+  it("loja do header fora da membership → 403 sem efeito", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-2"], modules: ["pdv"] }) as never)
+    const res = await POST(postReq(h.devolucaoBody()))
+    expect(res.status).toBe(403)
+    expect(h.db.creditos).toHaveLength(0)
+    expect(h.db.devolucoes).toHaveLength(0)
   })
 })

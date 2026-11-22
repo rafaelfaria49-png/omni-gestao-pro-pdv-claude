@@ -8,7 +8,10 @@ const h = vi.hoisted(() => ({
   update: vi.fn(),
   count: vi.fn(async () => 1),
   ensureConnected: vi.fn(async () => undefined),
-  auth: vi.fn(async () => ({ user: { id: "user-1" } })),
+  // Rota de plataforma desde 52c01c3 (requireModuleApi(req, "platform")): o ator é a plataforma.
+  auth: vi.fn(async (): Promise<unknown> => ({
+    user: { id: "user-1", role: "SUPER_ADMIN", storeAccess: "all", accessScope: "PLATFORM", platformAuthority: true },
+  })),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -27,9 +30,6 @@ vi.mock("@/lib/ops-api-gate", () => ({
   opsLojaIdFromRequestForWrite: () => STORE,
 }))
 vi.mock("@/auth", () => ({ auth: h.auth }))
-vi.mock("@/lib/auth/enterprise-permissions", () => ({
-  canAccessStore: () => true,
-}))
 
 import { POST } from "./route"
 import { VendaCreateUniqueConflictError } from "@/lib/ops-upsert-venda"
@@ -104,5 +104,23 @@ describe("POST /api/ops/sync-legacy-vendas — replay concorrente create-only", 
     ])
     expect(h.findUnique).toHaveBeenCalledTimes(1)
     expect(h.update).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /api/ops/sync-legacy-vendas — guard de plataforma real (negativos)", () => {
+  it("usuário de loja (ADMIN membro da loja) → 403 sem gravar", async () => {
+    h.auth.mockResolvedValueOnce({
+      user: { id: "user-2", role: "ADMIN", storeAccess: "restricted", allowedStoreIds: [STORE], storeModules: { [STORE]: ["pdv", "sales"] } },
+    })
+    const res = await POST(new Request("http://local/api/ops/sync-legacy-vendas", { method: "POST", body: "{}" }))
+    expect(res.status).toBe(403)
+    expect(h.transaction).not.toHaveBeenCalled()
+    expect(h.update).not.toHaveBeenCalled()
+  })
+  it("sem sessão → 401 sem gravar", async () => {
+    h.auth.mockResolvedValueOnce(null)
+    const res = await POST(new Request("http://local/api/ops/sync-legacy-vendas", { method: "POST", body: "{}" }))
+    expect(res.status).toBe(401)
+    expect(h.transaction).not.toHaveBeenCalled()
   })
 })

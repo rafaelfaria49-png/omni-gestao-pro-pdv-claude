@@ -8,6 +8,12 @@ const h = vi.hoisted(() => {
   return { requireFiscalAdmin, cancelar, opsLojaIdFromRequestForWrite, getOperatorLabelFromSession }
 })
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Admin da loja-1 com módulos fiscal + settings (exigidos por requireModuleApi(req, "fiscal")).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["fiscal", "settings"] })) }
+})
 vi.mock("@/lib/ops-api-gate", () => ({
   opsLojaIdFromRequestForWrite: h.opsLojaIdFromRequestForWrite,
 }))

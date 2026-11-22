@@ -33,6 +33,7 @@ import "server-only"
 import type { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { ensureDepositoPrincipal } from "@/lib/estoque/deposito-core"
+import { isSerializedDeviceProduct } from "@/lib/aparelhos/serialized-product"
 import { isRecord, productVariantIssue, unsupportedVariantLineIssue } from "@/lib/vestuario/guard-contract"
 import {
   normalizeStockCommand,
@@ -220,17 +221,20 @@ export async function applyStockMutationTx(
   // O predicado inclui storeId: produto de outra loja nunca é travado/lido aqui.
   // Fakes de teste DEVEM validar o `FOR UPDATE` (ver stock-ledger-service.test.ts).
   let variantMetadata: unknown = undefined
+  let serializedDevice = false
   try {
     const locked = await tx.$queryRaw`
       SELECT "id",
         CASE WHEN jsonb_typeof("metadata") = 'object' THEN "metadata" ? 'vestuario' ELSE false END AS "hasVestuario",
-        "metadata" -> 'vestuario' AS "vestuario"
+        "metadata" -> 'vestuario' AS "vestuario",
+        "metadata" -> 'serializedDevice' AS "serializedDevice"
       FROM "estoque_produtos"
       WHERE "id" = ${pid} AND "storeId" = ${sid}
       FOR UPDATE
     `
     const row = Array.isArray(locked) ? locked[0] : undefined
     if (isRecord(row) && row.hasVestuario === true) variantMetadata = { vestuario: row.vestuario }
+    if (isRecord(row)) serializedDevice = isSerializedDeviceProduct({ serializedDevice: row.serializedDevice })
   } catch (e) {
     return stockFail("PERSISTENCE", `Falha ao travar linha do produto: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -253,6 +257,15 @@ export async function applyStockMutationTx(
     } as never) as { id: string; storeId: string } | null
     if (elsewhere) return stockFail("CROSS_STORE", "Produto pertence a outra loja.")
     return stockFail("NOT_FOUND", "Produto não encontrado nesta loja.")
+  }
+  // O saldo de modelos por IMEI é derivado das unidades físicas. Entradas/ajustes/OS
+  // genéricos não podem criar ou consumir saldo sem identificar a unidade. Os dois
+  // escritores autorizados são internos e fazem o vínculo na mesma transação.
+  if (serializedDevice && !(
+    (context.source === "aparelhos" && cmd.kind !== "ajuste") ||
+    (context.source === "pdv" && cmd.kind === "saida")
+  )) {
+    return stockFail("APARELHO_ESTOQUE_INDIVIDUAL", "Estoque de aparelho por IMEI deve ser movimentado pela unidade física no módulo Aparelhos.")
   }
   // No mesmo lock/consulta: não transfere todo o JSON nem cria uma leitura adicional.
   const variantIssue = productVariantIssue(variantMetadata)

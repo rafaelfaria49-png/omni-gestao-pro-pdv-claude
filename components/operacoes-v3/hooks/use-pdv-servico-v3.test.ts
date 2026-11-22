@@ -52,10 +52,17 @@ describe("usePdvServicoV3 — identidade da OS carregada", () => {
     })).toEqual({ pagamento: pagamentoA, sessao: sessaoA, loading: false, error: null });
   });
 
-  it("o effect invalida request anterior e limpa pagamento/sessão antes da nova leitura e também no catch", () => {
+  // Desde 0ab5290 o catch não zera mais o estado: a limpeza acontece no início de cada leitura e
+  // o erro de B fica mascarado pela projeção (coberto funcionalmente no 2º teste acima). O que o
+  // fonte ainda precisa garantir é a invalidação do request anterior em sucesso E em falha.
+  it("o effect invalida request anterior e limpa pagamento/sessão antes da nova leitura; resposta velha é descartada", () => {
     const source = readFileSync(fileURLToPath(new URL("./use-pdv-servico-v3.ts", import.meta.url)), "utf8");
-    expect(source).toMatch(/const reqId = \+\+reqRef\.current;\s*setPagamento\(null\);\s*setSessao\(null\)/);
-    expect(source).toMatch(/\.catch\(\(e\) => \{[\s\S]*setPagamento\(null\);\s*setSessao\(null\);/);
-    expect(source).toContain("activeKeyRef.current !== targetKey");
+    expect(source).toMatch(/const (\w+) = \+\+reqRef\.current;\s*setPagamento\(null\);\s*setSessao\(null\)/);
+    const reqVar = source.match(/const (\w+) = \+\+reqRef\.current;/)![1];
+    const descarte = new RegExp(`if \\(${reqVar} !== reqRef\\.current \\|\\| activeKeyRef\\.current !== targetKey\\) return;`);
+    const leitura = source.slice(source.indexOf("lerPagamentoOSV3(sid, id).then("));
+    const [ramoOk, ramoErro] = leitura.split(".catch((e) => {");
+    expect(ramoOk).toMatch(descarte);
+    expect(ramoErro).toMatch(descarte);
   });
 });

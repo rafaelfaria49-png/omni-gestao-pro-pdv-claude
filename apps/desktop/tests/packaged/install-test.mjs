@@ -36,6 +36,8 @@ if (upgradeSetup && !existsSync(upgradeSetup)) throw new Error(`--upgrade-setup 
 const keepInstalled = args["keep-installed"] === true
 const allowExistingProfile = args["allow-existing-profile"] === true
 // Versão esperada do Setup.exe (padrão: package.json deste checkout) — nunca deduzida da pasta instalada.
+// Versão que o --upgrade-setup tem de registrar (opcional; sem ela só exige versão diferente).
+const expectUpgradeVersion = args["expect-upgrade-version"] ? String(args["expect-upgrade-version"]) : null
 const expectVersion = String(
   args["expect-version"] ?? JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json"), "utf8")).version,
 )
@@ -238,6 +240,7 @@ try {
     }, 30_000)
     const nv = s3?.reg?.version
     check("atualização: nova versão registrada", nv && nv !== version, `${version} → ${nv}`)
+    if (expectUpgradeVersion) check(`atualização: versão registrada = ${expectUpgradeVersion}`, nv === expectUpgradeVersion, String(nv))
     check("atualização: pasta da nova versão", s3?.apps.includes(`app-${nv}`), s3?.apps.join(","))
     if (await waitFor(() => appProcesses().length > 0, 15_000)) await closeApp("pós-atualização (firstrun)")
     check("atualização: dados locais preservados", existsSync(sentinel))
