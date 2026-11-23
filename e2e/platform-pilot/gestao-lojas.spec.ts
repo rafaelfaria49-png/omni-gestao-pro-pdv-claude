@@ -61,7 +61,7 @@ test("página comercial é pública, honesta, interativa e responsiva em 320/375
   expect(corpo).toMatch(/7 dias/i)
   expect(corpo).not.toMatch(/39,90|99,90|Comércio Plus|créditos IA|depoimento|\+\s?\d+ (lojas|clientes)/i)
   // Canal único para computador/Windows: /baixar (sem link direto para .exe).
-  await expect(page.locator('a[href="/baixar"]').first()).toBeVisible()
+  await expect(page.locator('main a[href="/baixar"]')).toBeVisible()
   expect(await page.locator('a[href$=".exe"], a[href*="download"], a[download]').count()).toBe(0)
 
   // Toda âncora interna tem destino; todo link de página responde.
