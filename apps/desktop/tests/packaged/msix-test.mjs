@@ -15,6 +15,8 @@
 // Também confere que o perfil do Setup.exe (%AppData%\OmniGestão Pro) não foi usado pelo MSIX.
 //
 // Nunca roda numa máquina com o pacote já instalado e recusa a identidade da Store (só a de teste).
+// Fora do CI (OMNI_MSIX_TEST_ALLOW_LOCAL=1), se o processo morrer antes da limpeza, remover à mão o
+// certificado "CN=OmniGestao CI Teste" de LocalMachine\TrustedPeople e CurrentUser\My (vale 1 dia, sem CA).
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync } from "node:fs"
 import path from "node:path"
@@ -30,6 +32,7 @@ const args = Object.fromEntries(
 const msix = args.msix
 const upgradeMsix = args["upgrade-msix"]
 if (!msix || !existsSync(msix)) throw new Error("--msix <arquivo> obrigatório")
+if (upgradeMsix !== undefined && !existsSync(upgradeMsix)) throw new Error(`--upgrade-msix informado mas ausente: ${upgradeMsix}`)
 
 const root = process.cwd()
 const out = path.join(root, "test-results")
@@ -177,7 +180,7 @@ Import-Certificate -FilePath $f -CertStoreLocation 'Cert:\\LocalMachine\\Trusted
   const afterLog = readText(squirrelLog)
   check("perfil do Setup.exe (%AppData%) não foi usado pelo MSIX", !afterLog.slice(squirrelLogBefore.length).includes("package=msix"), squirrelLog)
 
-  if (upgradeMsix && existsSync(upgradeMsix)) {
+  if (upgradeMsix) {
     const v2 = path.basename(upgradeMsix).match(/OmniGestaoPro-(\d+\.\d+\.\d+)-x64\.msix$/)?.[1]
     const signed2 = signCopy(upgradeMsix)
     ps("Add-AppxPackage -Path $env:OMNI_MSIX", { OMNI_MSIX: signed2 })
@@ -203,7 +206,7 @@ Import-Certificate -FilePath $f -CertStoreLocation 'Cert:\\LocalMachine\\Trusted
   }
   if (thumbprint) {
     try {
-      ps("Get-ChildItem Cert:\\LocalMachine\\TrustedPeople, Cert:\\CurrentUser\\My | Where-Object Thumbprint -eq $env:OMNI_T | Remove-Item -Force; 'null'", { OMNI_T: thumbprint })
+      ps("Get-ChildItem Cert:\\LocalMachine\\TrustedPeople, Cert:\\CurrentUser\\My | Where-Object Thumbprint -eq $env:OMNI_T | Remove-Item -Force; foreach($d in @($env:RUNNER_TEMP,$env:TEMP)){ if($d){ Remove-Item -LiteralPath (Join-Path $d 'omni-msix-test.cer') -Force -ErrorAction SilentlyContinue } }; 'null'", { OMNI_T: thumbprint })
       check("certificado de teste removido", true)
     } catch (e) {
       check("certificado de teste removido", false, e.message.slice(0, 200))
