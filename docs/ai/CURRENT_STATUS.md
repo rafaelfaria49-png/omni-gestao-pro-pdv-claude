@@ -64,6 +64,12 @@
 
 ---
 
+## Cadastros — padrão global de nomes, busca e duplicidade (`OMNI-CADASTROS-PADRAO-GLOBAL-UX-001`) · 23/11/2026
+
+- Regra única em `lib/cadastros/nome-cadastro.ts` (puro, cliente+servidor) aplicada nos gravadores de produto, cliente, categoria, marca, fornecedor, técnico, modelo de equipamento e serviço, e na UI do Cadastros HUB. Detalhe, mapa por ramo, exceções e auditoria de fotos/QR: [`docs/modules/CADASTROS_PADRAO_GLOBAL.md`](../modules/CADASTROS_PADRAO_GLOBAL.md).
+- Sem migration e sem alteração de dados existentes. Duplicidade de fornecedor/técnico/modelo/serviço é só na aplicação (sem constraint). Busca de produto no servidor segue sensível a acento.
+- Estado: PR aberta, sem merge/deploy.
+
 ## Página comercial "Vendas e Estoque" `/gestao-lojas` (`OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001`) · 18/11/2026 · atualizado 19/11/2026
 
 - **19/11/2026:** #374 mergeada (`fbc7bba`) e publicada; migration comercial **aplicada em Production** antes do
