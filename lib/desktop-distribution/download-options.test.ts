@@ -5,10 +5,10 @@ import { classifyPlatform } from "./platform"
 import { noticeFor } from "@/components/desktop-download/PlatformNotice"
 
 const URL_OFICIAL = "https://downloads.exemplo.test/desktop/production/1.0.4/OmniGestaoPro-Setup.exe"
-const release = { installerUrl: URL_OFICIAL }
+const release = { installerUrl: URL_OFICIAL, version: "1.0.4" }
 
 const homologarTudo: CompatEntry[] = DESKTOP_COMPATIBILIDADE.map((c) =>
-  c.sistema.startsWith("Windows 1") ? { ...c, status: "verificado" } : c,
+  c.sistema.startsWith("Windows 1") ? { ...c, status: "verificado", versoesHomologadas: ["1.0.4"] } : c,
 )
 
 describe("resolveWindowsOptions", () => {
@@ -26,14 +26,34 @@ describe("resolveWindowsOptions", () => {
     }
   })
 
-  it("estado atual: Windows 10 em validação fica bloqueado mesmo com release", () => {
+  it("estado atual: nenhuma versão pública homologada — os dois ficam bloqueados mesmo com release", () => {
     const [w10, w11] = resolveWindowsOptions(release)
     expect(w10.status).toBe("em-validacao")
     expect(w10.installerUrl).toBeNull()
-    expect(w10.bloqueio).toMatch(/Em validação no Windows 10/)
+    expect(w10.bloqueio).toMatch(/Versão 1.0.4 em validação no Windows 10/)
+    // Win 11 foi testado com a 1.0.3 interna (não assinada): não homologa a versão pública.
+    expect(w11.status).toBe("em-validacao")
+    expect(w11.installerUrl).toBeNull()
+    expect(w11.bloqueio).toMatch(/Versão 1.0.4 em validação no Windows 11/)
+  })
+
+  it("homologação vale por versão: versão nova volta a ficar em validação", () => {
+    const [w10, w11] = resolveWindowsOptions({ ...release, version: "1.0.5" }, homologarTudo)
+    expect([w10.installerUrl, w11.installerUrl]).toEqual([null, null])
+    expect([w10.status, w11.status]).toEqual(["em-validacao", "em-validacao"])
+  })
+
+  it("sem release, mostra o histórico (Windows 11 testado na piloto) sem botão", () => {
+    const [w10, w11] = resolveWindowsOptions(null)
+    expect(w10.status).toBe("em-validacao")
     expect(w11.status).toBe("verificado")
-    expect(w11.installerUrl).toBe(URL_OFICIAL)
-    expect(w11.bloqueio).toBeNull()
+    expect(w11.installerUrl).toBeNull()
+  })
+
+  it("versão listada mas sistema não verificado continua bloqueado", () => {
+    const compat = DESKTOP_COMPATIBILIDADE.map((c) => ({ ...c, versoesHomologadas: ["1.0.4"] }))
+    const [w10] = resolveWindowsOptions(release, compat)
+    expect(w10.installerUrl).toBeNull()
   })
 
   it("homologados os dois, ambos apontam para o MESMO artefato oficial", () => {

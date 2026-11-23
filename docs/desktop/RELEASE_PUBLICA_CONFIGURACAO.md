@@ -2,6 +2,9 @@
 
 GOAL `OMNI-DESKTOP-DISTRIBUICAO-PUBLICA-SAAS-001` · etapa `CONFIGURACAO_E_HOMOLOGACAO_RELEASE_PUBLICA` · 2026-11-19
 
+> **23/11/2026:** integração incorporada à PR #385 (GOAL `OMNI-DESKTOP-DOWNLOAD-PUBLICO-WINDOWS-001`). Segue
+> dormente até o proprietário contratar o certificado e o domínio — nada foi comprado.
+>
 > **SUSPENSO em 20/11/2026.** O proprietário não aprovou a despesa do certificado (orçamento R$ 0).
 > Este documento e a integração eSigner no workflow ficam preservados, dormentes e fail-closed (sem os
 > segredos, `publish` falha no 1º passo). Estratégia vigente: `DISTRIBUICAO_CUSTO_ZERO.md`.

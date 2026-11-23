@@ -13,6 +13,14 @@ pública válida **e** aquele Windows homologado em `compatibility.ts`
 deixou de ter canal próprio (`GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` removida) e aponta sempre para
 `/baixar`. Roteiro físico das duas lojas: `HOMOLOGACAO_WINDOWS_10_11.md`.
 
+**2026-11-23 (`OMNI-DESKTOP-DOWNLOAD-PUBLICO-WINDOWS-001`)**: auditoria ao vivo — `/baixar` 200
+"ainda não está liberado", `/api/desktop/update-manifest` 404, environment `desktop-release` só com as vars
+`OMNI_DESKTOP_SIGN_PROVIDER=store` e `OMNI_DESKTOP_R2_BUCKET`, **nenhum secret**, `desktop-release.yml`
+**nunca executado**, `omnigestaopro.com.br` **não registrado**, releases do GitHub só rascunhos internos não
+assinados (1.0.0–1.0.3). A integração SSL.com eSigner + ação `verify-storage` (antes só na branch
+`claude/desktop-release-assinatura-r2-001`) entrou no workflow. Homologação passou a ser **por versão**
+(`versoesHomologadas`). Faltas externas: seção 6 e `RELEASE_PUBLICA_CONFIGURACAO.md`.
+
 ## 1. Peças
 
 ```
@@ -94,7 +102,9 @@ Dentro do programa, o botão de download da CDN pede confirmação para abrir no
 ## 5. Matriz de testes antes do `promote`
 
 Todos com o arquivo **baixado da CDN** (o mesmo dos clientes). Registrar evidência em
-`docs/ai-execution/_evidence/`. Só então atualizar `lib/desktop-distribution/compatibility.ts`.
+`docs/ai-execution/_evidence/`. Só então acrescentar a versão em `versoesHomologadas` do sistema testado em
+`lib/desktop-distribution/compatibility.ts` — a homologação vale por versão: versão pública fora da lista
+mantém o botão daquele Windows desligado, mesmo com release válida (teste da 1.0.3 interna não conta).
 
 | Item | Win 11 x64 | Win 10 22H2 x64 |
 |---|---|---|

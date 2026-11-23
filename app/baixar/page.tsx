@@ -3,7 +3,7 @@ import Link from "next/link"
 import { headers } from "next/headers"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 import { WindowsDownloadOptions } from "@/components/desktop-download/WindowsDownloadOptions"
-import { DESKTOP_COMPATIBILIDADE, DESKTOP_REQUISITOS, type CompatStatus } from "@/lib/desktop-distribution/compatibility"
+import { DESKTOP_COMPATIBILIDADE, DESKTOP_REQUISITOS, statusParaVersao, type CompatStatus } from "@/lib/desktop-distribution/compatibility"
 import { resolveWindowsOptions } from "@/lib/desktop-distribution/download-options"
 import { getDesktopDownloadState } from "@/lib/desktop-distribution/download-state"
 import { desktopVersionFromUserAgent } from "@/lib/desktop-distribution/platform"
@@ -115,7 +115,7 @@ export default async function BaixarPage() {
                   <tr key={c.sistema} className="border-t border-border align-top">
                     <td className="px-3 py-2">{c.sistema}</td>
                     <td className="px-3 py-2">
-                      <span className="font-medium">{STATUS_LABEL[c.status]}</span>
+                      <span className="font-medium">{STATUS_LABEL[statusParaVersao(c, release?.version ?? null)]}</span>
                       <span className="block text-muted-foreground">{c.detalhe}</span>
                     </td>
                   </tr>

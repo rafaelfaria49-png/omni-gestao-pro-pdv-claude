@@ -123,7 +123,7 @@ autorizar na hora e anotar.
 - Salvar em `docs/ai-execution/_evidence/OMNI-DESKTOP-WIN10-PILOTO-CUSTO-ZERO-002/` com: data, técnico,
   build do Windows, versão, SHA-256, antivírus e resultado de cada item.
 - Qualquer item que falhe: anotar o que apareceu na tela, sem "dar um jeito". O Windows 10 só vira
-  **Homologado** em `lib/desktop-distribution/compatibility.ts` depois desta lista inteira aprovada com evidência.
+  **Homologado** (com a versão em `versoesHomologadas`) em `lib/desktop-distribution/compatibility.ts` depois desta lista inteira aprovada com evidência.
 
 ## LOJA 1 — RAFACELL · Windows 11 · atualização 1.0.3 → nova versão
 

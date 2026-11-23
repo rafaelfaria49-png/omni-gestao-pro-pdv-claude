@@ -7,11 +7,11 @@
  *
  * O botão de uma opção só fica ativo quando as duas condições valem:
  *  1. há release pública válida (`getDesktopDownloadState` → manifesto assinado e conferido);
- *  2. aquele Windows está HOMOLOGADO em `compatibility.ts` (evidência de teste real).
+ *  2. aquele Windows está HOMOLOGADO para ESSA versão em `compatibility.ts` (evidência de teste real).
  * Biblioteca suportar a plataforma não conta como homologação.
  */
 
-import { DESKTOP_COMPATIBILIDADE, type CompatStatus } from "./compatibility"
+import { DESKTOP_COMPATIBILIDADE, statusParaVersao, type CompatStatus } from "./compatibility"
 import type { DesktopRelease } from "./release-manifest"
 import type { PlatformInfo } from "./platform"
 
@@ -36,16 +36,16 @@ const OPCOES: { id: WindowsOptionId; titulo: string; sistema: string }[] = [
 ]
 
 export function resolveWindowsOptions(
-  release: Pick<DesktopRelease, "installerUrl"> | null,
+  release: Pick<DesktopRelease, "installerUrl" | "version"> | null,
   compat = DESKTOP_COMPATIBILIDADE,
 ): WindowsDownloadOption[] {
   return OPCOES.map(({ id, titulo, sistema }) => {
     const entry = compat.find((c) => c.sistema === sistema)
-    const status: CompatStatus = entry?.status ?? "em-validacao"
+    const status: CompatStatus = statusParaVersao(entry, release?.version ?? null)
     const homologado = status === "verificado"
     let bloqueio: string | null = null
     if (!release) bloqueio = "Download público ainda não liberado."
-    else if (!homologado) bloqueio = `Em validação no ${titulo}. Até a confirmação, use pelo navegador.`
+    else if (!homologado) bloqueio = `Versão ${release.version} em validação no ${titulo}. Até a confirmação, use pelo navegador.`
     return {
       id,
       titulo,
