@@ -12,6 +12,72 @@ Complementa: `GESTAO_LOJAS_MATRIZ_RECURSOS.md`, `GESTAO_LOJAS_OPERACAO_PILOTO.md
 
 ---
 
+## Publicação técnica — GOAL `OMNI-SAAS-PILOTO-COMERCIAL-INTEGRACAO-002` (2026-11-23)
+
+> Esta seção substitui o estado "NO-GO hoje" das seções A e F abaixo, que descrevem o momento anterior ao merge.
+
+- **Merge:** #389 entrou na `main` por merge commit `f9de968` (pais `8286a4a` + `a546120`), sem force push.
+  Os heads de #343 (`0db51cc`), #344 (`5b28f5c`) e #376 (`93528e1`) estão na história da `main`; o GitHub
+  marcou as quatro PRs como **MERGED**. Nenhum merge redundante.
+- **Reconciliação:** a árvore final difere dos heads originais só nas correções desta frente (porta da loja
+  não resolvida em `lib/operations-store.tsx`, documentos comerciais) e no que a `main` já tinha.
+- **CI no head exato publicado (`a546120`):** 10/10 verde — validate×2 (825 testes), authenticated
+  (build de produção + 47 E2E, inclui `jornada-cliente-independente`), e2e-authenticated (34), postgres-integration (33),
+  Suítes PG descartáveis, reports, Vercel.
+- **Production:** `omni-gestao-pro` deploy `dpl_G5HcqZPAu8qM1vYb4B4b2H2vHzhs` **READY** no commit `f9de968`,
+  alias `omni-gestao-pro.vercel.app`. Nenhum build de outro projeto promovido. Sem migration (a frente não tem schema).
+- **Smoke de Production (sem criar dados):** `/gestao-lojas`, `/suporte`, `/privacy`, `/login` = 200;
+  `/dashboard` e `/dashboard/plataforma` = 307 para `/login`; `/suporte` mostra só o texto neutro (nenhuma
+  variável `GESTAO_LOJAS_CONTATO_*` em Production) e nenhum `(00) 00000-0000`/`seudominio`/`wa.me/5500…`;
+  preços propostos ocultos (o único valor é o comprovante ilustrativo marcado como fictício);
+  `POST /api/platform/provision` sem sessão = 403; `/api/produtos` e relatórios sem sessão = 401;
+  pedido de teste vazio = `ok:false, codigo:INVALIDO` (sem falso sucesso).
+
+**TECHNICAL_RELEASE=CONCLUDED.** O piloto pago continua **NO-GO** até os itens D–I abaixo.
+
+### A. Pronto para vender (pacote básico)
+PDV, Caixa (abertura, sangria/suprimento, fechamento com a senha do ADMIN), Produtos por unidade,
+Estoque, Clientes, Relatórios básicos (tela e PDF), comprovante pelo navegador, isolamento por loja,
+troca obrigatória de senha no primeiro acesso, assistente de configuração adiável.
+
+### B. Ramos atendidos
+**Operacional:** Comércio geral, Variedades/Brinquedos, Acessórios. **Parcial** (venda por unidade e
+produto simples): Supermercado sem cupom fiscal, Padaria, Agropecuária, Moda, Assistência técnica
+(só balcão). Detalhe na seção C.
+
+### C. Limitações da oferta básica
+Sem emissão fiscal, sem venda por peso, sem grade cor/tamanho, sem OS, sem limite de usuários por plano,
+cobrança e bloqueio manuais, impressão só pelo navegador (app Windows não distribuído).
+
+### D. Contatos reais necessários
+WhatsApp (55+DDD) e email de suporte/comercial → Vercel `GESTAO_LOJAS_CONTATO_WHATSAPP` e
+`GESTAO_LOJAS_CONTATO_EMAIL` + redeploy (as páginas são estáticas). **Não fornecidos.**
+
+### E. Preço e limite contratual
+Valores propostos não aprovados; limite de usuários só por contrato. **Decisão do proprietário.**
+
+### F. Cobrança manual e suporte
+Régua manual (vencimento, carência, restrição via "Liberação por loja"), horário e prazo de resposta do
+suporte, controle de pilotos em planilha (seção "Controle manual de pilotos"). **A definir.**
+
+### G. Privacidade e termos
+`PRIVACIDADE_TERMOS_PROPOSTA_PILOTO.md` aguarda aprovação jurídica; razão social/CNPJ e prazos de retenção
+pendentes; termos não publicados.
+
+### H. Regra fiscal
+Vender só para quem é dispensado de NFC-e ou já tem emissor próprio — validar com contador e declarar no contrato.
+
+### I. Roteiro de homologação do primeiro cliente
+Com autorização para criar a loja de teste: §2 de `GESTAO_LOJAS_OPERACAO_PILOTO.md` — pedido → aprovação →
+provisionamento → instruções sem senha → login e troca de senha → assistente → produto UN → Caixa →
+primeira venda acompanhada → fechamento → relatório → impressão na impressora do cliente.
+
+### J. GO/NO-GO para cobrar
+**NO-GO** até: D configurado, E/F/G/H aprovados pelo proprietário e I executado em Production.
+Tecnicamente não há bloqueio pendente.
+
+---
+
 ## A) PRs prontas para merge (ordem recomendada)
 
 | Ordem | PR | O que resolve | Revisão desta missão | Ressalva |
