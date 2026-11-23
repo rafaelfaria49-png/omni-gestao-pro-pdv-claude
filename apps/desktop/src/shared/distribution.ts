@@ -12,3 +12,11 @@ export type DesktopPackageKind = "squirrel" | "msix"
 export function packageKind(proc: { windowsStore?: boolean }): DesktopPackageKind {
   return proc.windowsStore === true ? "msix" : "squirrel"
 }
+
+/**
+ * Pasta de perfil do canal MSIX (dentro de %AppData%). Precisa ser um nome que o Setup.exe nunca usa:
+ * no Windows 10 1903+, o app empacotado grava ARQUIVOS JÁ EXISTENTES de %AppData% no lugar real e só
+ * redireciona os novos para a área privada do pacote. Reusar "OmniGestão Pro" (perfil do Setup.exe)
+ * dividiria o perfil entre os dois lugares conforme a máquina. Pasta nova = sempre privada do pacote.
+ */
+export const MSIX_PROFILE_DIR = "OmniGestão Pro Store"

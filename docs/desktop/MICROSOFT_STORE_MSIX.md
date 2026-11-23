@@ -29,9 +29,12 @@ artefatos do Actions (repositório público) nem para release: só `msix.json`, 
 
 ## Comportamento que muda no canal MSIX (documentar ao cliente)
 
-- **Perfil**: o Windows guarda os dados do app (sessão, vendas pendentes, `print-station.json`) em
-  `%LocalAppData%\Packages\<família do pacote>\LocalCache\Roaming\OmniGestão Pro`, separado do perfil do
-  Setup.exe (`%AppData%\OmniGestão Pro`). **Não há migração automática**: quem trocar do Setup.exe para a
+- **Perfil**: o app da Store usa a pasta própria `OmniGestão Pro Store`, que o Windows grava em
+  `%LocalAppData%\Packages\<família do pacote>\LocalCache\Roaming\OmniGestão Pro Store` (sessão, vendas
+  pendentes, `print-station.json`), separada do perfil do Setup.exe (`%AppData%\OmniGestão Pro`).
+  Motivo: no Windows 10 1903+ o app empacotado grava no lugar real os arquivos que **já existem** em
+  `%AppData%` e só redireciona os novos; reusar a pasta do Setup.exe dividiria o perfil conforme a
+  máquina (visto no CI). Pasta nova = sempre privada do pacote. **Não há migração automática**: quem trocar do Setup.exe para a
   Store precisa sincronizar as vendas pendentes antes e configurar a impressora de novo.
 - **Atualizações da Store** preservam o perfil (provado no CI com marcador no perfil). O app nunca reinicia
   sozinho; o momento em que a Store aplica a versão nova com o app aberto **precisa ser confirmado na

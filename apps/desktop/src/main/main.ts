@@ -19,7 +19,7 @@ import { installDirectPrint } from "./direct-print"
 import { isAuthSessionCookie, LogoutGuard } from "./privacy"
 import { handleSquirrelEvent } from "./squirrel"
 import { checkDesktopUpdate, type UpdateStatus } from "./updates"
-import { packageKind } from "../shared/distribution"
+import { MSIX_PROFILE_DIR, packageKind } from "../shared/distribution"
 
 const startedAt = Date.now()
 
@@ -439,6 +439,9 @@ try {
 if (config && config.channel !== "production") {
   const testProfile = process.env.OMNI_DESKTOP_TEST_USER_DATA // testes automatizados
   app.setPath("userData", testProfile || path.join(app.getPath("appData"), `OmniGestão Pro ${channelLabel(config.channel)}`))
+} else if (config && packageKind(process) === "msix") {
+  // Perfil próprio do pacote da Store, nunca o do Setup.exe (ver MSIX_PROFILE_DIR).
+  app.setPath("userData", path.join(app.getPath("appData"), MSIX_PROFILE_DIR))
 }
 // Dentro do pacote MSIX não há Squirrel: nenhum argumento --squirrel-* é tratado.
 const squirrelEvent = packageKind(process) === "msix" ? null : parseSquirrelEvent(process.argv)

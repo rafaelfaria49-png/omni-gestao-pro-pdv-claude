@@ -93,7 +93,9 @@ function appProcesses(location) {
 }
 
 /** Perfil do app dentro do pacote: o Windows redireciona %AppData% do app MSIX para LocalCache\Roaming. */
-const packageProfile = (pfn) => path.join(process.env.LOCALAPPDATA, "Packages", pfn, "LocalCache", "Roaming", PRODUCT)
+const MSIX_PROFILE_DIR = "OmniGestão Pro Store" // = src/shared/distribution.ts
+const packageProfile = (pfn) => path.join(process.env.LOCALAPPDATA, "Packages", pfn, "LocalCache", "Roaming", MSIX_PROFILE_DIR)
+const realStoreProfile = path.join(process.env.APPDATA, MSIX_PROFILE_DIR)
 const readText = (f) => {
   try {
     return readFileSync(f, "utf8")
@@ -166,7 +168,9 @@ Import-Certificate -FilePath $f -CertStoreLocation 'Cert:\\LocalMachine\\Trusted
   await launch("1ª abertura", st, v1)
   const profile = packageProfile(st.pfn)
   check("perfil do navegador criado DENTRO do pacote", existsSync(path.join(profile, "Local State")) || existsSync(path.join(profile, "Partitions")), profile)
+  check("perfil NÃO ficou no %AppData% real (redirecionado ao pacote)", !existsSync(realStoreProfile), realStoreProfile)
   const sentinel = path.join(profile, "omni-msix-test-sentinel.txt")
+  if (!existsSync(profile)) throw new Error(`perfil do pacote ausente: ${profile}`)
   writeFileSync(sentinel, "vendas pendentes / impressora / sessão — devem sobreviver à atualização\n")
   await close("1ª abertura", st)
 

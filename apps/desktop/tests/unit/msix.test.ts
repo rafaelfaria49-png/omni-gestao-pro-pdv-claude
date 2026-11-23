@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { buildAppxManifest, CI_TEST_IDENTITY, MsixManifestError, msixVersion, validateIdentity } from "../../scripts/lib/msix-manifest.mjs"
-import { packageKind } from "../../src/shared/distribution"
+import { MSIX_PROFILE_DIR, packageKind } from "../../src/shared/distribution"
 
 const store = { name: "12345RAFACELL.OmniGestaoPro", publisher: "CN=0A1B2C3D-1111-2222-3333-444455556666", publisherDisplayName: "RAFACELL" }
 const base = { version: "1.0.4", displayName: "OmniGestão Pro", description: "Vendas & caixa <loja>" }
@@ -54,5 +54,9 @@ describe("canal do executável", () => {
     expect(packageKind({ windowsStore: true })).toBe("msix")
     expect(packageKind({ windowsStore: false })).toBe("squirrel")
     expect(packageKind({})).toBe("squirrel")
+  })
+  it("perfil do MSIX nunca é o do Setup.exe nem o do QA (pasta nova = privada do pacote)", () => {
+    expect(MSIX_PROFILE_DIR).not.toBe("OmniGestão Pro")
+    expect(MSIX_PROFILE_DIR.startsWith("OmniGestão Pro QA")).toBe(false)
   })
 })
