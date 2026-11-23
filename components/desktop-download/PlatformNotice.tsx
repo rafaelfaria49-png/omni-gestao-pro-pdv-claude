@@ -8,8 +8,8 @@ type UAData = {
   getHighEntropyValues?: (hints: string[]) => Promise<Record<string, string>>
 }
 
-/** Mensagem conforme o computador de quem visita. Só orienta; não bloqueia o download. */
-export function PlatformNotice() {
+/** Plataforma de quem visita (null até detectar). Só orienta; nunca bloqueia a escolha manual. */
+export function usePlatformInfo(): PlatformInfo | null {
   const [info, setInfo] = useState<PlatformInfo | null>(null)
 
   useEffect(() => {
@@ -29,6 +29,11 @@ export function PlatformNotice() {
     }
   }, [])
 
+  return info
+}
+
+/** Mensagem conforme o computador de quem visita. */
+export function PlatformNotice({ info }: { info: PlatformInfo | null }) {
   if (!info) return null
   const message = noticeFor(info)
   if (!message) return null
@@ -39,18 +44,18 @@ export function PlatformNotice() {
   )
 }
 
-function noticeFor(info: PlatformInfo): string | null {
+export function noticeFor(info: PlatformInfo): string | null {
   switch (info.kind) {
     case "windows-x64":
-      return info.windowsVersion === "10"
-        ? "Detectamos Windows 10 de 64 bits. O instalador ainda está em validação no Windows 10 22H2 — se preferir, use pelo navegador."
-        : "Detectamos Windows de 64 bits (x64): este instalador é para o seu computador."
+      if (info.windowsVersion === "11") return "Detectamos Windows 11 de 64 bits. Destacamos a opção do seu computador, mas você pode escolher a outra."
+      if (info.windowsVersion === "10") return "Detectamos Windows 10 de 64 bits. Destacamos a opção do seu computador, mas você pode escolher a outra."
+      return "Detectamos Windows de 64 bits (x64). Escolha abaixo a versão do seu Windows."
     case "windows-arm":
       return "Este computador usa processador ARM. O instalador é só para x64 — use o OmniGestão Pro pelo navegador."
     case "windows-32":
       return "Este Windows parece ser de 32 bits. O instalador exige Windows de 64 bits (x64) — use pelo navegador."
     case "windows-desconhecido":
-      return "Não foi possível confirmar a arquitetura deste Windows. O instalador é para Windows 64 bits (x64); em processador ARM, use pelo navegador."
+      return "Não foi possível confirmar a versão deste Windows. Para conferir, aperte as teclas Windows + R e digite winver. O instalador é para Windows 64 bits (x64); em processador ARM, use pelo navegador."
     case "mac":
     case "linux":
     case "outro":

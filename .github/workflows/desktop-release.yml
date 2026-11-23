@@ -9,6 +9,9 @@ name: Desktop Release pública (assinada)
 #                     NÃO muda a versão oferecida aos clientes.
 #   action=promote  → valida o release.json com o mesmo contrato da página, baixa e confere de novo e aponta
 #                     latest.json para essa versão. Rollback = promote de uma versão anterior.
+#   action=verify-storage → pré-voo do armazenamento, sem certificado e sem tocar em versões: grava um
+#                     objeto de teste em desktop/_probe/, prova que a 2ª escrita condicional é RECUSADA
+#                     (imutabilidade) e que o domínio público serve o objeto por HTTPS.
 #
 # Nada aqui roda em pull_request. Segredos e variáveis ficam no environment `desktop-release` (com revisores
 # obrigatórios configurados pelo proprietário). Sem certificado, o job FALHA: executável não assinado nunca
@@ -24,7 +27,7 @@ on:
       action:
         description: "publish = gerar e enviar nova versão · promote = tornar uma versão publicada a oficial (ou rollback)"
         type: choice
-        options: [publish, promote]
+        options: [publish, promote, verify-storage]
         default: publish
       version:
         description: "Somente para promote: versão já publicada (ex.: 1.0.4)"
@@ -66,7 +69,12 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.OMNI_DESKTOP_R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.OMNI_DESKTOP_R2_SECRET_ACCESS_KEY }}
       SIGN_PROVIDER: ${{ vars.OMNI_DESKTOP_SIGN_PROVIDER }}
+      # Fornecedor do HSM em nuvem no modo store. Hoje só `sslcom-esigner` (SSL.com eSigner CKA).
+      SIGN_VENDOR: ${{ vars.OMNI_DESKTOP_SIGN_VENDOR }}
       OMNI_DESKTOP_TIMESTAMP_URL: ${{ vars.OMNI_DESKTOP_TIMESTAMP_URL }}
+      # eSigner CKA fixado por versão e SHA-256 (digest publicado no release oficial SSLcom/eSignerCKA).
+      ESIGNER_CKA_URL: https://github.com/SSLcom/eSignerCKA/releases/download/v1.1.2/SSL.COM-eSigner-CKA_1.1.2.zip
+      ESIGNER_CKA_SHA256: 071ca52986795e7a00dfbd87cc5818d03af74daac32dfe32afd4171b676c4d13
     steps:
       - uses: actions/checkout@v4
         with:
@@ -91,6 +99,36 @@ jobs:
       #        Acrescente aqui, ANTES deste passo, a instalação/login da ferramenta do fornecedor
       #        (ver docs). O thumbprint vem de vars.OMNI_DESKTOP_SIGN_SHA1.
       # pfx:   certificado .pfx (legado) em segredo base64; importado só neste runner descartável.
+      - name: Fornecedor — SSL.com eSigner CKA (instalar e autenticar)
+        if: env.SIGN_PROVIDER == 'store'
+        env:
+          ES_USERNAME: ${{ secrets.OMNI_DESKTOP_ESIGNER_USERNAME }}
+          ES_PASSWORD: ${{ secrets.OMNI_DESKTOP_ESIGNER_PASSWORD }}
+          ES_TOTP_SECRET: ${{ secrets.OMNI_DESKTOP_ESIGNER_TOTP_SECRET }}
+        run: |
+          if ($env:SIGN_VENDOR -ne "sslcom-esigner") { Write-Error "vars.OMNI_DESKTOP_SIGN_VENDOR deve ser 'sslcom-esigner' no modo store (único fornecedor integrado)"; exit 1 }
+          if (-not $env:ES_USERNAME -or -not $env:ES_PASSWORD -or -not $env:ES_TOTP_SECRET) { Write-Error "segredos OMNI_DESKTOP_ESIGNER_USERNAME/PASSWORD/TOTP_SECRET ausentes no environment desktop-release"; exit 1 }
+          $ErrorActionPreference = "Stop"
+          $work = Join-Path $env:RUNNER_TEMP "esigner"
+          $dir = Join-Path $env:RUNNER_TEMP "eSignerCKA"
+          New-Item -ItemType Directory -Force $work, $dir | Out-Null
+          $zip = Join-Path $work "cka.zip"
+          Invoke-WebRequest -Uri $env:ESIGNER_CKA_URL -OutFile $zip
+          $got = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $env:ESIGNER_CKA_SHA256) { Write-Error "eSigner CKA com SHA-256 inesperado ($got) — não instalar"; exit 1 }
+          Expand-Archive $zip -DestinationPath $work -Force
+          $setup = Get-ChildItem $work -Recurse -Filter *.exe | Select-Object -First 1
+          if (-not $setup) { Write-Error "instalador do eSigner CKA não encontrado no zip"; exit 1 }
+          Start-Process -FilePath $setup.FullName -ArgumentList "/CURRENTUSER","/VERYSILENT","/SUPPRESSMSGBOXES","/DIR=`"$dir`"" -Wait
+          $tool = Join-Path $dir "eSignerCKATool.exe"
+          if (-not (Test-Path $tool)) { Write-Error "eSignerCKATool.exe não instalado"; exit 1 }
+          # Segredos só por variável de ambiente; saída da ferramenta descartada para não ecoar nada.
+          & $tool config -mode product -user $env:ES_USERNAME -pass $env:ES_PASSWORD -totp $env:ES_TOTP_SECRET -key (Join-Path $dir "master.key") -r | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Error "eSigner CKA: falha ao configurar a conta (usuário/senha/TOTP)"; exit 1 }
+          & $tool unload | Out-Null
+          & $tool load | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Error "eSigner CKA: falha ao carregar o certificado"; exit 1 }
+          "ESIGNER_CKA_TOOL=$tool" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Certificado — repositório do Windows (HSM do fornecedor)
         if: env.SIGN_PROVIDER == 'store'
         env:
@@ -146,6 +184,16 @@ jobs:
         if: always() && env.SIGN_PROVIDER == 'pfx'
         run: |
           if ($env:OMNI_DESKTOP_SIGN_SHA1) { Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $env:OMNI_DESKTOP_SIGN_SHA1.ToUpper() | Remove-Item -Force -ErrorAction SilentlyContinue }
+      # Encerra a sessão do HSM: descarrega o certificado, apaga master.key e a configuração cifrada da conta.
+      # Nenhum instalador roda com a credencial de assinatura disponível no runner.
+      - name: Encerrar eSigner CKA (store)
+        if: always() && env.SIGN_PROVIDER == 'store'
+        run: |
+          if ($env:ESIGNER_CKA_TOOL -and (Test-Path $env:ESIGNER_CKA_TOOL)) { & $env:ESIGNER_CKA_TOOL unload | Out-Null; $global:LASTEXITCODE = 0 }
+          Remove-Item (Join-Path $env:RUNNER_TEMP "eSignerCKA\master.key") -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:APPDATA "eSignerCKA") -Recurse -Force -ErrorAction SilentlyContinue
+          if ($env:OMNI_DESKTOP_SIGN_SHA1) { Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $env:OMNI_DESKTOP_SIGN_SHA1.ToUpper() | Remove-Item -Force -ErrorAction SilentlyContinue }
+          exit 0
 
       - name: Versão nova e imutável no armazenamento
         id: meta
@@ -248,6 +296,52 @@ jobs:
             apps/desktop/out/public/public-check.json
             apps/desktop/out/manifest/release.json
             apps/desktop/test-results/install-test-production.json
+
+  verify-storage:
+    if: inputs.action == 'verify-storage' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    environment: desktop-release
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      AWS_ENDPOINT_URL_S3: ${{ secrets.OMNI_DESKTOP_R2_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.OMNI_DESKTOP_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.OMNI_DESKTOP_R2_SECRET_ACCESS_KEY }}
+      PROBE_KEY: desktop/_probe/${{ github.run_id }}-${{ github.run_attempt }}.txt
+    steps:
+      - name: Configuração presente
+        run: |
+          $missing = @()
+          foreach ($n in "RELEASES_BASE_URL","R2_BUCKET","AWS_ENDPOINT_URL_S3","AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY") { if (-not [Environment]::GetEnvironmentVariable($n)) { $missing += $n } }
+          if ($missing.Count) { Write-Error "Configuração ausente no environment desktop-release: $($missing -join ', ')"; exit 1 }
+          if ($env:RELEASES_BASE_URL -notmatch '^https://[A-Za-z0-9.-]+$' -or $env:RELEASES_BASE_URL -match '\.(vercel\.app|r2\.dev)$') { Write-Error "OMNI_DESKTOP_RELEASES_BASE_URL deve ser a origem https do domínio próprio (não r2.dev)"; exit 1 }
+      - name: Escrita condicional (1ª aceita, 2ª recusada)
+        run: |
+          $f = Join-Path $env:RUNNER_TEMP "probe.txt"
+          "omni-desktop-releases probe $env:GITHUB_RUN_ID" | Out-File -Encoding ascii -NoNewline $f
+          aws s3api put-object --bucket $env:R2_BUCKET --key $env:PROBE_KEY --body $f --if-none-match "*" --content-type "text/plain" --cache-control "no-store" | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Error "1ª escrita recusada (token sem escrita no bucket?)"; exit 1 }
+          $out = aws s3api put-object --bucket $env:R2_BUCKET --key $env:PROBE_KEY --body $f --if-none-match "*" --content-type "text/plain" 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          $global:LASTEXITCODE = 0
+          if ($code -eq 0) { Write-Error "2ª escrita ACEITA: o armazenamento sobrescreve com If-None-Match — releases não seriam imutáveis. NÃO publicar."; exit 1 }
+          if ($out -notmatch 'PreconditionFailed|\(412\)') { Write-Error "2ª escrita falhou por outro motivo (exit $code): $out"; exit 1 }
+          Write-Host "OK: sobrescrita recusada (412)."
+          exit 0
+      - name: Leitura pública pelo domínio
+        run: |
+          $r = Invoke-WebRequest -Uri "$env:RELEASES_BASE_URL/$env:PROBE_KEY" -MaximumRedirection 0 -SkipHttpErrorCheck
+          if ($r.StatusCode -ne 200) { Write-Error "domínio público respondeu HTTP $($r.StatusCode) para o objeto de teste"; exit 1 }
+          $body = if ($r.Content -is [byte[]]) { [Text.Encoding]::ASCII.GetString($r.Content) } else { [string]$r.Content }
+          if ($body -ne "omni-desktop-releases probe $env:GITHUB_RUN_ID") { Write-Error "conteúdo divergente no domínio público"; exit 1 }
+          Write-Host "OK: $env:RELEASES_BASE_URL serve o bucket por HTTPS."
+      - name: Listagem pública desativada
+        run: |
+          $r = Invoke-WebRequest -Uri "$env:RELEASES_BASE_URL/" -MaximumRedirection 0 -SkipHttpErrorCheck
+          if ($r.StatusCode -eq 200 -and ([string]$r.Content) -match '<ListBucketResult') { Write-Error "o domínio lista o bucket publicamente"; exit 1 }
+          Write-Host "Raiz do domínio: HTTP $($r.StatusCode) (sem listagem)."
 
   promote:
     if: inputs.action == 'promote' && github.ref == 'refs/heads/main'

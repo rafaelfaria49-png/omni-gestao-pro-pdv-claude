@@ -42,7 +42,7 @@ A página `/gestao-lojas` só anuncia o que está marcado **OPERACIONAL** abaixo
 | Controle de usuários (CAIXA, VENDEDOR, GERENTE, ADMIN) | todos | OPERACIONAL | `UsuariosSection.tsx`, `/api/admin/users` |
 | Configuração por loja | todos | OPERACIONAL | módulo `settings`, `/api/stores/[id]/settings` |
 | Isolamento entre lojas | todos | OPERACIONAL | E2E piloto (dados B invisíveis para A) |
-| Aplicativo Windows (download público) | — | EM LIBERAÇÃO | frente `OMNI-DESKTOP-DISTRIBUICAO-PUBLICA-SAAS-001`; botão fica desligado até `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` |
+| Aplicativo Windows (download público) | — | EM LIBERAÇÃO | frente `OMNI-DESKTOP-DISTRIBUICAO-PUBLICA-SAAS-001`; botão leva sempre a `/baixar` (opções Windows 10/11; download liberado só com release assinada e homologada) |
 | Padaria — venda por peso (kg) | — | EM LIBERAÇÃO | PRs #315/#335/#336 sem merge; NO_GO de janela presencial |
 | Vestuário — grade de tamanho e cor | — | EM LIBERAÇÃO | P02 #358 em draft; flags `VESTUARIO_*` desligadas |
 | Aparelhos por IMEI | — | FORA DA OFERTA | #347 mergeada, migration não aplicada em produção, recurso desligado |

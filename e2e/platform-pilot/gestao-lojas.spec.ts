@@ -57,8 +57,9 @@ test("página comercial é pública, honesta e responsiva em 375/768/1440", asyn
   // Sem aprovação: nenhum preço proposto, nenhum download, nenhum número fictício.
   const corpo = await page.locator("body").innerText()
   expect(corpo).not.toMatch(/39,90|69,90|99,90|teste grátis|créditos IA|depoimento|\+\s?\d+ (lojas|clientes)/i)
-  await expect(page.getByText("Download ainda não liberado")).toBeVisible()
-  expect(await page.locator('a[href$=".exe"], a[href*="download"]').count()).toBe(0)
+  // Windows: canal único é /baixar (sem link direto para instalador nesta página).
+  await expect(page.getByRole("link", { name: "Ver opções para Windows" })).toHaveAttribute("href", "/baixar")
+  expect(await page.locator('a[href$=".exe"], a[href*="download"], a[download]').count()).toBe(0)
 
   // Toda âncora interna tem destino; todo link de página responde.
   for (const href of await page.locator('a[href^="#"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")!))) {
@@ -86,6 +87,28 @@ test("página comercial é pública, honesta e responsiva em 375/768/1440", asyn
     expect(overflow, `rolagem horizontal em ${width}px`).toBeLessThanOrEqual(0)
     await page.screenshot({ path: `${out}/gestao-lojas-${width}.png`, fullPage: true, animations: "disabled" })
   }
+})
+
+test("/baixar oferece Windows 10 e 11 e, sem release homologada, nenhum instalador público", async ({ page }) => {
+  expect((await page.goto("/baixar"))?.status()).toBe(200)
+  await expect(page.getByRole("heading", { level: 1, name: /Baixe o .+ para seu computador/ })).toBeVisible()
+  for (const w of ["10", "11"]) {
+    const card = page.getByRole("article", { name: `Windows ${w}` })
+    await expect(card).toBeVisible()
+    await expect(card.getByText("64 bits (x64)")).toBeVisible()
+    // Sem release pública assinada no CI: o botão existe, mas é desabilitado e não é link.
+    await expect(card.getByText(`Baixar para Windows ${w}`)).toHaveAttribute("aria-disabled", "true")
+    expect(await card.getByRole("link").count()).toBe(0)
+  }
+  expect(await page.locator('a[href$=".exe"], a[download]').count()).toBe(0)
+  await expect(page.getByText("O download público do instalador ainda não está liberado.")).toBeVisible()
+  await expect(page.getByRole("link", { name: "Acessar pelo navegador" })).toHaveAttribute("href", "/login")
+  // O pipeline exige assinatura: a página continua mandando conferir Authenticode.
+  await expect(page.getByRole("heading", { name: "Assinatura digital" })).toBeVisible()
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto("/baixar")
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
+  await page.screenshot({ path: `${out}/baixar-375.png`, fullPage: true, animations: "disabled" })
 })
 
 test("pedido de teste: erros claros, registro real, repetição sem duplicar, leitura só da plataforma", async ({ page }) => {

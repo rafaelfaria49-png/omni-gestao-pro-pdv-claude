@@ -53,25 +53,20 @@ type Env = Record<string, string | undefined>
 
 export type GestaoLojasConfig = {
   exibirPrecosPropostos: boolean
-  downloadWindowsUrl: string | null
   contatoWhatsapp: string | null
   contatoEmail: string | null
 }
 
 /**
  * Lê as chaves da página. Tudo falha fechado: valor ausente ou malformado = recurso
- * oculto. O download só aparece com URL https explícita (instalador homologado na
- * frente OMNI-DESKTOP-DISTRIBUICAO-PUBLICA-SAAS-001); nunca há link "provisório".
+ * oculto. O download do Windows NÃO é configurado aqui: a página aponta sempre para
+ * `/baixar`, o único canal oficial (manifesto assinado e conferido).
  */
 export function resolverGestaoLojasConfig(env: Env = process.env): GestaoLojasConfig {
-  const url = env.GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL?.trim() ?? ""
-  let downloadWindowsUrl: string | null = null
-  try { if (url && new URL(url).protocol === "https:") downloadWindowsUrl = url } catch { downloadWindowsUrl = null }
   const whatsapp = (env.GESTAO_LOJAS_CONTATO_WHATSAPP ?? "").replace(/\D/g, "")
   const email = env.GESTAO_LOJAS_CONTATO_EMAIL?.trim() ?? ""
   return {
     exibirPrecosPropostos: env.GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS === "1",
-    downloadWindowsUrl,
     contatoWhatsapp: /^\d{12,13}$/.test(whatsapp) ? whatsapp : null,
     contatoEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null,
   }
