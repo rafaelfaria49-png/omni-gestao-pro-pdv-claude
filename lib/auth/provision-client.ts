@@ -1,6 +1,7 @@
 import "server-only"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import type { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { BASIC_MODULE_ACCESS, MODULES } from "./access-policy"
 import { generateTemporaryPassword } from "./password-policy"
@@ -12,7 +13,16 @@ export const provisionClientSchema = z.object({
   modules: z.array(z.enum(MODULES)).default(BASIC_MODULE_ACCESS.modules),
 }).strict()
 
-export async function provisionClient(input: z.infer<typeof provisionClientSchema>) {
+type Provisionado = { store: { id: string; name: string }; user: { id: string; email: string } }
+
+/**
+ * `aoCriar` (opcional) roda DENTRO da transação, depois de criar loja e usuário: se lançar,
+ * nada é gravado. Sem ele, o comportamento é o de sempre.
+ */
+export async function provisionClient(
+  input: z.infer<typeof provisionClientSchema>,
+  opts?: { aoCriar?: (tx: Prisma.TransactionClient, criado: Provisionado) => Promise<void> },
+) {
   const temporaryPassword = generateTemporaryPassword()
   const hash = await bcrypt.hash(temporaryPassword, 12)
   const storeId = `cliente-${crypto.randomUUID()}`
@@ -27,6 +37,7 @@ export async function provisionClient(input: z.infer<typeof provisionClientSchem
       name: input.name, email: input.email.toLowerCase(), password: hash, role: "ADMIN", accessScope: "STORE",
       lojaId: store.id, mustChangePassword: true, adminUserStores: { create: { storeId: store.id } },
     }, select: { id: true, email: true, role: true, accessScope: true, mustChangePassword: true } })
+    await opts?.aoCriar?.(tx, { store, user })
     return { store, user }
   })
   return { ...result, temporaryPassword }

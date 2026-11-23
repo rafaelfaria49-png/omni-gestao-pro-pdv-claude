@@ -17,14 +17,38 @@ export function FirstAccessWizard() {
   const { storeId, scope } = useStoreBasicsScope()
   const business = useStoreBusiness()
   if (!storeId || !business.canConfigure) return null
-  return <FirstAccessForStore key={scope} storeId={storeId} />
+  return <FirstAccessForStore key={scope} storeId={storeId} scope={scope} />
 }
 
-function FirstAccessForStore({ storeId }: { storeId: string }) {
+/**
+ * "Voltar depois"/fechar vale para a sessão da aba (usuário + versão de sessão + loja): antes
+ * o adiamento vivia só em memória e o assistente reabria a cada recarga, navegação completa e
+ * troca de loja. sessionStorage não guarda dado de cadastro — só o adiamento; fechar o
+ * navegador, trocar de usuário ou de loja volta a oferecer o assistente.
+ */
+export function firstAccessPostponedKey(scope: string): string {
+  return `omnigestao:first-access-wizard:adiado:v1:${scope}`
+}
+function readPostponed(key: string): boolean {
+  try { return typeof window !== "undefined" && window.sessionStorage.getItem(key) === "1" } catch { return false }
+}
+function writePostponed(key: string, postponed: boolean) {
+  try {
+    if (postponed) window.sessionStorage.setItem(key, "1")
+    else window.sessionStorage.removeItem(key)
+  } catch { /* sessionStorage indisponível: comportamento anterior (só em memória) */ }
+}
+
+function FirstAccessForStore({ storeId, scope }: { storeId: string; scope: string }) {
   const { storesLoaded, cadastroBasicoIncompleto } = useLojaAtiva()
   const business = useStoreBusiness()
+  const postponedKey = firstAccessPostponedKey(scope)
   const [started, setStarted] = useState(false)
-  const [open, setOpen] = useState(true)
+  const [open, setOpenState] = useState(() => !readPostponed(postponedKey))
+  const setOpen = (value: boolean) => {
+    writePostponed(postponedKey, !value)
+    setOpenState(value)
+  }
   // Persisted completeness, never a local "completed" flag. Existing complete stores stay untouched.
   useEffect(() => {
     if (storesLoaded && business.ready && cadastroBasicoIncompleto) setStarted(true)
@@ -35,7 +59,7 @@ function FirstAccessForStore({ storeId }: { storeId: string }) {
       <p>Os dados básicos desta unidade ainda estão incompletos.</p>
       <Button variant="outline" onClick={() => setOpen(true)}>Retomar configuração inicial</Button>
     </div>}
-    {open && <WizardEditor storeId={storeId} open={open} onOpenChange={setOpen} onCompletedClose={() => { setStarted(false); setOpen(true) }} />}
+    {open && <WizardEditor storeId={storeId} open={open} onOpenChange={setOpen} onCompletedClose={() => { writePostponed(postponedKey, false); setStarted(false); setOpenState(true) }} />}
   </>
 }
 

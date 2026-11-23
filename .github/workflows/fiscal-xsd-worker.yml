@@ -85,7 +85,10 @@ jobs:
       - run: npm run test:fiscal-xsd:unit
       - name: Testes provider SEFAZ
         run: npx vitest run lib/fiscal/provider/sefaz --testTimeout=30000
-      - run: npx tsc --noEmit --incremental false
+      - name: Typecheck (tsc, heap 6144 MB)
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npx tsc --noEmit --incremental false
       - name: ESLint fiscal focado
         run: >-
           npx eslint lib/fiscal/xsd lib/fiscal/xsd-worker lib/fiscal/provider/sefaz
@@ -193,8 +196,11 @@ jobs:
           "fetch('https://www.nfe.fazenda.gov.br',{signal:AbortSignal.timeout(3000)})
           .then(()=>process.exit(1)).catch(()=>process.exit(0))"
       - name: Suíte completa e build Next
+        # Suíte inteira da raiz, exceto as suítes que EXIGEM PostgreSQL descartável (BLOQUEIO_EXPLICITO_PG).
+        # Elas rodam no workflow "Suítes PostgreSQL da raiz" (root-pg-suites.yml), pelo mesmo manifesto
+        # de scripts/ci/run-root-pg-suites.mjs; suíte PG fora do manifesto reprova este passo.
         run: |
-          npm test
+          npm run test:root:sem-pg
           npm run build
       - name: Registrar hashes da imagem e binário
         run: |

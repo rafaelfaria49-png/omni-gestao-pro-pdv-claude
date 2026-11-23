@@ -77,7 +77,13 @@ describe("OPS-V4-FLUXO-CURTO-002 — PostgreSQL real", () => {
       expect(payloadInicial.aberturaV3.garantiaPrevista).toMatchObject({ modelo: "tela", prazoDias: 90 });
       expect(payloadInicial.aberturaV3.itensV3[0]).toMatchObject({ garantiaDias: 90 });
 
-      await salvarGarantiaOSV3(storeId, osId, { modeloId: "sem_garantia", prazoDias: 90 });
+      // Desde 7919e87 alterar a garantia fora do padrão exige motivo; sem ele, nada é gravado.
+      await expect(salvarGarantiaOSV3(storeId, osId, { modeloId: "sem_garantia", prazoDias: 90 })).rejects.toThrow(
+        "Informe o motivo obrigatório da alteração da garantia.",
+      );
+      const intacta = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId }, select: { payload: true } });
+      expect((intacta.payload as unknown as { aberturaV3: typeof aberturaV3 }).aberturaV3.garantiaPrevista).toMatchObject({ modelo: "tela", prazoDias: 90 });
+      await salvarGarantiaOSV3(storeId, osId, { modeloId: "sem_garantia", prazoDias: 90, motivo: "Cliente recusou a cobertura" });
       const salva = await prisma.ordemServico.findUniqueOrThrow({ where: { id: osId }, select: { payload: true } });
       const payloadFinal = salva.payload as unknown as { aberturaV3: typeof aberturaV3; timeline: Array<{ tipo: string }> };
       expect(payloadFinal.aberturaV3.garantiaPrevista).toMatchObject({ modelo: "sem_garantia", prazoDias: 0 });

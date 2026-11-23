@@ -95,6 +95,12 @@ const h = vi.hoisted(() => {
   return { store, prisma, requireEnterpriseWith, reset }
 })
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Usuário das duas lojas com módulo agent (requireModuleAction(storeId, "agent")); os cenários A×B seguem provando isolamento de dados.
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-a", "loja-b"], modules: ["agent"] })) }
+})
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: h.requireEnterpriseWith }))
 
@@ -106,6 +112,8 @@ import {
   listRecentOmniAgentMemories,
   searchOmniAgentMemories,
 } from "./omni-agent-memory"
+import { auth } from "@/auth"
+import { storeSession } from "@/test/fixtures/store-session"
 
 beforeEach(() => {
   h.reset()
@@ -244,5 +252,18 @@ describe("auditoria", () => {
 
     const actions = h.store.auditLogs.map((l) => l.action)
     expect(actions).toEqual(["OMNI_AGENT_MEMORY_CREATE", "OMNI_AGENT_MEMORY_UPDATE", "OMNI_AGENT_MEMORY_ARCHIVE"])
+  })
+})
+
+describe("guard de módulo real (requireModuleAction) — negativos", () => {
+  it("loja fora da membership → recusa antes do gate enterprise e do banco", async () => {
+    await expect(createOmniAgentMemory("loja-c", { tipo: "nota", titulo: "x", conteudo: "y" })).rejects.toThrow(
+      "Sem permissão para esta unidade",
+    )
+    expect(h.requireEnterpriseWith).not.toHaveBeenCalled()
+  })
+  it("membership sem módulo agent → recusa", async () => {
+    vi.mocked(auth).mockResolvedValueOnce(storeSession({ stores: ["loja-a", "loja-b"], modules: ["pdv"] }) as never)
+    await expect(listRecentOmniAgentMemories(STORE_A)).rejects.toThrow("Sem permissão para este módulo ou unidade.")
   })
 })

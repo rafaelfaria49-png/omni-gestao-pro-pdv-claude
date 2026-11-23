@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-23
+
+### Operações V3 — "Nova OS" abre o seletor Novo atendimento
+
+- O botão **Nova OS** da V3 abre um seletor com três opções: **Nova OS**, **Orçamento** e **Retorno / Garantia**. "Atendimento rápido" não aparece no seletor (a tela própria continua no menu).
+- **Nova OS** abre o formulário completo de sempre, sem mudança.
+- **Orçamento** usa o mesmo formulário sem o passo Pagamento e com a entrada do aparelho opcional; grava um orçamento pré-OS (proposta de hoje, validade de 7 dias). Nada é recebido e nenhum serviço é concluído; aprovação e envio seguem no painel de orçamento da OS.
+- **Retorno / Garantia** localiza a OS original (número, cliente, telefone ou aparelho) e abre o retorno vinculado a ela. Repetir o mesmo relato não cria um segundo atendimento; retorno já em andamento abre o atendimento existente; OS não entregue ou cancelada não oferece abertura.
+- Modal responsivo, com botão Fechar e tecla ESC. Operações V4, Caixa, PDV, Financeiro e Fiscal não mudaram.
+
 ## 2026-10-22
 
 ### Cadastros — Contato por QR Code no cadastro de Clientes

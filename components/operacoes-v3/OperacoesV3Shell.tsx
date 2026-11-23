@@ -7,7 +7,10 @@ import { cn } from "@/lib/utils";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 import { statusMetaV3, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import { OperacoesV3Context, type OperacoesV3ContextValue } from "./context/OperacoesV3Context";
-import { NovaOSEnterpriseModalV3 } from "./components/NovaOSEnterpriseModalV3";
+import { NovaOSEnterpriseModalV3, type NovaOSModoV3 } from "./components/NovaOSEnterpriseModalV3";
+import { NovoAtendimentoSeletorV3 } from "./components/NovoAtendimentoSeletorV3";
+import { RetornoOrigemV3Modal } from "./components/RetornoOrigemV3Modal";
+import type { NovoAtendimentoModalidadeV3 } from "@/lib/operacoes-v3/novo-atendimento-seletor";
 import { OSContextRailV3 } from "./components/OSContextRailV3";
 import { OperacoesV3MiniRail, OperacoesV3TopTabs } from "./OperacoesV3Nav";
 import { OSModeToggleV3, type ModoOperacoesV3 } from "./components/OSModeToggleV3";
@@ -79,6 +82,10 @@ export function OperacoesV3Shell() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>("dashboard");
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
   const [novaOSOpen, setNovaOSOpen] = useState(false);
+  // GOAL OPERACOES-V3-NOVA-OS-SELETOR-003: "Nova OS" abre o seletor (Nova OS / Orçamento / Retorno).
+  const [seletorOpen, setSeletorOpen] = useState(false);
+  const [novaOSModo, setNovaOSModo] = useState<NovaOSModoV3>("os");
+  const [retornoOpen, setRetornoOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   // Cockpit layout state — puro UI, sem I/O.
@@ -115,17 +122,45 @@ export function OperacoesV3Shell() {
       notificar("Selecione uma unidade ativa para abrir uma OS.");
       return;
     }
-    setNovaOSOpen(true);
+    setSeletorOpen(true);
   }, [storeId, notificar]);
+
+  const escolherNovoAtendimento = useCallback((id: NovoAtendimentoModalidadeV3) => {
+    setSeletorOpen(false);
+    if (id === "retorno") {
+      setRetornoOpen(true);
+      return;
+    }
+    setNovaOSModo(id === "orcamento" ? "orcamento" : "os");
+    setNovaOSOpen(true);
+  }, []);
 
   const onOSCriada = useCallback(
     (osId: string) => {
       setNovaOSOpen(false);
       reload();
-      notificar("OS criada com sucesso.");
+      notificar(novaOSModo === "orcamento" ? "Orçamento registrado. Monte e envie a proposta no painel de orçamento." : "OS criada com sucesso.");
       openOS(osId);
     },
+    [reload, notificar, openOS, novaOSModo],
+  );
+
+  const onRetornoAberto = useCallback(
+    (atendimentoId: string, situacao: "criado" | "recuperado") => {
+      setRetornoOpen(false);
+      reload();
+      notificar(situacao === "criado" ? "Retorno aberto e vinculado à OS original." : "Este retorno já estava aberto — abrindo o atendimento existente.");
+      openOS(atendimentoId);
+    },
     [reload, notificar, openOS],
+  );
+
+  const abrirOSDoRetorno = useCallback(
+    (osId: string) => {
+      setRetornoOpen(false);
+      openOS(osId);
+    },
+    [openOS],
   );
 
   const acaoEmConstrucao = useCallback(
@@ -349,11 +384,22 @@ export function OperacoesV3Shell() {
           </div>
         ) : null}
 
+        <NovoAtendimentoSeletorV3 open={seletorOpen} onClose={() => setSeletorOpen(false)} onEscolher={escolherNovoAtendimento} />
+
         <NovaOSEnterpriseModalV3
           open={novaOSOpen}
           storeId={storeId}
+          modo={novaOSModo}
           onClose={() => setNovaOSOpen(false)}
           onCreated={onOSCriada}
+        />
+
+        <RetornoOrigemV3Modal
+          open={retornoOpen}
+          storeId={storeId}
+          onClose={() => setRetornoOpen(false)}
+          onAbrirOS={abrirOSDoRetorno}
+          onRetornoAberto={onRetornoAberto}
         />
       </div>
     </OperacoesV3Context.Provider>

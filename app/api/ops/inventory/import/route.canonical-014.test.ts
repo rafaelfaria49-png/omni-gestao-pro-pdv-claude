@@ -37,8 +37,10 @@ function adminSession(over: Record<string, unknown> = {}): Session {
       email: "a@x.com",
       name: "Admin",
       role: "ADMIN",
-      storeAccess: "all",
-      allowedStoreIds: [],
+      // Membership explícita + módulo catalog (requireModuleApi(req, "catalog"), desde 52c01c3).
+      storeAccess: "restricted",
+      allowedStoreIds: ["loja-a"],
+      storeModules: { "loja-a": ["catalog"] },
       lojaId: "loja-a",
       ...over,
     },
@@ -138,5 +140,22 @@ describe("PUT /api/ops/inventory/import — canonical", () => {
     const body = (await res.json()) as { created: number; updated: number }
     expect(body.updated).toBe(1)
     expect(h.updateProduct).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("PUT /api/ops/inventory/import — guard de módulo real (negativos, contrato 52c01c3)", () => {
+  it("ADMIN com storeAccess all sem autoridade da plataforma → 403 antes do requireAdmin", async () => {
+    gateAdmin(adminSession({ storeAccess: "all", allowedStoreIds: [], storeModules: {} }))
+    const res = await PUT(req("loja-a", [{ id: "SKU-1", name: "P1" }]))
+    expect(res.status).toBe(403)
+    expect(h.requireAdmin).not.toHaveBeenCalled()
+    expect(h.createProduct).not.toHaveBeenCalled()
+    expect(h.updateProduct).not.toHaveBeenCalled()
+  })
+  it("ADMIN membro sem o módulo catalog → 403", async () => {
+    gateAdmin(adminSession({ storeModules: { "loja-a": ["stock"] } }))
+    const res = await PUT(req("loja-a", [{ id: "SKU-1", name: "P1" }]))
+    expect(res.status).toBe(403)
+    expect(h.createProduct).not.toHaveBeenCalled()
   })
 })

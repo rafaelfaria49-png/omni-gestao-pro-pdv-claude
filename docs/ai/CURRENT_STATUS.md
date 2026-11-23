@@ -1,5 +1,7 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
+> **Adendo — 23 Nov 2026 · Operações V3 · Seletor "Novo atendimento" (`OPERACOES-V3-NOVA-OS-SELETOR-003`, branch `claude/operacoes-v3-nova-os-seletor-003`, PR DRAFT, sem merge):** o botão "Nova OS" da V3 (header e telas) abre um seletor com só três opções — **Nova OS** (modal Nova OS Enterprise inalterado, `criarOSEnterpriseV3`), **Orçamento** (o mesmo modal em `modo="orcamento"`: sem passo Pagamento, entrada do aparelho opcional, grava pré-OS por `criarOSPreOrcamentoV3` com proposta de hoje e validade padrão de 7 dias; rascunho local separado) e **Retorno / Garantia** (localiza a OS original por `buscarOrigensRetornoV3` e abre o retorno vinculado por `abrirRetornoV3`, idempotente por `operacaoId`; retorno em andamento abre o atendimento existente; OS não entregue/cancelada não oferece abertura). "Atendimento rápido" fica fora do seletor (a tela própria segue). Sem Server Action nova, sem schema, V4/Caixa/PDV/Financeiro/Fiscal intocados. Catálogo puro em `lib/operacoes-v3/novo-atendimento-seletor.ts` (reaproveita a copy da V4); testes montados em `test/ops-v3-nova-os-seletor-003/` (runner jsdom dedicado). **Aceite real no navegador (`OPERACOES-V3-SELETOR-003-ACEITE-REAL`, 23 Nov):** `next start` local + login NextAuth real pela tela + PostgreSQL descartável com massa sintética (`aceite.e2e.ts`, `qa-bootstrap.mjs`) — 6/6: seletor com 3 opções e sem Atendimento rápido, Nova OS persistida e reaberta, orçamento gravado como pré-OS sem pagamento/serviço concluído, retorno vinculado à OS original sem duplicar (duplo clique + segunda tentativa abre o atendimento em andamento), ESC/Fechar em desktop e 390 px, isolamento entre lojas (loja B intacta; loja forjada no navegador volta à loja do usuário).
+
 > **Adendo — 20 Nov 2026 · Relatório Geral da Loja (`OMNI-RELATORIO-GERAL-LOJA-COMERCIAL-FINANCEIRO-001`, branch `codex/relatorio-geral-loja-001`, PR DRAFT, sem merge):** novo kind `geral` na Central (`/dashboard/relatorios/geral`), somente leitura e por loja: vendas por tipo (produto/acessório/aparelho/serviço/OS/avulso/não classificado), à vista × a prazo comprovados, recebimentos efetivos (inclui parcelas antigas, sem virar venda), contas a receber/pagar na posição atual, despesas pagas × compras (sem CMV), fluxo pelo mesmo cálculo do Fluxo de Caixa e conferência de divergências (OS cobrada 2×, cancelamento sem estorno, órfãos, não classificados). Detalhamento unificado com rastreio até venda/título/movimento; CSV/PDF completos até 5.000 registros (acima: 422). Sem schema/migration. Lacunas e regras em [evidências](../ai-execution/_evidence/OMNI-RELATORIO-GERAL-LOJA-COMERCIAL-FINANCEIRO-001/REPORT.md). Homologação com dados reais da RAFACELL pendente.
 
 > **Adendo — 15 Nov 2026 · Central de Relatórios (`OMNI-RELATORIOS-HUB-ENTERPRISE-REAL-001`, branch isolada, sem merge):** sete consultas gerenciais somente leitura por loja, com contratos explícitos de origem/limitações, CSV/PDF autorizados, coortes e paginação. Produtos reaproveitam seletivamente a PR #318; financeiro separa ledger realizado de títulos previstos; DRE é gerencial parcial de caixa, sem CMV/lucro inventados. Clientes usam FK; OS preservam status V3 e precisão de datas; WhatsApp distingue registros de aceite externo sem prova. HTML/RSC e APIs protegidos contra cache privado. Validação em QA sintético e revisão independente registradas em [evidências](../ai-execution/_evidence/OMNI-RELATORIOS-HUB-ENTERPRISE-REAL-001/). Promoção comercial depende dos gates de teste/CI e dos bloqueios de fonte declarados; não confundir tela/API com relatório integral pronto. Nenhuma escrita ou migration em Production.
@@ -62,14 +64,19 @@
 
 ---
 
-## Página comercial "Vendas e Estoque" `/gestao-lojas` (`OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001`) · 18/11/2026
+## Página comercial "Vendas e Estoque" `/gestao-lojas` (`OMNI-SAAS-VENDAS-SIMPLES-LANDING-COMERCIAL-001`) · 18/11/2026 · atualizado 19/11/2026
 
-- **Real, em PR, sem merge**: página pública `/gestao-lojas` (sem IA), pedido de teste gravado em
+- **19/11/2026:** #374 mergeada (`fbc7bba`) e publicada; migration comercial **aplicada em Production** antes do
+  merge (30/30, tabela vazia; backup Neon `br-delicate-sky-acgab3g9`). Nenhum pedido real validado ainda.
+  `CAPTACAO-COMERCIAL-PILOTO-002`: provisionar a partir de um pedido fecha o pedido e grava `storeId`/`userId`
+  no histórico; caixa com links de contato; instruções de entrada sem senha. Operação, roteiro de teste real,
+  preços e proposta de limite por plano: `docs/comercial/GESTAO_LOJAS_OPERACAO_PILOTO.md`.
+- **Real**: página pública `/gestao-lojas` (sem IA), pedido de teste gravado em
   `solicitacoes_teste_comercial` com protocolo, consentimento, histórico, idempotência por email aberto
   (UNIQUE `emailAberto`) e limite por origem/global no banco; caixa de entrada em `/dashboard/plataforma`
   ligada ao provisionamento assistido existente. Pedido **não** cria conta, loja, trial nem cobrança.
-- **Migration aditiva `20261118120000_solicitacoes_teste_comercial` NÃO aplicada em Production**
-  (merge na `main` pode disparar `migrate deploy` no `omni-gestao-pro`). Exige autorização do proprietário.
+- **Limite de pessoas por plano não existe** (os 3 planos são idênticos); contato comercial direto só com
+  `GESTAO_LOJAS_CONTATO_WHATSAPP`/`GESTAO_LOJAS_CONTATO_EMAIL` (não configurados).
 - **Fail-closed por env**: preços propostos (R$ 39,90/69,90/99,90 — **não aprovados**) só com
   `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1`; botão Windows leva sempre a `/baixar` (canal único; `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` removida em 2026-11-22).
 - `/` (acesso piloto) e a landing antiga de IA (`/dashboard/landing-preview`) **inalteradas**. Stripe intocado.

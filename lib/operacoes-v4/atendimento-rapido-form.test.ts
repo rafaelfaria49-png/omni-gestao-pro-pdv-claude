@@ -1,7 +1,7 @@
 // Testes PUROS do mapeamento Atendimento Rápido V4 → AtendimentoRapidoInputV3
 // (OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014). Ambiente node: o helper e
 // `validarAtendimentoRapidoV3` são puros (sem Prisma/React/next-auth).
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   atendimentoRapidoFormVazioV4,
   buildAtendimentoRapidoInputFromFormV4,
@@ -9,6 +9,10 @@ import {
   type AtendimentoRapidoFormV4,
 } from "./atendimento-rapido-form";
 import { validarAtendimentoRapidoV3, SERVICOS_RAPIDOS_V3 } from "@/lib/operacoes-v3/atendimento-rapido-model";
+
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+vi.mock("@/auth", () => ({ auth: vi.fn(async () => null) }));
+
 
 function form(over: Partial<AtendimentoRapidoFormV4> = {}): AtendimentoRapidoFormV4 {
   return { ...atendimentoRapidoFormVazioV4(), ...over };

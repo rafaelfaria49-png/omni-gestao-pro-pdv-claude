@@ -13,6 +13,7 @@ describe("OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3", () => {
   const orchestrator = source("use-v4-preview.ts");
   const viewModel = readFileSync(join(dir, "..", "..", "lib", "operacoes-v4", "financeiro-v4.ts"), "utf8");
   const form = readFileSync(join(dir, "..", "..", "lib", "operacoes-v4", "receber-pagamento-form.ts"), "utf8");
+  const hookV3 = readFileSync(join(dir, "..", "operacoes-v3", "hooks", "use-pdv-servico-v3.ts"), "utf8");
 
   it("não cria motor financeiro V4 paralelo", () => {
     for (const blob of [financeiro, receber, entrega, orchestrator, viewModel, form]) {
@@ -39,7 +40,10 @@ describe("OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3", () => {
   });
 
   it("recebimento imediato continua no contrato receberOSV3 via hook, sem optimistic de valor", () => {
-    expect(receber).toContain("pdv.receber({");
+    // Desde 3027772 o input imediato é montado antes da chamada (pode ser o replay da pendência
+    // original) e o hook V3 é quem chama receberOSV3.
+    expect(receber).toContain("await pdv.receber(inputImediato)");
+    expect(hookV3).toContain("await receberOSV3(p.storeId, p.osId,");
     expect(receber).toContain("pdv.recebendo");
     expect(receber).not.toContain("setOptimistic");
     expect(orchestrator).toMatch(/if \(ok\) \{\s*reloadOrdens\(\);\s*reloadDetail\(\);\s*reloadFinancial\(\);/);
@@ -68,7 +72,8 @@ describe("OPS-V4-RECEBIMENTO-TRANSVERSAL-005 — shell UX do motor V3", () => {
   });
 
   it("19–35. submit usa receberOSV3 via hook, sem optimistic e com reload só no sucesso", () => {
-    expect(receber).toMatch(/pdv\.receber\(\{\s*linhas:\s*linhasValidas,/);
+    expect(receber).toMatch(/const inputImediato = pendenciaImediata\?\.input \?\? \{ linhas: linhasValidas,/);
+    expect(receber).toContain("await pdv.receber(inputImediato)");
     expect(receber).toContain("pdv.recebendo");
     expect(receber).toContain("if (!podeConfirmar || envio.current) return");
     expect(orchestrator).toContain("receberOSV3");

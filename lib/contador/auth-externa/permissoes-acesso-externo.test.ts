@@ -18,8 +18,18 @@ import { resolverCapacidadesContador } from "@/lib/contador/status/permissoes"
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 
+/** Membro da loja-1 com os módulos accountant + finance liberados (contrato desde 52c01c3); o papel decide. */
 function sessao(over: Record<string, unknown>): Session {
-  return { user: { id: "user-1", ...over }, expires: "2999-01-01" } as unknown as Session
+  return {
+    user: {
+      id: "user-1",
+      storeAccess: "restricted",
+      allowedStoreIds: ["loja-1"],
+      storeModules: { "loja-1": ["accountant", "finance"] },
+      ...over,
+    },
+    expires: "2999-01-01",
+  } as unknown as Session
 }
 
 describe("TESTE 26 · contador.manageExternalAccess na matriz enterprise", () => {
@@ -85,5 +95,20 @@ describe("TESTE 26 · podeGerenciarAcessoExterno — predicado sem financeiro.ed
     // Garantia de que o ajuste não apagou o critério original do GOAL 011.
     expect(resolverCapacidadesContador(sessao({ role: "GERENTE" })).podeConferir).toBe(true)
     expect(resolverCapacidadesContador(sessao({ role: "CAIXA" })).podeConferir).toBe(false)
+  })
+})
+
+describe("capacidades exigem o módulo accountant liberado na loja (contrato 52c01c3)", () => {
+  it("ADMIN membro da loja sem o módulo accountant → nenhuma capacidade", () => {
+    expect(resolverCapacidadesContador(sessao({ role: "ADMIN", storeModules: { "loja-1": ["finance"] } }))).toEqual({
+      acessaHub: false,
+      podeConferir: false,
+      podeGerenciarAcessoExterno: false,
+    })
+  })
+  it("ADMIN sem membership em loja alguma → nenhuma capacidade", () => {
+    const caps = resolverCapacidadesContador(sessao({ role: "ADMIN", allowedStoreIds: [], storeModules: {} }))
+    expect(caps.acessaHub).toBe(false)
+    expect(caps.podeGerenciarAcessoExterno).toBe(false)
   })
 })
