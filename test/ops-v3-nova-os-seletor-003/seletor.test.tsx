@@ -202,7 +202,7 @@ describe("Shell V3 — o botão Nova OS abre o seletor", () => {
     const botoes = screen.getAllByRole("button", { name: /Nova OS/ });
     fireEvent.click(botoes[0]!);
     expect(screen.getByRole("dialog", { name: "Novo atendimento" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Orçamento.*Só proposta|Só proposta.*Orçamento/s }));
+    fireEvent.click(screen.getByRole("button", { name: /Orçamento[\s\S]*Só proposta|Só proposta[\s\S]*Orçamento/ }));
     expect(screen.queryByRole("dialog", { name: "Novo atendimento" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Novo orçamento" })).toBeTruthy();
     fireEvent.click(within(screen.getByRole("dialog", { name: "Novo orçamento" })).getAllByRole("button", { name: "Fechar" })[0]!);
