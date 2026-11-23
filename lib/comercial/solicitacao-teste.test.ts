@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   LIMITE_GLOBAL_POR_10_MIN, LIMITE_POR_ORIGEM_POR_HORA, atualizarStatusSolicitacao, gerarProtocolo, hashOrigem,
-  registrarSolicitacaoTeste, type SolicitacaoDb,
+  registrarSolicitacaoTeste, vincularProvisionamento, type SolicitacaoDb,
 } from "./solicitacao-teste"
 import { resolverGestaoLojasConfig, PLANOS_GESTAO_LOJAS } from "./gestao-lojas-oferta"
 
@@ -68,6 +68,48 @@ describe("registrarSolicitacaoTeste", () => {
     const [a, b] = await Promise.all([registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora }), registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })])
     expect(rows).toHaveLength(1)
     expect(a.ok && b.ok && a.protocolo === b.protocolo).toBe(true)
+  })
+
+  it("provisionamento ligado ao pedido grava loja e usuário no histórico e encerra o pedido", async () => {
+    const { db, rows } = fakeDb()
+    await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })
+    const r = await atualizarStatusSolicitacao(db, { id: rows[0].id, status: "provisionada", por: "plataforma@x", agora, vinculo: { storeId: "cliente-1", userId: "u-1" } })
+    expect(r).toEqual({ ok: true })
+    expect(rows[0].status).toBe("provisionada")
+    expect(rows[0].emailAberto).toBeNull()
+    expect(rows[0].historico).toEqual([
+      { em: agora.toISOString(), evento: "recebida", por: "visitante" },
+      { em: agora.toISOString(), evento: "provisionada", por: "plataforma@x", storeId: "cliente-1", userId: "u-1" },
+    ])
+    // Pedido já encerrado não é marcado de novo (segunda conta não reescreve o vínculo).
+    expect(await atualizarStatusSolicitacao(db, { id: rows[0].id, status: "provisionada", por: "p", vinculo: { storeId: "cliente-2", userId: "u-2" } })).toEqual({ ok: false, erro: "Solicitação já encerrada." })
+  })
+
+  it("vínculo do provisionamento sobrevive a recebida → em_contato simultâneo e falha se descartado", async () => {
+    const { db, rows } = fakeDb()
+    await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })
+    // Outro operador põe o pedido em contato entre a leitura e a gravação do vínculo.
+    const original = db.solicitacaoTesteComercial.findUnique
+    let corrida = true
+    db.solicitacaoTesteComercial.findUnique = async (a) => {
+      const r = await original(a)
+      if (corrida) { corrida = false; rows[0].status = "em_contato" }
+      return r
+    }
+    expect(await vincularProvisionamento(db, { id: rows[0].id, por: "p@x", storeId: "cliente-1", userId: "u-1", agora })).toEqual({ ok: true })
+    expect(rows[0]).toMatchObject({ status: "provisionada", emailAberto: null })
+    expect((rows[0].historico as unknown[]).at(-1)).toMatchObject({ evento: "provisionada", storeId: "cliente-1", userId: "u-1" })
+
+    // Repetir o status atual não regrava o histórico.
+    const repetido = fakeDb()
+    await registrarSolicitacaoTeste(repetido.db, valido, { ipHash: "x", agora })
+    expect(await atualizarStatusSolicitacao(repetido.db, { id: repetido.rows[0].id, status: "recebida", por: "p" })).toEqual({ ok: true })
+    expect(repetido.rows[0].historico).toHaveLength(1)
+
+    const outro = fakeDb()
+    await registrarSolicitacaoTeste(outro.db, valido, { ipHash: "x", agora })
+    outro.rows[0].status = "descartada"
+    expect(await vincularProvisionamento(outro.db, { id: outro.rows[0].id, por: "p", storeId: "c", userId: "u" })).toEqual({ ok: false, erro: "Solicitação já encerrada." })
   })
 
   it("depois de encerrada, o mesmo email pode pedir de novo (novo protocolo)", async () => {

@@ -245,9 +245,7 @@ export function Pricing({
             className="shrink-0"
           >
             <a
-              href="https://wa.me/5500000000000?text=Quero%20conhecer%20o%20plano%20Enterprise%20do%20OmniGest%C3%A3o%20Pro"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/gestao-lojas#gl-contato"
             >
               <Phone className="h-4 w-4" />
               Falar com Especialista
