@@ -75,6 +75,9 @@ datamodel vigente (`migrate diff --from-empty`). Nenhum banco real tocado.
 | `test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts` | 32/51 — **as mesmas 19 falhas na `origin/main`** (rotas globais/seed; pré-existente) |
 | Runner CI `scripts/ci/run-root-pg-suites.mjs` | OPS V4 fluxo 41/41, 006 18/18, 007 13/13, FRG 77/77; `aparelhos` não preparou no Windows (erro de stdio do `prisma migrate diff`; roda no CI Linux) |
 | Unit/componente afetados (Node 22) | 3196 pass; 6 falhas = 2 arquivos PG-only + 3 PDV instáveis sob carga, **verdes isolados** (131/131 e 200/200) |
+| Suíte da raiz sem PG (job Container do CI) | 1º run da PR: 5 falhas em 2 arquivos desta entrega — `receber-liquidar-saldo.test.ts` (harness em memória sem a trava consultiva do motor novo) e `recebimento-lote.test.ts` (chaves `operacaoId`/`recebidoEm` que a #341 acrescentou à resposta) — **corrigidas**; localmente 58/58. Falhas restantes só no Windows local (fiscal/auth/contador/caixa estático), ausentes no CI Linux |
+| `npm run build` | exit 0, "Compiled successfully" |
+| E2E autenticado (`next start` 127.0.0.1:3007 do build da branch, NextAuth real, PG descartável) | `financeiro-f9-estorno-aceite-002` 3/3 · `financeiro-recebimentos-f9-print-001` 4/4 · `financeiro-f9-tres-layouts-001` 8/8 · `financeiro-hub-avisos-estorno-003` + `04-financeiro-v2` verdes · `07-financeiro-relatorios-export` vermelho por seletor ambíguo (`Central de inteligência` ×2) na central de relatórios da main — branch não toca relatórios (`e2e.txt`) |
 | `npm run typecheck` (heap 6144) | exit 0 |
 | `npm run lint` | 0 erros (67 avisos pré-existentes) |
 
