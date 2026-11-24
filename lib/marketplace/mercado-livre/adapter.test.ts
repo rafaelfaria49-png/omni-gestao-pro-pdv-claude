@@ -63,7 +63,8 @@ describe("configuração privada e criptografia", () => {
     expect(openMeli(config, scope, parts.join("."))).toBeNull()
   })
 
-  it("limita o Preview a vendedores de teste a partir do ambiente da implantação", () => {
+  it("limita a vendedores de teste quando o ambiente não é produção", () => {
+    expect(mercadoLivreConfig(env)?.testSellersOnly).toBe(true)
     expect(mercadoLivreConfig({ ...env, VERCEL_ENV: "preview" })?.testSellersOnly).toBe(true)
     expect(mercadoLivreConfig({ ...env, VERCEL_ENV: "production" })?.testSellersOnly).toBe(false)
   })

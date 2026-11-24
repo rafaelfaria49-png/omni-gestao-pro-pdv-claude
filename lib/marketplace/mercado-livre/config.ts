@@ -29,7 +29,7 @@ export function mercadoLivreConfig(env: Readonly<Record<string, string | undefin
   try {
     const url = new URL(redirectUri)
     if (url.protocol !== "https:" || redirectUri !== url.origin + MELI_CALLBACK_PATH) return null
-    return { clientId, clientSecret, redirectUri, origin: url.origin, key, storeIds, testSellersOnly: env.VERCEL_ENV === "preview" }
+    return { clientId, clientSecret, redirectUri, origin: url.origin, key, storeIds, testSellersOnly: env.VERCEL_ENV !== "production" }
   } catch {
     return null
   }
