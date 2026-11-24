@@ -54,9 +54,14 @@ try {
   if (ddl.error || ddl.status !== 0 || !ddl.stdout.includes("CREATE TABLE")) throw new Error("Não foi possível preparar o schema descartável.")
   run(["node_modules/prisma/build/index.js", "db", "execute", "--stdin", "--schema", "prisma/schema.prisma"], localEnv, ddl.stdout)
 
-  const stores = ["meli-qa-a", "meli-qa-b", "meli-qa-off", "meli-qa-no-module"]
-  await db.store.createMany({ data: stores.map((id) => ({
-    id, name: id, moduleAccess: id === "meli-qa-no-module" ? { version: 1, modules: ["home"] } : Prisma.DbNull,
+  const stores = [
+    { id: "meli-qa-a", cnpj: "00.000.000/0001-91" },
+    { id: "meli-qa-b", cnpj: "00.000.000/0002-72" },
+    { id: "meli-qa-off", cnpj: "00.000.000/0003-53" },
+    { id: "meli-qa-no-module", cnpj: "00.000.000/0004-34" },
+  ]
+  await db.store.createMany({ data: stores.map((store) => ({
+    ...store, name: store.id, moduleAccess: store.id === "meli-qa-no-module" ? { version: 1, modules: ["home"] } : Prisma.DbNull,
   })) })
   const users = [
     ["manager-a", ["meli-qa-a", "meli-qa-off", "meli-qa-no-module"]],
