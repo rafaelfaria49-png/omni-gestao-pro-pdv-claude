@@ -165,23 +165,26 @@ export async function POST(request: Request) {
       )
     }
 
-    const sessao = await prisma.sessaoCaixa.findFirst({
-      where: { id: parsed.data.sessaoId, storeId, status: "ABERTA" },
-      select: { id: true },
-    })
-    if (!sessao) {
-      return NextResponse.json(
-        { ok: false, error: "Sessão de caixa não encontrada ou já fechada. Abra o caixa no PDV.", code: "caixa_fechado" },
-        { status: 409 },
-      )
-    }
-
     const parcial = parsed.data.op === "parcial"
+    const sessao = { id: parsed.data.sessaoId }
 
     // Título + histórico + movimentação + operação de caixa numa ÚNICA unidade
     // transacional. Qualquer falha aqui desfaz a baixa — nada de título quitado sem
     // lançamento financeiro correspondente.
     const outcome = await prisma.$transaction(async (tx) => {
+      // Sessão relida e TRAVADA dentro da transação (FOR SHARE, ordem sessão → título — a
+      // mesma do estorno e da Operações V3). O fechamento (`UPDATE … FECHADA`) espera este
+      // recebimento terminar; se fechou antes, esta leitura já vê FECHADA. Antes a sessão era
+      // conferida fora da transação e sem trava: um fechamento no meio deixava o recebimento
+      // cair numa sessão já fechada.
+      const sessaoRows = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT "status"::text AS status FROM "sessoes_caixa"
+        WHERE "id" = ${sessao.id} AND "storeId" = ${storeId}
+        FOR SHARE
+      `
+      const sessaoStatus = sessaoRows[0]?.status ?? null
+      if (!sessaoStatus) return { kind: "erro" as const, code: "caixa_fechado", status: 409 }
+
       const atual = ref.id
         ? await getContaReceberById(storeId, ref.id, tx)
         : await getContaReceberByLocalKey(storeId, ref.localKey!, tx)
@@ -215,6 +218,10 @@ export async function POST(request: Request) {
         }
         return { kind: "replay" as const, titulo: atual, valorMov: jaRegistrada.valor }
       }
+
+      // Operação NOVA só em sessão aberta. (O replay acima vale mesmo depois do fechamento:
+      // a resposta perdida devolve o recebimento original, sem escrever nada.)
+      if (sessaoStatus !== "ABERTA") return { kind: "erro" as const, code: "caixa_fechado", status: 409 }
 
       // O service é a autoridade sobre a recusa (`ja_pago` / `nada_em_aberto` /
       // `titulo_encerrado`) e não escreve nada quando recusa.
@@ -293,8 +300,10 @@ export async function POST(request: Request) {
     }, TX_OPTS)
 
     if (outcome.kind === "erro") {
+      const error =
+        outcome.code === "caixa_fechado" ? "Sessão de caixa não encontrada ou já fechada. Abra o caixa no PDV." : outcome.code
       return NextResponse.json(
-        { ok: false, error: outcome.code, code: outcome.code },
+        { ok: false, error, code: outcome.code },
         { status: outcome.status },
       )
     }

@@ -560,11 +560,12 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
 }
 
 function normalizePagarRows(rows: unknown[], audit: unknown[]): ContaPagar[] {
+  // A linha usa o `localKey` como id (GET /api/financeiro/pagar); o audit traz id do banco E
+  // localKey. Indexar só pelo id do banco deixava o título parcial com "pago 0" na tela.
   const auditMap = new Map<string, AuditP>()
   for (const a of audit) {
     const item = a as AuditP
-    const key = safeStr(item.id ?? item.localKey)
-    if (key) auditMap.set(key, item)
+    for (const key of [safeStr(item.localKey), safeStr(item.id)]) if (key && !auditMap.has(key)) auditMap.set(key, item)
   }
   const result: ContaPagar[] = []
   for (const r of rows) {
@@ -1065,9 +1066,16 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [callApi, fetchData])
 
   const estornarPagar = useCallback(async (id: string, motivo?: string) => {
-    await callApi("/api/financeiro/pagar", { op: "estornar", localKey: id, motivo }, "PATCH")
-    await fetchData()
-  }, [callApi, fetchData])
+    // Pré-condição: o pago que o operador VIU. Um 2º clique/retry depois de um estorno já
+    // gravado é recusado (409) em vez de estornar o pagamento anterior.
+    const visto = pagar.find((p) => p.id === id)
+    try {
+      await callApi("/api/financeiro/pagar", { op: "estornar", localKey: id, motivo, ...(visto ? { pagoEsperado: visto.pago } : {}) }, "PATCH")
+    } finally {
+      // Recarrega também na falha: a lista passa a mostrar o estado real antes de nova tentativa.
+      await fetchData()
+    }
+  }, [callApi, fetchData, pagar])
 
   const criarPagar = useCallback(async (data: NovoPagarInput) => {
     const body: Record<string, unknown> = {

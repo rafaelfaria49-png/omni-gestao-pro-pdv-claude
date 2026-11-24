@@ -332,7 +332,19 @@ export async function createMovimentacaoEntradaFromReceber(
 export async function createMovimentacaoSaidaFromPagar(
   titulo: { id: string; storeId: string; descricao: string },
   valor: number,
-  opts: { parcial?: boolean; meta?: CreateFromTituloMeta; carteiraId?: string | null } = {},
+  opts: {
+    parcial?: boolean
+    meta?: CreateFromTituloMeta
+    carteiraId?: string | null
+    /** Transação do chamador: a saída commita (ou desfaz) junto com o ledger do título. */
+    db?: MovimentacoesDbClient
+    /**
+     * O chamador já garante UM pagamento novo no ledger (título travado + CAS): exatamente
+     * UMA saída, sem as heurísticas abaixo — que descartavam a 2ª parcial menor e o novo
+     * pagamento depois de um estorno.
+     */
+    idempotenciaDoChamador?: boolean
+  } = {},
 ): Promise<MovimentacaoResult> {
   const storeId = assertStoreId(titulo.storeId)
   const referenciaId = safeStr(opts.meta?.referenciaId) || titulo.id
@@ -341,30 +353,36 @@ export async function createMovimentacaoSaidaFromPagar(
 
   const origem = opts.parcial ? "pagar_parcial" : "pagar"
   const carteiraId = safeStr(opts.carteiraId) || null
+  const db = dbOf(opts.db)
 
-  if (!opts.parcial) {
-    if (await existeMovimentacao(storeId, referenciaId, "saida", origem)) {
-      return { ok: true, action: "skipped_idempotent" }
-    }
-  } else {
-    const agg = await prisma.movimentacaoFinanceira.aggregate({
-      where: { storeId, referenciaId, tipo: "saida", origem: { startsWith: "pagar" } },
-      _sum: { valor: true },
-    })
-    const totalGravado = safeMoney(agg._sum.valor ?? 0)
-    if (totalGravado >= valorMoney) {
-      return { ok: true, action: "skipped_idempotent" }
+  if (!opts.idempotenciaDoChamador) {
+    if (!opts.parcial) {
+      if (await existeMovimentacao(storeId, referenciaId, "saida", origem)) {
+        return { ok: true, action: "skipped_idempotent" }
+      }
+    } else {
+      const agg = await db.movimentacaoFinanceira.aggregate({
+        where: { storeId, referenciaId, tipo: "saida", origem: { startsWith: "pagar" } },
+        _sum: { valor: true },
+      })
+      const totalGravado = safeMoney(agg._sum.valor ?? 0)
+      if (totalGravado >= valorMoney) {
+        return { ok: true, action: "skipped_idempotent" }
+      }
     }
   }
 
   const descricao = `Pagamento — ${titulo.descricao}`
-  const movimentacao = await prisma.movimentacaoFinanceira.create({
+  const movimentacao = await db.movimentacaoFinanceira.create({
     data: { storeId, tipo: "saida", valor: valorMoney, descricao, origem, referenciaId, carteiraId },
   })
   if (carteiraId) {
-    await recalcularSaldoCarteira(carteiraId, storeId).catch((e) =>
-      console.error("[movimentacoes-service] recalcularSaldoCarteira pagar falhou:", e),
-    )
+    if (opts.db) await recalcularSaldoCarteira(carteiraId, storeId, opts.db)
+    else {
+      await recalcularSaldoCarteira(carteiraId, storeId).catch((e) =>
+        console.error("[movimentacoes-service] recalcularSaldoCarteira pagar falhou:", e),
+      )
+    }
   }
   return { ok: true, action: "created", movimentacao }
 }
@@ -441,23 +459,47 @@ export async function estornarMovimentacaoDePagamentoReceber(
   db: MovimentacoesDbClient,
   input: { storeId: string; tituloId: string; valor: number; recebidoRestante: number },
 ): Promise<{ valor: number; divergente: boolean; movimentacaoId: string | null }> {
+  return estornarMovimentacaoDePagamento(db, "receber", { ...input, restante: input.recebidoRestante })
+}
+
+/**
+ * Contas a Pagar: mesmo contrato do Receber com os sinais trocados — a ENTRADA de estorno
+ * tem o valor exato do pagamento estornado e nunca leva o líquido pago abaixo do que o
+ * ledger ainda diz pago (`pagoRestante`). Substitui, no estorno do Pagar, o
+ * `estornarMovimentacaoPorReferencia` (que estorna o líquido inteiro do título).
+ */
+export async function estornarMovimentacaoDePagamentoPagar(
+  db: MovimentacoesDbClient,
+  input: { storeId: string; tituloId: string; valor: number; pagoRestante: number },
+): Promise<{ valor: number; divergente: boolean; movimentacaoId: string | null }> {
+  return estornarMovimentacaoDePagamento(db, "pagar", { ...input, restante: input.pagoRestante })
+}
+
+async function estornarMovimentacaoDePagamento(
+  db: MovimentacoesDbClient,
+  lado: "receber" | "pagar",
+  input: { storeId: string; tituloId: string; valor: number; restante: number },
+): Promise<{ valor: number; divergente: boolean; movimentacaoId: string | null }> {
   const storeId = assertStoreId(input.storeId)
   const tituloId = safeStr(input.tituloId)
   if (!tituloId) throw new Error("movimentacoes-service: tituloId é obrigatório")
   const valor = safeMoney(input.valor)
-  const restante = safeMoney(input.recebidoRestante)
+  const restante = safeMoney(input.restante)
+  const tipoOriginal: MovTipo = lado === "receber" ? "entrada" : "saida"
+  const tipoEstorno: MovTipo = lado === "receber" ? "saida" : "entrada"
+  const origemEstorno = lado === "receber" ? "estorno_receber" : "estorno_pagar"
 
   const [entradas, estornos, comCarteira] = await Promise.all([
     db.movimentacaoFinanceira.aggregate({
-      where: { storeId, referenciaId: tituloId, tipo: "entrada", origem: { startsWith: "receber" } },
+      where: { storeId, referenciaId: tituloId, tipo: tipoOriginal, origem: { startsWith: lado } },
       _sum: { valor: true },
     }),
     db.movimentacaoFinanceira.aggregate({
-      where: { storeId, referenciaId: tituloId, tipo: "saida", origem: "estorno_receber" },
+      where: { storeId, referenciaId: tituloId, tipo: tipoEstorno, origem: origemEstorno },
       _sum: { valor: true },
     }),
     db.movimentacaoFinanceira.findFirst({
-      where: { storeId, referenciaId: tituloId, tipo: "entrada", origem: { startsWith: "receber" }, carteiraId: { not: null } },
+      where: { storeId, referenciaId: tituloId, tipo: tipoOriginal, origem: { startsWith: lado }, carteiraId: { not: null } },
       orderBy: { createdAt: "desc" },
       select: { carteiraId: true },
     }),
@@ -472,10 +514,10 @@ export async function estornarMovimentacaoDePagamentoReceber(
   const mov = await db.movimentacaoFinanceira.create({
     data: {
       storeId,
-      tipo: "saida",
+      tipo: tipoEstorno,
       valor: saida,
-      descricao: "Estorno de recebimento",
-      origem: "estorno_receber",
+      descricao: lado === "receber" ? "Estorno de recebimento" : "Estorno de pagamento",
+      origem: origemEstorno,
       referenciaId: tituloId,
       carteiraId,
     },

@@ -12,6 +12,7 @@ import {
   calculatePaidRemaining,
   isOverdueDateString,
 } from "@/lib/financeiro/contracts/valores"
+import { pagamentosAtivosDoHistorico } from "@/lib/financeiro/services/contas-receber-service"
 
 const PAY_EPS = 0.009
 
@@ -121,16 +122,63 @@ export async function getContaPagarByLocalKey(storeId: string, localKey: string)
   })
 }
 
+/** Cliente da transação do chamador (travas + escrita atômica com a movimentação). */
+export type ContaPagarDbClient = Prisma.TransactionClient
+
 async function findTitulo(
   storeId: string,
-  opts: { id?: string; localKey?: string },
+  opts: { id?: string; localKey?: string; db?: ContaPagarDbClient },
 ): Promise<ContaPagarTitulo | null> {
-  if (opts.id) {
-    const t = await getContaPagarById(storeId, opts.id)
+  const db = opts.db ?? prisma
+  const sid = safeStr(storeId).trim()
+  if (!sid) return null
+  const id = safeStr(opts.id).trim()
+  if (id) {
+    const t = await db.contaPagarTitulo.findFirst({ where: { id, storeId: sid } })
     if (t) return t
   }
-  if (opts.localKey) return await getContaPagarByLocalKey(storeId, opts.localKey)
+  const lk = safeStr(opts.localKey).trim()
+  if (lk) return db.contaPagarTitulo.findUnique({ where: { storeId_localKey: { storeId: sid, localKey: lk } } })
   return null
+}
+
+/**
+ * Trava a linha do título (`SELECT … FOR UPDATE`) dentro da transação do chamador: pagamento
+ * e estorno do MESMO título passam a ser serializados. Devolve o id, ou null se não existe.
+ */
+export async function travarTituloContaPagar(
+  db: ContaPagarDbClient,
+  storeId: string,
+  ref: { id?: string; localKey?: string },
+): Promise<string | null> {
+  const sid = safeStr(storeId).trim()
+  const id = safeStr(ref.id).trim()
+  const lk = safeStr(ref.localKey).trim()
+  if (!sid || (!id && !lk)) return null
+  const rows = id
+    ? await db.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "contas_pagar_titulos" WHERE "id" = ${id} AND "storeId" = ${sid} FOR UPDATE`
+    : await db.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "contas_pagar_titulos" WHERE "storeId" = ${sid} AND "localKey" = ${lk} FOR UPDATE`
+  return rows[0]?.id ?? null
+}
+
+/**
+ * Escrita com token otimista (`updatedAt` lido): um `update` cego apagaria um pagamento ou
+ * estorno gravado por outra requisição entre a leitura e a escrita (lost update).
+ */
+async function gravarComToken(
+  db: ContaPagarDbClient | typeof prisma,
+  row: ContaPagarTitulo,
+  data: { status: string; payload: Record<string, unknown> },
+): Promise<ContaPagarServiceResult<ContaPagarTitulo>> {
+  const res = await db.contaPagarTitulo.updateMany({
+    where: { id: row.id, storeId: row.storeId, updatedAt: row.updatedAt },
+    data: { status: data.status, payload: data.payload as unknown as Prisma.InputJsonValue },
+  })
+  if (res.count !== 1) return { ok: false, reason: "titulo_alterado" }
+  const updated = await db.contaPagarTitulo.findFirst({ where: { id: row.id, storeId: row.storeId } })
+  return updated ? { ok: true, data: updated } : { ok: false, reason: "titulo_alterado" }
 }
 
 function saldoAberto(row: ContaPagarTitulo): { pago: number; restante: number } {
@@ -258,8 +306,10 @@ export async function liquidarContaPagar(params: {
   localKey?: string
   observacao?: string
   userLabel?: string
+  /** Quando informado, participa da transação (e das travas) do chamador. */
+  db?: ContaPagarDbClient
 }): Promise<ContaPagarServiceResult<ContaPagarTitulo>> {
-  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
+  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey, db: params.db })
   if (!row) return { ok: false, reason: "not_found" }
 
   const cur = normalizePagarStatus(row.status)
@@ -277,11 +327,7 @@ export async function liquidarContaPagar(params: {
     userLabel: safeStr(params.userLabel) || undefined,
   })
 
-  const updated = await prisma.contaPagarTitulo.update({
-    where: { id: row.id },
-    data: { status: PAGAR_STATUS.PAGO, payload: merged as unknown as Prisma.InputJsonValue },
-  })
-  return { ok: true, data: updated }
+  return gravarComToken(params.db ?? prisma, row, { status: PAGAR_STATUS.PAGO, payload: merged })
 }
 
 export async function registrarPagamentoParcialContaPagar(params: {
@@ -291,8 +337,9 @@ export async function registrarPagamentoParcialContaPagar(params: {
   valorPago: number
   observacao?: string
   userLabel?: string
+  db?: ContaPagarDbClient
 }): Promise<ContaPagarServiceResult<ContaPagarTitulo>> {
-  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
+  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey, db: params.db })
   if (!row) return { ok: false, reason: "not_found" }
 
   const cur = normalizePagarStatus(row.status)
@@ -321,11 +368,7 @@ export async function registrarPagamentoParcialContaPagar(params: {
   if (pago + PAY_EPS >= safeMoney(total)) nextStatus = PAGAR_STATUS.PAGO
   else if (pago > PAY_EPS) nextStatus = PAGAR_STATUS.PARCIAL
 
-  const updated = await prisma.contaPagarTitulo.update({
-    where: { id: row.id },
-    data: { status: nextStatus, payload: merged as unknown as Prisma.InputJsonValue },
-  })
-  return { ok: true, data: updated }
+  return gravarComToken(params.db ?? prisma, row, { status: nextStatus, payload: merged })
 }
 
 export type EstornoContaPagarModo = "titulo_completo" | "ultimo_pagamento"
@@ -337,8 +380,14 @@ export async function estornarContaPagar(params: {
   modo: EstornoContaPagarModo
   motivo?: string
   userLabel?: string
+  /**
+   * `ultimo_pagamento`: estorna EXATAMENTE este pagamento (índice no `historico`) em vez do
+   * último ativo. Já estornado ⇒ `pagamento_ja_estornado`, sem escrita.
+   */
+  pagamentoIndex?: number
+  db?: ContaPagarDbClient
 }): Promise<ContaPagarServiceResult<ContaPagarTitulo>> {
-  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
+  const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey, db: params.db })
   if (!row) return { ok: false, reason: "not_found" }
 
   const cur = normalizePagarStatus(row.status)
@@ -359,26 +408,25 @@ export async function estornarContaPagar(params: {
       motivo: safeStr(params.motivo) || undefined,
       userLabel: safeStr(params.userLabel) || undefined,
     })
-    const updated = await prisma.contaPagarTitulo.update({
-      where: { id: row.id },
-      data: { status: PAGAR_STATUS.ESTORNADO, payload: merged as unknown as Prisma.InputJsonValue },
-    })
-    return { ok: true, data: updated }
+    return gravarComToken(params.db ?? prisma, row, { status: PAGAR_STATUS.ESTORNADO, payload: merged })
   }
 
-  let lastIdx = -1
-  let lastValor = 0
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const e = arr[i]
-    if (!isRecord(e)) continue
-    const t = String(e.tipo ?? "").toLowerCase()
-    if (t === "pagamento" || t === "liquidacao") {
-      lastIdx = i
-      lastValor = safeNum(e.valor)
-      break
-    }
+  // Identidade do pagamento = índice no `historico` (mesmo contrato do Contas a Receber,
+  // `pagamentosAtivosDoHistorico`). Antes o alvo era o último `pagamento` do array MESMO já
+  // estornado: dois estornos seguidos revertiam o mesmo pagamento duas vezes.
+  const ledger = pagamentosAtivosDoHistorico(arr)
+  if (ledger.ambiguo) return { ok: false, reason: "historico_ambiguo" }
+  let alvo: { index: number; valor: number } | undefined
+  if (params.pagamentoIndex !== undefined) {
+    if (ledger.estornados.has(params.pagamentoIndex)) return { ok: false, reason: "pagamento_ja_estornado" }
+    alvo = ledger.ativos.find((a) => a.index === params.pagamentoIndex)
+    if (!alvo) return { ok: false, reason: "pagamento_nao_encontrado" }
+  } else {
+    alvo = ledger.ativos[ledger.ativos.length - 1]
   }
-  if (lastIdx < 0 || !(lastValor > PAY_EPS)) return { ok: false, reason: "sem_pagamento_para_estornar" }
+  if (!alvo) return { ok: false, reason: "sem_pagamento_para_estornar" }
+  const lastIdx = alvo.index
+  const lastValor = alvo.valor
 
   const merged = appendFinanceiroHistorico(base, {
     tipo: "estorno_pagamento",
@@ -395,11 +443,7 @@ export async function estornarContaPagar(params: {
   else if (pago + PAY_EPS >= total) nextStatus = PAGAR_STATUS.PAGO
   else nextStatus = PAGAR_STATUS.PENDENTE
 
-  const updated = await prisma.contaPagarTitulo.update({
-    where: { id: row.id },
-    data: { status: nextStatus, payload: merged as unknown as Prisma.InputJsonValue },
-  })
-  return { ok: true, data: updated }
+  return gravarComToken(params.db ?? prisma, row, { status: nextStatus, payload: merged })
 }
 
 export function buildContaPagarSummary(titulos: ContaPagarTitulo[]): ContaPagarSummary {
