@@ -40,12 +40,12 @@ function fmtDt(iso: string | null) {
 function publicationPill(status: string) {
   if (status === "NOT_PUBLISHED") return <StatusPill status="warning" label="Não publicado" />
   if (status === "ERROR") return <StatusPill status="error" label="Erro" />
-  if (status === "PUBLISHED") return <StatusPill status="online" label="Publicado" />
+  if (status === "PUBLISHED") return <StatusPill status="warning" label="Publicação simulada" />
   return <StatusPill status="warning" label={status} />
 }
 
 function syncPill(sync: string) {
-  if (sync === "SYNCED") return <StatusPill status="online" label="Sincronizado" />
+  if (sync === "SYNCED") return <StatusPill status="warning" label="Sync simulado" />
   if (sync === "SYNC_ERROR") return <StatusPill status="error" label="Sync erro" />
   if (sync === "PENDING") return <StatusPill status="syncing" label="Pendente" />
   if (sync === "IDLE") return <span className="text-xs text-muted-foreground">Idle</span>
@@ -245,7 +245,7 @@ export function MarketplaceAnnouncementsPanel({
         <Package className="h-10 w-10 mx-auto text-muted-foreground" />
         <p className="text-sm font-medium text-foreground">Nenhuma conta conectada</p>
         <p className="text-xs text-muted-foreground max-w-md mx-auto">
-          Conecte um marketplace acima para ver vínculos e anúncios simulados por canal.
+          Crie uma simulação para ver vínculos e anúncios de demonstração por canal.
         </p>
       </section>
     )

@@ -13,6 +13,7 @@ export type MarketplaceConnectionDTO = {
   id: string
   storeId: string
   provider: MarketplaceProviderCode
+  mode: "simulation"
   accountName: string
   status: MarketplaceConnectionStatusCode
   metadata: unknown

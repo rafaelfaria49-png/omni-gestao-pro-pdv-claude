@@ -3,15 +3,15 @@ title: Roadmap — HUB Marketplace
 hub: marketplace
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-05-27
-sprint_atual: nenhuma (não iniciado)
+last_update: 2026-11-24
+sprint_atual: M01 OAuth e leitura Mercado Livre (draft)
 ---
 
 # 🛍️ Roadmap — HUB Marketplace
 
 > Estrutura conforme [`docs/roadmaps/INDEX.md §2.2`](./INDEX.md). 15 seções obrigatórias.
 > Fonte da verdade do estado real: [`docs/ai/CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md).
-> **Status global:** HUB ainda **não iniciado** no código (pasta `lib/marketplace*` a criar).
+> **Status global:** HUB existente com catálogo e operações simuladas. M01 implementa OAuth e leitura Mercado Livre com opt-in privado e homologação externa pendente. [Relatório técnico](../modules/MARKETPLACE_MELI_OAUTH.md)
 
 ---
 
@@ -57,13 +57,12 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 
 ## 5. Gaps atuais
 
-**Todo o HUB é gap.** Nada implementado ainda. Estado:
+O HUB tem cadastro local por loja. A ativação do primeiro canal depende de configuração e validação no DevCenter.
 
 | Gap | Severidade |
 |---|---|
-| **Sem código** em `lib/marketplace*` | 🔴 P0 |
-| **Sem cadastro de canais** no schema | 🔴 P0 |
-| **Sem credenciais OAuth** por loja para cada marketplace | 🔴 P0 |
+| **Homologação do OAuth e leitura Mercado Livre em conta oficial de teste** | 🔴 P0 |
+| **OAuth para Shopee, Amazon e Magalu** | 🔴 P0 |
 | **Sem adapter de estoque** Marketplace ↔ Estoque | 🔴 P0 |
 | **Sem adapter financeiro** repasses → Financeiro | 🔴 P0 |
 | **Sem importação de pedidos** | 🔴 P0 |
@@ -97,7 +96,7 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 |---|---|---|
 | ADR: arquitetura do adapter unificado | M | Discussão Opus |
 | Modelar `MarketplaceConta`, `MarketplaceProduto`, `MarketplacePedido` | L | ADR aprovada |
-| OAuth Mercado Livre (mais maduro) | M | Conta dev ML |
+| Homologar OAuth e leitura Mercado Livre | M | Aplicação DevCenter e vendedor oficial de teste |
 | Sync saldo ML → Estoque | L | Multi-depósito (Estoque Fase 2) |
 | Importação pedidos ML → Venda | L | Adapter pronto |
 | Adapter `marketplace-conciliacao` → Financeiro | L | Financeiro Fase 1 fechado |
@@ -107,6 +106,15 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 ---
 
 ## 8. Fases
+
+| Etapa | Entrega |
+|---|---|
+| M01 | Autorizar conta Mercado Livre e consultar anúncios por loja. |
+| M02 | Importação e vinculação de anúncios, com confirmação humana e mapeamento de produto, variante, oferta e User Product. |
+| M03 | Publicação e gerenciamento de anúncios, com permissões e auditoria específicas para escrita. |
+| M04 | Pedidos e webhooks, com verificação no canal, idempotência e autorização para transformar pedidos em vendas. |
+| M05 | Estoque, reservas e sincronização, usando o ledger canônico e os vínculos aprovados. |
+| M06 | Homologação e ativação por loja, com evidência oficial, rollback e aceite do proprietário. |
 
 ### Fase 1 — Fundação (greenfield)
 **Objetivo:** arquitetura do adapter + cadastro de canais + OAuth ML.

@@ -1,10 +1,12 @@
-# Marketplace HUB — Fase 1 (contas reais)
+# Marketplace HUB — Fase 1 (conexões simuladas legadas)
+
+Esta fase introduziu registros locais de conexão e sincronização simulada. O OAuth e a consulta oficial de anúncios do Mercado Livre estão em [Mercado Livre · OAuth e consulta de anúncios](MARKETPLACE_MELI_OAUTH.md).
 
 ## Mapeamento do hub Lovable (`components/marketplace/lovable/`)
 
 | Área | O que existe | Mock / preparação |
 |------|----------------|-------------------|
-| `MarketplaceLayout.tsx` | Shell principal: resumo, alertas, **conexões (agora reais)**, produtos, pedidos, SAC, NF-e, relatórios, automações | Resumo parcial, alertas, catálogo, pedidos, SAC e demais seções seguem dados locais para UI (fora do escopo desta fase). |
+| `MarketplaceLayout.tsx` | Shell principal: resumo, alertas, conexões locais, produtos, pedidos, SAC, NF-e, relatórios, automações | Resumo parcial, alertas, catálogo, pedidos, SAC e demais seções seguem exemplos e dados locais. |
 | `MarketplaceSettingsDrawer.tsx` | Preferências visuais / toggles | Controles majoritariamente desabilitados (“em preparação”). |
 | `tabs/*` (`DashboardTab`, `EstudioTab`, `PrecificadorTab`, `FabricaTab`, `EstoqueTab`, `ExpedicaoTab`, `RelatoriosTab`) | Módulos isolados | Não referenciados pelo layout atual; conteúdo mock. |
 | `ConexoesTab.tsx` | Aba de conexões | Passou a reutilizar `MarketplaceConnectionsReal` + API real. |

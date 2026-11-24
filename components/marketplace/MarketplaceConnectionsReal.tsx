@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { Loader2, Plug, Plus, RefreshCw, Unplug } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { MarketplaceConnectionsHub } from "@/components/marketplace/use-marketplace-connections"
@@ -19,6 +19,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { MercadoLivreConnection } from "./MercadoLivreConnection"
+
+const simulatedProviders = MARKETPLACE_PROVIDER_IDS.filter((id) => id !== "MERCADO_LIVRE")
 
 function formatTimeAgoPt(iso: string | null): string {
   if (!iso) return "—"
@@ -35,15 +38,9 @@ function formatTimeAgoPt(iso: string | null): string {
 }
 
 function connectionStatusPill(c: MarketplaceConnectionDTO) {
-  if (c.status === "CONNECTED") return <StatusPill status="online" label="Conectado" />
-  if (c.status === "SYNCING") return <StatusPill status="syncing" label="Sincronizando" />
-  if (c.status === "ERROR") return <StatusPill status="error" label="Erro" />
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-      Desconectado
-    </span>
-  )
+  if (c.status === "DISCONNECTED") return <StatusPill status="warning" label="Simulação inativa" />
+  if (c.status === "ERROR") return <StatusPill status="error" label="Erro na simulação" />
+  return <StatusPill status="warning" label="Simulada" />
 }
 
 export function MarketplaceConnectionsReal({
@@ -55,42 +52,33 @@ export function MarketplaceConnectionsReal({
 }) {
   const { toast } = useToast()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [providerPick, setProviderPick] = useState<MarketplaceProviderCode>("MERCADO_LIVRE")
+  const [providerPick, setProviderPick] = useState<MarketplaceProviderCode>("SHOPEE")
   const [accountName, setAccountName] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
-
-  const lastGlobalSync = useMemo(() => {
-    let max: string | null = null
-    for (const c of hub.connections) {
-      if (!c.lastSyncAt) continue
-      if (!max || new Date(c.lastSyncAt) > new Date(max)) max = c.lastSyncAt
-    }
-    return max
-  }, [hub.connections])
 
   const onConnect = async () => {
     setBusyId("__dialog__")
     const r = await hub.connect(providerPick, accountName)
     setBusyId(null)
     if (!r.ok) {
-      toast({ title: "Não foi possível conectar", description: r.error, variant: "destructive" })
+      toast({ title: "Não foi possível criar a simulação", description: r.error, variant: "destructive" })
       return
     }
-    toast({ title: "Canal vinculado", description: "A conta foi registrada para esta unidade." })
+    toast({ title: "Simulação registrada para a unidade" })
     setDialogOpen(false)
     setAccountName("")
   }
 
   const onDisconnect = async (c: MarketplaceConnectionDTO) => {
-    if (!confirm(`Remover a conexão "${c.accountName}" (${MARKETPLACE_PROVIDER_META[c.provider].label})?`)) return
+    if (!confirm(`Desativar a simulação "${c.accountName}" (${MARKETPLACE_PROVIDER_META[c.provider].label})?`)) return
     setBusyId(c.id)
     const r = await hub.disconnect(c.id)
     setBusyId(null)
     if (!r.ok) {
-      toast({ title: "Erro ao remover", description: r.error, variant: "destructive" })
+      toast({ title: "Erro ao desativar a simulação", description: r.error, variant: "destructive" })
       return
     }
-    toast({ title: "Conexão removida" })
+    toast({ title: "Simulação desativada" })
   }
 
   const onSync = async (c: MarketplaceConnectionDTO) => {
@@ -98,10 +86,10 @@ export function MarketplaceConnectionsReal({
     const r = await hub.simulateSync(c.id)
     setBusyId(null)
     if (!r.ok) {
-      toast({ title: "Sincronização não concluída", description: r.error, variant: "destructive" })
+      toast({ title: "Falha na simulação", description: r.error, variant: "destructive" })
       return
     }
-    toast({ title: "Sincronização concluída", description: "Registros gravados no histórico da unidade." })
+    toast({ title: "Simulação registrada no histórico local" })
   }
 
   if (!storeId?.trim()) {
@@ -117,25 +105,18 @@ export function MarketplaceConnectionsReal({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="text-xs text-muted-foreground">
-          {hub.connectedCount > 0 ? (
-            <span>
-              Última sincronização registrada:{" "}
-              <span className="font-medium text-foreground">{formatTimeAgoPt(lastGlobalSync)}</span>
-            </span>
-          ) : (
-            <span>Nenhuma sincronização registrada ainda.</span>
-          )}
-        </div>
-        <Button type="button" size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
+      {hub.mercadoLivre && <MercadoLivreConnection key={storeId} storeId={storeId} connection={hub.mercadoLivre} refetch={hub.refetch} />}
+
+      <div className="mb-4 mt-6 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">Conexões simuladas</h3>
+        <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => setDialogOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Conectar canal
+          Criar simulação
         </Button>
       </div>
 
       {hub.error && (
-        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {hub.error}
         </div>
       )}
@@ -151,15 +132,10 @@ export function MarketplaceConnectionsReal({
           <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-primary">
             <Plug className="h-8 w-8" />
           </div>
-          <h2 className="relative mt-5 font-display text-xl font-bold tracking-tight">Nenhum marketplace vinculado</h2>
+          <h4 className="relative mt-5 font-display text-xl font-bold tracking-tight">Nenhuma conexão simulada</h4>
           <p className="relative mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Conecte Mercado Livre, Shopee, Amazon ou Magalu para esta unidade. Os dados passam a ser persistidos no
-            banco com histórico de sincronização.
+            As simulações gravam resultados de demonstração no histórico desta unidade.
           </p>
-          <Button type="button" className="relative mt-6 gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Conectar canal
-          </Button>
         </section>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -178,10 +154,10 @@ export function MarketplaceConnectionsReal({
                   {connectionStatusPill(c)}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-semibold leading-tight">{meta.label}</h3>
+                  <h4 className="font-semibold leading-tight">{meta.label}</h4>
                   <p className="mt-0.5 truncate text-sm text-muted-foreground">{c.accountName}</p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Última sincronização:{" "}
+                    Última simulação:{" "}
                     <span className="font-medium text-foreground">{formatTimeAgoPt(c.lastSyncAt)}</span>
                   </p>
                   {c.lastSyncMessage ? (
@@ -198,18 +174,18 @@ export function MarketplaceConnectionsReal({
                     onClick={() => void onSync(c)}
                   >
                     {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    Sincronizar
+                    Simular sincronização
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     className="gap-1.5 text-destructive hover:text-destructive"
-                    disabled={busy}
+                    disabled={busy || c.status === "DISCONNECTED"}
                     onClick={() => void onDisconnect(c)}
                   >
                     <Unplug className="h-3.5 w-3.5" />
-                    Desconectar
+                    Desativar simulação
                   </Button>
                 </div>
                 {c.recentSyncLogs.length > 0 && (
@@ -229,9 +205,9 @@ export function MarketplaceConnectionsReal({
       )}
 
       <div className="mt-8">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Canais suportados</p>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Canais em preparação</p>
         <div className="flex flex-wrap gap-2">
-          {MARKETPLACE_PROVIDER_IDS.map((pid) => {
+          {simulatedProviders.map((pid) => {
             const m = MARKETPLACE_PROVIDER_META[pid]
             return (
               <span
@@ -253,10 +229,9 @@ export function MarketplaceConnectionsReal({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Conectar marketplace</DialogTitle>
+            <DialogTitle>Criar conexão simulada</DialogTitle>
             <DialogDescription>
-              Vinculação por unidade. OAuth com o provedor entra na próxima fase; por ora os tokens ficam como
-              placeholder seguro no banco.
+              Registra uma demonstração local para a unidade selecionada.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
@@ -268,7 +243,7 @@ export function MarketplaceConnectionsReal({
                 value={providerPick}
                 onChange={(e) => setProviderPick(e.target.value as MarketplaceProviderCode)}
               >
-                {MARKETPLACE_PROVIDER_IDS.map((pid) => (
+                {simulatedProviders.map((pid) => (
                   <option key={pid} value={pid}>
                     {MARKETPLACE_PROVIDER_META[pid].label}
                   </option>
@@ -291,7 +266,7 @@ export function MarketplaceConnectionsReal({
             </Button>
             <Button type="button" disabled={busyId === "__dialog__"} onClick={() => void onConnect()}>
               {busyId === "__dialog__" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Salvar conexão
+              Salvar simulação
             </Button>
           </DialogFooter>
         </DialogContent>
