@@ -41,5 +41,5 @@ export async function requireMarketplaceApi(req: Request) {
       response: NextResponse.json({ error: enterprise.error }, { status: enterprise.status }),
     }
   }
-  return { ok: true as const, storeId }
+  return { ok: true as const, storeId, userId: enterprise.session.user.id }
 }

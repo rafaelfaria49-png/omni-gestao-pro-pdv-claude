@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-24
+
+### Marketplace · Mercado Livre (draft)
+
+- Conexão por OAuth e consulta de anúncios e variações na unidade autorizada. A ativação por loja fica desligada até a configuração do proprietário.
+- O HUB identifica conexões, publicações e sincronizações de demonstração como simuladas. O histórico local é preservado.
+
 ## 2026-11-23
 
 ### Cadastros — padrão global de nomes, busca e duplicidade (todos os ramos)

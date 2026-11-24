@@ -3,15 +3,15 @@ title: Roadmap — HUB Marketplace
 hub: marketplace
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-05-27
-sprint_atual: nenhuma (não iniciado)
+last_update: 2026-11-24
+sprint_atual: M01 reconciliação e homologação de leitura (PR #399 draft)
 ---
 
 # 🛍️ Roadmap — HUB Marketplace
 
 > Estrutura conforme [`docs/roadmaps/INDEX.md §2.2`](./INDEX.md). 15 seções obrigatórias.
 > Fonte da verdade do estado real: [`docs/ai/CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md).
-> **Status global:** HUB ainda **não iniciado** no código (pasta `lib/marketplace*` a criar).
+> **Status global:** HUB existente com catálogo e operações simuladas. M01 implementa OAuth e leitura Mercado Livre com opt-in privado e homologação externa pendente. [Relatório técnico](../modules/MARKETPLACE_MELI_OAUTH.md)
 
 ---
 
@@ -47,7 +47,7 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 
 ## 4. Diferenciais (planejados)
 
-- **Adapter unificado** com interface comum (`MarketplaceAdapter`); ML, Shopee, Amazon implementam o mesmo contrato.
+- **Adaptador de leitura** com interface comum (`MarketplaceReadOnlyAdapter`). O Mercado Livre usa esse contrato. Os demais canais entram após o piloto.
 - **Estoque virtual por canal** (opcional): reserva X% do saldo para cada canal.
 - **Conciliação contábil** integrada ao Financeiro via adapter (`marketplace-conciliacao.ts`).
 - **Anúncio com Marketing IA** — gera título/descrição otimizada por canal usando Omni Agent.
@@ -57,13 +57,12 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 
 ## 5. Gaps atuais
 
-**Todo o HUB é gap.** Nada implementado ainda. Estado:
+O HUB tem cadastro local por loja. A ativação do primeiro canal depende de configuração e validação no DevCenter.
 
 | Gap | Severidade |
 |---|---|
-| **Sem código** em `lib/marketplace*` | 🔴 P0 |
-| **Sem cadastro de canais** no schema | 🔴 P0 |
-| **Sem credenciais OAuth** por loja para cada marketplace | 🔴 P0 |
+| **Homologação do OAuth e leitura Mercado Livre em conta oficial de teste** | 🔴 P0 |
+| **OAuth para Shopee, Amazon e Magalu** | 🔴 P0 |
 | **Sem adapter de estoque** Marketplace ↔ Estoque | 🔴 P0 |
 | **Sem adapter financeiro** repasses → Financeiro | 🔴 P0 |
 | **Sem importação de pedidos** | 🔴 P0 |
@@ -76,7 +75,7 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 
 | # | Funcionalidade | Prioridade |
 |---|---|---|
-| 1 | **Cadastro de canais** + OAuth ML, Shopee, Amazon, Magalu | P0 |
+| 1 | **Homologar a primeira autorização e leitura Mercado Livre** na loja piloto | P0 |
 | 2 | **Mapeamento SKU OmniGestão ↔ MLB/SKU canal** | P0 |
 | 3 | **Sync de saldo bidirecional** | P0 |
 | 4 | **Importação de pedidos** → Venda/OS interna | P0 |
@@ -95,11 +94,10 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 
 | Item | Tamanho | Pré-req |
 |---|---|---|
-| ADR: arquitetura do adapter unificado | M | Discussão Opus |
-| Modelar `MarketplaceConta`, `MarketplaceProduto`, `MarketplacePedido` | L | ADR aprovada |
-| OAuth Mercado Livre (mais maduro) | M | Conta dev ML |
-| Sync saldo ML → Estoque | L | Multi-depósito (Estoque Fase 2) |
-| Importação pedidos ML → Venda | L | Adapter pronto |
+| Homologar OAuth e leitura Mercado Livre | M | Aplicação DevCenter, Preview isolado e vendedor oficial de teste |
+| Vincular anúncio à variante com confirmação | L | Catálogo P02 e identificadores estáveis P03 |
+| Sincronizar saldo disponível do canal | L | Ledger de estoque e reservas por variante no depósito |
+| Registrar venda de pedido com variante | L | Idempotência do pedido, venda por variante no PDV e reserva/baixa canônicas |
 | Adapter `marketplace-conciliacao` → Financeiro | L | Financeiro Fase 1 fechado |
 | OAuth Shopee | M | OAuth ML provado |
 | Reprice automático básico | M | Sync saldo funcionando |
@@ -108,24 +106,14 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 
 ## 8. Fases
 
-### Fase 1 — Fundação (greenfield)
-**Objetivo:** arquitetura do adapter + cadastro de canais + OAuth ML.
-**Saída:** ADR aprovada; OAuth ML conectando; tela de "canais conectados" funcional.
-
-### Fase 2 — ML completo (1 marketplace fim-a-fim)
-**Objetivo:** Mercado Livre operando 100% — saldo sincronizado, pedidos importados, repasses conciliados.
-**Saída:** loja-piloto vendendo no ML pelo OmniGestão.
-
-### Fase 3 — Multi-canal
-**Objetivo:** Shopee + Amazon + Magalu na mesma arquitetura.
-**Saída:** 4 canais ativos simultâneos.
-
-### Fase 4 — Inteligência
-**Objetivo:** reprice automático, anúncio IA, análise concorrência.
-**Saída:** preços ajustando automaticamente; novos anúncios gerados em 1 clique.
-
-### Fase 5 — Fulfillment + avançado
-**Objetivo:** ML Full, Shopee Logística, multi-conta por canal.
+| Etapa | Entrega |
+|---|---|
+| M01 | OAuth e leitura paginada por loja, com flag privada. Homologação com vendedor oficial de teste. |
+| M02 | Importação e vinculação de produtos e variantes. Confirmar cada vínculo de produto, variante, oferta ou User Product. Reusar o catálogo P02 e os identificadores estáveis do Vestuário P03. |
+| M03 | Publicação e gerenciamento de anúncios. Requer escopos de escrita separados, autorização e auditoria. |
+| M04 | Pedidos e webhooks com validação do evento, leitura no canal e idempotência. Converter um pedido com variante em venda depende do contrato operacional de venda por variante no PDV. |
+| M05 | Estoque, reservas e sincronização. Requer ledger por variante e depósito, compatibilidade com venda/cancelamento/devolução no PDV e regra de disponibilidade por canal. |
+| M06 | Homologação e ativação comercial por loja. Requer evidência oficial dos fluxos habilitados, aceite do proprietário, rollback e opt-in. |
 
 ---
 
@@ -133,11 +121,13 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 
 | Depende de | Para quê |
 |---|---|
-| **Estoque** | Sync de saldo — **serial obrigatório** (proibido paralelo per matriz §4) |
+| **Vestuário P03** | Identificação estável para M02. O SKU do canal ajuda a localizar candidatos e o vínculo usa a identidade interna confirmada. O P03 segue em draft. |
+| **Estoque por variante** | M05 depende de saldo, reserva e baixa por variante e depósito. |
+| **Venda por variante no PDV** | M04 e M05 dependem de venda, cancelamento e devolução da variante com o mesmo identificador. |
 | **Financeiro** | Conciliação de repasses (adapter) |
 | **Multi-loja** | Cada loja com suas próprias credenciais por canal |
-| **Marketing IA** | Geração de anúncios (Fase 4) |
-| **Omni Agent** | "Republicar produto X com 10% off" (Fase 4) |
+| **Marketing IA** | Geração de conteúdo depois do piloto de publicação. |
+| **Omni Agent** | Operações de escrita autorizadas em etapas comerciais futuras. |
 | **BI** | Performance por canal (leitura) |
 
 ---
@@ -147,23 +137,23 @@ Marketplace é o **HUB de alcance** — permite ao SMB triplicar receita sem tri
 | Risco | Categoria | Mitigação |
 |---|---|---|
 | **Oversell** (vendido em N canais > saldo) | Negócio — P0 | Estoque virtual + reserva otimista + webhook real-time |
-| **Rate limit do marketplace** | Técnico — P1 | Queue + retry exponencial + cache local |
-| **Token OAuth expira** sem renovação automática | Técnico — P0 | Refresh token + cron + alerta para humano |
+| **Rate limit do marketplace** | Técnico — P1 | Leitura sob demanda, cooldown e `Retry-After` no M01. Dimensionar fila para fases de escrita. |
+| **Token OAuth expira ou é revogado** | Técnico — P1 | Renovação sob demanda serializada e reconexão quando o grant for recusado. |
 | **Conciliação errada** de repasses causa rombo financeiro | Negócio — P0 | Modo dry-run + revisão humana inicial |
 | **API do marketplace muda** sem aviso | Técnico — P1 | Versioning do adapter + testes de integração |
-| **Greenfield grande** com escopo aberto vira pântano | Operacional — P0 | Sprint cap: 1 marketplace por vez |
+| **Mistura de leitura com efeitos comerciais** | Operacional — P1 | Separar as entregas M01–M06 e a autorização de escrita. |
 
 ---
 
 ## 11. Sprint atual
 
-**Nenhuma.** Próxima sugerida: **SPRINT_NN_MARKETPLACE — ADR + cadastro de canais + OAuth ML** (Fase 1, item 1 do backlog).
+**M01 · PR #399 em draft.** Reconciliada com a base PWA da #393. O aceite oficial depende do proprietário e da configuração isolada de homologação.
 
 ---
 
 ## 12. Status atual
 
-Marketplace é **greenfield total** — nenhum código escrito. Vai ser um dos maiores HUBs do projeto e exige arquitetura cuidadosa antes de qualquer linha. Tem dependência crítica em Estoque multi-depósito (Fase 2 do Estoque) e em Financeiro com adapter de conciliação. Recomendação: **só iniciar após Onda 1 estar com Fase 1 fechada nos 3 HUBs do núcleo transacional**.
+O HUB existe e preserva a demonstração de catálogo, conexões e operações locais. O M01 acrescenta o fluxo oficial de OAuth e a consulta somente leitura do Mercado Livre, com ativação desligada por padrão. O aceite oficial segue pendente. [Configuração e evidências M01](../modules/MARKETPLACE_MELI_OAUTH.md)
 
 ---
 
@@ -183,16 +173,15 @@ Marketplace é **greenfield total** — nenhum código escrito. Vai ser um dos m
 
 | Blocker | Bloqueia |
 |---|---|
-| ADR de arquitetura adapter | Tudo |
-| Estoque multi-depósito (Fase 2) | Sync de saldo realista |
-| Credenciais dev de cada marketplace | OAuth |
+| Aplicação DevCenter, Preview isolado e vendedor oficial de teste | Aceite M01 |
+| Vestuário P03 e confirmação do vínculo | Identificação operacional dos anúncios de variante no M02 |
+| Estoque e venda por variante | Conversão de pedidos com variantes no M04 e sincronização no M05 |
+| Aceite do proprietário e opt-in da loja | Ativação comercial M06 |
 
 ---
 
 ## 15. Referências
 
-- **ADRs relacionados:** ADR Marketplace Adapter Interface (a criar — alta prioridade)
-- **Sprints relacionadas:** — (nenhuma)
-- **Docs de módulo:** — (a criar `docs/modules/MARKETPLACE.md`)
-- **Memórias persistentes:** — (nenhuma ainda)
-- **Governança:** quando iniciado, `lib/marketplace*` core entra na lista de áreas protegidas.
+- [Módulo Marketplace](../modules/MARKETPLACE.md)
+- [Relatório técnico M01](../modules/MARKETPLACE_MELI_OAUTH.md)
+- [Vestuário P03 · Identificadores e etiquetas](../vestuario/P03_PROPOSTA_CODIGOS_ETIQUETAS.md)

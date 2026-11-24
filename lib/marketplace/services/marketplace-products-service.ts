@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
+import { MELI_CONNECTION_PREFIX } from "@/lib/marketplace/mercado-livre/config"
 import type {
   MarketplaceAnnouncementRowDTO,
   MarketplaceCatalogProductDTO,
@@ -79,6 +80,7 @@ export async function listMarketplaceCatalog(
   const connectionId = opts?.connectionId?.trim() || null
 
   if (connectionId) {
+    if (connectionId.startsWith(MELI_CONNECTION_PREFIX)) throw new Error("Conexão indisponível para simulação.")
     const conn = await prisma.marketplaceConnection.findFirst({
       where: { id: connectionId, storeId },
       select: { id: true },
@@ -101,7 +103,7 @@ export async function listMarketplaceCatalog(
       price: true,
       metadata: true,
       marketplaceProductLinks: {
-        where: connectionId ? { connectionId } : { storeId },
+        where: { storeId, connectionId: connectionId ?? { not: { startsWith: MELI_CONNECTION_PREFIX } } },
         select: LINK_SELECT,
       },
     },
@@ -125,6 +127,7 @@ export async function exportMarketplaceProducts(input: {
   productIds: string[]
   simulatePublishError?: boolean
 }): Promise<{ productId: string; link: MarketplaceProductLinkDTO }[]> {
+  if (input.connectionId.startsWith(MELI_CONNECTION_PREFIX)) throw new Error("Conexão indisponível para simulação.")
   const conn = await prisma.marketplaceConnection.findFirst({
     where: { id: input.connectionId, storeId: input.storeId },
   })
@@ -216,6 +219,7 @@ export async function patchMarketplaceProductLink(input: {
   action: "sync" | "update_stock"
   simulateError?: boolean
 }): Promise<MarketplaceProductLinkDTO> {
+  if (input.connectionId.startsWith(MELI_CONNECTION_PREFIX)) throw new Error("Conexão indisponível para simulação.")
   const link = await prisma.marketplaceProductLink.findFirst({
     where: {
       produtoId: input.produtoId,
@@ -300,6 +304,7 @@ export async function listMarketplaceAnnouncements(
 ): Promise<MarketplaceAnnouncementRowDTO[]> {
   const connectionId = filters.connectionId?.trim() || null
   if (connectionId) {
+    if (connectionId.startsWith(MELI_CONNECTION_PREFIX)) throw new Error("Conexão indisponível para simulação.")
     const c = await prisma.marketplaceConnection.findFirst({
       where: { id: connectionId, storeId },
       select: { id: true },
@@ -323,7 +328,7 @@ export async function listMarketplaceAnnouncements(
 
   const where: Prisma.MarketplaceProductLinkWhereInput = {
     storeId,
-    ...(connectionId ? { connectionId } : {}),
+    connectionId: connectionId ?? { not: { startsWith: MELI_CONNECTION_PREFIX } },
     ...(status ? { status } : {}),
     ...(syncStatus ? { syncStatus } : {}),
     ...(filters.q?.trim()
@@ -378,6 +383,7 @@ export async function listMarketplaceSyncLogs(opts: {
   const take = Math.min(Math.max(opts.take ?? 40, 1), 100)
 
   if (opts.connectionId?.trim()) {
+    if (opts.connectionId.trim().startsWith(MELI_CONNECTION_PREFIX)) throw new Error("Conexão indisponível para simulação.")
     const c = await prisma.marketplaceConnection.findFirst({
       where: { id: opts.connectionId.trim(), storeId: opts.storeId },
       select: { id: true },
@@ -408,7 +414,7 @@ export async function listMarketplaceSyncLogs(opts: {
   const logs = await prisma.marketplaceSyncLog.findMany({
     where: {
       storeId: opts.storeId,
-      ...(opts.connectionId?.trim() ? { connectionId: opts.connectionId.trim() } : {}),
+      connectionId: opts.connectionId?.trim() || { not: { startsWith: MELI_CONNECTION_PREFIX } },
       ...(opts.produtoId?.trim() ? { produtoId: opts.produtoId.trim() } : {}),
       ...(opts.productLinkId?.trim() ? { productLinkId: opts.productLinkId.trim() } : {}),
     },
@@ -441,7 +447,7 @@ export async function patchMarketplaceLinkById(input: {
   simulateError?: boolean
 }): Promise<MarketplaceProductLinkDTO> {
   const link = await prisma.marketplaceProductLink.findFirst({
-    where: { id: input.linkId, storeId: input.storeId },
+    where: { id: input.linkId, storeId: input.storeId, connectionId: { not: { startsWith: MELI_CONNECTION_PREFIX } } },
     select: LINK_SELECT,
   })
   if (!link) {

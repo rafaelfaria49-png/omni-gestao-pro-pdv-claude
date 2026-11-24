@@ -1,0 +1,76 @@
+name: Marketplace Mercado Livre QA
+
+on:
+  pull_request:
+    paths:
+      - "app/api/marketplace/**"
+      - "app/dashboard/marketplace/**"
+      - "components/marketplace/**"
+      - "lib/marketplace/**"
+      - "e2e/marketplace-meli/**"
+      - "e2e/marketplace-meli.playwright.config.ts"
+      - "scripts/marketplace/**"
+      - "prisma/schema.prisma"
+      - "package-lock.json"
+      - ".github/workflows/marketplace-meli.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-meli-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  marketplace-meli:
+    name: OAuth, isolamento, consulta e E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: meli_qa
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: omni_meli_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U meli_qa -d omni_meli_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MELI_E2E_DATABASE_URL: postgresql://meli_qa:isolated_ci_only@127.0.0.1:5432/omni_meli_e2e
+      DATABASE_URL: postgresql://meli_qa:isolated_ci_only@127.0.0.1:5432/omni_meli_e2e
+      DIRECT_URL: postgresql://meli_qa:isolated_ci_only@127.0.0.1:5432/omni_meli_e2e
+      AUTH_SECRET: isolated-marketplace-build-fixture
+      AUTH_TRUST_HOST: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      MELI_OAUTH_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript integral
+        run: npm run typecheck -- --incremental false
+      - run: npx eslint app/api/marketplace app/dashboard/marketplace components/marketplace lib/marketplace scripts/marketplace e2e/marketplace-meli e2e/marketplace-meli.playwright.config.ts
+      - run: npm test -- lib/marketplace
+      - run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/marketplace/run-meli-e2e.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: marketplace-meli-qa
+          path: |
+            test-results/marketplace-meli/provider-events.log
+            test-results/marketplace-meli/playwright/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7

@@ -123,7 +123,7 @@ describe("requireMarketplaceApi — membership + hubs.marketplace", () => {
       }),
     )
     const r = await requireMarketplaceApi(req({ headerStoreId: "loja-a" }))
-    expect(r).toEqual({ ok: true, storeId: "loja-a" })
+    expect(r).toEqual({ ok: true, storeId: "loja-a", userId: "user-1" })
   })
 
   it("T5 / B — restricted + loja não autorizada: 403", async () => {
@@ -158,10 +158,10 @@ describe("requireMarketplaceApi — membership + hubs.marketplace", () => {
     }
   })
 
-  it("T8 — ADMIN autorizado: contrato de sucesso { ok, storeId }", async () => {
+  it("T8 — ADMIN autorizado: retorna a loja e a identidade autenticada", async () => {
     sessionAtiva(makeSession({ role: "ADMIN" }))
     const r = await requireMarketplaceApi(req({ headerStoreId: "loja-a" }))
-    expect(r).toEqual({ ok: true, storeId: "loja-a" })
+    expect(r).toEqual({ ok: true, storeId: "loja-a", userId: "user-1" })
     expect(r).not.toHaveProperty("response")
   })
 
@@ -188,6 +188,7 @@ describe("requireMarketplaceApi — membership + hubs.marketplace", () => {
     await expect(requireMarketplaceApi(req({ headerStoreId: "loja-a" }))).resolves.toEqual({
       ok: true,
       storeId: "loja-a",
+      userId: "user-1",
     })
     const denied = await deny(await requireMarketplaceApi(req({ headerStoreId: "loja-b" })))
     expect(denied.status).toBe(403)
@@ -204,17 +205,19 @@ describe("requireMarketplaceApi — membership + hubs.marketplace", () => {
     await expect(requireMarketplaceApi(req({ query: "?storeId=loja-a" }))).resolves.toEqual({
       ok: true,
       storeId: "loja-a",
+      userId: "user-1",
     })
     await expect(requireMarketplaceApi(req({ query: "?lojaId=loja-a" }))).resolves.toEqual({
       ok: true,
       storeId: "loja-a",
+      userId: "user-1",
     })
     const denied = await deny(await requireMarketplaceApi(req({ query: "?storeId=loja-b" })))
     expect(denied).toEqual({ status: 403, error: "Sem permissão para esta unidade" })
   })
 })
 
-describe("rotas HTTP Marketplace — 10/10 passam pelo gate", () => {
+describe("rotas HTTP Marketplace — todos os handlers passam pelo gate", () => {
   it("todo handler exportado chama requireMarketplaceApi; zero bypass", () => {
     const root = join(process.cwd(), "app/api/marketplace")
     const files: string[] = []
@@ -240,19 +243,19 @@ describe("rotas HTTP Marketplace — 10/10 passam pelo gate", () => {
     }
 
     expect(files.length).toBeGreaterThanOrEqual(1)
-    expect(handlers).toBe(10)
-    expect(gateCalls).toBe(10)
+    expect(handlers).toBe(15)
+    expect(gateCalls).toBe(15)
   })
 })
 
 describe("service layer store scope (fail-closed, estático)", () => {
-  it("C — connection lookup/update/delete escopados por id + storeId", () => {
+  it("C — leitura e atualização de conexão escopadas por id + storeId", () => {
     const src = readFileSync(
       join(process.cwd(), "lib/marketplace/services/marketplace-connections-service.ts"),
       "utf8",
     )
     expect(src).toContain("where: { id: input.id, storeId: input.storeId }")
-    expect(src).toContain("deleteMany({ where: { id, storeId } })")
+    expect(src).toContain("updateMany({ where: { id, storeId }, data: { status:")
   })
 
   it("D — export recusa productIds fora da loja", () => {
