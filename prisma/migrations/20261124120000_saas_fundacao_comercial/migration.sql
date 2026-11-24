@@ -230,7 +230,7 @@ ALTER TABLE "organization_members" ADD CONSTRAINT "organization_members_papel_ch
 ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_status_check"
   CHECK ("status" IN ('trialing', 'trial_expired', 'pending_payment', 'active', 'past_due', 'canceled', 'suspended'));
 ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_suspended_mode_check"
-  CHECK ("suspendedMode" IS NULL OR "suspendedMode" IN ('limitado', 'bloqueado'));
+  CHECK ("suspendedMode" IS NULL OR ("status" = 'suspended' AND "suspendedMode" IN ('limitado', 'bloqueado')));
 ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_suspensao_motivo_check"
   CHECK ("status" <> 'suspended' OR ("suspendedAt" IS NOT NULL AND length(btrim(coalesce("suspendedReason", ''))) > 0));
 ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_trialing_fim_check"

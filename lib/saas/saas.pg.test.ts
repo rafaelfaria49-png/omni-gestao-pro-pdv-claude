@@ -56,25 +56,24 @@ async function criarOrganizacao(id: string, sub: Record<string, unknown>) {
 }
 
 describe("lojas legadas e isolamento (entitlement sombra com banco real)", () => {
-  it("todas as lojas existentes (organizationId NULL) resolvem legado/pleno com UMA consulta", async () => {
+  it("todas as lojas existentes (organizationId NULL) resolvem legado com UMA consulta e claim vazio", async () => {
     const todas = (await db.store.findMany({ where: { organizationId: null }, select: { id: true } })).map((s) => s.id)
     expect(todas).toEqual(expect.arrayContaining(LEGADAS))
     consultas.length = 0
     const claims = await calcularEntitlementsSombra(db as unknown as EntitlementDb, todas)
     expect(consultas).toHaveLength(1)
-    for (const id of todas) expect(claims?.[id]).toEqual({ modo: "pleno", motivo: "legado" })
+    expect(claims).toEqual({})
   })
 
   it("organizações distintas não se contaminam; custo constante (3 consultas) com N lojas", async () => {
     await criarOrganizacao("org-iso-a", { status: "trialing", trialStartedAt: new Date("2020-01-01T00:00:00Z"), trialEndsAt: new Date("2020-01-08T00:00:00Z") })
     await criarOrganizacao("org-iso-b", { status: "active" })
     consultas.length = 0
-    const claims = await calcularEntitlementsSombra(db as unknown as EntitlementDb, ["org-iso-a-loja", "org-iso-b-loja", "loja-1"])
+    const claims = await calcularEntitlementsSombra(db as unknown as EntitlementDb, ["org-iso-a-loja", "org-iso-b-loja", "loja-1"], { log: () => {} })
     expect(consultas.length).toBeLessThanOrEqual(3)
     expect(claims).toEqual({
       "org-iso-a-loja": { modo: "limitado", motivo: "teste_vencido", limitedSince: "2020-01-08T00:00:00.000Z" },
       "org-iso-b-loja": { modo: "pleno", motivo: "ok" },
-      "loja-1": { modo: "pleno", motivo: "legado" },
     })
     // Nenhum dado das lojas legadas foi alterado pela leitura.
     expect(await db.store.count({ where: { id: { in: LEGADAS }, organizationId: null } })).toBe(3)
@@ -104,6 +103,7 @@ describe("lojas legadas e isolamento (entitlement sombra com banco real)", () =>
     await expect(db.subscription.create({ data: { ...base, status: "ativo" } })).rejects.toThrow()
     await expect(db.subscription.create({ data: { ...base, status: "suspended", suspendedAt: new Date() } })).rejects.toThrow()
     await expect(db.subscription.create({ data: { ...base, status: "trialing" } })).rejects.toThrow()
+    await expect(db.subscription.create({ data: { ...base, status: "active", suspendedMode: "bloqueado" } })).rejects.toThrow()
     await db.subscription.create({ data: { ...base, status: "active" } })
     await expect(db.subscription.create({ data: { ...base, status: "active" } })).rejects.toThrow()
     await expect(db.organization.create({ data: { id: "org-x", nome: " ", contatoEmail: "x", contatoWhatsapp: "1", origem: "assistido" } })).rejects.toThrow()
@@ -271,12 +271,41 @@ describe("outbox — retry, falha permanente, recuperação", () => {
     expect(await db.notificationOutbox.count({ where: { status: "pendente" } })).toBe(5)
   })
 
-  it("prazo esgotado interrompe o ciclo sem perder itens", async () => {
+  it("prazo esgotado: itens reivindicados e não tentados voltam a pendente sem gastar tentativa", async () => {
     for (let i = 0; i < 3; i++) await nova(`prazo:${i}`)
     let t = 0
-    const r = await processarOutbox(db, silencioso, { prazoMs: 1, relogioMs: () => (t += 1) })
+    // Relógio de passos: prazo = 3; o laço reivindica (t=2) e o 1º item já encontra o prazo esgotado (t=3).
+    const r = await processarOutbox(db, silencioso, { prazoMs: 2, relogioMs: () => (t += 1) })
     expect(r.interrompidoPorPrazo).toBe(true)
-    expect(await db.notificationOutbox.count({ where: { status: { in: ["pendente", "enviando", "registrado"] } } })).toBe(3)
+    expect(r.reivindicadas).toBe(3)
+    expect(r.devolvidosSemTentativa).toBe(3)
+    const pendentes = await db.notificationOutbox.findMany({ where: { status: "pendente" } })
+    expect(pendentes).toHaveLength(r.devolvidosSemTentativa)
+    for (const p of pendentes) expect(p).toMatchObject({ tentativas: 0, primeiraTentativaEm: null, lockedBy: null })
+  })
+
+  it("resultado desconhecido reagendado fora da janela de idempotência NÃO é reenviado (vira falhou)", async () => {
+    const { id } = await nova("unk:2")
+    const t = criarAdaptadorTeste([{ ok: false, tipo: "desconhecido", codigo: "sem_resposta" }])
+    expect((await processarOutbox(db, t.adaptador, { workerId: "u1" })).reagendadas).toBe(1)
+    expect(await db.notificationOutbox.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "pendente", ultimoErroTipo: "desconhecido" })
+    // Simula o cron do dia seguinte: hora de tentar de novo, mas a 1ª tentativa foi há 24 h.
+    await db.$executeRaw`UPDATE notification_outbox SET "proximaTentativaEm" = now(), "primeiraTentativaEm" = now() - interval '24 hours' WHERE id = ${id}`
+    const r = await processarOutbox(db, t.adaptador, { workerId: "u2" })
+    expect(r.reivindicadas).toBe(0)
+    expect(r.resultadosDesconhecidosEncerrados).toBe(1)
+    expect(t.enviados).toHaveLength(1)
+    expect(await db.notificationOutbox.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "falhou", ultimoErro: "resultado_desconhecido" })
+  })
+
+  it("resultado desconhecido reagendado DENTRO da janela repete com a mesma chave", async () => {
+    const { id } = await nova("unk:3")
+    const t = criarAdaptadorTeste([{ ok: false, tipo: "desconhecido", codigo: "sem_resposta" }])
+    await processarOutbox(db, t.adaptador, { workerId: "d1" })
+    await liberarAgora(id)
+    expect((await processarOutbox(db, t.adaptador, { workerId: "d2" })).registradas).toBe(1)
+    expect(t.enviados.map((m) => m.idempotencyKey)).toEqual([`outbox:${id}`, `outbox:${id}`])
+    expect((await db.notificationOutbox.findUniqueOrThrow({ where: { id } })).tentativas).toBe(2)
   })
 
   it("dados sensíveis são recusados antes de gravar", async () => {

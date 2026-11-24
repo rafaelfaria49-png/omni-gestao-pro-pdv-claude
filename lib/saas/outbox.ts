@@ -6,7 +6,7 @@ import type { AdaptadorEmail, ResultadoEnvio } from "@/lib/saas/email/tipos"
 /**
  * NotificationOutbox — fila persistente no Postgres (SAAS-ADR-06 · arquitetura §8).
  *
- * Garantias (provadas em PG real: lib/saas/outbox.pg.test.ts):
+ * Garantias (provadas em PG real: lib/saas/saas.pg.test.ts):
  *  · deduplicação: `dedupeKey` UNIQUE — enfileirar duas vezes cria UMA linha;
  *  · exclusão mútua: reivindicação por `FOR UPDATE SKIP LOCKED` + lease (`lockedBy`/`lockedUntil`).
  *    Dois workers simultâneos nunca recebem a mesma linha;
@@ -21,8 +21,15 @@ import type { AdaptadorEmail, ResultadoEnvio } from "@/lib/saas/email/tipos"
  * morrido entre o aceite do provedor e o commit): a repetição usa SEMPRE a mesma chave de
  * idempotência (`outbox:<id>`), que o Resend respeita por 24 h. Passadas 23 h da primeira
  * tentativa, a linha NÃO é reenviada às cegas: vira `falhou` com `resultado_desconhecido`, para
- * conferência manual. Assim o risco residual é "no máximo uma duplicata fora da janela", nunca
- * reenvio em laço.
+ * conferência manual. Isso vale nos DOIS caminhos do desconhecido: lease vencido em `enviando` e
+ * retentativa reagendada (`pendente` com `ultimoErroTipo = desconhecido`) — com o cron diário a
+ * retentativa cairia ~24 h depois, fora da janela do provedor (revisão independente, P1).
+ * Item reivindicado e não tentado (prazo do ciclo esgotado) devolve a tentativa e volta a
+ * `pendente` na hora, quando nunca foi enviado antes.
+ *
+ * `dedupeKey` é UNIQUE GLOBAL: toda chave deve conter o id da entidade dona (organização,
+ * cadastro…), ex.: `trial-d5:<organizationId>`. Chave genérica suprimiria a notificação de outra
+ * organização.
  */
 
 export const CANAIS_OUTBOX = ["email", "interno", "whatsapp"] as const
@@ -113,7 +120,10 @@ export async function reivindicarLote(db: OutboxDb, opts: { workerId: string; li
     WITH alvo AS (
       SELECT id FROM notification_outbox
       WHERE tentativas < "maxTentativas" AND (
-        (status = 'pendente' AND "proximaTentativaEm" <= now())
+        (status = 'pendente' AND "proximaTentativaEm" <= now()
+            -- NULL-safe: linha nova (sem erro, sem 1ª tentativa) sempre elegível.
+            AND ("ultimoErroTipo" IS DISTINCT FROM 'desconhecido' OR "primeiraTentativaEm" IS NULL
+                 OR "primeiraTentativaEm" > now() - make_interval(hours => ${JANELA_IDEMPOTENCIA_HORAS}::int)))
         OR (status = 'enviando' AND "lockedUntil" < now()
             AND "primeiraTentativaEm" > now() - make_interval(hours => ${JANELA_IDEMPOTENCIA_HORAS}::int))
       )
@@ -147,9 +157,24 @@ export async function encerrarResultadosDesconhecidos(db: OutboxDb): Promise<num
       status = 'falhou', "ultimoErroTipo" = 'desconhecido', "ultimoErro" = 'resultado_desconhecido',
       historico = historico || jsonb_build_array(jsonb_build_object('em', now(), 'evento', 'resultado_desconhecido', 'worker', "lockedBy", 'tentativa', tentativas)),
       "lockedBy" = NULL, "lockedUntil" = NULL, "updatedAt" = now()
-    WHERE status = 'enviando' AND "lockedUntil" < now()
-      AND (tentativas >= "maxTentativas" OR "primeiraTentativaEm" <= now() - make_interval(hours => ${JANELA_IDEMPOTENCIA_HORAS}::int))
+    WHERE (status = 'enviando' AND "lockedUntil" < now()
+           AND (tentativas >= "maxTentativas" OR "primeiraTentativaEm" <= now() - make_interval(hours => ${JANELA_IDEMPOTENCIA_HORAS}::int)))
+       OR (status = 'pendente' AND "ultimoErroTipo" = 'desconhecido'
+           AND "primeiraTentativaEm" <= now() - make_interval(hours => ${JANELA_IDEMPOTENCIA_HORAS}::int))
   `)
+}
+
+/**
+ * Devolve itens reivindicados e NÃO tentados neste ciclo (prazo esgotado). Só os que estão na 1ª
+ * tentativa — nunca enviados — voltam a `pendente` sem gastar tentativa; os demais seguem o
+ * caminho do lease (o resultado da tentativa anterior é desconhecido). Fencing por `lockedBy`.
+ */
+export async function liberarNaoTentados(db: OutboxDb, ids: string[], workerId: string): Promise<number> {
+  if (ids.length === 0) return 0
+  return db.$executeRaw(Prisma.sql`
+    UPDATE notification_outbox SET status = 'pendente', tentativas = 0, "primeiraTentativaEm" = NULL, "ultimaTentativaEm" = NULL,
+      "lockedBy" = NULL, "lockedUntil" = NULL, "updatedAt" = now()
+    WHERE id IN (${Prisma.join(ids)}) AND status = 'enviando' AND "lockedBy" = ${workerId} AND tentativas = 1`)
 }
 
 export type DesfechoGravado = "enviado" | "registrado" | "reagendado" | "falhou" | "lease_perdido"
@@ -195,6 +220,7 @@ export type ResumoOutbox = {
   falhas: number
   leasesPerdidos: number
   resultadosDesconhecidosEncerrados: number
+  devolvidosSemTentativa: number
   interrompidoPorPrazo: boolean
 }
 
@@ -220,7 +246,7 @@ export async function processarOutbox(
   const limiteTotal = opts.limiteTotal ?? 50
   const relogio = opts.relogioMs ?? Date.now
   const prazo = relogio() + (opts.prazoMs ?? 40_000)
-  const resumo: ResumoOutbox = { reivindicadas: 0, enviadas: 0, registradas: 0, reagendadas: 0, falhas: 0, leasesPerdidos: 0, resultadosDesconhecidosEncerrados: 0, interrompidoPorPrazo: false }
+  const resumo: ResumoOutbox = { reivindicadas: 0, enviadas: 0, registradas: 0, reagendadas: 0, falhas: 0, leasesPerdidos: 0, resultadosDesconhecidosEncerrados: 0, devolvidosSemTentativa: 0, interrompidoPorPrazo: false }
 
   resumo.resultadosDesconhecidosEncerrados = await encerrarResultadosDesconhecidos(db)
   while (resumo.reivindicadas < limiteTotal) {
@@ -228,9 +254,12 @@ export async function processarOutbox(
     const itens = await reivindicarLote(db, { workerId, limite: Math.min(lote, limiteTotal - resumo.reivindicadas), leaseMs: opts.leaseMs })
     if (itens.length === 0) break
     resumo.reivindicadas += itens.length
-    for (const item of itens) {
-      // Itens já reivindicados e não tentados por falta de prazo voltam sozinhos quando o lease vencer.
-      if (relogio() >= prazo) { resumo.interrompidoPorPrazo = true; break }
+    for (const [i, item] of itens.entries()) {
+      if (relogio() >= prazo) {
+        resumo.interrompidoPorPrazo = true
+        resumo.devolvidosSemTentativa += await liberarNaoTentados(db, itens.slice(i).map((x) => x.id), workerId)
+        break
+      }
       const d = await concluirTentativa(db, item, workerId, await entregar(item, email))
       if (d === "enviado") resumo.enviadas++
       else if (d === "registrado") resumo.registradas++

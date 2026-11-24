@@ -1,0 +1,153 @@
+## 1. baseline = schema da origin/main (sem SaaS) + _prisma_migrations com o histórico da main
+NOTA:  removendo em cascata outros 169 objetos
+DETALHE:  removendo em cascata tipo "StoreProfile"
+removendo em cascata tipo "SubscriptionPlan"
+removendo em cascata tipo "MarketingMediaJobKind"
+removendo em cascata tipo "MarketplaceProvider"
+removendo em cascata tipo "MarketplaceConnectionStatus"
+removendo em cascata tipo "MarketplaceProductLinkStatus"
+removendo em cascata tipo "MarketplaceProductSyncStatus"
+removendo em cascata tipo "StatusOrdemServico"
+removendo em cascata tipo "VendaNumeracaoOrigem"
+removendo em cascata tipo "FinancialAccountType"
+removendo em cascata tipo "FinancialTransactionType"
+removendo em cascata tipo "FinancialTransactionStatus"
+removendo em cascata tipo "SessaoCaixaStatus"
+removendo em cascata tipo "OmniAgentCommandStatus"
+removendo em cascata tipo "UserRole"
+removendo em cascata tipo "FiscalStatusVenda"
+removendo em cascata tipo "StatusNotaFiscal"
+removendo em cascata tipo "ModeloFiscal"
+removendo em cascata tipo "AmbienteFiscal"
+removendo em cascata tipo "TipoEmissao"
+removendo em cascata tipo "RegimeTributario"
+removendo em cascata tipo "FiscalProviderTipo"
+removendo em cascata tipo "CertificadoStatus"
+removendo em cascata tipo "TipoEventoFiscal"
+removendo em cascata tipo "StatusEventoFiscal"
+removendo em cascata tipo "FiscalJobTipo"
+removendo em cascata tipo "FiscalJobStatus"
+removendo em cascata tipo "ContadorCompetenciaStatus"
+removendo em cascata tipo "ContadorItemStatus"
+removendo em cascata tipo "ContadorDocumentoCategoria"
+removendo em cascata tipo "ContadorUsuarioStatus"
+removendo em cascata tipo "ContadorPapelExterno"
+removendo em cascata tipo "ContadorAcessoStatus"
+removendo em cascata tipo "ContadorObrigacaoTipo"
+removendo em cascata tipo "ContadorObrigacaoRecorrencia"
+removendo em cascata tipo "ContadorGuiaOrigem"
+removendo em cascata tabela stores
+removendo em cascata tabela marketplace_connections
+removendo em cascata tabela marketplace_sync_logs
+removendo em cascata tabela marketplace_product_links
+removendo em cascata tabela whatsapp_contacts
+removendo em cascata tabela whatsapp_conversations
+removendo em cascata tabela whatsapp_messages
+removendo em cascata tabela whatsapp_automations
+removendo em cascata tabela whatsapp_quick_replies
+removendo em cascata tabela whatsapp_etiquetas
+removendo em cascata tabela whatsapp_conversa_etiquetas
+removendo em cascata tabela whatsapp_ai_settings
+removendo em cascata tabela whatsapp_automation_logs
+removendo em cascata tabela whatsapp_phone_numbers
+removendo em cascata tabela marketing_posts
+removendo em cascata tabela marketing_ia_posts
+removendo em cascata tabela store_settings
+removendo em cascata tabela marketing_media_jobs
+removendo em cascata tabela ia_conversations
+removendo em cascata tabela ia_messages
+removendo em cascata tabela clientes_importados
+removendo em cascata tabela ordens_servico
+removendo em cascata tabela garantia_ordem_servico
+removendo em cascata tabela ordem_servico_item
+removendo em cascata tabela estoque_produtos
+removendo em cascata tabela movimentacoes_estoque
+removendo em cascata tabela depositos
+removendo em cascata tabela produto_depositos
+removendo em cascata tabela inventario_sessoes
+removendo em cascata tabela inventario_contagens
+removendo em cascata tabela tecnicos
+removendo em cascata tabela equipamentos_modelos
+removendo em cascata tabela product_media
+removendo em cascata tabela marketplace_listings
+removendo em cascata tabela servicos
+removendo em cascata tabela ledger_snapshots
+removendo em cascata tabela app_loja_settings
+removendo em cascata tabela logs_auditoria
+removendo em cascata tabela whatsapp_pending_actions
+removendo em cascata tabela categorias_produto
+removendo em cascata tabela fornecedores
+removendo em cascata tabela categorias_cadastro
+removendo em cascata tabela marcas_cadastro
+removendo em cascata tabela contas_pagar_titulos
+removendo em cascata tabela contas_receber_titulos
+removendo em cascata tabela carteiras_financeiras
+removendo em cascata tabela movimentacoes_financeiras
+removendo em cascata tabela series_venda
+removendo em cascata tabela vendas
+removendo em cascata tabela venda_itens
+removendo em cascata tabela devolucoes_venda
+removendo em cascata tabela itens_devolucao_venda
+removendo em cascata tabela clientes_creditos
+removendo em cascata tabela usos_credito_cliente
+removendo em cascata tabela users
+removendo em cascata tabela "Usage"
+removendo em cascata tabela "CreditPurchase"
+removendo em cascata tabela financial_accounts
+removendo em cascata tabela financial_categories
+removendo em cascata tabela financial_transactions
+removendo em cascata tabela financial_attachments
+removendo em cascata tabela fechamentos_financeiros
+removendo em cascata tabela conciliacoes_financeiras
+removendo em cascata tabela auditorias_financeiras
+e 69 outros objetos (veja lista no log do servidor)
+BASELINE_OK
+migrations registradas: 28
+## 2. legado representativo
+## 3. prisma migrate status (o que 'migrate deploy' aplicaria)
+   Following migrations have not yet been applied:
+   20261114120000_compat_catalogo_marcas_lancamento
+   20261115120000_vestuario_p02_grades_catalogo
+   20261124120000_saas_fundacao_comercial
+## 4. checagens PRÉ (sessão somente leitura)
+== 2. objetos do SaaS (ANTES: tudo AUSENTE / 0; DEPOIS: presentes)
+organizations|AUSENTE
+organization_members|AUSENTE
+subscriptions|AUSENTE
+subscription_history|AUSENTE
+trial_grants|AUSENTE
+notification_outbox|AUSENTE
+platform_audit_logs|AUSENTE
+stores|2|2c79f25c93d63a0b9244995cf3d1bc34
+admin_users|2|b2467dda9b2748e88ef1e3ea957a5f31
+admin_user_stores|1|d522a9bb5818662cb692e8d52e809a73
+## 5. aplicação com transação longa concorrente lendo stores (lock_timeout deve abortar sem aplicar nada)
+exit=3 em 5s
+psql:prisma/migrations/20261124120000_saas_fundacao_comercial/migration.sql:10: ERRO:  cancelando comando por causa do tempo de espera (timeout) do bloqueio
+organizations depois da tentativa: AUSENTE · coluna: 0
+## 6. aplicação limpa (transação única) + registro só desta migration
+exit=0 em 1440 ms
+   Migration 20261124120000_saas_fundacao_comercial marked as applied.
+   Following migrations have not yet been applied:
+   20261114120000_compat_catalogo_marcas_lancamento
+   20261115120000_vestuario_p02_grades_catalogo
+## 7. checagens PÓS
+LEGADO_HASH_IDENTICO
+0
+== 5. pós-migration (só faz sentido DEPOIS; antes estas consultas falham por tabela ausente — esperado)
+0
+0|0|0|0|0|0|0
+16
+4
+## 8. rollback com dado comercial presente → deve RECUSAR
+exit=3
+ROLLBACK_SAAS_RECUSADO: existem 1 registros comerciais; exportar e decidir antes
+organizations ainda existe: organizations
+## 9. rollback com tabelas vazias → reverte para o schema da main
+exit=0
+   registro SaaS em _prisma_migrations: 0
+drift contra o schema da main após rollback: 0 comandos
+   lojas preservadas: 2
+## 10. reaplicar depois do rollback (rollforward)
+exit=0
+drift contra o schema da branch: 0 comandos

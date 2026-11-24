@@ -73,7 +73,7 @@ decide o **modo** na leitura; o cron só materializará estados (SAAS-002).
 
 - Fronteiras semiabertas: no **instante exato** de `trialEndsAt`, `graceEndsAt`, `currentPeriodEnd` ou `cortesiaAte` o benefício já acabou (`agora ≥ fim`).
 - `limitedSince` = valor gravado na assinatura, senão o instante derivado (fim do teste, da carência, do período).
-- **Desvio pendente de aceite:** suspensão prevalece sobre cortesia (a arquitetura diz que cortesia "sobrepõe qualquer estado"). Motivo: suspensão por fraude não pode ser anulada por cortesia esquecida.
+- **Regra APROVADA pelo proprietário (2026-11-24, GOAL `OMNI-SAAS-001A-MERGE-MIGRATION-READINESS-002`):** suspensão administrativa prevalece sobre cortesia **e** sobre extensão do teste. Ajusta a arquitetura §6.1 ("cortesia sobrepõe qualquer estado" passa a valer só fora de `suspended`). Cobertura: `entitlement.test.ts` › "precedência da suspensão (regra aprovada)".
 - Tabela-verdade em Vitest: `lib/saas/entitlement.test.ts` (7 estados × cortesia × carência × instante exato × inconsistências × transições).
 
 ## 4. Lojas legadas
@@ -85,10 +85,14 @@ decide o **modo** na leitura; o cron só materializará estados (SAAS-002).
 ## 5. Auth — modo sombra
 
 - `auth.ts`, callback `jwt`: depois de toda a lógica existente (sem mudar uma linha dela), chama `calcularEntitlementsSombra(prisma, ids das lojas)` e grava `token.storeEntitlements`. Plataforma não calcula (não há loja).
-- **Nunca derruba o login:** qualquer erro (inclusive banco sem a migration — coluna ausente) devolve `undefined`, registra `[saas] entitlement_sombra_falhou` sem detalhes e o claim é removido.
+- **Nunca derruba o login:** qualquer erro **ou demora acima de 1,5 s** (`TEMPO_LIMITE_SOMBRA_MS`) devolve `undefined`, registra o evento `saas_entitlement_shadow_failed` sem detalhes e o claim é removido. **Atenção:** isto protege só o callback `jwt`. Com o código publicado num banco SEM a migration, outras rotas quebram (ver §11) — a ordem migration → merge é obrigatória.
 - Não é exposto na `Session` (o callback `session` de `auth.config.ts` não foi tocado). `moduleAccess`, `storeModules`, `allowedStoreIdsJson`, revogação, troca de senha e logout ficam idênticos (`lib/saas/auth-jwt-sombra.test.ts` + suítes de auth existentes).
 - `lib/auth/session-entitlement.ts`: contrato idêntico (só comentário). Delegar ao resolvedor mudaria o acesso — fica para o SAAS-002.
-- Observabilidade: decisões não plenas viram `[saas] entitlement_sombra loja=<id> modo=… motivo=… aplicado=nao` (no máximo 1 linha por loja/decisão a cada 15 min por instância) e um contador em memória (`contadoresEntitlementSombra()`). Sem email, nome ou IP.
+- Observabilidade — eventos JSON de uma linha (`v: 1`, sem email, nome ou IP):
+  - `{"event":"saas_entitlement_shadow","v":1,"storeId":…,"modo":…,"motivo":…,"applied":false,"suppressed":n}` — decisão não plena; no máximo 1 linha por loja/decisão a cada 15 min **por instância**; `suppressed` = decisões iguais caladas desde a linha anterior (somar `1 + suppressed` aproxima o total);
+  - `{"event":"saas_entitlement_shadow_failed","v":1,"suppressed":n}` — falha ou tempo limite; no máximo 1 linha/min por instância;
+  - `{"event":"saas_entitlement_enforce_ignored","v":1}` — `SAAS_ENTITLEMENT_ENFORCE=on` configurada (sem efeito).
+- **Limite serverless:** cada instância da Vercel tem memória própria e efêmera; `contadoresEntitlementSombra()` zera no cold start e não soma instâncias. Ele serve para teste/depuração, **não** como métrica de ativação. A métrica de ativação do SAAS-002 é a agregação dos logs: (a) lojas distintas com `saas_entitlement_shadow` por `modo:motivo` em ≥ 7 dias, conferidas contra a lista de organizações esperadas; (b) soma de `saas_entitlement_shadow_failed` = 0. Em modo sombra o 001A não sabe por qual rota a recusa aconteceria — contagem por rota só existe quando os gates do SAAS-002 consultarem o claim.
 - `proxy.ts` e `auth.config.ts` **não** foram alterados nem precisaram ser (`/api/**` já é rota pública no proxy; a rota do cron se autoprotege).
 
 ### Custo e tamanho
@@ -97,9 +101,10 @@ decide o **modo** na leitura; o cron só materializará estados (SAAS-002).
 |---|---|
 | Consultas a mais por resolução do `jwt` | **1** (`stores WHERE id IN (...) AND organizationId IS NOT NULL`, índice novo). Com lojas vinculadas: até 3 em lote (stores, organizations, subscriptions), constante — sem N+1 (medido em PG) |
 | Usuário de plataforma | 0 |
-| Claim por loja legada | id + 35 bytes (`{"modo":"pleno","motivo":"legado"}`) |
+| Claim por loja legada | **0 bytes** — legado fica fora do mapa (mapa presente + loja ausente = legado; mapa ausente = não calculado) |
 | Claim limitado com data | < 100 bytes |
-| Usuário típico (1–3 lojas) | + ~80–250 bytes no cookie do JWT |
+| Usuário típico atual (só lojas legadas) | + `"storeEntitlements":{}` ≈ 23 bytes antes da cifragem |
+| Tempo limite da consulta | 1,5 s; depois disso o claim fica ausente e o login segue |
 
 Trade-off escolhido: consulta separada, em vez de acrescentar `organizationId` ao `findMany`
 existente, para que um banco ainda sem a migration (Preview apontando para um banco antigo) não
@@ -131,6 +136,9 @@ Variáveis documentadas em `.env.example` sem valores.
 - `concluirTentativa`: fencing por `lockedBy` — quem perdeu o lease não sobrescreve.
 - Retentativa: 1, 2, 4, 8 min (teto 1 h) até 5 tentativas; permanente → `falhou` na hora.
 - Recuperação: linha presa em `enviando` com lease vencido volta a ser reivindicada (com a mesma chave de idempotência) enquanto estiver a menos de 23 h da 1ª tentativa; depois disso vira `falhou` / `resultado_desconhecido` para conferência manual — **nunca reenvio às cegas**.
+- O resultado desconhecido tem DOIS caminhos e ambos respeitam a janela: lease vencido em `enviando` **e** retentativa reagendada (`pendente` com `ultimoErroTipo = desconhecido`). Sem isso, com o cron diário a retentativa sairia ~24 h depois, fora da janela do Resend, e poderia duplicar o email (achado P1 da revisão independente, corrigido e coberto em PG).
+- Item reivindicado e não tentado porque o prazo do ciclo acabou volta a `pendente` na hora, sem gastar tentativa (`liberarNaoTentados`), quando nunca foi enviado.
+- `dedupeKey` é UNIQUE **global**: toda chave precisa conter o id da entidade dona (ex.: `trial-d5:<organizationId>`); uma chave genérica suprimiria a notificação de outra organização.
 - **Não há exactly-once de entrega externa.** Garantido: um worker por linha de cada vez; repetições usam a mesma chave do provedor. Risco residual: uma duplicata se o provedor ignorar a chave ou fora da janela de 24 h.
 - Provas em PG real (`lib/saas/saas.pg.test.ts`): 2 workers × 30 rodadas sem colisão (60 linhas); 2 ciclos paralelos → 40 envios, cada um exatamente 1 vez; backoff 60/120/240/480 s; 5ª falha → `falhou`; lease vencido + fencing; resultado desconhecido fora da janela; limites de lote/total/prazo; dados sensíveis recusados.
 
@@ -160,12 +168,19 @@ Requer autorização específica do proprietário. Seguir `GESTAO_LOJAS_PROCEDIM
 4. Conferir: 7 tabelas novas vazias, `SELECT count(*) FROM stores WHERE "organizationId" IS NOT NULL` = 0, 16 CHECKs e 4 gatilhos, `prisma migrate diff --from-url … --to-schema-datamodel` vazio.
 5. Só então fazer merge e deploy.
 
-Se o código for publicado **antes** da migration, o login continua funcionando (a consulta sombra
-falha e é ignorada), mas o cron falha com 500 ao tocar a outbox — por isso a ordem acima.
+**Código sem migration QUEBRA rotas (revisão independente, P1).** Com `Store.organizationId` no
+schema, toda consulta de loja sem `select` passa a ler a coluna (ex.: `app/api/stores/route.ts`,
+`app/api/stores/[id]/route.ts`, `app/api/settings/perfil-loja/route.ts`) e responde 500 num banco que
+não a tem. O login sobrevive (consulta sombra isolada), o resto não. Portanto: **migration aplicada
+antes do merge**, e qualquer banco de **Preview** usado por esta branch também precisa dela (ou o
+Preview fica parcialmente quebrado — sem efeito em Production). Se `MIGRATION_AUTHORITY_ENABLED`
+estiver ligado em Production, o próprio merge roda `prisma migrate deploy` e aplica **todas** as
+pendentes: merge equivale a autorização de migration. Procedimento exato:
+[`SAAS_001A_PROCEDIMENTO_MIGRATION_PRODUCTION.md`](SAAS_001A_PROCEDIMENTO_MIGRATION_PRODUCTION.md).
 
 ## 12. Rollout e rollback
 
-- **Rollout:** migration (autorizada) → merge → deploy com todas as flags ausentes. Observar no log `[saas] entitlement_sombra` (não deve aparecer: nenhuma loja tem organização) e `[saas] entitlement_sombra_falhou` (deve ser zero).
+- **Rollout:** ver [`SAAS_001A_PROCEDIMENTO_MIGRATION_PRODUCTION.md`](SAAS_001A_PROCEDIMENTO_MIGRATION_PRODUCTION.md). Depois do deploy, nos logs: `saas_entitlement_shadow` não deve aparecer (nenhuma loja tem organização) e `saas_entitlement_shadow_failed` deve ser zero.
 - **Rollback de código:** reverter o merge. As tabelas ficam vazias e sem uso; `stores.organizationId` NULL não é lido por nenhum código anterior.
 - **Rollback de schema** (só se exigido, com autorização): remover gatilhos, função, tabelas novas e a coluna — nenhuma linha de cliente depende delas.
 - Desligar o cron: remover a entrada de `vercel.json` ou retirar `CRON_SECRET` (a rota passa a responder 503).
@@ -174,7 +189,7 @@ falha e é ignorada), mas o cron falha com 500 ao tocar a outbox — por isso a 
 
 | Item | Situação |
 |---|---|
-| Suspensão > cortesia | desvio da arquitetura §6.1 — aguarda aceite |
+| Suspensão > cortesia/extensão | **APROVADA** (2026-11-24) — coberta por teste |
 | D-03 preço por loja · D-04 ADMIN conta no limite | PROPOSTA; nada aplicado |
 | D-11 domínio remetente/DNS/conta Resend | pendente do proprietário; sem isso só modo registro |
 | D-14 plano Vercel | cron diário até a decisão |

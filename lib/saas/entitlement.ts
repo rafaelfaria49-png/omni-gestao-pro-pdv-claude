@@ -29,8 +29,9 @@
  * Fronteiras são semiabertas: no instante EXATO de `trialEndsAt`/`graceEndsAt`/`currentPeriodEnd`
  * o acesso já é limitado (mesma regra do cron: `now() >= trialEndsAt`).
  *
- * Desvio documentado da arquitetura §6.1: suspensão prevalece sobre cortesia (falha segura —
- * suspender por fraude não pode ser anulado por uma cortesia esquecida). PENDENTE de aceite.
+ * Regra comercial APROVADA pelo proprietário (2026-11-24): suspensão administrativa prevalece sobre
+ * cortesia e sobre extensão do teste (ajusta a arquitetura §6.1, que dizia "cortesia sobrepõe
+ * qualquer estado").
  *
  * SAAS-001A: o resultado é só OBSERVADO (modo sombra). Nada aqui recusa acesso.
  */

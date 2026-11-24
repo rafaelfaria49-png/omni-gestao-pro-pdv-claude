@@ -15,7 +15,10 @@ import {
  * acesso — sem aplicar nenhuma. Garantias:
  *   · nunca lança: qualquer falha (inclusive coluna ausente num banco sem a migration) devolve
  *     `undefined` e o login segue exatamente como antes;
- *   · lojas legadas (`organizationId = NULL`) resolvem `pleno/legado` sem consultar assinatura;
+ *   · lojas legadas (`organizationId = NULL`) resolvem `pleno/legado` e NÃO entram no claim:
+ *     mapa presente + loja ausente = legado (custo zero no cookie para os clientes atuais);
+ *     mapa ausente = não calculado;
+ *   · tempo limite de `TEMPO_LIMITE_SOMBRA_MS`: banco lento nunca segura o login por mais que isso;
  *   · custo: 1 consulta indexada (`stores.id IN … AND organizationId IS NOT NULL`); quando há
  *     loja com organização, o Prisma acrescenta 2 consultas em lote (organizations, subscriptions)
  *     — constante, sem N+1;
@@ -57,10 +60,12 @@ export type EntitlementDb = {
 
 type Log = (linha: string) => void
 
+export const TEMPO_LIMITE_SOMBRA_MS = 1500
+
 export async function calcularEntitlementsSombra(
   db: EntitlementDb,
   storeIds: readonly string[],
-  opcoes: { agora?: Date; env?: Record<string, string | undefined>; log?: Log; logErro?: Log } = {},
+  opcoes: { agora?: Date; env?: Record<string, string | undefined>; log?: Log; logErro?: Log; tempoLimiteMs?: number } = {},
 ): Promise<Record<string, StoreEntitlementClaim> | undefined> {
   const log = opcoes.log ?? ((l) => console.info(l))
   const logErro = opcoes.logErro ?? ((l) => console.error(l))
@@ -73,7 +78,7 @@ export async function calcularEntitlementsSombra(
     const claims: Record<string, StoreEntitlementClaim> = {}
     if (ids.length === 0) return claims
 
-    const comOrganizacao = await db.store.findMany({
+    const consulta = db.store.findMany({
       where: { id: { in: ids }, organizationId: { not: null } },
       select: {
         id: true,
@@ -81,13 +86,16 @@ export async function calcularEntitlementsSombra(
         organization: { select: { subscription: { select: SELECT_ASSINATURA_ENTITLEMENT } } },
       },
     })
+    let relogioLimite: ReturnType<typeof setTimeout> | undefined
+    const limite = new Promise<never>((_, rejeitar) => { relogioLimite = setTimeout(() => rejeitar(new Error("tempo_limite")), opcoes.tempoLimiteMs ?? TEMPO_LIMITE_SOMBRA_MS) })
+    consulta.catch(() => {})
+    const comOrganizacao = await Promise.race([consulta, limite]).finally(() => clearTimeout(relogioLimite))
     const porLoja = new Map(comOrganizacao.map((l) => [l.id, l]))
 
     for (const id of ids) {
       const loja = porLoja.get(id)
-      const entitlement = loja
-        ? resolverEntitlement({ organizationId: loja.organizationId }, loja.organization?.subscription ?? null, agora)
-        : resolverEntitlement({ organizationId: null }, null, agora)
+      if (!loja) continue // legado: ausência no mapa calculado = pleno/legado
+      const entitlement = resolverEntitlement({ organizationId: loja.organizationId }, loja.organization?.subscription ?? null, agora)
       claims[id] = paraClaim(entitlement)
       if (entitlement.modo !== "pleno") observarDecisaoSombra(id, entitlement.modo, entitlement.motivo, agora.getTime(), log)
     }

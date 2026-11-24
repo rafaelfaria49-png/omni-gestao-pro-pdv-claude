@@ -44,13 +44,13 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
 describe("lojas legadas — comportamento idêntico", () => {
-  it("token mantém todos os campos de autorização e ganha só storeEntitlements legado/pleno", async () => {
+  it("token mantém todos os campos de autorização; lojas legadas não entram no claim (mapa vazio)", async () => {
     const t = await jwt({ sub: "u1", sessionVersion: 0 })
     expect(t).not.toBeNull()
     expect(t).toMatchObject({
       role: "GERENTE", accessScope: "STORE", platformAuthority: false, storeAccess: "restricted", lojaId: "loja-1",
       allowedStoreIdsJson: JSON.stringify(["loja-1", "nova"]), mustChangePassword: false,
-      storeEntitlements: { "loja-1": { modo: "pleno", motivo: "legado" }, nova: { modo: "pleno", motivo: "legado" } },
+      storeEntitlements: {},
     })
     expect(Object.keys(t?.storeModules ?? {})).toEqual(["loja-1", "nova"])
   })

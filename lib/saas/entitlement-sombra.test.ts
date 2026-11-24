@@ -20,14 +20,11 @@ function dbCom(linhas: Awaited<ReturnType<EntitlementDb["store"]["findMany"]>>) 
 beforeEach(() => reiniciarObservabilidadeSombra())
 
 describe("lojas legadas", () => {
-  it("todas as lojas sem organização resolvem legado/pleno", async () => {
+  it("lojas sem organização = mapa calculado e vazio (ausência = legado/pleno; custo zero no JWT)", async () => {
     const { db } = dbCom([])
     const claims = await calcularEntitlementsSombra(db, ["loja-1", "loja-2", "cliente-x"], { agora: AGORA, log: vi.fn() })
-    expect(claims).toEqual({
-      "loja-1": { modo: "pleno", motivo: "legado" },
-      "loja-2": { modo: "pleno", motivo: "legado" },
-      "cliente-x": { modo: "pleno", motivo: "legado" },
-    })
+    expect(claims).toEqual({})
+    expect(claims).not.toBeUndefined()
   })
   it("uma consulta só, filtrada por organizationId NOT NULL e pelos ids da sessão", async () => {
     const { db, findMany } = dbCom([])
@@ -48,7 +45,7 @@ describe("organizações em modo sombra", () => {
     const { db } = dbCom([{ id: "nova", organizationId: "org-1", organization: { subscription: assinatura("org-1") } }])
     const claims = await calcularEntitlementsSombra(db, ["nova", "loja-1"], { agora: AGORA, log })
     expect(claims?.nova).toEqual({ modo: "limitado", motivo: "teste_vencido", limitedSince: "2026-12-08T12:00:00.000Z" })
-    expect(claims?.["loja-1"]).toEqual({ modo: "pleno", motivo: "legado" })
+    expect(claims && "loja-1" in claims).toBe(false)
     expect(JSON.parse(log.mock.calls[0][0])).toEqual({ event: "saas_entitlement_shadow", v: 1, storeId: "nova", modo: "limitado", motivo: "teste_vencido", applied: false, suppressed: 0 })
     expect(contadoresEntitlementSombra()).toEqual({ "limitado:teste_vencido": 1 })
   })
@@ -105,17 +102,27 @@ describe("falha nunca afeta o login", () => {
     const { db } = dbCom([])
     const a = await calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, env: { SAAS_ENTITLEMENT_ENFORCE: "on" }, log })
     await calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, env: { SAAS_ENTITLEMENT_ENFORCE: "on" }, log })
-    expect(a).toEqual({ "loja-1": { modo: "pleno", motivo: "legado" } })
+    expect(a).toEqual({})
     expect(log.mock.calls.filter(([l]) => String(l).includes("saas_entitlement_enforce_ignored"))).toHaveLength(1)
   })
 })
 
+describe("tempo limite da consulta sombra", () => {
+  it("banco lento: devolve undefined no prazo (login segue) e registra a falha", async () => {
+    const logErro = vi.fn()
+    const db = { store: { findMany: vi.fn(() => new Promise(() => {})) } } as unknown as EntitlementDb
+    const t0 = Date.now()
+    await expect(calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, logErro, tempoLimiteMs: 50 })).resolves.toBeUndefined()
+    expect(Date.now() - t0).toBeLessThan(1000)
+    expect(logErro).toHaveBeenCalledWith(JSON.stringify({ event: "saas_entitlement_shadow_failed", v: 1, suppressed: 0 }))
+  })
+})
+
 describe("tamanho do JWT", () => {
-  it("custo por loja = id + ≤ 40 bytes (legado); limitado com data < 100 bytes", async () => {
+  it("50 lojas legadas não acrescentam nada ao claim ({} = 2 bytes); limitado com data < 100 bytes", async () => {
     const ids = Array.from({ length: 50 }, (_, i) => `cliente-${"0".repeat(8)}-0000-4000-8000-${String(i).padStart(12, "0")}`)
     const legados = await calcularEntitlementsSombra(dbCom([]).db, ids, { agora: AGORA })
-    const soIds = ids.reduce((n, id) => n + id.length, 0)
-    expect(JSON.stringify(legados).length - soIds).toBeLessThanOrEqual(ids.length * 40 + 2)
+    expect(JSON.stringify(legados)).toBe("{}")
     const { db } = dbCom([{ id: "nova", organizationId: "o", organization: { subscription: assinatura("o") } }])
     const um = await calcularEntitlementsSombra(db, ["nova"], { agora: AGORA, log: vi.fn() })
     expect(JSON.stringify(um?.nova).length).toBeLessThan(100)
