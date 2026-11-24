@@ -34,6 +34,7 @@ import {
 } from "@/lib/financeiro/services/contas-receber-service"
 import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/movimentacoes-service"
 import { recalcularSaldoCarteira } from "@/lib/financeiro/services/carteiras-service"
+import { operacaoEstornadaNoLedger } from "@/lib/financeiro/recibo-recebimento"
 
 /** O lote SEMPRE roda dentro da transação do chamador — nunca no singleton global. */
 export type RecebimentoLoteTx = Prisma.TransactionClient
@@ -112,6 +113,8 @@ export type RecebimentoLoteErrorCode =
   | "saldo_divergente"
   | "titulo_alterado"
   | "movimentacao_financeira_falhou"
+  /** Financeiro HUB: títulos de clientes distintos (ou homônimos) num comprovante só. */
+  | "cliente_divergente"
 
 /**
  * Recusa do lote. É LANÇADA (não devolvida) para abortar a transação inteira; a rota a
@@ -452,6 +455,21 @@ export async function executarRecebimentoLote(
         "idempotency_conflict",
         409,
         "A idempotencyKey já foi usada com outro conteúdo econômico.",
+      )
+    }
+    // Estornada depois de gravada (mesma regra do Financeiro HUB): o retry não pode
+    // devolver "recebido" nem gerar comprovante de dinheiro que voltou ao cliente.
+    const titulosLote = await tx.contaReceberTitulo.findMany({
+      where: { storeId, localKey: { in: itens.map((i) => i.localKey) } },
+      select: { localKey: true, payload: true },
+    })
+    const estornados = titulosLote.filter((t) => operacaoEstornadaNoLedger(t.payload, input.idempotencyKey))
+    if (estornados.length > 0) {
+      throw new RecebimentoLoteError(
+        "titulo_alterado",
+        409,
+        "Esta operação foi estornada depois de registrada. Atualize a lista antes de receber de novo.",
+        estornados.map((t) => ({ localKey: t.localKey ?? "", motivo: "operacao_estornada" })),
       )
     }
     return {

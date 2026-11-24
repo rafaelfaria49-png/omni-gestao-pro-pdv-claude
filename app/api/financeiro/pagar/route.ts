@@ -21,7 +21,6 @@ import {
   buildContaPagarAuditTrail,
   buildContaPagarSummary,
   cancelContaPagar,
-  getContaPagarByLocalKey,
   liquidarContaPagar,
   registrarPagamentoParcialContaPagar,
   estornarContaPagar,
@@ -29,8 +28,14 @@ import {
 } from "@/lib/financeiro/services"
 import {
   createMovimentacaoSaidaFromPagar,
-  estornarMovimentacaoPorReferencia,
+  estornarMovimentacaoDePagamentoPagar,
 } from "@/lib/financeiro/services/movimentacoes-service"
+import {
+  sumPagamentosFromHistoricoPayloadContaPagar,
+  travarTituloContaPagar,
+} from "@/lib/financeiro/services/contas-pagar-service"
+import type { Prisma } from "@/generated/prisma"
+import { PAGAR_STATUS, normalizePagarStatus } from "@/lib/financeiro/contracts/status"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 
 export const runtime = "nodejs"
@@ -88,17 +93,36 @@ function parcelaLabelFromPayload(payload: unknown): string | null {
  * Resolve `carteiraId` do payload do título, validando que existe na loja e
  * está ativa. Retorna `null` quando ausente, inválido ou desativado.
  */
-async function resolveCarteiraIdFromPayload(payload: unknown, storeId: string): Promise<string | null> {
+async function resolveCarteiraIdFromPayload(
+  payload: unknown,
+  storeId: string,
+  db: Pick<Prisma.TransactionClient, "carteiraFinanceira"> = prisma,
+): Promise<string | null> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null
   const raw = (payload as Record<string, unknown>).carteiraId
   if (typeof raw !== "string") return null
   const id = raw.trim()
   if (!id) return null
-  const c = await prisma.carteiraFinanceira.findFirst({
+  const c = await db.carteiraFinanceira.findFirst({
     where: { id, storeId, ativo: true },
     select: { id: true },
   })
   return c?.id ?? null
+}
+
+/** Recusa dentro da transação do PATCH: desfaz tudo e vira a resposta `${op}_${reason}`. */
+class FalhaPagar extends Error {
+  constructor(readonly reason: string, readonly status: number) {
+    super(reason)
+  }
+}
+
+/** Recusas de concorrência/identidade = 409 (nada gravado; atualizar e tentar de novo). */
+const STATUS_RECUSA_PAGAR: Record<string, number> = {
+  titulo_alterado: 409,
+  historico_ambiguo: 409,
+  pagamento_ja_estornado: 409,
+  pagamento_nao_encontrado: 404,
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -125,6 +149,8 @@ const patchSchema = z.discriminatedUnion("op", [
     lojaId: z.string().max(120).optional(),
     localKey: z.string().min(1).max(260),
     observacao: z.string().max(2000).optional(),
+    /** Saldo em aberto que o operador viu. Diferente do atual = 409 sem escrita (retry/clique duplo). */
+    restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("parcial"),
@@ -132,12 +158,17 @@ const patchSchema = z.discriminatedUnion("op", [
     localKey: z.string().min(1).max(260),
     valor: z.number().finite().positive("Valor deve ser positivo"),
     observacao: z.string().max(2000).optional(),
+    restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("estornar"),
     lojaId: z.string().max(120).optional(),
     localKey: z.string().min(1).max(260),
     motivo: z.string().max(2000).optional(),
+    /** Identidade do pagamento (índice no `historico`). Já estornado = 409 sem escrita. */
+    pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(),
+    /** Pago que o operador viu. Diferente do atual = 409 sem escrita (2º clique/retry seguro). */
+    pagoEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("cancelar"),
@@ -345,58 +376,83 @@ export async function PATCH(req: Request) {
       }
     }
 
-    if (parsed.data.op === "liquidar") {
-      // Saldo REAL em aberto ANTES de quitar (valor − pagamentos já no histórico).
-      // `res.data.valor` é a coluna BRUTA e NÃO diminui em baixas parciais via backend —
-      // usá-lo lançaria mais que o devido na saída de caixa/auditoria de títulos já parciais.
-      const atual = await getContaPagarByLocalKey(storeId, parsed.data.localKey)
-      const abertoAntes = atual ? buildContaPagarAuditTrail([atual])[0]?.restante ?? 0 : 0
+    if (parsed.data.op === "liquidar" || parsed.data.op === "parcial" || parsed.data.op === "estornar") {
+      // Título TRAVADO (FOR UPDATE) + ledger (CAS) + movimentação + carteira numa ÚNICA
+      // transação. Antes a movimentação era gravada depois, fora da transação, com
+      // heurísticas de soma (a 2ª parcial menor e o novo pagamento após um estorno ficavam
+      // sem saída) e o estorno revertia o líquido inteiro do título, não o pagamento.
+      const d = parsed.data
+      try {
+        const out = await prisma.$transaction(async (tx) => {
+          const tituloId = await travarTituloContaPagar(tx, storeId, { localKey: d.localKey })
+          if (!tituloId) throw new FalhaPagar("not_found", 422)
+          const atual = await tx.contaPagarTitulo.findFirst({ where: { id: tituloId, storeId } })
+          if (!atual) throw new FalhaPagar("not_found", 422)
 
-      const res = await liquidarContaPagar({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel })
-      if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
-      const valorMov = abertoAntes > 0 ? abertoAntes : res.data.valor
-      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
-      // Gerar movimentação de saída (idempotente) — vincula à carteira do título se houver
-      await createMovimentacaoSaidaFromPagar(
-        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
-        valorMov,
-        { carteiraId },
-      ).catch((e) => console.error("[pagar/liquidar mov]", e))
-      void logAuditoriaFinanceira({
-        storeId, entidade: "pagar", entidadeId: res.data.id, acao: "liquidar", actor,
-        depois: { localKey: parsed.data.localKey, valor: valorMov, carteiraId },
-      })
-      return NextResponse.json({ ok: true, op: "liquidar" })
-    }
+          if (d.op === "estornar") {
+            const pagoAntes = sumPagamentosFromHistoricoPayloadContaPagar(atual.payload)
+            if (d.pagoEsperado !== undefined && Math.abs(pagoAntes - d.pagoEsperado) > 0.009) {
+              throw new FalhaPagar("titulo_alterado", 409)
+            }
+            const res = await estornarContaPagar({
+              storeId, id: tituloId, modo: "ultimo_pagamento", pagamentoIndex: d.pagamentoIndex,
+              motivo: d.motivo, userLabel, db: tx,
+            })
+            if (!res.ok) throw new FalhaPagar(res.reason, STATUS_RECUSA_PAGAR[res.reason] ?? 422)
+            const pagoDepois = sumPagamentosFromHistoricoPayloadContaPagar(res.data.payload)
+            const valorEstornado = Math.round(Math.max(0, pagoAntes - pagoDepois) * 100) / 100
+            const mov =
+              valorEstornado > 0.009
+                ? await estornarMovimentacaoDePagamentoPagar(tx, { storeId, tituloId, valor: valorEstornado, pagoRestante: pagoDepois })
+                : { valor: 0, divergente: false, movimentacaoId: null }
+            return { titulo: res.data, valor: valorEstornado, movimentacao: mov, carteiraId: null as string | null }
+          }
 
-    if (parsed.data.op === "parcial") {
-      const res = await registrarPagamentoParcialContaPagar({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel })
-      if (!res.ok) return err(res.reason, `parcial_${res.reason}`, 422)
-      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
-      // Gerar movimentação de saída parcial (idempotente por soma total)
-      await createMovimentacaoSaidaFromPagar(
-        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
-        parsed.data.valor,
-        { parcial: true, carteiraId },
-      ).catch((e) => console.error("[pagar/parcial mov]", e))
-      void logAuditoriaFinanceira({
-        storeId, entidade: "pagar", entidadeId: res.data.id, acao: "liquidar", actor,
-        depois: { localKey: parsed.data.localKey, valorPago: parsed.data.valor, parcial: true, carteiraId },
-      })
-      return NextResponse.json({ ok: true, op: "parcial" })
-    }
+          if (d.op === "liquidar" && normalizePagarStatus(atual.status) === PAGAR_STATUS.PAGO) {
+            // Contrato anterior: liquidar um título já pago responde ok sem gravar nada.
+            return { titulo: atual, valor: 0, movimentacao: null, carteiraId: null as string | null }
+          }
+          // Saldo REAL em aberto ANTES de quitar (valor − pagamentos já no histórico): a
+          // coluna `valor` é BRUTA e não diminui em baixas parciais.
+          const abertoAntes = buildContaPagarAuditTrail([atual])[0]?.restante ?? 0
+          // Pré-condição do chamador: um retry depois de um pagamento já gravado (resposta
+          // perdida, clique duplo) encontra outro saldo e é recusado em vez de pagar de novo.
+          if (d.restanteEsperado !== undefined && Math.abs(abertoAntes - d.restanteEsperado) > 0.009) {
+            throw new FalhaPagar("titulo_alterado", 409)
+          }
+          const res =
+            d.op === "liquidar"
+              ? await liquidarContaPagar({ storeId, id: tituloId, observacao: d.observacao, userLabel, db: tx })
+              : await registrarPagamentoParcialContaPagar({ storeId, id: tituloId, valorPago: d.valor, observacao: d.observacao, userLabel, db: tx })
+          if (!res.ok) throw new FalhaPagar(res.reason, STATUS_RECUSA_PAGAR[res.reason] ?? 422)
+          const valor = d.op === "liquidar" ? abertoAntes : d.valor
+          const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId, tx)
+          const mov = await createMovimentacaoSaidaFromPagar(
+            { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
+            valor,
+            { parcial: d.op === "parcial", carteiraId, db: tx, idempotenciaDoChamador: true },
+          )
+          // Escrita financeira NÃO é best-effort: sem saída, o pagamento não vale.
+          if (!mov.ok) throw new FalhaPagar("movimentacao_financeira_falhou", 503)
+          return { titulo: res.data, valor, movimentacao: mov, carteiraId }
+        }, { maxWait: 5_000, timeout: 15_000 })
 
-    if (parsed.data.op === "estornar") {
-      const res = await estornarContaPagar({ storeId, localKey: parsed.data.localKey, modo: "ultimo_pagamento", motivo: parsed.data.motivo, userLabel })
-      if (!res.ok) return err(res.reason, `estornar_${res.reason}`, 422)
-      // Estornar movimentação correspondente (idempotente)
-      await estornarMovimentacaoPorReferencia(storeId, res.data.id, "pagar")
-        .catch((e) => console.error("[pagar/estornar mov]", e))
-      void logAuditoriaFinanceira({
-        storeId, entidade: "pagar", entidadeId: res.data.id, acao: "estornar", actor,
-        depois: { localKey: parsed.data.localKey, motivo: parsed.data.motivo },
-      })
-      return NextResponse.json({ ok: true, op: "estornar" })
+        if (out.valor > 0) {
+          void logAuditoriaFinanceira({
+            storeId, entidade: "pagar", entidadeId: out.titulo.id, acao: d.op === "estornar" ? "estornar" : "liquidar", actor,
+            depois:
+              d.op === "estornar"
+                ? { localKey: d.localKey, motivo: d.motivo, valorEstornado: out.valor, movimentacao: out.movimentacao }
+                : { localKey: d.localKey, valor: out.valor, ...(d.op === "parcial" ? { parcial: true } : {}), carteiraId: out.carteiraId },
+          })
+        }
+        return NextResponse.json(
+          d.op === "estornar" ? { ok: true, op: d.op, valorEstornado: out.valor } : { ok: true, op: d.op, valorPago: out.valor },
+        )
+      } catch (e) {
+        if (e instanceof FalhaPagar) return err(e.reason, `${d.op}_${e.reason}`, e.status)
+        throw e
+      }
     }
 
     // cancelar — não gera movimentação nova

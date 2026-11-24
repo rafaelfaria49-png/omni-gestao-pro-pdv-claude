@@ -71,6 +71,13 @@ const h = vi.hoisted(() => {
         for (const gancho of aoTravarOS.splice(0)) gancho();
         return [{ lock: "" }];
       }
+      // Entradas/compensações de caixa do título (`lerOperacoesCaixaDoTitulo`): faz JOIN em
+      // `sessoes_caixa`, por isso vem antes da trava de sessão. Valores: storeId, tituloId, …, localKey.
+      if (sql.includes("caixa_operacoes")) {
+        return caixaOps
+          .filter((o) => o.storeId === values[0] && (o.payload?.tituloId === values[1] || o.payload?.localKey === values[3]))
+          .map((o) => ({ ...o, sessaoStatus: "ABERTA" }));
+      }
       if (sql.includes("sessoes_caixa")) return caixaAberta ? [{ id: values[0], status: "ABERTA" }] : [];
       if (sql.includes("ordens_servico")) {
         const r = ordens.get(values[0] as string);
@@ -213,6 +220,7 @@ vi.mock("@/lib/financeiro/services/fechamento-service", () => ({
 }));
 vi.mock("@/lib/financeiro/services/movimentacoes-service", () => ({
   createMovimentacaoEntradaFromReceber: vi.fn(async () => ({ ok: true, action: "created" })),
+  estornarMovimentacaoDePagamentoReceber: vi.fn(async (_db: unknown, i: { valor: number }) => ({ valor: i.valor, divergente: false, movimentacaoId: "mov-estorno" })),
 }));
 // GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019: cancelamento restaura estoque via
 // adapter oficial — mockado aqui porque este arquivo testa a chave única de CR

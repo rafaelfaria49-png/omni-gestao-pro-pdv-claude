@@ -5,7 +5,7 @@ import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
 import { buildContaReceberAuditTrail, buildContaReceberSummary } from "@/lib/financeiro/services"
-import { mapearNomesAmbiguos } from "@/lib/contas-receber-cliente-match"
+import { mapearNomesAmbiguos, resumirClientesComAberto, type ClienteComAberto } from "@/lib/contas-receber-cliente-match"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -109,12 +109,23 @@ export async function GET(req: Request) {
 
     // Identifica nomes homônimos da loja para o gate de matching fail-closed
     let nomesAmbiguos: string[] = []
+    /**
+     * Lista inicial do recebimento F5/F9: clientes com saldo em aberto NESTA loja,
+     * casados pelo mesmo matcher fail-closed do modal (sem homônimo, sem outra loja).
+     */
+    let clientesComAberto: ClienteComAberto[] = []
     if (prisma.cliente) {
       const clientes = await prisma.cliente.findMany({
         where: { storeId: lojaId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, phone: true, document: true },
       })
-      nomesAmbiguos = Array.from(mapearNomesAmbiguos(clientes))
+      const ambiguos = mapearNomesAmbiguos(clientes)
+      nomesAmbiguos = Array.from(ambiguos)
+      clientesComAberto = resumirClientesComAberto(
+        clientes,
+        out.map((r) => ({ clienteId: r.clienteId, cliente: r.cliente, saldoAberto: Number(r.saldoAberto ?? 0) })),
+        { nomesAmbiguos: ambiguos },
+      )
     }
 
     const generatedAt = new Date().toISOString()
@@ -125,6 +136,7 @@ export async function GET(req: Request) {
       summary,
       audit,
       nomesAmbiguos,
+      clientesComAberto,
       metadata: {
         source: "server",
         storeId: lojaId,

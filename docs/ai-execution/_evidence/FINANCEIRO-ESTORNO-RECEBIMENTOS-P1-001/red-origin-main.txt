@@ -1,0 +1,42 @@
+# RED — test/fin-estorno-p1/estorno-recebimentos.pg.ts contra origin/main 464190a (sem a correção)
+
+     × 1. pagamento único (PDV, caixa aberto) + estorno pelo Financeiro: ledger, movimentação e caixa voltam ao zero 173ms
+     × 2+3. dois parciais (100 + 50) no PDV: as duas entradas existem; estornar o 2º desfaz SÓ os 50 33ms
+     × 4. estorno posterior do 1º pagamento: mais 100 de saída, caixa zerado, título pendente 31ms
+     × 5. estornar de novo o MESMO pagamento (pagamentoIndex) é recusado sem nenhuma escrita 29ms
+     × 5b. sem pagamento ativo: 'estornar último' não reverte nada de novo 26ms
+     × 6+7. recebimento PDV (caixa aberto, dinheiro) estornado no HUB: a gaveta perde exatamente o valor 23ms
+     × 8. recebimento direto no Financeiro HUB (sem caixa): estorno exato e NENHUMA operação de caixa inventada 17ms
+     × 9. lote com múltiplos títulos: estornar um título compensa só o item dele na operação do lote 26ms
+     × 12. caixa FECHADO: estorno bloqueado com orientação; nada é gravado e a sessão fechada não muda 19ms
+     × 13. outra loja: não estorna título alheio nem compensa operação de caixa de outra loja 15ms
+     × 14a. legado sem identidade e ambíguo (2 pagamentos de mesmo valor, só 1 no caixa): bloqueia sem escrever 11ms
+     × 14b. legado sem identidade mas inequívoco (1 pagamento, 1 entrada de caixa): estorna e compensa 14ms
+     × 14c. ledger legado com estorno sem referência ao pagamento: bloqueado (não adivinha qual voltou) 15ms
+     × 14d. legado cuja entrada da 2ª parcial nunca foi gravada: o estorno não cria saída sem entrada 11ms
+     × 10a. dois estornos simultâneos do MESMO pagamento: exatamente um vale 20ms
+     × 10b. recebimento e estorno simultâneos no mesmo título: estado final sempre conciliado 20ms
+     × 11. falha simulada no meio (insert de caixa): nada do estorno persiste 38ms
+     × estorno por referência (cancelamento de venda) depois de um estorno parcial reverte o LÍQUIDO restante 22ms
+     × modo título completo com dois pagamentos no caixa: compensa cada um, uma vez 24ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 19 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [] to have a length of 1 but got +0
+AssertionError: expected [ 100 ] to deeply equal [ 100, 50 ]
+AssertionError: expected 50 to be +0 // Object.is equality
+AssertionError: expected 200 to be 409 // Object.is equality
+AssertionError: expected 200 to be 422 // Object.is equality
+AssertionError: expected 100 to be 30 // Object.is equality
+AssertionError: expected [ 100 ] to deeply equal [ 100, 50 ]
+AssertionError: expected [] to deeply equal [ 40 ]
+AssertionError: expected 200 to be 409 // Object.is equality
+AssertionError: expected 422 to be 404 // Object.is equality
+AssertionError: expected 200 to be 409 // Object.is equality
+AssertionError: expected [] to deeply equal [ 80 ]
+AssertionError: expected 200 to be 409 // Object.is equality
+AssertionError: expected [ 100 ] to deeply equal []
+AssertionError: expected [ 200, 422 ] to deeply equal [ 200, 409 ]
+AssertionError: expected 100 to be close to +0, received difference is 100, but expected 0.005
+AssertionError: expected 200 to be 503 // Object.is equality
+AssertionError: expected [ 100 ] to deeply equal [ 50, 100 ]
+AssertionError: expected [ 100 ] to deeply equal [ 150 ]
+      Tests  19 failed (19)

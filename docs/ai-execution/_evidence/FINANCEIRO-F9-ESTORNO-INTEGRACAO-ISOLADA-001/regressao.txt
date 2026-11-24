@@ -1,0 +1,24 @@
+# Operações V3 PG (test/ops-v3-recebimento-misto, todos os *.pg.ts) — main 464190a × integração
+{
+ "baseTotal": 109,
+ "headTotal": 109,
+ "newFailures": 0,
+ "fixedVsBase": 0,
+ "testsOnlyInHead": 0
+}
+ops-v3-basemain.json passed 6 failed 103
+ops-v3-integ.json passed 6 failed 103
+Causa comum das falhas: sessão simulada { storeAccess: "all" } sem allowedStoreIds → canAccessStore recusa ("Sem permissão para esta unidade").
+
+# Vitest amplo — main × integração (Node 26)
+{
+ "baseTotal": 3120,
+ "headTotal": 3194,
+ "newFailures": 4,
+ "fixedVsBase": 0,
+ "testsOnlyInHead": 74
+}
+NEW FAIL: lib/pdv/parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido classic: F9 não abre recebimento por cima do pagamento aberto (F12)
+NEW FAIL: lib/pdv/parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido assistencia: F9 não abre recebimento por cima do pagamento aberto (F12)
+NEW FAIL: lib/pdv/parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido supermercado: F9 não abre recebimento por cima do pagamento aberto (F12)
+NEW FAIL: lib/pdv/parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido Classic F9 com caixa fechado tenta recuperar a sessão e não abre o recebimento

@@ -1,0 +1,35 @@
+# hardening-002.pg.ts contra o head anterior da #397 (70e2d2e, sem e5933cc) — RED
+     × H1. fechamento em voo commita primeiro → o F9 espera, vê FECHADA e recusa sem escrever nada 21677ms
+     × H2. recebimento em voo → o fechamento espera ele terminar; a entrada fica na sessão ANTES do fechamento 22949ms
+     × H3. resposta perdida + caixa fechado depois → o retry com a mesma chave devolve o original (replay), sem escrever 477ms
+     × P1. integral: liquidar 300 → UMA saída 300; liquidar de novo responde ok sem gravar 108ms
+     × P2. parciais 100 + 50 (a 2ª MENOR) → saídas [100, 50]; liquidar o resto → +150 116ms
+     × P3. estorno do último (50): entrada EXATA de 50, ref ao pagamento 1, saldo devedor 200 116ms
+     × P4. pagar 100 → estornar → pagar 100 → pagar 50 → estornar o último: só os 50 voltam 77ms
+     × P5. dois estornos seguidos estornam pagamentos DIFERENTES (antes: o mesmo 50 duas vezes) 116ms
+     × P6. três pagamentos IGUAIS (50) → dois estornos atingem os índices 2 e 1, nunca o mesmo 135ms
+     × P7. clique duplo simultâneo com pagoEsperado → UM estorno; o outro 409 sem escrita 410ms
+     × P8. retry do estorno depois da resposta perdida (mesmo pagoEsperado) → 409, nada muda 236ms
+     × P9. pagamento e estorno CONCORRENTES no mesmo título → serializados; nenhum lançamento perdido 63ms
+     × P10. índice explícito: estornar o pagamento 0 quando há 0 e 1; repetir o índice → 409 pagamento_ja_estornado 112ms
+     × P11. histórico ambíguo (estorno legado sem referência, ou o mesmo índice estornado 2×) → 409 sem escrita 66ms
+     × P12. Relatório Geral: pagamentos e estornos do Pagar aparecem com o valor exato, sem venda nem recebimento 1314ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  15 failed | 2 passed (17)
+
+## motivo por teste
+H1	Error: nenhuma espera por trava (mínimo 1) em 15000 ms: [{"pid":16160,"state":"idle in transaction","wait_event_type":"Client","wait_event":"ClientRead","query":"UPDATE \"sessoes_caixa\" SET \"status\" = 'FECHADA', \
+H2	Error: nenhuma espera por trava (mínimo 2) em 15000 ms: [{"pid":16160,"state":"idle in transaction","wait_event_type":"Client","wait_event":"ClientRead","query":"UPDATE \"sessoes_caixa\" SET \"status\" = 'FECHADA', \
+H3	AssertionError: expected 409 to be 200 // Object.is equality
+P1	AssertionError: expected undefined to be 300 // Object.is equality
+P2	AssertionError: expected undefined to be 150 // Object.is equality
+P3	AssertionError: expected undefined to be 50 // Object.is equality
+P4	AssertionError: expected undefined to be 100 // Object.is equality
+P5	AssertionError: expected undefined to be 50 // Object.is equality
+P6	AssertionError: expected [ 2, 2 ] to deeply equal [ 2, 1 ]
+P7	AssertionError: expected [ 200, 200 ] to deeply equal [ 200, 409 ]
+P8	AssertionError: expected 200 to be 409 // Object.is equality
+P9	AssertionError: expected [ { …(4) } ] to have a length of 2 but got 1
+P10	AssertionError: expected undefined to be 100 // Object.is equality
+P11	AssertionError: expected 200 to be 409 // Object.is equality
+P12	AssertionError: expected 100 to be close to 150, received difference is 50, but expected 0.005

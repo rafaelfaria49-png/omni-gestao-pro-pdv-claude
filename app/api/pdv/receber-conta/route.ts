@@ -31,6 +31,7 @@ import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { logAuditoriaFinanceira, extractAuditoriaActor } from "@/lib/financeiro/services/auditoria-actor"
 import { PAY_EPS } from "@/lib/financeiro/contracts/valores"
+import { momentoDaOperacao, operacaoEstornadaNoLedger } from "@/lib/financeiro/recibo-recebimento"
 import type { Prisma } from "@/generated/prisma"
 
 export const runtime = "nodejs"
@@ -164,23 +165,26 @@ export async function POST(request: Request) {
       )
     }
 
-    const sessao = await prisma.sessaoCaixa.findFirst({
-      where: { id: parsed.data.sessaoId, storeId, status: "ABERTA" },
-      select: { id: true },
-    })
-    if (!sessao) {
-      return NextResponse.json(
-        { ok: false, error: "Sessão de caixa não encontrada ou já fechada. Abra o caixa no PDV.", code: "caixa_fechado" },
-        { status: 409 },
-      )
-    }
-
     const parcial = parsed.data.op === "parcial"
+    const sessao = { id: parsed.data.sessaoId }
 
     // Título + histórico + movimentação + operação de caixa numa ÚNICA unidade
     // transacional. Qualquer falha aqui desfaz a baixa — nada de título quitado sem
     // lançamento financeiro correspondente.
     const outcome = await prisma.$transaction(async (tx) => {
+      // Sessão relida e TRAVADA dentro da transação (FOR SHARE, ordem sessão → título — a
+      // mesma do estorno e da Operações V3). O fechamento (`UPDATE … FECHADA`) espera este
+      // recebimento terminar; se fechou antes, esta leitura já vê FECHADA. Antes a sessão era
+      // conferida fora da transação e sem trava: um fechamento no meio deixava o recebimento
+      // cair numa sessão já fechada.
+      const sessaoRows = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT "status"::text AS status FROM "sessoes_caixa"
+        WHERE "id" = ${sessao.id} AND "storeId" = ${storeId}
+        FOR SHARE
+      `
+      const sessaoStatus = sessaoRows[0]?.status ?? null
+      if (!sessaoStatus) return { kind: "erro" as const, code: "caixa_fechado", status: 409 }
+
       const atual = ref.id
         ? await getContaReceberById(storeId, ref.id, tx)
         : await getContaReceberByLocalKey(storeId, ref.localKey!, tx)
@@ -208,8 +212,16 @@ export async function POST(request: Request) {
         select: { id: true, valor: true },
       })
       if (jaRegistrada) {
+        // Estornada depois de gravada: o retry não pode devolver "recebido" nem comprovante.
+        if (operacaoEstornadaNoLedger(atual.payload, parsed.data.idempotencyKey)) {
+          return { kind: "erro" as const, code: "operacao_estornada", status: 409 }
+        }
         return { kind: "replay" as const, titulo: atual, valorMov: jaRegistrada.valor }
       }
+
+      // Operação NOVA só em sessão aberta. (O replay acima vale mesmo depois do fechamento:
+      // a resposta perdida devolve o recebimento original, sem escrever nada.)
+      if (sessaoStatus !== "ABERTA") return { kind: "erro" as const, code: "caixa_fechado", status: 409 }
 
       // O service é a autoridade sobre a recusa (`ja_pago` / `nada_em_aberto` /
       // `titulo_encerrado`) e não escreve nada quando recusa.
@@ -220,6 +232,10 @@ export async function POST(request: Request) {
             localKey: ref.localKey,
             valorPago: parsed.data.valor!,
             observacao,
+            // Forma e identidade da operação no LEDGER do título: base da 2ª via do
+            // comprovante (sem elas, a reimpressão não saberia a forma nem a operação).
+            formaPagamento: forma,
+            loteId: parsed.data.idempotencyKey?.trim() || undefined,
             userLabel,
             tituloSnapshot: atual,
             db: tx,
@@ -229,6 +245,8 @@ export async function POST(request: Request) {
             id: ref.id,
             localKey: ref.localKey,
             observacao,
+            formaPagamento: forma,
+            loteId: parsed.data.idempotencyKey?.trim() || undefined,
             userLabel,
             tituloSnapshot: atual,
             db: tx,
@@ -245,10 +263,19 @@ export async function POST(request: Request) {
       const mov = await createMovimentacaoEntradaFromReceber(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
         valorMov,
-        { parcial, carteiraId, db: tx },
+        // A identidade da operação é o `localId` checado acima, na MESMA transação. A
+        // heurística de soma do service suprimia a 2ª parcial menor (dinheiro no caixa sem
+        // entrada no financeiro) e a reliquidação depois de um estorno.
+        { parcial, carteiraId, db: tx, idempotenciaDoChamador: true },
       )
       // Escrita financeira NÃO é best-effort: sem movimentação, a baixa não vale.
       if (!mov.ok) throw new Error(`movimentacao_financeira_falhou:${mov.reason}`)
+
+      // Identidade do pagamento no ledger (índice da entrada que o service acabou de
+      // apendar): é por ela que o estorno pelo Financeiro acha ESTA entrada de caixa.
+      const hist = (res.data.payload as Record<string, unknown> | null)?.historico
+      const historicoIndex = Array.isArray(hist) ? hist.length - 1 : -1
+      if (historicoIndex < 0) throw new Error("historico_sem_pagamento")
 
       await tx.caixaOperacao.create({
         data: {
@@ -264,6 +291,7 @@ export async function POST(request: Request) {
             localKey: res.data.localKey,
             formaPagamento: forma,
             op: parsed.data.op,
+            historicoIndex,
           } as Prisma.InputJsonValue,
         },
       })
@@ -272,8 +300,10 @@ export async function POST(request: Request) {
     }, TX_OPTS)
 
     if (outcome.kind === "erro") {
+      const error =
+        outcome.code === "caixa_fechado" ? "Sessão de caixa não encontrada ou já fechada. Abra o caixa no PDV." : outcome.code
       return NextResponse.json(
-        { ok: false, error: outcome.code, code: outcome.code },
+        { ok: false, error, code: outcome.code },
         { status: outcome.status },
       )
     }
@@ -301,6 +331,11 @@ export async function POST(request: Request) {
       valorRecebido: valorMov,
       /** true = operação já registrada antes (retry); nada foi gravado de novo. */
       jaRegistrado: replay,
+      /** Identidade da operação (carimbada no histórico) — usada no comprovante. */
+      operacaoId: parsed.data.idempotencyKey?.trim() || null,
+      // Hora do LEDGER (no replay, a da gravação original — não a do retry).
+      recebidoEm: momentoDaOperacao(titulo.payload, parsed.data.idempotencyKey) ?? new Date().toISOString(),
+      formaPagamento: forma,
       titulo: {
         id: titulo.id,
         localKey: titulo.localKey,

@@ -1,0 +1,68 @@
+# E2E aceite 002 — build local 127.0.0.1:3007, PG descartável fin_receb_f9_qa_e2e
+## Sem a correção do Toaster (build anterior): vermelho
+    Error: Timed out 25000ms waiting for expect(locator).toBeVisible()
+    Locator: locator('[data-sonner-toast]').filter({ hasText: 'Recebimento estornado' })
+    test-results\specs-financeiro-f9-estorn-100f9-e-Relatório-Geral-pela-tela-chromium\test-failed-1.png
+[1A[2K  1 failed
+  1 did not run
+  1 passed (31.2s)
+## Com a correção — rodada 1
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (899ms)
+  ok 2 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:79:5 › Aceite 002 — PDV 100 + 50, estorno do 2º pelo HUB, 2ª via, Fechamento de Caixa e Relatório Geral pela tela (9.6s)
+  ok 3 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:290:5 › Aceite 002 — terminal ocupado por outro computador: supervisor assume pelo fluxo real (2.7s)
+  3 passed (15.4s)
+## Com a correção — rodada 2
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (810ms)
+  ok 2 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:79:5 › Aceite 002 — PDV 100 + 50, estorno do 2º pelo HUB, 2ª via, Fechamento de Caixa e Relatório Geral pela tela (9.5s)
+  ok 3 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:290:5 › Aceite 002 — terminal ocupado por outro computador: supervisor assume pelo fluxo real (3.2s)
+  3 passed (15.6s)
+## Com a correção — rodada 3
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (1.0s)
+  ok 2 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:79:5 › Aceite 002 — PDV 100 + 50, estorno do 2º pelo HUB, 2ª via, Fechamento de Caixa e Relatório Geral pela tela (10.1s)
+  ok 3 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:290:5 › Aceite 002 — terminal ocupado por outro computador: supervisor assume pelo fluxo real (3.2s)
+  3 passed (16.6s)
+## Anotações (rodada JSON)
+passed autenticar e gravar sessão
+passed Aceite 002 — PDV 100 + 50, estorno do 2º pelo HUB, 2ª via, Fechamento de Caixa e Relatório Geral pela tela
+   relatorio-geral-deltas {"recebimentosValor":150,"recebimentosQtd":2,"estornosValor":-50,"estornosQtd":1,"recebimentosLiquidos":100,"caixaSessoes":100,"ledgerTitulos":100,"divergencias":0}
+   relatorio-geral-detalhe [{"id":"titulo:receber:cmwrzbidd0005h2xg0xyf3gni","date":"2026-12-20","record":"Título a receber","origin":"Não classificado","category":"Não classificado","status":"Em aberto","reference":"cmwrzbidd0005h2xg0xyf3gni","amount":300,"open":200,"href":"/dashboard/relatorios/geral?source=titulo%3Areceber%3Acmwrzbidd0005h2xg0xyf3gni&from=2026-11-22&to=2026-11-22"},{"id":"mov:cmwrzbjfq002wh25gmvd6psq7","date":"2026-11-22T15:15:56.582Z","record":"Movimento financeiro","origin":"Estorno / devolução","category":"Estornos de recebimento","status":"Realizado no ledger","reference":"cmwrzbidd0005h2xg0xyf3gni","amount":-50,"open":null,"href":"/dashboard/relatorios/fluxo-caixa?source=cmwrzbjfq002wh25gmvd6p
+   resumo-fechamento {"saldoFinal":100,"saldoContado":100,"recebidoPorOrigem":{"total":100,"osRecebidas":0,"vendasAVista":0,"origemSeparada":true,"qtdOsRecebidas":0,"contasRecebidas":150,"qtdContasRecebidas":2,"estornosRecebimento":50,"qtdEstornosRecebimento":1},"gavetaDinheiro":{"abertura":0,"esperado":100,"sangrias":0,"dinheiroOs":0,"suprimentos":0,"dinheiroContas":150,"dinheiroVendas":0,"estornosDinheiro":50}}
+   estorno-caixa-fechado 409 {"ok":false,"error":"Este pagamento entrou num caixa que já foi fechado. O estorno não altera sessões fechadas: registre a devolução no caixa atual (sangria/devolução) e ajuste o fechamento pelo procedimento de conciliação.","code":"estornar_caixa_sessao_fechada"}
+   estorno-caixa-fechado-aviso Este pagamento entrou num caixa que já foi fechado. O estorno não altera sessões fechadas: registre a devolução no caixa atual (sangria/devolução) e ajuste o fechamento pelo procedimento de conciliação.
+passed Aceite 002 — terminal ocupado por outro computador: supervisor assume pelo fluxo real
+## Regressão do HUB com a correção
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (1.4s)
+  ok 2 [chromium] › e2e\specs\04-financeiro-v2.spec.ts:5:7 › Financeiro HUB v2 › carrega shell, abas e conteúdo principal (1.3s)
+  ok 3 [chromium] › e2e\specs\07-financeiro-relatorios-export.spec.ts:7:7 › Financeiro — Fase 2 (central relatórios + export) › abre central Relatórios e, no HUB, tab Relatórios com botões de exportação (1.9s)
+requestfailed GET http://127.0.0.1:3007/api/ops/inventory?lojaId=loja-1&catalogSync=1&versionOnly=1 net::ERR_ABORTED
+requestfailed GET http://127.0.0.1:3007/api/ops/vendas-list?lojaId=000-qa-fin-f9 net::ERR_ABORTED
+requestfailed GET http://127.0.0.1:3007/api/version net::ERR_ABORTED
+  ok 4 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:48:5 › Financeiro HUB — parcial com comprovante real, lote por cliente numa operação e 2ª via sem nova baixa (6.8s)
+  ok 5 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:158:5 › PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e oferece comprovante (3.7s)
+  ok 6 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:226:5 › Financeiro HUB — integral, lote de 3 numa operação, tela de sucesso após a recarga, estorno e cupom 58 mm (9.0s)
+  6 passed (26.7s)
+## 06-pdv-caixa-historico — integração (seguido e espaçado >120 s) e main 464190a
+### e2e-06-integ-seguido
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (1.2s)
+  x  2 [chromium] › e2e\specs\06-pdv-caixa-historico.spec.ts:5:7 › PDV — Fase 2 (caixa + histórico) › abre caixa, confirma aberto e navega para histórico de vendas (45.8s)
+    Error: Timed out 45000ms waiting for expect(locator).toBeVisible()
+      - waiting for getByPlaceholder(/Código \/ Bipe|Buscar produto|Digite produto|código/i)
+    test-results\specs-06-pdv-caixa-histori-210f1-ga-para-histórico-de-vendas-chromium\test-failed-1.png
+  1 failed
+  1 passed (49.1s)
+### e2e-06-integ-espacado
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (921ms)
+  x  2 [chromium] › e2e\specs\06-pdv-caixa-historico.spec.ts:5:7 › PDV — Fase 2 (caixa + histórico) › abre caixa, confirma aberto e navega para histórico de vendas (45.7s)
+    Error: Timed out 45000ms waiting for expect(locator).toBeVisible()
+      - waiting for getByPlaceholder(/Código \/ Bipe|Buscar produto|Digite produto|código/i)
+    test-results\specs-06-pdv-caixa-histori-210f1-ga-para-histórico-de-vendas-chromium\test-failed-1.png
+  1 failed
+  1 passed (48.8s)
+### e2e-06-main
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (3.0s)
+  x  2 [chromium] › e2e\specs\06-pdv-caixa-historico.spec.ts:5:7 › PDV — Fase 2 (caixa + histórico) › abre caixa, confirma aberto e navega para histórico de vendas (46.0s)
+    Error: Timed out 45000ms waiting for expect(locator).toBeVisible()
+      - waiting for getByPlaceholder(/Código \/ Bipe|Buscar produto|Digite produto|código/i)
+    test-results\specs-06-pdv-caixa-histori-210f1-ga-para-histórico-de-vendas-chromium\test-failed-1.png
+  1 failed
+  1 passed (51.7s)

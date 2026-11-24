@@ -1,0 +1,18 @@
+# Contraprova: mesma suíte sobre a #341 sozinha (6c4641f, sem a #384)
+
+     × B+C. estorna só os 50 (saldo 200, saída 50) e depois os 100 (saldo 300); 2ª via coerente; sem estorno duplicado 47ms
+     × entrada original e compensação na MESMA sessão, ligadas por referência; retry antigo e 2ª via recusados; relatório coerente 55ms
+     × PDV: lote de 2 títulos na gaveta; estornar um compensa só o item dele, apontando a operação do lote 48ms
+     × PDV e HUB devolvem o MESMO resultado (operação e hora do ledger) sem gravar de novo; estorno repetido é recusado 62ms
+     × estorno de pagamento cuja sessão fechou: 409 com orientação, nenhuma escrita, sessão intacta; 2ª via segue válida 52ms
+     × título de OUTRA loja: recebimento, estorno e 2ª via não leem nem gravam nada em nenhuma das lojas 26ms
+     × legado ambíguo (estorno sem referência ao pagamento): estorno bloqueado e nenhuma 2ª via, sem escrita 12ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected undefined to be 50 // Object.is equality
+AssertionError: expected [ 100 ] to deeply equal [ 50 ]
+AssertionError: expected [] to have a length of 1 but got +0
+AssertionError: expected undefined to be 20 // Object.is equality
+AssertionError: expected 200 to be 409 // Object.is equality
+AssertionError: expected 422 to be 404 // Object.is equality
+AssertionError: expected 200 to be 409 // Object.is equality
+      Tests  7 failed | 7 passed (14)

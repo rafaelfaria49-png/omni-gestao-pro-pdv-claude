@@ -49,8 +49,10 @@ import {
   estornarContaReceber,
   upsertContaReceber,
   sumPagamentosFromHistoricoPayload,
+  pagamentosAtivosDoHistorico,
 } from "@/lib/financeiro/services/contas-receber-service";
-import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/movimentacoes-service";
+import { lerOperacoesCaixaDoTitulo, localizarEntradaCaixaDoPagamento } from "@/lib/financeiro/services/estorno-recebimento-service";
+import { createMovimentacaoEntradaFromReceber, estornarMovimentacaoDePagamentoReceber } from "@/lib/financeiro/services/movimentacoes-service";
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service";
 import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
 import {
@@ -729,6 +731,12 @@ async function executarRecebimentoImediatoOSV3(storeId: string, osId: string, in
 export interface EstornarRecebimentoInputV3 {
   sessaoId: string;
   motivo?: string;
+  /**
+   * Recebido (ledger do título) que o operador VIU ao pedir o estorno. Diferente do atual =
+   * recusa sem escrita: um 2º clique ou retry depois de um estorno já gravado não reverte
+   * OUTRO pagamento (mesmo contrato do `recebidoEsperado` do Financeiro HUB).
+   */
+  recebidoEsperado?: number;
 }
 
 export interface EstornarRecebimentoResultV3 {
@@ -770,11 +778,37 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
     const titulo = await getContaReceberByLocalKey(sid, localKey, tx);
     const recebidoAntes = titulo ? sumPagamentosFromHistoricoPayload(titulo.payload) : 0;
     if (!titulo || recebidoAntes <= 0) throw new Error("Não há recebimento para estornar nesta OS.");
+    if (input.recebidoEsperado !== undefined && Math.abs(recebidoAntes - money(input.recebidoEsperado)) > 0.009) {
+      throw new Error("O recebimento desta OS mudou desde que a tela carregou (outro estorno ou baixa). Atualize e confira antes de estornar.");
+    }
+
+    // Identidade do pagamento (índice no `historico`, contrato da #384): o alvo é o último
+    // pagamento ATIVO. Histórico com estorno sem referência = não dá para saber qual voltou.
+    const ledger = pagamentosAtivosDoHistorico((titulo.payload as Record<string, unknown> | null)?.historico);
+    if (ledger.ambiguo) {
+      throw new Error("O histórico deste título tem estornos sem identificação do pagamento. Estorno bloqueado: requer conciliação manual no Financeiro.");
+    }
+    const alvo = ledger.ativos[ledger.ativos.length - 1];
+    if (!alvo) throw new Error("Não há recebimento ativo para estornar nesta OS.");
+
+    // Entrada de caixa DESTE pagamento, decidida antes de qualquer escrita. Sem entrada (pago
+    // por um fluxo que não passa pela gaveta, ex.: Financeiro HUB) não há o que devolver da
+    // gaveta; entrada não identificável com segurança = recusa (não se presume valor).
+    const caixaOrig = localizarEntradaCaixaDoPagamento({
+      tituloId: titulo.id,
+      pagamento: alvo,
+      ativos: ledger.ativos,
+      operacoes: await lerOperacoesCaixaDoTitulo(tx, sid, titulo),
+    });
+    if (caixaOrig.kind === "ambigua") {
+      throw new Error("Não foi possível identificar com segurança a entrada de caixa deste pagamento (lançamento antigo sem vínculo). Estorno bloqueado para não deixar Financeiro e Caixa divergentes.");
+    }
 
     const res = await estornarContaReceber({
       storeId: sid,
       localKey,
       modo: "ultimo_pagamento",
+      pagamentoIndex: alvo.index,
       motivo: input.motivo || "Estorno de recebimento (Operações V3).",
       userLabel: operador,
       db: tx,
@@ -783,25 +817,41 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
     const recebidoDepois = sumPagamentosFromHistoricoPayload(res.data.payload);
     const estornado = Math.max(0, money(recebidoAntes - recebidoDepois));
 
-    // Caixa: registra o estorno para AUDITORIA da sessão. (O fechamento agrega
-    // hoje só sangria/suprimento/recebimento_cr; a baixa deste estorno na gaveta é
-    // follow-up — ver relatório. Não modificamos o helper de caixa/PDV.)
-    await tx.caixaOperacao.create({
-      data: {
-        sessaoId: sessao.id,
-        storeId: sid,
-        tipo: "estorno_recebimento_cr",
-        valor: estornado,
-        motivo: `Estorno OS ${os.codigo ?? id}${input.motivo ? " — " + input.motivo : ""}`,
-        operador,
-        payload: {
-          origem: "operacoes-v3-os",
-          ordemServicoId: id,
-          tituloId: res.data.id,
-          localKey,
-        } as Prisma.InputJsonValue,
-      },
-    });
+    // Movimentação financeira: saída com o valor exato, reconciliada com a entrada do
+    // recebimento (antes o estorno da OS deixava a entrada inteira no fluxo de caixa).
+    if (estornado > 0.009) {
+      await estornarMovimentacaoDePagamentoReceber(tx, { storeId: sid, tituloId: res.data.id, valor: estornado, recebidoRestante: recebidoDepois });
+    }
+
+    // Caixa: a devolução sai da gaveta ATUAL (sessão aberta; sessão fechada nunca é editada),
+    // referenciando a entrada original por forma — o fechamento abate pela forma certa e um
+    // estorno futuro pelo Financeiro enxerga esta entrada como já compensada.
+    if (caixaOrig.kind === "encontrada") {
+      for (const parcela of caixaOrig.parcelas) {
+        const orig = (parcela.operacao.payload ?? {}) as Record<string, unknown>;
+        const forma = typeof orig.formaPagamento === "string" ? orig.formaPagamento.trim().toLowerCase() : "";
+        await tx.caixaOperacao.create({
+          data: {
+            sessaoId: sessao.id,
+            storeId: sid,
+            tipo: "estorno_recebimento_cr",
+            valor: money(parcela.valor),
+            motivo: `Estorno OS ${os.codigo ?? id}${input.motivo ? " — " + input.motivo : ""}`,
+            operador,
+            payload: {
+              origem: "operacoes-v3-os",
+              ordemServicoId: id,
+              tituloId: res.data.id,
+              localKey,
+              ...(forma ? { formaPagamento: forma } : {}),
+              refCaixaOperacaoId: parcela.operacao.id,
+              historicoIndex: alvo.index,
+              localId: `ops-v3-estorno:${sid}:${id}:${alvo.index}:${parcela.operacao.id}`,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
+    }
 
     // Espelho + timeline sobre o payload TRAVADO. O "a prazo" NÃO é tocado: estorno reverte
     // só dinheiro; uma autorização menor que o novo saldo deixa de valer no guard de entrega,

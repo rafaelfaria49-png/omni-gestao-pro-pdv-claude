@@ -7,9 +7,9 @@
  */
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-const sessao = vi.hoisted(() => ({ id: "qa-misto-admin", name: "Operador QA", role: "ADMIN" }));
+const sessao = vi.hoisted(() => ({ id: "qa-misto-admin", name: "Operador QA", role: "ADMIN", lojas: [] as string[] }));
 vi.mock("@/auth", () => ({
-  auth: vi.fn(async () => ({ user: { id: sessao.id, name: sessao.name, role: sessao.role, storeAccess: "all" } })),
+  auth: vi.fn(async () => ({ user: { id: sessao.id, name: sessao.name, role: sessao.role, storeAccess: "all", allowedStoreIds: [...sessao.lojas], storeModules: Object.fromEntries(sessao.lojas.map((id) => [id, ["finance", "pdv", "cash", "catalog", "service", "sales"]])) } })),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -76,6 +76,7 @@ type Payload = Record<string, any>;
 async function novaLoja(): Promise<string> {
   const id = `qa-misto-${SUFIXO}-${++seq}`;
   await prisma.store.create({ data: { id, name: `Loja QA misto ${seq}` } });
+  sessao.lojas.push(id);
   lojasCriadas.push(id);
   return id;
 }
