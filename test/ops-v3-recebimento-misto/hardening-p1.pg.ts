@@ -15,9 +15,9 @@
 import { createHash } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-const sessao = vi.hoisted(() => ({ id: "qa-hard-admin", name: "Operador QA", role: "ADMIN" }));
+const sessao = vi.hoisted(() => ({ id: "qa-hard-admin", name: "Operador QA", role: "ADMIN", lojas: [] as string[] }));
 vi.mock("@/auth", () => ({
-  auth: vi.fn(async () => ({ user: { id: sessao.id, name: sessao.name, role: sessao.role, storeAccess: "all" } })),
+  auth: vi.fn(async () => ({ user: { id: sessao.id, name: sessao.name, role: sessao.role, storeAccess: "all", allowedStoreIds: [...sessao.lojas], storeModules: Object.fromEntries(sessao.lojas.map((id) => [id, ["finance", "pdv", "cash", "catalog", "service", "sales"]])) } })),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -96,6 +96,7 @@ type Payload = Record<string, any>;
 async function novaLoja(): Promise<string> {
   const id = `qa-hard-${SUFIXO}-${++seq}`;
   await prisma.store.create({ data: { id, name: `Loja QA hardening ${seq}` } });
+  sessao.lojas.push(id);
   return id;
 }
 
@@ -523,8 +524,11 @@ describe("travas: normal × misto × estorno × a prazo × operacional", () => {
         return acc;
       }, 0);
       expect(s.saldo).toBeCloseTo(400 - liquido, 2);
-      // Cada pagamento novo do histórico corresponde a UMA movimentação (nenhuma em dobro).
-      expect(s.movs.length).toBe(s.pagamentos.length);
+      // Cada pagamento novo do histórico corresponde a UMA entrada (nenhuma em dobro) e cada
+      // estorno a UMA saída (OMNI-FINANCEIRO-F9-ESTORNOS-CONSOLIDACAO-FINAL-001: o estorno da OS
+      // passou a lançar a saída na movimentação financeira).
+      expect(s.movs.filter((m) => m.tipo === "entrada").length).toBe(s.pagamentos.length);
+      expect(s.movs.filter((m) => m.tipo === "saida").length).toBe(s.historico.filter((e) => e.tipo === "estorno_pagamento").length);
     }
   });
 });
