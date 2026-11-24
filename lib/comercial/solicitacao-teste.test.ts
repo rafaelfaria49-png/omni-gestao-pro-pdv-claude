@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest"
 import {
   LIMITE_GLOBAL_POR_10_MIN, LIMITE_POR_ORIGEM_POR_HORA, atualizarStatusSolicitacao, gerarProtocolo, hashOrigem,
-  registrarSolicitacaoTeste, type SolicitacaoDb,
+  registrarSolicitacaoTeste, vincularProvisionamento, type SolicitacaoDb,
 } from "./solicitacao-teste"
-import { resolverGestaoLojasConfig, PLANOS_GESTAO_LOJAS } from "./gestao-lojas-oferta"
+import {
+  OFERTA_COMERCIAL_GESTAO_LOJAS,
+  PLANOS_GESTAO_LOJAS,
+  formatarWhatsappComercial,
+  isPlanoGestaoLojas,
+  linkWhatsappComercial,
+  resolverGestaoLojasConfig,
+} from "./gestao-lojas-oferta"
 
 type Row = Record<string, unknown> & { id: string; protocolo: string; emailAberto: string | null; ipHash: string; createdAt: Date; status: string; historico: unknown }
 
@@ -68,6 +75,48 @@ describe("registrarSolicitacaoTeste", () => {
     const [a, b] = await Promise.all([registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora }), registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })])
     expect(rows).toHaveLength(1)
     expect(a.ok && b.ok && a.protocolo === b.protocolo).toBe(true)
+  })
+
+  it("provisionamento ligado ao pedido grava loja e usuário no histórico e encerra o pedido", async () => {
+    const { db, rows } = fakeDb()
+    await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })
+    const r = await atualizarStatusSolicitacao(db, { id: rows[0].id, status: "provisionada", por: "plataforma@x", agora, vinculo: { storeId: "cliente-1", userId: "u-1" } })
+    expect(r).toEqual({ ok: true })
+    expect(rows[0].status).toBe("provisionada")
+    expect(rows[0].emailAberto).toBeNull()
+    expect(rows[0].historico).toEqual([
+      { em: agora.toISOString(), evento: "recebida", por: "visitante" },
+      { em: agora.toISOString(), evento: "provisionada", por: "plataforma@x", storeId: "cliente-1", userId: "u-1" },
+    ])
+    // Pedido já encerrado não é marcado de novo (segunda conta não reescreve o vínculo).
+    expect(await atualizarStatusSolicitacao(db, { id: rows[0].id, status: "provisionada", por: "p", vinculo: { storeId: "cliente-2", userId: "u-2" } })).toEqual({ ok: false, erro: "Solicitação já encerrada." })
+  })
+
+  it("vínculo do provisionamento sobrevive a recebida → em_contato simultâneo e falha se descartado", async () => {
+    const { db, rows } = fakeDb()
+    await registrarSolicitacaoTeste(db, valido, { ipHash: "x", agora })
+    // Outro operador põe o pedido em contato entre a leitura e a gravação do vínculo.
+    const original = db.solicitacaoTesteComercial.findUnique
+    let corrida = true
+    db.solicitacaoTesteComercial.findUnique = async (a) => {
+      const r = await original(a)
+      if (corrida) { corrida = false; rows[0].status = "em_contato" }
+      return r
+    }
+    expect(await vincularProvisionamento(db, { id: rows[0].id, por: "p@x", storeId: "cliente-1", userId: "u-1", agora })).toEqual({ ok: true })
+    expect(rows[0]).toMatchObject({ status: "provisionada", emailAberto: null })
+    expect((rows[0].historico as unknown[]).at(-1)).toMatchObject({ evento: "provisionada", storeId: "cliente-1", userId: "u-1" })
+
+    // Repetir o status atual não regrava o histórico.
+    const repetido = fakeDb()
+    await registrarSolicitacaoTeste(repetido.db, valido, { ipHash: "x", agora })
+    expect(await atualizarStatusSolicitacao(repetido.db, { id: repetido.rows[0].id, status: "recebida", por: "p" })).toEqual({ ok: true })
+    expect(repetido.rows[0].historico).toHaveLength(1)
+
+    const outro = fakeDb()
+    await registrarSolicitacaoTeste(outro.db, valido, { ipHash: "x", agora })
+    outro.rows[0].status = "descartada"
+    expect(await vincularProvisionamento(outro.db, { id: outro.rows[0].id, por: "p", storeId: "c", userId: "u" })).toEqual({ ok: false, erro: "Solicitação já encerrada." })
   })
 
   it("depois de encerrada, o mesmo email pode pedir de novo (novo protocolo)", async () => {
@@ -190,24 +239,32 @@ describe("utilitários", () => {
   })
 })
 
-describe("resolverGestaoLojasConfig (falha fechado)", () => {
-  it("sem variáveis: sem preço, sem download, sem contato direto", () => {
-    expect(resolverGestaoLojasConfig({})).toEqual({ exibirPrecosPropostos: false, downloadWindowsUrl: null, contatoWhatsapp: null, contatoEmail: null })
+describe("resolverGestaoLojasConfig e oferta autorizada (falha fechado)", () => {
+  it("sem variáveis: sem contato direto", () => {
+    expect(resolverGestaoLojasConfig({})).toEqual({ contatoWhatsapp: null, contatoEmail: null })
   })
-  it("preço só com o valor exato 1", () => {
-    for (const v of ["true", "yes", "0", " 1"]) expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS: v }).exibirPrecosPropostos).toBe(false)
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS: "1" }).exibirPrecosPropostos).toBe(true)
+  it("download do Windows não tem canal próprio na landing: URL direta é ignorada (canal único em /baixar)", () => {
+    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "https://dl.example.com/Setup.exe" })).not.toHaveProperty("downloadWindowsUrl")
   })
-  it("download só com https válido", () => {
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "http://x/a.exe" }).downloadWindowsUrl).toBeNull()
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "javascript:alert(1)" }).downloadWindowsUrl).toBeNull()
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "https://dl.example.com/Setup.exe" }).downloadWindowsUrl).toBe("https://dl.example.com/Setup.exe")
-  })
-  it("contatos malformados ficam ocultos", () => {
+  it("contatos malformados ficam ocultos e contato válido é normalizado", () => {
     expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_CONTATO_WHATSAPP: "(00) 00000-0000", GESTAO_LOJAS_CONTATO_EMAIL: "suporte@" })).toMatchObject({ contatoWhatsapp: null, contatoEmail: null })
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_CONTATO_WHATSAPP: "+55 11 91234-5678" }).contatoWhatsapp).toBe("5511912345678")
+    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_CONTATO_WHATSAPP: "+55 14 99861-0730" }).contatoWhatsapp).toBe("5514998610730")
+    expect(formatarWhatsappComercial("5514998610730")).toBe("(14) 99861-0730")
+    expect(linkWhatsappComercial("5514998610730")).toBe("https://wa.me/5514998610730")
   })
-  it("planos propostos: valores da decisão do proprietário, em centavos", () => {
-    expect(PLANOS_GESTAO_LOJAS.map((p) => [p.id, p.precoMensalCentavos, p.operadoresPropostos])).toEqual([["essencial", 3990, 1], ["comercio", 6990, 2], ["comercio-plus", 9990, 3]])
+  it("oferta única autorizada: R$ 69,90/mês, até 2 usuários, 7 dias acompanhados e cobrança manual", () => {
+    expect(OFERTA_COMERCIAL_GESTAO_LOJAS).toMatchObject({
+      precoMensalCentavos: 6990,
+      usuariosInclusos: 2,
+      diasTesteGratuito: 7,
+      cobrancaManual: true,
+      acompanhamentoManual: true,
+    })
+  })
+  it("mantém compatibilidade retroativa para registros históricos em PLANOS_GESTAO_LOJAS", () => {
+    for (const id of ["vendas-e-estoque", "essencial", "comercio", "comercio-plus"]) {
+      expect(isPlanoGestaoLojas(id)).toBe(true)
+    }
+    expect(PLANOS_GESTAO_LOJAS.some((p) => p.id === "comercio" && p.precoMensalCentavos === 6990)).toBe(true)
   })
 })

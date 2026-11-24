@@ -6,6 +6,11 @@
 // Fluxo COMPLETO de abertura no balcão (seções A→J), sem depender de F11.
 // Persiste via `criarOSEnterpriseV3` (caminho seguro). NÃO recebe pagamento:
 // o recebimento real acontece depois no PDV de Serviço.
+//
+// GOAL OPERACOES-V3-NOVA-OS-SELETOR-003 — `modo="orcamento"`: o MESMO formulário
+// grava um orçamento pré-OS por `criarOSPreOrcamentoV3` (proposta de hoje,
+// validade padrão). Sem passo Pagamento, entrada do aparelho opcional (consulta
+// de preço não fabrica entrada física) e rascunho guardado à parte.
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -32,7 +37,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listClientes } from "@/api/clientes";
-import { criarOSEnterpriseV3 } from "@/lib/operacoes-v3/nova-os-actions";
+import { criarOSEnterpriseV3, criarOSPreOrcamentoV3 } from "@/lib/operacoes-v3/nova-os-actions";
+import { datasOrcamentoRapidoPadraoV3 } from "@/lib/operacoes-v3/orcamento-rapido-model";
+import { VALIDADE_PADRAO_DIAS } from "@/lib/operacoes-v3/orcamento-model";
 import {
   GARANTIA_TEMPLATES_V3,
   garantiaTemplateV3,
@@ -97,11 +104,21 @@ interface ClienteOpcao {
   documento?: string;
 }
 
+/** `os` = Nova OS completa (padrão); `orcamento` = orçamento pré-OS pelo mesmo formulário. */
+export type NovaOSModoV3 = "os" | "orcamento";
+
 interface Props {
   open: boolean;
   storeId: string | null;
   onClose: () => void;
   onCreated: (osId: string) => void;
+  modo?: NovaOSModoV3;
+}
+
+/** Rascunho do orçamento guardado à parte do da Nova OS (passos diferentes). */
+function chaveRascunhoV3(storeId: string | null, modo: NovaOSModoV3): string {
+  const sid = (storeId ?? "").trim();
+  return sid && modo === "orcamento" ? `${sid}::orcamento` : sid;
 }
 
 const inputCls =
@@ -141,7 +158,7 @@ function comDatasRecepcao(d: NovaOSDraftV3, entrada: CampoDataOperacionalV3, pre
   };
 }
 
-const STEPS: { id: string; label: string; icon: typeof User }[] = [
+const TODOS_STEPS: { id: string; label: string; icon: typeof User }[] = [
   { id: "cliente", label: "Cliente", icon: User },
   { id: "equipamento", label: "Equipamento", icon: Smartphone },
   { id: "recepcao", label: "Recepção", icon: ClipboardList },
@@ -154,7 +171,11 @@ const STEPS: { id: string; label: string; icon: typeof User }[] = [
 
 // ---------------------------------------------------------------------------
 
-export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: Props) {
+export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated, modo = "os" }: Props) {
+  const orcamento = modo === "orcamento";
+  // Orçamento não passa por Pagamento: nada de forma/sinal previsto, nada recebido.
+  const STEPS = useMemo(() => (orcamento ? TODOS_STEPS.filter((s) => s.id !== "pagamento") : TODOS_STEPS), [orcamento]);
+  const rascunhoId = chaveRascunhoV3(storeId, modo);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<NovaOSDraftV3>(() => novaOSDraftVazioV3());
   const [salvando, setSalvando] = useState(false);
@@ -162,7 +183,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
 
   // Datas e prazos (passo Recepção): entrada efetiva começa em "hoje, agora";
   // previsão opcional. Fuso da loja — nunca o do navegador.
-  const [entradaCampo, setEntradaCampo] = useState<CampoDataOperacionalV3>(() => campoAgoraV3());
+  const [entradaCampo, setEntradaCampo] = useState<CampoDataOperacionalV3>(() => (modo === "orcamento" ? campoVazioV3() : campoAgoraV3()));
   const [previsaoCampo, setPrevisaoCampo] = useState<CampoDataOperacionalV3>(() => campoVazioV3());
   const [errosDatas, setErrosDatas] = useState<Record<string, string>>({});
   const entradaRef = useRef<HTMLInputElement>(null);
@@ -219,13 +240,13 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setPendingDiscard(null);
 
     setStep(0);
-    const entradaInicial = campoAgoraV3();
+    const entradaInicial = orcamento ? campoVazioV3() : campoAgoraV3();
     setEntradaCampo(entradaInicial);
     setPrevisaoCampo(campoVazioV3());
     setErrosDatas({});
     setDraft(comDatasRecepcao(novaOSDraftVazioV3(), entradaInicial, campoVazioV3()));
 
-    const sid = (storeId ?? "").trim();
+    const sid = rascunhoId;
     const saved = sid ? readNovaOSDraftV3(sid) : null;
     if (saved && isNovaOSDraftMeaningfulV3(saved.draft)) {
       setRestoreState(saved);
@@ -234,20 +255,20 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
       setRestoreState(null);
       setSavedAt(null);
     }
-  }, [open, storeId]);
+  }, [open, rascunhoId, orcamento]);
 
   // Auto-save (debounce) enquanto o operador preenche. Não roda enquanto o prompt
   // de restauração está aberto (evita sobrescrever o rascunho com o form vazio).
   useEffect(() => {
     if (!open || restoreState || salvando) return;
-    const sid = (storeId ?? "").trim();
+    const sid = rascunhoId;
     if (!sid || !isNovaOSDraftMeaningfulV3(draft)) return;
     const t = setTimeout(() => {
       const at = writeNovaOSDraftV3(sid, draft, step);
       if (at) setSavedAt(at);
     }, 600);
     return () => clearTimeout(t);
-  }, [open, restoreState, salvando, storeId, draft, step]);
+  }, [open, restoreState, salvando, rascunhoId, draft, step]);
 
   // Fechamento guardado: se houver dados, confirma antes de fechar.
   const requestClose = useCallback(() => {
@@ -297,16 +318,16 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setGarantiaTermoEditado(!!restoreState.draft.garantia?.termo?.trim());
     setStep(Math.min(Math.max(0, restoreState.step), STEPS.length - 1));
     setRestoreState(null);
-  }, [restoreState]);
+  }, [restoreState, STEPS]);
 
   const confirmarDescarte = useCallback(() => {
-    const sid = (storeId ?? "").trim();
+    const sid = rascunhoId;
     if (sid) clearNovaOSDraftV3(sid);
     setSavedAt(null);
     if (pendingDiscard === "close") {
       onClose();
     } else {
-      const entradaInicial = campoAgoraV3();
+      const entradaInicial = orcamento ? campoVazioV3() : campoAgoraV3();
       setEntradaCampo(entradaInicial);
       setPrevisaoCampo(campoVazioV3());
       setErrosDatas({});
@@ -316,7 +337,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setRestoreState(null);
     setCloseConfirm(false);
     setPendingDiscard(null);
-  }, [storeId, pendingDiscard, onClose]);
+  }, [rascunhoId, orcamento, pendingDiscard, onClose]);
 
   // Carrega clientes ao abrir
   useEffect(() => {
@@ -453,10 +474,11 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   };
 
   const stepDoErro = (msg: string): number => {
-    if (/cliente/i.test(msg)) return 0;
-    if (/marca e modelo/i.test(msg)) return 1;
-    if (/defeito/i.test(msg)) return 3;
-    if (/item|quantidade/i.test(msg)) return 4;
+    const idx = (id: string) => Math.max(0, STEPS.findIndex((s) => s.id === id));
+    if (/cliente/i.test(msg)) return idx("cliente");
+    if (/marca e modelo/i.test(msg)) return idx("equipamento");
+    if (/defeito/i.test(msg)) return idx("problema");
+    if (/item|quantidade/i.test(msg)) return idx("itens");
     return step;
   };
 
@@ -481,7 +503,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
       return;
     }
     // Datas antes de tudo: nada é enviado com data inválida, futura ou fora de ordem.
-    const datas = resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: true });
+    const datas = resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: !orcamento });
     if (marcarErrosDatas(datas.erros)) {
       setErro("Revise as datas da recepção.");
       return;
@@ -495,14 +517,19 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     }
     setSalvando(true);
     try {
-      const { os } = await criarOSEnterpriseV3(sid, comDatas);
-      clearNovaOSDraftV3(sid);
+      const { os } = orcamento
+        ? await criarOSPreOrcamentoV3(sid, comDatas, {
+            dataProposta: datasOrcamentoRapidoPadraoV3().dataProposta,
+            validadeDias: VALIDADE_PADRAO_DIAS,
+          })
+        : await criarOSEnterpriseV3(sid, comDatas);
+      clearNovaOSDraftV3(rascunhoId);
       setSavedAt(null);
       onCreated(os.id);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível abrir a OS.");
+      setErro(e instanceof Error ? e.message : orcamento ? "Não foi possível registrar o orçamento." : "Não foi possível abrir a OS.");
       // O servidor confere de novo com o relógio dele: aponta o campo se for data.
-      marcarErrosDatas(resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: true }).erros);
+      marcarErrosDatas(resolverDatasRecepcaoFormV3({ entrada: entradaCampo, previsao: previsaoCampo }, { entradaObrigatoria: !orcamento }).erros);
     } finally {
       setSalvando(false);
     }
@@ -517,7 +544,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   const stepId = STEPS[step].id;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Nova OS">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={orcamento ? "Novo orçamento" : "Nova OS"}>
       <button type="button" aria-label="Fechar" className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={requestClose} />
       <div className={`${styles.popIn} relative flex max-h-[94vh] w-full min-w-0 flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:max-h-[92vh] sm:max-w-4xl sm:rounded-2xl`}>
         {/* Header */}
@@ -526,8 +553,12 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
             <FileCheck2 className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-foreground">Nova OS Enterprise</h2>
-            <p className="truncate text-xs text-muted-foreground">Abertura completa da ordem de serviço — pagamento aqui é só previsão.</p>
+            <h2 className="truncate text-base font-semibold text-foreground">{orcamento ? "Novo orçamento" : "Nova OS Enterprise"}</h2>
+            <p className="truncate text-xs text-muted-foreground">
+              {orcamento
+                ? `Só proposta — sem recebimento e sem concluir serviço. Validade padrão de ${VALIDADE_PADRAO_DIAS} dias.`
+                : "Abertura completa da ordem de serviço — pagamento aqui é só previsão."}
+            </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             {savedAt && !restoreState ? (
@@ -741,8 +772,8 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
                     ref={entradaRef}
                     id="novaos-v3-entrada"
                     rotulo="Data de entrada do aparelho"
-                    ajuda="Quando o aparelho realmente entrou na loja."
-                    obrigatorio
+                    ajuda={orcamento ? "Só se o aparelho já está na loja. Deixe vazio numa consulta de preço." : "Quando o aparelho realmente entrou na loja."}
+                    obrigatorio={!orcamento}
                     maxDia={hojeNaLojaV3()}
                     valor={entradaCampo}
                     onChange={(c) => {
@@ -1055,10 +1086,17 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
                 </div>
               </ResumoBloco>
               <div className="grid gap-3 sm:grid-cols-2">
-                <ResumoBloco titulo="Pagamento previsto">
-                  <p className="text-sm text-foreground">{pagamentoFormaLabelV3(draft.pagamento.forma)}{draft.pagamento.sinal ? ` · sinal ${formatBRL(draft.pagamento.sinal)}` : ""}</p>
-                  <p className="text-xs text-muted-foreground">Recebimento real no PDV de Serviço.</p>
-                </ResumoBloco>
+                {orcamento ? (
+                  <ResumoBloco titulo="Orçamento">
+                    <p className="text-sm text-foreground">Proposta de hoje · validade de {VALIDADE_PADRAO_DIAS} dias</p>
+                    <p className="text-xs text-muted-foreground">Nada é recebido. Aprovação e envio seguem no painel de orçamento da OS.</p>
+                  </ResumoBloco>
+                ) : (
+                  <ResumoBloco titulo="Pagamento previsto">
+                    <p className="text-sm text-foreground">{pagamentoFormaLabelV3(draft.pagamento.forma)}{draft.pagamento.sinal ? ` · sinal ${formatBRL(draft.pagamento.sinal)}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">Recebimento real no PDV de Serviço.</p>
+                  </ResumoBloco>
+                )}
                 <ResumoBloco titulo="Garantia prevista">
                   <p className="text-sm text-foreground">{draft.garantia.label}{draft.garantia.prazoDias ? ` · ${draft.garantia.prazoDias} dias` : ""}</p>
                 </ResumoBloco>
@@ -1092,7 +1130,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
             ) : null}
             <ButtonV3 variant="primary" onClick={handleCriar} disabled={salvando}>
               {salvando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Check className="h-4 w-4" aria-hidden />}
-              {salvando ? "Criando…" : "Criar Ordem de Serviço"}
+              {salvando ? (orcamento ? "Registrando…" : "Criando…") : orcamento ? "Registrar orçamento" : "Criar Ordem de Serviço"}
             </ButtonV3>
           </div>
         </footer>

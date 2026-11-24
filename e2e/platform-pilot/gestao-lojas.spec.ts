@@ -45,46 +45,72 @@ async function preencherPedido(page: Page, dados: { nome: string; loja: string; 
 test.afterEach(async () => { for (const c of contexts) await c.dispose(); contexts.clear() })
 test.afterAll(async () => { await db.$disconnect() })
 
-test("página comercial é pública, honesta e responsiva em 375/768/1440", async ({ page }) => {
+test("página comercial é pública, honesta, interativa e responsiva em 320/375/390/768/1024/1440", async ({ page }) => {
   const r = await page.goto("/gestao-lojas")
   expect(r?.status()).toBe(200)
   await expect(page).toHaveURL(baseURL + "/gestao-lojas")
-  await expect(page.getByRole("heading", { level: 1, name: "O balcão da sua loja, organizado." })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: /O balcão da sua loja/i })).toBeVisible()
   await expect(page).toHaveTitle(/vendas, caixa e estoque/i)
   expect(await page.locator('link[rel="canonical"]').getAttribute("href")).toMatch(/\/gestao-lojas$/)
   expect(await page.locator('meta[property="og:image"]').getAttribute("content")).toMatch(/\/gestao-lojas\/opengraph-image/)
 
-  // Sem aprovação: nenhum preço proposto, nenhum download, nenhum número fictício.
+  // Oferta única autorizada presente; propostas antigas, downloads diretos e prova social inventada ausentes.
   const corpo = await page.locator("body").innerText()
-  expect(corpo).not.toMatch(/39,90|69,90|99,90|teste grátis|créditos IA|depoimento|\+\s?\d+ (lojas|clientes)/i)
-  await expect(page.getByText("Download ainda não liberado")).toBeVisible()
-  expect(await page.locator('a[href$=".exe"], a[href*="download"]').count()).toBe(0)
+  expect(corpo).toContain("69,90")
+  expect(corpo).toMatch(/até 2/i)
+  expect(corpo).toMatch(/7 dias/i)
+  expect(corpo).not.toMatch(/39,90|99,90|Comércio Plus|créditos IA|depoimento|\+\s?\d+ (lojas|clientes)/i)
+  // Canal único para computador/Windows: /baixar (sem link direto para .exe).
+  await expect(page.locator('main a[href="/baixar"]')).toBeVisible()
+  expect(await page.locator('a[href$=".exe"], a[href*="download"], a[download]').count()).toBe(0)
 
   // Toda âncora interna tem destino; todo link de página responde.
   for (const href of await page.locator('a[href^="#"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")!))) {
     expect(await page.locator(href).count(), href).toBe(1)
   }
-  for (const href of ["/login", "/privacy"]) expect((await page.request.get(href)).status(), href).toBe(200)
+  for (const href of ["/login", "/privacy", "/baixar"]) expect((await page.request.get(href)).status(), href).toBe(200)
   expect((await page.request.get("/gestao-lojas/opengraph-image")).headers()["content-type"]).toContain("image/png")
   await expect(page.getByRole("banner").getByRole("link", { name: "Entrar" })).toHaveAttribute("href", "/login")
 
-  // Capturas reais do sistema carregadas.
-  const imagens = page.locator("main img")
+  // Capturas reais e logos carregadas sem imagem quebrada.
+  const imagens = page.locator("img:visible")
   for (let i = 0; i < await imagens.count(); i++) {
     const img = imagens.nth(i); await img.scrollIntoViewIfNeeded()
     await expect.poll(() => img.evaluate((n) => (n as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   }
 
+  // Vitrine interativa em abas + ampliação acessível (Lightbox com Escape).
+  const tabEstoque = page.getByRole("tab", { name: /Produtos e Estoque/i })
+  await tabEstoque.click()
+  await expect(tabEstoque).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("heading", { name: /Produtos organizados e estoque atualizado/i })).toBeVisible()
+  await page.getByRole("button", { name: "Ampliar captura", exact: true }).click()
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+
   // Teclado: o primeiro Tab mostra "Pular para o conteúdo".
+  await page.goto("/gestao-lojas")
   await page.keyboard.press("Tab")
   await expect(page.getByRole("link", { name: "Pular para o conteúdo" })).toBeFocused()
 
-  for (const [width, height] of [[375, 812], [768, 1024], [1440, 1000]]) {
+  // Responsividade real nas 6 larguras obrigatórias (sem rolagem horizontal) + menu mobile.
+  for (const [width, height] of [[320, 640], [375, 812], [390, 844], [768, 1024], [1024, 900], [1440, 1000]]) {
     await page.setViewportSize({ width, height })
     await page.goto("/gestao-lojas")
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     expect(overflow, `rolagem horizontal em ${width}px`).toBeLessThanOrEqual(0)
-    await page.screenshot({ path: `${out}/gestao-lojas-${width}.png`, fullPage: true, animations: "disabled" })
+    if (width === 390) {
+      const toggle = page.getByRole("button", { name: "Abrir menu" })
+      await expect(toggle).toBeVisible()
+      await toggle.click()
+      await expect(page.locator("#gl-mobile-drawer")).toBeVisible()
+      await page.keyboard.press("Escape")
+      await expect(page.locator("#gl-mobile-drawer")).toBeHidden()
+    }
+    if (width === 375 || width === 768 || width === 1440) {
+      await page.screenshot({ path: `${out}/gestao-lojas-${width}.png`, fullPage: true, animations: "disabled" })
+    }
   }
 })
 
@@ -180,16 +206,24 @@ test("jornada: pedido → plataforma provisiona com os dados do pedido → login
   await expect(page.getByLabel("Ramo principal")).toHaveValue("acessorios")
   await page.screenshot({ path: `${out}/gestao-lojas-plataforma.png`, fullPage: true, animations: "disabled" })
   await expect(page.getByLabel("Email de acesso")).toHaveValue(email)
+  await expect(page.getByText(`Ligado ao pedido ${protocolo}`)).toBeVisible()
   await page.getByRole("button", { name: "Provisionar cliente" }).click()
   const senha = page.getByLabel("Senha temporária individual")
   await expect(senha).not.toHaveValue("")
   const temporaria = await senha.inputValue()
-  await item.getByRole("button", { name: "Marcar acesso liberado" }).click()
+  // O pedido fecha sozinho ao provisionar, com a loja e o usuário criados no histórico.
+  await expect(page.getByText(`Pedido ${protocolo} marcado como acesso liberado.`)).toBeVisible()
   await expect(item).toHaveCount(0)
+  const instrucoes = await page.getByLabel("Instruções de entrada para o cliente (sem a senha)").inputValue()
+  expect(instrucoes).toContain(`${baseURL}/login`)
+  expect(instrucoes).toContain(email)
+  expect(instrucoes).not.toContain(temporaria)
+
+  const user = await db.adminUser.findUniqueOrThrow({ where: { email }, select: { id: true, lojaId: true, role: true, accessScope: true, mustChangePassword: true } })
   const row = await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { protocolo } })
   expect({ status: row.status, aberto: row.emailAberto }).toEqual({ status: "provisionada", aberto: null })
+  expect((row.historico as Array<Record<string, unknown>>).at(-1)).toMatchObject({ evento: "provisionada", storeId: user.lojaId, userId: user.id })
 
-  const user = await db.adminUser.findUniqueOrThrow({ where: { email }, select: { lojaId: true, role: true, accessScope: true, mustChangePassword: true } })
   expect({ role: user.role, scope: user.accessScope, troca: user.mustChangePassword }).toEqual({ role: "ADMIN", scope: "STORE", troca: true })
   const cliente = await loginCredentials(email, temporaria, user.lojaId!)
   expect(new URL((await cliente.get("/dashboard")).url()).pathname).toBe("/conta/seguranca")
@@ -201,4 +235,62 @@ test("jornada: pedido → plataforma provisiona com os dados do pedido → login
   expect(new URL(painel.url()).pathname).toBe("/dashboard")
   // Cliente novo não enxerga os pedidos comerciais de outras lojas.
   expect((await dentro.get("/api/platform/solicitacoes-teste")).status()).toBe(403)
+})
+
+test("provisionamento ligado ao pedido é atômico: corrida, pedido encerrado, marcação manual e sem pedido", async () => {
+  const api = await request.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": origem() } }); contexts.add(api)
+  const tag = randomBytes(3).toString("hex")
+  const pedir = async (n: string) => {
+    const r = await api.post("/api/comercial/solicitacoes-teste", { data: { nome: "Corrida Sintética", nomeLoja: `Corrida ${n} ${tag}`, email: `corrida-${n}-${tag}@pilot.invalid`, whatsapp: "11900000004", ramo: "comercio", consentimento: true } })
+    expect(r.status()).toBe(201)
+    return db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { protocolo: (await r.json()).protocolo } })
+  }
+  const owner = await login("owner")
+  const conta = (email: string, storeName: string, solicitacaoId?: string) => ({ storeName, name: "Dono Sintético", email, branch: "comercio", ...(solicitacaoId ? { solicitacaoId } : {}) })
+
+  // Loja local não provisiona, nem ligando a um pedido; o pedido continua aberto.
+  const p1 = await pedir("1")
+  const local = await login("adminA")
+  expect((await local.post("/api/platform/provision", { data: conta(`x-${tag}@pilot.invalid`, `Local ${tag}`, p1.id) })).status()).toBe(403)
+  expect((await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe("recebida")
+
+  // Email diferente do pedido: o servidor recusa ligar, nada é criado e o pedido segue aberto.
+  const outroEmail = `outro-${tag}@pilot.invalid`
+  expect((await owner.post("/api/platform/provision", { data: conta(outroEmail, `Outro ${tag}`, p1.id) })).status()).toBe(400)
+  expect(await db.adminUser.count({ where: { email: outroEmail } })).toBe(0)
+  expect((await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe("recebida")
+
+  // Dois operadores no MESMO pedido ao mesmo tempo: uma conta só, um vínculo só.
+  const nomeLoja = `Corrida Loja ${tag}`
+  const emailPedido = `corrida-1-${tag}@pilot.invalid`
+  const rs = await Promise.all([0, 1].map(() => owner.post("/api/platform/provision", { data: conta(emailPedido, nomeLoja, p1.id) })))
+  expect(rs.map((r) => r.status()).sort()).toEqual([201, 409])
+  expect(await db.store.count({ where: { name: nomeLoja } })).toBe(1)
+  const criado = await db.adminUser.findUniqueOrThrow({ where: { email: emailPedido }, select: { id: true, lojaId: true } })
+  const fechado = await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p1.id } })
+  expect({ status: fechado.status, aberto: fechado.emailAberto }).toEqual({ status: "provisionada", aberto: null })
+  const eventos = (fechado.historico as Array<Record<string, unknown>>).filter((h) => h.evento === "provisionada")
+  expect(eventos).toHaveLength(1)
+  expect(eventos[0]).toMatchObject({ storeId: criado.lojaId, userId: criado.id })
+
+  // Pedido descartado: nada é criado.
+  const p2 = await pedir("2")
+  expect((await owner.patch("/api/platform/solicitacoes-teste", { data: { id: p2.id, status: "descartada" } })).status()).toBe(200)
+  const r2 = await owner.post("/api/platform/provision", { data: conta(`corrida-2-${tag}@pilot.invalid`, `Descartado ${tag}`, p2.id) })
+  expect(r2.status()).toBe(409)
+  expect(await db.store.count({ where: { name: `Descartado ${tag}` } })).toBe(0)
+  expect(await db.adminUser.count({ where: { email: `corrida-2-${tag}@pilot.invalid` } })).toBe(0)
+
+  // Marcação manual ("Marcar acesso liberado") segue funcionando, sem vínculo inventado.
+  const p3 = await pedir("3")
+  expect((await owner.patch("/api/platform/solicitacoes-teste", { data: { id: p3.id, status: "provisionada" } })).status()).toBe(200)
+  const manual = await db.solicitacaoTesteComercial.findUniqueOrThrow({ where: { id: p3.id } })
+  expect(manual.status).toBe("provisionada")
+  expect((manual.historico as Array<Record<string, unknown>>).at(-1)).not.toHaveProperty("storeId")
+
+  // Provisionamento manual, sem pedido, continua igual.
+  const semPedido = await owner.post("/api/platform/provision", { data: conta(`sem-${tag}@pilot.invalid`, `Sem pedido ${tag}`) })
+  expect(semPedido.status()).toBe(201)
+  expect(await semPedido.json()).not.toHaveProperty("solicitacao")
+  expect(await db.adminUser.findUniqueOrThrow({ where: { email: `sem-${tag}@pilot.invalid` }, select: { mustChangePassword: true, accessScope: true } })).toEqual({ mustChangePassword: true, accessScope: "STORE" })
 })

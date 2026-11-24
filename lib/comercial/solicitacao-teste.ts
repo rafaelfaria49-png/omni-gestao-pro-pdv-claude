@@ -146,7 +146,11 @@ export async function registrarSolicitacaoTeste(
 
 export async function atualizarStatusSolicitacao(
   db: SolicitacaoDb,
-  args: { id: string; status: StatusSolicitacao; por: string; agora?: Date },
+  args: {
+    id: string; status: StatusSolicitacao; por: string; agora?: Date
+    /** Rastreabilidade do provisionamento: loja e usuário criados a partir deste pedido. */
+    vinculo?: { storeId: string; userId: string }
+  },
 ): Promise<{ ok: true } | { ok: false; erro: string }> {
   // Compare-and-set: só grava se o status ainda for o que foi lido. Sem isso, "descartada"
   // e "em_contato" simultâneos deixavam um pedido aberto com emailAberto=NULL.
@@ -154,15 +158,38 @@ export async function atualizarStatusSolicitacao(
   const atual = await tabela.findUnique({ where: { id: args.id }, select: { id: true, protocolo: true, status: true, historico: true } })
   if (!atual) return { ok: false, erro: "Solicitação não encontrada." }
   if (STATUS_ENCERRADOS.has(atual.status as StatusSolicitacao)) return { ok: false, erro: "Solicitação já encerrada." }
+  // Repetir o status atual não grava: toda gravação muda o status, e o compare-and-set por status
+  // basta para não sobrescrever o histórico de outra mudança simultânea.
+  if (atual.status === args.status) return { ok: true }
   const historico = Array.isArray(atual.historico) ? atual.historico : []
   const gravado = await tabela.updateMany({
     where: { id: args.id, status: atual.status },
     data: {
       status: args.status,
       ...(STATUS_ENCERRADOS.has(args.status) ? { emailAberto: null } : {}),
-      historico: [...historico, { em: (args.agora ?? new Date()).toISOString(), evento: args.status, por: args.por }],
+      historico: [...historico, { em: (args.agora ?? new Date()).toISOString(), evento: args.status, por: args.por, ...(args.vinculo ?? {}) }],
     },
   })
-  if (gravado.count !== 1) return { ok: false, erro: "A solicitação mudou enquanto você atualizava. Recarregue a lista." }
+  if (gravado.count !== 1) return { ok: false, erro: ERRO_MUDOU }
   return { ok: true }
+}
+
+const ERRO_MUDOU = "A solicitação mudou enquanto você atualizava. Recarregue a lista."
+
+/**
+ * Fecha o pedido como `provisionada` com a loja e o usuário criados. Feito para rodar na MESMA
+ * transação que cria a conta: se o pedido já estiver encerrado, a criação é desfeita.
+ * Uma troca concorrente de status ainda aberta (recebida → em_contato) não derruba o vínculo:
+ * relê e tenta de novo.
+ */
+export async function vincularProvisionamento(
+  db: SolicitacaoDb,
+  args: { id: string; por: string; storeId: string; userId: string; agora?: Date },
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  let r: { ok: true } | { ok: false; erro: string } = { ok: false, erro: ERRO_MUDOU }
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    r = await atualizarStatusSolicitacao(db, { id: args.id, status: "provisionada", por: args.por, agora: args.agora, vinculo: { storeId: args.storeId, userId: args.userId } })
+    if (r.ok || r.erro !== ERRO_MUDOU) return r
+  }
+  return r
 }

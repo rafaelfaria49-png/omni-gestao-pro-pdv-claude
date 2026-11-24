@@ -1,52 +1,17 @@
 import withPWAInit from "@ducanh2912/next-pwa"
 
-/** Guarda o worker auxiliar antes de qualquer aquecimento/leitura/gravação Pessoas. */
-function protegerWorkerPessoas() {
-  const original = self.onmessage
-  if (typeof original !== "function") throw new Error("PESSOAS_PWA_WORKER_CONTRACT_CHANGED")
-  self.onmessage = function (event) {
-    if (event.data?.type === "__FRONTEND_NAV_CACHE__" || event.data?.type === "__START_URL_CACHE__") {
-      const url = new URL(event.data.url, self.location.href)
-      if (url.origin === self.location.origin && (
-        url.pathname === "/api/clientes" || url.pathname.startsWith("/api/clientes/") ||
-        url.pathname === "/api/clients" || url.pathname.startsWith("/api/import/") ||
-        url.pathname === "/api/ops/import/clientes" ||
-        url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
-        url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
-        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/")
-        || url.pathname === "/dashboard/relatorios" || url.pathname.startsWith("/dashboard/relatorios/")
-      )) return Promise.resolve()
-    }
-    return original.call(this, event)
-  }
-}
-
-class PessoasNavigationWorkerPlugin {
-  apply(compiler) {
-    const nome = "PessoasNavigationWorkerPlugin"
-    compiler.hooks.thisCompilation.tap(nome, (compilation) => {
-      compilation.hooks.processAssets.tap({
-        name: nome,
-        // Workbox calcula manifesto/revisions em OPTIMIZE_TRANSFER - 10.
-        stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_TRANSFER - 20,
-      }, () => {
-        const workers = compilation.getAssets().filter(({ name }) => /(?:^|[/\\])swe-worker-[a-f0-9]+\.js$/.test(name))
-        if (workers.length !== 1) throw new Error("PESSOAS_PWA_WORKER_MISSING_OR_AMBIGUOUS")
-        const worker = workers[0]
-        const source = worker.source.source().toString()
-        // Falhar diante de outro contrato, sem substituir silenciosamente código arbitrário.
-        if (!source.includes("__FRONTEND_NAV_CACHE__") || !source.includes("__START_URL_CACHE__") ||
-            !/self\.onmessage\s*=/.test(source) || !/caches\.open\(["']pages["']\)/.test(source)) {
-          throw new Error("PESSOAS_PWA_WORKER_CONTRACT_CHANGED")
-        }
-        compilation.updateAsset(worker.name, new compiler.webpack.sources.RawSource(
-          source + ";(" + protegerWorkerPessoas.toString() + ")();\n",
-        ))
-      })
-    })
-  }
-}
-
+/**
+ * OMNI-PWA-OFFLINE-CACHE-LOGOUT-ISOLATION-P1-001:
+ * Política allowlist-only no Service Worker.
+ * - `cacheOnFrontEndNav: false` e `cacheStartUrl: false` eliminam o worker auxiliar (`swe-worker`)
+ *   que gravava HTML autenticado em `pages`/`start-url`.
+ * - `extendDefaultRuntimeCaching: false` impede que regras genéricas (`apis`, `pages`, `pages-rsc*`,
+ *   `next-data`, `static-data-assets`, `static-js-assets`, `cross-origin`) armazenem respostas
+ *   autenticadas ou envenenem caches estáticos com HTML de login/dashboard.
+ * - A 1ª regra (`NetworkOnly`) tem precedência máxima sobre TODAS as APIs, páginas privadas e RSC.
+ * - Somente ativos públicos e estáticos imutáveis entram no cache do SW; a fila offline do PDV vive
+ *   em `localStorage` por loja (`opsKeyForLoja`) e `reloadOnOnline: false` permanece preservado.
+ */
 const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
@@ -56,48 +21,117 @@ const withPWA = withPWAInit({
   // pelos handlers de `online` (catálogo, pendências, caixa, versão) sem recarregar.
   reloadOnOnline: false,
   skipWaiting: true,
-  cacheOnFrontEndNav: true,
-  extendDefaultRuntimeCaching: true,
+  cacheOnFrontEndNav: false,
+  cacheStartUrl: false,
+  dynamicStartUrl: false,
+  extendDefaultRuntimeCaching: false,
   workboxOptions: {
     disableDevLogs: true,
+    cleanupOutdatedCaches: true,
     importScripts: ["/client-privacy-cache.js"],
-    runtimeCaching: [{
-      // Callback autocontido: Workbox o serializa para o SW de produção.
-      urlPattern: ({ sameOrigin, url }) => sameOrigin && (
-        url.pathname === "/api/clientes" || url.pathname.startsWith("/api/clientes/") ||
-        url.pathname === "/api/clients" || url.pathname.startsWith("/api/import/") ||
-        url.pathname === "/api/ops/import/clientes" ||
-        url.pathname === "/dashboard/clientes" || url.pathname.startsWith("/dashboard/cadastros") ||
-        url.pathname === "/api/pessoas" || url.pathname.startsWith("/api/pessoas/") ||
-        url.pathname === "/dashboard/pessoas" || url.pathname.startsWith("/dashboard/pessoas/") ||
-        // Sync do catálogo do PDV (PDV-CADASTROS-SYNC-AUTOMATICO-001): versão e snapshot nunca do
-        // cache — rede lenta devolveria catálogo velho. A carga inicial do PDV segue cacheável.
-        (url.pathname === "/api/ops/inventory" && url.searchParams.get("catalogSync") === "1") ||
-        // OMNI-PRINT-004C: estado de job/terminal/agente nunca do cache (nem entre sessões no mesmo navegador).
-        url.pathname.startsWith("/api/print/") ||
-        // Prova de venda no servidor (PDV-OFFLINE-SYNC-CONFIABILIDADE-E2E-001): consulta por
-        // clientSaleId e capability do writer nunca do cache — offline vira erro de rede honesto.
-        url.pathname === "/api/ops/vendas/by-client-sale-id" ||
-        url.pathname === "/api/ops/venda-persist/v2" ||
-        // Relatórios, financeiro e caixa (RELATORIOS-FASE-A-001): a regra padrão `apis` do next-pwa
-        // (NetworkFirst, 24 h, timeout 10 s, chave = URL) servia números velhos sem aviso e, nas rotas
-        // que levam a loja só no header, a resposta de outra loja/sessão. Offline vira erro honesto;
-        // a sessão de caixa já trata falha de rede sem tocar no estado local (`decision: null`).
-        url.pathname.startsWith("/api/vendas/") ||
-        url.pathname.startsWith("/api/financeiro/") ||
-        url.pathname.startsWith("/api/ops/caixa/") ||
-        url.pathname.startsWith("/api/dashboard/") ||
-        // Reports HTML/RSC embeds session data in the root layout; auxiliary nav worker is guarded above too.
-        url.pathname === "/dashboard/relatorios" || url.pathname.startsWith("/dashboard/relatorios/") ||
-        // Listas de títulos (Contas a Pagar/Receber e recebimento no PDV) levam a loja só no
-        // header: mesma URL para todas as lojas. Gravar já exige rede; ler offline vira erro.
-        url.pathname === "/api/ops/contas-pagar-list" ||
-        url.pathname === "/api/ops/contas-receber-list" ||
-        url.pathname.startsWith("/api/finance/")
-      ),
-      handler: "NetworkOnly",
-      method: "GET",
-    }],
+    runtimeCaching: [
+      {
+        // REGRA 1 (precedência máxima — true allowlist-only, autocontida para serialização Workbox):
+        // Qualquer GET mesma-origem que NÃO seja um ativo estático público explicitamente listado
+        // (inclui "/", todas as /api/*, /dashboard*, /conta*, /login*, /portal*, /contador*,
+        // /_next/data/*, qualquer rota futura e qualquer requisição RSC/prefetch) é NetworkOnly.
+        urlPattern: ({ sameOrigin, url, request }) => sameOrigin && (
+          // Mantém explicitamente o marcador do contrato de sync do catálogo do PDV:
+          (url.pathname === "/api/ops/inventory" && url.searchParams.get("catalogSync") === "1") ||
+          url.searchParams.has("_rsc") ||
+          Boolean(request && request.headers && (
+            request.headers.get("RSC") === "1" ||
+            request.headers.get("Next-Router-Prefetch") === "1"
+          )) ||
+          !(
+            url.pathname.startsWith("/_next/static/") ||
+            url.pathname === "/manifest.webmanifest" ||
+            url.pathname === "/manifest.json" ||
+            url.pathname === "/apple-touch-icon.png" ||
+            url.pathname === "/omni-gestao-pro-icon.svg" ||
+            url.pathname === "/favicon.ico" ||
+            url.pathname.startsWith("/icons/") ||
+            url.pathname.startsWith("/gestao-lojas/")
+          )
+        ),
+        handler: "NetworkOnly",
+        method: "GET",
+      },
+      {
+        // REGRA 2: Google Fonts webfonts (públicos e imutáveis).
+        urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
+        handler: "CacheFirst",
+        method: "GET",
+        options: {
+          cacheName: "google-fonts-webfonts",
+          expiration: { maxEntries: 8, maxAgeSeconds: 365 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+      {
+        // REGRA 3: Google Fonts stylesheets (públicos).
+        urlPattern: /^https:\/\/fonts\.(?:googleapis)\.com\/.*/i,
+        handler: "StaleWhileRevalidate",
+        method: "GET",
+        options: {
+          cacheName: "google-fonts-stylesheets",
+          expiration: { maxEntries: 8, maxAgeSeconds: 7 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+      {
+        // REGRA 4: Ativos estáticos imutáveis gerados pelo build (`/_next/static/*`, somente HTTP 200 não-HTML/JSON/RSC).
+        urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/_next/static/"),
+        handler: "CacheFirst",
+        method: "GET",
+        options: {
+          cacheName: "next-static-assets",
+          expiration: { maxEntries: 128, maxAgeSeconds: 7 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [200] },
+          plugins: [{
+            cacheWillUpdate: async ({ response }) => (
+              !response ||
+              response.status !== 200 ||
+              response.redirected ||
+              response.type === "opaqueredirect" ||
+              /^\s*(text\/html|application\/json|text\/x-component)/i.test(response.headers.get("content-type") || "")
+                ? null
+                : response
+            ),
+          }],
+        },
+      },
+      {
+        // REGRA 5: Manifesto PWA, ícones oficiais e imagens públicas da landing (somente HTTP 200 não-HTML/RSC).
+        urlPattern: ({ sameOrigin, url }) => sameOrigin && (
+          url.pathname === "/manifest.webmanifest" ||
+          url.pathname === "/manifest.json" ||
+          url.pathname === "/apple-touch-icon.png" ||
+          url.pathname === "/omni-gestao-pro-icon.svg" ||
+          url.pathname === "/favicon.ico" ||
+          url.pathname.startsWith("/icons/") ||
+          url.pathname.startsWith("/gestao-lojas/")
+        ),
+        handler: "StaleWhileRevalidate",
+        method: "GET",
+        options: {
+          cacheName: "public-pwa-assets",
+          expiration: { maxEntries: 64, maxAgeSeconds: 7 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [200] },
+          plugins: [{
+            cacheWillUpdate: async ({ response }) => (
+              !response ||
+              response.status !== 200 ||
+              response.redirected ||
+              response.type === "opaqueredirect" ||
+              /^\s*(text\/html|text\/x-component)/i.test(response.headers.get("content-type") || "")
+                ? null
+                : response
+            ),
+          }],
+        },
+      },
+    ],
   },
 })
 
@@ -155,16 +189,17 @@ if (isVercel) {
   })
 }
 
+/** Impede cache HTTP e BFCache em rotas autenticadas após logout / botão Voltar. */
+const privateNoStoreHeaders = [
+  { key: "Cache-Control", value: "private, no-store, max-age=0, must-revalidate" },
+]
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /** Next.js 16 — HMR/webpack dev a partir de 127.0.0.1 (ex.: Playwright com IPv4). */
   allowedDevOrigins: ["127.0.0.1"],
   /** Next.js 16 usa Turbopack por padrão; o plugin PWA injeta webpack — config vazia evita erro de build. */
   turbopack: {},
-  webpack(config, { isServer, dev }) {
-    if (!isServer && !dev) config.plugins.push(new PessoasNavigationWorkerPlugin())
-    return config
-  },
   env,
   /**
    * CATALOGO-APARELHOS-SEEDS-TRACING-002 — o loader server-only (`lib/catalogo-aparelhos/
@@ -197,6 +232,18 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        source: "/dashboard",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/dashboard/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/conta/:path*",
+        headers: privateNoStoreHeaders,
       },
     ]
   },

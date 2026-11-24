@@ -4,11 +4,17 @@ import { useState } from "react"
 import { signOut } from "next-auth/react"
 import { LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  broadcastAuthLogout,
+  markCachePurgeRetryNeeded,
+  purgeAuthenticatedBrowserCaches,
+} from "@/lib/auth/pwa-cache-privacy"
 
 /**
  * "Sair da conta" para QUALQUER usuário autenticado, inclusive no primeiro acesso (troca de senha
  * pendente). Mesmo mecanismo do "Encerrar sessão" de Configurações → Segurança: `signOut` oficial do
- * NextAuth, que chama `/api/auth/signout` (liberado pelo proxy mesmo com troca pendente) e volta ao login.
+ * NextAuth, que chama `/api/auth/signout` (liberado pelo proxy mesmo com troca pendente) e volta ao login,
+ * acrescido de limpeza segura de CacheStorage autenticado e aviso multi-aba (sem tocar em localStorage/PDV).
  */
 export function SignOutButton() {
   const [busy, setBusy] = useState(false)
@@ -22,6 +28,10 @@ export function SignOutButton() {
         onClick={() => {
           setBusy(true)
           setFailed(false)
+          broadcastAuthLogout()
+          void purgeAuthenticatedBrowserCaches().then((res) => {
+            if (!res.ok) markCachePurgeRetryNeeded(true)
+          })
           void signOut({ callbackUrl: "/login" }).catch(() => {
             setBusy(false)
             setFailed(true)
