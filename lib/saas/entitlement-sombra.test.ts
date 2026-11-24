@@ -13,7 +13,7 @@ const assinatura = (organizationId: string, p: Record<string, unknown> = {}) => 
 })
 
 function dbCom(linhas: Awaited<ReturnType<EntitlementDb["store"]["findMany"]>>) {
-  const findMany = vi.fn(async () => linhas)
+  const findMany = vi.fn(async (_args: unknown) => linhas)
   return { db: { store: { findMany } } as unknown as EntitlementDb, findMany }
 }
 
