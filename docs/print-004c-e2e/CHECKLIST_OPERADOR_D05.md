@@ -116,20 +116,21 @@ exige conferência e autorização separadas conforme o plano. Aprovação final
 
 ## Reconciliação 2026-11-24
 
-- Heads: #327 `cd1cc6a`, #334 `ddfbc31`. Pacote continua `e974ca03…bc77` (reproduzido do head `ddfbc31`; agente inalterado).
-- **Já existe a instalação `USB001`** no RAFACELL (#346, 2026-11-11): desabilitada, não pareada, integridade PASS. Escolher
-  **uma** instalação antes do §2 (decisão do proprietário, ver ROTEIRO "Antes de começar"):
-  - reutilizar (recomendado) — trocar só estas três variáveis do §1 e pular o `Install-Agent.ps1 -Apply` do §2:
+- Heads: #327 `cd1cc6a`, #334 `907f749`+ (docs). Pacote continua `e974ca03…bc77` (reproduzido do head `ddfbc31`; agente inalterado).
+- **Decisão do proprietário (2026-11-24): reutilizar a `USB001`.** Conferência só leitura do mesmo dia: integridade
+  PASS, mas a instalação está **pareada** no alias D05 (12/11), com tarefa **habilitada** e parada `FATAL`; diário vazio.
+  Na janela, antes de tudo, seguir "Primeiro passo da janela: reconciliar a `USB001`" no ROTEIRO (Stop → Diagnose
+  `-ProbeCredential` → conferir no Preview). O `pair` do §3 recusa enquanto houver `config.json`/`pairing.pending.json`.
+  Variáveis do §1 para a `USB001` (pular o `Install-Agent.ps1 -Apply` do §2):
 
     ```powershell
     $D05InstallRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgentApp-USB001'
     $D05DataRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgent-USB001'
     $D05TaskName = 'OmniPrintAgent-Lab-USB001'
-    .\windows\Diagnose-Agent.ps1 -InstallRoot $D05InstallRoot   # esperado: integrity PASS, paired=false, Disabled
+    .\windows\Diagnose-Agent.ps1 -InstallRoot $D05InstallRoot   # 2026-11-24: integrity PASS, paired=true, Ready, haltReason=FATAL
     ```
 
-  - ou retirar a `USB001` primeiro (`Uninstall-Agent.ps1 -InstallRoot <USB001> -Apply -AuthorizedLab`; sem pareamento não
-    há credencial a revogar) e seguir o §2 com `-D05`. Nunca duas tarefas pareadas para a fila `POS-80`.
+  - Nenhuma instalação `-D05` nova (decisão do proprietário). Nunca duas tarefas pareadas para a fila `POS-80`.
 - **Fechar o app OmniGestão Desktop** durante H01–H18: ele imprime na mesma fila por outro canal (spooler). PDV só no
   Chrome/Edge, no alias D05. Aviso "enviado à fila de <impressora>" = app desktop → parar o caso.
 - Ligar o transporte (`OMNI_PRINT_DIRECT_ENABLED=1` só na branch D05 + novo Preview + probe) é decisão do proprietário

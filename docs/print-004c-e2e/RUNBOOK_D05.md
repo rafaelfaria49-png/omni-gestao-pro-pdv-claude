@@ -89,6 +89,10 @@ e aprovação escrita do proprietário. Esta preparação não muda nenhum caso 
   sem foto, sem série, sem nome do operador) — a linha acima segue **NÃO EXECUTADO**.
 - Procedimento guiado passo a passo (A–V), com o caso H de cada passo: ROTEIRO_HOMOLOGACAO_FISICA.md, seção
   "Estado em 2026-11-24". Instalação `USB001` existente e app desktop fechado: CHECKLIST_OPERADOR_D05.md.
+- Decisões do proprietário (2026-11-24): reutilizar a `USB001`; preservar a POS-80; só Preview D05 com banco/loja
+  sintéticos; Chrome/Edge com o app desktop fechado; `APPROVED_RELEASE=null`. Pareamento, transporte e testes físicos só
+  com autorização presencial. A `USB001` está pareada no alias D05 (12/11), tarefa habilitada e `FATAL`: reconciliar
+  primeiro (ROTEIRO, "Primeiro passo da janela").
 - O PDV agora também imprime pelo app desktop (spooler) e exige o agente quando a impressão direta está ligada
   (`requireAgent`, #346). Os dois canais não podem rodar juntos durante D05.
 

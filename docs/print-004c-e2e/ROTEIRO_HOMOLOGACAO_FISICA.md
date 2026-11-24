@@ -10,19 +10,46 @@ seções 1–9 abaixo continuam valendo como detalhe e critérios.
 | Pilha | main `f97e9de` → #327 `cd1cc6a` → #334 `ddfbc31` (ambas DRAFT, nenhum merge) |
 | Pacote do agente | `omni-print-agent-0.2.0-d04.zip`, SHA-256 `e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77`, contentId `f6af488c…6a40`, **sem assinatura**. Reproduzido byte a byte do head `ddfbc31` em 2026-11-24; código do agente sem mudança desde `1c39fcd` |
 | Estação autorizada | RAFACELL, `RAFACELL\rafae` (SID …-1002), POS-80 USB, fila `POS-80`, driver 11.3.0.1, porta USB005, bobina 80 mm |
-| Instalação já existente | `OmniPrintAgentApp-USB001` / `OmniPrintAgent-USB001`, tarefa `OmniPrintAgent-Lab-USB001` **desabilitada**, **não pareada**, integridade PASS (#346, 2026-11-11) |
+| Instalação já existente | `OmniPrintAgentApp-USB001` / `OmniPrintAgent-USB001`, tarefa `OmniPrintAgent-Lab-USB001`. Instalada em 2026-11-11 (#346). **Conferência de 2026-11-24 (só leitura):** integridade PASS, mesmo SID, Interactive/Limited/IgnoreNew; porém **pareada** (`config.json` de 2026-11-12 15:10, `pairing.pending.json` ainda presente), tarefa **habilitada** (`Ready`, gatilho de logon, última execução 2026-11-24 11:30, resultado 0), parada em **`FATAL`** desde 2026-11-12 18:50, diário de envios **vazio** (0 bytes: nenhum cupom enviado), nenhum processo ativo. O pareamento de 12/11 não tem registro no repositório |
 | Servidor de pareamento | alias da branch D05 `https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app` (banco Neon QA `omni_print_d05`) |
 | Transporte no Preview | **desligado** (`OMNI_PRINT_DIRECT_ENABLED=0`); Production: `APPROVED_RELEASE=null`, nada ligado |
 | Já observado (não conta como PASS) | página de teste do **Windows** saiu completa e cortou (relato do operador em 2026-11-11, sem foto) |
 
-### Antes de começar: três decisões do proprietário
+### Decisões do proprietário (2026-11-24)
 
-1. **Qual instalação usar.** Existe a `USB001` (mesmo pacote, desabilitada, sem credencial). Recomendado: **reutilizá-la**
-   (variáveis do passo B apontando para `-USB001`). A alternativa é desinstalá-la (`Uninstall-Agent.ps1`, sem pareamento
-   não há credencial a revogar) e instalar a `-D05` do CHECKLIST. **Nunca** duas tarefas pareadas para a mesma fila.
-2. **Janela e operador.** Nome do operador, dia e horário presencial; loja real fora do horário de vendas ou com outro caixa.
-3. **Ligar o transporte só na janela.** Uma variável da branch D05 (`OMNI_PRINT_DIRECT_ENABLED=1`) + novo deployment
-   Preview + probe `enabled`, imediatamente antes de H01. Ação remota que exige o "sim" do proprietário no momento.
+1. **Instalação: reutilizar a `USB001`**, após nova conferência de integridade (feita em 2026-11-24, só leitura: PASS —
+   ver estado na tabela acima). Nenhuma instalação `-D05` nova; **nunca** duas tarefas pareadas para a mesma fila.
+2. **Impressora:** preservar a POS-80 e sua configuração atual (fila, driver, porta). Não alterar a fila no Windows;
+   o "offline" que o Windows reporta (`WorkOffline=True`) só é diagnosticado, não corrigido por script.
+3. **Ambiente:** exclusivamente o Preview D05, banco Neon QA e loja sintética `d05-synthetic-store`.
+4. **Canal:** Chrome ou Edge, com o OmniGestão Desktop **fechado** durante todo o teste.
+5. **Production:** `APPROVED_RELEASE=null`, nada ligado.
+6. **Autorização efetiva** de pareamento, ativação do transporte e execução física: dada pelo proprietário **presencialmente**,
+   no computador, com a impressora disponível. Até lá, nenhuma ação na `USB001`, na tarefa, no Preview ou na fila.
+
+### Primeiro passo da janela: reconciliar a `USB001` (só com o proprietário presente)
+
+A `USB001` não está no estado em que foi instalada (pareada em 12/11 sem registro, tarefa habilitada, parada `FATAL`).
+Antes de qualquer impressão:
+
+Já conferido sem segredo (`pairing.pending.json` só tem data e URL): o pareamento de 2026-11-12 18:09Z foi feito no
+**alias do Preview D05**. Causa do `FATAL` não comprovada (hipótese: recusa do servidor com o transporte desligado).
+
+1. `Stop-Agent.ps1 -InstallRoot <USB001> -Apply -AuthorizedLab` → tarefa volta a **desabilitada** (não apaga nada).
+2. `Diagnose-Agent.ps1 -InstallRoot <USB001> -ProbeCredential -AuthorizedLab` → `credential: DPAPI_CURRENT_USER_OK` no
+   mesmo usuário (o diagnóstico não mostra servidor nem credencial).
+3. No Preview D05, Configurações → PDV → impressão direta: o computador deve aparecer como instalação pareada.
+4. Se aparecer e a credencial abrir: registrar a causa do `FATAL` (log do supervisor, sem credencial) e seguir para o passo
+   G (vínculo); o passo F (novo pareamento) não se aplica — o `pair` recusa (`ALREADY_PAIRED_OR_PENDING`) com
+   `config.json`/`pairing.pending.json` presentes, por design.
+5. Se não aparecer, a credencial não abrir ou o `FATAL` não for explicado: revogar a instalação no Preview D05, arquivar a
+   pasta `OmniPrintAgent-USB001` inteira (mover, não apagar: diário, `.instance`, travas e `pairing.pending.json` juntos)
+   e só então parear de novo (passo F). Nunca editar ou limpar esses arquivos à mão.
+
+### Ligar o transporte só na janela
+
+Uma variável da branch D05 (`OMNI_PRINT_DIRECT_ENABLED=1`) + novo deployment Preview + probe `enabled`, imediatamente
+antes de H01. Ação remota que exige o "sim" do proprietário no momento.
 
 ### Canal certo: navegador, não o app desktop
 
@@ -40,9 +67,9 @@ o cupom saiu pelo app desktop — **parar**: o caso não vale para D05.
 | A. Ambiente isolado | Conferir no navegador que a URL é o alias D05 e que só aparece a loja `d05-synthetic-store`; nenhuma venda real | login ADMIN/CAIXA sintéticos; nenhuma loja real visível | pré-condição |
 | B. Pacote e integridade | Baixar o ZIP do CI da #334 (head revisado) para `C:\HomologacaoD05\`; `Get-FileHash … -Algorithm SHA256` | hash = `e974ca03…bc77`; divergiu → **parar** | H02 |
 | C. Impressora | `Get-CimInstance Win32_Printer` e `Get-PnpDevice` (CHECKLIST §1); fila não pausada nem offline; foto da montagem, modelo e série | fila `POS-80`, USB005 presente | H01 |
-| D. Instalação | Reutilizar `USB001` (`Diagnose-Agent.ps1`) ou instalar `-D05` (`Install-Agent.ps1 … -Apply -AuthorizedLab`) | tarefa desabilitada, mesmo SID, Interactive/Limited/IgnoreNew, integridade PASS | H02 |
+| D. Instalação | Reutilizar `USB001`: reconciliação acima (Stop → Diagnose `-ProbeCredential` → conferir no Preview) | tarefa desabilitada, mesmo SID, Interactive/Limited/IgnoreNew, integridade PASS, instalação listada no Preview D05 | H02 |
 | E. Impressora vista pelo agente | `agent.mjs printers --data-dir <dataRoot>` | a fila `POS-80` aparece | H01/H02 |
-| F. Pareamento | No caixa: Configurações → PDV → gerar código (10 min, uso único); `agent.mjs pair --server <alias D05> --code …`; `Diagnose-Agent.ps1 -ProbeCredential`; `Start-Agent.ps1 -Apply` | computador **online**; nenhum código/credencial em foto, log ou chat | H02 |
+| F. Pareamento (só se a reconciliação da `USB001` exigir) | No caixa: Configurações → PDV → gerar código (10 min, uso único); `agent.mjs pair --server <alias D05> --code …`; `Diagnose-Agent.ps1 -ProbeCredential`; `Start-Agent.ps1 -Apply` | computador **online**; nenhum código/credencial em foto, log ou chat | H02 |
 | G. Selecionar a impressora | Vincular terminal → computador, fila `POS-80`, bobina 80 mm, "Somente este navegador"; ligar "Usar impressão direta nesta loja" | vínculo ativo no terminal sintético | H02/H15 |
 | H. Comprovante de teste | Venda sintética: "Pão de queijo", "Café com açúcar", "Maçã/Ç/ã/é", dinheiro com troco | sem diálogo do navegador; aviso "Comprovante enviado à fila da impressora"; exatamente 1 papel | H05/H06 |
 | I. Acentuação | Conferir no papel Ç, ã, é, ç, "NÃO É DOCUMENTO FISCAL" | todos corretos, nenhum `?` ou caractere trocado | H05 |

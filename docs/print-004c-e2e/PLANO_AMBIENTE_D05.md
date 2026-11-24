@@ -108,8 +108,8 @@ inalterada por escopo/ações; não acessar banco produtivo para produzir esse a
 |---|---|
 | NEON_TEST_BRANCH | inalterado (nenhuma consulta nesta reconciliação) |
 | VERCEL_TEST_PREVIEW | alias D05 em `dpl_7WpCYjjAzai3weEYYUd4rjx9U8EQ` (`1c39fcd`), transporte **desligado**. O head `ddfbc31` ainda não tem Preview: novo deployment só com autorização, na janela |
-| WINDOWS_PHYSICAL_INSTALL | instalação `USB001` existente (desabilitada, não pareada, integridade PASS); escolher reutilizar ou retirar antes de instalar outra |
-| REAL_PRINTER_USE | POS-80 / USB005 / 80 mm; página de teste do Windows relatada em 2026-11-11 (sem foto) |
+| WINDOWS_PHYSICAL_INSTALL | **reutilizar a `USB001`** (decisão do proprietário). Conferência só leitura 2026-11-24: integridade PASS; pareada no alias D05 em 2026-11-12, tarefa habilitada, parada `FATAL`, diário vazio. Reconciliar na janela (ROTEIRO) |
+| REAL_PRINTER_USE | POS-80 / USB005 / 80 mm, **configuração preservada** (decisão do proprietário); Windows reporta `WorkOffline=True`; página de teste do Windows relatada em 2026-11-11 (sem foto) |
 | D05_PHYSICAL_EXECUTION | PENDING_OPERATOR_AND_WINDOW; 0/18 |
 
 Isolamento de canal: o app OmniGestão Desktop (spooler) usa a mesma fila; fica fechado durante D05 (ROTEIRO).

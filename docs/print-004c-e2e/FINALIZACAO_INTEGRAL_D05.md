@@ -196,3 +196,37 @@ reproduzido `e974ca03…bc77`, integridade PASS. CI integral: na PR #334.
 Homologação física: **PENDING**, 0/18. Procedimento guiado A–V com mapeamento para H01–H18 no ROTEIRO; decisões pendentes
 do proprietário: instalação (`USB001` existente ou nova), operador/janela, ligar o transporte do Preview na janela.
 Production: nenhum acesso, deploy, env, migration ou merge.
+
+## 12. Decisões do proprietário e encerramento da preparação (2026-11-24)
+
+Preparação técnica **aprovada** pelo proprietário. Decisões: reutilizar a `USB001` após nova conferência de integridade;
+preservar a POS-80 e sua configuração; homologar só no Preview D05 com banco e loja sintéticos; Chrome/Edge com o
+OmniGestão Desktop fechado; `APPROVED_RELEASE=null`. Pareamento, ativação do transporte e testes físicos: autorização
+presencial do proprietário, no computador, com a impressora disponível. PRs #327/#334 permanecem DRAFT.
+
+Conferência da `USB001` (somente leitura: `Diagnose-Agent.ps1` sem `-ProbeCredential`, metadados da pasta de dados,
+`halt.json` e `pairing.pending.json`; `config.json` **não** foi aberto):
+
+| Item | Resultado |
+|---|---|
+| Integridade do release instalado | PASS (`0.2.0-d04`, contentId `f6af488c…`, sem assinatura) |
+| Usuário / tarefa | mesmo SID; Interactive/Limited/IgnoreNew; tarefa **habilitada** (`Ready`), última execução 2026-11-24 11:30, resultado 0 |
+| Pareamento | **existe**: `pairing.pending.json` 2026-11-12T18:09:59Z → alias D05; `config.json` 2026-11-12 15:10 (local) |
+| Estado | `halt.json` = `FATAL` em 2026-11-12T21:50:39Z; diário `journal.jsonl` com 0 bytes (nenhum envio); nenhum processo |
+| Impressora | `POS-80`, driver 11.3.0.1, USB005, `WorkOffline=True` (preservada, não alterada) |
+
+Esse pareamento de 12/11 não tem registro no repositório. Nada foi alterado: tarefa, pasta de dados, fila e Preview
+permanecem como estavam. Reconciliação na janela: ROTEIRO, "Primeiro passo da janela: reconciliar a `USB001`".
+
+Limpeza de disco autorizada (somente `.next` regeneráveis de worktrees integradas à main, comprovadamente inativas):
+
+| Worktree | Ação |
+|---|---|
+| `.claude/worktrees/ops-v3-seletor-003` (#391), `.worktrees/desktop-win10-win11-download-001` (#393), `.worktrees/gestao-lojas-landing-premium-001` (#395), `~/.codex/worktrees/ops-edicao-completa-v3-v4` (#353) | `.next` removido (sem processo, sem escrita < 3 h, ignorado pelo Git) |
+| `.worktrees/cadastros-acessorios-final-001` (#400) | **preservado**: escrita nas últimas 3 h (agente ativo) |
+| `.worktrees/fin-f9-reconcile-main-001` | já inexistente (removido fora desta sessão) |
+
+Antes, na mesma data, os `.next` das quatro worktrees do próprio Omni Print (004C, D03, D04, USB) também foram removidos.
+Disco: 12 GB livres no início → 29 GB. `node_modules`, bancos, `.env`, evidências, branches e worktrees preservados.
+
+Estado final: **AGUARDANDO JANELA PRESENCIAL**. H01–H18 = 0/18.
