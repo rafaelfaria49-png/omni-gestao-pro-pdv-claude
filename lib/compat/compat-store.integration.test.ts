@@ -26,6 +26,7 @@ import {
   deleteLocal,
   getPreferencias,
   listCoresLoja,
+  listCoresVisual,
   listLocalizacoes,
   listOrganizacao,
   listDevolucoesPorVenda,
@@ -313,18 +314,23 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
   // ── Cores ──────────────────────────────────────────────────────────────────
 
   it("cores: cadastra, impede duplicata por grafia e nome da paleta, renomeia, desativa e isola", async () => {
-    const c = await createCorLoja(db, A, "u-a", { label: "Azul Bebê" })
+    const c = await createCorLoja(db, A, "u-a", { label: "Azul Bebê", visual: "#93C5FD" })
     expect(c.ok).toBe(true)
     if (!c.ok) return
+    expect(c.value.visual).toBe("#93C5FD")
     expect(await createCorLoja(db, A, "u-a", { label: "azul  bebe" })).toMatchObject({ ok: false, code: "DUPLICATE" })
+    expect(await createCorLoja(db, A, "u-a", { label: "Azul-bebê" })).toMatchObject({ ok: false, code: "DUPLICATE" })
     expect(await createCorLoja(db, A, "u-a", { label: "Preto" })).toMatchObject({ ok: false, code: "DUPLICATE" })
-    expect((await updateCorLoja(db, A, "u-a", c.value.id, { version: 1, label: "Azul bebê claro" })).ok).toBe(true)
+    expect(await createCorLoja(db, A, "u-a", { label: "Cor Ruim", visual: "red;drop" })).toMatchObject({ ok: false, code: "INVALID" })
+    expect((await updateCorLoja(db, A, "u-a", c.value.id, { version: 1, label: "Azul-marinho", visual: "#1E3A8A" })).ok).toBe(true)
     expect((await updateCorLoja(db, A, "u-a", c.value.id, { version: 2, ativo: false })).ok).toBe(true)
     expect((await setCorPadraoAtiva(db, A, "u-a", "fume", false)).ok).toBe(true)
+    expect((await setCorPadraoAtiva(db, A, "u-a", "rosa", undefined, "#F472B6")).ok).toBe(true)
     expect(await setCorPadraoAtiva(db, A, "u-a", "outra", false)).toMatchObject({ ok: false, code: "INVALID" })
-    const efetivas = coresEfetivas(await listCoresLoja(db, A))
+    const efetivas = coresEfetivas(await listCoresLoja(db, A), await listCoresVisual(db, A))
     expect(efetivas.find((x) => x.id === "fume")?.ativo).toBe(false)
-    expect(efetivas.find((x) => x.id === c.value.id)).toMatchObject({ label: "Azul bebê claro", ativo: false })
+    expect(efetivas.find((x) => x.id === "rosa")?.visual).toBe("#F472B6")
+    expect(efetivas.find((x) => x.id === c.value.id)).toMatchObject({ label: "Azul-marinho", ativo: false, visual: "#1E3A8A" })
     expect(await listCoresLoja(db, B)).toEqual([])
     expect(await updateCorLoja(db, B, "u-b", c.value.id, { version: 3, ativo: true })).toMatchObject({ ok: false, code: "NOT_FOUND" })
   })

@@ -111,6 +111,8 @@ export interface DeviceSearchResult {
 export interface SearchDeviceOptions {
   /** Máximo de resultados (default 20). */
   limit?: number
+  /** Quantos resultados pular (paginação "Mostrar mais"; default 0). */
+  offset?: number
   /** Tamanho mínimo da query para buscar (default 2). */
   minQueryLength?: number
   /** Filtro por marca (desambigua aliases curtos). */

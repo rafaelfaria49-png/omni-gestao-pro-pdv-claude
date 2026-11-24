@@ -11,6 +11,7 @@ import { loadCatalogoIndex } from "./catalogo-loader"
 import { getPeliculasPorModelo } from "./peliculas"
 import { applyPeliculaOverrides, buildLojaCatalogoIndex, searchDeviceModelsComLoja } from "./loja-catalogo"
 import {
+  chaveLockCatalogoModelos,
   createLojaModelo,
   getLojaModelosByKeys,
   listLojaCompatOverrides,
@@ -233,5 +234,113 @@ describe.skipIf(!TEST_URL)("catálogo por loja — PostgreSQL descartável", () 
     )
     await expect(ins("ok")).resolves.toBe(1)
     await expect(ins("invertido")).rejects.toThrow()
+  })
+
+  it("COMPAT-BUSCA-MODELOS-NATURAL-001: nome de 1 caractere grava; iPhone 7 existente é reaproveitado; duplicata segue barrada", async () => {
+    // "iPhone" + "7" (fabricante Apple) = Apple iPhone 7 do catálogo global → usar o existente, sem gravar.
+    const global7 = await createLojaModelo(db, global, storeB, "user-b", { manufacturer: "Apple", brand: "iPhone", name: "7" })
+    expect(global7).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: "apple_iphone_7", source: "global", active: true } })
+    expect(await db.catalogoAparelhoLojaModelo.count({ where: { storeId: storeB, nameKey: "7" } })).toBe(0)
+
+    // marca sintética (fora do catálogo global): nome de um caractere é válido
+    const z = await createLojaModelo(db, global, storeB, "user-b", { brand: BRAND, name: "Z" })
+    expect(z.ok).toBe(true)
+    if (!z.ok) return
+    expect(z.value).toMatchObject({ name: "Z", brand: BRAND })
+    // mesmo marca+nome (outra grafia): bloqueado, oferecendo o existente
+    expect(await createLojaModelo(db, global, storeB, "user-b", { brand: BRAND.toUpperCase(), name: "z" })).toMatchObject({
+      ok: false,
+      code: "DUPLICATE",
+      existing: { modelKey: z.value.modelKey, source: "loja" },
+    })
+    // a busca da loja acha o modelo de 1 caractere pelo nome padronizado; a outra loja não o vê
+    const idxB = buildLojaCatalogoIndex(await listLojaModelos(db, storeB))
+    expect(searchDeviceModelsComLoja(global, idxB, `${BRAND} Z`).map((r) => r.modelKey)).toContain(z.value.modelKey)
+    const idxA = buildLojaCatalogoIndex(await listLojaModelos(db, storeA))
+    expect(searchDeviceModelsComLoja(global, idxA, `${BRAND} Z`).map((r) => r.modelKey)).not.toContain(z.value.modelKey)
+    // nome sem letra nem número continua inválido
+    expect(await createLojaModelo(db, global, storeB, "user-b", { brand: BRAND, name: "-" })).toMatchObject({ ok: false, code: "INVALID" })
+
+    // revisão R3: edição não cria o mesmo aparelho escrito de outro jeito
+    // ("Fab Sintética QA" + "Linha QA 5" ≡ "Linha QA" + "5", fabricante Fab Sintética QA).
+    const FAB = "Fab Sintética QA"
+    const existente = await createLojaModelo(db, global, storeB, "user-b", { brand: FAB, manufacturer: FAB, name: "Linha QA 5" })
+    expect(existente.ok).toBe(true)
+    if (!existente.ok) return
+    const outro = await createLojaModelo(db, global, storeB, "user-b", { brand: "Linha QA", manufacturer: FAB, name: "5s" })
+    expect(outro.ok).toBe(true)
+    if (!outro.ok) return
+    // criar direto o equivalente: bloqueado
+    expect(await createLojaModelo(db, global, storeB, "user-b", { brand: "Linha QA", manufacturer: FAB, name: "5" })).toMatchObject({
+      ok: false, code: "DUPLICATE", existing: { modelKey: existente.value.modelKey },
+    })
+    const row = await db.catalogoAparelhoLojaModelo.findFirstOrThrow({ where: { storeId: storeB, modelKey: outro.value.modelKey } })
+    const editado = await updateLojaModelo(db, global, storeB, "user-b", row.id, { version: row.version, name: "5" })
+    expect(editado).toMatchObject({ ok: false, code: "DUPLICATE", existing: { modelKey: existente.value.modelKey } })
+    expect((await db.catalogoAparelhoLojaModelo.findFirstOrThrow({ where: { id: row.id } })).name).toBe("5s")
+  })
+
+  it("PR #355 P2 (concorrência): equivalentes simultâneos na mesma loja geram UM registro (criação e edição)", async () => {
+    // Dois operadores cadastram simultaneamente o mesmo aparelho escrito de formas equivalentes:
+    // "ROG" + "Phone QA99" (fabricante Asus) × "Asus" + "ROG Phone QA99".
+    const criacao = await Promise.all([
+      createLojaModelo(db, global, storeA, "u1", { manufacturer: "Asus", brand: "ROG", name: "Phone QA99" }),
+      createLojaModelo(second, global, storeA, "u2", { manufacturer: "Asus", brand: "Asus", name: "ROG Phone QA99" }),
+    ])
+    expect(criacao.filter((r) => r.ok)).toHaveLength(1)
+    expect(criacao.filter((r) => !r.ok && r.code === "DUPLICATE")).toHaveLength(1)
+    const salvos = await db.catalogoAparelhoLojaModelo.findMany({
+      where: { storeId: storeA, OR: [{ nameKey: "PHONE QA99" }, { nameKey: "ROG PHONE QA99" }] },
+    })
+    expect(salvos).toHaveLength(1)
+
+    // Edição concorrente: dois registros distintos editados simultaneamente para o mesmo aparelho equivalente.
+    const e1 = await createLojaModelo(db, global, storeA, "u1", { manufacturer: "Asus", brand: "ROG", name: "Edit A1" })
+    const e2 = await createLojaModelo(db, global, storeA, "u2", { manufacturer: "Asus", brand: "Asus", name: "ROG Edit B2" })
+    expect(e1.ok && e2.ok).toBe(true)
+    if (!e1.ok || !e2.ok) return
+    const edicao = await Promise.all([
+      updateLojaModelo(db, global, storeA, "u1", e1.value.id, { version: e1.value.version, name: "Phone Edit99" }),
+      updateLojaModelo(second, global, storeA, "u2", e2.value.id, { version: e2.value.version, name: "ROG Phone Edit99" }),
+    ])
+    expect(edicao.filter((r) => r.ok)).toHaveLength(1)
+    expect(edicao.filter((r) => !r.ok && r.code === "DUPLICATE")).toHaveLength(1)
+    const salvosEdicao = await db.catalogoAparelhoLojaModelo.findMany({
+      where: { storeId: storeA, OR: [{ nameKey: "PHONE EDIT99" }, { nameKey: "ROG PHONE EDIT99" }] },
+    })
+    expect(salvosEdicao).toHaveLength(1)
+  })
+
+  it("PR #355 P2 (isolamento do lock): lock por loja nunca bloqueia lojas independentes e não vaza após commit", async () => {
+    const estado = (p: Promise<unknown>) =>
+      Promise.race([p.then(() => "ok"), new Promise((r) => setTimeout(() => r("esperando"), 400))])
+
+    let soltar!: () => void
+    const liberado = new Promise<void>((r) => (soltar = r))
+    let travado!: () => void
+    const segurando = new Promise<void>((r) => (travado = r))
+
+    const dono = db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${chaveLockCatalogoModelos(storeA)}))::text AS lock`
+      travado()
+      await liberado
+    }, { timeout: 20000 })
+    await segurando
+
+    // Loja B escreve imediatamente sem esperar o lock da Loja A.
+    const writeB = createLojaModelo(second, global, storeB, "u-b", { brand: BRAND, name: "Livre Lock B" })
+    expect(await estado(writeB)).toBe("ok")
+    expect((await writeB).ok).toBe(true)
+
+    // Loja A espera até o lock da própria loja ser liberado.
+    const writeA = createLojaModelo(second, global, storeA, "u-a", { brand: BRAND, name: "Espera Lock A" })
+    expect(await estado(writeA)).toBe("esperando")
+    soltar()
+    await dono
+    expect((await writeA).ok).toBe(true)
+
+    // Advisory lock é transacional: nada sobra neste banco depois do commit.
+    const sobra = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`
+    expect(sobra[0].n).toBe(0)
   })
 })

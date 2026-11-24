@@ -1,12 +1,24 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { ACESSORIO_CORES_PADRAO } from "@/lib/acessorios/cores"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Palette, Plus, Search, X } from "lucide-react"
+import { ACESSORIO_CORES_PADRAO, type AcessorioColorKey } from "@/lib/acessorios/cores"
 import { withModoCaptura, type ProdutoAcessoriosFormValue } from "@/lib/acessorios/form"
 import { isAcessorioModoCaptura } from "@/lib/acessorios/metadata"
 import type { AcessorioModoCaptura, ProdutoAcessorioTipo } from "@/lib/acessorios/types"
-import { carregarCores, carregarOrganizacao } from "@/lib/compat/compat-client"
-import type { CorEfetiva } from "@/lib/compat/cores-loja"
+import { carregarCores, carregarOrganizacao, criarCor } from "@/lib/compat/compat-client"
+import {
+  COR_PADRAO_VISUAL,
+  corEquivalenciaKey,
+  corPadraoComMesmoNome,
+  filtrarCoresPorBusca,
+  type CorEfetiva,
+} from "@/lib/compat/cores-loja"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { CorSwatch } from "@/components/dashboard/compat/cor-swatch"
+import { CoresPanel } from "@/components/dashboard/compat/ajustes-panels"
 
 type Props = {
   /** Loja do produto (header explícito). Sem loja: só paleta padrão, sem preferências da loja. */
@@ -33,10 +45,22 @@ function modoAtual(value: ProdutoAcessoriosFormValue, campo: "modelo" | "cor"): 
   return (campo === "modelo" ? value.exigeModelo : value.exigeCor) ? "obrigatorio" : "desativado"
 }
 
+const CORES_PADRAO_FALLBACK: CorEfetiva[] = ACESSORIO_CORES_PADRAO.map((c) => ({
+  id: c.key,
+  label: c.label,
+  origem: "padrao",
+  ativo: true,
+  baseKey: c.key,
+  version: 0,
+  rowId: null,
+  visual: COR_PADRAO_VISUAL[c.key],
+}))
+
 /**
  * Configuração de acessórios do produto. COMPAT-PROFISSIONAL-001: modelo e cor viram
  * obrigatório / opcional / desativado (produtos antigos abrem com o equivalente dos booleanos)
- * e as cores próprias da loja podem ser escolhidas por produto. O estoque continua único no
+ * e as cores da loja podem ser pesquisadas, selecionadas, desvinculadas deste produto ou
+ * gerenciadas na fonte oficial (`/api/catalogo/compat/cores`). O estoque continua único no
  * produto — modelo/cor informados na venda são histórico, não saldo.
  */
 // Recebe a loja por prop (não usa o provider de loja ativa): o formulário roda também em
@@ -44,21 +68,39 @@ function modoAtual(value: ProdutoAcessoriosFormValue, campo: "modelo" | "cor"): 
 export function ProdutoAcessoriosConfig({ lojaHeader: lojaProp, value, onChange }: Props) {
   const patch = (next: Partial<ProdutoAcessoriosFormValue>) => onChange({ ...value, ...next })
   const lojaHeader = (lojaProp ?? "").trim() || null
-  const [coresLoja, setCoresLoja] = useState<CorEfetiva[]>([])
+  const [todasCores, setTodasCores] = useState<CorEfetiva[]>(CORES_PADRAO_FALLBACK)
+  const [buscaCor, setBuscaCor] = useState("")
+  const [gerenciarAberto, setGerenciarAberto] = useState(false)
+  const [criandoCor, setCriandoCor] = useState(false)
+  const [corErro, setCorErro] = useState("")
+
+  const recarregarCores = useCallback(async () => {
+    if (!lojaHeader) return
+    const r = await carregarCores(lojaHeader)
+    // Resposta sem a lista (servidor antigo/harness) = segue com a paleta padrão, nunca quebra o formulário.
+    if (r.ok && Array.isArray(r.cores) && r.cores.length > 0) setTodasCores(r.cores)
+  }, [lojaHeader])
 
   useEffect(() => {
     if (!lojaHeader || !value.enabled) return
     let vivo = true
     void carregarCores(lojaHeader).then((r) => {
-      // Resposta sem a lista (servidor antigo/harness) = sem cores próprias, nunca quebra o formulário.
-      if (vivo && r.ok && Array.isArray(r.cores)) setCoresLoja(r.cores.filter((c) => c.origem === "loja" && c.ativo))
+      if (vivo && r.ok && Array.isArray(r.cores) && r.cores.length > 0) setTodasCores(r.cores)
     })
     return () => {
       vivo = false
     }
   }, [lojaHeader, value.enabled])
 
-  const toggleCor = (key: ProdutoAcessoriosFormValue["coresPermitidas"][number], checked: boolean) => {
+  const coresPadrao = useMemo(() => todasCores.filter((c) => c.origem === "padrao"), [todasCores])
+  const coresLoja = useMemo(() => todasCores.filter((c) => c.origem === "loja"), [todasCores])
+  const coresLojaAtivas = useMemo(() => coresLoja.filter((c) => c.ativo), [coresLoja])
+  const coresLojaSelecionadas = useMemo(
+    () => value.coresLoja ?? coresLojaAtivas.map((c) => c.id),
+    [value.coresLoja, coresLojaAtivas],
+  )
+
+  const toggleCor = (key: AcessorioColorKey, checked: boolean) => {
     const selected = new Set(value.coresPermitidas)
     if (checked) selected.add(key)
     else selected.delete(key)
@@ -66,7 +108,7 @@ export function ProdutoAcessoriosConfig({ lojaHeader: lojaProp, value, onChange 
   }
 
   const toggleCorLoja = (id: string, checked: boolean) => {
-    const atual = value.coresLoja ?? coresLoja.map((c) => c.id)
+    const atual = value.coresLoja ?? coresLojaAtivas.map((c) => c.id)
     const next = checked ? [...new Set([...atual, id])] : atual.filter((x) => x !== id)
     patch({ coresLoja: next })
   }
@@ -97,8 +139,58 @@ export function ProdutoAcessoriosConfig({ lojaHeader: lojaProp, value, onChange 
 
   const modoCor = modoAtual(value, "cor")
 
+  const padraoFiltradas = useMemo(
+    () =>
+      filtrarCoresPorBusca(
+        coresPadrao.filter((c) => c.ativo || value.coresPermitidas.includes(c.id as AcessorioColorKey)),
+        buscaCor,
+      ),
+    [coresPadrao, value.coresPermitidas, buscaCor],
+  )
+  const lojaFiltradas = useMemo(
+    () =>
+      filtrarCoresPorBusca(
+        coresLoja.filter((c) => c.ativo || coresLojaSelecionadas.includes(c.id)),
+        buscaCor,
+      ),
+    [coresLoja, coresLojaSelecionadas, buscaCor],
+  )
+
+  const selecionadasChips = useMemo(() => {
+    const padraoChips = coresPadrao
+      .filter((c) => value.coresPermitidas.includes(c.id as AcessorioColorKey))
+      .map((c) => ({ ...c, origemChip: "padrao" as const }))
+    const lojaChips = coresLoja
+      .filter((c) => coresLojaSelecionadas.includes(c.id))
+      .map((c) => ({ ...c, origemChip: "loja" as const }))
+    return [...padraoChips, ...lojaChips]
+  }, [coresPadrao, coresLoja, value.coresPermitidas, coresLojaSelecionadas])
+
+  const podeCriarBusca = useMemo(() => {
+    const q = buscaCor.trim()
+    if (!lojaHeader || corEquivalenciaKey(q).length < 2) return false
+    if (corPadraoComMesmoNome(q)) return false
+    return !coresLoja.some((c) => corEquivalenciaKey(c.label) === corEquivalenciaKey(q))
+  }, [lojaHeader, buscaCor, coresLoja])
+
+  const cadastrarCorRapida = async () => {
+    if (!lojaHeader || !podeCriarBusca || criandoCor) return
+    setCriandoCor(true)
+    setCorErro("")
+    const r = await criarCor(lojaHeader, buscaCor.trim())
+    setCriandoCor(false)
+    if (!r.ok) {
+      setCorErro(r.error)
+      return
+    }
+    await recarregarCores()
+    const atual = value.coresLoja ?? coresLojaAtivas.map((c) => c.id)
+    patch({ coresLoja: [...new Set([...atual, r.id])] })
+    setBuscaCor("")
+  }
+
   return (
-    <section className="rounded-xl border border-border bg-muted/20 p-4" aria-label="Configuração de acessórios">
+    <section className="min-w-0 rounded-xl border border-border bg-muted/20 p-4" aria-label="Configuração de acessórios">
       <label className="flex cursor-pointer items-start gap-3">
         <input
           type="checkbox"
@@ -115,7 +207,7 @@ export function ProdutoAcessoriosConfig({ lojaHeader: lojaProp, value, onChange 
       </label>
 
       {value.enabled ? (
-        <div className="mt-4 space-y-4 border-t border-border pt-4">
+        <div className="mt-4 min-w-0 space-y-4 border-t border-border pt-4">
           <label className="block space-y-1 text-sm text-foreground">
             <span className="font-medium">Tipo</span>
             <select
@@ -144,56 +236,163 @@ export function ProdutoAcessoriosConfig({ lojaHeader: lojaProp, value, onChange 
           </div>
 
           {modoCor !== "desativado" && (
-            <>
-              <BooleanField
-                label="Usar cores padrão"
-                checked={value.usaCoresPadrao}
-                onChange={(checked) => patch({ usaCoresPadrao: checked })}
-              />
+            <div className="min-w-0 space-y-3">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <BooleanField
+                  label="Usar cores padrão"
+                  checked={value.usaCoresPadrao}
+                  onChange={(checked) => patch({ usaCoresPadrao: checked })}
+                />
+                {lojaHeader && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setGerenciarAberto(true)}
+                  >
+                    <Palette className="mr-1.5 h-3.5 w-3.5" /> Gerenciar cores
+                  </Button>
+                )}
+              </div>
+
               {value.usaCoresPadrao ? (
-                <p className="text-xs text-muted-foreground">
-                  As cores padrão ativas da loja{coresLoja.length ? " e as cores próprias" : ""} estarão disponíveis.
-                </p>
+                <div className="space-y-2 rounded-lg border border-border bg-background/70 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    As cores padrão ativas da loja{coresLojaAtivas.length ? ` e as ${coresLojaAtivas.length} cor(es) própria(s)` : ""} estarão disponíveis.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5" aria-label="Cores ativas da loja">
+                    {todasCores.filter((c) => c.ativo).map((c) => (
+                      <span
+                        key={c.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs text-foreground"
+                      >
+                        <CorSwatch visual={c.visual} size="xs" />
+                        <span>{c.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
               ) : (
-                <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium text-foreground">Cores permitidas</legend>
+                <fieldset className="min-w-0 space-y-3">
+                  <legend className="text-sm font-medium text-foreground">Cores aplicáveis a este produto</legend>
+
+                  {selecionadasChips.length > 0 && (
+                    <div className="space-y-1.5 rounded-lg border border-border bg-background/80 p-2.5">
+                      <p className="text-[11px] text-muted-foreground">
+                        Selecionadas ({selecionadasChips.length}) — remover aqui tira apenas deste produto, sem apagar a cor da loja:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5" aria-label="Cores selecionadas no produto">
+                        {selecionadasChips.map((cor) => (
+                          <span
+                            key={`${cor.origem}-${cor.id}`}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 py-0.5 pl-2 pr-1 text-xs text-foreground"
+                          >
+                            <CorSwatch visual={cor.visual} size="xs" />
+                            <span>{cor.label}</span>
+                            <button
+                              type="button"
+                              aria-label={`Remover seleção de ${cor.label}`}
+                              onClick={() =>
+                                cor.origemChip === "padrao"
+                                  ? toggleCor(cor.id as AcessorioColorKey, false)
+                                  : toggleCorLoja(cor.id, false)
+                              }
+                              className="grid h-4 w-4 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="relative min-w-0">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                    <Input
+                      value={buscaCor}
+                      onChange={(e) => {
+                        setBuscaCor(e.target.value)
+                        setCorErro("")
+                      }}
+                      aria-label="Pesquisar cores do produto"
+                      placeholder="Pesquisar cores (ex.: preto, azul-marinho, transparente, fumê)…"
+                      className="h-8 pl-8 text-xs"
+                    />
+                  </div>
+                  {corErro && <p role="alert" className="text-xs text-destructive">{corErro}</p>}
+
+                  {podeCriarBusca && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={criandoCor}
+                      onClick={() => void cadastrarCorRapida()}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      {criandoCor ? "Cadastrando…" : `Cadastrar cor “${buscaCor.trim()}” na loja`}
+                    </Button>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                    {ACESSORIO_CORES_PADRAO.map((cor) => (
-                      <label key={cor.key} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+                    {padraoFiltradas.map((cor) => (
+                      <label key={cor.id} className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-primary"
-                          checked={value.coresPermitidas.includes(cor.key)}
-                          onChange={(event) => toggleCor(cor.key, event.target.checked)}
+                          className="h-4 w-4 shrink-0 accent-primary"
+                          checked={value.coresPermitidas.includes(cor.id as AcessorioColorKey)}
+                          onChange={(event) => toggleCor(cor.id as AcessorioColorKey, event.target.checked)}
                         />
-                        {cor.label}
+                        <CorSwatch visual={cor.visual} size="xs" />
+                        <span className="truncate">{cor.label}</span>
+                        {!cor.ativo && <span className="shrink-0 text-[10px] text-muted-foreground">(inativa)</span>}
                       </label>
                     ))}
                   </div>
-                  {coresLoja.length > 0 && (
+                  {lojaFiltradas.length > 0 && (
                     <>
                       <p className="pt-1 text-xs font-medium text-muted-foreground">Cores da loja</p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                        {coresLoja.map((cor) => (
-                          <label key={cor.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+                        {lojaFiltradas.map((cor) => (
+                          <label key={cor.id} className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 accent-primary"
-                              checked={(value.coresLoja ?? coresLoja.map((c) => c.id)).includes(cor.id)}
+                              className="h-4 w-4 shrink-0 accent-primary"
+                              checked={coresLojaSelecionadas.includes(cor.id)}
                               onChange={(event) => toggleCorLoja(cor.id, event.target.checked)}
                             />
-                            {cor.label}
+                            <CorSwatch visual={cor.visual} size="xs" />
+                            <span className="truncate">{cor.label}</span>
+                            {!cor.ativo && <span className="shrink-0 text-[10px] text-muted-foreground">(inativa)</span>}
                           </label>
                         ))}
                       </div>
                     </>
                   )}
+                  {padraoFiltradas.length === 0 && lojaFiltradas.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nenhuma cor encontrada para “{buscaCor.trim()}”.</p>
+                  )}
                 </fieldset>
               )}
-            </>
+            </div>
           )}
         </div>
       ) : null}
+
+      {lojaHeader && (
+        <Dialog open={gerenciarAberto} onOpenChange={setGerenciarAberto}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Gerenciar cores da loja</DialogTitle>
+              <DialogDescription>
+                Cadastre, renomeie, personalize o visual ou ative/desative cores na fonte oficial da loja.
+              </DialogDescription>
+            </DialogHeader>
+            <CoresPanel lojaHeader={lojaHeader} onChanged={() => void recarregarCores()} />
+          </DialogContent>
+        </Dialog>
+      )}
     </section>
   )
 }

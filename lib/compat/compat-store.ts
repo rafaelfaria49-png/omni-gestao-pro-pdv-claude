@@ -15,7 +15,18 @@ import { ACESSORIO_CORES_PADRAO, isAcessorioColorKey, type AcessorioColorKey } f
 import { cleanCatalogText, isManualModelKey } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import { errorCode, isUnavailable } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import type { CatalogoIndex } from "@/lib/catalogo-aparelhos/types"
-import { COR_LOJA_LIMITS, corLabelKey, corPadraoComMesmoNome, sanitizeCorLabel, type CorLoja } from "./cores-loja"
+import {
+  COR_LOJA_LIMITS,
+  corEquivalenciaKey,
+  corLabelKey,
+  corPadraoComMesmoNome,
+  extractCoresVisualFromConfig,
+  mergeCoresVisualIntoConfig,
+  sanitizeCorLabel,
+  sanitizeCorVisual,
+  sugerirVisualParaCor,
+  type CorLoja,
+} from "./cores-loja"
 import {
   COMPAT_LIMITS,
   COMPAT_PREFERENCIAS_PADRAO,
@@ -134,14 +145,22 @@ export async function setPreferencias(
   const version = versionOf(b)
   if (version === null) return invalid("Versão das preferências obrigatória.")
   try {
-    const atual = await getPreferenciasStrict(db, storeId)
+    const rowAtual = await db.compatPreferenciasLoja.findUnique({ where: { storeId } })
+    const atual = rowAtual
+      ? mergePreferencias({ ...COMPAT_PREFERENCIAS_PADRAO, version: rowAtual.version }, rowAtual)
+      : { ...COMPAT_PREFERENCIAS_PADRAO }
     if (atual.version !== version) return CONFLICT_VERSAO
     const next = mergePreferencias(atual, b)
+    const visuaisExistentes = extractCoresVisualFromConfig(rowAtual?.marcasConfig)
+    const marcasConfigPersisted =
+      Object.keys(visuaisExistentes).length > 0
+        ? mergeCoresVisualIntoConfig(next.marcasConfig, visuaisExistentes)
+        : next.marcasConfig
     const data = {
       posicoesHabilitadas: next.posicoesHabilitadas,
       modoModeloPadrao: next.modoModeloPadrao,
       modoCorPadrao: next.modoCorPadrao,
-      marcasConfig: next.marcasConfig,
+      marcasConfig: marcasConfigPersisted as object,
       updatedBy: actorId,
     }
     if (version === 0) {
@@ -658,21 +677,79 @@ export async function removeLocalizacao(
 // Cores
 // ---------------------------------------------------------------------------
 
+/** Mapa `{ [corIdOuBaseKey]: visual }` persistido por loja (sem migration, sem afetar `marcasConfig`). */
+export async function listCoresVisual(db: CompatDb, storeId: string): Promise<Record<string, string>> {
+  return softRead("listCoresVisual", {} as Record<string, string>, async () => {
+    const row = await db.compatPreferenciasLoja.findUnique({ where: { storeId }, select: { marcasConfig: true } })
+    return extractCoresVisualFromConfig(row?.marcasConfig)
+  })
+}
+
+async function persistCorVisual(
+  db: CompatDb,
+  storeId: string,
+  actorId: string,
+  corId: string,
+  visual: string,
+): Promise<void> {
+  const lockKey = `compat-cores-visual:${storeId}`
+  const apply = async (tx: Pick<CompatDb, "compatPreferenciasLoja">) => {
+    const row = await tx.compatPreferenciasLoja.findUnique({ where: { storeId } })
+    const nextConfig = mergeCoresVisualIntoConfig(row?.marcasConfig, { [corId]: visual })
+    if (!row) {
+      await tx.compatPreferenciasLoja.create({
+        data: {
+          storeId,
+          posicoesHabilitadas: COMPAT_PREFERENCIAS_PADRAO.posicoesHabilitadas,
+          modoModeloPadrao: COMPAT_PREFERENCIAS_PADRAO.modoModeloPadrao,
+          modoCorPadrao: COMPAT_PREFERENCIAS_PADRAO.modoCorPadrao,
+          marcasConfig: nextConfig as object,
+          updatedBy: actorId,
+        },
+      })
+    } else {
+      await tx.compatPreferenciasLoja.update({
+        where: { storeId },
+        data: { marcasConfig: nextConfig as object, updatedBy: actorId },
+      })
+    }
+  }
+  if (typeof db.$transaction === "function") {
+    await db.$transaction(async (rawTx) => {
+      const tx = rawTx as unknown as CompatDb
+      if (typeof tx.$queryRaw === "function") {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock`
+      }
+      await apply(tx)
+    })
+  } else {
+    await apply(db)
+  }
+}
+
 export async function listCoresLoja(db: CompatDb, storeId: string): Promise<CorLoja[]> {
   return softRead("listCoresLoja", [] as CorLoja[], async () => {
-    const rows = await db.compatCorLoja.findMany({
-      where: { storeId },
-      orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
-      take: COR_LOJA_LIMITS.coresPorLoja + ACESSORIO_CORES_PADRAO.length,
+    const [rows, visuais] = await Promise.all([
+      db.compatCorLoja.findMany({
+        where: { storeId },
+        orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
+        take: COR_LOJA_LIMITS.coresPorLoja + ACESSORIO_CORES_PADRAO.length,
+      }),
+      listCoresVisual(db, storeId),
+    ])
+    return rows.map((r) => {
+      const baseKey = r.baseKey && isAcessorioColorKey(r.baseKey) ? r.baseKey : null
+      const visual = visuais[baseKey ?? r.id]
+      return {
+        id: r.id,
+        baseKey,
+        label: r.label,
+        ativo: r.ativo,
+        ordem: r.ordem,
+        version: r.version,
+        ...(visual ? { visual } : {}),
+      }
     })
-    return rows.map((r) => ({
-      id: r.id,
-      baseKey: r.baseKey && isAcessorioColorKey(r.baseKey) ? r.baseKey : null,
-      label: r.label,
-      ativo: r.ativo,
-      ordem: r.ordem,
-      version: r.version,
-    }))
   })
 }
 
@@ -681,15 +758,33 @@ export async function createCorLoja(
   storeId: string,
   actorId: string,
   raw: unknown,
-): Promise<CompatResult<{ id: string }>> {
-  const parsed = sanitizeCorLabel(body(raw).label)
+): Promise<CompatResult<{ id: string; visual: string }>> {
+  const b = body(raw)
+  const parsed = sanitizeCorLabel(b.label)
   if (!parsed.ok) return invalid(parsed.error)
+  let visual: string
+  if ("visual" in b && b.visual !== undefined && b.visual !== "") {
+    const v = sanitizeCorVisual(b.visual)
+    if (!v) return invalid("Representação visual inválida. Use uma cor hexadecimal (#RRGGBB) ou estilo válido.")
+    visual = v
+  } else {
+    visual = sugerirVisualParaCor(parsed.label)
+  }
   const padrao = corPadraoComMesmoNome(parsed.label)
   if (padrao) {
     return { ok: false, code: "DUPLICATE", status: 409, message: "Essa cor já existe na lista padrão. Use a cor padrão." }
   }
   try {
-    const total = await db.compatCorLoja.count({ where: { storeId, baseKey: null } })
+    const existentes = await db.compatCorLoja.findMany({
+      where: { storeId, baseKey: null },
+      select: { id: true, label: true },
+      take: COR_LOJA_LIMITS.coresPorLoja,
+    })
+    const equiv = corEquivalenciaKey(parsed.label)
+    if (existentes.some((e) => corEquivalenciaKey(e.label) === equiv)) {
+      return { ok: false, code: "DUPLICATE", status: 409, message: "Já existe uma cor com esse nome nesta loja." }
+    }
+    const total = existentes.length
     if (total >= COR_LOJA_LIMITS.coresPorLoja) {
       return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${COR_LOJA_LIMITS.coresPorLoja} cores por loja.` }
     }
@@ -704,13 +799,14 @@ export async function createCorLoja(
       },
       select: { id: true },
     })
-    return { ok: true, value: created }
+    await persistCorVisual(db, storeId, actorId, created.id, visual)
+    return { ok: true, value: { id: created.id, visual } }
   } catch (e) {
     return failureFrom(e, "Já existe uma cor com esse nome nesta loja.")
   }
 }
 
-/** Renomear (só cores próprias) e/ou ativar-desativar. Histórico de vendas não muda. */
+/** Renomear (só cores próprias), editar representação visual e/ou ativar-desativar. Histórico de vendas não muda. */
 export async function updateCorLoja(
   db: CompatDb,
   storeId: string,
@@ -721,6 +817,12 @@ export async function updateCorLoja(
   const b = body(raw)
   const version = versionOf(b)
   if (version === null) return invalid("Versão do registro obrigatória.")
+  let nextVisual: string | null = null
+  if ("visual" in b && b.visual !== undefined) {
+    const v = sanitizeCorVisual(b.visual)
+    if (!v) return invalid("Representação visual inválida. Use uma cor hexadecimal (#RRGGBB) ou estilo válido.")
+    nextVisual = v
+  }
   try {
     const atual = await db.compatCorLoja.findFirst({ where: { id, storeId } })
     if (!atual) return notFound("Cor não encontrada nesta loja.")
@@ -732,37 +834,62 @@ export async function updateCorLoja(
       if (corPadraoComMesmoNome(parsed.label)) {
         return { ok: false, code: "DUPLICATE", status: 409, message: "Essa cor já existe na lista padrão." }
       }
+      const equiv = corEquivalenciaKey(parsed.label)
+      if (equiv !== corEquivalenciaKey(atual.label)) {
+        const outras = await db.compatCorLoja.findMany({
+          where: { storeId, baseKey: null, NOT: { id } },
+          select: { label: true },
+          take: COR_LOJA_LIMITS.coresPorLoja,
+        })
+        if (outras.some((e) => corEquivalenciaKey(e.label) === equiv)) {
+          return { ok: false, code: "DUPLICATE", status: 409, message: "Já existe uma cor com esse nome nesta loja." }
+        }
+      }
       Object.assign(data, { label: parsed.label, labelKey: corLabelKey(parsed.label) })
     }
     if (typeof b.ativo === "boolean") data.ativo = b.ativo
     const res = await db.compatCorLoja.updateMany({ where: { id, storeId, version }, data })
     if (res.count === 0) return CONFLICT_VERSAO
+    if (nextVisual) await persistCorVisual(db, storeId, actorId, atual.baseKey ?? id, nextVisual)
     return { ok: true, value: { id } }
   } catch (e) {
     return failureFrom(e, "Já existe uma cor com esse nome nesta loja.")
   }
 }
 
-/** Ativa/desativa uma cor da PALETA PADRÃO só nesta loja ("Outra" não é desativável). */
+/** Ativa/desativa e/ou atualiza a representação visual de uma cor da PALETA PADRÃO só nesta loja. */
 export async function setCorPadraoAtiva(
   db: CompatDb,
   storeId: string,
   actorId: string,
   baseKey: unknown,
   ativo: unknown,
+  visualRaw?: unknown,
 ): Promise<CompatResult<{ id: string }>> {
   if (!isAcessorioColorKey(baseKey)) return invalid("Cor padrão inválida.")
   if (baseKey === "outra") return invalid("A opção “Outra” não pode ser desativada.")
-  if (typeof ativo !== "boolean") return invalid("Informe ativo: true/false.")
+  const temAtivo = typeof ativo === "boolean"
+  const temVisual = visualRaw !== undefined
+  if (!temAtivo && !temVisual) return invalid("Informe ativo: true/false ou uma representação visual.")
+  let nextVisual: string | null = null
+  if (temVisual) {
+    nextVisual = sanitizeCorVisual(visualRaw)
+    if (!nextVisual) return invalid("Representação visual inválida. Use uma cor hexadecimal (#RRGGBB) ou estilo válido.")
+  }
   const label = ACESSORIO_CORES_PADRAO.find((c) => c.key === baseKey)!.label
   try {
-    const row = await db.compatCorLoja.upsert({
-      where: { storeId_baseKey: { storeId, baseKey: baseKey as AcessorioColorKey } },
-      create: { storeId, baseKey, label, labelKey: corLabelKey(label), ativo, createdBy: actorId, updatedBy: actorId },
-      update: { ativo, updatedBy: actorId, version: { increment: 1 } },
-      select: { id: true },
-    })
-    return { ok: true, value: row }
+    let id = baseKey as string
+    if (temAtivo) {
+      const row = await db.compatCorLoja.upsert({
+        where: { storeId_baseKey: { storeId, baseKey: baseKey as AcessorioColorKey } },
+        create: { storeId, baseKey, label, labelKey: corLabelKey(label), ativo: ativo as boolean, createdBy: actorId, updatedBy: actorId },
+        update: { ativo: ativo as boolean, updatedBy: actorId, version: { increment: 1 } },
+        select: { id: true },
+      })
+      id = row.id
+    }
+    if (nextVisual) await persistCorVisual(db, storeId, actorId, baseKey, nextVisual)
+    return { ok: true, value: { id } }
   } catch (e) {
     return failureFrom(e, "Conflito ao gravar a cor.")
   }

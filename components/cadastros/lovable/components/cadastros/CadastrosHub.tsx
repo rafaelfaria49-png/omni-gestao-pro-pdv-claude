@@ -17,6 +17,7 @@ import { ClienteEditorDialog } from "./ClienteEditor";
 import { ImportacaoHub } from "./ImportacaoHub";
 import { AparelhosPanel } from "@/components/aparelhos/AparelhosPanel";
 import { VestuarioCatalogoPanel } from "@/components/vestuario/VestuarioCatalogoPanel";
+import { CoresPanel } from "@/components/dashboard/compat/ajustes-panels";
 import { getVestuarioCatalogoStatus } from "@/app/actions/vestuario-catalogo";
 import { Shirt, TabletSmartphone } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
@@ -3509,7 +3510,10 @@ function EquipamentosPanel({
 
 /* ───── CATEGORIAS ───── */
 function CategoriasPanel({ storeId }: { storeId: string }) {
-  const technical = useStoreBusiness().resource("service.technical").operational;
+  const business = useStoreBusiness();
+  const technical = business.resource("service.technical").operational;
+  const allowAccessories = business.ready && business.resource("pdv.accessoryModelColor").operational;
+  const allowCompatibility = business.ready && business.resource("catalog.deviceCompatibility").operational;
   const m = useToggle();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -3650,6 +3654,26 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
           </div>
         </Card>
       ))}
+
+      {(allowAccessories || allowCompatibility) && (
+        <Card className="p-6 md:col-span-2">
+          <SectionTitle
+            title="Cores e compatibilidade de acessórios"
+            subtitle="Fonte oficial de cores da loja e acesso ao catálogo de aparelhos e compatibilidades."
+            action={
+              allowCompatibility ? (
+                <Link
+                  href="/dashboard/catalogo-aparelhos"
+                  className="inline-flex items-center gap-1 rounded-lg border border-primary/40 bg-background px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  Abrir Compat <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              ) : undefined
+            }
+          />
+          {allowAccessories && <CoresPanel lojaHeader={storeId || null} />}
+        </Card>
+      )}
 
       <Modal
         open={m.open}

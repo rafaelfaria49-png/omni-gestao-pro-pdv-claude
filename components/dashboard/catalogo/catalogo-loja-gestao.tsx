@@ -10,7 +10,7 @@
  * vendas registradas continuam intactos. Nada aqui altera estoque, preço ou fiscal.
  */
 
-import { useCallback, useEffect, useId, useState } from "react"
+import { useCallback, useEffect, useId, useMemo, useState } from "react"
 import { Pencil, Plus, Power } from "lucide-react"
 import {
   Dialog,
@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import {
   LOJA_COMPAT_STATUSES,
   LOJA_MODELO_LIMITS,
@@ -40,6 +39,8 @@ import {
 } from "@/lib/catalogo-aparelhos/loja-catalogo-client"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
 import { CadastrarModeloAparelhoDialog } from "./cadastrar-modelo-aparelho-dialog"
+import { MostrarMaisModelos } from "./mostrar-mais-modelos"
+import { useBuscaModelos } from "./use-busca-modelos"
 import { HierarquiaFields, type HierarquiaValue } from "./hierarquia-fields"
 import { hierarquiaDoModeloLoja } from "@/lib/catalogo-aparelhos/hierarquia"
 
@@ -288,7 +289,7 @@ function EditarModeloDialog({
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
             Cancelar
           </Button>
-          <Button type="button" onClick={() => void save()} disabled={busy || !brand.trim() || name.trim().length < 2}>
+          <Button type="button" onClick={() => void save()} disabled={busy || !brand.trim() || !name.trim()}>
             {busy ? "Salvando…" : "Salvar alterações"}
           </Button>
         </DialogFooter>
@@ -314,7 +315,10 @@ export function AdicionarEquivalenteDialog({
 }) {
   const uid = useId()
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<DeviceSearchResult[]>([])
+  // COMPAT-BUSCA-MODELOS-NATURAL-001: mesma busca paginada do PDV/Compat (ordem natural + "Mostrar mais").
+  const busca = useBuscaModelos({ query, lojaHeader, enabled: baseModel !== null })
+  const baseKey = baseModel?.modelKey
+  const results = useMemo(() => busca.results.filter((r) => r.modelKey !== baseKey), [busca.results, baseKey])
   const [escolhido, setEscolhido] = useState<DeviceSearchResult | null>(null)
   const [status, setStatus] = useState<LojaCompatStatus>("precisa_testar")
   const [notes, setNotes] = useState("")
@@ -324,41 +328,11 @@ export function AdicionarEquivalenteDialog({
   useEffect(() => {
     if (!baseModel) return
     setQuery("")
-    setResults([])
     setEscolhido(null)
     setStatus("precisa_testar")
     setNotes("")
     setError("")
   }, [baseModel])
-
-  useEffect(() => {
-    const q = query.trim()
-    if (!baseModel || q.length < 2) {
-      setResults([])
-      return
-    }
-    const controller = new AbortController()
-    const t = window.setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/catalogo/aparelhos/search?q=${encodeURIComponent(q)}&limit=10`, {
-          credentials: "include",
-          cache: "no-store",
-          signal: controller.signal,
-          ...(lojaHeader ? { headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader } } : {}),
-        })
-        const data = (await res.json().catch(() => null)) as { results?: DeviceSearchResult[] } | null
-        if (!controller.signal.aborted) {
-          setResults((data?.results ?? []).filter((r) => r.modelKey !== baseModel.modelKey))
-        }
-      } catch {
-        /* abortada ou rede: mantém a lista anterior */
-      }
-    }, 250)
-    return () => {
-      window.clearTimeout(t)
-      controller.abort()
-    }
-  }, [query, baseModel, lojaHeader])
 
   const save = async () => {
     if (!baseModel || !escolhido) return
@@ -420,8 +394,16 @@ export function AdicionarEquivalenteDialog({
                     </span>
                   </button>
                 ))}
-                {query.trim().length >= 2 && results.length === 0 && (
+                {query.trim().length >= 2 && !busca.loading && results.length === 0 && (
                   <p className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum modelo encontrado.</p>
+                )}
+                {!busca.loading && busca.hasMore && (
+                  <MostrarMaisModelos
+                    mostrados={busca.results.length}
+                    total={busca.total}
+                    loading={busca.loadingMore}
+                    onMostrarMais={() => void busca.carregarMais()}
+                  />
                 )}
               </div>
             </div>
