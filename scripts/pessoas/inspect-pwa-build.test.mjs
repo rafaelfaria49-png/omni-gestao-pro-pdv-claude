@@ -19,7 +19,7 @@ function fixture(t, script = privacy) {
   return dir
 }
 
-test("import local executa a ativação real: remove Clientes e preserva Pessoas/outros em todos os caches", async (t) => {
+test("import local executa a ativação real: remove rotas privadas e preserva assets estáticos públicos e cross-origin", async (t) => {
   const result = await coletarRotas(allowed + routes, fixture(t))
   assert.equal(result.routes[0].handler.kind, "NetworkOnly")
   assert.equal(result.manifest.length, 1)
@@ -59,10 +59,10 @@ for (const [name, script, error] of [
   ["sem listener", "", /listener activate/],
   ["evento incorreto", privacy.replace('"activate"', '"fetch"'), /evento inesperado/],
   ["sem waitUntil", 'self.addEventListener("activate", () => {});', /waitUntil/],
-  ["limpeza neutralizada", privacy.replace("await cache.delete(request)", "void request"), /Clientes preservado/],
-  ["remove Pessoas", privacy.replace('url.pathname === "/api/clientes"', 'url.pathname === "/api/pessoas" || url.pathname === "/api/clientes"'), /afetou Pessoas/],
-  ["remove outro módulo", privacy.replace('url.pathname === "/api/clientes"', 'url.pathname === "/dashboard/estoque" || url.pathname === "/api/clientes"'), /afetou Pessoas\/outros/],
-  ["ignora cache histórico", privacy.replace("await caches.keys()", '(await caches.keys()).slice(0, 1)'), /Clientes preservado/],
+  ["limpeza neutralizada", privacy.replace("await cache.delete(request)", "void request"), /privado preservado/],
+  ["remove asset estático público", privacy.replace('pathname.startsWith("/_next/static/") ||', ""), /afetou assets públicos/],
+  ["remove ícone PWA público", privacy.replace('pathname.startsWith("/icons/") ||', ""), /afetou assets públicos/],
+  ["ignora cache histórico", privacy.replace("await caches.keys()", '(await caches.keys()).slice(0, 1)'), /privado preservado/],
   ["falha assíncrona", 'self.addEventListener("activate", e => e.waitUntil(Promise.reject(new Error("PURGE_FAILED"))));', /PURGE_FAILED/],
   ["import transitivo", 'importScripts("/extra.js");' + privacy, /importScripts is not defined/],
   ["sem acesso a Node", "process.exit(0);" + privacy, /process is not defined/],
