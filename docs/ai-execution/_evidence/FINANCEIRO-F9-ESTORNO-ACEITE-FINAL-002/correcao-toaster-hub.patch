@@ -1,0 +1,22 @@
+diff --git a/components/financeiro/lovable/FinanceiroHubIsolated.tsx b/components/financeiro/lovable/FinanceiroHubIsolated.tsx
+index 3c1c4c0..3fa38c5 100644
+--- a/components/financeiro/lovable/FinanceiroHubIsolated.tsx
++++ b/components/financeiro/lovable/FinanceiroHubIsolated.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { useEffect, useMemo, useState, type CSSProperties, type ComponentType } from "react";
+ import * as FinanceiroRouteModule from "./routes/financeiro";
++import { Toaster } from "./components/ui/sonner";
+ 
+ function isRecord(v: unknown): v is Record<string, unknown> {
+   return !!v && typeof v === "object" && !Array.isArray(v);
+@@ -178,6 +179,9 @@ export function FinanceiroHubIsolated() {
+   return (
+     <div className="w-full min-w-0 max-w-full overflow-x-hidden" style={tokenizedVars}>
+       <Hub />
++      {/* O HUB confirma estornos e mostra recusas do servidor via `sonner` (o `__root.tsx`
++          com o Toaster não é montado aqui); sem este Toaster nenhuma dessas mensagens aparece. */}
++      <Toaster position="top-center" />
+     </div>
+   );
+ }

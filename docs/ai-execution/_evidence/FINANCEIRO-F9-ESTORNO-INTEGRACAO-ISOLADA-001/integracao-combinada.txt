@@ -1,0 +1,16 @@
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > A–C · parciais no HUB (#341) e estornos por identidade (#384) > A. 300 → recebe 100 e depois 50: recebido 150, saldo 150, duas entradas, nenhuma duplicidade
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > A–C · parciais no HUB (#341) e estornos por identidade (#384) > B+C. estorna só os 50 (saldo 200, saída 50) e depois os 100 (saldo 300); 2ª via coerente; sem estorno duplicado
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > D · recebimento F9 com caixa aberto, estorno pelo Financeiro > entrada original e compensação na MESMA sessão, ligadas por referência; retry antigo e 2ª via recusados; relatório coerente
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > E · recebimento exclusivo do HUB > com caixa aberto na loja: nem o recebimento nem o estorno lançam na gaveta; a sessão fica intacta
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > F · lote: estorno individual preserva os demais > HUB: 3 títulos numa operação; estornar um não toca os outros; retry do lote e 2ª via consolidada recusados
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > F · lote: estorno individual preserva os demais > PDV: lote de 2 títulos na gaveta; estornar um compensa só o item dele, apontando a operação do lote
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > G · clique duplo (mesma chave, mesmo instante) > HUB singular e HUB lote: uma baixa por título, uma movimentação
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > G · clique duplo (mesma chave, mesmo instante) > PDV singular e PDV lote: uma baixa, uma entrada financeira, uma operação de caixa
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > H · servidor confirma, resposta se perde, cliente repete > PDV e HUB devolvem o MESMO resultado (operação e hora do ledger) sem gravar de novo; estorno repetido é recusado
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > I · estorno seguido de retry do recebimento original > HUB singular: a requisição antiga é recusada (409), não grava e não gera 2ª via
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > J · caixa fechado > estorno de pagamento cuja sessão fechou: 409 com orientação, nenhuma escrita, sessão intacta; 2ª via segue válida
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > K · outra loja, perfil sem permissão, legado ambíguo > título de OUTRA loja: recebimento, estorno e 2ª via não leem nem gravam nada em nenhuma das lojas
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > K · outra loja, perfil sem permissão, legado ambíguo > perfil sem permissão financeira (TÉCNICO): recebimento e estorno recusados, nada gravado
+ ✓ test/fin-f9-estorno-integ/integracao.pg.ts > K · outra loja, perfil sem permissão, legado ambíguo > legado ambíguo (estorno sem referência ao pagamento): estorno bloqueado e nenhuma 2ª via, sem escrita
+ Test Files  1 passed (1)
+      Tests  14 passed (14)

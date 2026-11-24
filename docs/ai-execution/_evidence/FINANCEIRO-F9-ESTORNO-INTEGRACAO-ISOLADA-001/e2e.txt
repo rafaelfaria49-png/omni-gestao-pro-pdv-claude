@@ -1,0 +1,34 @@
+# E2E autenticado — build local (next start 127.0.0.1:3007), PG descartável fin_receb_f9_qa_e2e, usuários sintéticos
+
+## Execução completa (6 specs, workers=1, retries=0)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão
+  ok 2 [chromium] › e2e\specs\02-pdv-vendas.spec.ts:5:7 › PDV / Vendas › abre vendas, área de caixa e fluxo leve de pagamento (modal)
+  ok 3 [chromium] › e2e\specs\04-financeiro-v2.spec.ts:5:7 › Financeiro HUB v2 › carrega shell, abas e conteúdo principal
+  x  4 [chromium] › e2e\specs\06-pdv-caixa-historico.spec.ts:5:7 › PDV — Fase 2 (caixa + histórico) › abre caixa, confirma aberto e navega para histórico de vendas
+  ok 5 [chromium] › e2e\specs\07-financeiro-relatorios-export.spec.ts:7:7 › Financeiro — Fase 2 (central relatórios + export) › abre central Relatórios e, no HUB, tab Relatórios com botões de exportação
+  ok 6 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Clássico — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 80mm, 2ª via e foco (1.5m)
+  ok 7 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Clássico — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja (2.1m)
+  ok 8 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Assistência — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 58mm, 2ª via e foco (2.2m)
+  ok 9 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Assistência — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja (2.1m)
+  ok 10 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Supermercado — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 80mm, 2ª via e foco (2.2m)
+  ok 11 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Supermercado — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja (2.1m)
+  ok 12 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:429:5 › API — perfil sem permissão (TÉCNICO) e loja sem vínculo recebem 403, sem nenhuma escrita
+  ok 13 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:48:5 › Financeiro HUB — parcial com comprovante real, lote por cliente numa operação e 2ª via sem nova baixa
+  x  14 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:158:5 › PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e oferece comprovante
+
+## Reexecução isolada, espaçada além do TTL do lock de terminal (120 s)
+### financeiro-recebimentos-f9-print-001
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão
+requestfailed GET http://127.0.0.1:3007/api/ops/inventory?lojaId=loja-1&catalogSync=1&versionOnly=1 net::ERR_ABORTED
+requestfailed GET http://127.0.0.1:3007/api/ops/credito-cliente?lojaId=000-qa-fin-f9 net::ERR_ABORTED
+requestfailed GET http://127.0.0.1:3007/api/version net::ERR_ABORTED
+  ok 2 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:48:5 › Financeiro HUB — parcial com comprovante real, lote por cliente numa operação e 2ª via sem nova baixa
+  ok 3 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:158:5 › PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e oferece comprovante
+  ok 4 [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:226:5 › Financeiro HUB — integral, lote de 3 numa operação, tela de sucesso após a recarga, estorno e cupom 58 mm
+  4 passed
+### 06-pdv-caixa-historico
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão
+  x  2 [chromium] › e2e\specs\06-pdv-caixa-historico.spec.ts:5:7 › PDV — Fase 2 (caixa + histórico) › abre caixa, confirma aberto e navega para histórico de vendas
+    test-results\specs-06-pdv-caixa-histori-210f1-ga-para-histórico-de-vendas-chromium\test-failed-1.png
+  1 failed
+  1 passed
