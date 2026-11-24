@@ -12,7 +12,7 @@
     "build": "node scripts/vercel-build.mjs",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js --noEmit",
+    "typecheck": "node --max-old-space-size=6144 ./node_modules/typescript/lib/tsc.js --noEmit",
     "test": "vitest run",
     "test:root:sem-pg": "node scripts/ci/run-root-suite-sem-pg.mjs",
     "test:root:pg": "node scripts/ci/run-root-pg-suites.mjs",

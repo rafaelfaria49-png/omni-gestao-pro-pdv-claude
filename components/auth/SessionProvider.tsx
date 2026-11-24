@@ -3,6 +3,10 @@
 import { useEffect } from "react"
 import { SessionProvider as NextAuthSessionProvider, useSession } from "next-auth/react"
 import type { Session } from "next-auth"
+import {
+  purgeAuthenticatedBrowserCaches,
+  subscribeAuthLogout,
+} from "@/lib/auth/pwa-cache-privacy"
 
 const REVALIDATE_SECONDS = 30
 
@@ -72,6 +76,10 @@ function SessionRevalidator() {
         window.clearTimeout(timer)
       }
       if (cancelled || sessionIdentity(fetched) === current) return
+      // Se o servidor confirmou fim/revogação da sessão (null), limpa caches autenticados sem tocar em localStorage/PDV.
+      if (!fetched?.user) {
+        void purgeAuthenticatedBrowserCaches()
+      }
       try {
         const channel = new BroadcastChannel("next-auth")
         channel.postMessage({ event: "session", data: { trigger: "getSession" } })
@@ -83,14 +91,31 @@ function SessionRevalidator() {
     const onVisible = () => {
       if (document.visibilityState === "visible") void check()
     }
+    const onPageShow = (event: PageTransitionEvent) => {
+      // Restauração de BFCache (botão Voltar): revalida imediatamente com o servidor.
+      if (event.persisted) void check()
+    }
+    const unsubscribeLogout = subscribeAuthLogout(() => {
+      void purgeAuthenticatedBrowserCaches()
+      try {
+        const channel = new BroadcastChannel("next-auth")
+        channel.postMessage({ event: "session", data: { trigger: "getSession" } })
+        channel.close()
+      } catch {
+        /* ignore */
+      }
+    })
     const timer = window.setInterval(() => void check(), REVALIDATE_SECONDS * 1000)
     document.addEventListener("visibilitychange", onVisible)
     window.addEventListener("online", check)
+    window.addEventListener("pageshow", onPageShow)
     return () => {
       cancelled = true
+      unsubscribeLogout()
       window.clearInterval(timer)
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("online", check)
+      window.removeEventListener("pageshow", onPageShow)
     }
   }, [current, status])
   return null
