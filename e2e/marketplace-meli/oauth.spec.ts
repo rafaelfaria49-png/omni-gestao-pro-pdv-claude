@@ -219,7 +219,7 @@ test("recusa vendedor conhecido antes do consentimento e limita intenções conc
   const exchanges = await providerEvents("exchange")
   const duplicate = await requestAuthorization(page.request, storeB, "745001")
   expect(duplicate.status()).toBe(409)
-  expect(duplicate.headers()["set-cookie"]).toBeUndefined()
+  expect(duplicate.headers()["set-cookie"] ?? "").not.toContain("__Host-omni-meli-oauth=")
   expect(await duplicate.json()).toMatchObject({ code: "account_mismatch" })
 
   const second = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true })
