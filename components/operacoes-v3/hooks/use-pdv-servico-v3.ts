@@ -256,14 +256,17 @@ export function usePdvServicoV3(storeId: string | null, osId: string | null): Pd
     if (local.pendencia || local.bloqueada || bloqueios[targetKey] || emVoo.has(targetKey)) { erro(targetKey); return false; }
     setEstornando(true); setError(null);
     try {
-      const res = await estornarRecebimentoOSV3(sid, id, input);
+      // Pré-condição: o recebido que a tela mostra (lido do título). Um 2º clique/retry após
+      // um estorno já gravado é recusado em vez de estornar o pagamento anterior.
+      const visto = loadedKey === targetKey && pagamento ? { recebidoEsperado: pagamento.recebido } : {};
+      const res = await estornarRecebimentoOSV3(sid, id, { ...visto, ...input });
       if (activeKeyRef.current === targetKey) {
         setPagamento(res.pagamento); setAPrazo(aPrazoVisivelV3(res.os, res.pagamento.saldo)); setLoadedKey(targetKey); setErrorKey(null);
       }
       return true;
     } catch (e) { erro(targetKey, e instanceof Error ? e.message : "Não foi possível estornar o recebimento."); return false; }
     finally { setEstornando(false); }
-  }, [sid, id, targetKey, bloqueios, erro]);
+  }, [sid, id, targetKey, bloqueios, erro, loadedKey, pagamento]);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   const limparRecibo = useCallback(() => setUltimoRecibo(null), []);
   const limparRecusaComercial = useCallback(() => {

@@ -60,6 +60,16 @@ const h = vi.hoisted(() => {
     // `SELECT … FOR UPDATE` do título (em memória não há concorrência): devolve a linha, se existir.
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join("?")
+      // O PATCH parcial/liquidar usa o motor do `receber-lote` (OMNI-FINANCEIRO-F9-ESTORNOS-
+      // CONSOLIDACAO-FINAL-001): trava consultiva da chave + busca de títulos já com a operação.
+      if (sql.includes("pg_advisory_xact_lock")) return [{ lock: "" }]
+      if (sql.includes("'historico' @>")) {
+        const [{ loteId }] = JSON.parse(String(values[1])) as Array<{ loteId: string }>
+        return [...titulos.values()]
+          .filter((r) => r.storeId === values[0])
+          .filter((r) => ((r.payload as { historico?: Array<{ loteId?: string }> })?.historico ?? []).some((e) => e.loteId === loteId))
+          .map((r) => ({ localKey: r.localKey }))
+      }
       if (!sql.includes("contas_receber_titulos")) throw new Error(`query raw não simulada: ${sql}`)
       const porId = sql.includes('"id" = ?')
       const row = porId ? byId.get(String(values[0])) : titulos.get(ck(String(values[0]), String(values[1])))

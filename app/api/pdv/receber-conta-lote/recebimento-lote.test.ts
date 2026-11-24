@@ -1325,7 +1325,9 @@ describe("G2 — contrato da API", () => {
     const keys = await seedTitulos(1)
     const body = await json(await POST(post({ itens: itensDe(keys) })))
 
-    expect(Object.keys(body).sort()).toEqual(["itens", "jaRegistrado", "ok", "sessaoId", "totalRecebido"])
+    // `operacaoId` (a idempotencyKey do próprio chamador) e `recebidoEm` (hora do ledger) vieram
+    // com o comprovante real da #341 — identidade e horário, nunca payload do título.
+    expect(Object.keys(body).sort()).toEqual(["itens", "jaRegistrado", "ok", "operacaoId", "recebidoEm", "sessaoId", "totalRecebido"])
     expect(Object.keys((body.itens as Row[])[0]!).sort()).toEqual([
       "localKey",
       "saldoAntes",

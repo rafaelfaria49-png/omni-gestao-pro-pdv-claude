@@ -1,0 +1,27 @@
+# GREEN — test/fin-estorno-p1/estorno-recebimentos.pg.ts nesta branch
+
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno de recebimento — identidade do pagamento (P1-A) > 1. pagamento único (PDV, caixa aberto) + estorno pelo Financeiro: ledger, movimentação e caixa voltam ao zero 151ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno de recebimento — identidade do pagamento (P1-A) > 2+3. dois parciais (100 + 50) no PDV: as duas entradas existem; estornar o 2º desfaz SÓ os 50 33ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno de recebimento — identidade do pagamento (P1-A) > 4. estorno posterior do 1º pagamento: mais 100 de saída, caixa zerado, título pendente 37ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno de recebimento — identidade do pagamento (P1-A) > 5. estornar de novo o MESMO pagamento (pagamentoIndex) é recusado sem nenhuma escrita 40ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno de recebimento — identidade do pagamento (P1-A) > 5b. sem pagamento ativo: 'estornar último' não reverte nada de novo 25ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 6+7. recebimento PDV (caixa aberto, dinheiro) estornado no HUB: a gaveta perde exatamente o valor 30ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 8. recebimento direto no Financeiro HUB (sem caixa): estorno exato e NENHUMA operação de caixa inventada 22ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 9. lote com múltiplos títulos: estornar um título compensa só o item dele na operação do lote 24ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 12. caixa FECHADO: estorno bloqueado com orientação; nada é gravado e a sessão fechada não muda 17ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 13. outra loja: não estorna título alheio nem compensa operação de caixa de outra loja 24ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 14a. legado sem identidade e ambíguo (2 pagamentos de mesmo valor, só 1 no caixa): bloqueia sem escrever 12ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 14b. legado sem identidade mas inequívoco (1 pagamento, 1 entrada de caixa): estorna e compensa 14ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 14c. ledger legado com estorno sem referência ao pagamento: bloqueado (não adivinha qual voltou) 6ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Estorno pelo Financeiro de recebimento do PDV — Caixa conciliado (P1-B) > 14d. legado cuja entrada da 2ª parcial nunca foi gravada: o estorno não cria saída sem entrada 10ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Atomicidade, concorrência e cancelamento > 10a. dois estornos simultâneos do MESMO pagamento: exatamente um vale 27ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Atomicidade, concorrência e cancelamento > 10b. recebimento e estorno simultâneos no mesmo título: estado final sempre conciliado 19ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Atomicidade, concorrência e cancelamento > 11. falha simulada no meio (insert de caixa): nada do estorno persiste 48ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Atomicidade, concorrência e cancelamento > estorno por referência (cancelamento de venda) depois de um estorno parcial reverte o LÍQUIDO restante 26ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Atomicidade, concorrência e cancelamento > modo título completo com dois pagamentos no caixa: compensa cada um, uma vez 30ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Achados da revisão independente > R1. retry com o recebido que o operador VIU (resposta perdida): 409, nenhum 2º pagamento revertido 28ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Achados da revisão independente > R2. título completo com 2 entradas legadas intercambiáveis: cada compensação aponta uma operação diferente 15ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Achados da revisão independente > R3. entrada de caixa legada que nenhum pagamento explica: bloqueia em vez de presumir 'fora do caixa' 7ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Achados da revisão independente > R4. pagamento dividido em N entradas de caixa com a mesma identidade (V3): compensa todas, valor a valor 14ms
+ ✓ test/fin-estorno-p1/estorno-recebimentos.pg.ts > Achados da revisão independente > R5. lote na mesma sessão concorrendo com o estorno do mesmo título: nunca 503, sempre conciliado 61ms
+      Tests  24 passed (24)

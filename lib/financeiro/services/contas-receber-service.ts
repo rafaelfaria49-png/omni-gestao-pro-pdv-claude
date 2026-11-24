@@ -76,6 +76,48 @@ export function sumPagamentosFromHistoricoPayload(payload: unknown): number {
   return safeMoney(s)
 }
 
+export type PagamentoAtivoHistorico = { index: number; valor: number; loteId: string | null }
+
+/**
+ * Pagamentos (`pagamento`/`liquidacao`) ainda NÃO estornados, por índice no `historico`.
+ *
+ * Um `estorno_pagamento` identifica o pagamento por `refHistoricoIndex` (mesmo contrato da
+ * 2ª via do comprovante). Fail-closed (`ambiguo`): estorno sem referência, referência que
+ * não aponta para um pagamento, dois estornos no mesmo índice, ou valor estornado diferente
+ * do pagamento referenciado — não dá para saber QUAL pagamento voltou ao cliente.
+ */
+export function pagamentosAtivosDoHistorico(historico: unknown): {
+  ativos: PagamentoAtivoHistorico[]
+  estornados: Set<number>
+  ambiguo: boolean
+} {
+  const arr = Array.isArray(historico) ? historico : []
+  const estornados = new Set<number>()
+  let ambiguo = false
+  arr.forEach((e) => {
+    if (!isRecord(e) || String(e.tipo ?? "").toLowerCase() !== "estorno_pagamento") return
+    const ref = e.refHistoricoIndex
+    const alvo = typeof ref === "number" ? arr[ref] : undefined
+    const t = isRecord(alvo) ? String(alvo.tipo ?? "").toLowerCase() : ""
+    if (typeof ref !== "number" || (t !== "pagamento" && t !== "liquidacao") || estornados.has(ref)) {
+      ambiguo = true
+      return
+    }
+    if (Math.abs(safeNum(e.valor) - safeNum((alvo as Record<string, unknown>).valor)) > PAY_EPS) ambiguo = true
+    estornados.add(ref)
+  })
+  const ativos: PagamentoAtivoHistorico[] = []
+  arr.forEach((e, index) => {
+    if (!isRecord(e) || estornados.has(index)) return
+    const t = String(e.tipo ?? "").toLowerCase()
+    if (t !== "pagamento" && t !== "liquidacao") return
+    const valor = safeMoney(safeNum(e.valor))
+    if (!(valor > PAY_EPS)) return
+    ativos.push({ index, valor, loteId: safeStr(e.loteId) || null })
+  })
+  return { ativos, estornados, ambiguo }
+}
+
 /**
  * O servidor já gravou algum lançamento no ledger deste título?
  *
@@ -629,6 +671,11 @@ export async function estornarContaReceber(params: {
   modo: EstornoContaReceberModo
   motivo?: string
   userLabel?: string
+  /**
+   * `ultimo_pagamento`: estorna EXATAMENTE este pagamento (índice no `historico`) em vez do
+   * último ativo. Já estornado ⇒ `pagamento_ja_estornado`, sem escrita (retry seguro).
+   */
+  pagamentoIndex?: number
   /** Quando informado, o estorno participa da transação (e das travas) do chamador. */
   db?: ContaReceberDbClient
 }): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
@@ -658,16 +705,26 @@ export async function estornarContaReceber(params: {
     return gravarBaixaNoTitulo(dbOf(params.db), row, { status: RECEBER_STATUS.ESTORNADO, payload: withHist })
   }
 
+  // Identidade do pagamento = índice da entrada no `historico` (append-only). Pagamento já
+  // estornado nunca é escolhido de novo — antes, o 2º "estornar último" revertia o MESMO
+  // pagamento outra vez (dinheiro devolvido duas vezes).
+  const ledger = pagamentosAtivosDoHistorico(arr)
+  if (ledger.ambiguo) return { ok: false, reason: "historico_ambiguo" }
+
   let lastIdx = -1
   let lastValor = 0
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const e = arr[i]
-    if (!isRecord(e)) continue
-    const t = String(e.tipo ?? "").toLowerCase()
-    if (t === "pagamento" || t === "liquidacao") {
-      lastIdx = i
-      lastValor = safeNum(e.valor)
-      break
+  if (params.pagamentoIndex !== undefined) {
+    const alvo = arr[params.pagamentoIndex]
+    const t = isRecord(alvo) ? String(alvo.tipo ?? "").toLowerCase() : ""
+    if (t !== "pagamento" && t !== "liquidacao") return { ok: false, reason: "pagamento_nao_encontrado" }
+    if (ledger.estornados.has(params.pagamentoIndex)) return { ok: false, reason: "pagamento_ja_estornado" }
+    lastIdx = params.pagamentoIndex
+    lastValor = safeNum((alvo as Record<string, unknown>).valor)
+  } else {
+    const ultimo = ledger.ativos[ledger.ativos.length - 1]
+    if (ultimo) {
+      lastIdx = ultimo.index
+      lastValor = ultimo.valor
     }
   }
   if (lastIdx < 0 || !(lastValor > PAY_EPS)) {
