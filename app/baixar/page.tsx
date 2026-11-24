@@ -112,9 +112,9 @@ export default async function BaixarPage() {
               <li>
                 <span className="font-medium text-foreground">Lojas e usuários:</span> cada pessoa entra com o próprio
                 login e só vê as lojas liberadas para ela. Ao trocar de usuário no mesmo computador, use{" "}
-                <em>Encerrar sessão</em>. Sem internet, o navegador pode reter por até 24 horas respostas de leitura do
-                cache offline da última sessão: em computador compartilhado entre lojas diferentes, use um usuário do
-                Windows separado para cada loja.
+                <em>Encerrar sessão</em>: o sistema limpa os caches de páginas e APIs autenticadas do navegador sem
+                apagar vendas pendentes do PDV. Em computador compartilhado entre lojas diferentes, a prática mais
+                segura segue sendo usar um usuário do Windows separado para cada loja.
               </li>
               <li>
                 <span className="font-medium text-foreground">Atualizações:</span> automáticas, como no site. Quando

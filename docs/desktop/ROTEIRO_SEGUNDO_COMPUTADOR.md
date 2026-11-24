@@ -20,9 +20,10 @@ No computador novo (Windows 10 ou 11), **com o Microsoft Edge ou o Google Chrome
 Pronto. Atualizações chegam sozinhas (mesmo do site). Nada para baixar, nada para assinar.
 
 Limites honestos: sem impressão automática do cupom ao finalizar, sem aviso de impressora desligada,
-precisa de internet (o PDV guarda vendas sem conexão e envia quando volta). Sem internet, o navegador pode
-mostrar por até 24 h dados de leitura (como a lista de lojas) da última pessoa que usou aquele perfil:
-computador dividido entre lojas diferentes = um usuário do Windows para cada loja.
+precisa de internet (o PDV guarda vendas sem conexão em armazenamento local por loja e envia quando volta).
+O Service Worker não armazena APIs ou páginas autenticadas em cache offline e o logout limpa caches
+autenticados legados; ainda assim, em computador dividido entre lojas diferentes, recomenda-se usar um
+usuário do Windows separado para cada loja.
 
 ## 2. Só se precisar de impressão direta — programa Windows por instalação assistida
 
