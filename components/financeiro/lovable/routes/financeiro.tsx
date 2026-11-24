@@ -769,7 +769,12 @@ function ContasReceber() {
       toast.success("Recebimento estornado");
       setModal(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao estornar");
+      // Sem resposta (rede): o servidor pode ou não ter gravado — não afirmar nenhum dos dois.
+      toast.error(
+        e instanceof TypeError
+          ? "Sem conexão com o servidor: o estorno não foi confirmado. Atualize a lista antes de tentar de novo."
+          : e instanceof Error ? e.message : "Falha ao estornar",
+      );
     } finally {
       setBusy(false);
     }
