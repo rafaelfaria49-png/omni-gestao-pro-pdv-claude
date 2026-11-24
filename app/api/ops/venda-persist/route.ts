@@ -63,6 +63,8 @@ export async function POST(req: Request) {
   const bodyObj = body as { allowClosedOriginalSession?: unknown; retroactiveClosedSession?: unknown }
   const allowClosedOriginalSession =
     bodyObj.allowClosedOriginalSession === true || bodyObj.retroactiveClosedSession === true
+  // COMPAT-PROFISSIONAL-001: o PDV marca só a tentativa de finalização (nunca o reenvio da fila).
+  const finalizacaoAoVivo = (body as { tentativa?: unknown }).tentativa === "finalize"
 
   const pedidoId = typeof sale.id === "string" && sale.id.trim() ? sale.id.trim() : ""
   if (!pedidoId) {
@@ -88,6 +90,7 @@ export async function POST(req: Request) {
           enforceStock: true,
           requireCaixaSession: true,
           allowClosedOriginalSession,
+          finalizacaoAoVivo,
         })
       },
       // `DATABASE_URL` usa `connection_limit=1` (pooler Supabase) — vendas com muitas

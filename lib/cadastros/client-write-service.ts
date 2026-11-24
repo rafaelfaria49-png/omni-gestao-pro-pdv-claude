@@ -44,6 +44,7 @@ import {
   type ClientIdentityVerdict,
 } from "@/lib/cadastros/client-identity"
 import { createPrismaClientIdentitySource } from "@/lib/cadastros/client-identity/lookup-prisma"
+import { limparTextoCadastro, nomeCadastroParaGravar } from "@/lib/cadastros/nome-cadastro"
 import {
   CLIENT_WRITE_MESSAGES,
   clientWriteInvalid,
@@ -150,6 +151,14 @@ function asTrimmedText(value: unknown): string | null | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return String(value).trim()
   if (typeof value !== "string") return null
   return value.trim()
+}
+
+/**
+ * Padrão global de nome de cliente: nome todo em CAIXA ALTA/baixa vira "João da Silva";
+ * grafia mista e siglas são preservadas; nome legado não alterado fica intacto.
+ */
+function nomeClienteParaGravar(nome: string, atual?: string | null): string {
+  return nomeCadastroParaGravar(nome, "pessoa", atual)
 }
 
 function isPrismaKnownError(e: unknown, code: "P2002" | "P2025"): boolean {
@@ -278,7 +287,9 @@ function normalizePatch(
     if (name === null || name === "") {
       return { ok: false, error: clientWriteInvalid(CLIENT_WRITE_MESSAGES.nameRequired, "nome") }
     }
-    patch.name = name
+    // Aqui só a limpeza de espaços; a capitalização é aplicada na gravação
+    // (`nomeClienteParaGravar`) para não reescrever um nome legado que não mudou.
+    patch.name = limparTextoCadastro(name)
     patch.changedFields.push("nome")
   } else if (opts.requireName) {
     return { ok: false, error: clientWriteInvalid(CLIENT_WRITE_MESSAGES.nameRequired, "nome") }
@@ -550,7 +561,7 @@ export async function createClientTx(
   const incomingDocument = patch.documentTouched ? (patch.document ?? "") : ""
   const data: Prisma.ClienteUncheckedCreateInput = {
     storeId: ctx.storeId,
-    name: patch.name,
+    name: nomeClienteParaGravar(patch.name),
     kind: patch.kind ?? "PF",
     document: incomingDocument,
     // CAD-R2-019: chave canônica mantida atomicamente com o legado.
@@ -681,7 +692,7 @@ async function persistUpdate(
   reviewed: boolean,
 ): Promise<ClientWriteResult> {
   const data: Prisma.ClienteUpdateInput = {}
-  if (patch.name !== undefined) data.name = patch.name
+  if (patch.name !== undefined) data.name = nomeClienteParaGravar(patch.name, existing.name)
   if (patch.kind !== undefined) data.kind = patch.kind
   if (patch.documentTouched) {
     data.document = patch.document ?? ""

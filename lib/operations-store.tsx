@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { APARELHO_REVERSAO_NAO_INTEGRADA } from "@/lib/aparelhos/sale-reversal"
 import type { OrdemServico } from "@/components/dashboard/os/ordens-servico"
 import type { Orcamento } from "@/lib/orcamento-types"
 import { normalizeDocDigits } from "@/lib/cpf"
@@ -154,6 +155,15 @@ const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
 const UNKNOWN_TWIN_WINDOW_MS = 10 * 60_000
 /** Código da recusa: venda idêntica pendente com resultado desconhecido — decisão do operador. */
 export const UNKNOWN_TWIN_CODE = "VENDA_IDENTICA_RESULTADO_DESCONHECIDO"
+/**
+ * SEC-342 · P2 (revisão da #343): sem loja ativa resolvida o provider usa a chave legada, que
+ * `opsLojaIdFromStorageKey` traduz para `loja-1`. Nenhuma ação do operador pode gravar ou
+ * enviar nada nesse estado — nem localmente (a fila ficaria órfã na chave legada quando a loja
+ * resolver). Nada local é apagado: só se recusa a ação nova, com este aviso.
+ */
+export const LOJA_NAO_RESOLVIDA_CODE = "LOJA_NAO_RESOLVIDA"
+export const LOJA_NAO_RESOLVIDA_MOTIVO =
+  "A loja desta sessão ainda não foi carregada. Aguarde alguns segundos ou conecte-se à internet e recarregue a página. Nada foi gravado."
 
 export type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
@@ -188,6 +198,8 @@ export interface InventoryItem {
   atributos?: ProdutoAtributoDef[]
   /** Configuração saneada e opcional projetada por `/api/ops/inventory`. */
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /** Modelo de aparelho por IMEI — venda exige escolher a unidade física. */
+  serializedDevice?: boolean
 }
 
 export interface CaixaState {
@@ -621,6 +633,8 @@ interface OperationsContextType {
         custoUnitario?: number | null
         /** Seleção de modelo/cor do acessório (dado passivo, ver SaleLineRecord). */
         accessorySelection?: AccessorySelectionV1
+        /** Aparelho individualizado (unidade + garantia) — ver SaleLineRecord. */
+        deviceSale?: SaleLineRecord["deviceSale"]
         serviceId?: string
         serviceCategory?: string
         warrantyDays?: number
@@ -1088,6 +1102,14 @@ export function OperationsProvider({
   const caixaHydratedForRef = useRef<string | null>(null)
   const storageKeyRef = useRef(storageKey)
   const caixaHydrated = caixaHydratedFor === storageKey
+  /**
+   * A chave legada só aparece enquanto a loja ativa ainda não foi resolvida (primeiro
+   * render, antes de `/api/stores`/localStorage) — `opsLojaIdFromStorageKey` a traduz para
+   * `loja-1`. Sem esta porta, toda carga de página consultava (e podia gravar ordens, livro
+   * diário e reenviar a fila) na `loja-1` com outra loja selecionada (SEC-342 · isolamento).
+   * Estado local (hidratação/persistência) continua igual; só o servidor espera a loja real.
+   */
+  const lojaResolvida = storageKey !== OPS_KEY_LEGACY
 
   useEffect(() => {
     stateRef.current = state
@@ -1338,6 +1360,7 @@ export function OperationsProvider({
   }, [])
 
   useEffect(() => {
+    if (!lojaResolvida) return
     const lj = opsLojaIdFromStorageKey(storageKey)
     // `catalogSync=1` é NetworkOnly no service worker (next.config.mjs): o cache NetworkFirst de
     // `/api/*` devolveria um catálogo velho em rede lenta. A carga inicial segue cacheável (offline).
@@ -1398,10 +1421,13 @@ export function OperationsProvider({
       unsubscribe()
       window.clearInterval(timer)
     }
-  }, [storageKey])
+  }, [storageKey, lojaResolvida])
 
   useEffect(() => {
     setOpsDbReady(false)
+    // Sem loja resolvida `opsDbReady` fica falso: PUT de ordens, flush da fila e o ciclo de
+    // reenvio (todos atrás de `opsDbReady`) não disparam contra a `loja-1`.
+    if (!lojaResolvida) return
     let cancelled = false
     async function loadDb() {
       const lj = opsLojaIdFromStorageKey(storageKey)
@@ -1543,7 +1569,7 @@ export function OperationsProvider({
     return () => {
       cancelled = true
     }
-  }, [storageKey, canReadOperations, checkCatalog])
+  }, [storageKey, canReadOperations, checkCatalog, lojaResolvida])
 
   /**
    * Reconcilia a sessão de caixa com o servidor — fonte da verdade.
@@ -1569,6 +1595,8 @@ export function OperationsProvider({
 
   const refreshCaixaSession = useCallback(async (): Promise<CaixaRefreshOutcome> => {
     const lj = opsLojaIdFromStorageKey(storageKey)
+    // Loja não resolvida: nenhuma decisão (a consulta iria para a `loja-1`).
+    if (!lojaResolvida) return { ok: false, status: "falha", reason: "nao-hidratado" }
     return caixaSyncSingleFlightRef.current(async () => {
       const local = stateRef.current
       const { outcome, decision } = await reconcileCaixaSession({
@@ -1603,13 +1631,13 @@ export function OperationsProvider({
 
       return outcome
     })
-  }, [storageKey])
+  }, [storageKey, lojaResolvida])
 
   // Reconciliação automática: montagem (só DEPOIS da hidratação), troca de loja,
   // volta do foco e retorno da rede. Cobre F5, nova aba, novo login e reinício
   // do computador. Não depende de `opsDbReady` — estoque/OS podem falhar.
   useEffect(() => {
-    if (!caixaHydrated) return
+    if (!caixaHydrated || !lojaResolvida) return
     void refreshCaixaSession()
     const onVisible = () => {
       if (document.visibilityState === "visible") void refreshCaixaSession()
@@ -1621,7 +1649,7 @@ export function OperationsProvider({
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("online", onOnline)
     }
-  }, [caixaHydrated, refreshCaixaSession])
+  }, [caixaHydrated, refreshCaixaSession, lojaResolvida])
 
   useEffect(() => {
     if (!opsDbReady || !canReadOperations) return
@@ -1656,6 +1684,7 @@ export function OperationsProvider({
 
   const ledgerKey = JSON.stringify(state.dailyLedger)
   useEffect(() => {
+    if (!lojaResolvida) return
     let cancelled = false
     const t = setTimeout(() => {
       void (async () => {
@@ -1686,7 +1715,7 @@ export function OperationsProvider({
       cancelled = true
       clearTimeout(t)
     }
-  }, [ledgerKey, storageKey])
+  }, [ledgerKey, storageKey, lojaResolvida])
 
   // Cooldown do re-sync automático por venda: rejeição de REGRA (HTTP 4xx, ex.:
   // 409 caixa fechado / produto não resolvido) não muda re-POSTando a cada 30s —
@@ -1801,6 +1830,7 @@ export function OperationsProvider({
   )
 
   const probeWriterCapability = useCallback(async (lojaId: string): Promise<SaleWriterCapability> => {
+    if (!lojaResolvida) return "unknown"
     const cached = writerCapabilityRef.current
     if (cached === "v1" || cached === "v2") return cached
     // Sem rede não há o que perguntar: `unknown` mantém o writer V2 (identidade cliente).
@@ -1826,7 +1856,7 @@ export function OperationsProvider({
       noteServerReachability(false)
       return "unknown"
     }
-  }, [noteServerReachability])
+  }, [noteServerReachability, lojaResolvida])
 
   const probeSaleWriterCapability = useCallback<OperationsContextType["probeSaleWriterCapability"]>(
     async () => {
@@ -1933,14 +1963,15 @@ export function OperationsProvider({
   // travado) vira "sem resposta" — resultado DESCONHECIDO com a mesma identidade — em vez
   // de prender a finalização e o Reenviar (que se juntava à mesma promessa pendurada).
   const postV1Sale = useCallback(
-    async (lojaId: string, sale: SaleRecord, retroactive: boolean): Promise<TimedTextResponse> => {
+    async (lojaId: string, sale: SaleRecord, retroactive: boolean, source: SaleAttemptSource = "auto"): Promise<TimedTextResponse> => {
       return fetchTextWithTimeout(
         vendaPersistUrl(lojaId),
         {
           method: "POST",
           credentials: "include",
           headers: persistHeaders(lojaId),
-          body: JSON.stringify(retroactive ? { sale, allowClosedOriginalSession: true } : { sale }),
+          // `tentativa`: o servidor distingue finalização ao vivo de reenvio da fila (COMPAT-PROFISSIONAL-001).
+          body: JSON.stringify({ sale, tentativa: source, ...(retroactive ? { allowClosedOriginalSession: true } : {}) }),
         },
         SALE_PERSIST_TIMEOUT_MS,
       )
@@ -1949,7 +1980,7 @@ export function OperationsProvider({
   )
 
   const postV2Sale = useCallback(
-    async (lojaId: string, sale: SaleRecord, retroactive: boolean): Promise<TimedTextResponse> => {
+    async (lojaId: string, sale: SaleRecord, retroactive: boolean, source: SaleAttemptSource = "auto"): Promise<TimedTextResponse> => {
       return fetchTextWithTimeout(
         vendaPersistV2Url(lojaId),
         {
@@ -1959,6 +1990,7 @@ export function OperationsProvider({
           body: JSON.stringify({
             sale,
             clientSaleId: sale.clientSaleId,
+            tentativa: source,
             ...(retroactive ? { allowClosedOriginalSession: true } : {}),
           }),
         },
@@ -2094,6 +2126,7 @@ export function OperationsProvider({
       retroactive: boolean,
       source: SaleAttemptSource = "auto",
     ): Promise<PersistPendingSaleResult> => {
+      if (!lojaResolvida) return { ok: false, reason: LOJA_NAO_RESOLVIDA_MOTIVO, code: LOJA_NAO_RESOLVIDA_CODE }
       const flightKey = `${lojaId}:${saleLocalKey(sale)}:${retroactive ? "r" : "n"}`
       const existing = persistInFlightRef.current.get(flightKey)
       if (existing) return existing
@@ -2104,7 +2137,9 @@ export function OperationsProvider({
       const offlineAtSend = typeof navigator !== "undefined" && navigator.onLine === false
       setSalePhase(phaseKey, "enviando")
       try {
-        const res = useV2 ? await postV2Sale(lojaId, sale, retroactive) : await postV1Sale(lojaId, sale, retroactive)
+        const res = useV2
+          ? await postV2Sale(lojaId, sale, retroactive, source)
+          : await postV1Sale(lojaId, sale, retroactive, source)
         noteServerReachability(true)
         if (!res.ok && useV2) {
           const parsed = parseSalePersistError(res.text)
@@ -2114,7 +2149,7 @@ export function OperationsProvider({
             resolvePendingSyncErrorCode({ httpStatus: res.status, message: parsed.message })
           if (shouldFallbackV2ToV1({ httpStatus: res.status, code })) {
             const converted = convertPendingV2ToV1(sale)
-            const v1 = await postV1Sale(lojaId, converted, retroactive)
+            const v1 = await postV1Sale(lojaId, converted, retroactive, source)
             noteServerReachability(true)
             return await settlePersistResponse(v1, converted, lojaId, source)
           }
@@ -2143,7 +2178,7 @@ export function OperationsProvider({
         persistInFlightRef.current.delete(flightKey)
       }
     },
-    [convertPendingV2ToV1, markSaleBlocked, noteServerReachability, postV1Sale, postV2Sale, setSalePhase, settlePersistResponse],
+    [convertPendingV2ToV1, markSaleBlocked, noteServerReachability, postV1Sale, postV2Sale, setSalePhase, settlePersistResponse, lojaResolvida],
   )
 
   /** A versão MAIS NOVA da venda ainda pendente (outra aba ou o automático podem ter confirmado). */
@@ -2164,6 +2199,7 @@ export function OperationsProvider({
    * se outra aba está enviando, esta não envia). `resetBackoff` = a rede acabou de voltar.
    */
   const flushPendingSales = useCallback((opts?: { resetBackoff?: boolean }) => {
+    if (!lojaResolvida) return
     if (typeof navigator !== "undefined" && navigator.onLine === false) return
     const pending = stateRef.current.sales.filter((s) => s.syncPending === true)
     if (pending.length === 0) return
@@ -2216,7 +2252,7 @@ export function OperationsProvider({
           console.warn("[venda-persist] re-sync lock", sale.id, "lojaId:", lj, err)
         })
     }
-  }, [isOpenHere, latestPendingSale, persistPendingSale, storageKey])
+  }, [isOpenHere, latestPendingSale, persistPendingSale, storageKey, lojaResolvida])
 
   const refreshSalesFromServer = useCallback<OperationsContextType["refreshSalesFromServer"]>(
     async () => {
@@ -2252,6 +2288,7 @@ export function OperationsProvider({
    */
   const doRetrySyncSale = useCallback(
     async (saleId: string, retroactive: boolean): Promise<ManualSyncResult> => {
+      if (!lojaResolvida) return { ok: false, reason: LOJA_NAO_RESOLVIDA_MOTIVO, code: LOJA_NAO_RESOLVIDA_CODE }
       const sale = stateRef.current.sales.find(
         (s) => s.syncPending === true && (s.id === saleId || s.clientSaleId === saleId),
       )
@@ -2359,6 +2396,7 @@ export function OperationsProvider({
       }
     },
     [
+      lojaResolvida,
       emitVendaFinalizadaOnce,
       latestPendingSale,
       markSaleBlocked,
@@ -2682,6 +2720,7 @@ export function OperationsProvider({
    * Nunca passa por `persistPendingSale`: conflito de identificação não vira reenvio comum.
    */
   const autoReconcileQuarantinedSales = useCallback(async () => {
+    if (!lojaResolvida) return
     if (autoReconcileInFlightRef.current) return
     const lj = opsLojaIdFromStorageKey(storageKey)
     const isQuarantined = (sale: SaleRecord) =>
@@ -2782,7 +2821,7 @@ export function OperationsProvider({
       if (next.size === prev.size && [...next].every((key) => prev.has(key))) return prev
       return next
     })
-  }, [reconcileRecoveredSales, storageKey])
+  }, [reconcileRecoveredSales, storageKey, lojaResolvida])
 
   /** Baixa o catálogo já (best-effort) pelo controlador: mesma loja, resposta mais nova vence. */
   const refreshInventoryFromServer = useCallback(async () => {
@@ -2938,6 +2977,7 @@ export function OperationsProvider({
   }, [storageKey])
 
   const flushPendingDevolucoes = useCallback(() => {
+    if (!lojaResolvida) return
     const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true)
     if (pending.length === 0) return
     const lj = opsLojaIdFromStorageKey(storageKey)
@@ -2993,9 +3033,10 @@ export function OperationsProvider({
           console.warn("[devolucao-persist] re-sync rede", dev.id, "lojaId:", lj, err)
         })
     }
-  }, [storageKey])
+  }, [storageKey, lojaResolvida])
 
   const flushPendingCaixaOperations = useCallback(() => {
+    if (!lojaResolvida) return
     if (storeCaixaOnlineOnlyRef.current) return
     const pending = stateRef.current.pendingCaixaOperations?.filter((op) => op.syncPending === true) ?? []
     if (pending.length === 0) return
@@ -3027,7 +3068,7 @@ export function OperationsProvider({
           console.warn("[caixa-persist] re-sync rede", op.id, err)
         })
     }
-  }, [storageKey])
+  }, [storageKey, lojaResolvida])
 
   // Sessão STORE confirmada: sangria/suprimento que ficaram na fila (versão anterior,
   // aba fechada no meio do envio ou valor forjado no storage) nunca chegaram ao servidor.
@@ -3219,6 +3260,8 @@ export function OperationsProvider({
       pixQrKind,
       cashTendered,
     }) => {
+      // Sem loja resolvida: recusa antes de qualquer mutação local (carrinho preservado na tela).
+      if (!lojaResolvida) return { ok: false, reason: LOJA_NAO_RESOLVIDA_MOTIVO, code: LOJA_NAO_RESOLVIDA_CODE }
       // Preflight fail-closed (FRACTIONAL-SALE-HARD-BLOCK-005): quantidade
       // significativamente fracionária nunca gera mutação local (carrinho,
       // SaleRecord, estoque, caixa, syncPending) nem "Venda finalizada". Roda
@@ -3590,6 +3633,7 @@ export function OperationsProvider({
       }
     },
     [
+      lojaResolvida,
       persistPendingSale,
       probeWriterCapability,
       recomputeConnectivity,
@@ -3602,6 +3646,7 @@ export function OperationsProvider({
 
   const registrarDevolucao = useCallback<OperationsContextType["registrarDevolucao"]>((input) => {
     const { saleId, lines, mode, customerCpf, customerName, sessaoId, tipo, motivo, observacao, payload } = input
+    if (!lojaResolvida) return { ok: false, reason: LOJA_NAO_RESOLVIDA_MOTIVO }
     const k = normalizeDocDigits(customerCpf)
     if (!k) return { ok: false, reason: "CPF/CNPJ do cliente obrigatório." }
 
@@ -3636,6 +3681,9 @@ export function OperationsProvider({
       if (canReturn < req.quantity) {
         return { ok: false, reason: `Devolução maior que o disponível para ${saleLine.name}.` }
       }
+      // Aparelho por IMEI: devolução ainda não integrada (F8). Recusa ANTES de gravar algo local
+      // (estoque/crédito), igual ao servidor — nunca uma devolução parcial pendente para sempre.
+      if (saleLine.deviceSale) return { ok: false, reason: APARELHO_REVERSAO_NAO_INTEGRADA.message }
       const inv = next.inventory.find((i) => i.id === req.inventoryId)
       if (!inv) return { ok: false, reason: "Produto não está mais no cadastro de estoque." }
 
@@ -3741,10 +3789,11 @@ export function OperationsProvider({
     }
 
     return { ok: true, devolucaoId, creditIssued: mode === "vale_credito" ? creditIssued : 0 }
-  }, [storageKey])
+  }, [storageKey, lojaResolvida])
 
   const registrarOperacaoCaixa = useCallback<OperationsContextType["registrarOperacaoCaixa"]>(
     async ({ sessaoId, tipo, valor, motivo, localId, operador }) => {
+      if (!lojaResolvida) return { ok: false, reason: LOJA_NAO_RESOLVIDA_MOTIVO }
       const prev = stateRef.current
       const next: OpsState = {
         ...prev,
@@ -3818,7 +3867,7 @@ export function OperationsProvider({
         return { ok: false, reason: "network" }
       }
     },
-    [storageKey]
+    [storageKey, lojaResolvida]
   )
 
   const value = useMemo<OperationsContextType>(

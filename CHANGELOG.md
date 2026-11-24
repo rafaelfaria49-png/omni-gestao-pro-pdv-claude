@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-11-23
+
+### Cadastros — padrão global de nomes, busca e duplicidade (todos os ramos)
+
+- Nomes gravados com espaços limpos em todos os cadastros. Cliente, técnico e contato de fornecedor digitados todo em maiúsculas ou minúsculas viram "João da Silva"; categoria, serviço e tipo de equipamento todo em minúsculas ganham a primeira letra maiúscula. Grafia mista ("iPhone", "McDonald"), siglas (PJ, LTDA, ME), marcas, modelos, produtos, SKU, EAN e IMEI nunca são recapitalizados.
+- Editar um cadastro sem mudar o nome (inativar, trocar telefone) mantém a grafia já gravada.
+- Duplicidade sem diferença de caixa, acento ou espaço: categorias e marcas (por tipo), fornecedores (mesmo CNPJ, ou mesmo nome sem CNPJs diferentes), técnicos, modelos de equipamento (marca + modelo) e serviços (nome dentro da categoria). O formulário avisa qual cadastro já existe antes de enviar; cadastros duplicados antigos continuam editáveis. Sempre por loja.
+- Busca das abas Clientes, Serviços, Fornecedores, Técnicos e Equipamentos e do campo Categoria/Marca do produto sem acento e por vários termos; telefone e CNPJ também pelos dígitos. Listas e chips em ordem alfabética pt-BR.
+- Mensagens de sucesso e erro por aviso na tela (fim do `alert` do navegador), em português mesmo quando o servidor recusa em produção. Formulários em uma coluna no celular, rótulos ligados aos campos e campos obrigatórios marcados. Inativar categoria/marca visível no celular.
+- Busca de produtos no servidor continua sensível a acento (exige migration) — ver `docs/modules/CADASTROS_PADRAO_GLOBAL.md`.
+
+### Operações V3 — "Nova OS" abre o seletor Novo atendimento
+
+- O botão **Nova OS** da V3 abre um seletor com três opções: **Nova OS**, **Orçamento** e **Retorno / Garantia**. "Atendimento rápido" não aparece no seletor (a tela própria continua no menu).
+- **Nova OS** abre o formulário completo de sempre, sem mudança.
+- **Orçamento** usa o mesmo formulário sem o passo Pagamento e com a entrada do aparelho opcional; grava um orçamento pré-OS (proposta de hoje, validade de 7 dias). Nada é recebido e nenhum serviço é concluído; aprovação e envio seguem no painel de orçamento da OS.
+- **Retorno / Garantia** localiza a OS original (número, cliente, telefone ou aparelho) e abre o retorno vinculado a ela. Repetir o mesmo relato não cria um segundo atendimento; retorno já em andamento abre o atendimento existente; OS não entregue ou cancelada não oferece abertura.
+- Modal responsivo, com botão Fechar e tecla ESC. Operações V4, Caixa, PDV, Financeiro e Fiscal não mudaram.
+
 ## 2026-10-22
 
 ### Cadastros — Contato por QR Code no cadastro de Clientes

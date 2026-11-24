@@ -9,7 +9,7 @@ import type { Session } from "next-auth"
 const h = vi.hoisted(() => ({
   auth: vi.fn(async (): Promise<unknown> => null),
   getSessionEntitlement: vi.fn(async (): Promise<{ ok: boolean }> => ({ ok: false })),
-  produtoFindFirst: vi.fn(async (_args?: unknown) => null),
+  produtoFindFirst: vi.fn(async (_args?: unknown): Promise<unknown> => null),
   produtoFindUnique: vi.fn(async (_args?: unknown) => null),
   logsCreate: vi.fn(async (_args?: unknown) => ({})),
   txRunner: vi.fn(async (fn: (tx: unknown) => unknown) => fn({})),
@@ -224,6 +224,27 @@ describe("createCliente / updateCliente", () => {
 })
 
 describe("deleteProduto / upsertProduto", () => {
+  it.each([
+    null,
+    { vestuario: "camiseta" },
+    { vestuario: { contract: "omni.vestuario.catalog", version: 1, mode: "SIMPLES" } },
+  ])("preserva exclusão de produto simples com metadata %j", async (metadata) => {
+    sessionAtiva({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    h.produtoFindFirst.mockResolvedValue({ id: "simples-a", name: "Simples QA", metadata })
+    expect(await deleteProduto("loja-a", "simples-a")).toMatchObject({ ok: true, deleted: true })
+    expect(h.produtoDelete).toHaveBeenCalledWith({ where: { id: "simples-a" } })
+  })
+
+  it.each([
+    { contract: "omni.vestuario.catalog", version: 1, mode: "COM_GRADE", gradeId: "grade-a" },
+    { contract: "omni.vestuario.catalog", version: 2, mode: "SIMPLES" },
+  ])("recusa excluir grade ou declaração futura inválida: %j", async (vestuario) => {
+    sessionAtiva({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    h.produtoFindFirst.mockResolvedValue({ id: "grade-a", name: "Grade QA", metadata: { vestuario } })
+    expect(await deleteProduto("loja-a", "grade-a")).toMatchObject({ ok: false })
+    expect(h.produtoDelete).not.toHaveBeenCalled()
+  })
+
   it("sem sessão → não revela existência", async () => {
     const r = await deleteProduto("loja-a", "prod-b")
     expect(r.ok).toBe(false)

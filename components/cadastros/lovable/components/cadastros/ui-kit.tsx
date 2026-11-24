@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode, useState } from "react";
+import { cloneElement, forwardRef, isValidElement, type ReactElement, type ReactNode, useId, useState } from "react";
 import { X } from "lucide-react";
 
 export function Modal({ open, onClose, title, subtitle, children, size = "lg", accessible = false }: {
@@ -32,11 +32,30 @@ export function Modal({ open, onClose, title, subtitle, children, size = "lg", a
   );
 }
 
-export function Field({ label, children, span = 1 }: { label: string; children: ReactNode; span?: 1 | 2 }) {
+/**
+ * Campo rotulado. Quando o filho direto é `Input`/`Select`/`Textarea` do kit, o rótulo
+ * é ligado ao controle (`htmlFor`/`id`) — leitor de tela anuncia o nome do campo e o
+ * clique no rótulo foca o controle. `required` mostra o marcador e `aria-required`.
+ */
+export function Field({ label, children, span = 1, required = false }: { label: string; children: ReactNode; span?: 1 | 2; required?: boolean }) {
+  const autoId = useId();
+  let control = children;
+  let htmlFor: string | undefined;
+  if (isValidElement(children) && (children.type === Input || children.type === Select || children.type === Textarea)) {
+    const props = children.props as { id?: string };
+    htmlFor = props.id ?? autoId;
+    control = cloneElement(children as ReactElement<Record<string, unknown>>, {
+      id: htmlFor,
+      ...(required ? { "aria-required": true } : {}),
+    });
+  }
   return (
-    <div className={span === 2 ? "col-span-full space-y-1.5" : "space-y-1.5"}>
-      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
-      {children}
+    <div className={span === 2 ? "col-span-full min-w-0 space-y-1.5" : "min-w-0 space-y-1.5"}>
+      <label htmlFor={htmlFor} className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+        {required && <span aria-hidden="true" className="ml-0.5 text-destructive">*</span>}
+      </label>
+      {control}
     </div>
   );
 }

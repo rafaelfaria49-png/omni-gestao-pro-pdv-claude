@@ -67,8 +67,11 @@ function adminSession(): Session {
       email: "admin@loja.com",
       name: "Admin Sessão",
       role: "ADMIN",
-      storeAccess: "all",
-      lojaId: null,
+      // Membership explícita + módulo catalog (requireModuleApi(req, "catalog"), desde 52c01c3).
+      storeAccess: "restricted",
+      allowedStoreIds: ["loja-a"],
+      storeModules: { "loja-a": ["catalog"] },
+      lojaId: "loja-a",
     },
     expires: new Date(Date.now() + 3_600_000).toISOString(),
   } as unknown as Session
@@ -125,5 +128,21 @@ describe("POST /api/produtos/bulk-action — ator oficial", () => {
     const [, , , input] = h.updateProductTx.mock.calls[0] as unknown as [unknown, unknown, unknown, { active: boolean }]
     expect(input).toMatchObject({ active: false })
     expect(h.produtoUpdateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /api/produtos/bulk-action — guard de módulo real (negativos, contrato 52c01c3)", () => {
+  it("ADMIN com storeAccess all sem autoridade da plataforma → 403 sem tocar produtos", async () => {
+    h.auth.mockResolvedValueOnce({ ...adminSession(), user: { ...adminSession().user, storeAccess: "all", allowedStoreIds: [], storeModules: {} } })
+    const res = await POST(req({ action: "inactivate", ids: ["p1"] }))
+    expect(res.status).toBe(403)
+    expect(h.updateProductTx).not.toHaveBeenCalled()
+    expect(h.produtoUpdateMany).not.toHaveBeenCalled()
+  })
+  it("membro da loja sem o módulo catalog → 403 sem tocar produtos", async () => {
+    h.auth.mockResolvedValueOnce({ ...adminSession(), user: { ...adminSession().user, storeModules: { "loja-a": ["pdv"] } } })
+    const res = await POST(req({ action: "inactivate", ids: ["p1"] }))
+    expect(res.status).toBe(403)
+    expect(h.updateProductTx).not.toHaveBeenCalled()
   })
 })

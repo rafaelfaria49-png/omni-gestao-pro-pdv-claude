@@ -28,13 +28,34 @@ describe("avaliarAcessoContador (ACL multi-loja)", () => {
     expect(avaliarAcessoContador(s, "   ")).toEqual({ ok: false, motivo: "loja_ausente" })
   })
 
-  it('storeAccess="all" sem permissão Contador → sem_permissao', () => {
-    const s = sessao({ storeAccess: "all", role: "VENDEDOR" } as Partial<Session["user"]>)
-    expect(avaliarAcessoContador(s, "loja-9")).toEqual({ ok: false, motivo: "sem_permissao" })
+  // Contrato desde 52c01c3: `storeAccess: "all"` sozinho não concede loja; só a autoridade da
+  // plataforma (`platformAuthority`) ou membership explícita (`allowedStoreIds`).
+  it('storeAccess="all" sem autoridade de plataforma não concede loja → sem_acesso_loja', () => {
+    for (const role of ["VENDEDOR", "ADMIN"]) {
+      const s = sessao({ storeAccess: "all", role } as Partial<Session["user"]>)
+      expect(avaliarAcessoContador(s, "loja-9")).toEqual({ ok: false, motivo: "sem_acesso_loja" })
+    }
   })
 
-  it('storeAccess="all" com permissão Contador segue o contrato real da plataforma', () => {
-    const s = sessao({ storeAccess: "all", role: "ADMIN" } as Partial<Session["user"]>)
+  it("membro da loja sem permissão Contador (papel ou módulo) → sem_permissao", () => {
+    const vendedor = sessao({
+      storeAccess: "restricted",
+      allowedStoreIds: ["loja-9"],
+      storeModules: { "loja-9": ["accountant"] },
+      role: "VENDEDOR",
+    } as Partial<Session["user"]>)
+    expect(avaliarAcessoContador(vendedor, "loja-9")).toEqual({ ok: false, motivo: "sem_permissao" })
+    const adminSemModulo = sessao({
+      storeAccess: "restricted",
+      allowedStoreIds: ["loja-9"],
+      storeModules: { "loja-9": ["finance"] },
+      role: "ADMIN",
+    } as Partial<Session["user"]>)
+    expect(avaliarAcessoContador(adminSemModulo, "loja-9")).toEqual({ ok: false, motivo: "sem_permissao" })
+  })
+
+  it("autoridade da plataforma segue o contrato real da plataforma", () => {
+    const s = sessao({ storeAccess: "all", role: "SUPER_ADMIN", platformAuthority: true } as Partial<Session["user"]>)
     expect(avaliarAcessoContador(s, "loja-9")).toEqual({
       ok: true,
       storeId: "loja-9",
@@ -47,6 +68,7 @@ describe("avaliarAcessoContador (ACL multi-loja)", () => {
     const s = sessao({
       storeAccess: "restricted",
       allowedStoreIds: ["loja-2"],
+      storeModules: { "loja-2": ["accountant"] },
       role: "GERENTE",
     } as Partial<Session["user"]>)
     expect(avaliarAcessoContador(s, "loja-9")).toEqual({ ok: false, motivo: "sem_acesso_loja" })

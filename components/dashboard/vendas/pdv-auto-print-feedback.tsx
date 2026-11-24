@@ -19,6 +19,7 @@ export interface PdvAutoPrintFeedbackProps {
 
 function errorMessage(result: PrintJobResult, config: PdvImpressaoConfig, requireAgent: boolean): string {
   if (requireAgent) return result.error || "Confira o agente Omni Print deste terminal."
+  if (result.via === "desktop") return `Impressora do Windows: ${result.error || "falha ao enviar."}`
   const target = config.impressoraHost.trim()
   if (target) return `Não foi possível alcançar ${target}:${config.impressoraPorta}. ${result.error || "Verifique a conexão."}`
   return result.error || "Nenhuma impressora térmica respondeu. Configure a impressora desta estação."
@@ -34,6 +35,7 @@ export function PdvAutoPrintFeedback({
 }: PdvAutoPrintFeedbackProps) {
   const [status, setStatus] = useState<PrintStatus | null>(null)
   const [error, setError] = useState("")
+  const [sentTo, setSentTo] = useState("")
 
   const runPrint = useCallback(
     async (forceBrowserFallback = false): Promise<PrintJobResult | null> => {
@@ -51,7 +53,10 @@ export function PdvAutoPrintFeedback({
           allowBrowserFallback: false,
           forceBrowserFallback,
         })
-        if (result.ok) setStatus("sent")
+        if (result.ok) {
+          setSentTo(result.via === "desktop" && result.deviceName ? result.deviceName : "")
+          setStatus("sent")
+        }
         else {
           setStatus("failed")
           setError(errorMessage(result, impressaoConfig, requireAgent))
@@ -100,7 +105,7 @@ export function PdvAutoPrintFeedback({
             {status === "printing" ? "Enviando comprovante…" : status === "sent" ? "Comprovante enviado" : "Venda confirmada · impressão pendente"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {status === "printing" ? `${saleLabel}. O PDV continua livre para a próxima venda.` : status === "sent" ? `${saleLabel} · envio aceito pelo transporte. Confira o papel na impressora.` : error}
+            {status === "printing" ? `${saleLabel}. O PDV continua livre para a próxima venda.` : status === "sent" ? sentTo ? `${saleLabel} · enviado à fila de ${sentTo}.` : `${saleLabel} · envio aceito pelo transporte. Confira o papel na impressora.` : error}
           </p>
         </div>
         <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-2 h-8 w-8 shrink-0" onClick={onDismiss} aria-label="Fechar aviso de impressão">

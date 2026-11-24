@@ -12,6 +12,7 @@
  */
 
 import type { CadastrosAuditPrincipal } from "@/lib/cadastros/cadastros-audit-principal"
+import type { VestuarioGuardCode } from "@/lib/vestuario/guard-contract"
 
 /** Tipos de movimento do ledger (coluna `tipo`, livre no banco). */
 export const STOCK_LEDGER_TIPOS = ["entrada", "saida", "ajuste"] as const
@@ -110,10 +111,12 @@ export type StockLedgerCommand =
     })
 
 export type StockLedgerErrorCode =
+  | VestuarioGuardCode
   | "UNTRUSTED_CONTEXT"
   | "VALIDATION"
   | "NOT_FOUND"
   | "CROSS_STORE"
+  | "APARELHO_ESTOQUE_INDIVIDUAL"
   | "INSUFFICIENT_STOCK"
   | "STOCK_INVARIANT_DRIFT"
   | "IDEMPOTENCY_CONFLICT"

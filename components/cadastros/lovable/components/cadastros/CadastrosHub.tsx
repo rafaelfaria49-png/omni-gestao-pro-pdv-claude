@@ -15,6 +15,10 @@ import { MovimentacaoEstoqueModal, HistoricoEstoqueGeralModal } from "./Moviment
 import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
 import { ClienteEditorDialog } from "./ClienteEditor";
 import { ImportacaoHub } from "./ImportacaoHub";
+import { AparelhosPanel } from "@/components/aparelhos/AparelhosPanel";
+import { VestuarioCatalogoPanel } from "@/components/vestuario/VestuarioCatalogoPanel";
+import { getVestuarioCatalogoStatus } from "@/app/actions/vestuario-catalogo";
+import { Shirt, TabletSmartphone } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useStoreBusiness } from "@/lib/use-store-business";
 import { BUSINESS_BRANCHES, BUSINESS_SETTINGS_HREF } from "@/lib/store-business-capabilities";
@@ -64,6 +68,15 @@ import {
   categoriaCriadaSelecionada,
   categoriasAtivasDeServico,
 } from "@/lib/cadastros/servico-categorias";
+import {
+  chaveNomeCadastro,
+  compararNomesPtBR,
+  correspondeBuscaCadastro,
+  digitosCadastro,
+  encontrarNomeDuplicado,
+  mensagemErroCadastro,
+  ordenarPorNome,
+} from "@/lib/cadastros/nome-cadastro";
 
 const ICONS: Record<string, any> = {
   Users, Package, Wrench, Truck, HardHat, Smartphone, AlertTriangle, RefreshCw,
@@ -73,9 +86,11 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "produtos", label: "Produtos", icon: Package },
+  { id: "grades", label: "Grades e variações", icon: Shirt },
   { id: "servicos", label: "Serviços", icon: Wrench },
   { id: "fornecedores", label: "Fornecedores", icon: Truck },
   { id: "tecnicos", label: "Técnicos", icon: HardHat },
+  { id: "aparelhos", label: "Aparelhos", icon: TabletSmartphone },
   { id: "equipamentos", label: "Equipamentos", icon: Smartphone },
   { id: "categorias", label: "Categorias / Marcas", icon: Tag },
   { id: "importacao", label: "Importação", icon: FileSpreadsheet },
@@ -88,6 +103,8 @@ function useCadastrosAvailability() {
   const p = business.permissions;
   return (id: string) => {
     if (["importacao", "auditoria"].includes(id)) return p?.platformAuthority === true;
+    // Aparelhos por IMEI: recurso explícito da loja (desligado por padrão) + módulo de catálogo de aparelhos.
+    if (id === "aparelhos") return business.resource("catalog.serializedDevices").operational;
     if (id === "equipamentos") return business.resource("service.technical").operational && p?.modules?.deviceCatalog === true;
     if (["servicos", "tecnicos"].includes(id)) return business.resource("service.technical").operational;
     return true;
@@ -117,7 +134,17 @@ export function CadastrosHub() {
   const storeId = (lojaAtivaId ?? "").trim();
   const business = useStoreBusiness();
   const technical = business.resource("service.technical").operational;
-  const visibleTab = useCadastrosAvailability();
+  const baseVisibleTab = useCadastrosAvailability();
+  // Vestuário P02: a aba só existe quando o SERVIDOR habilita o catálogo para a loja (flag + allowlist).
+  const [vestuarioEnabled, setVestuarioEnabled] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setVestuarioEnabled(false);
+    if (!storeId) return;
+    getVestuarioCatalogoStatus(storeId).then((r) => { if (alive) setVestuarioEnabled(r.enabled); }, () => {});
+    return () => { alive = false; };
+  }, [storeId]);
+  const visibleTab = (id: string) => (id === "grades" ? vestuarioEnabled && !!storeId : baseVisibleTab(id));
   const selectedTab = visibleTab(tab) ? tab : "dashboard";
   return (
     <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
@@ -214,6 +241,15 @@ export function CadastrosHub() {
             storeId={storeId}
             autoOpen={autoOpenNew === "produtos" && !!storeId}
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
+            onNewWithGrade={vestuarioEnabled ? () => { setTab("grades"); setAutoOpenNew("grades"); } : undefined}
+          />
+        )}
+        {selectedTab === "grades" && vestuarioEnabled && storeId && (
+          <VestuarioCatalogoPanel
+            key={storeId}
+            storeId={storeId}
+            openNewProduct={autoOpenNew === "grades"}
+            onNewProductConsumed={() => setAutoOpenNew(null)}
           />
         )}
         {selectedTab === "servicos" && (
@@ -244,6 +280,7 @@ export function CadastrosHub() {
             onAutoOpenConsumed={() => setAutoOpenNew(null)}
           />
         )}
+        {selectedTab === "aparelhos" && visibleTab("aparelhos") && storeId && <AparelhosPanel key={storeId} storeId={storeId} />}
         {selectedTab === "categorias" && <CategoriasPanel storeId={storeId} />}
         {selectedTab === "importacao" && <ImportacaoPanel />}
         {selectedTab === "auditoria" && <AuditoriaPanel />}
@@ -685,12 +722,13 @@ function ClientesPanel({
   const sortedAndFilteredRows = useMemo(() => {
     let result = rows;
 
-    const q = filterQuery.trim().toLowerCase();
-    if (q) {
-      result = result.filter((c) => {
-        const blob = [c.nome, c.telefone, c.documento, c.cidade].join(" ").toLowerCase();
-        return blob.includes(q);
-      });
+    if (filterQuery.trim()) {
+      // Busca sem acento/caixa; telefone e documento também casam só pelos dígitos.
+      const qDigitos = digitosCadastro(filterQuery);
+      result = result.filter((c) =>
+        correspondeBuscaCadastro([c.nome, c.telefone, c.documento, c.cidade], filterQuery) ||
+        (qDigitos.length >= 3 && [c.telefone, c.documento].some((v) => digitosCadastro(v).includes(qDigitos)))
+      );
     }
 
     if (tipoFilter !== "todos") {
@@ -737,6 +775,10 @@ function ClientesPanel({
           valB = b.status;
         }
 
+        if (typeof valA === "string" && typeof valB === "string" && field !== "ultimaCompra") {
+          const cmp = compararNomesPtBR(valA, valB);
+          return direction === "asc" ? cmp : -cmp;
+        }
         if (valA < valB) return direction === "asc" ? -1 : 1;
         if (valA > valB) return direction === "asc" ? 1 : -1;
         return 0;
@@ -1035,7 +1077,7 @@ function ClientesPanel({
                             try {
                               await updateCliente(storeId, c.id, { active: c.status !== "Ativo" });
                               await refresh();
-                              toast.success("Status do cliente updated.");
+                              toast.success("Status do cliente atualizado.");
                             } catch (e) {
                               toast.error(e instanceof Error ? e.message : "Não foi possível atualizar status.");
                             }
@@ -1158,11 +1200,14 @@ export function ProdutosPanel({
   autoOpen,
   onAutoOpenConsumed,
   variant = "cadastros",
+  onNewWithGrade,
 }: {
   storeId: string;
   autoOpen?: boolean;
   onAutoOpenConsumed?: () => void;
   variant?: "cadastros" | "estoque";
+  /** Vestuário P02: presente só quando o catálogo de grade está habilitado para a loja. */
+  onNewWithGrade?: () => void;
 }) {
   const business = useStoreBusiness();
   const perms = business.permissions;
@@ -1170,6 +1215,8 @@ export function ProdutosPanel({
   const marketplaceOffered = perms?.modules?.marketplace === true;
   const importFiltersOffered = usesClientExperience(perms) === false;
   const m = useToggle();
+  const modalidade = useToggle();
+  const openNewProduct = onNewWithGrade ? modalidade.openIt : m.openIt;
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);
   const [deleteResult, setDeleteResult] = useState<DeleteProdutoResult | null>(null);
@@ -1596,7 +1643,7 @@ export function ProdutosPanel({
       <Toolbar
         count={totalRows}
         label="produtos"
-        onNew={m.openIt}
+        onNew={openNewProduct}
         filterQuery={filterQuery}
         onFilterQueryChange={setFilterQuery}
         onFilterClick={() => setShowFilters(!showFilters)}
@@ -1727,7 +1774,7 @@ export function ProdutosPanel({
           </p>
           <button
             type="button"
-            onClick={m.openIt}
+            onClick={openNewProduct}
             className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
             <Plus className="h-4 w-4" /> Novo produto
@@ -2329,6 +2376,22 @@ export function ProdutosPanel({
           </div>
         </Modal>
       )}
+      {onNewWithGrade && (
+        <Modal open={modalidade.open} onClose={modalidade.close} accessible title="Novo produto" subtitle="Escolha a modalidade do cadastro.">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            <button type="button" onClick={() => { modalidade.close(); m.openIt(); }} className="min-w-0 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/30 hover:bg-primary/5">
+              <Package className="mb-2 h-5 w-5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">Produto simples</p>
+              <p className="mt-1 text-xs text-muted-foreground">Um único item, com estoque e venda como hoje.</p>
+            </button>
+            <button type="button" onClick={() => { modalidade.close(); onNewWithGrade(); }} className="min-w-0 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/30 hover:bg-primary/5">
+              <Shirt className="mb-2 h-5 w-5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">Produto com grade</p>
+              <p className="mt-1 text-xs text-muted-foreground">Cores × tamanhos. Somente cadastro nesta etapa: estoque e venda por variação ainda não disponíveis.</p>
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2357,7 +2420,7 @@ function ServicosPanel({
 
   useEffect(() => {
     listCategorias(storeId).then((cats) =>
-      setServCategorias(categoriasAtivasDeServico(cats))
+      setServCategorias(ordenarPorNome(categoriasAtivasDeServico(cats), (c) => c.name))
     ).catch(() => {});
   }, [storeId]);
   const [saving, startSaving] = useTransition();
@@ -2419,9 +2482,9 @@ function ServicosPanel({
   }, [refresh]);
 
   const visibleRows = useMemo(() => {
-    const q = filterQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((s) => [s.nome, s.categoria].join(" ").toLowerCase().includes(q));
+    const ordenados = ordenarPorNome(rows, (s) => s.nome);
+    if (!filterQuery.trim()) return ordenados;
+    return ordenados.filter((s) => correspondeBuscaCadastro([s.nome, s.categoria], filterQuery));
   }, [rows, filterQuery]);
 
   return (
@@ -2470,7 +2533,7 @@ function ServicosPanel({
                       });
                       await refresh();
                     } catch (e) {
-                      window.alert(e instanceof Error ? e.message : "Não foi possível atualizar status");
+                      toast.error(mensagemErroCadastro(e, "Não foi possível atualizar o status do serviço."));
                     }
                   });
                 }}
@@ -2561,9 +2624,27 @@ function ServicosPanel({
                   const custo = Number(String(custoRef.current?.value ?? "").replace(",", "."));
                   const preco = Number(String(precoRef.current?.value ?? "").replace(",", "."));
                   const garantia = Number(String(garantiaRef.current?.value ?? "").replace(",", "."));
+                  const nome = (nomeRef.current?.value ?? "").trim();
+                  if (!nome) {
+                    toast.error("Informe o nome do serviço.");
+                    nomeRef.current?.focus();
+                    return;
+                  }
+                  const chaveServico = (n: string, c: string) => `${chaveNomeCadastro(c === "—" ? "" : c)}|${chaveNomeCadastro(n)}`;
+                  // Mesmo critério do servidor: duplicidade só é checada quando nome/categoria mudam.
+                  const mudou = !editing || chaveServico(editing.nome, editing.categoria) !== chaveServico(nome, selectedCategoria);
+                  const mesmoServico = mudou && rows.find(
+                    (s) =>
+                      s.id !== editing?.id && chaveServico(s.nome, s.categoria) === chaveServico(nome, selectedCategoria)
+                  );
+                  if (mesmoServico) {
+                    toast.error(`Já existe o serviço “${mesmoServico.nome}” nesta categoria. Abra o cadastro existente para editar.`);
+                    nomeRef.current?.focus();
+                    return;
+                  }
                   await upsertServico(storeId, {
                     id: editing?.id,
-                    nome: (nomeRef.current?.value ?? "").trim(),
+                    nome,
                     categoria: selectedCategoria.trim(),
                     tempo: (tempoRef.current?.value ?? "").trim(),
                     custo: Number.isFinite(custo) ? custo : 0,
@@ -2576,7 +2657,7 @@ function ServicosPanel({
                   closeServiceModal();
                   toast.success("Serviço salvo com sucesso");
                 } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Não foi possível salvar serviço");
+                  toast.error(mensagemErroCadastro(e, "Não foi possível salvar o serviço. Confira se já existe um serviço com esse nome e tente de novo."));
                 }
               });
             }}
@@ -2631,6 +2712,14 @@ function ServicosPanel({
               startCreatingCategory(async () => {
                 try {
                   setCategoryCreateError(null);
+                  const jaExiste = encontrarNomeDuplicado(newCategoryName, servCategorias, (c) => c.name);
+                  if (jaExiste) {
+                    setSelectedCategoria(jaExiste.name);
+                    setCategoryCreateOpen(false);
+                    setNewCategoryName("");
+                    toast.info(`A categoria “${jaExiste.name}” já existia e foi selecionada.`);
+                    return;
+                  }
                   const created = await upsertCategoria(storeId, {
                     name: newCategoryName.trim(),
                     type: "servico",
@@ -2650,7 +2739,7 @@ function ServicosPanel({
                   setNewCategoryName("");
                   toast.success(`Categoria “${next.selectedName}” criada e selecionada`);
                 } catch (error) {
-                  setCategoryCreateError(error instanceof Error ? error.message : "Não foi possível criar a categoria");
+                  setCategoryCreateError(mensagemErroCadastro(error, "Não foi possível criar a categoria."));
                 }
               });
             }}
@@ -2732,10 +2821,12 @@ function FornecedoresPanel({
   }, [refresh]);
 
   const visibleRows = useMemo(() => {
-    const q = filterQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((f) =>
-      [f.nome, f.razaoSocial, f.cnpj, f.contato, f.whatsapp, f.email].join(" ").toLowerCase().includes(q)
+    const ordenados = ordenarPorNome(rows, (f) => f.nome);
+    if (!filterQuery.trim()) return ordenados;
+    const qDigitos = digitosCadastro(filterQuery);
+    return ordenados.filter((f) =>
+      correspondeBuscaCadastro([f.nome, f.razaoSocial, f.cnpj, f.contato, f.whatsapp, f.email], filterQuery) ||
+      (qDigitos.length >= 3 && [f.cnpj, f.whatsapp].some((v) => digitosCadastro(v).includes(qDigitos)))
     );
   }, [rows, filterQuery]);
 
@@ -2805,7 +2896,7 @@ function FornecedoresPanel({
                             });
                             await refresh();
                           } catch (e2) {
-                            window.alert(e2 instanceof Error ? e2.message : "Não foi possível atualizar status");
+                            toast.error(mensagemErroCadastro(e2, "Não foi possível atualizar o status do fornecedor."));
                           }
                         });
                       }}
@@ -2829,8 +2920,8 @@ function FornecedoresPanel({
         title={editing ? "Editar fornecedor" : "Novo fornecedor"}
         size="lg"
       >
-        <div className="grid grid-cols-2 gap-4" key={m.open ? "open" : "closed"}>
-          <Field label="Nome fantasia"><Input ref={nomeRef} defaultValue={editing?.nome ?? ""} /></Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" key={m.open ? "open" : "closed"}>
+          <Field label="Nome fantasia" required><Input ref={nomeRef} defaultValue={editing?.nome ?? ""} /></Field>
           <Field label="Razão social"><Input ref={razaoRef} defaultValue={editing?.razaoSocial ?? ""} /></Field>
           <Field label="CNPJ"><Input ref={cnpjRef} defaultValue={editing?.cnpj === "—" ? "" : editing?.cnpj ?? ""} placeholder="00.000.000/0000-00" /></Field>
           <Field label="Contato principal"><Input ref={contatoRef} defaultValue={editing?.contato === "—" ? "" : editing?.contato ?? ""} /></Field>
@@ -2858,11 +2949,38 @@ function FornecedoresPanel({
             onClick={() => {
               startSaving(async () => {
                 try {
+                  const nome = (nomeRef.current?.value ?? "").trim();
+                  const cnpj = (cnpjRef.current?.value ?? "").trim();
+                  if (!nome) {
+                    toast.error("Informe o nome fantasia do fornecedor.");
+                    nomeRef.current?.focus();
+                    return;
+                  }
+                  // Mesmo critério do servidor: mesmo CNPJ, ou mesmo nome sem CNPJs divergentes.
+                  const doc = digitosCadastro(cnpj);
+                  const mudou =
+                    !editing ||
+                    chaveNomeCadastro(editing.nome) !== chaveNomeCadastro(nome) ||
+                    digitosCadastro(editing.cnpj) !== doc;
+                  const conflito = mudou
+                    ? rows.find((f) => {
+                        if (f.id === editing?.id) return false;
+                        const docOutro = digitosCadastro(f.cnpj);
+                        if (doc.length >= 11 && docOutro === doc) return true;
+                        const divergem = doc.length >= 11 && docOutro.length >= 11 && docOutro !== doc;
+                        return !divergem && chaveNomeCadastro(f.nome) === chaveNomeCadastro(nome);
+                      })
+                    : undefined;
+                  if (conflito) {
+                    toast.error(`Já existe o fornecedor “${conflito.nome}” nesta loja. Abra o cadastro existente para editar.`);
+                    nomeRef.current?.focus();
+                    return;
+                  }
                   await upsertFornecedor(storeId, {
                     id: editing?.id,
-                    nome: (nomeRef.current?.value ?? "").trim(),
+                    nome,
                     razaoSocial: (razaoRef.current?.value ?? "").trim(),
-                    cnpj: (cnpjRef.current?.value ?? "").trim(),
+                    cnpj,
                     contato: (contatoRef.current?.value ?? "").trim(),
                     whatsapp: (whatsappRef.current?.value ?? "").trim(),
                     email: (emailRef.current?.value ?? "").trim(),
@@ -2876,9 +2994,9 @@ function FornecedoresPanel({
                   await refresh();
                   setEditing(null);
                   m.close();
-                  window.alert("Salvo com sucesso");
+                  toast.success(editing ? "Fornecedor atualizado." : "Fornecedor cadastrado.");
                 } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Não foi possível salvar fornecedor");
+                  toast.error(mensagemErroCadastro(e, "Não foi possível salvar o fornecedor. Confira se ele já está cadastrado e tente de novo."));
                 }
               });
             }}
@@ -2947,10 +3065,10 @@ function TecnicosPanel({
   }, [refresh]);
 
   const visibleRows = useMemo(() => {
-    const q = filterQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((t) =>
-      [t.name, t.email, t.phone, t.role, t.specialty].join(" ").toLowerCase().includes(q)
+    const ordenados = ordenarPorNome(rows, (t) => t.name);
+    if (!filterQuery.trim()) return ordenados;
+    return ordenados.filter((t) =>
+      correspondeBuscaCadastro([t.name, t.email, t.phone, t.role, t.specialty], filterQuery)
     );
   }, [rows, filterQuery]);
 
@@ -3003,7 +3121,7 @@ function TecnicosPanel({
                       });
                       await refresh();
                     } catch (e2) {
-                      window.alert(e2 instanceof Error ? e2.message : "Não foi possível atualizar status");
+                      toast.error(mensagemErroCadastro(e2, "Não foi possível atualizar o status do técnico."));
                     }
                   });
                 }}
@@ -3044,8 +3162,8 @@ function TecnicosPanel({
         title={editing ? "Editar técnico / funcionário" : "Novo técnico / funcionário"}
         size="lg"
       >
-        <div className="grid grid-cols-2 gap-4" key={m.open ? "open" : "closed"}>
-          <Field label="Nome" span={2}><Input ref={nomeRef} defaultValue={editing?.name ?? ""} /></Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" key={m.open ? "open" : "closed"}>
+          <Field label="Nome" span={2} required><Input ref={nomeRef} defaultValue={editing?.name ?? ""} /></Field>
           <Field label="Email"><Input ref={emailRef} defaultValue={editing?.email ?? ""} /></Field>
           <Field label="Telefone"><Input ref={telRef} defaultValue={editing?.phone ?? ""} /></Field>
           <Field label="Cargo"><Input ref={cargoRef} defaultValue={editing?.role ?? ""} placeholder="Técnico Sênior" /></Field>
@@ -3086,10 +3204,23 @@ function TecnicosPanel({
                   const role =
                     (cargoRef.current?.value ?? "").trim() ||
                     (permissaoRef.current?.value ?? "").trim();
+                  const name = (nomeRef.current?.value ?? "").trim();
+                  if (!name) {
+                    toast.error("Informe o nome do técnico.");
+                    nomeRef.current?.focus();
+                    return;
+                  }
+                  const mudou = !editing || chaveNomeCadastro(editing.name) !== chaveNomeCadastro(name);
+                  const conflito = mudou ? encontrarNomeDuplicado(name, rows, (t) => t.name, editing?.id) : null;
+                  if (conflito) {
+                    toast.error(`Já existe o técnico “${conflito.name}” nesta loja. Abra o cadastro existente para editar.`);
+                    nomeRef.current?.focus();
+                    return;
+                  }
 
                   await upsertTecnico(storeId, {
                     id: editing?.id,
-                    name: (nomeRef.current?.value ?? "").trim(),
+                    name,
                     email: (emailRef.current?.value ?? "").trim(),
                     phone: (telRef.current?.value ?? "").trim(),
                     role,
@@ -3100,9 +3231,9 @@ function TecnicosPanel({
                   await refresh();
                   setEditing(null);
                   m.close();
-                  window.alert("Salvo com sucesso");
+                  toast.success(editing ? "Técnico atualizado." : "Técnico cadastrado.");
                 } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Não foi possível salvar");
+                  toast.error(mensagemErroCadastro(e, "Não foi possível salvar o técnico. Confira se ele já está cadastrado e tente de novo."));
                 }
               });
             }}
@@ -3172,9 +3303,9 @@ function EquipamentosPanel({
   }, [refresh]);
 
   const visibleRows = useMemo(() => {
-    const q = filterQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((e) => [e.name, e.brand, e.type].join(" ").toLowerCase().includes(q));
+    const ordenados = ordenarPorNome(rows, (e) => `${e.brand} ${e.name}`);
+    if (!filterQuery.trim()) return ordenados;
+    return ordenados.filter((e) => correspondeBuscaCadastro([e.name, e.brand, e.type], filterQuery));
   }, [rows, filterQuery]);
 
   return (
@@ -3231,7 +3362,7 @@ function EquipamentosPanel({
                       });
                       await refresh();
                     } catch (e2) {
-                      window.alert(e2 instanceof Error ? e2.message : "Não foi possível atualizar status");
+                      toast.error(mensagemErroCadastro(e2, "Não foi possível atualizar o status do modelo."));
                     }
                   });
                 }}
@@ -3288,8 +3419,8 @@ function EquipamentosPanel({
         subtitle="Cadastro de modelos e base de diagnóstico."
         size="lg"
       >
-        <div className="grid grid-cols-2 gap-4" key={m.open ? "open" : "closed"}>
-          <Field label="Nome / Modelo" span={2}><Input ref={nameRef} defaultValue={editing?.name ?? ""} placeholder="iPhone 11" /></Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" key={m.open ? "open" : "closed"}>
+          <Field label="Nome / Modelo" span={2} required><Input ref={nameRef} defaultValue={editing?.name ?? ""} placeholder="iPhone 11" /></Field>
           <Field label="Marca"><Input ref={brandRef} defaultValue={editing?.brand ?? ""} placeholder="Apple" /></Field>
           <Field label="Tipo"><Input ref={typeRef} defaultValue={editing?.type ?? ""} placeholder="Smartphone" /></Field>
           <Field label="Ano"><Input ref={yearRef} defaultValue={editing ? String(editing.year || "") : ""} placeholder="2019" /></Field>
@@ -3327,11 +3458,28 @@ function EquipamentosPanel({
                     .split(",")
                     .map((s) => s.trim())
                     .filter(Boolean);
+                  const name = (nameRef.current?.value ?? "").trim();
+                  const brand = (brandRef.current?.value ?? "").trim();
+                  if (!name) {
+                    toast.error("Informe o nome do modelo.");
+                    nameRef.current?.focus();
+                    return;
+                  }
+                  const chaveModelo = (n: string, b: string) => `${chaveNomeCadastro(b)}|${chaveNomeCadastro(n)}`;
+                  const mudou = !editing || chaveModelo(editing.name, editing.brand) !== chaveModelo(name, brand);
+                  const conflito = mudou
+                    ? rows.find((r) => r.id !== editing?.id && chaveModelo(r.name, r.brand) === chaveModelo(name, brand))
+                    : undefined;
+                  if (conflito) {
+                    toast.error(`Já existe o modelo “${[conflito.brand, conflito.name].filter(Boolean).join(" ")}” nesta loja. Abra o cadastro existente para editar.`);
+                    nameRef.current?.focus();
+                    return;
+                  }
 
                   await upsertEquipamentoModelo(storeId, {
                     id: editing?.id,
-                    name: (nameRef.current?.value ?? "").trim(),
-                    brand: (brandRef.current?.value ?? "").trim(),
+                    name,
+                    brand,
                     type: (typeRef.current?.value ?? "").trim(),
                     year: Number.isFinite(year) ? year : 0,
                     averageRepairTime: (tempoRef.current?.value ?? "").trim(),
@@ -3343,9 +3491,9 @@ function EquipamentosPanel({
                   await refresh();
                   setEditing(null);
                   m.close();
-                  window.alert("Salvo com sucesso");
+                  toast.success(editing ? "Modelo atualizado." : "Modelo cadastrado.");
                 } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Não foi possível salvar");
+                  toast.error(mensagemErroCadastro(e, "Não foi possível salvar o modelo. Confira se ele já está cadastrado e tente de novo."));
                 }
               });
             }}
@@ -3413,13 +3561,14 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
     void refresh();
   }, [refresh]);
 
+  // Chips por id (nomes legados podem repetir) e em ordem alfabética pt-BR.
   const itemsFor = (kind: "produto" | "servico" | "equipamento" | "geral") =>
-    cats.filter((c) => c.active && c.type === kind).map((c) => c.name);
+    ordenarPorNome(cats.filter((c) => c.active && c.type === kind), (c) => c.name).map((c) => ({ id: c.id, name: c.name }));
 
   const groups = [
     { l: "Categorias de produtos", items: itemsFor("produto"), t: "primary" as const, kind: "categoria" as const, catType: "produto" as const },
     { l: "Categorias de serviços", items: itemsFor("servico"), t: "info" as const, kind: "categoria" as const, catType: "servico" as const },
-    { l: "Marcas", items: brands.filter((b) => b.active).map((b) => b.name), t: "success" as const, kind: "marca" as const, catType: "geral" as const },
+    { l: "Marcas", items: ordenarPorNome(brands.filter((b) => b.active), (b) => b.name).map((b) => ({ id: b.id, name: b.name })), t: "success" as const, kind: "marca" as const, catType: "geral" as const },
     { l: "Linhas de equipamentos", items: itemsFor("equipamento"), t: "warning" as const, kind: "categoria" as const, catType: "equipamento" as const },
     { l: "Tags globais", items: itemsFor("geral"), t: "default" as const, kind: "categoria" as const, catType: "geral" as const },
   ];
@@ -3445,50 +3594,51 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
               </button>
             }
           />
-          <div className="flex flex-wrap gap-2">
+          {g.items.length === 0 && !loading && (
+            <p className="text-sm text-muted-foreground">Nenhum item ativo. Use “Novo” para cadastrar.</p>
+          )}
+          <div className="flex min-w-0 flex-wrap gap-2">
             {g.items.map((i) => (
               <span
-                key={i}
-                className="group flex cursor-pointer items-center gap-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground"
-                onClick={() => {
-                  if (g.kind === "marca") {
-                    const b = brands.find((x) => x.name === i);
-                    if (!b) return;
-                    setMode("marca");
-                    setEditingId(b.id);
-                    setCatType("geral");
-                    m.openIt();
-                    return;
-                  }
-                  const c = cats.find((x) => x.name === i && x.type === g.catType);
-                  if (!c) return;
-                  setMode("categoria");
-                  setEditingId(c.id);
-                  setCatType(g.catType);
-                  m.openIt();
-                }}
+                key={i.id}
+                className="group flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-border bg-background text-sm text-foreground"
               >
-                <Badge tone={g.t}>•</Badge>
-                {i}
                 <button
-                  className="ml-1 text-muted-foreground opacity-0 group-hover:opacity-100"
+                  type="button"
+                  className="flex min-h-9 min-w-0 items-center gap-1 rounded-l-lg py-1.5 pl-3 pr-1 text-left hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title={`Editar ${i.name}`}
+                  onClick={() => {
+                    setMode(g.kind);
+                    setEditingId(i.id);
+                    setCatType(g.catType);
+                    m.openIt();
+                  }}
+                >
+                  <Badge tone={g.t}>•</Badge>
+                  <span className="truncate">{i.name}</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  className="mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                   title="Inativar"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  aria-label={`Inativar ${i.name}`}
+                  onClick={() => {
                     startSaving(async () => {
                       try {
                         if (g.kind === "marca") {
-                          const b = brands.find((x) => x.name === i);
+                          const b = brands.find((x) => x.id === i.id);
                           if (!b) return;
                           await upsertMarca(storeId, { id: b.id, name: b.name, type: b.type, active: false });
                         } else {
-                          const c = cats.find((x) => x.name === i && x.type === g.catType);
+                          const c = cats.find((x) => x.id === i.id);
                           if (!c) return;
                           await upsertCategoria(storeId, { id: c.id, name: c.name, type: c.type, active: false });
                         }
                         await refresh();
+                        toast.success(`“${i.name}” inativado. Para reativar, cadastre de novo com o mesmo nome.`);
                       } catch (e2) {
-                        window.alert(e2 instanceof Error ? e2.message : "Não foi possível inativar");
+                        toast.error(mensagemErroCadastro(e2, "Não foi possível inativar."));
                       }
                     });
                   }}
@@ -3510,17 +3660,17 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
         title={mode === "marca" ? (editingId ? "Editar marca" : "Nova marca") : (editingId ? "Editar categoria" : "Nova categoria")}
         size="md"
       >
-        <div className="grid grid-cols-2 gap-4" key={m.open ? "open" : "closed"}>
-          <Field label="Nome" span={2}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" key={m.open ? "open" : "closed"}>
+          <Field label="Nome" span={2} required>
             <Input ref={nomeRef} defaultValue={modalNameDefault} />
           </Field>
           {mode === "categoria" && (
             <Field label="Tipo" span={2}>
               <Select ref={typeRef} defaultValue={modalTypeDefault}>
-                <option value="produto">produto</option>
-                <option value="servico">servico</option>
-                {technical && <option value="equipamento">equipamento</option>}
-                <option value="geral">geral</option>
+                <option value="produto">Produto</option>
+                <option value="servico">Serviço</option>
+                {technical && <option value="equipamento">Linha de equipamento</option>}
+                <option value="geral">Tag geral</option>
               </Select>
             </Field>
           )}
@@ -3548,6 +3698,28 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
                 try {
                   const name = (nomeRef.current?.value ?? "").trim();
                   const active = (statusRef.current?.value ?? "Ativo") !== "Inativo";
+                  if (!name) {
+                    toast.error(mode === "marca" ? "Informe o nome da marca." : "Informe o nome da categoria.");
+                    nomeRef.current?.focus();
+                    return;
+                  }
+                  // Duplicidade sem caixa/acento/espaço, no mesmo tipo (mesmo critério do servidor).
+                  const tipoAlvo = mode === "marca" ? (editingMarca?.type ?? "") : (typeRef.current?.value ?? catType);
+                  const atualNome = mode === "marca" ? editingMarca?.name : editingCategoria?.name;
+                  const mesmoTipo =
+                    mode === "marca"
+                      ? brands.filter((b) => b.type === tipoAlvo)
+                      : cats.filter((c) => c.type === tipoAlvo);
+                  const mudou =
+                    !editingId || chaveNomeCadastro(atualNome) !== chaveNomeCadastro(name) ||
+                    (mode === "categoria" && editingCategoria?.type !== tipoAlvo);
+                  const dup = mudou ? encontrarNomeDuplicado(name, mesmoTipo, (x) => x.name, editingId) : null;
+                  const rotulo = mode === "marca" ? "a marca" : "a categoria";
+                  if (dup && (editingId || dup.active)) {
+                    toast.error(`Já existe ${rotulo} “${dup.name}”. Abra o cadastro existente para editar.`);
+                    nomeRef.current?.focus();
+                    return;
+                  }
                   if (mode === "marca") {
                     await upsertMarca(storeId, {
                       id: editingMarca?.id,
@@ -3571,9 +3743,15 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
                   await refresh();
                   setEditingId(null);
                   m.close();
-                  window.alert("Salvo com sucesso");
+                  toast.success(
+                    dup
+                      ? `${rotulo === "a marca" ? "Marca" : "Categoria"} “${dup.name}” reativada.`
+                      : editingId
+                        ? "Alterações salvas."
+                        : `${rotulo === "a marca" ? "Marca cadastrada" : "Categoria cadastrada"}.`
+                  );
                 } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Não foi possível salvar");
+                  toast.error(mensagemErroCadastro(e, "Não foi possível salvar. Confira se o nome já está cadastrado e tente de novo."));
                 }
               });
             }}

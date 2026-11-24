@@ -70,15 +70,15 @@ import { manualProductNumberText, parseManualProductNumber } from "@/lib/cadastr
 import { usesClientExperience } from "@/lib/navigation/client-experience";
 import { notifyCatalogChanged } from "@/lib/estoque/catalog-sync";
 import { NovaCategoriaDialog, type NovaCategoriaResult } from "./NovaCategoriaDialog";
+import {
+  chaveNomeCadastro,
+  correspondeBuscaCadastro,
+  unirNomesCadastro,
+} from "@/lib/cadastros/nome-cadastro";
 
-/** União case-insensitive: a primeira lista tem precedência para o nome canônico. */
+/** União sem caixa/acento/espaço: a primeira lista tem precedência para o nome canônico. */
 function mergeCatalogNames(preferred: string[], fallback: string[]): string[] {
-  const seen = new Map<string, string>();
-  for (const n of [...preferred, ...fallback]) {
-    const key = n.trim().toLowerCase();
-    if (key && !seen.has(key)) seen.set(key, n.trim());
-  }
-  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return unirNomesCadastro(preferred, fallback);
 }
 
 function productCategoryNames(cats: Awaited<ReturnType<typeof listCategorias>>): string[] {
@@ -258,16 +258,17 @@ function CategoriaMarcaCombobox({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  const normalized = draft.trim().toLowerCase();
+  // Padrão global: comparação sem caixa, acento e espaço extra ("pelicula" acha "Películas").
+  const normalized = chaveNomeCadastro(draft);
   const filtered = useMemo(() => {
     if (!normalized) return options.slice(0, 50);
     return options
-      .filter((o) => o.toLowerCase().includes(normalized))
+      .filter((o) => correspondeBuscaCadastro([o], draft))
       .slice(0, 50);
-  }, [options, normalized]);
+  }, [options, normalized, draft]);
 
   const hasExact = useMemo(
-    () => options.some((o) => o.trim().toLowerCase() === normalized),
+    () => options.some((o) => chaveNomeCadastro(o) === normalized),
     [options, normalized]
   );
 
@@ -278,10 +279,10 @@ function CategoriaMarcaCombobox({
     setOpen(false);
   };
 
-  // Seleção estrita: devolve o nome canônico da lista (sem diferenciar caixa/espaços nas pontas).
+  // Seleção estrita: devolve o nome canônico da lista (sem diferenciar caixa/acento/espaços).
   const matchOption = (candidate: string) => {
-    const key = candidate.trim().toLowerCase();
-    return options.find((o) => o.trim().toLowerCase() === key);
+    const key = chaveNomeCadastro(candidate);
+    return key ? options.find((o) => chaveNomeCadastro(o) === key) : undefined;
   };
 
   const handleCreate = async () => {
@@ -412,11 +413,11 @@ function CategoriaMarcaCombobox({
                     commit(o);
                   }}
                   className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${
-                    o.trim().toLowerCase() === normalized || (explicitCreate && index === active) ? "bg-accent/60 text-accent-foreground" : "text-foreground"
+                    chaveNomeCadastro(o) === normalized || (explicitCreate && index === active) ? "bg-accent/60 text-accent-foreground" : "text-foreground"
                   }`}
                 >
                   <span className="truncate">{o}</span>
-                  {o.trim().toLowerCase() === normalized && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                  {chaveNomeCadastro(o) === normalized && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
                 </button>
               ))}
               {explicitCreate && draft.trim() && !hasExact && (
@@ -806,7 +807,7 @@ function ProductAIEditor({
     try {
       const res = await upsertCategoria(storeId, { name, type: "produto", active: true });
       if (!mountedRef.current) return null;
-      setCategoriaOpts((prev) => (prev.includes(res.name) ? prev : [...prev, res.name].sort((a, b) => a.localeCompare(b, "pt-BR"))));
+      setCategoriaOpts((prev) => (unirNomesCadastro(prev, [res.name])));
       return res.name;
     } catch (e) {
       if (mountedRef.current) toast.error("Não foi possível criar categoria.");
@@ -851,7 +852,7 @@ function ProductAIEditor({
   };
 
   const openNovaCategoria = (draft: string) => {
-    const known = categoriaOpts.some((o) => o.trim().toLowerCase() === draft.trim().toLowerCase());
+    const known = categoriaOpts.some((o) => chaveNomeCadastro(o) === chaveNomeCadastro(draft));
     setNovaCategoriaNome(known ? "" : draft.trim());
     setNovaCategoriaOpen(true);
   };
@@ -860,7 +861,7 @@ function ProductAIEditor({
     try {
       const res = await upsertMarca(storeId, { name, type: "", active: true });
       if (!mountedRef.current) return null;
-      setMarcaOpts((prev) => (prev.includes(res.name) ? prev : [...prev, res.name].sort((a, b) => a.localeCompare(b, "pt-BR"))));
+      setMarcaOpts((prev) => (unirNomesCadastro(prev, [res.name])));
       return res.name;
     } catch (e) {
       if (mountedRef.current) toast.error("Não foi possível criar marca.");
@@ -1944,7 +1945,7 @@ function ProductAIEditor({
               </div>
             </div>}
             {showAccessories && <div className="col-span-full">
-              <ProdutoAcessoriosConfig value={acessoriosValue} onChange={(value) => { setAcessoriosValue(value); setAccessoriesTouched(true); }} />
+              <ProdutoAcessoriosConfig lojaHeader={storeId} value={acessoriosValue} onChange={(value) => { setAcessoriosValue(value); setAccessoriesTouched(true); }} />
             </div>}
           </fieldset>
         </div>

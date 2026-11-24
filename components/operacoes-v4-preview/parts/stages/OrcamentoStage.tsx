@@ -123,7 +123,7 @@ export function OrcamentoStage({ v }: { v: V4Vals }) {
   return (
     <>
       <ConverterOrcamentoPanel v={v} />
-      <OrcamentoReadonly v={v} onReabrir={() => setReaberto(true)} />
+      <OrcamentoReadonly v={v} onReabrir={v.abrirEdicaoCompleta} />
     </>
   );
 }

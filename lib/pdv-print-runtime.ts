@@ -17,11 +17,14 @@ import {
   type SendEscPosResult,
 } from "@/lib/thermal-print"
 import { buildPdvNonFiscalNoticeHtml } from "@/lib/pdv-non-fiscal-notice"
+import { desktopPrintHtml, isDesktopDirectPrintReady } from "@/lib/desktop-print-bridge"
 
 export type PrintJobResult = {
   ok: boolean
-  via?: "proxy" | "html" | "download"
+  via?: "proxy" | "html" | "download" | "desktop"
   error?: string
+  /** Impressão direta: impressora do Windows que recebeu o cupom na fila. */
+  deviceName?: string
 }
 
 export type ExecutePrintOptions = {
@@ -82,6 +85,11 @@ export async function printWithFallback(
     return { ok: false, error: "A impressão USB usa o agente Omni Print. Confira o pareamento e o vínculo deste terminal. A venda continua confirmada." }
   }
 
+  // App Windows com impressora escolhida nesta estação: spooler direto, sem diálogo e sem 9100.
+  if (opts.buildHtmlBody && (await isDesktopDirectPrintReady())) {
+    return printViaDesktop(opts)
+  }
+
   const proxy = await executeEscPosPrint(bytes, opts.config, { openDrawer: true })
   if (proxy.ok) return proxy
 
@@ -99,18 +107,39 @@ export async function printWithFallback(
   return openBrowserFallback(opts, proxy.error)
 }
 
+function thermalHtmlWithLogo(opts: ExecutePrintOptions): string {
+  const inner = opts.buildHtmlBody ? opts.buildHtmlBody() : ""
+  const logo =
+    opts.config.logoNoCupom && opts.logoUrl?.trim()
+      ? `<div style="text-align:center;margin-bottom:6px"><img src="${escapeHtml(opts.logoUrl.trim())}" alt="" style="max-width:90%;max-height:48px;object-fit:contain" /></div>`
+      : ""
+  return `${logo}${inner}`
+}
+
+async function printViaDesktop(opts: ExecutePrintOptions): Promise<PrintJobResult> {
+  const html = thermalHtmlWithLogo(opts)
+  const bobina = opts.config.bobinaTamanho === "58mm" ? "58mm" : "80mm"
+  const vias = Math.min(5, Math.max(1, opts.config.viasCupom))
+  let deviceName: string | undefined
+  for (let via = 1; via <= vias; via++) {
+    // Marcador por via: a proteção contra duplicidade do app não engole a 2ª via pedida na config.
+    const res = await desktopPrintHtml(`${html}<!-- via ${via}/${vias} -->`, { bobina, title: opts.htmlTitle })
+    if (!res.ok) return { ok: false, via: "desktop", error: res.error }
+    deviceName = res.deviceName
+  }
+  return { ok: true, via: "desktop", deviceName }
+}
+
 function openBrowserFallback(opts: ExecutePrintOptions, error?: string): PrintJobResult {
   if (!opts.buildHtmlBody) {
     return { ok: false, via: "download", error: error || "Fallback do navegador indisponível." }
   }
 
   const width = opts.config.bobinaTamanho === "58mm" ? "58mm" : "80mm"
-  const inner = opts.buildHtmlBody()
-  const logo =
-    opts.config.logoNoCupom && opts.logoUrl?.trim()
-      ? `<div style="text-align:center;margin-bottom:6px"><img src="${escapeHtml(opts.logoUrl.trim())}" alt="" style="max-width:90%;max-height:48px;object-fit:contain" /></div>`
-      : ""
-  const opened = openThermalHtmlPrint(`${logo}${inner}`, opts.htmlTitle ?? "Cupom", { bobina: width })
+  const opened = openThermalHtmlPrint(thermalHtmlWithLogo(opts), opts.htmlTitle ?? "Cupom", {
+    bobina: width,
+    browserOnly: true,
+  })
   return opened
     ? { ok: true, via: "html" }
     : { ok: false, via: "html", error: "O navegador bloqueou a janela de impressão. Permita pop-ups para esta tela." }

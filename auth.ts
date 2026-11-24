@@ -5,14 +5,34 @@ import { authConfig } from "./auth.config"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { isPlatformAuthority, resolveStoreModules } from "@/lib/auth/access-policy"
+import { isSessionRevocationEnabled, prismaAdminSessionStore, resolveAdminSession } from "@/lib/auth/admin-session"
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 })
 
+const sessionStore = prismaAdminSessionStore(prisma)
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
+  events: {
+    // Logout revoga SÓ esta sessão (outros dispositivos e usuários seguem ativos).
+    async signOut(message) {
+      if (!isSessionRevocationEnabled()) return
+      const sid = "token" in message ? message.token?.sid : undefined
+      if (typeof sid !== "string") return
+      // Uma nova tentativa; se ainda falhar, registra o prefixo do sid para acompanhamento.
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await sessionStore.revoke(sid, "logout")
+          return
+        } catch {
+          if (attempt === 2) console.error("[auth] session_revoke_failed sid=" + sid.slice(0, 8))
+        }
+      }
+    },
+  },
   logger: { error() { console.error("[auth] authentication_failed") } },
   callbacks: {
     ...authConfig.callbacks,
@@ -25,6 +45,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         include: { adminUserStores: { select: { storeId: true } } },
       })
       if (!current || !current.active || (token.sessionVersion ?? 0) !== current.sessionVersion) return null
+      // Revogação por sessão no servidor: token de sessão encerrada (logout), expirada ou alheia
+      // não vale mais, mesmo que o cookie volte por resposta atrasada ou cópia.
+      if (isSessionRevocationEnabled()) {
+        const session = await resolveAdminSession(sessionStore, { sid: token.sid, jti: token.jti, userId: current.id, isSignIn: Boolean(user) })
+        if (!session.ok) return null
+        token.sid = session.sid
+      }
       const platform = isPlatformAuthority(current)
       const memberships = current.adminUserStores.map((s) => s.storeId)
       const ids = memberships.length ? memberships : current.lojaId ? [current.lojaId] : []

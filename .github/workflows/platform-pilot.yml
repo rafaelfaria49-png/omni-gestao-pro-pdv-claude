@@ -26,6 +26,10 @@ on:
 permissions:
   contents: read
 jobs:
+  # The reports workflow can be exercised on a review branch before it exists on main.
+  reports-synthetic:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/relatorios-qa.yml
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 25

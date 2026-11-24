@@ -25,8 +25,15 @@ import {
 } from "@/lib/cadastros/client-write-contract";
 import { applyStockMutation } from "@/lib/estoque/stock-ledger-service";
 import { assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract";
+import { productVariantIssue } from "@/lib/vestuario/guard-contract";
 import type { ExistingProdutoLite } from "@/lib/produtos/duplicate-product";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
+import {
+  chaveNomeCadastro,
+  digitosCadastro,
+  encontrarNomeDuplicado,
+  nomeCadastroParaGravar,
+} from "@/lib/cadastros/nome-cadastro";
 import {
   requireCadastrosActionAccess,
   requireCadastrosActionSession,
@@ -400,13 +407,22 @@ export async function upsertFornecedor(
   await requireModuleAction(storeId, "catalog")
 
   storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
-  const nome = input.nome.trim();
+  const atual = input.id
+    ? await prisma.fornecedor.findFirst({
+        where: { id: input.id, storeId },
+        select: { id: true, name: true, legalName: true, contactName: true, document: true },
+      })
+    : null;
+  if (input.id && !atual) throw new Error("Fornecedor não encontrado");
+
+  // Nome fantasia/razão social preservam a grafia (siglas como LTDA/ME); contato é pessoa.
+  const nome = nomeCadastroParaGravar(input.nome, "preservar", atual?.name);
   if (!nome) throw new Error("Nome obrigatório");
 
   const common = {
     name: nome,
-    legalName: (input.razaoSocial ?? "").trim(),
-    contactName: (input.contato ?? "").trim(),
+    legalName: nomeCadastroParaGravar(input.razaoSocial, "preservar", atual?.legalName),
+    contactName: nomeCadastroParaGravar(input.contato, "pessoa", atual?.contactName),
     document: (input.cnpj ?? "").trim(),
     phone: "", // UI atual não tem campo telefone separado do whatsapp; manter vazio por enquanto
     whatsapp: (input.whatsapp ?? "").trim(),
@@ -419,9 +435,24 @@ export async function upsertFornecedor(
     active: input.active ?? true,
   } as const;
 
+  // Duplicidade por loja: mesmo documento, ou mesmo nome quando os documentos não divergem.
+  // Só é checada quando nome/documento mudam — registros legados duplicados seguem editáveis.
+  const doc = digitosCadastro(common.document);
+  const mudouIdentidade =
+    !atual || chaveNomeCadastro(atual.name) !== chaveNomeCadastro(nome) || digitosCadastro(atual.document) !== doc;
+  if (mudouIdentidade) {
+    const outros = await prisma.fornecedor.findMany({ where: { storeId }, select: { id: true, name: true, document: true } });
+    const conflito = outros.find((f) => {
+      if (f.id === input.id) return false;
+      const docOutro = digitosCadastro(f.document);
+      if (doc.length >= 11 && docOutro === doc) return true;
+      const docsDivergem = doc.length >= 11 && docOutro.length >= 11 && docOutro !== doc;
+      return !docsDivergem && chaveNomeCadastro(f.name) === chaveNomeCadastro(nome);
+    });
+    if (conflito) throw new Error(`Já existe o fornecedor “${conflito.name}” nesta loja.`);
+  }
+
   if (input.id) {
-    const existing = await prisma.fornecedor.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
-    if (!existing) throw new Error("Fornecedor não encontrado");
     const updated = await prisma.fornecedor.update({ where: { id: input.id }, data: common, select: { id: true } });
     revalidatePath("/dashboard/cadastros-v2");
     return updated;
@@ -465,9 +496,13 @@ export async function upsertCategoria(
   await requireModuleAction(storeId, "catalog")
 
   const sid = await requireCadastrosStoreAccess(storeId);
-  const name = input.name.trim();
-  if (!name) throw new Error("Nome obrigatório");
   const type = input.type || "geral";
+  const existing = input.id
+    ? await prisma.categoriaCadastro.findFirst({ where: { id: input.id, storeId: sid }, select: { id: true, name: true, type: true } })
+    : null;
+  if (input.id && !existing) throw new Error("Categoria não encontrada");
+  const name = nomeCadastroParaGravar(input.name, "rotulo", existing?.name);
+  if (!name) throw new Error("Nome obrigatório");
 
   const common = {
     name,
@@ -475,19 +510,24 @@ export async function upsertCategoria(
     active: input.active ?? true,
   } as const;
 
-  if (input.id) {
-    const existing = await prisma.categoriaCadastro.findFirst({ where: { id: input.id, storeId: sid }, select: { id: true } });
-    if (!existing) throw new Error("Categoria não encontrada");
+  // Mesmo tipo + mesma chave (sem caixa/acento/espaço) = mesma categoria.
+  const mesmoTipo = await prisma.categoriaCadastro.findMany({
+    where: { storeId: sid, type },
+    select: { id: true, name: true, active: true },
+  });
+
+  if (input.id && existing) {
+    if (chaveNomeCadastro(existing.name) !== chaveNomeCadastro(name) || existing.type !== type) {
+      const conflito = encontrarNomeDuplicado(name, mesmoTipo, (c) => c.name, existing.id);
+      if (conflito) throw new Error(`Já existe a categoria “${conflito.name}” neste tipo.`);
+    }
     const updated = await prisma.categoriaCadastro.update({ where: { id: input.id }, data: common, select: { id: true, name: true } });
     revalidatePath("/dashboard/cadastros-v2");
     return updated;
   }
 
-  // Dedup case-insensitive antes de criar: evita duplicatas "Apple" vs "apple".
-  const dup = await prisma.categoriaCadastro.findFirst({
-    where: { storeId: sid, type, name: { equals: name, mode: "insensitive" } },
-    select: { id: true, name: true, active: true },
-  });
+  // Dedup antes de criar: "Películas", "peliculas" e "PELÍCULAS " são a mesma categoria.
+  const dup = encontrarNomeDuplicado(name, mesmoTipo, (c) => c.name);
   if (dup) {
     if (!dup.active) {
       await prisma.categoriaCadastro.update({ where: { id: dup.id }, data: { active: true } });
@@ -532,7 +572,12 @@ export async function upsertMarca(
   await requireModuleAction(storeId, "catalog")
 
   storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
-  const name = input.name.trim();
+  // Marca é nome próprio de fabricante: grafia preservada ("LG", "iPhone", "Xiaomi").
+  const existing = input.id
+    ? await prisma.marcaCadastro.findFirst({ where: { id: input.id, storeId }, select: { id: true, name: true } })
+    : null;
+  if (input.id && !existing) throw new Error("Marca não encontrada");
+  const name = nomeCadastroParaGravar(input.name, "preservar", existing?.name);
   if (!name) throw new Error("Nome obrigatório");
   const type = (input.type ?? "").trim();
 
@@ -542,19 +587,23 @@ export async function upsertMarca(
     active: input.active ?? true,
   } as const;
 
-  if (input.id) {
-    const existing = await prisma.marcaCadastro.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
-    if (!existing) throw new Error("Marca não encontrada");
+  const mesmoTipo = await prisma.marcaCadastro.findMany({
+    where: { storeId, type },
+    select: { id: true, name: true, active: true },
+  });
+
+  if (input.id && existing) {
+    if (chaveNomeCadastro(existing.name) !== chaveNomeCadastro(name)) {
+      const conflito = encontrarNomeDuplicado(name, mesmoTipo, (m) => m.name, existing.id);
+      if (conflito) throw new Error(`Já existe a marca “${conflito.name}”.`);
+    }
     const updated = await prisma.marcaCadastro.update({ where: { id: input.id }, data: common, select: { id: true, name: true } });
     revalidatePath("/dashboard/cadastros-v2");
     return updated;
   }
 
-  // Dedup case-insensitive: reativa marca inativa de mesmo nome em vez de criar duplicata.
-  const dup = await prisma.marcaCadastro.findFirst({
-    where: { storeId, type, name: { equals: name, mode: "insensitive" } },
-    select: { id: true, name: true, active: true },
-  });
+  // Dedup sem caixa/acento/espaço: reativa marca inativa de mesmo nome em vez de criar duplicata.
+  const dup = encontrarNomeDuplicado(name, mesmoTipo, (m) => m.name);
   if (dup) {
     if (!dup.active) {
       await prisma.marcaCadastro.update({ where: { id: dup.id }, data: { active: true } });
@@ -654,7 +703,10 @@ export async function upsertTecnico(
   await requireModuleAction(storeId, "service")
 
   storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
-  const name = input.name.trim();
+  const atual = input.id
+    ? await prisma.tecnico.findFirst({ where: { id: input.id, storeId }, select: { id: true, name: true } })
+    : null;
+  const name = nomeCadastroParaGravar(input.name, "pessoa", atual?.name);
   if (!name) throw new Error("Nome obrigatório");
 
   const common = {
@@ -667,8 +719,14 @@ export async function upsertTecnico(
     active: input.active ?? true,
   } as const;
 
+  if (!atual || chaveNomeCadastro(atual.name) !== chaveNomeCadastro(name)) {
+    const outros = await prisma.tecnico.findMany({ where: { storeId }, select: { id: true, name: true } });
+    const conflito = encontrarNomeDuplicado(name, outros, (t) => t.name, input.id);
+    if (conflito) throw new Error(`Já existe o técnico “${conflito.name}” nesta loja.`);
+  }
+
   if (input.id) {
-    const existing = await prisma.tecnico.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
+    const existing = atual;
     if (!existing) throw new Error("Técnico não encontrado");
     const updated = await prisma.tecnico.update({ where: { id: input.id }, data: common, select: { id: true } });
     revalidatePath("/dashboard/cadastros-v2");
@@ -740,13 +798,26 @@ export async function upsertEquipamentoModelo(
   await requireModuleAction(storeId, "deviceCatalog")
 
   storeId = (await requireCadastrosActionAccess(storeId, "hub")).storeId;
-  const name = input.name.trim();
+  // Modelo e marca são grafias de fabricante ("iPhone 11", "Galaxy A15"): só limpeza de espaços.
+  const atual = input.id
+    ? await prisma.equipamentoModelo.findFirst({ where: { id: input.id, storeId }, select: { id: true, name: true, brand: true, type: true } })
+    : null;
+  const name = nomeCadastroParaGravar(input.name, "preservar", atual?.name);
   if (!name) throw new Error("Nome obrigatório");
+  const brand = nomeCadastroParaGravar(input.brand, "preservar", atual?.brand);
+
+  // Duplicidade: mesma marca + mesmo modelo na loja. Só checa quando marca/modelo mudam.
+  const chaveModelo = (m: { name: string; brand: string }) => `${chaveNomeCadastro(m.brand)}|${chaveNomeCadastro(m.name)}`;
+  if (!atual || chaveModelo(atual) !== chaveModelo({ name, brand })) {
+    const outros = await prisma.equipamentoModelo.findMany({ where: { storeId }, select: { id: true, name: true, brand: true } });
+    const conflito = outros.find((o) => o.id !== input.id && chaveModelo(o) === chaveModelo({ name, brand }));
+    if (conflito) throw new Error(`Já existe o modelo “${[conflito.brand, conflito.name].filter(Boolean).join(" ")}” nesta loja.`);
+  }
 
   const common = {
     name,
-    brand: (input.brand ?? "").trim(),
-    type: (input.type ?? "").trim(),
+    brand,
+    type: nomeCadastroParaGravar(input.type, "rotulo", atual?.type),
     year: Math.max(0, Math.trunc(input.year ?? 0)),
     compatibleParts: input.compatibleParts ?? undefined,
     commonDefects: input.commonDefects ?? undefined,
@@ -756,7 +827,7 @@ export async function upsertEquipamentoModelo(
   } as const;
 
   if (input.id) {
-    const existing = await prisma.equipamentoModelo.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
+    const existing = atual;
     if (!existing) throw new Error("Modelo não encontrado");
     const updated = await prisma.equipamentoModelo.update({ where: { id: input.id }, data: common, select: { id: true } });
     revalidatePath("/dashboard/cadastros-v2");
@@ -2075,9 +2146,17 @@ export async function deleteProduto(
 
   const produto = await prisma.produto.findFirst({
     where: { id: produtoId, storeId: sid },
-    select: { id: true, name: true },
+    select: { id: true, name: true, metadata: true },
   });
   if (!produto) return { ok: false, reason: "Produto não encontrado nesta loja" };
+  // Vestuário P02: produto com grade (marcador P01) nunca é excluído — as variações e o histórico dependem dele.
+  if (productVariantIssue(produto.metadata)) {
+    return {
+      ok: false,
+      reason: "Produto com grade de cor e tamanho não pode ser excluído. Desative-o em Cadastros › Grades e variações.",
+      produto: { id: produto.id, nome: produto.name },
+    };
+  }
 
   // Marketplace listings usa `productId` (inconsistência histórica do schema). Links usa `produtoId`.
   const [osItens, listings, links] = await Promise.all([
@@ -2142,12 +2221,25 @@ export async function upsertServico(
   await requireModuleAction(storeId, "service")
 
   const sid = await requireCadastrosStoreAccess(storeId);
-  const nome = input.nome.trim();
+  const atualServico = input.id
+    ? await prisma.servico.findFirst({ where: { id: input.id, storeId: sid }, select: { id: true, name: true, category: true } })
+    : null;
+  const nome = nomeCadastroParaGravar(input.nome, "rotulo", atualServico?.name);
   if (!nome) throw new Error("Nome obrigatório");
 
   const preco = Number(input.preco ?? 0);
   const custo = Number(input.custo ?? 0);
+  // Categoria vem da lista de CategoriaCadastro (nome canônico): não é reescrita aqui.
   const categoria = (input.categoria ?? "").trim();
+
+  // Mesmo serviço = mesmo nome na mesma categoria ("Troca de tela" pode existir em
+  // Celular e em Tablet). Só checa quando nome/categoria mudam (legado segue editável).
+  const chaveServico = (s: { name: string; category: string }) => `${chaveNomeCadastro(s.category)}|${chaveNomeCadastro(s.name)}`;
+  if (!atualServico || chaveServico(atualServico) !== chaveServico({ name: nome, category: categoria })) {
+    const outros = await prisma.servico.findMany({ where: { storeId: sid }, select: { id: true, name: true, category: true } });
+    const conflito = outros.find((s) => s.id !== input.id && chaveServico(s) === chaveServico({ name: nome, category: categoria }));
+    if (conflito) throw new Error(`Já existe o serviço “${conflito.name}” nesta categoria.`);
+  }
   const active = input.active ?? true;
   if (active && categoria) {
     const categoriaValida = await prisma.categoriaCadastro.findFirst({

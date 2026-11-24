@@ -1,16 +1,22 @@
 import type { Metadata } from "next"
-import { BuscadorPeliculas } from "@/components/dashboard/catalogo/buscador-peliculas"
+import { CompatHub } from "@/components/dashboard/compat/compat-hub"
 
 /**
- * CATALOGO-PELICULAS-BUSCADOR-MVP-002 — tela isolada de CONSULTA do catálogo.
- * Sem venda, sem estoque, sem cadastro: apenas o buscador de películas.
+ * COMPAT-PROFISSIONAL-001 — HUB do Compat (antes: tela isolada de consulta de películas).
+ * A rota é mantida (links, permissões e E2E existentes continuam válidos).
  */
 
 export const metadata: Metadata = {
-  title: "Catálogo de Aparelhos · OmniGestão Pro",
-  description: "Busque compatibilidade de películas por modelo, alias ou marca.",
+  title: "Compat · OmniGestão Pro",
+  description: "Compatibilidade de películas e capinhas, organização física, cores e relatórios.",
 }
 
-export default function CatalogoAparelhosPage() {
-  return <BuscadorPeliculas />
+export default async function CatalogoAparelhosPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const sp = await searchParams
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
+  return <CompatHub areaInicial={one(sp.area)} abaInicial={one(sp.aba)} />
 }

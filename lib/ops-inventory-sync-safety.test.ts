@@ -44,11 +44,16 @@ const EXCLUDE_PATH_FRAGMENTS = [
  */
 const INVENTORY_BULK_WRITE_RE = /["'`]\/api\/ops\/inventory["'`]\s*,/
 
-/** Remove comentários de bloco e de linha (preserva `://` de URLs). */
+/**
+ * Remove comentários de linha e de bloco (preserva `://` de URLs).
+ *
+ * Linha ANTES de bloco: um comentário de linha que cite um glob como `` `/api/*` `` abria um
+ * falso início de bloco e engolia o código até o próximo `*\/` (6f96f99), escondendo o GET.
+ */
 function stripComments(src: string): string {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/(^|[^:])\/\/[^\n]*/g, "$1")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
 }
 
 function read(relPath: string): string {

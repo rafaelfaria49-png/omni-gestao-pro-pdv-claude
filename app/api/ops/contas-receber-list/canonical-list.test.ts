@@ -143,6 +143,12 @@ const h = vi.hoisted(() => {
 
 const STORE = "loja-1"
 
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+// Usuário da loja-1 com módulo finance (requireModuleApi(req, "sharedPayment")).
+vi.mock("@/auth", async () => {
+  const { storeSession } = await import("@/test/fixtures/store-session")
+  return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["finance"] })) }
+})
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
 vi.mock("@/lib/ops-api-gate", () => ({
   opsLojaIdFromRequest: vi.fn(() => STORE),

@@ -1,6 +1,6 @@
 // OPS-DATAS-ENTRADA-ENTREGA-RETROATIVAS-001 — regras de datas dos fluxos (puras):
 // Nova OS, Atendimento rápido, Orçamento, dados básicos e leitura canônica da OS.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { normalizarDatasRecepcaoV3, resolverDatasRecepcaoFormV3, novaOSDraftVazioV3 } from "./nova-os-model";
 import {
   camposDatasAtendimentoAgoraV3,
@@ -29,6 +29,10 @@ import {
 import { montarProximosDadosBasicos } from "@/lib/operacoes-v4/entrada-form";
 import { buildNovaOSDraftFromFormV4 } from "@/lib/operacoes-v4/nova-os-draft-from-form";
 import type { OrdemServico } from "@/types/os";
+
+// `@/auth` real carrega next-auth → `next/server`, que o Node ESM não resolve fora do bundler do Next.
+vi.mock("@/auth", () => ({ auth: vi.fn(async () => null) }));
+
 
 const AGORA = new Date("2026-10-04T18:00:00.000Z"); // 04/10/2026 15:00 na loja
 
