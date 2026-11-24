@@ -77,11 +77,12 @@ export function listarMarcasDoCatalogo(
   )
 }
 
-/** Saneia a configuração vinda do banco/requisição (só booleanos, chaves normalizadas). */
+/** Saneia a configuração vinda do banco/requisição (só booleanos, chaves normalizadas; ignora chaves reservadas `__*`). */
 export function sanitizeMarcasConfig(raw: unknown): Record<string, boolean> {
   const out: Record<string, boolean> = {}
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (k.trim().startsWith("__")) continue
     const key = marcaKey(k)
     if (!key || key.length > 40 || typeof v !== "boolean") continue
     out[key] = v

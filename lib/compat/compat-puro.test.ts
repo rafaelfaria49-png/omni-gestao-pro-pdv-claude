@@ -121,9 +121,18 @@ describe("painéis e fileiras", () => {
     expect(rotuloLocalizacao({ painelNome: "Painel 1" })).toBe("Painel 1")
   })
 
-  it("preferências: PATCH parcial ignora valores inválidos", () => {
-    const p = mergePreferencias({ ...COMPAT_PREFERENCIAS_PADRAO, version: 2 }, { posicoesHabilitadas: true, modoCorPadrao: "xyz" })
-    expect(p).toEqual({ posicoesHabilitadas: true, modoModeloPadrao: "opcional", modoCorPadrao: "opcional", marcasConfig: {}, version: 2 })
+  it("preferências: PATCH parcial ignora valores inválidos e chaves reservadas __*", () => {
+    const p = mergePreferencias(
+      { ...COMPAT_PREFERENCIAS_PADRAO, version: 2 },
+      { posicoesHabilitadas: true, modoCorPadrao: "xyz", marcas: { __coresVisual: true, Google: false } },
+    )
+    expect(p).toEqual({
+      posicoesHabilitadas: true,
+      modoModeloPadrao: "opcional",
+      modoCorPadrao: "opcional",
+      marcasConfig: { GOOGLE: false },
+      version: 2,
+    })
   })
 })
 

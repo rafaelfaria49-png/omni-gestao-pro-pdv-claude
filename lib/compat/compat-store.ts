@@ -127,6 +127,33 @@ async function softRead<T>(scope: string, fallback: T, fn: () => Promise<T>): Pr
 // Preferências
 // ---------------------------------------------------------------------------
 
+/**
+ * Chaves de advisory lock transacional por loja (sem lock global).
+ * Ordem de aquisição quando ambos forem necessários: `cores` → `preferencias` (evita deadlock).
+ */
+export function chaveLockPreferencias(storeId: string): string {
+  return `compat-preferencias:${storeId}`
+}
+
+export function chaveLockCores(storeId: string): string {
+  return `compat-cores:${storeId}`
+}
+
+async function acquireAdvisoryLock(tx: CompatDb, lockKey: string): Promise<void> {
+  if (typeof tx.$queryRaw === "function") {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock`
+  }
+}
+
+async function withStoreLock<T>(db: CompatDb, lockKey: string, fn: (tx: CompatDb) => Promise<T>): Promise<T> {
+  if (typeof db.$transaction !== "function") return fn(db)
+  return db.$transaction(async (rawTx) => {
+    const tx = rawTx as unknown as CompatDb
+    await acquireAdvisoryLock(tx, lockKey)
+    return fn(tx)
+  })
+}
+
 export async function getPreferencias(db: CompatDb, storeId: string): Promise<CompatPreferencias> {
   return softRead("getPreferencias", { ...COMPAT_PREFERENCIAS_PADRAO }, async () => {
     const row = await db.compatPreferenciasLoja.findUnique({ where: { storeId } })
@@ -145,34 +172,36 @@ export async function setPreferencias(
   const version = versionOf(b)
   if (version === null) return invalid("Versão das preferências obrigatória.")
   try {
-    const rowAtual = await db.compatPreferenciasLoja.findUnique({ where: { storeId } })
-    const atual = rowAtual
-      ? mergePreferencias({ ...COMPAT_PREFERENCIAS_PADRAO, version: rowAtual.version }, rowAtual)
-      : { ...COMPAT_PREFERENCIAS_PADRAO }
-    if (atual.version !== version) return CONFLICT_VERSAO
-    const next = mergePreferencias(atual, b)
-    const visuaisExistentes = extractCoresVisualFromConfig(rowAtual?.marcasConfig)
-    const marcasConfigPersisted =
-      Object.keys(visuaisExistentes).length > 0
-        ? mergeCoresVisualIntoConfig(next.marcasConfig, visuaisExistentes)
-        : next.marcasConfig
-    const data = {
-      posicoesHabilitadas: next.posicoesHabilitadas,
-      modoModeloPadrao: next.modoModeloPadrao,
-      modoCorPadrao: next.modoCorPadrao,
-      marcasConfig: marcasConfigPersisted as object,
-      updatedBy: actorId,
-    }
-    if (version === 0) {
-      await db.compatPreferenciasLoja.create({ data: { storeId, ...data } })
-    } else {
-      const res = await db.compatPreferenciasLoja.updateMany({
-        where: { storeId, version },
-        data: { ...data, version: { increment: 1 } },
-      })
-      if (res.count === 0) return CONFLICT_VERSAO
-    }
-    return { ok: true, value: await getPreferenciasStrict(db, storeId) }
+    return await withStoreLock(db, chaveLockPreferencias(storeId), async (tx) => {
+      const rowAtual = await tx.compatPreferenciasLoja.findUnique({ where: { storeId } })
+      const atual = rowAtual
+        ? mergePreferencias({ ...COMPAT_PREFERENCIAS_PADRAO, version: rowAtual.version }, rowAtual)
+        : { ...COMPAT_PREFERENCIAS_PADRAO }
+      if (atual.version !== version) return CONFLICT_VERSAO
+      const next = mergePreferencias(atual, b)
+      const visuaisExistentes = extractCoresVisualFromConfig(rowAtual?.marcasConfig)
+      const marcasConfigPersisted =
+        Object.keys(visuaisExistentes).length > 0
+          ? mergeCoresVisualIntoConfig(next.marcasConfig, visuaisExistentes)
+          : next.marcasConfig
+      const data = {
+        posicoesHabilitadas: next.posicoesHabilitadas,
+        modoModeloPadrao: next.modoModeloPadrao,
+        modoCorPadrao: next.modoCorPadrao,
+        marcasConfig: marcasConfigPersisted as object,
+        updatedBy: actorId,
+      }
+      if (version === 0) {
+        await tx.compatPreferenciasLoja.create({ data: { storeId, ...data } })
+      } else {
+        const res = await tx.compatPreferenciasLoja.updateMany({
+          where: { storeId, version },
+          data: { ...data, version: { increment: 1 } },
+        })
+        if (res.count === 0) return CONFLICT_VERSAO
+      }
+      return { ok: true, value: await getPreferenciasStrict(tx, storeId) }
+    })
   } catch (e) {
     if (errorCode(e) === "P2002") return CONFLICT_VERSAO
     return failureFrom(e, "Preferências já gravadas.")
@@ -685,45 +714,34 @@ export async function listCoresVisual(db: CompatDb, storeId: string): Promise<Re
   })
 }
 
-async function persistCorVisual(
-  db: CompatDb,
+async function persistCorVisualTx(
+  tx: CompatDb,
   storeId: string,
   actorId: string,
   corId: string,
   visual: string,
 ): Promise<void> {
-  const lockKey = `compat-cores-visual:${storeId}`
-  const apply = async (tx: Pick<CompatDb, "compatPreferenciasLoja">) => {
-    const row = await tx.compatPreferenciasLoja.findUnique({ where: { storeId } })
-    const nextConfig = mergeCoresVisualIntoConfig(row?.marcasConfig, { [corId]: visual })
-    if (!row) {
-      await tx.compatPreferenciasLoja.create({
-        data: {
-          storeId,
-          posicoesHabilitadas: COMPAT_PREFERENCIAS_PADRAO.posicoesHabilitadas,
-          modoModeloPadrao: COMPAT_PREFERENCIAS_PADRAO.modoModeloPadrao,
-          modoCorPadrao: COMPAT_PREFERENCIAS_PADRAO.modoCorPadrao,
-          marcasConfig: nextConfig as object,
-          updatedBy: actorId,
-        },
-      })
-    } else {
-      await tx.compatPreferenciasLoja.update({
-        where: { storeId },
-        data: { marcasConfig: nextConfig as object, updatedBy: actorId },
-      })
-    }
-  }
-  if (typeof db.$transaction === "function") {
-    await db.$transaction(async (rawTx) => {
-      const tx = rawTx as unknown as CompatDb
-      if (typeof tx.$queryRaw === "function") {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock`
-      }
-      await apply(tx)
+  // Compartilha o lock de preferências da mesma loja com `setPreferencias` (ordem fixa: cores → preferencias),
+  // garantindo que escritas concorrentes de marcas/preferências e visual de cores nunca se sobrescrevam.
+  await acquireAdvisoryLock(tx, chaveLockPreferencias(storeId))
+  const row = await tx.compatPreferenciasLoja.findUnique({ where: { storeId } })
+  const nextConfig = mergeCoresVisualIntoConfig(row?.marcasConfig, { [corId]: visual })
+  if (!row) {
+    await tx.compatPreferenciasLoja.create({
+      data: {
+        storeId,
+        posicoesHabilitadas: COMPAT_PREFERENCIAS_PADRAO.posicoesHabilitadas,
+        modoModeloPadrao: COMPAT_PREFERENCIAS_PADRAO.modoModeloPadrao,
+        modoCorPadrao: COMPAT_PREFERENCIAS_PADRAO.modoCorPadrao,
+        marcasConfig: nextConfig as object,
+        updatedBy: actorId,
+      },
     })
   } else {
-    await apply(db)
+    await tx.compatPreferenciasLoja.update({
+      where: { storeId },
+      data: { marcasConfig: nextConfig as object, updatedBy: actorId },
+    })
   }
 }
 
@@ -775,32 +793,34 @@ export async function createCorLoja(
     return { ok: false, code: "DUPLICATE", status: 409, message: "Essa cor já existe na lista padrão. Use a cor padrão." }
   }
   try {
-    const existentes = await db.compatCorLoja.findMany({
-      where: { storeId, baseKey: null },
-      select: { id: true, label: true },
-      take: COR_LOJA_LIMITS.coresPorLoja,
+    return await withStoreLock(db, chaveLockCores(storeId), async (tx) => {
+      const existentes = await tx.compatCorLoja.findMany({
+        where: { storeId, baseKey: null },
+        select: { id: true, label: true },
+        take: COR_LOJA_LIMITS.coresPorLoja,
+      })
+      const equiv = corEquivalenciaKey(parsed.label)
+      if (existentes.some((e) => corEquivalenciaKey(e.label) === equiv)) {
+        return { ok: false, code: "DUPLICATE", status: 409, message: "Já existe uma cor com esse nome nesta loja." }
+      }
+      const total = existentes.length
+      if (total >= COR_LOJA_LIMITS.coresPorLoja) {
+        return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${COR_LOJA_LIMITS.coresPorLoja} cores por loja.` }
+      }
+      const created = await tx.compatCorLoja.create({
+        data: {
+          storeId,
+          label: parsed.label,
+          labelKey: corLabelKey(parsed.label),
+          ordem: total,
+          createdBy: actorId,
+          updatedBy: actorId,
+        },
+        select: { id: true },
+      })
+      await persistCorVisualTx(tx, storeId, actorId, created.id, visual)
+      return { ok: true, value: { id: created.id, visual } }
     })
-    const equiv = corEquivalenciaKey(parsed.label)
-    if (existentes.some((e) => corEquivalenciaKey(e.label) === equiv)) {
-      return { ok: false, code: "DUPLICATE", status: 409, message: "Já existe uma cor com esse nome nesta loja." }
-    }
-    const total = existentes.length
-    if (total >= COR_LOJA_LIMITS.coresPorLoja) {
-      return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${COR_LOJA_LIMITS.coresPorLoja} cores por loja.` }
-    }
-    const created = await db.compatCorLoja.create({
-      data: {
-        storeId,
-        label: parsed.label,
-        labelKey: corLabelKey(parsed.label),
-        ordem: total,
-        createdBy: actorId,
-        updatedBy: actorId,
-      },
-      select: { id: true },
-    })
-    await persistCorVisual(db, storeId, actorId, created.id, visual)
-    return { ok: true, value: { id: created.id, visual } }
   } catch (e) {
     return failureFrom(e, "Já existe uma cor com esse nome nesta loja.")
   }
@@ -824,34 +844,36 @@ export async function updateCorLoja(
     nextVisual = v
   }
   try {
-    const atual = await db.compatCorLoja.findFirst({ where: { id, storeId } })
-    if (!atual) return notFound("Cor não encontrada nesta loja.")
-    const data: Record<string, unknown> = { updatedBy: actorId, version: { increment: 1 } }
-    if ("label" in b) {
-      if (atual.baseKey) return invalid("Cores da lista padrão não podem ser renomeadas; cadastre uma cor própria.")
-      const parsed = sanitizeCorLabel(b.label)
-      if (!parsed.ok) return invalid(parsed.error)
-      if (corPadraoComMesmoNome(parsed.label)) {
-        return { ok: false, code: "DUPLICATE", status: 409, message: "Essa cor já existe na lista padrão." }
-      }
-      const equiv = corEquivalenciaKey(parsed.label)
-      if (equiv !== corEquivalenciaKey(atual.label)) {
-        const outras = await db.compatCorLoja.findMany({
-          where: { storeId, baseKey: null, NOT: { id } },
-          select: { label: true },
-          take: COR_LOJA_LIMITS.coresPorLoja,
-        })
-        if (outras.some((e) => corEquivalenciaKey(e.label) === equiv)) {
-          return { ok: false, code: "DUPLICATE", status: 409, message: "Já existe uma cor com esse nome nesta loja." }
+    return await withStoreLock(db, chaveLockCores(storeId), async (tx) => {
+      const atual = await tx.compatCorLoja.findFirst({ where: { id, storeId } })
+      if (!atual) return notFound("Cor não encontrada nesta loja.")
+      const data: Record<string, unknown> = { updatedBy: actorId, version: { increment: 1 } }
+      if ("label" in b) {
+        if (atual.baseKey) return invalid("Cores da lista padrão não podem ser renomeadas; cadastre uma cor própria.")
+        const parsed = sanitizeCorLabel(b.label)
+        if (!parsed.ok) return invalid(parsed.error)
+        if (corPadraoComMesmoNome(parsed.label)) {
+          return { ok: false, code: "DUPLICATE", status: 409, message: "Essa cor já existe na lista padrão." }
         }
+        const equiv = corEquivalenciaKey(parsed.label)
+        if (equiv !== corEquivalenciaKey(atual.label)) {
+          const outras = await tx.compatCorLoja.findMany({
+            where: { storeId, baseKey: null, NOT: { id } },
+            select: { label: true },
+            take: COR_LOJA_LIMITS.coresPorLoja,
+          })
+          if (outras.some((e) => corEquivalenciaKey(e.label) === equiv)) {
+            return { ok: false, code: "DUPLICATE", status: 409, message: "Já existe uma cor com esse nome nesta loja." }
+          }
+        }
+        Object.assign(data, { label: parsed.label, labelKey: corLabelKey(parsed.label) })
       }
-      Object.assign(data, { label: parsed.label, labelKey: corLabelKey(parsed.label) })
-    }
-    if (typeof b.ativo === "boolean") data.ativo = b.ativo
-    const res = await db.compatCorLoja.updateMany({ where: { id, storeId, version }, data })
-    if (res.count === 0) return CONFLICT_VERSAO
-    if (nextVisual) await persistCorVisual(db, storeId, actorId, atual.baseKey ?? id, nextVisual)
-    return { ok: true, value: { id } }
+      if (typeof b.ativo === "boolean") data.ativo = b.ativo
+      const res = await tx.compatCorLoja.updateMany({ where: { id, storeId, version }, data })
+      if (res.count === 0) return CONFLICT_VERSAO
+      if (nextVisual) await persistCorVisualTx(tx, storeId, actorId, atual.baseKey ?? id, nextVisual)
+      return { ok: true, value: { id } }
+    })
   } catch (e) {
     return failureFrom(e, "Já existe uma cor com esse nome nesta loja.")
   }
@@ -878,18 +900,20 @@ export async function setCorPadraoAtiva(
   }
   const label = ACESSORIO_CORES_PADRAO.find((c) => c.key === baseKey)!.label
   try {
-    let id = baseKey as string
-    if (temAtivo) {
-      const row = await db.compatCorLoja.upsert({
-        where: { storeId_baseKey: { storeId, baseKey: baseKey as AcessorioColorKey } },
-        create: { storeId, baseKey, label, labelKey: corLabelKey(label), ativo: ativo as boolean, createdBy: actorId, updatedBy: actorId },
-        update: { ativo: ativo as boolean, updatedBy: actorId, version: { increment: 1 } },
-        select: { id: true },
-      })
-      id = row.id
-    }
-    if (nextVisual) await persistCorVisual(db, storeId, actorId, baseKey, nextVisual)
-    return { ok: true, value: { id } }
+    return await withStoreLock(db, chaveLockCores(storeId), async (tx) => {
+      let id = baseKey as string
+      if (temAtivo) {
+        const row = await tx.compatCorLoja.upsert({
+          where: { storeId_baseKey: { storeId, baseKey: baseKey as AcessorioColorKey } },
+          create: { storeId, baseKey, label, labelKey: corLabelKey(label), ativo: ativo as boolean, createdBy: actorId, updatedBy: actorId },
+          update: { ativo: ativo as boolean, updatedBy: actorId, version: { increment: 1 } },
+          select: { id: true },
+        })
+        id = row.id
+      }
+      if (nextVisual) await persistCorVisualTx(tx, storeId, actorId, baseKey, nextVisual)
+      return { ok: true, value: { id } }
+    })
   } catch (e) {
     return failureFrom(e, "Conflito ao gravar a cor.")
   }
