@@ -114,6 +114,28 @@ histórico, diário, `.lock`, `.guard`, instância, hosts ou fila; não restaura
 exige conferência e autorização separadas conforme o plano. Aprovação final do proprietário fica com referência/data;
 `PHYSICAL_HOMOLOGATION=PASS` só após conferir todos os casos aplicáveis e evidências físicas.
 
+## Reconciliação 2026-11-24
+
+- Heads: #327 `cd1cc6a`, #334 `ddfbc31`. Pacote continua `e974ca03…bc77` (reproduzido do head `ddfbc31`; agente inalterado).
+- **Já existe a instalação `USB001`** no RAFACELL (#346, 2026-11-11): desabilitada, não pareada, integridade PASS. Escolher
+  **uma** instalação antes do §2 (decisão do proprietário, ver ROTEIRO "Antes de começar"):
+  - reutilizar (recomendado) — trocar só estas três variáveis do §1 e pular o `Install-Agent.ps1 -Apply` do §2:
+
+    ```powershell
+    $D05InstallRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgentApp-USB001'
+    $D05DataRoot = Join-Path $env:LOCALAPPDATA 'OmniPrintAgent-USB001'
+    $D05TaskName = 'OmniPrintAgent-Lab-USB001'
+    .\windows\Diagnose-Agent.ps1 -InstallRoot $D05InstallRoot   # esperado: integrity PASS, paired=false, Disabled
+    ```
+
+  - ou retirar a `USB001` primeiro (`Uninstall-Agent.ps1 -InstallRoot <USB001> -Apply -AuthorizedLab`; sem pareamento não
+    há credencial a revogar) e seguir o §2 com `-D05`. Nunca duas tarefas pareadas para a fila `POS-80`.
+- **Fechar o app OmniGestão Desktop** durante H01–H18: ele imprime na mesma fila por outro canal (spooler). PDV só no
+  Chrome/Edge, no alias D05. Aviso "enviado à fila de <impressora>" = app desktop → parar o caso.
+- Ligar o transporte (`OMNI_PRINT_DIRECT_ENABLED=1` só na branch D05 + novo Preview + probe) é decisão do proprietário
+  no início da janela; nenhuma IA liga sozinha.
+- H01: só confirmação parcial (página de teste do Windows relatada, sem foto). Continua **NÃO EXECUTADO**.
+
 ## Finalização 2026-11-08
 
 - [ ] ZIP do CI do head final da #334 com SHA-256 `e974ca03…bc77` (ver variável `$D05ExpectedSha` acima).

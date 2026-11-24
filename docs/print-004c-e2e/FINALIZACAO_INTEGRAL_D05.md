@@ -162,8 +162,37 @@ probe `enabled`) na janela presencial do operador, imediatamente antes de H01.
 
 O commit de evidências que segue `1c39fcd` só acrescenta documentos/provas; seu CI é informado na PR.
 
-### 10.3 Limpeza
+### 10.3 Limpeza (2026-11-08)
 
 Removidos ao final: worktree temporária própria `.worktrees/omni-print-327-final` (commit já publicado), cluster PG17
 descartável do scratchpad (parado e apagado), cópias temporárias do pacote. Preservados: worktree D05 (continua a homologação),
 worktree da #327 de outra sessão, `.artifacts` anteriores, estado privado DPAPI, Neon QA, deployments, todas as demais worktrees.
+
+## 11. Reconciliação 2026-11-24 (GOAL `OMNI-PRINT-D05-FINAL-HOMOLOGATION-READINESS-002`)
+
+| Item | Valor |
+|---|---|
+| main | `f97e9de13a875a80401d82edddcd4fdfffc6c93e` |
+| #327 | `cd1cc6a80fef73d91b1b22d026f0877d09c9f676` (main ancestral; 10/10 workflows e 2 projetos Vercel verdes, conforme o proprietário) |
+| #334 antes | `58fd851` (já com a #346 USB Windows), 6 conflitos contra a #327 |
+| #334 depois | `ddfbc31` — merge normal de `cd1cc6a`; sem rebase, squash ou force-push; continua mirando a #327 |
+
+Conflitos e resolução (nenhuma regra de runtime reescrita):
+
+- `pdv-auto-print-feedback.tsx` / `pdv-post-sale-dialog.tsx`: mantidos `requireAgent` (#346, sem queda para TCP) **e**
+  `via === "desktop"` (spooler do app Windows, vindo da main); sucesso sem app desktop segue "envio aceito pelo
+  transporte" (exigido pelo E2E 004C), sem prometer papel.
+- `vercel.json`: `buildCommand` do D05 (o `build-preview.mjs` já delega a `scripts/vercel-build.mjs`) e união das branches
+  com deploy Git desligado. `tools/print-d03/verify.mjs`: lista ESLint do D05 (superconjunto da #327) com heap 6144.
+- `CHANGELOG.md`: as duas entradas; `HASHES.json`: regenerado (633 arquivos).
+- Cache do PWA (#393): `next.config.mjs`, `public/client-privacy-cache.js` e `lib/auth/pwa-cache-privacy.ts` idênticos à
+  main. `APPROVED_RELEASE=null`. Nenhuma pasta Omni Print em `prisma/migrations`.
+
+Validações locais no head mergeado (sem build local: disco com 12 GB livres): typecheck sem erros; ESLint da bateria D03 +
+arquivos resolvidos sem erros; vitest 123/123 (impressão direta, D02 guard, SW, privacidade de cache, runtime de impressão)
+e 212/212 (PDV Clássico, paridade, guarda KG, cupom); D05 isolamento/prontidão 12/12; `readiness check` PASS; pacote
+reproduzido `e974ca03…bc77`, integridade PASS. CI integral: na PR #334.
+
+Homologação física: **PENDING**, 0/18. Procedimento guiado A–V com mapeamento para H01–H18 no ROTEIRO; decisões pendentes
+do proprietário: instalação (`USB001` existente ou nova), operador/janela, ligar o transporte do Preview na janela.
+Production: nenhum acesso, deploy, env, migration ou merge.

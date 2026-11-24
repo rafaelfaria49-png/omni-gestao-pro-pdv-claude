@@ -102,6 +102,19 @@ somente após autorização separada, evidências preservadas e UNKNOWN reconcil
 destrua automaticamente banco com provas pendentes. Registrar responsável, horário e IDs removidos, confirmar Production
 inalterada por escopo/ações; não acessar banco produtivo para produzir esse atestado.
 
+## Reconciliação 2026-11-24
+
+| Gate | Estado |
+|---|---|
+| NEON_TEST_BRANCH | inalterado (nenhuma consulta nesta reconciliação) |
+| VERCEL_TEST_PREVIEW | alias D05 em `dpl_7WpCYjjAzai3weEYYUd4rjx9U8EQ` (`1c39fcd`), transporte **desligado**. O head `ddfbc31` ainda não tem Preview: novo deployment só com autorização, na janela |
+| WINDOWS_PHYSICAL_INSTALL | instalação `USB001` existente (desabilitada, não pareada, integridade PASS); escolher reutilizar ou retirar antes de instalar outra |
+| REAL_PRINTER_USE | POS-80 / USB005 / 80 mm; página de teste do Windows relatada em 2026-11-11 (sem foto) |
+| D05_PHYSICAL_EXECUTION | PENDING_OPERATOR_AND_WINDOW; 0/18 |
+
+Isolamento de canal: o app OmniGestão Desktop (spooler) usa a mesma fila; fica fechado durante D05 (ROTEIRO).
+Production: nada alterado; `APPROVED_RELEASE=null`; migrations D02 continuam fora de `prisma/migrations`.
+
 ## Finalização 2026-11-08 — origem de autenticação do Preview
 
 `AUTH_URL`/`NEXTAUTH_URL` da branch D05 **não podem ser string vazia**: no Auth.js, `trustHost = !!(AUTH_URL ?? AUTH_TRUST_HOST ?? VERCEL …)` e `""` não é nulo, então `trustHost=false` e todo `/api/auth/*` responde 500 (`UntrustedHost`) — causa do `ADMIN_CSRF` do probe de 2026-11-07. Valor obrigatório: o alias estável da branch `https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app` (`D05_TARGET.origin`). `d05IsolationErrors` recusa qualquer outro valor (build e runtime). `private-state.ps1 -Mode Initialize` já grava o alias. O alias é a URL do servidor para o pareamento do agente.

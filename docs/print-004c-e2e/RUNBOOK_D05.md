@@ -81,6 +81,17 @@ mudou. Recolher a impressora/cabos e restaurar a organização física da bancad
 `PHYSICAL_HOMOLOGATION=PASS` só depois de todos os casos aplicáveis executados, desvios resolvidos, evidências conferidas
 e aprovação escrita do proprietário. Esta preparação não muda nenhum caso físico para PASS.
 
+## Reconciliação 2026-11-24
+
+- Pilha main `f97e9de` → #327 `cd1cc6a` → #334 `ddfbc31` (DRAFT, sem merge). A #346 (USB Windows) já está na #334.
+- Pacote `e974ca03…bc77` ainda é o correto (reproduzido do head; agente inalterado desde `1c39fcd`).
+- H01–H18: **0 PASS**. H01 teve só confirmação parcial em 2026-11-11 (página de teste do Windows relatada pelo operador,
+  sem foto, sem série, sem nome do operador) — a linha acima segue **NÃO EXECUTADO**.
+- Procedimento guiado passo a passo (A–V), com o caso H de cada passo: ROTEIRO_HOMOLOGACAO_FISICA.md, seção
+  "Estado em 2026-11-24". Instalação `USB001` existente e app desktop fechado: CHECKLIST_OPERADOR_D05.md.
+- O PDV agora também imprime pelo app desktop (spooler) e exige o agente quando a impressão direta está ligada
+  (`requireAgent`, #346). Os dois canais não podem rodar juntos durante D05.
+
 ## Finalização 2026-11-08
 
 - Usar somente o ZIP do CI do head final da #334 (SHA-256 `e974ca03a8ae862b8f7b7da5d78cd6aa5fca0c1664b5bf114d79870f0452bc77`); o pacote `f48b3097…` foi substituído e nunca instalado.
