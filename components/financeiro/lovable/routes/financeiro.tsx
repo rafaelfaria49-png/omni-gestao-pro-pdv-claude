@@ -58,7 +58,6 @@ import {
   TrendingDown,
   Percent,
   Printer,
-  Share2,
   Download,
   Copy,
   AlertCircle,
@@ -129,6 +128,12 @@ import { EmptyState } from "@/components/ui/states/EmptyState";
 import { LoadingState } from "@/components/ui/states/LoadingState";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
+import { parseValorBR, RECEBIMENTO_LOTE_UI_MAX_ITENS } from "@/lib/contas-receber-lote";
+import { normalizeNomeCliente } from "@/lib/contas-receber-cliente-match";
+import { chaveClienteTitulo, type RecebimentoHubItemPedido } from "@/lib/financeiro/recebimento-hub-client";
+import { FORMAS_RECEBIMENTO_HUB } from "@/lib/financeiro/formas-recebimento-hub";
+import { ComprovanteRecebimentoPainel, SegundaViaRecebimentoDialog } from "@/components/financeiro/recebimento/comprovante-recebimento";
+import { useEnvioRecebimento } from "@/components/financeiro/recebimento/use-envio-recebimento";
 import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify";
 
 export const Route = createFileRoute("/financeiro" as never)({
@@ -743,7 +748,7 @@ const RECEBER_FILTER_CHIPS: { v: string; label: string }[] = [
 ];
 
 function ContasReceber() {
-  const { receber, summaryR, loading, error, reload, liquidarReceber, receberParcial, estornarReceber, criarReceber } = useFinanceiroReal();
+  const { receber, summaryR, loading, error, reload, estornarReceber, criarReceber, getActiveStoreId } = useFinanceiroReal();
   const [filter, setFilter] = useState<string>("todos");
   const [openNovo, setOpenNovo] = useState(false);
   const [openReceberCliente, setOpenReceberCliente] = useState(false);
@@ -754,25 +759,6 @@ function ContasReceber() {
   const open = (m: typeof modal, item: ContaReceber) => {
     setSelected(item);
     setModal(m);
-  };
-
-  const handleReceber = async (valor: number, total: boolean) => {
-    if (!selected || busy) return;
-    setBusy(true);
-    try {
-      if (total) {
-        await liquidarReceber(selected.id);
-        toast.success("Conta quitada");
-      } else {
-        await receberParcial(selected.id, valor);
-        toast.success("Baixa parcial registrada");
-      }
-      setModal(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao registrar recebimento");
-    } finally {
-      setBusy(false);
-    }
   };
 
   const handleEstorno = async () => {
@@ -909,7 +895,7 @@ function ContasReceber() {
                             <Button size="icon" variant="ghost" title="Receber" onClick={() => open("receber", r)}>
                               <CheckCircle2 className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" title="Emitir recibo" onClick={() => open("recibo", r)}>
+                            <Button size="icon" variant="ghost" title="Comprovantes (reimprimir)" aria-label="Comprovantes de recebimento" onClick={() => open("recibo", r)}>
                               <Receipt className="h-4 w-4" />
                             </Button>
                             <Button size="icon" variant="ghost" title="Renegociar" onClick={() => open("renegociar", r)}>
@@ -942,17 +928,19 @@ function ContasReceber() {
           setOpenReceberCliente(false);
           open("receber", item);
         }}
-        onLiquidarTitulo={liquidarReceber}
-        onReceberParcialTitulo={receberParcial}
-        onReload={reload}
       />
       <ReceberContaModal
         open={modal === "receber"}
         onOpenChange={(v) => !v && setModal(null)}
         conta={selected}
-        onConfirm={handleReceber}
       />
-      <ReciboModal open={modal === "recibo"} onOpenChange={(v) => !v && setModal(null)} conta={selected} />
+      <SegundaViaRecebimentoDialog
+        open={modal === "recibo"}
+        onOpenChange={(v) => !v && setModal(null)}
+        localKey={selected?.id ?? null}
+        titulo={selected ? `${parseTituloDisplay(selected.descricao, selected.id).principal} · ${selected.cliente}` : ""}
+        storeId={getActiveStoreId()}
+      />
       <EstornoModal
         open={modal === "estorno"}
         onOpenChange={(v) => !v && setModal(null)}
@@ -2676,86 +2664,115 @@ function parseTituloDisplay(descricao: string, id: string): { principal: string;
   return { principal: texto, secundaria: "" };
 }
 
+type GrupoClienteReceber = {
+  chave: string;
+  nome: string;
+  /** Sem `Cliente.id` e com homônimo na loja: não juntar títulos num recebimento só. */
+  ambiguo: boolean;
+  clienteId: string | null;
+  titulos: ContaReceber[];
+  total: number;
+};
+
+/**
+ * "Receber de cliente" — valor avulso (distribuído do mais antigo para o mais novo) ou
+ * títulos marcados, gravados numa ÚNICA operação atômica e idempotente
+ * (`POST /api/financeiro/receber-lote`). Substitui o laço de N baixas independentes que
+ * deixava parte gravada quando uma falhava, e o agrupamento por nome digitado, que
+ * juntava dívidas de clientes homônimos.
+ */
 function ReceberClienteModal({
   open,
   onOpenChange,
   receber,
   onSelectTitulo,
-  onLiquidarTitulo,
-  onReceberParcialTitulo,
-  onReload,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   receber: ContaReceber[];
   onSelectTitulo: (conta: ContaReceber) => void;
-  onLiquidarTitulo: (id: string, observacao?: string, formaPagamento?: string) => Promise<void>;
-  onReceberParcialTitulo: (id: string, valor: number, observacao?: string, formaPagamento?: string) => Promise<void>;
-  onReload: () => void;
 }) {
-  const [cliente, setCliente] = useState("");
+  const { receberTitulos, nomesAmbiguos } = useFinanceiroReal();
+  const envio = useEnvioRecebimento(receberTitulos);
+  const [busca, setBusca] = useState("");
+  const [chave, setChave] = useState<string | null>(null);
   const [valorRecebido, setValorRecebido] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("");
   const [observacao, setObservacao] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [recibo, setRecibo] = useState<ReciboAvulsoData | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const busy = envio.busy;
+  const { reset: resetEnvio } = envio;
 
-  const clientesComSaldo = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          receber
-            .filter((r) => saldoAbertoReceber(r) > 0)
-            .map((r) => r.cliente)
-            .filter(Boolean),
-        ),
-      ).sort(),
-    [receber],
-  );
+  useEffect(() => {
+    if (!open) return;
+    setBusca("");
+    setChave(null);
+    setValorRecebido("");
+    setFormaPagamento("");
+    setObservacao("");
+    setSelecionados(new Set());
+    resetEnvio();
+  }, [open, resetEnvio]);
 
-  const clienteTrim = cliente.trim();
-  const clienteReconhecido = clienteTrim.length > 0 && clientesComSaldo.includes(clienteTrim);
-
-  const titulosDoCliente = useMemo(() => {
-    if (!clienteReconhecido) return [];
-    return receber
-      .filter((r) => r.cliente === clienteTrim && saldoAbertoReceber(r) > 0)
-      .sort((a, b) => {
+  const grupos = useMemo(() => {
+    const m = new Map<string, GrupoClienteReceber>();
+    for (const r of receber) {
+      if (r.status === "cancelado" || saldoAbertoReceber(r) <= 0.009) continue;
+      const { chave: k, ambiguo } = chaveClienteTitulo(r, nomesAmbiguos);
+      const g = m.get(k) ?? { chave: k, nome: r.cliente, ambiguo, clienteId: r.clienteId ?? null, titulos: [], total: 0 };
+      g.titulos.push(r);
+      g.total = Math.round((g.total + saldoAbertoReceber(r)) * 100) / 100;
+      m.set(k, g);
+    }
+    const lista = [...m.values()];
+    for (const g of lista) {
+      g.titulos.sort((a, b) => {
         const ta = parseDateStringSafe(a.venc)?.getTime() ?? Number.POSITIVE_INFINITY;
         const tb = parseDateStringSafe(b.venc)?.getTime() ?? Number.POSITIVE_INFINITY;
         return ta - tb;
       });
-  }, [receber, clienteTrim, clienteReconhecido]);
+    }
+    return lista.sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [receber, nomesAmbiguos]);
 
-  const valorNum = parseFloat(valorRecebido.replace(",", "."));
+  /** Nomes exibidos que aparecem em 2+ grupos: a UI mostra de qual cadastro é cada um. */
+  const nomesRepetidos = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const g of grupos) {
+      const n = normalizeNomeCliente(g.nome);
+      c.set(n, (c.get(n) ?? 0) + 1);
+    }
+    return c;
+  }, [grupos]);
+
+  const rotuloGrupo = (g: GrupoClienteReceber) => {
+    if ((nomesRepetidos.get(normalizeNomeCliente(g.nome)) ?? 0) < 2 && !g.ambiguo) return null;
+    return g.clienteId ? `cadastro …${g.clienteId.slice(-4)}` : "sem cadastro vinculado";
+  };
+
+  const buscaNorm = normalizeNomeCliente(busca);
+  const gruposFiltrados = buscaNorm ? grupos.filter((g) => normalizeNomeCliente(g.nome).includes(buscaNorm)) : grupos;
+  const grupo = grupos.find((g) => g.chave === chave) ?? null;
+  const titulosDoCliente = useMemo(() => grupo?.titulos ?? [], [grupo]);
+  const loteBloqueado = !!grupo && grupo.ambiguo && grupo.titulos.length > 1;
+
+  const valorNum = parseValorBR(valorRecebido) ?? 0;
   const plano = useMemo(
     () =>
       distribuirRecebimentoPorVencimento(
         titulosDoCliente.map((t) => ({ id: t.id, saldoAberto: saldoAbertoReceber(t), vencimento: t.venc })),
-        Number.isFinite(valorNum) ? valorNum : 0,
+        valorNum,
       ),
     [titulosDoCliente, valorNum],
   );
 
-  const clientesTodos = useMemo(
-    () => new Set(receber.map((r) => r.cliente).filter(Boolean)),
-    [receber],
-  );
-  const sugestoesCliente = useMemo(() => {
-    const q = clienteTrim.toLowerCase();
-    if (!q || clienteReconhecido) return [];
-    return clientesComSaldo.filter((c) => c.toLowerCase().includes(q)).slice(0, 6);
-  }, [clienteTrim, clienteReconhecido, clientesComSaldo]);
-
-  // Seleção manual de títulos: quita integralmente os marcados (independe da distribuição FIFO).
   const selecionadosValidos = useMemo(
     () => titulosDoCliente.filter((t) => selecionados.has(t.id)),
     [titulosDoCliente, selecionados],
   );
   const modoSelecao = selecionadosValidos.length > 0;
   const totalSelecionado = useMemo(
-    () => selecionadosValidos.reduce((s, t) => s + saldoAbertoReceber(t), 0),
+    () => Math.round(selecionadosValidos.reduce((s, t) => s + saldoAbertoReceber(t), 0) * 100) / 100,
     [selecionadosValidos],
   );
   const toggleSelecionado = (id: string, checked: boolean) => {
@@ -2768,129 +2785,60 @@ function ReceberClienteModal({
   };
 
   const handleClose = (v: boolean) => {
-    if (busy) return;
+    if (!v && envio.emVoo()) return;
     onOpenChange(v);
-    if (!v) {
-      setCliente("");
-      setValorRecebido("");
-      setFormaPagamento("");
-      setObservacao("");
-      setSelecionados(new Set());
-    }
+  };
+
+  const escolherCliente = (g: GrupoClienteReceber | null) => {
+    setChave(g?.chave ?? null);
+    setSelecionados(new Set());
+    setValorRecebido("");
+    envio.setAviso(null);
   };
 
   const handleReceberValor = async () => {
-    if (busy) return;
+    if (busy || !grupo || loteBloqueado) return;
+    if (!formaPagamento) {
+      toast.error("Selecione a forma de pagamento.");
+      return;
+    }
+    const porId = new Map(titulosDoCliente.map((t) => [t.id, t]));
+    let itens: RecebimentoHubItemPedido[];
     if (modoSelecao) {
-      const alvos = [...selecionadosValidos];
-      setBusy(true);
-      const obsPartes = ["Recebimento de títulos selecionados"];
-      if (observacao.trim()) obsPartes.push(observacao.trim());
-      const obs = obsPartes.join(" — ");
-      const forma = formaPagamento || undefined;
-      let executadas = 0;
-      try {
-        for (const t of alvos) {
-          await onLiquidarTitulo(t.id, obs, forma);
-          executadas += 1;
-        }
-        setRecibo({
-          numero: `REC-AV-${Date.now()}`,
-          cliente,
-          total: alvos.reduce((s, t) => s + saldoAbertoReceber(t), 0),
-          formaPagamento: forma,
-          observacao: observacao.trim() || undefined,
-          emitidoEm: new Date().toISOString(),
-          linhas: alvos.map((t) => ({
-            titulo: parseTituloDisplay(t.descricao, t.id).principal,
-            vencimento: formatDateBR(t.venc, "Sem vencimento"),
-            valor: saldoAbertoReceber(t),
-            quitado: true,
-          })),
-        });
-        toast.success("Recebimento registrado com sucesso.");
-        setSelecionados(new Set());
-        setFormaPagamento("");
-        setObservacao("");
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Falha ao registrar recebimento";
-        toast.error(
-          executadas > 0
-            ? `Falha na baixa ${executadas + 1} de ${alvos.length}: ${msg}. As ${executadas} baixas anteriores foram registradas.`
-            : `Falha ao registrar recebimento: ${msg}`,
-        );
-        onReload();
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    if (titulosDoCliente.length === 0) {
-      toast.error("Nenhum título em aberto para este cliente.");
-      return;
-    }
-    if (!plano.ok) {
-      toast.error(
-        plano.erro === "valor_maior_que_saldo"
-          ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
-          : "Informe um valor recebido maior que zero.",
-      );
-      return;
-    }
-    setBusy(true);
-    const obsPartes = ["Recebimento avulso por cliente"];
-    if (observacao.trim()) obsPartes.push(observacao.trim());
-    const obs = obsPartes.join(" — ");
-    const forma = formaPagamento || undefined;
-    const tituloPorId = new Map(titulosDoCliente.map((t) => [t.id, t]));
-    let executadas = 0;
-    try {
-      for (const baixa of plano.baixas) {
-        if (baixa.total) {
-          await onLiquidarTitulo(baixa.id, obs, forma);
-        } else {
-          await onReceberParcialTitulo(baixa.id, baixa.valor, obs, forma);
-        }
-        executadas += 1;
-      }
-      setRecibo({
-        numero: `REC-AV-${Date.now()}`,
-        cliente,
-        total: plano.baixas.reduce((s, b) => s + b.valor, 0),
-        formaPagamento: forma,
-        observacao: observacao.trim() || undefined,
-        emitidoEm: new Date().toISOString(),
-        linhas: plano.baixas.map((b) => {
-          const t = tituloPorId.get(b.id);
-          return {
-            titulo: t ? parseTituloDisplay(t.descricao, t.id).principal : b.id,
-            vencimento: t ? formatDateBR(t.venc, "Sem vencimento") : "—",
-            valor: b.valor,
-            quitado: b.total,
-          };
-        }),
+      itens = selecionadosValidos.map((t) => {
+        const saldo = saldoAbertoReceber(t);
+        return { localKey: t.id, saldoEsperado: saldo, valorReceber: saldo };
       });
-      toast.success("Recebimento registrado com sucesso.");
-      setValorRecebido("");
-      setFormaPagamento("");
-      setObservacao("");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha ao registrar recebimento";
-      toast.error(
-        executadas > 0
-          ? `Falha na baixa ${executadas + 1} de ${plano.baixas.length}: ${msg}. As ${executadas} baixas anteriores foram registradas.`
-          : `Falha ao registrar recebimento: ${msg}`,
-      );
-      onReload();
-    } finally {
-      setBusy(false);
+    } else {
+      if (!plano.ok) {
+        toast.error(
+          plano.erro === "valor_maior_que_saldo"
+            ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
+            : "Informe um valor recebido maior que zero.",
+        );
+        return;
+      }
+      itens = plano.baixas.map((b) => ({
+        localKey: b.id,
+        saldoEsperado: saldoAbertoReceber(porId.get(b.id)!),
+        valorReceber: b.valor,
+      }));
     }
+    if (itens.length > RECEBIMENTO_LOTE_UI_MAX_ITENS) {
+      toast.error(`Máximo de ${RECEBIMENTO_LOTE_UI_MAX_ITENS} títulos por recebimento. Receba em partes.`);
+      return;
+    }
+    const out = await envio.submeter({ formaPagamento, observacao: observacao.trim() || undefined, itens });
+    if (out?.kind === "recusado") toast.error(out.mensagem);
   };
 
   return (
-    <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-4xl">
+      <DialogContent
+        className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-4xl"
+        onEscapeKeyDown={(e) => { if (envio.emVoo()) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (envio.emVoo()) e.preventDefault(); }}
+      >
         <DialogHeader className="border-b border-border bg-muted/30 px-8 py-5">
           <DialogTitle className="flex items-center gap-3 text-lg font-semibold tracking-tight">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
@@ -2899,437 +2847,271 @@ function ReceberClienteModal({
             Receber de cliente
           </DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
-            Receba um valor avulso do cliente (baixado nos títulos mais antigos primeiro) ou receba um título específico.
+            Receba um valor do cliente (baixado nos títulos mais antigos primeiro) ou os títulos marcados — tudo numa
+            operação só: ou grava inteiro, ou nada grava.
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-          <div className="space-y-2">
-            <Label
-              htmlFor="receber-cliente-busca"
-              className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-            >
-              Cliente
-            </Label>
-            <Input
-              id="receber-cliente-busca"
-              list="clientes-list-receber-cliente"
-              placeholder="Buscar cliente com título em aberto..."
-              className="h-11 rounded-lg text-sm"
-              value={cliente}
-              onChange={(e) => setCliente(e.target.value)}
-              autoFocus
-            />
-            <datalist id="clientes-list-receber-cliente">
-              {clientesComSaldo.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-          </div>
-
-          <div className="mt-5">
-            {!clienteTrim ? (
-              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
-                <User className="h-5 w-5 text-muted-foreground/60" />
-                <p className="text-sm text-muted-foreground">
-                  Digite ou selecione um cliente para ver os títulos em aberto.
-                </p>
+          {envio.resultado ? (
+            <ComprovanteRecebimentoPainel resultado={envio.resultado} onConcluir={() => onOpenChange(false)} />
+          ) : !grupo ? (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="receber-cliente-busca" className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Cliente com título em aberto
+                </Label>
+                <Input
+                  id="receber-cliente-busca"
+                  placeholder="Filtrar por nome…"
+                  className="h-11 rounded-lg text-sm"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  autoFocus
+                />
               </div>
-            ) : !clienteReconhecido ? (
-              clientesTodos.has(clienteTrim) ? (
+              {grupos.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
-                  Nenhum título em aberto para este cliente.
+                  Nenhum título em aberto nesta unidade.
+                </p>
+              ) : gruposFiltrados.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
+                  Nenhum cliente com título em aberto corresponde a “{busca.trim()}”.
                 </p>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    {sugestoesCliente.length > 0
-                      ? "Selecione um cliente para continuar:"
-                      : "Nenhum cliente com título em aberto corresponde à busca."}
-                  </p>
-                  {sugestoesCliente.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {sugestoesCliente.map((c) => (
-                        <Button
-                          key={c}
+                <ul className="space-y-1">
+                  {gruposFiltrados.slice(0, 50).map((g) => {
+                    const extra = rotuloGrupo(g);
+                    return (
+                      <li key={g.chave}>
+                        <button
                           type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8 rounded-full px-4 text-xs"
-                          onClick={() => setCliente(c)}
+                          className="flex w-full min-w-0 items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-left hover:bg-muted/50"
+                          onClick={() => escolherCliente(g)}
                         >
-                          {c}
-                        </Button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              )
-            ) : titulosDoCliente.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
-                Nenhum título em aberto para este cliente.
-              </p>
-            ) : (
-              <div className="space-y-5">
-                {/* Recebimento por valor avulso */}
-                <section className="overflow-hidden rounded-xl border border-primary/20">
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-primary/15 bg-primary/5 px-5 py-3">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      Receber valor do cliente
-                    </h3>
-                    <p className="flex items-baseline gap-2">
-                      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Total em aberto</span>
-                      <span className="text-lg font-semibold tracking-tight tabular-nums text-foreground">{fmt(plano.totalAberto)}</span>
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 bg-card px-5 py-5 sm:grid-cols-[1fr_1fr_1.4fr]">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="receber-cliente-valor"
-                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                      >
-                        Valor recebido (R$)
-                      </Label>
-                      <Input
-                        id="receber-cliente-valor"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0,00"
-                        className="h-10 rounded-lg text-base font-semibold"
-                        value={modoSelecao ? totalSelecionado.toFixed(2) : valorRecebido}
-                        onChange={(e) => setValorRecebido(e.target.value)}
-                        disabled={busy || modoSelecao}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="receber-cliente-forma"
-                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                      >
-                        Forma de pagamento
-                      </Label>
-                      <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={busy}>
-                        <SelectTrigger id="receber-cliente-forma" className="h-10 w-full rounded-lg">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                          <SelectItem value="PIX">PIX</SelectItem>
-                          <SelectItem value="Cartão de crédito">Cartão de crédito</SelectItem>
-                          <SelectItem value="Cartão de débito">Cartão de débito</SelectItem>
-                          <SelectItem value="Boleto">Boleto</SelectItem>
-                          <SelectItem value="Transferência">Transferência</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="receber-cliente-obs"
-                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                      >
-                        Observação (opcional)
-                      </Label>
-                      <Input
-                        id="receber-cliente-obs"
-                        placeholder="Ex.: pagamento parcial combinado"
-                        className="h-10 rounded-lg"
-                        value={observacao}
-                        onChange={(e) => setObservacao(e.target.value)}
-                        disabled={busy}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-primary/15 bg-primary/5 px-5 py-3">
-                    <p className="text-xs text-muted-foreground">
-                      {modoSelecao
-                        ? `${selecionadosValidos.length} título(s) selecionado(s) serão quitados integralmente.`
-                        : !valorRecebido.trim()
-                          ? "O valor será distribuído nos títulos mais antigos primeiro — ou marque abaixo os títulos que deseja receber."
-                          : plano.ok
-                            ? `Esse recebimento quitará ${plano.quitados} título(s) e fará baixa parcial em ${plano.parciais} título(s).`
-                            : plano.erro === "valor_maior_que_saldo"
-                              ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
-                              : "Informe um valor maior que zero."}
-                    </p>
-                    <Button
-                      className="h-9 rounded-lg px-6"
-                      onClick={handleReceberValor}
-                      disabled={busy || (!modoSelecao && !plano.ok)}
-                    >
-                      {busy
-                        ? "Registrando..."
-                        : modoSelecao
-                          ? `Receber selecionados (${fmt(totalSelecionado)})`
-                          : "Receber valor"}
-                    </Button>
-                  </div>
-                </section>
-
-                {/* Títulos em aberto — recebimento individual */}
-                <div className="min-w-0 overflow-hidden rounded-xl border border-border">
-                  <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      Títulos em aberto
-                    </h3>
-                    <span className="text-xs text-muted-foreground">
-                      {modoSelecao ? (
-                        <>
-                          {selecionadosValidos.length} selecionado(s) ·{" "}
-                          <span className="font-semibold tabular-nums text-success">{fmt(totalSelecionado)}</span>
-                        </>
-                      ) : (
-                        `${titulosDoCliente.length} título(s)`
-                      )}
-                    </span>
-                  </div>
-                  <Table className="table-fixed">
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-10">
-                          <span className="sr-only">Selecionar</span>
-                        </TableHead>
-                        <TableHead className="text-[11px] uppercase tracking-wide">Título</TableHead>
-                        <TableHead className="w-28 text-[11px] uppercase tracking-wide">Vencimento</TableHead>
-                        <TableHead className="w-28 text-right text-[11px] uppercase tracking-wide">Saldo aberto</TableHead>
-                        <TableHead className="w-24 text-right text-[11px] uppercase tracking-wide">Ação</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {titulosDoCliente.map((t) => {
-                        const { principal, secundaria } = parseTituloDisplay(t.descricao, t.id);
-                        const selecionado = selecionados.has(t.id);
-                        const baixa =
-                          !modoSelecao && valorNum > 0 && plano.ok
-                            ? plano.baixas.find((b) => b.id === t.id)
-                            : undefined;
-                        const previewLabel = modoSelecao
-                          ? selecionado
-                            ? `Quita ${fmt(saldoAbertoReceber(t))}`
-                            : null
-                          : !(valorNum > 0)
-                            ? null
-                            : baixa
-                              ? baixa.total
-                                ? `Quita ${fmt(baixa.valor)}`
-                                : `Parcial ${fmt(baixa.valor)}`
-                              : plano.ok
-                                ? "Não alcançado"
-                                : null;
-                        return (
-                          <TableRow key={t.id} className={selecionado ? "bg-primary/5" : undefined}>
-                            <TableCell className="w-10">
-                              <Checkbox
-                                checked={selecionado}
-                                onCheckedChange={(v) => toggleSelecionado(t.id, v === true)}
-                                disabled={busy}
-                                aria-label={`Selecionar ${principal}`}
-                              />
-                            </TableCell>
-                            <TableCell className="max-w-0">
-                              <div className="truncate text-sm font-medium" title={t.descricao || t.id}>
-                                {principal}
-                              </div>
-                              {secundaria ? (
-                                <div className="truncate text-xs text-muted-foreground" title={secundaria}>
-                                  {secundaria}
-                                </div>
-                              ) : null}
-                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                                {statusBadge(t.status)}
-                                {previewLabel ? (
-                                  <span
-                                    className={
-                                      (modoSelecao && selecionado) || baixa?.total
-                                        ? "text-[10px] font-medium text-success"
-                                        : baixa
-                                          ? "text-[10px] font-medium text-warning"
-                                          : "text-[10px] text-muted-foreground"
-                                    }
-                                  >
-                                    {previewLabel}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {formatDateBR(t.venc, "Sem vencimento")}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <span className="font-semibold">{fmt(saldoAbertoReceber(t))}</span>
-                              {t.recebido > 0 ? (
-                                <div className="text-[10px] text-muted-foreground">de {fmt(t.valor)}</div>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button size="sm" variant="outline" disabled={busy} onClick={() => onSelectTitulo(t)}>
-                                Receber
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <DialogFooter className="border-t border-border bg-muted/30 px-8 py-4">
-          <Button variant="outline" className="rounded-lg px-6" onClick={() => handleClose(false)} disabled={busy}>
-            Fechar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <ReciboAvulsoModal recibo={recibo} onClose={() => setRecibo(null)} />
-    </>
-  );
-}
-
-type ReciboAvulsoData = {
-  numero: string;
-  cliente: string;
-  total: number;
-  formaPagamento?: string;
-  observacao?: string;
-  emitidoEm: string;
-  linhas: { titulo: string; vencimento: string; valor: number; quitado: boolean }[];
-};
-
-function reciboAvulsoTexto(r: ReciboAvulsoData): string {
-  const linhas = r.linhas
-    .map((l) => `- ${l.titulo} (venc. ${l.vencimento}): ${fmt(l.valor)} ${l.quitado ? "(quitado)" : "(parcial)"}`)
-    .join("\n");
-  return [
-    `Recibo ${r.numero} — OmniGestão Pro`,
-    `Cliente: ${r.cliente}`,
-    `Data: ${new Date(r.emitidoEm).toLocaleString("pt-BR")}`,
-    ...(r.formaPagamento ? [`Forma de pagamento: ${r.formaPagamento}`] : []),
-    ...(r.observacao ? [`Observação: ${r.observacao}`] : []),
-    "",
-    "Títulos baixados (mais antigos primeiro):",
-    linhas,
-    "",
-    `Total recebido: ${fmt(r.total)}`,
-  ].join("\n");
-}
-
-function escapeHtmlRecibo(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-/** Impressão real em janela dedicada (documento de impressão: fora do tema da aplicação). */
-function imprimirReciboAvulso(r: ReciboAvulsoData) {
-  const w = window.open("", "_blank", "width=640,height=760");
-  if (!w) {
-    toast.error("Não foi possível abrir a janela de impressão (pop-up bloqueado).");
-    return;
-  }
-  const linhas = r.linhas
-    .map(
-      (l) =>
-        `<tr><td>${escapeHtmlRecibo(l.titulo)}</td><td>${escapeHtmlRecibo(l.vencimento)}</td><td style="text-align:right">${escapeHtmlRecibo(fmt(l.valor))}</td><td>${l.quitado ? "Quitado" : "Parcial"}</td></tr>`,
-    )
-    .join("");
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtmlRecibo(r.numero)}</title>
-<style>body{font-family:system-ui,sans-serif;font-size:14px;margin:24px}table{border-collapse:collapse;width:100%;margin-top:12px}td,th{border:1px solid #888;padding:6px;text-align:left}h1{font-size:18px}p{margin:4px 0}.total{margin-top:12px;font-weight:700}</style>
-</head><body>
-<h1>Recibo de recebimento — ${escapeHtmlRecibo(r.numero)}</h1>
-<p>Cliente: <strong>${escapeHtmlRecibo(r.cliente)}</strong></p>
-<p>Data: ${escapeHtmlRecibo(new Date(r.emitidoEm).toLocaleString("pt-BR"))}</p>
-${r.formaPagamento ? `<p>Forma de pagamento: ${escapeHtmlRecibo(r.formaPagamento)}</p>` : ""}
-${r.observacao ? `<p>Observação: ${escapeHtmlRecibo(r.observacao)}</p>` : ""}
-<table><thead><tr><th>Título</th><th>Vencimento</th><th>Valor</th><th>Baixa</th></tr></thead><tbody>${linhas}</tbody></table>
-<p class="total">Total recebido: ${escapeHtmlRecibo(fmt(r.total))}</p>
-<p>Recebemos a importância acima descrita.</p>
-</body></html>`);
-  w.document.close();
-  w.focus();
-  w.print();
-}
-
-function ReciboAvulsoModal({ recibo, onClose }: { recibo: ReciboAvulsoData | null; onClose: () => void }) {
-  if (!recibo) return null;
-  return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-primary" /> Recebimento registrado
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            Recibo {recibo.numero} — confira e imprima ou copie se o cliente precisar de comprovante.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="rounded-xl border border-border bg-card p-4 text-sm">
-          <div className="space-y-1.5">
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Cliente</span>
-              <span className="font-medium">{recibo.cliente}</span>
+                          <User className="h-4 w-4 shrink-0 text-primary" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{g.nome}</span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {g.titulos.length === 1 ? "1 título em aberto" : `${g.titulos.length} títulos em aberto`}
+                              {extra ? ` · ${extra}` : ""}
+                            </span>
+                          </span>
+                          <span className="shrink-0 font-semibold tabular-nums">{fmt(g.total)}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Data</span>
-              <span>{new Date(recibo.emitidoEm).toLocaleString("pt-BR")}</span>
-            </div>
-            {recibo.formaPagamento ? (
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Forma de pagamento</span>
-                <span>{recibo.formaPagamento}</span>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{grupo.nome}</p>
+                  {rotuloGrupo(grupo) ? <p className="text-xs text-muted-foreground">{rotuloGrupo(grupo)}</p> : null}
+                </div>
+                <Button size="sm" variant="outline" onClick={() => escolherCliente(null)} disabled={busy}>
+                  Trocar cliente
+                </Button>
               </div>
-            ) : null}
-            {recibo.observacao ? (
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Observação</span>
-                <span className="text-right">{recibo.observacao}</span>
-              </div>
-            ) : null}
-          </div>
-          <div className="mt-3 border-t border-border pt-2">
-            <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Títulos baixados</p>
-            <div className="space-y-1">
-              {recibo.linhas.map((l, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="min-w-0 truncate" title={l.titulo}>
-                    {l.titulo} · venc. {l.vencimento}
-                  </span>
-                  <span className="shrink-0 font-medium">
-                    {fmt(l.valor)} · {l.quitado ? "quitado" : "parcial"}
+
+              {loteBloqueado ? (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Cliente homônimo sem vínculo de cadastro</AlertTitle>
+                  <AlertDescription>
+                    Há mais de um cadastro com este nome e estes títulos não apontam para nenhum deles. Para não receber a
+                    dívida de outra pessoa, receba título a título pelo botão “Receber”.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              <section className="overflow-hidden rounded-xl border border-primary/20">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-primary/15 bg-primary/5 px-5 py-3">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Receber valor do cliente</h3>
+                  <p className="flex items-baseline gap-2">
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Total em aberto</span>
+                    <span className="text-lg font-semibold tracking-tight tabular-nums text-foreground">{fmt(grupo.total)}</span>
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 bg-card px-5 py-5 sm:grid-cols-[1fr_1fr_1.4fr]">
+                  <div className="space-y-2">
+                    <Label htmlFor="receber-cliente-valor" className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Valor recebido (R$)
+                    </Label>
+                    <Input
+                      id="receber-cliente-valor"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      className="h-10 rounded-lg text-base font-semibold"
+                      value={modoSelecao ? totalSelecionado.toFixed(2).replace(".", ",") : valorRecebido}
+                      onChange={(e) => setValorRecebido(e.target.value)}
+                      disabled={busy || modoSelecao || loteBloqueado}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receber-cliente-forma" className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Forma de pagamento
+                    </Label>
+                    <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={busy || loteBloqueado}>
+                      <SelectTrigger id="receber-cliente-forma" className="h-10 w-full rounded-lg">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FORMAS_RECEBIMENTO_HUB.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receber-cliente-obs" className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Observação (opcional)
+                    </Label>
+                    <Input
+                      id="receber-cliente-obs"
+                      placeholder="Ex.: pagamento parcial combinado"
+                      className="h-10 rounded-lg"
+                      maxLength={500}
+                      value={observacao}
+                      onChange={(e) => setObservacao(e.target.value)}
+                      disabled={busy || loteBloqueado}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-primary/15 bg-primary/5 px-5 py-3">
+                  <p className="text-xs text-muted-foreground">
+                    {modoSelecao
+                      ? `${selecionadosValidos.length} título(s) selecionado(s) serão quitados integralmente.`
+                      : !valorRecebido.trim()
+                        ? "O valor será distribuído nos títulos mais antigos primeiro — ou marque abaixo os títulos que deseja receber."
+                        : plano.ok
+                          ? `Esse recebimento quitará ${plano.quitados} título(s) e fará baixa parcial em ${plano.parciais} título(s).`
+                          : plano.erro === "valor_maior_que_saldo"
+                            ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
+                            : "Informe um valor maior que zero."}
+                  </p>
+                  <Button
+                    className="h-9 rounded-lg px-6"
+                    onClick={() => void handleReceberValor()}
+                    disabled={busy || loteBloqueado || !formaPagamento || (!modoSelecao && !plano.ok)}
+                  >
+                    {busy ? "Registrando…" : modoSelecao ? `Receber selecionados (${fmt(totalSelecionado)})` : "Receber valor"}
+                  </Button>
+                </div>
+              </section>
+
+              {envio.aviso ? (
+                <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {envio.aviso}
+                </p>
+              ) : null}
+
+              <div className="min-w-0 overflow-hidden rounded-xl border border-border">
+                <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Títulos em aberto</h3>
+                  <span className="text-xs text-muted-foreground">
+                    {modoSelecao ? (
+                      <>
+                        {selecionadosValidos.length} selecionado(s) ·{" "}
+                        <span className="font-semibold tabular-nums text-success">{fmt(totalSelecionado)}</span>
+                      </>
+                    ) : (
+                      `${titulosDoCliente.length} título(s)`
+                    )}
                   </span>
                 </div>
-              ))}
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-10">
+                        <span className="sr-only">Selecionar</span>
+                      </TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wide">Título</TableHead>
+                      <TableHead className="w-28 text-[11px] uppercase tracking-wide">Vencimento</TableHead>
+                      <TableHead className="w-28 text-right text-[11px] uppercase tracking-wide">Saldo aberto</TableHead>
+                      <TableHead className="w-24 text-right text-[11px] uppercase tracking-wide">Ação</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {titulosDoCliente.map((t) => {
+                      const { principal, secundaria } = parseTituloDisplay(t.descricao, t.id);
+                      const selecionado = selecionados.has(t.id);
+                      const baixa = !modoSelecao && valorNum > 0 && plano.ok ? plano.baixas.find((b) => b.id === t.id) : undefined;
+                      const previewLabel = modoSelecao
+                        ? selecionado
+                          ? `Quita ${fmt(saldoAbertoReceber(t))}`
+                          : null
+                        : !(valorNum > 0)
+                          ? null
+                          : baixa
+                            ? baixa.total
+                              ? `Quita ${fmt(baixa.valor)}`
+                              : `Parcial ${fmt(baixa.valor)}`
+                            : plano.ok
+                              ? "Não alcançado"
+                              : null;
+                      return (
+                        <TableRow key={t.id} className={selecionado ? "bg-primary/5" : undefined}>
+                          <TableCell className="w-10">
+                            <Checkbox
+                              checked={selecionado}
+                              onCheckedChange={(v) => toggleSelecionado(t.id, v === true)}
+                              disabled={busy || loteBloqueado}
+                              aria-label={`Selecionar ${principal}`}
+                            />
+                          </TableCell>
+                          <TableCell className="max-w-0">
+                            <div className="truncate text-sm font-medium" title={t.descricao || t.id}>{principal}</div>
+                            {secundaria ? (
+                              <div className="truncate text-xs text-muted-foreground" title={secundaria}>{secundaria}</div>
+                            ) : null}
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              {statusBadge(t.status)}
+                              {previewLabel ? (
+                                <span
+                                  className={
+                                    (modoSelecao && selecionado) || baixa?.total
+                                      ? "text-[10px] font-medium text-success"
+                                      : baixa
+                                        ? "text-[10px] font-medium text-warning"
+                                        : "text-[10px] text-muted-foreground"
+                                  }
+                                >
+                                  {previewLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{formatDateBR(t.venc, "Sem vencimento")}</TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-semibold">{fmt(saldoAbertoReceber(t))}</span>
+                            {t.recebido > 0 ? <div className="text-[10px] text-muted-foreground">de {fmt(t.valor)}</div> : null}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="outline" disabled={busy} onClick={() => onSelectTitulo(t)}>
+                              Receber
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
-          </div>
-          <div className="mt-3 flex justify-between border-t border-border pt-2 text-base">
-            <span className="font-medium">Total recebido</span>
-            <span className="font-semibold tabular-nums text-success">{fmt(recibo.total)}</span>
-          </div>
+          )}
         </div>
-        <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            className="gap-1"
-            onClick={() => {
-              navigator.clipboard.writeText(reciboAvulsoTexto(recibo)).then(
-                () => toast.success("Recibo copiado."),
-                () => toast.error("Falha ao copiar o recibo."),
-              );
-            }}
-          >
-            <Copy className="h-4 w-4" /> Copiar
-          </Button>
-          <Button variant="outline" className="gap-1" onClick={() => imprimirReciboAvulso(recibo)}>
-            <Printer className="h-4 w-4" /> Imprimir
-          </Button>
-          <Button onClick={onClose}>Fechar</Button>
-        </DialogFooter>
+
+        {envio.resultado ? null : (
+          <DialogFooter className="border-t border-border bg-muted/30 px-8 py-4">
+            <Button variant="outline" className="rounded-lg px-6" onClick={() => handleClose(false)} disabled={busy}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -4022,41 +3804,72 @@ function NovaCarteiraModal({
 
 /* ===================== Receber / Recibo / Estorno / Histórico / Renegociar ===================== */
 
+/**
+ * Baixa de UM título pelo Financeiro HUB. Grava pelo endpoint atômico/idempotente
+ * (`POST /api/financeiro/receber-lote`, 1 item) e só mostra sucesso — com comprovante —
+ * depois da confirmação do servidor.
+ *
+ * Controles removidos por não terem persistência no servidor: desconto, juros, multa,
+ * data retroativa, carteira destino (a carteira vem do próprio título) e anexo de
+ * comprovante. Ficaram forma (gravada no histórico) e observação (gravada no histórico).
+ */
 function ReceberContaModal({
   open,
   onOpenChange,
   conta,
-  onConfirm,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   conta: ContaReceber | null;
-  onConfirm: (valor: number, total: boolean) => void;
 }) {
-  const { carteiras: listaCarteiras } = useFinanceiroReal();
-  const [valorAgora, setValorAgora] = useState<number>(0);
-  const [desconto, setDesconto] = useState<number>(0);
-  const [juros, setJuros] = useState<number>(0);
-  const [multa, setMulta] = useState<number>(0);
-  const [forma, setForma] = useState("pix");
-  const [carteira, setCarteira] = useState("2");
-  const [parcial, setParcial] = useState(true);
+  const { receberTitulos } = useFinanceiroReal();
+  const envio = useEnvioRecebimento(receberTitulos);
+  const [parcial, setParcial] = useState(false);
+  const [valorDigitado, setValorDigitado] = useState("");
+  const [forma, setForma] = useState("");
+  const [observacao, setObservacao] = useState("");
+  const { reset: resetEnvio } = envio;
 
   useEffect(() => {
-    if (open && conta) {
-      const restante = conta.valor - conta.recebido;
-      setValorAgora(parcial ? 0 : restante);
-    }
-  }, [open, conta, parcial]);
+    if (!open) return;
+    setParcial(false);
+    setValorDigitado("");
+    setForma("");
+    setObservacao("");
+    resetEnvio();
+  }, [open, conta?.id, resetEnvio]);
 
   if (!conta) return null;
-  const restanteAtual = conta.valor - conta.recebido;
-  const saldoFinal = restanteAtual - valorAgora - desconto + juros + multa;
-  const totalReceberAgora = parcial ? valorAgora : restanteAtual;
+  const restanteAtual = saldoAbertoReceber(conta);
+  const valorParcial = parseValorBR(valorDigitado);
+  const valorAgora = parcial ? (valorParcial ?? 0) : restanteAtual;
+  const valorInvalido = parcial && (valorParcial == null || valorParcial <= 0.009);
+  const excede = valorAgora > restanteAtual + 0.009;
+  const saldoFinal = Math.max(0, Math.round((restanteAtual - valorAgora) * 100) / 100);
+  const podeConfirmar = !envio.busy && !!forma && restanteAtual > 0.009 && !valorInvalido && !excede;
+
+  const fechar = (v: boolean) => {
+    if (!v && envio.emVoo()) return;
+    onOpenChange(v);
+  };
+
+  const confirmar = async () => {
+    if (!podeConfirmar) return;
+    const out = await envio.submeter({
+      formaPagamento: forma,
+      observacao: observacao.trim() || undefined,
+      itens: [{ localKey: conta.id, saldoEsperado: restanteAtual, valorReceber: Math.round(valorAgora * 100) / 100 }],
+    });
+    if (out?.kind === "recusado") toast.error(out.mensagem);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-2xl">
+    <Dialog open={open} onOpenChange={fechar}>
+      <DialogContent
+        className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-2xl"
+        onEscapeKeyDown={(e) => { if (envio.emVoo()) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (envio.emVoo()) e.preventDefault(); }}
+      >
         <DialogHeader className="border-b border-border bg-muted/30 px-8 py-5">
           <DialogTitle className="flex items-center gap-3 text-lg font-semibold tracking-tight">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
@@ -4070,215 +3883,120 @@ function ReceberContaModal({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-8 py-6">
-          <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border">
-            <div className="border-r border-border bg-muted/20 px-4 py-3 text-center">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total</p>
-              <p className="mt-0.5 text-base font-semibold tracking-tight">{fmt(conta.valor)}</p>
-            </div>
-            <div className="border-r border-border bg-muted/20 px-4 py-3 text-center">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Já recebido</p>
-              <p className="mt-0.5 text-base font-semibold tracking-tight text-success">{fmt(conta.recebido)}</p>
-            </div>
-            <div className="bg-muted/20 px-4 py-3 text-center">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pendente</p>
-              <p className="mt-0.5 text-base font-semibold tracking-tight tabular-nums text-warning">{fmt(restanteAtual)}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-5 py-4">
-            <div>
-              <p className="text-sm font-medium">Baixa parcial</p>
-              <p className="text-xs text-muted-foreground">Desligue para quitar totalmente</p>
-            </div>
-            <Switch checked={parcial} onCheckedChange={setParcial} />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Valor recebido agora
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                className="h-10 rounded-lg text-base font-semibold"
-                value={valorAgora}
-                disabled={!parcial}
-                onChange={(e) => setValorAgora(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Desconto
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                className="h-10 rounded-lg"
-                value={desconto}
-                onChange={(e) => setDesconto(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Juros
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                className="h-10 rounded-lg"
-                value={juros}
-                onChange={(e) => setJuros(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Multa
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                className="h-10 rounded-lg"
-                value={multa}
-                onChange={(e) => setMulta(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Forma de recebimento
-              </Label>
-              <Select value={forma} onValueChange={setForma}>
-                <SelectTrigger className="h-10 w-full rounded-lg">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="credito">Cartão crédito</SelectItem>
-                  <SelectItem value="debito">Cartão débito</SelectItem>
-                  <SelectItem value="boleto">Boleto</SelectItem>
-                  <SelectItem value="transferencia">Transferência</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Carteira destino
-              </Label>
-              <Select value={carteira} onValueChange={setCarteira}>
-                <SelectTrigger className="h-10 w-full rounded-lg">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {listaCarteiras.filter((c) => c.ativo).map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Data do recebimento
-              </Label>
-              <Input type="date" className="h-10 rounded-lg" defaultValue={new Date().toISOString().slice(0, 10)} />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Observações
-              </Label>
-              <Textarea rows={2} className="rounded-lg" placeholder="Notas internas..." />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Comprovante (opcional)
-              </Label>
-              <Input type="file" className="rounded-lg" />
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-xl border border-primary/20">
-            <div className="space-y-1.5 bg-primary/5 px-5 py-4 text-sm">
-              <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">Recebendo agora</span>
-                <span className="text-lg font-semibold tracking-tight tabular-nums text-success">{fmt(totalReceberAgora)}</span>
+          {envio.resultado ? (
+            <ComprovanteRecebimentoPainel resultado={envio.resultado} onConcluir={() => onOpenChange(false)} />
+          ) : (
+            <>
+              <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border">
+                <div className="border-r border-border bg-muted/20 px-4 py-3 text-center">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total</p>
+                  <p className="mt-0.5 text-base font-semibold tracking-tight">{fmt(conta.valor)}</p>
+                </div>
+                <div className="border-r border-border bg-muted/20 px-4 py-3 text-center">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Já recebido</p>
+                  <p className="mt-0.5 text-base font-semibold tracking-tight text-success">{fmt(conta.recebido)}</p>
+                </div>
+                <div className="bg-muted/20 px-4 py-3 text-center">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pendente</p>
+                  <p className="mt-0.5 text-base font-semibold tracking-tight tabular-nums text-warning">{fmt(restanteAtual)}</p>
+                </div>
               </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">Saldo restante</span>
-                <span className="font-semibold">{fmt(Math.max(0, saldoFinal))}</span>
+
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-5 py-4">
+                <div>
+                  <p className="text-sm font-medium">Baixa parcial</p>
+                  <p className="text-xs text-muted-foreground">Desligado = quita o saldo pendente inteiro</p>
+                </div>
+                <Switch checked={parcial} onCheckedChange={setParcial} disabled={envio.busy} aria-label="Baixa parcial" />
               </div>
-              <div className="flex items-baseline justify-between border-t border-primary/15 pt-1.5 text-xs">
-                <span className="text-muted-foreground">Status final</span>
-                <span className="font-medium">{saldoFinal <= 0 ? "Pago" : "Parcial"}</span>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="receber-conta-valor" className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Valor recebido agora
+                  </Label>
+                  <Input
+                    id="receber-conta-valor"
+                    inputMode="decimal"
+                    className="h-10 rounded-lg text-base font-semibold"
+                    value={parcial ? valorDigitado : restanteAtual.toFixed(2).replace(".", ",")}
+                    disabled={!parcial || envio.busy}
+                    placeholder="0,00"
+                    onChange={(e) => setValorDigitado(e.target.value)}
+                    aria-invalid={parcial && (excede || (valorDigitado.trim() !== "" && valorInvalido))}
+                  />
+                  {parcial && excede ? (
+                    <p className="text-xs text-destructive">Maior que o saldo pendente ({fmt(restanteAtual)}).</p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="receber-conta-forma" className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Forma de recebimento
+                  </Label>
+                  <Select value={forma} onValueChange={setForma} disabled={envio.busy}>
+                    <SelectTrigger id="receber-conta-forma" className="h-10 w-full rounded-lg">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FORMAS_RECEBIMENTO_HUB.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="receber-conta-obs" className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Observação (gravada no histórico do título)
+                  </Label>
+                  <Textarea
+                    id="receber-conta-obs"
+                    rows={2}
+                    maxLength={500}
+                    className="rounded-lg"
+                    placeholder="Ex.: pago no balcão"
+                    value={observacao}
+                    onChange={(e) => setObservacao(e.target.value)}
+                    disabled={envio.busy}
+                  />
+                </div>
               </div>
-            </div>
-          </div>
+
+              <div className="overflow-hidden rounded-xl border border-primary/20">
+                <div className="space-y-1.5 bg-primary/5 px-5 py-4 text-sm">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-muted-foreground">Recebendo agora</span>
+                    <span className="text-lg font-semibold tracking-tight tabular-nums text-success">{fmt(valorAgora)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-muted-foreground">Saldo restante</span>
+                    <span className="font-semibold tabular-nums">{fmt(saldoFinal)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between border-t border-primary/15 pt-1.5 text-xs">
+                    <span className="text-muted-foreground">Status final</span>
+                    <span className="font-medium">{saldoFinal <= 0.009 ? "Pago" : "Parcial"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {envio.aviso ? (
+                <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {envio.aviso}
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
 
-        <DialogFooter className="border-t border-border bg-muted/30 px-8 py-4">
-          <Button variant="outline" className="rounded-lg px-6" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button className="rounded-lg px-6" onClick={() => onConfirm(totalReceberAgora, !parcial || saldoFinal <= 0)}>
-            Confirmar recebimento
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ReciboModal({
-  open,
-  onOpenChange,
-  conta,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  conta: ContaReceber | null;
-}) {
-  if (!conta) return null;
-  const numero = `REC-${conta.id}-${new Date().getFullYear()}`;
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Emitir recibo</DialogTitle>
-          <DialogDescription>Recibo nº {numero}</DialogDescription>
-        </DialogHeader>
-        <div className="rounded-xl border border-border bg-card p-5 text-sm">
-          <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">OmniGestão Pro</p>
-              <p className="text-base font-semibold">Recibo de pagamento</p>
-            </div>
-            <Badge variant="outline">{numero}</Badge>
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between"><span className="text-muted-foreground">Cliente</span><span className="font-medium">{conta.cliente}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Documento</span><span>—</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Forma</span><span>PIX</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Carteira</span><span>Banco Inter PJ</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Data</span><span>{new Date().toLocaleDateString("pt-BR")}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Descrição</span><span>Pagamento ref. {conta.id}</span></div>
-            <div className="flex justify-between border-t border-border pt-2 text-base"><span className="font-medium">Valor recebido</span><span className="font-semibold tabular-nums text-success">{fmt(conta.recebido || conta.valor)}</span></div>
-          </div>
-          <div className="mt-6 border-t border-border pt-3 text-center text-xs text-muted-foreground">
-            Recebemos a importância acima descrita, dando plena quitação.
-            <br />______________________________
-            <br />Assinatura
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" className="gap-1" onClick={() => toast.success("Enviado para impressão")}>
-            <Printer className="h-4 w-4" /> Imprimir
-          </Button>
-          <Button variant="outline" className="gap-1" onClick={() => toast.success("PDF gerado")}>
-            <Download className="h-4 w-4" /> Baixar PDF
-          </Button>
-          <Button className="gap-1" onClick={() => toast.success("Compartilhado via WhatsApp")}>
-            <Share2 className="h-4 w-4" /> WhatsApp
-          </Button>
-        </DialogFooter>
+        {envio.resultado ? null : (
+          <DialogFooter className="border-t border-border bg-muted/30 px-8 py-4">
+            <Button variant="outline" className="rounded-lg px-6" onClick={() => fechar(false)} disabled={envio.busy}>
+              Cancelar
+            </Button>
+            <Button className="rounded-lg px-6" onClick={() => void confirmar()} disabled={!podeConfirmar}>
+              {envio.busy ? "Registrando…" : "Confirmar recebimento"}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
