@@ -72,6 +72,7 @@ import {
   duplicateProductDetails,
   PRODUTO_DUP_SELECT,
 } from "@/lib/produtos/duplicate-product"
+import { limparTextoCadastro } from "@/lib/cadastros/nome-cadastro"
 import {
   productWriteInvalid,
   productWriteUntrusted,
@@ -246,7 +247,9 @@ function normalizePatch(
     return { ok: false, error: productWriteInvalid('Campo "nome" é obrigatório.', "nome") }
   }
   if (name) {
-    patch.name = name
+    // Padrão global: só limpeza de espaços/invisíveis. Nome de produto carrega marca,
+    // modelo e siglas ("Capa iPhone 15 Pro", "Cabo USB-C 2m") — nunca é recapitalizado.
+    patch.name = limparTextoCadastro(name)
     patch.changedFields.push("nome")
   } else if (opts.requireName) {
     return { ok: false, error: productWriteInvalid('Campo "nome" é obrigatório.', "nome") }
@@ -273,7 +276,7 @@ function normalizePatch(
     if (category === null) {
       return { ok: false, error: productWriteInvalid('Campo "categoria" inválido.', "categoria") }
     }
-    patch.category = category || null
+    patch.category = limparTextoCadastro(category) || null
     patch.changedFields.push("categoria")
   }
 
@@ -283,7 +286,7 @@ function normalizePatch(
     if (brand === null) {
       return { ok: false, error: productWriteInvalid('Campo "marca" inválido.', "marca") }
     }
-    patch.brand = brand
+    patch.brand = limparTextoCadastro(brand)
     patch.changedFields.push("marca")
   }
 
@@ -293,7 +296,7 @@ function normalizePatch(
     if (supplierName === null) {
       return { ok: false, error: productWriteInvalid('Campo "fornecedor" inválido.', "fornecedor") }
     }
-    patch.supplierName = supplierName
+    patch.supplierName = limparTextoCadastro(supplierName)
     patch.changedFields.push("fornecedor")
   }
 
