@@ -17,6 +17,7 @@ import type { PrismaClient } from "@/generated/prisma"
 import {
   MANUAL_MODEL_KEY_PREFIX,
   aliasesFromJson,
+  buildLojaCatalogoIndex,
   catalogKey,
   cleanCatalogText,
   findGlobalDuplicate,
@@ -32,9 +33,31 @@ import {
   type LojaModelo,
   type LojaModeloInputErrors,
 } from "./loja-catalogo"
+import { fabricanteDaMarca } from "./hierarquia"
 import type { CatalogoIndex } from "./types"
 
-type Db = Pick<PrismaClient, "catalogoAparelhoLojaModelo" | "catalogoAparelhoLojaCompat">
+type Db = Pick<PrismaClient, "catalogoAparelhoLojaModelo" | "catalogoAparelhoLojaCompat"> &
+  Partial<Pick<PrismaClient, "$transaction" | "$queryRaw">>
+
+/**
+ * Chave de advisory lock para serializar escritas de modelos por loja/catálogo (sem lock global).
+ * Lojas independentes nunca disputam a mesma chave.
+ */
+export function chaveLockCatalogoModelos(storeId: string): string {
+  return `catalogo-modelos:${storeId}`
+}
+
+async function withStoreCatalogModelLock<T>(db: Db, storeId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
+  if (typeof db.$transaction !== "function") return fn(db)
+  return db.$transaction(async (rawTx) => {
+    const tx = rawTx as unknown as Db
+    if (typeof tx.$queryRaw === "function") {
+      const lockKey = chaveLockCatalogoModelos(storeId)
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock`
+    }
+    return fn(tx)
+  })
+}
 
 export type LojaCatalogoFailure =
   | { ok: false; code: "INVALID"; status: 400; message: string; errors?: LojaModeloInputErrors }
@@ -211,7 +234,10 @@ async function findLojaDuplicate(db: Db, storeId: string, brandKey: string, name
 }
 
 function duplicateFromLoja(row: ModeloRow): LojaCatalogoFailure {
-  const m = toModelo(row)
+  return duplicateFromModelo(toModelo(row))
+}
+
+function duplicateFromModelo(m: LojaModelo): LojaCatalogoFailure {
   const aguardando = m.lancamento === "aguardando_lancamento"
   return {
     ok: false,
@@ -248,6 +274,25 @@ function checkGlobal(
   }
 }
 
+/**
+ * COMPAT-BUSCA-MODELOS-NATURAL-001 — o mesmo aparelho escrito de outro jeito nesta loja
+ * ("Apple" + "iPhone 7" × "iPhone" + "7") também é duplicata: oferece usar o existente. Vale para
+ * desativados e "aguardando lançamento" (a mensagem orienta reativar/confirmar). Usado na criação
+ * e na edição (que exclui o próprio registro).
+ */
+async function checkLojaEquivalente(
+  db: Db,
+  storeId: string,
+  input: { brand: string; name: string; manufacturer?: string },
+  exceptModelKey?: string,
+): Promise<LojaCatalogoFailure | null> {
+  const todosDaLoja = (await listLojaModelos(db, storeId, { includeInactive: true })).filter((m) => m.modelKey !== exceptModelKey)
+  const comoAtivos = todosDaLoja.map((m) => ({ ...m, active: true, lancamento: "lancado" as const }))
+  const equivalente = findGlobalDuplicate(buildLojaCatalogoIndex(comoAtivos), input)
+  const modelo = equivalente ? todosDaLoja.find((m) => m.modelKey === equivalente.modelKey) : undefined
+  return modelo ? duplicateFromModelo(modelo) : null
+}
+
 export async function createLojaModelo(
   db: Db,
   globalIndex: CatalogoIndex,
@@ -263,30 +308,34 @@ export async function createLojaModelo(
   const brandKey = catalogKey(brand)
   const nameKey = catalogKey(name)
   try {
-    const dup = await findLojaDuplicate(db, storeId, brandKey, nameKey)
-    if (dup) return duplicateFromLoja(dup)
-    // A busca lê no máximo MAX_MODELOS_POR_LOJA modelos: acima disso o novo sumiria em silêncio.
-    if ((await db.catalogoAparelhoLojaModelo.count({ where: { storeId } })) >= MAX_MODELOS_POR_LOJA) {
-      return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${MAX_MODELOS_POR_LOJA} modelos cadastrados por loja atingido.` }
-    }
-    const created = await db.catalogoAparelhoLojaModelo.create({
-      data: {
-        storeId,
-        modelKey: `${MANUAL_MODEL_KEY_PREFIX}${randomUUID().replace(/-/g, "")}`,
-        brand,
-        manufacturer,
-        line,
-        lancamento,
-        name,
-        brandKey,
-        nameKey,
-        aliases,
-        notes,
-        createdBy: actorId,
-        updatedBy: actorId,
-      },
+    return await withStoreCatalogModelLock(db, storeId, async (tx) => {
+      const dup = await findLojaDuplicate(tx, storeId, brandKey, nameKey)
+      if (dup) return duplicateFromLoja(dup)
+      const equivalente = await checkLojaEquivalente(tx, storeId, { brand, name, manufacturer })
+      if (equivalente) return equivalente
+      // A busca lê no máximo MAX_MODELOS_POR_LOJA modelos: acima disso o novo sumiria em silêncio.
+      if ((await tx.catalogoAparelhoLojaModelo.count({ where: { storeId } })) >= MAX_MODELOS_POR_LOJA) {
+        return { ok: false, code: "LIMIT", status: 409, message: `Limite de ${MAX_MODELOS_POR_LOJA} modelos cadastrados por loja atingido.` }
+      }
+      const created = await tx.catalogoAparelhoLojaModelo.create({
+        data: {
+          storeId,
+          modelKey: `${MANUAL_MODEL_KEY_PREFIX}${randomUUID().replace(/-/g, "")}`,
+          brand,
+          manufacturer,
+          line,
+          lancamento,
+          name,
+          brandKey,
+          nameKey,
+          aliases,
+          notes,
+          createdBy: actorId,
+          updatedBy: actorId,
+        },
+      })
+      return { ok: true, value: toModelo(created) }
     })
-    return { ok: true, value: toModelo(created) }
   } catch (e) {
     if (errorCode(e) === "P2002") {
       // Corrida: outra requisição criou o mesmo marca+modelo entre o lookup e o insert.
@@ -316,62 +365,71 @@ export async function updateLojaModelo(
   const version = typeof body.version === "number" && Number.isInteger(body.version) ? body.version : null
   if (version === null) return { ok: false, code: "INVALID", status: 400, message: "Versão do registro obrigatória." }
   try {
-    const current = await db.catalogoAparelhoLojaModelo.findFirst({ where: { id, storeId } })
-    if (!current) return { ok: false, code: "NOT_FOUND", status: 404, message: "Modelo não encontrado nesta loja." }
+    return await withStoreCatalogModelLock(db, storeId, async (tx) => {
+      const current = await tx.catalogoAparelhoLojaModelo.findFirst({ where: { id, storeId } })
+      if (!current) return { ok: false, code: "NOT_FOUND", status: 404, message: "Modelo não encontrado nesta loja." }
 
-    const onlyActive = Object.keys(body).every((k) => k === "version" || k === "active")
-    const data: Record<string, unknown> = { updatedBy: actorId, version: { increment: 1 } }
-    if (typeof body.active === "boolean") data.active = body.active
-    // Reativar não pode reintroduzir duplicata de um modelo que entrou depois no catálogo global.
-    if (body.active === true && !current.active) {
-      const globalDup = checkGlobal(globalIndex, {
-        brand: String(body.brand ?? current.brand),
-        name: String(body.name ?? current.name),
-        manufacturer: String(body.manufacturer ?? current.manufacturer ?? ""),
-      })
-      if (globalDup) return globalDup
-    }
-
-    if (!onlyActive) {
-      const parsed = sanitizeLojaModeloInput({
-        brand: "brand" in body ? body.brand : current.brand,
-        manufacturer: "manufacturer" in body ? body.manufacturer : current.manufacturer,
-        line: "line" in body ? body.line : current.line,
-        lancamento: "lancamento" in body ? body.lancamento : current.lancamento,
-        name: "name" in body ? body.name : current.name,
-        aliases: "aliases" in body ? body.aliases : aliasesFromJson(current.aliases),
-        notes: "notes" in body ? body.notes : current.notes,
-      })
-      if (!parsed.ok) return { ok: false, code: "INVALID", status: 400, message: "Dados do modelo inválidos.", errors: parsed.errors }
-      const v = parsed.value
-      const brandKey = catalogKey(v.brand)
-      const nameKey = catalogKey(v.name)
-      if (brandKey !== current.brandKey || nameKey !== current.nameKey) {
-        const globalDup = checkGlobal(globalIndex, v)
+      const onlyActive = Object.keys(body).every((k) => k === "version" || k === "active")
+      const data: Record<string, unknown> = { updatedBy: actorId, version: { increment: 1 } }
+      if (typeof body.active === "boolean") data.active = body.active
+      // Reativar não pode reintroduzir duplicata de um modelo que entrou depois no catálogo global.
+      if (body.active === true && !current.active) {
+        const globalDup = checkGlobal(globalIndex, {
+          brand: String(body.brand ?? current.brand),
+          name: String(body.name ?? current.name),
+          manufacturer: String(body.manufacturer ?? current.manufacturer ?? ""),
+        })
         if (globalDup) return globalDup
-        const dup = await findLojaDuplicate(db, storeId, brandKey, nameKey, id)
-        if (dup) return duplicateFromLoja(dup)
       }
-      Object.assign(data, {
-        brand: v.brand,
-        manufacturer: v.manufacturer,
-        line: v.line,
-        lancamento: v.lancamento,
-        name: v.name,
-        brandKey,
-        nameKey,
-        aliases: v.aliases,
-        notes: v.notes,
-      })
-    }
 
-    const res = await db.catalogoAparelhoLojaModelo.updateMany({ where: { id, storeId, version }, data })
-    if (res.count === 0) {
-      return { ok: false, code: "CONFLICT", status: 409, message: "Este modelo foi alterado por outra pessoa. Recarregue e tente de novo." }
-    }
-    const updated = await db.catalogoAparelhoLojaModelo.findFirst({ where: { id, storeId } })
-    if (!updated) return { ok: false, code: "NOT_FOUND", status: 404, message: "Modelo não encontrado nesta loja." }
-    return { ok: true, value: toModelo(updated) }
+      if (!onlyActive) {
+        const parsed = sanitizeLojaModeloInput({
+          brand: "brand" in body ? body.brand : current.brand,
+          manufacturer: "manufacturer" in body ? body.manufacturer : current.manufacturer,
+          line: "line" in body ? body.line : current.line,
+          lancamento: "lancamento" in body ? body.lancamento : current.lancamento,
+          name: "name" in body ? body.name : current.name,
+          aliases: "aliases" in body ? body.aliases : aliasesFromJson(current.aliases),
+          notes: "notes" in body ? body.notes : current.notes,
+        })
+        if (!parsed.ok) return { ok: false, code: "INVALID", status: 400, message: "Dados do modelo inválidos.", errors: parsed.errors }
+        const v = parsed.value
+        const brandKey = catalogKey(v.brand)
+        const nameKey = catalogKey(v.name)
+        const mudouIdentidade =
+          brandKey !== current.brandKey ||
+          nameKey !== current.nameKey ||
+          // Fabricante EFETIVO: legado com fabricante vazio deriva da marca (não é mudança de identidade).
+          catalogKey(v.manufacturer) !== catalogKey((current.manufacturer ?? "").trim() || fabricanteDaMarca(current.brand))
+        if (mudouIdentidade) {
+          const globalDup = checkGlobal(globalIndex, v)
+          if (globalDup) return globalDup
+          const dup = await findLojaDuplicate(tx, storeId, brandKey, nameKey, id)
+          if (dup) return duplicateFromLoja(dup)
+          const equivalente = await checkLojaEquivalente(tx, storeId, v, current.modelKey)
+          if (equivalente) return equivalente
+        }
+        Object.assign(data, {
+          brand: v.brand,
+          manufacturer: v.manufacturer,
+          line: v.line,
+          lancamento: v.lancamento,
+          name: v.name,
+          brandKey,
+          nameKey,
+          aliases: v.aliases,
+          notes: v.notes,
+        })
+      }
+
+      const res = await tx.catalogoAparelhoLojaModelo.updateMany({ where: { id, storeId, version }, data })
+      if (res.count === 0) {
+        return { ok: false, code: "CONFLICT", status: 409, message: "Este modelo foi alterado por outra pessoa. Recarregue e tente de novo." }
+      }
+      const updated = await tx.catalogoAparelhoLojaModelo.findFirst({ where: { id, storeId } })
+      if (!updated) return { ok: false, code: "NOT_FOUND", status: 404, message: "Modelo não encontrado nesta loja." }
+      return { ok: true, value: toModelo(updated) }
+    })
   } catch (e) {
     if (errorCode(e) === "P2002") {
       return { ok: false, code: "CONFLICT", status: 409, message: "Já existe um modelo com essa marca e nome nesta loja." }

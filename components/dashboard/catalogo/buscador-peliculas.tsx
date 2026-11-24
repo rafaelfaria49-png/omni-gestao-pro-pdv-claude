@@ -78,6 +78,29 @@ interface ApiResponse {
   message?: string
   warnings?: string[]
   error?: string
+  /** COMPAT-BUSCA-MODELOS-NATURAL-001: paginação ("Mostrar mais aparelhos"). */
+  total?: number
+  hasMore?: boolean
+  nextOffset?: number | null
+}
+
+/** Cada resultado traz grupos e membros: página curta (o servidor aceita até 10). */
+const PELICULAS_PAGE_SIZE = 6
+
+async function buscarPaginaPeliculas(
+  q: string,
+  offset: number,
+  lojaHeader: string | null,
+  signal: AbortSignal,
+): Promise<ApiResponse> {
+  const params = new URLSearchParams({ q, limit: String(PELICULAS_PAGE_SIZE), offset: String(offset) })
+  const res = await fetch(`/api/catalogo/peliculas/search?${params.toString()}`, {
+    signal,
+    cache: "no-store",
+    ...(lojaHeader ? { headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader } } : {}),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return (await res.json()) as ApiResponse
 }
 
 // --- Apresentação de status/confiança ---
@@ -139,10 +162,20 @@ export function BuscadorPeliculas({ embedded = false }: { embedded?: boolean } =
   const [adicionarPara, setAdicionarPara] = useState<{ modelKey: string; canonicalName: string } | null>(null)
   const refresh = () => setRefreshNonce((n) => n + 1)
 
+  // Quantos aparelhos o operador já abriu ("Mostrar mais"): um refresh (edição de grupo) recarrega
+  // a MESMA quantidade, sem recolher a lista. Busca nova volta para a primeira página.
+  const carregadosRef = useRef(0)
+  const ultimaBuscaRef = useRef("")
+  const [loadingMore, setLoadingMore] = useState(false)
+
   // Busca com debounce contra a API read-only.
   useEffect(() => {
     const q = query.trim()
     abortRef.current?.abort()
+    setLoadingMore(false)
+    const chave = `${q}|${lojaHeader ?? ""}`
+    if (chave !== ultimaBuscaRef.current) carregadosRef.current = 0
+    ultimaBuscaRef.current = chave
     if (q.length < 2) {
       setData(null)
       setLoading(false)
@@ -153,15 +186,14 @@ export function BuscadorPeliculas({ embedded = false }: { embedded?: boolean } =
     setError("")
     const controller = new AbortController()
     abortRef.current = controller
+    const alvo = Math.max(carregadosRef.current, 1)
     const t = window.setTimeout(async () => {
       try {
-        const res = await fetch(`/api/catalogo/peliculas/search?q=${encodeURIComponent(q)}`, {
-          signal: controller.signal,
-          cache: "no-store",
-          ...(lojaHeader ? { headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader } } : {}),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const json = (await res.json()) as ApiResponse
+        let json = await buscarPaginaPeliculas(q, 0, lojaHeader, controller.signal)
+        while (json.hasMore && typeof json.nextOffset === "number" && json.results.length < alvo) {
+          const prox = await buscarPaginaPeliculas(q, json.nextOffset, lojaHeader, controller.signal)
+          json = { ...prox, results: [...json.results, ...prox.results] }
+        }
         if (!controller.signal.aborted) {
           setData(json)
           setLoading(false)
@@ -179,7 +211,32 @@ export function BuscadorPeliculas({ embedded = false }: { embedded?: boolean } =
     }
   }, [query, lojaHeader, refreshNonce])
 
+  const carregarMais = async () => {
+    const atual = data
+    if (!atual?.hasMore || typeof atual.nextOffset !== "number" || loading || loadingMore) return
+    const controller = new AbortController()
+    abortRef.current = controller
+    setLoadingMore(true)
+    try {
+      const prox = await buscarPaginaPeliculas(query.trim(), atual.nextOffset, lojaHeader, controller.signal)
+      if (controller.signal.aborted) return
+      setError("")
+      setData((prev) => {
+        if (prev !== atual) return prev
+        const vistos = new Set(prev.results.map((r) => r.model.modelKey))
+        return { ...prox, results: [...prev.results, ...prox.results.filter((r) => !vistos.has(r.model.modelKey))] }
+      })
+    } catch {
+      if (!controller.signal.aborted) setError("Falha ao buscar no catálogo. Tente novamente.")
+    } finally {
+      if (!controller.signal.aborted) setLoadingMore(false)
+    }
+  }
+
   const results = data?.results ?? []
+  useEffect(() => {
+    carregadosRef.current = Math.max(carregadosRef.current, results.length)
+  }, [results.length])
   const showEmpty = !loading && !error && query.trim().length >= 2 && data !== null && results.length === 0
 
   return (
@@ -259,6 +316,17 @@ export function BuscadorPeliculas({ embedded = false }: { embedded?: boolean } =
             onAdicionar={() => setAdicionarPara({ modelKey: r.model.modelKey, canonicalName: r.model.canonicalName })}
           />
         ))}
+        {!loading && data?.hasMore && (
+          <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 pt-1">
+            <span className="text-xs text-muted-foreground" aria-live="polite">
+              {results.length} de {data.total ?? results.length} aparelhos
+            </span>
+            <Button type="button" size="sm" variant="outline" onClick={() => void carregarMais()} disabled={loadingMore}>
+              {loadingMore && <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />}
+              {loadingMore ? "Carregando…" : "Mostrar mais aparelhos"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Gestão do catálogo DA LOJA (cadastro manual de lançamentos). */}

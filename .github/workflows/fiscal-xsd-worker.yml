@@ -199,9 +199,12 @@ jobs:
         # Suíte inteira da raiz, exceto as suítes que EXIGEM PostgreSQL descartável (BLOQUEIO_EXPLICITO_PG).
         # Elas rodam no workflow "Suítes PostgreSQL da raiz" (root-pg-suites.yml), pelo mesmo manifesto
         # de scripts/ci/run-root-pg-suites.mjs; suíte PG fora do manifesto reprova este passo.
+        # Build Next: no runner ubuntu-24.04 (16 GB RAM; container fiscal limitado a 768m), o teto
+        # padrão de ~2 GB do V8 no Node 20 estoura na compilação webpack+PWA (exit 134); 4096 MB
+        # mantém margem folgada sem tocar nenhum controle fiscal, container, SBOM ou Trivy.
         run: |
           npm run test:root:sem-pg
-          npm run build
+          NODE_OPTIONS="--max-old-space-size=4096" npm run build
       - name: Registrar hashes da imagem e binário
         run: |
           docker image inspect "$IMAGE" --format '{{.Id}}' | tee image-digest.txt

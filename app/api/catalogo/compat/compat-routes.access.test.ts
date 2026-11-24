@@ -37,7 +37,7 @@ vi.mock("@/lib/catalogo-aparelhos/loja-catalogo-store", () => ({
 vi.mock("@/lib/compat/compat-store", () => {
   const names = [
     "createPainel", "createFileira", "updateLocal", "deleteLocal", "moverLocal", "listOrganizacao", "getPreferencias",
-    "setPreferencias", "listCoresLoja", "createCorLoja", "updateCorLoja", "setCorPadraoAtiva", "addLocalizacao",
+    "setPreferencias", "listCoresLoja", "listCoresVisual", "createCorLoja", "updateCorLoja", "setCorPadraoAtiva", "addLocalizacao",
     "listLocalizacoes", "removeLocalizacao", "setLocalizacaoPrincipal", "listProdutosCapinha", "listDevolucoesPorVenda",
   ]
   return Object.fromEntries(names.map((n) => [n, (...a: unknown[]) => h.store[n](...a)]))
@@ -83,6 +83,7 @@ beforeEach(() => {
   h.store.listOrganizacao = vi.fn(async () => [])
   h.store.getPreferencias = vi.fn(async () => ({ posicoesHabilitadas: false, modoModeloPadrao: "opcional", modoCorPadrao: "opcional", version: 0 }))
   h.store.listCoresLoja = vi.fn(async () => [])
+  h.store.listCoresVisual = vi.fn(async () => ({}))
   h.store.listLocalizacoes = vi.fn(async () => [])
   h.store.listProdutosCapinha = vi.fn(async () => [])
   h.store.listDevolucoesPorVenda = vi.fn(async () => new Map())

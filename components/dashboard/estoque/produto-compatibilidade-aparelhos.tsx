@@ -26,7 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { cn } from "@/lib/utils"
 import {
   COMPATIBILITY_STATUSES,
@@ -36,8 +35,12 @@ import {
   type CompatibilityType,
 } from "@/lib/catalogo-aparelhos/produto-metadata"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
+import { MostrarMaisModelos } from "@/components/dashboard/catalogo/mostrar-mais-modelos"
+import { useBuscaModelos } from "@/components/dashboard/catalogo/use-busca-modelos"
 import { resolverModelos, type ModeloResolvido } from "@/lib/catalogo-aparelhos/loja-catalogo-client"
-import { catalogKey } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import { catalogKey, type LojaCompatCategoria } from "@/lib/catalogo-aparelhos/loja-catalogo"
+import { carregarVinculos } from "@/lib/compat/compat-client"
+import { CompatStatusBadge } from "@/components/dashboard/compat/compat-status"
 import {
   CadastrarModeloAparelhoDialog,
   type ModeloAparelhoEscolhido,
@@ -89,8 +92,6 @@ export function ProdutoCompatibilidadeAparelhos({
   lojaHeader: string
 }) {
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<DeviceSearchResult[]>([])
-  const [searching, setSearching] = useState(false)
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement | null>(null)
   // CADASTROS-ACESSORIOS-COMPATIBILIDADE-MANUAL-001 — cadastro inline, filtro e nomes legíveis.
@@ -98,6 +99,14 @@ export function ProdutoCompatibilidadeAparelhos({
   const [cadastroNome, setCadastroNome] = useState("")
   const [filtroVinculados, setFiltroVinculados] = useState("")
   const [resolvidos, setResolvidos] = useState<Record<string, ModeloResolvido>>({})
+  // Sugestões explícitas de modelos compatíveis já registrados no Compat (nunca adiciona automaticamente).
+  const [sugestoesCompat, setSugestoesCompat] = useState<{
+    categoria: LojaCompatCategoria
+    principalKey: string
+    itens: { modelKey: string; canonicalName: string; brand: string; status: string }[]
+  } | null>(null)
+  const [carregandoSugestoes, setCarregandoSugestoes] = useState(false)
+  const [erroSugestoes, setErroSugestoes] = useState("")
 
   // Reidratação traz só a `modelKey`: resolve nome/marca (global ou manual da loja) para exibir.
   // Estado local de exibição — não altera o valor do formulário (não "suja" o produto).
@@ -121,37 +130,10 @@ export function ProdutoCompatibilidadeAparelhos({
     }
   }, [pendentesKey, lojaHeader])
 
-  // Busca com debounce contra a API read-only do catálogo.
-  useEffect(() => {
-    const q = query.trim()
-    if (q.length < 2) {
-      setResults([])
-      setSearching(false)
-      return
-    }
-    setSearching(true)
-    const t = window.setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/catalogo/aparelhos/search?q=${encodeURIComponent(q)}`, {
-          credentials: "include",
-          headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader },
-          cache: "no-store",
-        })
-        if (!res.ok) {
-          setResults([])
-          return
-        }
-        const data = (await res.json().catch(() => null)) as { results?: DeviceSearchResult[] } | null
-        setResults(Array.isArray(data?.results) ? data.results : [])
-        setOpen(true)
-      } catch {
-        setResults([])
-      } finally {
-        setSearching(false)
-      }
-    }, 250)
-    return () => window.clearTimeout(t)
-  }, [query, lojaHeader])
+  // Busca com debounce contra a API read-only do catálogo — paginada (COMPAT-BUSCA-MODELOS-NATURAL-001).
+  const busca = useBuscaModelos({ query, lojaHeader })
+  const { results, limpar: limparBusca } = busca
+  const searching = busca.loading
 
   // Fecha a lista ao clicar fora.
   useEffect(() => {
@@ -165,7 +147,7 @@ export function ProdutoCompatibilidadeAparelhos({
 
   const addModel = (r: DeviceSearchResult) => {
     setQuery("")
-    setResults([])
+    limparBusca()
     setOpen(false)
     if (value.models.some((m) => m.modelKey === r.modelKey)) return
     const nextAliases = Array.from(new Set([...value.aliases, r.canonicalName, ...r.aliases].filter(Boolean)))
@@ -178,7 +160,7 @@ export function ProdutoCompatibilidadeAparelhos({
 
   const addEscolhido = (m: ModeloAparelhoEscolhido) => {
     setQuery("")
-    setResults([])
+    limparBusca()
     setOpen(false)
     if (value.models.some((x) => x.modelKey === m.modelKey)) return
     onChange({
@@ -206,6 +188,46 @@ export function ProdutoCompatibilidadeAparelhos({
     onChange({ ...value, models: value.models.filter((m) => m.modelKey !== modelKey) })
   }
 
+  const definirComoPrincipal = (modelKey: string) => {
+    const alvo = value.models.find((m) => m.modelKey === modelKey)
+    if (!alvo) return
+    onChange({ ...value, models: [alvo, ...value.models.filter((m) => m.modelKey !== modelKey)] })
+  }
+
+  const categoriaCompat: LojaCompatCategoria | null =
+    value.types.includes("capinha") && !value.types.includes("pelicula_tela")
+      ? "capinha"
+      : value.types.includes("pelicula_tela") && !value.types.includes("capinha")
+        ? "pelicula_tela"
+        : null
+
+  const principalModel = value.models[0] ?? null
+
+  const consultarCompativeis = async (categoria: LojaCompatCategoria) => {
+    if (!principalModel || !lojaHeader) return
+    setCarregandoSugestoes(true)
+    setErroSugestoes("")
+    const res = await carregarVinculos(lojaHeader, categoria, principalModel.modelKey)
+    setCarregandoSugestoes(false)
+    if (!res.ok) {
+      setErroSugestoes(res.error)
+      return
+    }
+    const suprimidos = new Set(res.vinculos.filter((v) => v.acao === "suprimir").map((v) => v.modelKey))
+    const itensMap = new Map<string, { modelKey: string; canonicalName: string; brand: string; status: string }>()
+    for (const v of res.vinculos) {
+      if (v.acao !== "adicionar") continue
+      itensMap.set(v.modelKey, { modelKey: v.modelKey, canonicalName: v.canonicalName, brand: v.brand, status: v.status })
+    }
+    if (categoria === "pelicula_tela") {
+      for (const g of res.globais) {
+        if (suprimidos.has(g.modelKey) || itensMap.has(g.modelKey)) continue
+        itensMap.set(g.modelKey, { modelKey: g.modelKey, canonicalName: g.canonicalName, brand: g.brand, status: g.status })
+      }
+    }
+    setSugestoesCompat({ categoria, principalKey: principalModel.modelKey, itens: [...itensMap.values()] })
+  }
+
   const toggleType = (t: CompatibilityType) => {
     const has = value.types.includes(t)
     onChange({ ...value, types: has ? value.types.filter((x) => x !== t) : [...value.types, t] })
@@ -226,7 +248,10 @@ export function ProdutoCompatibilidadeAparelhos({
           <Input
             id="compat-busca"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setOpen(true)
+            }}
             onFocus={() => results.length > 0 && setOpen(true)}
             placeholder="Ex.: A05, Samsung A05, iPhone 13 Pro Max"
             autoComplete="off"
@@ -276,6 +301,14 @@ export function ProdutoCompatibilidadeAparelhos({
                   </span>
                 </button>
               ))}
+              {!searching && busca.hasMore && (
+                <MostrarMaisModelos
+                  mostrados={results.length}
+                  total={busca.total}
+                  loading={busca.loadingMore}
+                  onMostrarMais={() => void busca.carregarMais()}
+                />
+              )}
             </div>
           )}
         </div>
@@ -316,22 +349,103 @@ export function ProdutoCompatibilidadeAparelhos({
           <div className="flex flex-wrap gap-2" aria-label="Modelos vinculados">
             {modelosVisiveis.map((m) => {
               const d = displayOf(m)
+              const isPrincipal = value.models[0]?.modelKey === m.modelKey
               return (
-              <Badge key={m.modelKey} variant="secondary" className="gap-1 py-1 pl-2.5 pr-1">
+              <Badge key={m.modelKey} variant={isPrincipal ? "default" : "secondary"} className="gap-1 py-1 pl-2.5 pr-1">
                 <span className="truncate max-w-[16rem]">{d.name}</span>
-                {d.manual && <span className="text-[10px] text-muted-foreground">· loja</span>}
+                {isPrincipal && <span className="rounded bg-primary-foreground/20 px-1 text-[10px]">principal</span>}
+                {d.manual && <span className="text-[10px] opacity-80">· loja</span>}
                 {d.inactive && <span className="text-[10px] text-warning">· desativado</span>}
+                {!isPrincipal && (
+                  <button
+                    type="button"
+                    aria-label={`Definir ${d.name} como principal`}
+                    title="Definir como modelo principal"
+                    onClick={() => definirComoPrincipal(m.modelKey)}
+                    className="ml-0.5 rounded-sm px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                  >
+                    ★
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label={`Remover ${d.name}`}
                   onClick={() => removeModel(m.modelKey)}
-                  className="ml-0.5 rounded-sm px-1 text-muted-foreground hover:text-foreground"
+                  className={cn(
+                    "ml-0.5 rounded-sm px-1",
+                    isPrincipal ? "text-primary-foreground/80 hover:text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
                 >
                   ×
                 </button>
               </Badge>
               )
             })}
+          </div>
+        )}
+        {principalModel && lojaHeader && (
+          <div className="space-y-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {(categoriaCompat ? [categoriaCompat] : (["capinha", "pelicula_tela"] as LojaCompatCategoria[])).map((cat) => (
+                <Button
+                  key={cat}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2.5 text-xs"
+                  disabled={carregandoSugestoes}
+                  onClick={() => void consultarCompativeis(cat)}
+                >
+                  {carregandoSugestoes
+                    ? "Consultando…"
+                    : `Ver compatíveis de ${cat === "capinha" ? "capinha" : "película"} do principal`}
+                </Button>
+              ))}
+            </div>
+            {erroSugestoes && <p role="alert" className="text-xs text-destructive">{erroSugestoes}</p>}
+            {sugestoesCompat && sugestoesCompat.principalKey === principalModel.modelKey && (
+              <div className="space-y-2 rounded-md border border-border bg-background p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-foreground">
+                    Compatíveis de {sugestoesCompat.categoria === "capinha" ? "capinha" : "película"} cadastrados para {displayOf(principalModel).name}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setSugestoesCompat(null)}
+                  >
+                    Fechar
+                  </button>
+                </div>
+                {sugestoesCompat.itens.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum modelo compatível registrado para {sugestoesCompat.categoria === "capinha" ? "capinha" : "película"}. Nada é inferido automaticamente.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {sugestoesCompat.itens.map((item) => {
+                      const jaVinculado = value.models.some((x) => x.modelKey === item.modelKey)
+                      return (
+                        <div key={item.modelKey} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs">
+                          <span className="truncate max-w-[12rem]">{item.canonicalName}</span>
+                          <CompatStatusBadge status={item.status} curto />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={jaVinculado ? "ghost" : "outline"}
+                            className="h-6 px-2 text-[11px]"
+                            disabled={jaVinculado}
+                            onClick={() => addEscolhido({ modelKey: item.modelKey, canonicalName: item.canonicalName, brand: item.brand })}
+                          >
+                            {jaVinculado ? "Vinculado" : "+ Vincular"}
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

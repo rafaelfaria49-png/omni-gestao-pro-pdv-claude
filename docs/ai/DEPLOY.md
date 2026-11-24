@@ -101,9 +101,25 @@ emitiu `MIGRATION_RUN` → `MIGRATION_SUCCEEDED` com um único `migrate deploy`,
 legado emitiu `MIGRATION_SKIPPED` sem baseline e sem `migrate deploy`. Evidência:
 `docs/audits/DEPLOY_PRODUCTION_MIGRATION_AUTHORITY_ACTIVATION_006.md`.
 
-Consequência operacional: todo deployment Production do canônico passa a executar
-`prisma migrate deploy` automaticamente. Migrations só devem chegar à `main` já
-revisadas.
+Consequência operacional (enquanto a flag estiver exatamente `"true"`): todo
+deployment Production do canônico executa `prisma migrate deploy` automaticamente.
+Migrations só devem chegar à `main` já revisadas.
+
+> **Estado observado em Nov/2026 — conferir antes de cada rollout.** Todos os
+> deployments Production do `omni-gestao-pro` disponíveis de 28/10/2026 até o merge
+> `ce9228c` (08/11/2026) emitiram `MIGRATION_SKIPPED`. Pelo contrato do guard, isso
+> significa que `MIGRATION_AUTHORITY_ENABLED` **não** está `"true"` em Production
+> (valor secreto, não lido). Nesse estado **o merge publica o código, mas não aplica
+> migrations**. Antes de presumir o contrário, ler o evento `MIGRATION_*` do último
+> build Production.
+>
+> Exceção registrada: a migration `20261107120000_catalogo_aparelhos_loja` foi
+> aplicada manualmente em 08/11/2026, com autorização específica do proprietário,
+> numa única transação com trava de identidade do banco, checksum aprovado e registro
+> em `_prisma_migrations` — procedimento em
+> `docs/catalogo/rollout/ROLLOUT_20261107120000_catalogo_aparelhos_loja.md`. A regra
+> acima continua valendo: execução manual em Production só com GOAL e autorização
+> próprios do proprietário.
 
 ---
 

@@ -345,9 +345,14 @@ export function searchDeviceModels(
 
   if (brandFilter) results = results.filter((r) => normalizeDeviceQuery(r.brand) === brandFilter)
 
+  // COMPAT-BUSCA-MODELOS-NATURAL-001: dentro do mesmo tipo de casamento, ordem NATURAL de modelo
+  // (iPhone 6 → 6s → 7 → 7 Plus → 8 → X → XR → XS → 11…; Galaxy S7 → S21 → S26; Moto G7 → G47 → G77).
+  // A ordem alfabética antiga punha "iPhone 11" antes de "iPhone 7" e, com o corte, escondia o 7.
   results.sort((a, b) => {
     const mt = MATCH_RANK[a.matchType] - MATCH_RANK[b.matchType]
     if (mt !== 0) return mt
+    const nat = compareModelosNatural(a, b)
+    if (nat !== 0) return nat
     const cf =
       (CONFIDENCE_RANK[(a.confidence ?? "").toLowerCase()] ?? 3) -
       (CONFIDENCE_RANK[(b.confidence ?? "").toLowerCase()] ?? 3)
@@ -355,5 +360,71 @@ export function searchDeviceModels(
     return a.canonicalName.localeCompare(b.canonicalName, "pt-BR")
   })
 
-  return results.slice(0, limit)
+  const offset = Math.max(0, Math.floor(options.offset ?? 0))
+  return results.slice(offset, offset + limit)
+}
+
+// ---------------------------------------------------------------------------
+// Ordenação natural de modelos
+// ---------------------------------------------------------------------------
+
+type ModeloToken = number | string
+
+export type { ModeloToken }
+
+/**
+ * Quebra o nome do modelo em números e palavras: "6s Plus" → [6, "S", "PLUS"]; "S21 FE" → ["S", 21, "FE"].
+ * No iPhone, "X"/"XR"/"XS" viram a 10ª geração (entre o 8 e o 11), como o operador espera — tanto no
+ * nome curto da linha iPhone ("XR") quanto no nome completo ("iPhone XR", cadastro da loja).
+ */
+export function tokensModeloNatural(nome: string, linha = ""): ModeloToken[] {
+  let n = normalizeDeviceQuery(nome)
+  if (normalizeDeviceQuery(linha) === "IPHONE") n = n.replace(/^X(?=[RS]?(?: |$))/, "10")
+  n = n.replace(/^IPHONE X(?=[RS]?(?: |$))/, "IPHONE 10")
+  const tokens: ModeloToken[] = []
+  for (const parte of n.split(/(\d+)/)) {
+    if (!parte) continue
+    if (/^\d+$/.test(parte)) {
+      tokens.push(parseInt(parte, 10))
+      continue
+    }
+    for (const palavra of parte.split(/[^A-Z]+/)) if (palavra) tokens.push(palavra)
+  }
+  return tokens
+}
+
+export function compareTokens(a: readonly ModeloToken[], b: readonly ModeloToken[]): number {
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) {
+    const x = a[i]
+    const y = b[i]
+    if (x === y) continue
+    // Número antes de palavra: "iPhone 16" e variantes vêm antes de "iPhone Air"/"SE".
+    if (typeof x === "number" && typeof y === "number") return x - y
+    if (typeof x === "number") return -1
+    if (typeof y === "number") return 1
+    return x < y ? -1 : 1
+  }
+  // Prefixo primeiro: "7" antes de "7 Plus"; "12" antes de "12 Mini".
+  return a.length - b.length
+}
+
+/**
+ * Compara dois modelos por marca → linha comercial → nome curto em ordem natural.
+ * Nome curto ausente (cadastro antigo) cai no nome canônico.
+ */
+export function compareModelosNatural(
+  a: Pick<DeviceModel, "brand" | "commercialLine" | "shortName" | "canonicalName">,
+  b: Pick<DeviceModel, "brand" | "commercialLine" | "shortName" | "canonicalName">,
+): number {
+  const ba = normalizeDeviceQuery(a.brand)
+  const bb = normalizeDeviceQuery(b.brand)
+  if (ba !== bb) return ba < bb ? -1 : 1
+  const la = normalizeDeviceQuery(a.commercialLine ?? "")
+  const lb = normalizeDeviceQuery(b.commercialLine ?? "")
+  if (la !== lb) return la < lb ? -1 : 1
+  return compareTokens(
+    tokensModeloNatural(a.shortName || a.canonicalName, a.commercialLine),
+    tokensModeloNatural(b.shortName || b.canonicalName, b.commercialLine),
+  )
 }

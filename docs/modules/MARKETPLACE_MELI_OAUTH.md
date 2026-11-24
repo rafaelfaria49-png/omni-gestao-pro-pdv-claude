@@ -6,7 +6,7 @@ O HUB permite autorizar uma conta de vendedor do Brasil por unidade e consultar 
 
 ## Base recuperada
 
-O OAuth reutiliza a base local (`1eb744b`, `4e01827`, `847b230`), o gate por loja e módulo (`ee9f4a5`) e os contratos auditados em `OMNI-VESTUARIO-VARIACOES-MARKETPLACE-001`. A rodada FINAL-002 reconciliou a PR #399 com `origin/main` em `252f057c8bc7d631609e08a10ff3b271da82495e` (#397), preservando a política PWA da #393 e o typecheck canônico de 6144 MB.
+O OAuth reutiliza a base local (`1eb744b`, `4e01827`, `847b230`), o gate por loja e módulo (`ee9f4a5`) e os contratos auditados em `OMNI-VESTUARIO-VARIACOES-MARKETPLACE-001`. A rodada FINAL-002 reconciliou a PR #399 com `origin/main` em `252f057c8bc7d631609e08a10ff3b271da82495e` (#397), preservando a política PWA da #393 e o typecheck canônico de 6144 MB. A rodada TECHNICAL-CLOSURE-003 incorporou a main em 231bb402eafc26089dea98af39154106a23e6589 (#400).
 
 | Superfície | Uso neste recorte |
 |---|---|
