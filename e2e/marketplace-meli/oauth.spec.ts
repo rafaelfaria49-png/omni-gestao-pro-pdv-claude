@@ -60,8 +60,10 @@ async function cookieHeader(context: BrowserContext) {
 async function finish(request: APIRequestContext, url: string, result: string, cookie?: string) {
   const response = await request.get(url, { maxRedirects: 0, headers: cookie ? { Cookie: cookie } : undefined })
   expect(response.status()).toBe(303)
-  expect(response.headers()["referrer-policy"]).toBe("no-referrer")
-  expect(new URL(response.headers().location).searchParams.get("meli")).toBe(result)
+  expect(response.headers()["cache-control"]).toContain("no-store")
+  const destination = new URL(response.headers().location)
+  expect(destination.origin + destination.pathname).toBe(origin + dashboard)
+  expect(Array.from(destination.searchParams.entries())).toEqual([["meli", result]])
 }
 
 async function providerEvents(name: string) {
@@ -90,7 +92,13 @@ test("autoriza pelo HUB, identifica vendedor e pagina clássico e User Products 
   await expect(section.getByText("Conta simulada QA")).toBeVisible()
   await expect(section.getByText("Simulada", { exact: true })).toBeVisible()
   await expect(section.getByText("Conectado e validado")).toHaveCount(0)
+  const returningToHub = page.waitForRequest((req) => {
+    const url = new URL(req.url())
+    return req.isNavigationRequest() && url.pathname === dashboard && url.searchParams.has("meli")
+  })
   await section.getByRole("button", { name: "Conectar Mercado Livre", exact: true }).click()
+  const referrer = await (await returningToHub).headerValue("referer")
+  expect(referrer ?? "").not.toMatch(/\/callback|[?&](code|state)=/)
   await expect(section.getByText("Conectado e validado")).toBeVisible()
   await expect(section.getByText("VENDEDOR-QA-745001 · 745001")).toBeVisible()
   await expect(section.getByText("Leitura e acesso offline")).toBeVisible()
