@@ -245,10 +245,19 @@ export async function POST(request: Request) {
       const mov = await createMovimentacaoEntradaFromReceber(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
         valorMov,
-        { parcial, carteiraId, db: tx },
+        // A identidade da operação é o `localId` checado acima, na MESMA transação. A
+        // heurística de soma do service suprimia a 2ª parcial menor (dinheiro no caixa sem
+        // entrada no financeiro) e a reliquidação depois de um estorno.
+        { parcial, carteiraId, db: tx, idempotenciaDoChamador: true },
       )
       // Escrita financeira NÃO é best-effort: sem movimentação, a baixa não vale.
       if (!mov.ok) throw new Error(`movimentacao_financeira_falhou:${mov.reason}`)
+
+      // Identidade do pagamento no ledger (índice da entrada que o service acabou de
+      // apendar): é por ela que o estorno pelo Financeiro acha ESTA entrada de caixa.
+      const hist = (res.data.payload as Record<string, unknown> | null)?.historico
+      const historicoIndex = Array.isArray(hist) ? hist.length - 1 : -1
+      if (historicoIndex < 0) throw new Error("historico_sem_pagamento")
 
       await tx.caixaOperacao.create({
         data: {
@@ -264,6 +273,7 @@ export async function POST(request: Request) {
             localKey: res.data.localKey,
             formaPagamento: forma,
             op: parsed.data.op,
+            historicoIndex,
           } as Prisma.InputJsonValue,
         },
       })

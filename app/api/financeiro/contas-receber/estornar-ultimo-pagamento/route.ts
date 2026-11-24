@@ -6,7 +6,12 @@ import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { apiGuardFinanceiroEditEnterpriseOrLegacy } from "@/lib/auth/api-enterprise-guard"
-import { estornarContaReceber, buildContaReceberAuditTrail } from "@/lib/financeiro/services"
+import { buildContaReceberAuditTrail } from "@/lib/financeiro/services"
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
+import {
+  EstornoRecebimentoError,
+  estornarRecebimentoContaReceber,
+} from "@/lib/financeiro/services/estorno-recebimento-service"
 
 export const runtime = "nodejs"
 
@@ -15,6 +20,7 @@ const bodySchema = z.object({
   tituloId: z.union([z.string(), z.number()]).optional(),
   localKey: z.string().min(1).max(260).optional(),
   motivo: z.string().max(2000).optional(),
+  pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(),
 })
 
 function pickTituloRef(input: { tituloId?: string | number; localKey?: string }): { id?: string; localKey?: string } {
@@ -65,18 +71,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Informe tituloId ou localKey." }, { status: 400 })
   }
 
-  const res = await estornarContaReceber({
-    storeId,
-    id: ref.id,
-    localKey: ref.localKey,
-    modo: "ultimo_pagamento",
-    motivo: parsed.data.motivo,
-    userLabel,
-  })
-
-  if (!res.ok) {
-    return NextResponse.json({ ok: false, error: res.reason }, { status: 404 })
+  const lock = await verificarPeriodoFechado(storeId, new Date())
+  if (lock.fechado) {
+    return NextResponse.json(
+      { ok: false, error: "Período financeiro fechado. Reabra o fechamento para estornar.", code: "periodo_fechado" },
+      { status: 409 },
+    )
   }
+
+  // Mesmo motor do Financeiro HUB: ledger + movimentação + Caixa numa transação só.
+  // (Antes esta rota só reescrevia o ledger — a entrada financeira e a do caixa ficavam.)
+  let estorno: Awaited<ReturnType<typeof estornarRecebimentoContaReceber>>
+  try {
+    estorno = await estornarRecebimentoContaReceber({
+      storeId,
+      id: ref.id,
+      localKey: ref.localKey,
+      modo: "ultimo_pagamento",
+      pagamentoIndex: parsed.data.pagamentoIndex,
+      motivo: parsed.data.motivo,
+      userLabel,
+    })
+  } catch (e) {
+    if (e instanceof EstornoRecebimentoError) {
+      return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: e.status })
+    }
+    // Transação desfeita: nada do estorno foi gravado.
+    console.error("[contas-receber/estornar-ultimo-pagamento]", e instanceof Error ? e.message : e)
+    return NextResponse.json({ ok: false, error: "Falha ao estornar. Nada foi alterado.", code: "db_error" }, { status: 503 })
+  }
+  const res = { data: estorno.titulo }
 
   try {
     await prismaEnsureConnected()

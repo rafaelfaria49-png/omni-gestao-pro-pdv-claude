@@ -507,8 +507,12 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
   const auditMap = new Map<string, AuditR>()
   for (const a of audit) {
     const item = a as AuditR
-    const key = safeStr(item.id ?? item.localKey)
-    if (key) auditMap.set(key, item)
+    // A linha usa `localKey` como id; o audit traz o id do banco E o localKey. Indexar só
+    // pelo id do banco fazia todo título parcial aparecer como "nada recebido / saldo cheio".
+    const lk = safeStr(item.localKey).trim()
+    const dbId = safeStr(item.id).trim()
+    if (lk) auditMap.set(lk, item)
+    if (dbId && !auditMap.has(dbId)) auditMap.set(dbId, item)
   }
   const result: ContaReceber[] = []
   for (const r of rows) {
@@ -979,9 +983,20 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [callApi, fetchData])
 
   const estornarReceber = useCallback(async (id: string, motivo?: string) => {
-    await callApi("/api/financeiro/receber", { op: "estornar", localKey: id, modo: "ultimo_pagamento", motivo }, "PATCH")
-    await fetchData()
-  }, [callApi, fetchData])
+    // Pré-condição: o recebido que o operador VIU. Se um estorno anterior já gravou (retry,
+    // resposta perdida), o servidor recusa em vez de estornar OUTRO pagamento.
+    const visto = receber.find((r) => r.id === id)
+    try {
+      await callApi(
+        "/api/financeiro/receber",
+        { op: "estornar", localKey: id, modo: "ultimo_pagamento", motivo, ...(visto ? { recebidoEsperado: visto.recebido } : {}) },
+        "PATCH",
+      )
+    } finally {
+      // Recarrega também na falha: a lista passa a mostrar o estado real antes de nova tentativa.
+      await fetchData()
+    }
+  }, [callApi, fetchData, receber])
 
   const criarReceber = useCallback(async (data: NovoReceberInput) => {
     const body: Record<string, unknown> = {
