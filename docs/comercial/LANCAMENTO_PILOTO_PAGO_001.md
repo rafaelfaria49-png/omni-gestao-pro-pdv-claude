@@ -147,7 +147,8 @@ só se o cliente aceitar venda por unidade e produto simples.
 
 ## G) Backlog separado — SaaS 100% automático
 
-Detalhe em `SAAS_AUTOMATICO_PROPOSTA.md`. Resumo:
+Detalhe em `SAAS_AUTOMATICO_PROPOSTA.md`. Desde 2026-11-23 a fonte de verdade é
+`SAAS_AUTOMATICO_ROADMAP_MASTER.md` (mapeamento G-01…G-10 na §5). Resumo histórico:
 
 | ID | Item | Depende de |
 |---|---|---|
