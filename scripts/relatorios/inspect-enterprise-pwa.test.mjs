@@ -103,36 +103,45 @@ function workboxReal(dependency, { online, cacheInicial }) {
 /** Instancia a estratégia da rota com as classes REAIS do Workbox. */
 function estrategiaReal(wb, handler) {
   const opts = { ...handler.options }
-  if (opts.plugins) opts.plugins = opts.plugins.map((p) => new wb.workbox[p.kind](p.options))
+  if (opts.plugins) opts.plugins = opts.plugins.map((p) => (p.kind ? new wb.workbox[p.kind](p.options) : p))
   return new wb.workbox[handler.kind](opts)
 }
 
-test("sw.js de produção: relatório de produtos vendidos é NetworkOnly antes da regra genérica", { skip }, async () => {
+test("sw.js de produção: relatório de produtos vendidos e rotas privadas são NetworkOnly sem cache genérico", { skip }, async () => {
   const sw = fs.readFileSync(path.join(PUBLIC, "sw.js"), "utf8")
   const { routes } = await coletarRotas(sw, PUBLIC)
   const networkOnly = routes.filter((r) => r.handler.kind === "NetworkOnly")
   assert.equal(networkOnly.length, 1, "regra NetworkOnly ausente/duplicada")
-  const apis = routes.findIndex((r) => r.handler.options?.cacheName === "apis")
-  assert.ok(routes.indexOf(networkOnly[0]) < apis, "NetworkOnly precisa vir antes da regra genérica apis")
-  for (const url of RELATORIO) {
+  for (const forbidden of ["apis", "pages", "pages-rsc", "pages-rsc-prefetch", "start-url", "static-js-assets", "cross-origin"]) {
+    assert.equal(
+      routes.findIndex((r) => r.handler.options?.cacheName === forbidden),
+      -1,
+      "bucket genérico proibido reapareceu no sw.js: " + forbidden,
+    )
+  }
+  for (const url of [...RELATORIO, "/api/version", "/api/dashboardx/relatorios", "/dashboard/relatorios-extra", "/"]) {
     for (const headers of [{}, { "x-assistec-loja-id": "loja-1" }, { "x-assistec-loja-id": "loja-2" }]) {
-      assert.equal(primeira(routes, ctx(url, headers)), networkOnly[0], "relatório caiu em cache: " + url)
+      assert.equal(primeira(routes, ctx(url, headers)), networkOnly[0], "rota privada caiu em cache: " + url)
     }
   }
-  // Fronteiras: só estes caminhos mudaram; o resto segue a regra genérica de antes.
-  for (const url of ["/api/version", "/api/dashboardx/relatorios", "/dashboard/relatorios-extra"]) {
-    assert.notEqual(primeira(routes, ctx(url)), networkOnly[0], "regressão em " + url)
-  }
+  // Somente ativos públicos/estáticos em allowlist usam cache nomeado.
+  assert.equal(primeira(routes, ctx("/_next/static/chunks/app.js"))?.handler.options?.cacheName, "next-static-assets")
+  assert.equal(primeira(routes, ctx("/icons/icon-192x192.png"))?.handler.options?.cacheName, "public-pwa-assets")
+  assert.equal(primeira(routes, ctx("/manifest.webmanifest"))?.handler.options?.cacheName, "public-pwa-assets")
   assert.notEqual(primeira(routes, ctx(RELATORIO[0], {}, "POST")), networkOnly[0], "regra deve ser exclusiva de GET")
 })
 
-test("sw.js de produção: offline não devolve relatório guardado de outra loja/sessão", { skip }, async () => {
+test("sw.js de produção: offline não devolve relatório nem API/página guardada de outra loja/sessão", { skip }, async () => {
   const sw = fs.readFileSync(path.join(PUBLIC, "sw.js"), "utf8")
   const { routes, dependencies } = await coletarRotas(sw, PUBLIC)
   const guardado = JSON.stringify({ ok: true, produtos: [{ nome: "LOJA-2 SESSAO-ANTERIOR" }] })
-  const cacheInicial = { apis: [...RELATORIO, "/api/version"].map((u) => [u, guardado]) }
+  const cacheInicial = {
+    apis: [...RELATORIO, "/api/version"].map((u) => [u, guardado]),
+    pages: [["/dashboard/estoque", "<html>LOJA-2</html>"]],
+    "public-pwa-assets": [["/icons/icon-192x192.png", "PNG-PUBLIC-ICON"]],
+  }
 
-  for (const url of RELATORIO) {
+  for (const url of [...RELATORIO, "/api/version", "/dashboard/estoque"]) {
     const wb = workboxReal(dependencies[0], { online: false, cacheInicial })
     const rota = primeira(routes, ctx(url, { "x-assistec-loja-id": "loja-1" }))
     await assert.rejects(
@@ -152,19 +161,28 @@ test("sw.js de produção: offline não devolve relatório guardado de outra loj
   assert.equal(res.headers.get("cache-control"), "no-store, max-age=0")
   assert.equal(online.trace.cacheWrites + online.trace.cacheReads, 0, "relatório tocou o cache online")
 
-  // Contraprova: a regra genérica (que o relatório usava antes) devolve o guardado offline.
-  const antes = workboxReal(dependencies[0], { online: false, cacheInicial })
-  const generica = primeira(routes, ctx("/api/version"))
-  const servido = await estrategiaReal(antes, generica.handler).handle({ request: new Request(new URL("/api/version", ORIGEM)), event: new antes.FetchEvent() })
-  assert.equal(await servido.text(), guardado, "contraprova: NetworkFirst genérico serve o cache offline")
+  // Ativo público estático em allowlist segue legítimo offline.
+  const estatico = workboxReal(dependencies[0], { online: false, cacheInicial })
+  const rotaIcone = primeira(routes, ctx("/icons/icon-192x192.png"))
+  const iconeServido = await estrategiaReal(estatico, rotaIcone.handler).handle({ request: new Request(new URL("/icons/icon-192x192.png", ORIGEM)), event: new estatico.FetchEvent() })
+  assert.equal(await iconeServido.text(), "PNG-PUBLIC-ICON", "ativo público estático deve continuar acessível offline")
 })
 
-test("ativação do SW remove relatórios guardados antes da correção e preserva o resto", async () => {
+test("ativação do SW remove relatórios e rotas privadas guardadas antes da correção e preserva apenas ativos públicos", async () => {
   const preservar = [
-    "/api/version?take=50", "/api/dashboardx/relatorios", "/api/pessoas",
-    "/dashboard/relatorios-extra", "/api/version", "https://outra.example.invalid/api/vendas/produtos-vendidos",
+    "/_next/static/chunks/app.js",
+    "/icons/icon-192x192.png",
+    "/manifest.webmanifest",
+    "https://outra.example.invalid/api/vendas/produtos-vendidos",
   ].map((u) => new URL(u, ORIGEM).href)
-  const remover = RELATORIO.map((u) => new URL(u, ORIGEM).href)
+  const remover = [
+    ...RELATORIO,
+    "/api/version?take=50",
+    "/api/dashboardx/relatorios",
+    "/api/pessoas",
+    "/dashboard/relatorios-extra",
+    "/api/version",
+  ].map((u) => new URL(u, ORIGEM).href)
   const stores = new Map(["apis", "pages", "historico-antigo"].map((n) => [n, new Set([...remover, ...preservar])]))
   const listeners = [], pending = []
   vm.runInNewContext(fs.readFileSync(path.join(PUBLIC, "client-privacy-cache.js"), "utf8"), {
@@ -186,20 +204,7 @@ test("proteções Clientes/Pessoas do build continuam aceitas pelo inspetor ofic
   assert.equal(r.offline.cacheAccesses, 0)
 })
 
-test("worker auxiliar emitido não lê, aquece ou grava HTML/RSC de relatórios", { skip }, async () => {
-  const names=fs.readdirSync(PUBLIC).filter(n=>/^swe-worker-[a-f0-9]+\.js$/.test(n))
-  assert.equal(names.length,1)
-  const source=fs.readFileSync(path.join(PUBLIC,names[0]),"utf8")
-  for(const type of ["__FRONTEND_NAV_CACHE__","__START_URL_CACHE__"]){
-    for(const url of RELATORIO.filter(u=>u.startsWith("/dashboard/"))){
-      for(const hit of [true,false])for(const shouldCacheAggressively of [true,false]){
-        const trace=[],self={location:new URL(ORIGEM+"/"+names[0])}
-        const caches={open:async name=>{trace.push("open:"+name);return {match:async()=>{trace.push("match");return hit?new Response("old-session"):undefined},put:async()=>trace.push("put"),add:async()=>trace.push("add")}}}
-        const fetch=async()=>{trace.push("fetch");return new Response("network")}
-        vm.runInNewContext(source,{self,caches,fetch,URL,Promise},{timeout:10000})
-        await self.onmessage({data:{type,url,shouldCacheAggressively}})
-        assert.deepEqual(trace,[],`${type} tocou cache/rede para ${url}`)
-      }
-    }
-  }
+test("worker auxiliar swe-worker foi eliminado (cacheOnFrontEndNav: false), impedindo gravação de HTML/RSC", { skip }, async () => {
+  const names = fs.readdirSync(PUBLIC).filter((n) => /^swe-worker-[a-f0-9]+\.js$/.test(n))
+  assert.equal(names.length, 0, "swe-worker não deve ser emitido quando cacheOnFrontEndNav=false e cacheStartUrl=false")
 })
