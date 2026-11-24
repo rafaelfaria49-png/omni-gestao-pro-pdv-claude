@@ -10,7 +10,7 @@ if (!evidence || process.env.MELI_OAUTH_CLIENT_ID !== clientId) throw new Error(
 const liveFetch = globalThis.fetch
 const codes = new Set()
 const activeRefresh = new Map()
-const sellers = { classic: 745001, different: 745002, expiring: 745003, revoked: 745003, limited: 745003, lost: 745003, commercial: 745004, fault: 745005 }
+const sellers = { classic: 745001, different: 745002, slow: 745002, expiring: 745003, revoked: 745003, limited: 745003, lost: 745003, commercial: 745004, fault: 745005 }
 const shortGrants = new Set(["expiring", "revoked", "lost"])
 const grantKey = (kind) => `${clientId}:${sellers[kind]}`
 let sequence = 0
@@ -50,8 +50,8 @@ globalThis.fetch = async (input, init) => {
         return Response.json({ error: "invalid_grant" }, { status: 400 })
       }
       codes.add(nonce)
+      if (kind === "fault" || kind === "slow") await delay(1_500)
       if (kind === "fault") {
-        await delay(1_500)
         return Response.json({
           error: "qa-ingress-provider-error", request_code: params.get("code"), client_secret: params.get("client_secret"),
         }, { status: 503 })

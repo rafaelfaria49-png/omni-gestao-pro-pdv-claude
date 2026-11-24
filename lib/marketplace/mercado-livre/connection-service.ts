@@ -249,9 +249,14 @@ export async function finishMercadoLivre(
     if (!pending || pending.used || pending.digest !== digest || pending.sellerId !== intent.sellerId ||
         !pendingIsActive(metadata)) throw new MeliFailure("invalid_state")
     const sellerId = intent.sellerId ?? metadata.seller?.id
-    if (code && sellerId && !(await checkSellerOwner(tx, intent.storeId, sellerId))) {
-      await writeState(tx, intent.storeId, { ...metadata, pending: undefined })
-      return { accepted: false as const }
+    if (code && sellerId) {
+      const owner = await checkSellerOwner(tx, intent.storeId, sellerId)
+      // Outra loja pode ter obtido admissão enquanto o lock por vendedor estava ocupado.
+      if (!pendingIsActive(metadata)) throw new MeliFailure("invalid_state")
+      if (!owner) {
+        await writeState(tx, intent.storeId, { ...metadata, pending: undefined })
+        return { accepted: false as const }
+      }
     }
     // A tentativa é consumida antes da chamada externa, inclusive se o provedor falhar.
     await writeState(tx, intent.storeId, {
@@ -268,9 +273,11 @@ export async function finishMercadoLivre(
     if (grant.sellerId !== seller.id) throw new MeliFailure("account_mismatch")
     requireAllowedSeller(config, seller)
     await forStore(intent.storeId, async (tx, _row, metadata) => {
-      if (metadata.pending?.digest !== digest) throw new MeliFailure("invalid_state")
+      const pending = metadata.pending
+      if (!pending?.used || pending.digest !== digest || !pendingIsActive(metadata)) throw new MeliFailure("invalid_state")
       if (metadata.seller && metadata.seller.id !== seller.id) throw new MeliFailure("account_mismatch")
       await reserveSeller(tx, intent, seller.id)
+      if (!pendingIsActive(metadata)) throw new MeliFailure("invalid_state")
       const grantId = opaqueId()
       await writeState(tx, intent.storeId, {
         state: "validated",

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
+import { setTimeout as delay } from "node:timers/promises"
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test"
 import { Prisma, PrismaClient } from "../../generated/prisma"
 import { ASSISTEC_LOJA_HEADER } from "../../lib/assistec-headers"
@@ -87,6 +88,15 @@ async function expireGrant(storeId: string) {
   const metadata = row.metadata as Prisma.JsonObject
   await db.marketplaceConnection.update({ where: { id: row.id }, data: { metadata: {
     ...metadata, grant: { ...(metadata.grant as Prisma.JsonObject), expiresAt: Date.now() - 1 },
+  } } })
+}
+
+async function setPendingExpiry(storeId: string, expiresAt: number) {
+  const row = await officialConnection(storeId)
+  const metadata = row.metadata as Prisma.JsonObject
+  expect(metadata.pending).toMatchObject({ digest: expect.any(String) })
+  await db.marketplaceConnection.update({ where: { id: row.id }, data: { metadata: {
+    ...metadata, pending: { ...(metadata.pending as Prisma.JsonObject), expiresAt },
   } } })
 }
 
@@ -204,11 +214,7 @@ test("nega outra loja, módulo ausente, mutação de outra origem, replay e muda
   expect(description.mercadoLivre.seller.id).toBe("745001")
 
   const expired = await begin(page.request, storeA)
-  const row = await officialConnection(storeA)
-  const metadata = row.metadata as Prisma.JsonObject
-  await db.marketplaceConnection.update({ where: { id: row.id }, data: { metadata: {
-    ...metadata, pending: { ...(metadata.pending as Prisma.JsonObject), expiresAt: Date.now() - 1 },
-  } } })
+  await setPendingExpiry(storeA, Date.now() - 1)
   await finish(page.request, callback(expired, "classic"), "invalid_state")
   expect(await providerEvents("exchange")).toBe(before + 1)
 })
@@ -267,6 +273,45 @@ test("recusa vendedor conhecido antes do consentimento e limita intenções conc
   } finally {
     await second.close()
   }
+})
+
+test("fecha o callback expirado antes da troca e descarta grant após o prazo do processamento", async ({ page }) => {
+  await login(page, "manager-b", storeB)
+  const expectedSeller = "745002"
+  const exchanges = await providerEvents("exchange")
+  const first = await begin(page.request, storeB, expectedSeller)
+  const { response } = await db.$transaction(async (tx) => {
+    const lockKey = `marketplace:mercado-livre:seller:${expectedSeller}`
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))::text AS lock`
+    const expiresAt = Date.now() + 2_000
+    await setPendingExpiry(storeB, expiresAt)
+    const response = page.request.get(callback(first, "different"), { maxRedirects: 0 })
+    await expect.poll(async () => {
+      const [result] = await tx.$queryRaw<{ waiting: boolean }[]>`
+        SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted) AS waiting
+      `
+      return result.waiting
+    }, { timeout: 1_800 }).toBe(true)
+    await delay(Math.max(0, expiresAt - Date.now() + 25))
+    return { response }
+  }, { timeout: 8_000 })
+  const stale = await response
+  expect(stale.status()).toBe(303)
+  expect(new URL(stale.headers().location).searchParams.get("meli")).toBe("invalid_state")
+  expect(await providerEvents("exchange")).toBe(exchanges)
+
+  const second = await begin(page.request, storeB, expectedSeller)
+  await Promise.all([
+    finish(page.request, callback(second, "slow"), "invalid_state"),
+    (async () => {
+      await expect.poll(() => providerEvents("exchange")).toBe(exchanges + 1)
+      await setPendingExpiry(storeB, Date.now() - 1)
+    })(),
+  ])
+  expect((await officialConnection(storeB)).refreshToken).toBe("")
+  expect(await db.logsAuditoria.count({
+    where: { action: "marketplace.mercado_livre.seller_bound", metadata: { contains: '"sellerId":"745002"' } },
+  })).toBe(0)
 })
 
 test("recusa grant duplicado sem tocar o vínculo original e recupera refresh com nova autorização", async ({ page, browser }) => {
