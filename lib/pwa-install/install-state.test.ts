@@ -38,6 +38,8 @@ describe("detectBrowser", () => {
     expect(detectBrowser(CHROME, ["Chromium", "Google Chrome"])).toBe("chrome")
     expect(detectBrowser(CHROME, ["Chromium", "Brave"])).toBe("chrome")
     expect(detectBrowser("Mozilla/5.0 (Windows NT 10.0; Win64; x64) HeadlessChrome/142.0.0.0", ["HeadlessChrome", "Chromium"])).toBe("chrome")
+    // iOS Safari emulado em Chromium (userAgentData mantém marca Chromium) ainda resolve Safari.
+    expect(detectBrowser(IOS_SAFARI, ["HeadlessChrome", "Chromium"])).toBe("safari")
   })
 })
 

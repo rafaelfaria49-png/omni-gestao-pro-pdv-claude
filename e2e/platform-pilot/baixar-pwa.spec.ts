@@ -119,13 +119,16 @@ async function assertNoButtonOverlap(page: Page, scopeSelector: string) {
   expect(overlap).toEqual([])
 }
 
+const isExpectedLocalAnalyticsWarning = (msg: string) =>
+  msg.includes("/_vercel/insights/script.js") || msg.includes("%2F_vercel%2Finsights%2Fscript.js")
+
 test("manifesto oficial, ícones e /baixar instalável no Chromium (Edge/Chrome), sem login", async () => {
   const { context } = await profile()
   try {
     const page = context.pages()[0] ?? (await context.newPage())
     const consoleErrors: string[] = []
     page.on("console", (m) => {
-      if (m.type() === "error") consoleErrors.push(m.text())
+      if (m.type() === "error" && !isExpectedLocalAnalyticsWarning(m.text())) consoleErrors.push(m.text())
     })
     expect((await page.goto("/baixar"))?.status()).toBe(200)
     await swReady(page)
@@ -236,7 +239,7 @@ test("matriz desktop e mobile (Edge/Chrome/Firefox/Android/iOS): passos específ
     const page = await context.newPage()
     const consoleErrors: string[] = []
     page.on("console", (m) => {
-      if (m.type() === "error") consoleErrors.push(m.text())
+      if (m.type() === "error" && !isExpectedLocalAnalyticsWarning(m.text())) consoleErrors.push(m.text())
     })
     await page.goto("/baixar")
     const card = page.getByTestId("pwa-install-card")
@@ -259,7 +262,7 @@ test("funil comercial /gestao-lojas → /baixar → /login preserva landing prem
   const page = await context.newPage()
   const consoleErrors: string[] = []
   page.on("console", (m) => {
-    if (m.type() === "error") consoleErrors.push(m.text())
+    if (m.type() === "error" && !isExpectedLocalAnalyticsWarning(m.text())) consoleErrors.push(m.text())
   })
   expect((await page.goto("/gestao-lojas"))?.status()).toBe(200)
   const linkBaixar = page.locator('main a[href="/baixar"]').first()
@@ -332,6 +335,31 @@ test("mesmo perfil do app: login A → reinício mantém sessão → sair → au
     // devolve SEM internet logo após logout (regra pré-existente NetworkFirst 24h do next-pwa).
     await context.setOffline(true)
     evidencia.medicaoCacheOfflineAposSair = await storesSeenByPage(page).catch((e: Error) => `erro: ${e.message}`)
+    evidencia.auditoriaOfflineEndpointsAposLogout = await page.evaluate(async () => {
+      const targets = [
+        "/api/stores",
+        "/api/stores/pilot-a",
+        "/api/ops/inventory?lojaId=pilot-a",
+        "/api/ops/vendas-list?lojaId=pilot-a",
+        "/api/ops/credito-cliente?lojaId=pilot-a",
+        "/dashboard",
+      ]
+      const results: Record<string, unknown> = {}
+      for (const t of targets) {
+        try {
+          const r = await fetch(t, { credentials: "include" })
+          const text = await r.text()
+          results[t] = {
+            status: r.status,
+            bytes: text.length,
+            contemPilotA: text.includes("pilot-a") || text.includes("Padaria Piloto A") || text.includes("admina@pilot.invalid"),
+          }
+        } catch (err) {
+          results[t] = { error: err instanceof Error ? err.message : String(err) }
+        }
+      }
+      return results
+    })
     await context.setOffline(false)
 
     await loginForm(page, "adminB")

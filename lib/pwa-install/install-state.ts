@@ -50,6 +50,15 @@ export type InstallMode =
 export function detectBrowser(userAgent: string, brands: string[] = []): BrowserId {
   const ua = userAgent || ""
   const b = brands.map((x) => x.toLowerCase())
+  // Em iPhone/iPad (WebKit), o UA define o navegador real; ignora marcas Chromium de emulação.
+  if (/\b(iPhone|iPad|iPod)\b/i.test(ua)) {
+    if (/\bEdgiOS\//.test(ua)) return "edge"
+    if (/\bOPiOS\//.test(ua)) return "opera"
+    if (/\bFxiOS\//.test(ua)) return "firefox"
+    if (/\bCriOS\//.test(ua)) return "chrome"
+    if (/\bSafari\//.test(ua)) return "safari"
+    return "outro"
+  }
   if (b.some((x) => x.includes("microsoft edge")) || /\bEdg(e|A|iOS)?\//.test(ua)) return "edge"
   if (b.some((x) => x === "opera") || /\bOPR\//.test(ua) || /\bOPiOS\//.test(ua)) return "opera"
   if (/\bFirefox\//.test(ua) || /\bFxiOS\//.test(ua)) return "firefox"
@@ -61,7 +70,7 @@ export function detectBrowser(userAgent: string, brands: string[] = []): Browser
   ) {
     return "chrome"
   }
-  if (/\bSafari\//.test(ua) && (/\bVersion\//.test(ua) || /\b(iPhone|iPad|iPod)\b/i.test(ua))) return "safari"
+  if (/\bSafari\//.test(ua) && /\bVersion\//.test(ua)) return "safari"
   return "outro"
 }
 
