@@ -1,10 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { ChevronRight, Loader2, Plug, Search, Unplug } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { MarketplaceReadConnection, MarketplaceReadListing, MarketplaceReadPage } from "@/lib/marketplace/read-only-types"
+import { MELI_NUMERIC_ID_PATTERN } from "@/lib/marketplace/read-only-types"
 import { StatusPill } from "./lovable/StatusPill"
 
 const endpoint = "/api/marketplace/mercado-livre"
@@ -90,7 +93,7 @@ function ListingCard({ listing }: { listing: MarketplaceReadListing }) {
   )
 }
 
-async function request<T>(storeId: string, path: string, method: "POST" | "DELETE", body?: { cursor?: string }): Promise<T> {
+async function request<T>(storeId: string, path: string, method: "POST" | "DELETE", body?: { cursor?: string; sellerId?: string }): Promise<T> {
   const response = await fetch(endpoint + path, {
     method, cache: "no-store", credentials: "same-origin",
     headers: { [ASSISTEC_LOJA_HEADER]: storeId, ...(body && { "Content-Type": "application/json" }) },
@@ -110,6 +113,8 @@ export function MercadoLivreConnection({ storeId, connection, refetch }: {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState<(MarketplaceReadPage & { number: number }) | null>(null)
+  const [declaredSellerId, setDeclaredSellerId] = useState("")
+  const sellerFieldId = useId()
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -139,7 +144,8 @@ export function MercadoLivreConnection({ storeId, connection, refetch }: {
     setError(null)
     setNotice(null)
     try {
-      const result = await request<{ authorizationUrl: string }>(storeId, "", "POST")
+      const sellerId = connection.seller ? "" : declaredSellerId
+      const result = await request<{ authorizationUrl: string }>(storeId, "", "POST", sellerId ? { sellerId } : undefined)
       window.location.assign(result.authorizationUrl)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Falha ao iniciar a autorização.")
@@ -217,18 +223,34 @@ export function MercadoLivreConnection({ storeId, connection, refetch }: {
         <p className="text-sm text-muted-foreground">Reconecte a conta para retomar a leitura.</p>}
       {state === "disconnected" && <p className="text-sm text-muted-foreground">Para revogar a autorização externa, remova o aplicativo na conta Mercado Livre.</p>}
       {connection.enabled && (
-        <div className="flex flex-wrap gap-2">
-          {showAuthorize && <Button type="button" size="sm" disabled={!!busy} onClick={() => void authorize()}>
-            {busy === "authorize" ? <Loader2 className="animate-spin" /> : <Plug />}
-            {busy === "authorize" ? "Abrindo autorização…" : authorizeLabel}
-          </Button>}
-          {connection.canRead && <Button type="button" size="sm" variant={showAuthorize ? "outline" : "default"} disabled={!!busy} onClick={() => void loadListings()}>
-            {busy === "list" ? <Loader2 className="animate-spin" /> : <Search />}{page ? "Primeira página" : "Consultar anúncios"}
-          </Button>}
-          {connection.canDisconnect && <Button type="button" size="sm" variant="outline" disabled={!!busy} onClick={() => void disconnect()}>
-            {busy === "disconnect" ? <Loader2 className="animate-spin" /> : <Unplug />}{state === "awaiting_authorization" ? "Cancelar autorização" : "Desconectar"}
-          </Button>}
-        </div>
+        <form className="space-y-3" onSubmit={(event) => {
+          event.preventDefault()
+          if (showAuthorize && !busy) void authorize()
+        }}>
+          {showAuthorize && !connection.seller && (
+            <div className="space-y-2">
+              <Label htmlFor={sellerFieldId}>ID do vendedor (opcional)</Label>
+              <Input id={sellerFieldId} className="sm:max-w-xs" type="text" inputMode="numeric" autoComplete="off"
+                pattern={MELI_NUMERIC_ID_PATTERN} maxLength={19} value={declaredSellerId} disabled={!!busy}
+                aria-describedby={`${sellerFieldId}-help`} onChange={(event) => setDeclaredSellerId(event.target.value)} />
+              <p id={`${sellerFieldId}-help`} className="text-xs text-muted-foreground">
+                Informe o ID para conferir o vínculo antes de abrir o Mercado Livre.
+              </p>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {showAuthorize && <Button type="submit" size="sm" disabled={!!busy}>
+              {busy === "authorize" ? <Loader2 className="animate-spin" /> : <Plug />}
+              {busy === "authorize" ? "Abrindo autorização…" : authorizeLabel}
+            </Button>}
+            {connection.canRead && <Button type="button" size="sm" variant={showAuthorize ? "outline" : "default"} disabled={!!busy} onClick={() => void loadListings()}>
+              {busy === "list" ? <Loader2 className="animate-spin" /> : <Search />}{page ? "Primeira página" : "Consultar anúncios"}
+            </Button>}
+            {connection.canDisconnect && <Button type="button" size="sm" variant="outline" disabled={!!busy} onClick={() => void disconnect()}>
+              {busy === "disconnect" ? <Loader2 className="animate-spin" /> : <Unplug />}{state === "awaiting_authorization" ? "Cancelar autorização" : "Desconectar"}
+            </Button>}
+          </div>
+        </form>
       )}
       {connection.canRead && (page || busy === "list") && (
         <section aria-label="Anúncios do Mercado Livre" aria-busy={busy === "list"} className="space-y-3 border-t border-border pt-4">

@@ -15,6 +15,7 @@ import {
 import { isSegmentoContadorExterno } from "@/lib/contador/auth-externa/proxy-publico"
 import { isRotaLegadaContador, PORTAL_V2_LOGIN } from "@/lib/contador/legado/rota-legada"
 import { isPublicPath, resolveProxyEntry } from "@/lib/auth/proxy-session-gate"
+import { MELI_CALLBACK_PATH } from "@/lib/marketplace/mercado-livre/config"
 
 const ADMIN_COOKIE = "assistec_admin_session"
 
@@ -36,7 +37,12 @@ export const proxy = auth(async (req) => {
   const nextWithPath = () => {
     const headers = new Headers(req.headers)
     headers.set("x-omni-pathname", pathname)
-    headers.set("x-omni-search", req.nextUrl.search)
+    // O callback lê a URL original. Evita duplicar code e state em cabeçalhos internos.
+    if (pathname === MELI_CALLBACK_PATH || pathname === MELI_CALLBACK_PATH + "/") {
+      headers.delete("x-omni-search")
+    } else {
+      headers.set("x-omni-search", req.nextUrl.search)
+    }
     return NextResponse.next({ request: { headers } })
   }
 

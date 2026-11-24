@@ -2,6 +2,7 @@ import "server-only"
 import { z } from "zod"
 import type { MarketplaceGrant, MarketplaceReadOnlyAdapter } from "../read-only-adapter"
 import type { MarketplaceReadListing, MarketplaceReadPage, MarketplaceSeller } from "../read-only-types"
+import { MELI_NUMERIC_ID_PATTERN } from "../read-only-types"
 import type { MercadoLivreConfig } from "./config"
 import { MeliFailure } from "./errors"
 
@@ -10,7 +11,7 @@ const API_ORIGIN = "https://api.mercadolibre.com"
 const PAGE_SIZE = 20
 const TIMEOUT_MS = 5_000
 const EXTERNAL_IDS = new Set(["id", "user_id", "seller_id", "family_id"])
-const numericId = z.string().regex(/^[1-9][0-9]{0,18}$/)
+export const meliNumericId = z.string().regex(new RegExp(`^${MELI_NUMERIC_ID_PATTERN}$`))
 const itemId = z.string().regex(/^MLB[0-9]{1,19}$/)
 const optionalText = z.string().max(500).nullish()
 const money = z.number().finite().nonnegative().nullish()
@@ -20,14 +21,14 @@ const attributes = z.array(z.object({ id: z.string(), value_name: optionalText }
 const grantResponse = z.object({
   access_token: z.string().min(1).max(4000),
   refresh_token: z.string().min(1).max(4000),
-  user_id: numericId,
+  user_id: meliNumericId,
   expires_in: z.number().int().positive().max(48 * 3_600),
   token_type: z.string().refine((type) => type.toLowerCase() === "bearer"),
   scope: z.string().max(2000),
 })
 
 const sellerResponse = z.object({
-  id: numericId,
+  id: meliNumericId,
   site_id: z.string(),
   nickname: optionalText,
   status: z.object({ site_status: optionalText }).nullish(),
@@ -41,7 +42,7 @@ const scanResponse = z.object({
 
 const itemResponse = z.object({
   id: itemId,
-  seller_id: numericId,
+  seller_id: meliNumericId,
   title: optionalText,
   status: z.string().min(1).max(60),
   currency_id: z.string().regex(/^[A-Z]{3}$/).nullish(),
@@ -56,7 +57,7 @@ const itemResponse = z.object({
   family_name: optionalText,
   pictures: z.array(z.object({ id: z.string(), secure_url: z.string().nullish(), url: z.string().nullish() })).nullish(),
   variations: z.array(z.object({
-    id: numericId,
+    id: meliNumericId,
     price: money,
     available_quantity: quantity,
     attributes,
@@ -183,7 +184,7 @@ export class MercadoLivreAdapter implements MarketplaceReadOnlyAdapter {
   }
 
   async listAds(accessToken: string, sellerId: string, cursor?: string): Promise<MarketplaceReadPage> {
-    if (!numericId.safeParse(sellerId).success) throw new MeliFailure("account_mismatch")
+    if (!meliNumericId.safeParse(sellerId).success) throw new MeliFailure("account_mismatch")
     const search = new URLSearchParams({ search_type: "scan", limit: String(PAGE_SIZE) })
     if (cursor) search.set("scroll_id", cursor)
     const page = parse(scanResponse, await this.request(`/users/${sellerId}/items/search?${search}`, {

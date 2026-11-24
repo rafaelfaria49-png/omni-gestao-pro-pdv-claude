@@ -4,20 +4,31 @@ import { appendFileSync } from "node:fs"
 import { setTimeout as delay } from "node:timers/promises"
 
 const evidence = process.env.MELI_E2E_PROVIDER_EVENTS
-if (!evidence || process.env.MELI_OAUTH_CLIENT_ID !== "99990001") throw new Error("Fixture Mercado Livre fora de QA.")
+const clientId = "99990001"
+if (!evidence || process.env.MELI_OAUTH_CLIENT_ID !== clientId) throw new Error("Fixture Mercado Livre fora de QA.")
 
 const liveFetch = globalThis.fetch
 const codes = new Set()
-const refreshes = new Set()
-const sellers = { classic: 745001, different: 745002, expiring: 745003, revoked: 745003, limited: 745003, lost: 745003, commercial: 745004 }
-const token = (kind, expires = 21_600) => Response.json({
-  access_token: `qa-access-${kind}`,
-  refresh_token: `qa-refresh-${kind}`,
-  user_id: sellers[kind],
-  expires_in: expires,
-  token_type: "Bearer",
-  scope: "offline_access read",
-})
+const activeRefresh = new Map()
+const sellers = { classic: 745001, different: 745002, expiring: 745003, revoked: 745003, limited: 745003, lost: 745003, commercial: 745004, fault: 745005 }
+const shortGrants = new Set(["expiring", "revoked", "lost"])
+const grantKey = (kind) => `${clientId}:${sellers[kind]}`
+let sequence = 0
+
+function token(kind, expires = 21_600) {
+  const suffix = `${kind}-${++sequence}`
+  const refreshToken = `qa-refresh-${suffix}`
+  // Um novo consentimento e uma renovação substituem o último refresh por app e vendedor.
+  activeRefresh.set(grantKey(kind), refreshToken)
+  return Response.json({
+    access_token: `qa-access-${suffix}`,
+    refresh_token: refreshToken,
+    user_id: sellers[kind],
+    expires_in: expires,
+    token_type: "Bearer",
+    scope: "offline_access read",
+  })
+}
 
 globalThis.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input))
@@ -26,7 +37,7 @@ globalThis.fetch = async (input, init) => {
   const emit = (event) => appendFileSync(evidence, event + "\n")
   if (url.pathname === "/oauth/token" && req.method === "POST") {
     const params = new URLSearchParams(await req.text())
-    if (params.get("client_id") !== "99990001" || params.get("client_secret") !== process.env.MELI_OAUTH_CLIENT_SECRET) {
+    if (params.get("client_id") !== clientId || params.get("client_secret") !== process.env.MELI_OAUTH_CLIENT_SECRET) {
       return Response.json({ error: "invalid_client" }, { status: 401 })
     }
     if (params.get("grant_type") === "authorization_code") {
@@ -39,22 +50,33 @@ globalThis.fetch = async (input, init) => {
         return Response.json({ error: "invalid_grant" }, { status: 400 })
       }
       codes.add(nonce)
-      return token(kind, ["expiring", "revoked", "lost"].includes(kind) ? 1 : 21_600)
+      if (kind === "fault") {
+        await delay(1_500)
+        return Response.json({
+          error: "qa-ingress-provider-error", request_code: params.get("code"), client_secret: params.get("client_secret"),
+        }, { status: 503 })
+      }
+      return token(kind, shortGrants.has(kind) ? 1 : 21_600)
     }
     if (params.get("grant_type") === "refresh_token") {
       emit("refresh")
       const refresh = params.get("refresh_token")
-      if (refreshes.has(refresh) || refresh === "qa-refresh-revoked") return Response.json({ error: "invalid_grant" }, { status: 400 })
-      refreshes.add(refresh)
-      if (refresh === "qa-refresh-lost") throw new TypeError("Falha de rede sintética após o envio")
-      if (refresh === "qa-refresh-expiring") {
+      const kind = refresh?.match(/^qa-refresh-([a-z]+)-[0-9]+$/)?.[1]
+      if (!kind || !Object.hasOwn(sellers, kind) || activeRefresh.get(grantKey(kind)) !== refresh) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 })
+      }
+      activeRefresh.delete(grantKey(kind))
+      if (kind === "revoked") return Response.json({ error: "invalid_grant" }, { status: 400 })
+      if (kind === "lost") throw new TypeError("Falha de rede sintética após o envio")
+      if (kind === "expiring") {
         await delay(700)
         return token("limited")
       }
+      return token(kind)
     }
     return Response.json({ error: "invalid_grant" }, { status: 400 })
   }
-  const kind = req.headers.get("authorization")?.match(/^Bearer qa-access-([a-z]+)$/)?.[1]
+  const kind = req.headers.get("authorization")?.match(/^Bearer qa-access-([a-z]+)-[0-9]+$/)?.[1]
   if (!kind || !Object.hasOwn(sellers, kind)) return Response.json({ error: "invalid_token" }, { status: 401 })
   const id = sellers[kind]
   if (req.method === "GET" && url.pathname === "/users/me") {

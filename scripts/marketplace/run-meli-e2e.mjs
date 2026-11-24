@@ -154,7 +154,7 @@ try {
   await new Promise((resolve) => { serverOutput.write("", resolve) })
   const log = await readFile(serverLog, "utf8")
   if ([password, authSecret, clientSecret, encryptionKey].some((value) => log.includes(value)) ||
-      /qa-(access|refresh)-|__Host-omni-meli-oauth=[\w.-]+|\/mercado-livre\/callback[^\s]*[?&](code|state)=/i.test(log)) {
+      /qa-(access|refresh|ingress)-|__Host-omni-meli-oauth=[\w.-]+|\/mercado-livre\/callback[^\s]*[?&](code|state)=/i.test(log)) {
     throw new Error("O log do app registrou dados sensíveis do fixture OAuth.")
   }
   console.log("QA OAuth: app logs sem credenciais ou query do callback sintético.")

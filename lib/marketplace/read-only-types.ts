@@ -1,3 +1,5 @@
+export const MELI_NUMERIC_ID_PATTERN = "[1-9][0-9]{0,18}"
+
 export type MarketplaceSeller = {
   id: string
   nickname: string | null

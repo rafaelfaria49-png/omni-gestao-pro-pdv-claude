@@ -4,6 +4,7 @@ import type { MarketplaceConnection, Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import type { MarketplaceGrant, MarketplaceReadOnlyAdapter } from "../read-only-adapter"
 import type { MarketplaceReadConnection, MarketplaceReadPage, MarketplaceSeller } from "../read-only-types"
+import { meliNumericId } from "./adapter"
 import { MELI_CONNECTION_PREFIX, MELI_STATE_TTL_MS, type MercadoLivreConfig } from "./config"
 import { opaqueId, openMeli, sealMeli, sha256 } from "./crypto"
 import { MeliFailure, meliFailure } from "./errors"
@@ -16,17 +17,21 @@ const intentSchema = z.object({
   state: opaqueIdSchema,
   verifier: opaqueIdSchema,
   expiresAt: z.number(),
+  sellerId: meliNumericId.optional(),
 })
 const metadataSchema = z.object({
   state: z.enum(["not_configured", "validated", "reconnect_required", "insufficient_permissions", "disconnected", "communication_error"]),
-  seller: z.object({ id: z.string(), nickname: z.string().nullable(), siteStatus: z.string().nullable(), testAccount: z.boolean() }).optional(),
+  seller: z.object({ id: meliNumericId, nickname: z.string().nullable(), siteStatus: z.string().nullable(), testAccount: z.boolean() }).optional(),
   grant: z.object({ id: opaqueIdSchema, appId: z.string(), expiresAt: z.number(), scopes: z.array(z.string()) }).optional(),
-  pending: z.object({ digest: opaqueIdSchema, expiresAt: z.number(), used: z.boolean() }).optional(),
+  pending: z.object({
+    digest: opaqueIdSchema, expiresAt: z.number(), used: z.boolean(), sellerId: meliNumericId.optional(),
+  }).optional(),
   renewal: z.object({ id: opaqueIdSchema, expiresAt: z.number() }).optional(),
   retryAt: z.number().optional(),
 })
 const cursorSchema = z.object({ scrollId: z.string().min(1).max(2048), expiresAt: z.number() })
 const REFRESH_AHEAD_MS = 60_000
+const CALLBACK_LEASE_MS = 30_000
 const RENEWAL_LEASE_MS = 30_000
 const CURSOR_TTL_MS = 4 * 60_000
 
@@ -94,33 +99,55 @@ async function audit(tx: Prisma.TransactionClient, actor: Actor, action: "author
   })
 }
 
-async function reserveSeller(tx: Prisma.TransactionClient, actor: Actor, seller: MarketplaceSeller) {
-  await lock(tx, `marketplace:mercado-livre:seller:${seller.id}`)
+async function checkSellerOwner(tx: Prisma.TransactionClient, storeId: string, sellerId: string) {
+  await lock(tx, `marketplace:mercado-livre:seller:${sellerId}`)
   const [store] = await tx.$queryRaw<{ createdAt: Date }[]>`
-    SELECT "createdAt" FROM stores WHERE id = ${actor.storeId} FOR KEY SHARE
+    SELECT "createdAt" FROM stores WHERE id = ${storeId} FOR KEY SHARE
   `
   if (!store) throw new MeliFailure("invalid_state")
-  const id = "meli-seller-owner-v1-" + sha256(seller.id)
+  const id = "meli-seller-owner-v1-" + sha256(sellerId)
   const action = "marketplace.mercado_livre.seller_bound"
-  const metadata = JSON.stringify({ storeId: actor.storeId, storeCreatedAt: store.createdAt.toISOString(), sellerId: seller.id })
+  const metadata = JSON.stringify({ storeId, storeCreatedAt: store.createdAt.toISOString(), sellerId })
   // O registro de auditoria fica fora do cascade de Store. O ID é fixo por vendedor.
   const owner = await tx.logsAuditoria.findUnique({ where: { id }, select: { action: true, metadata: true } })
   if (owner) {
-    if (owner.action !== action || owner.metadata !== metadata) throw new MeliFailure("account_mismatch")
-    return
+    return owner.action === action && owner.metadata === metadata ? { id, action, metadata, exists: true } : null
   }
   // Compatibilidade com conexões verificadas antes do registro durável.
   const previous = await tx.marketplaceConnection.findFirst({
     where: {
-      id: { startsWith: MELI_CONNECTION_PREFIX }, provider, storeId: { not: actor.storeId },
-      metadata: { path: ["seller", "id"], equals: seller.id },
+      id: { startsWith: MELI_CONNECTION_PREFIX }, provider, storeId: { not: storeId },
+      metadata: { path: ["seller", "id"], equals: sellerId },
     },
     select: { id: true },
   })
-  if (previous) throw new MeliFailure("account_mismatch")
+  return previous ? null : { id, action, metadata, exists: false }
+}
+
+async function reserveSeller(tx: Prisma.TransactionClient, actor: Actor, sellerId: string) {
+  const owner = await checkSellerOwner(tx, actor.storeId, sellerId)
+  if (!owner) throw new MeliFailure("account_mismatch")
+  if (owner.exists) return
+  const { id, action, metadata } = owner
   await tx.logsAuditoria.create({
     data: { id, action, metadata, source: "marketplace", userLabel: actor.userId, detail: "Vendedor Mercado Livre reservado à unidade." },
   })
+}
+
+async function checkSellerBeforeConsent(tx: Prisma.TransactionClient, storeId: string, sellerId: string) {
+  if (!(await checkSellerOwner(tx, storeId, sellerId))) throw new MeliFailure("account_mismatch")
+  // O lock por vendedor também serializa a consulta e a gravação da intenção conhecida.
+  const otherPending = await tx.marketplaceConnection.findFirst({
+    where: {
+      id: { startsWith: MELI_CONNECTION_PREFIX }, provider, storeId: { not: storeId },
+      AND: [
+        { metadata: { path: ["pending", "sellerId"], equals: sellerId } },
+        { metadata: { path: ["pending", "expiresAt"], gt: Date.now() } },
+      ],
+    },
+    select: { id: true },
+  })
+  if (otherPending) throw new MeliFailure("operation_in_progress")
 }
 
 function sellerAllowed(config: MercadoLivreConfig, seller: MarketplaceSeller | undefined) {
@@ -179,22 +206,24 @@ export async function describeMercadoLivre(storeId: string, config: MercadoLivre
   }
 }
 
-export async function startMercadoLivre(config: MercadoLivreConfig, adapter: MarketplaceReadOnlyAdapter, actor: Actor) {
-  const intent = {
-    storeId: actor.storeId,
-    userId: actor.userId,
-    state: opaqueId(),
-    verifier: opaqueId(),
-    expiresAt: Date.now() + MELI_STATE_TTL_MS,
-  }
-  await forStore(actor.storeId, async (tx, row, metadata) => {
+export async function startMercadoLivre(
+  config: MercadoLivreConfig, adapter: MarketplaceReadOnlyAdapter, actor: Actor, declaredSellerId?: string,
+) {
+  const intent = await forStore(actor.storeId, async (tx, row, metadata): Promise<Intent> => {
     requireAllowedSeller(config, metadata.seller)
     if (activeRenewal(metadata) || (pendingIsActive(metadata) && metadata.pending?.used)) throw new MeliFailure("operation_in_progress")
-    const pending = { digest: sha256(intent.state), expiresAt: intent.expiresAt, used: false }
+    const knownSellerId = metadata.seller?.id
+    if (knownSellerId && declaredSellerId && knownSellerId !== declaredSellerId) throw new MeliFailure("account_mismatch")
+    const sellerId = knownSellerId ?? declaredSellerId
+    if (sellerId) await checkSellerBeforeConsent(tx, actor.storeId, sellerId)
+    const state = opaqueId()
+    const expiresAt = Date.now() + MELI_STATE_TTL_MS
+    const pending = { digest: sha256(state), expiresAt, used: false, sellerId }
     if (row) await writeState(tx, actor.storeId, { ...metadata, pending })
     else await tx.marketplaceConnection.create({
       data: { ...whereStore(actor.storeId), accountName: "Mercado Livre", metadata: { ...metadata, pending } },
     })
+    return { storeId: actor.storeId, userId: actor.userId, state, verifier: opaqueId(), expiresAt, sellerId }
   })
   return {
     authorizationUrl: adapter.authorizationUrl(intent.state, sha256(intent.verifier)),
@@ -215,22 +244,33 @@ export async function finishMercadoLivre(
   config: MercadoLivreConfig, adapter: MarketplaceReadOnlyAdapter, intent: Intent, code: string | null,
 ) {
   const digest = sha256(intent.state)
-  await forStore(intent.storeId, async (tx, _row, metadata) => {
+  const prepared = await forStore(intent.storeId, async (tx, _row, metadata) => {
     const pending = metadata.pending
-    if (!pending || pending.used || pending.digest !== digest || !pendingIsActive(metadata)) throw new MeliFailure("invalid_state")
+    if (!pending || pending.used || pending.digest !== digest || pending.sellerId !== intent.sellerId ||
+        !pendingIsActive(metadata)) throw new MeliFailure("invalid_state")
+    const sellerId = intent.sellerId ?? metadata.seller?.id
+    if (code && sellerId && !(await checkSellerOwner(tx, intent.storeId, sellerId))) {
+      await writeState(tx, intent.storeId, { ...metadata, pending: undefined })
+      return { accepted: false as const }
+    }
     // A tentativa é consumida antes da chamada externa, inclusive se o provedor falhar.
-    await writeState(tx, intent.storeId, { ...metadata, pending: { ...pending, used: true } })
+    await writeState(tx, intent.storeId, {
+      ...metadata, pending: { ...pending, used: true, sellerId, expiresAt: Date.now() + CALLBACK_LEASE_MS },
+    })
+    return { accepted: true as const, sellerId }
   })
+  if (!prepared.accepted) throw new MeliFailure("account_mismatch")
   try {
     if (!code) throw new MeliFailure("denied")
     const grant = await adapter.exchangeCode(code, intent.verifier)
+    if (prepared.sellerId && prepared.sellerId !== grant.sellerId) throw new MeliFailure("account_mismatch")
     const seller = await adapter.identifySeller(grant.accessToken)
     if (grant.sellerId !== seller.id) throw new MeliFailure("account_mismatch")
     requireAllowedSeller(config, seller)
     await forStore(intent.storeId, async (tx, _row, metadata) => {
       if (metadata.pending?.digest !== digest) throw new MeliFailure("invalid_state")
       if (metadata.seller && metadata.seller.id !== seller.id) throw new MeliFailure("account_mismatch")
-      await reserveSeller(tx, intent, seller)
+      await reserveSeller(tx, intent, seller.id)
       const grantId = opaqueId()
       await writeState(tx, intent.storeId, {
         state: "validated",

@@ -3,6 +3,7 @@ import "server-only"
 const failures = {
   not_configured: { status: 403, message: "Mercado Livre não configurado para esta unidade." },
   invalid_state: { status: 400, message: "Autorização inválida ou expirada. Inicie a conexão novamente." },
+  invalid_seller_id: { status: 400, message: "Informe o ID numérico do vendedor do Mercado Livre." },
   denied: { status: 400, message: "Autorização cancelada no Mercado Livre." },
   account_mismatch: { status: 409, message: "Use a conta autorizada para esta unidade. A conta informada não pode ser vinculada aqui." },
   test_seller_required: { status: 403, message: "Este Preview exige um vendedor oficial de teste do Mercado Livre." },

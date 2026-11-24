@@ -12,6 +12,7 @@ const connections = oauth + "/status"
 const dashboard = "/dashboard/marketplace"
 const storeA = "meli-qa-a"
 const storeB = "meli-qa-b"
+const storeNew = "meli-qa-new"
 const headers = (storeId: string) => ({ [ASSISTEC_LOJA_HEADER]: storeId, Origin: origin })
 const db = new PrismaClient({ datasourceUrl: process.env.MELI_E2E_DATABASE_URL })
 
@@ -38,8 +39,12 @@ function callback(authorization: URL, kind: string) {
   return url.href
 }
 
-async function begin(request: APIRequestContext, storeId: string) {
-  const response = await request.post(oauth, { headers: headers(storeId) })
+function requestAuthorization(request: APIRequestContext, storeId: string, sellerId?: string) {
+  return request.post(oauth, { headers: headers(storeId), data: sellerId ? { sellerId } : undefined })
+}
+
+async function begin(request: APIRequestContext, storeId: string, sellerId?: string) {
+  const response = await requestAuthorization(request, storeId, sellerId)
   expect(response.status()).toBe(200)
   expect(response.headers()["cache-control"]).toContain("no-store")
   return new URL((await response.json()).authorizationUrl)
@@ -57,10 +62,12 @@ async function cookieHeader(context: BrowserContext) {
   return (await context.cookies()).map((cookie) => `${cookie.name}=${cookie.value}`).join("; ")
 }
 
-async function finish(request: APIRequestContext, url: string, result: string, cookie?: string) {
-  const response = await request.get(url, { maxRedirects: 0, headers: cookie ? { Cookie: cookie } : undefined })
+async function finish(request: APIRequestContext, url: string, result: string, requestHeaders?: Record<string, string>) {
+  const response = await request.get(url, { maxRedirects: 0, headers: requestHeaders })
   expect(response.status()).toBe(303)
   expect(response.headers()["cache-control"]).toContain("no-store")
+  expect(response.headers()["referrer-policy"]).toBe("no-referrer")
+  expect(JSON.stringify(response.headers())).not.toContain("qa-ingress-")
   const destination = new URL(response.headers().location)
   expect(destination.origin + destination.pathname).toBe(origin + dashboard)
   expect(Array.from(destination.searchParams.entries())).toEqual([["meli", result]])
@@ -73,6 +80,14 @@ async function providerEvents(name: string) {
 
 async function officialConnection(storeId: string) {
   return db.marketplaceConnection.findFirstOrThrow({ where: { storeId, id: { startsWith: "meli-oauth-v1-" } } })
+}
+
+async function expireGrant(storeId: string) {
+  const row = await officialConnection(storeId)
+  const metadata = row.metadata as Prisma.JsonObject
+  await db.marketplaceConnection.update({ where: { id: row.id }, data: { metadata: {
+    ...metadata, grant: { ...(metadata.grant as Prisma.JsonObject), expiresAt: Date.now() - 1 },
+  } } })
 }
 
 test("autoriza pelo HUB, identifica vendedor e pagina clássico e User Products em desktop e mobile", async ({ page }, info) => {
@@ -92,6 +107,12 @@ test("autoriza pelo HUB, identifica vendedor e pagina clássico e User Products 
   await expect(section.getByText("Conta simulada QA")).toBeVisible()
   await expect(section.getByText("Simulada", { exact: true })).toBeVisible()
   await expect(section.getByText("Conectado e validado")).toHaveCount(0)
+  const desktop = page.viewportSize()!
+  await page.setViewportSize({ width: 390, height: 844 })
+  const sellerInput = section.getByLabel("ID do vendedor (opcional)")
+  await sellerInput.fill("745001")
+  await expect.poll(async () => (await sellerInput.boundingBox())?.width ?? 0).toBeLessThan(390)
+  await page.setViewportSize(desktop)
   const returningToHub = page.waitForRequest((req) => {
     const url = new URL(req.url())
     return req.isNavigationRequest() && url.pathname === dashboard && url.searchParams.has("meli")
@@ -150,6 +171,12 @@ test("nega outra loja, módulo ausente, mutação de outra origem, replay e muda
   expect(await off.json()).toMatchObject({ code: "not_configured" })
   expect((await page.request.post(oauth, { headers: { ...headers(storeA), Origin: "https://other.example.invalid" } })).status()).toBe(400)
   expect((await page.request.post(listings, { headers: headers(storeA), data: { sellerId: "745002" } })).status()).toBe(400)
+  const invalidSeller = await requestAuthorization(page.request, storeA, "001")
+  expect(invalidSeller.status()).toBe(400)
+  expect(await invalidSeller.json()).toMatchObject({ code: "invalid_seller_id" })
+  const changedSeller = await requestAuthorization(page.request, storeA, "745002")
+  expect(changedSeller.status()).toBe(409)
+  expect(await changedSeller.json()).toMatchObject({ code: "account_mismatch" })
 
   const before = await providerEvents("exchange")
   const pending = await begin(page.request, storeA)
@@ -171,7 +198,7 @@ test("nega outra loja, módulo ausente, mutação de outra origem, replay e muda
   }
   expect(await providerEvents("exchange")).toBe(before)
   await finish(page.request, url, "account_mismatch")
-  await finish(page.request, url, "invalid_state", beforeCallback)
+  await finish(page.request, url, "invalid_state", { Cookie: beforeCallback })
   expect(await providerEvents("exchange")).toBe(before + 1)
   const description = await readStatus(page.request, storeA)
   expect(description.mercadoLivre.seller.id).toBe("745001")
@@ -186,17 +213,113 @@ test("nega outra loja, módulo ausente, mutação de outra origem, replay e muda
   expect(await providerEvents("exchange")).toBe(before + 1)
 })
 
-test("isola cursor e conta por loja, gira refresh uma vez e distingue limite, rede e revogação", async ({ page, browser }) => {
+test("recusa vendedor conhecido antes do consentimento e limita intenções concorrentes", async ({ page, browser }) => {
   await login(page, "manager-b", storeB)
-  const duplicate = await begin(page.request, storeB)
-  await finish(page.request, callback(duplicate, "classic"), "account_mismatch")
-  const short = await begin(page.request, storeB)
-  await finish(page.request, callback(short, "expiring"), "authorized")
+  const original = await officialConnection(storeA)
+  const exchanges = await providerEvents("exchange")
+  const duplicate = await requestAuthorization(page.request, storeB, "745001")
+  expect(duplicate.status()).toBe(409)
+  expect(duplicate.headers()["set-cookie"]).toBeUndefined()
+  expect(await duplicate.json()).toMatchObject({ code: "account_mismatch" })
+
+  const second = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true })
+  try {
+    const secondPage = await second.newPage()
+    await login(secondPage, "manager-a", storeNew)
+    const flows = [{ request: page.request, store: storeB }, { request: secondPage.request, store: storeNew }]
+    const starts = await Promise.all(flows.map((flow) => requestAuthorization(flow.request, flow.store, "745002")))
+    expect(starts.map((reply) => reply.status()).sort()).toEqual([200, 409])
+    const index = starts.findIndex((reply) => reply.ok())
+    const winner = flows[index]
+    const loser = flows[1 - index]
+    expect(await starts[1 - index].json()).toMatchObject({ code: "operation_in_progress" })
+    expect(await providerEvents("exchange")).toBe(exchanges)
+
+    const authorization = new URL((await starts[index].json()).authorizationUrl)
+    const denial = new URL(authorization.searchParams.get("redirect_uri")!)
+    denial.searchParams.set("state", authorization.searchParams.get("state")!)
+    denial.searchParams.set("error", "access_denied")
+    await finish(winner.request, denial.href, "denied")
+    expect(await providerEvents("exchange")).toBe(exchanges)
+    const retry = await begin(loser.request, loser.store, "745002")
+    const cookies = await cookieHeader(loser.store === storeB ? page.context() : second)
+    await Promise.all([
+      finish(loser.request, callback(retry, "fault"), "communication_error", {
+        Authorization: "Bearer qa-ingress-authorization",
+        Cookie: cookies + "; meli-canary=qa-ingress-cookie",
+        Referer: origin + oauth + "/callback?code=qa-ingress-referer",
+        "x-omni-search": "?code=qa-ingress-copy",
+      }),
+      (async () => {
+        await expect.poll(() => providerEvents("exchange")).toBe(exchanges + 1)
+        const pending = ((await officialConnection(loser.store)).metadata as Prisma.JsonObject).pending as Prisma.JsonObject
+        expect(pending).toMatchObject({ sellerId: "745002", used: true })
+        expect(pending.expiresAt).toBeGreaterThan(Date.now())
+        expect(pending.expiresAt).toBeLessThanOrEqual(Date.now() + 30_000)
+        const concurrent = await requestAuthorization(winner.request, winner.store, "745002")
+        expect(concurrent.status()).toBe(409)
+        expect(await concurrent.json()).toMatchObject({ code: "operation_in_progress" })
+      })(),
+    ])
+    expect(await providerEvents("exchange")).toBe(exchanges + 1)
+    expect((await officialConnection(loser.store)).refreshToken).toBe("")
+    expect(await officialConnection(storeA)).toEqual(original)
+  } finally {
+    await second.close()
+  }
+})
+
+test("recusa grant duplicado sem tocar o vínculo original e recupera refresh com nova autorização", async ({ page, browser }) => {
+  await login(page, "manager-b", storeB)
+  const other = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true })
+  try {
+    const source = await other.newPage()
+    await login(source, "manager-a", storeA)
+    const original = await officialConnection(storeA)
+    const exchanges = await providerEvents("exchange")
+    await finish(page.request, callback(await begin(page.request, storeB), "classic"), "account_mismatch")
+    expect(await providerEvents("exchange")).toBe(exchanges + 1)
+    expect(await officialConnection(storeA)).toEqual(original)
+    expect((await officialConnection(storeB)).refreshToken).toBe("")
+    expect((await readStatus(source.request, storeA)).mercadoLivre.seller.id).toBe("745001")
+
+    await expireGrant(storeA)
+    const refreshes = await providerEvents("refresh")
+    const expired = await readAds(source.request, storeA)
+    expect(expired.status()).toBe(409)
+    expect(await expired.json()).toMatchObject({ code: "reconnect_required" })
+    const status = await readStatus(source.request, storeA)
+    expect(status.mercadoLivre).toMatchObject({ state: "reconnect_required", seller: { id: "745001" } })
+    expect((await officialConnection(storeA)).refreshToken).toBe("")
+    expect((await readAds(source.request, storeA)).status()).toBe(409)
+    expect(await providerEvents("refresh")).toBe(refreshes + 1)
+
+    await finish(source.request, callback(await begin(source.request, storeA), "classic"), "authorized")
+    expect((await readAds(source.request, storeA)).status()).toBe(200)
+    expect((await officialConnection(storeA)).id).toBe(original.id)
+  } finally {
+    await other.close()
+  }
+})
+
+test("revalida a reserva antes da troca, isola páginas e distingue rotação, limite e revogação", async ({ page, browser }) => {
+  await login(page, "manager-b", storeB)
+  const claimant = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true })
+  try {
+    const claimantPage = await claimant.newPage()
+    await login(claimantPage, "manager-a", storeNew)
+    const pending = await begin(claimantPage.request, storeNew, "745003")
+    await finish(page.request, callback(await begin(page.request, storeB), "expiring"), "authorized")
+    const exchanges = await providerEvents("exchange")
+    await finish(claimantPage.request, callback(pending, "expiring"), "account_mismatch")
+    expect(await providerEvents("exchange")).toBe(exchanges)
+    expect((await officialConnection(storeNew)).refreshToken).toBe("")
+    expect((await readStatus(claimantPage.request, storeNew)).mercadoLivre.state).not.toBe("awaiting_authorization")
+  } finally {
+    await claimant.close()
+  }
   const row = await officialConnection(storeB)
-  const metadata = row.metadata as Prisma.JsonObject
-  await db.marketplaceConnection.update({ where: { id: row.id }, data: { metadata: {
-    ...metadata, grant: { ...(metadata.grant as Prisma.JsonObject), expiresAt: Date.now() - 1 },
-  } } })
+  await expireGrant(storeB)
   expect((await readStatus(page.request, storeB)).mercadoLivre.state).toBe("token_expired")
 
   const beforeRefresh = await providerEvents("refresh")
@@ -248,13 +371,12 @@ test("isola cursor e conta por loja, gira refresh uma vez e distingue limite, re
 })
 
 test("Preview recusa identidade comercial e conserva reserva após exclusão ou recriação da loja sintética", async ({ page }) => {
-  const targetStore = "meli-qa-new"
-  await login(page, "manager-a", targetStore)
-  await finish(page.request, callback(await begin(page.request, targetStore), "commercial"), "test_seller_required")
-  expect((await readStatus(page.request, targetStore)).mercadoLivre).toMatchObject({
+  await login(page, "manager-a", storeNew)
+  await finish(page.request, callback(await begin(page.request, storeNew), "commercial"), "test_seller_required")
+  expect((await readStatus(page.request, storeNew)).mercadoLivre).toMatchObject({
     state: "insufficient_permissions", seller: null, canRead: false,
   })
-  expect((await officialConnection(targetStore)).accessToken).toBe("")
+  expect((await officialConnection(storeNew)).accessToken).toBe("")
 
   const previous = await officialConnection(storeB)
   const owner = await db.logsAuditoria.findFirstOrThrow({
@@ -264,8 +386,13 @@ test("Preview recusa identidade comercial e conserva reserva após exclusão ou 
   // Apenas a loja criada pelo fixture é removida do PostgreSQL isolado do teste.
   await db.store.delete({ where: { id: storeB } })
   expect(await db.marketplaceConnection.findUnique({ where: { id: previous.id } })).toBeNull()
-  await finish(page.request, callback(await begin(page.request, targetStore), "expiring"), "account_mismatch")
-  expect((await officialConnection(targetStore)).accessToken).toBe("")
+  const before = await providerEvents("exchange")
+  const afterDelete = await requestAuthorization(page.request, storeNew, "745003")
+  expect(afterDelete.status()).toBe(409)
+  expect(await afterDelete.json()).toMatchObject({ code: "account_mismatch" })
+  expect(await providerEvents("exchange")).toBe(before)
+  await finish(page.request, callback(await begin(page.request, storeNew), "expiring"), "account_mismatch")
+  expect((await officialConnection(storeNew)).accessToken).toBe("")
 
   const recreated = await db.store.create({ data: {
     id: storeB, name: "Loja QA recriada", cnpj: "00.000.000/0002-72", moduleAccess: Prisma.DbNull,
@@ -274,6 +401,11 @@ test("Preview recusa identidade comercial e conserva reserva após exclusão ou 
   const manager = await db.adminUser.findUniqueOrThrow({ where: { email: "manager-b@marketplace-qa.invalid" } })
   await db.adminUserStore.create({ data: { storeId: recreated.id, adminUserId: manager.id } })
   await login(page, "manager-b", recreated.id)
+  const beforeRecreate = await providerEvents("exchange")
+  const afterRecreate = await requestAuthorization(page.request, recreated.id, "745003")
+  expect(afterRecreate.status()).toBe(409)
+  expect(await afterRecreate.json()).toMatchObject({ code: "account_mismatch" })
+  expect(await providerEvents("exchange")).toBe(beforeRecreate)
   await finish(page.request, callback(await begin(page.request, recreated.id), "expiring"), "account_mismatch")
   expect((await officialConnection(recreated.id)).accessToken).toBe("")
 
