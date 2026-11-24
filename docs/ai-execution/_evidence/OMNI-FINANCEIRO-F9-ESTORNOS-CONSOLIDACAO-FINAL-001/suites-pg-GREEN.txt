@@ -1,0 +1,27 @@
+## integ
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+## estorno
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+## f9
+ Test Files  1 passed (1)
+      Tests  26 passed (26)
+## misto2
+ Test Files  2 passed (2)
+      Tests  58 passed (58)
+## frg2
+ Test Files  2 passed (2)
+      Tests  77 passed (77)
+## f006b
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+## hard
+ Test Files  1 passed (1)
+      Tests  22 passed (22)
+## hardening-p1-transitivos (branch)
+19
+## hardening-p1-transitivos (origin/main c2e9319, mesmo mock)
+⎯⎯⎯⎯⎯⎯ Failed Tests 19 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  19 failed | 32 passed (51)
+falhas idênticas por nome: sim (diff vazio)

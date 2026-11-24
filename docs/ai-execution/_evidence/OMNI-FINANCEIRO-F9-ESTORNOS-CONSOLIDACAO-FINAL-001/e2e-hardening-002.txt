@@ -1,0 +1,35 @@
+# E2E HARDENING-002 — build da branch (4b3fa47 + merge main f97e9de), next start 127.0.0.1:3007, PG descartável fin_receb_f9_qa_e2e recriado + bootstrap
+
+## rodada 1 (servidor FRIO): 07 corrigido, Pagar pela tela (novo), avisos HUB 003, 04, aceite F9+estorno 002
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (3.9s)
+  ok 2 [chromium] › e2e\specs\04-financeiro-v2.spec.ts:5:7 › Financeiro HUB v2 › carrega shell, abas e conteúdo principal (1.5s)
+  ok 3 [chromium] › e2e\specs\07-financeiro-relatorios-export.spec.ts:7:7 › Financeiro — Fase 2 (central relatórios + export) › abre central Relatórios e, no HUB, tab Relatórios com botões de exportação (1.4s)
+  ok 4 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:79:5 › Aceite 002 — PDV 100 + 50, estorno do 2º pelo HUB, 2ª via, Fechamento de Caixa e Relatório Geral pela tela (13.3s)
+  ok 5 [chromium] › e2e\specs\financeiro-f9-estorno-aceite-002.spec.ts:290:5 › Aceite 002 — terminal ocupado por outro computador: supervisor assume pelo fluxo real (6.6s)
+  ok 6 [chromium] › e2e\specs\financeiro-hub-avisos-estorno-003.spec.ts:66:5 › Financeiro HUB — estorno mostra sucesso e cada recusa, sem tratar recusa como sucesso (35.2s)
+  ok 7 [chromium] › e2e\specs\financeiro-pagar-identidade-h002.spec.ts:27:5 › Contas a Pagar — 2 parciais e 2 estornos pela tela: pré-condições aceitas, estorno pela identidade, movimentação conciliada (4.3s)
+  7 passed (1.2m)
+
+## financeiro-recebimentos-f9-print-001 (após TTL do terminal)
+requestfailed GET http://127.0.0.1:3007/api/ops/vendas-list?lojaId=000-qa-fin-f9 net::ERR_ABORTED
+requestfailed GET http://127.0.0.1:3007/api/version net::ERR_ABORTED
+  4 passed (28.7s)
+
+## financeiro-f9-tres-layouts-001 — 1ª tentativa: cupom do Clássico medido em 215,9 mm (Carta) uma vez; retries por timeout com lock de terminal preso
+    Received:   135.89999999999998
+    test-results\specs-financeiro-f9-tres-l-c285b-al-cupom-80mm-2ª-via-e-foco-chromium\test-failed-1.png
+  7 failed
+  1 passed (16.6m)
+
+## financeiro-f9-tres-layouts-001 — repetição sem retries (TTL respeitado)
+  ok 1 [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão (1.8s)
+  ok 2 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Clássico — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 80mm, 2ª via e foco (13.8s)
+  ok 3 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Clássico — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja (2.3m)
+  ok 4 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Assistência — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 58mm, 2ª via e foco (2.2m)
+  ok 5 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Assistência — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja (2.2m)
+  ok 6 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Supermercado — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 80mm, 2ª via e foco (2.3m)
+  ok 7 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Supermercado — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja (2.4m)
+  ok 8 [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:429:5 › API — perfil sem permissão (TÉCNICO) e loja sem vínculo recebem 403, sem nenhuma escrita (2.3s)
+  8 passed (11.7m)
+
+Nenhum arquivo de impressão/comprovante mudou nesta rodada (git diff 70e2d2e..HEAD). Intermitência registrada, não reproduzida.

@@ -1,10 +1,11 @@
 import { test, expect } from "@playwright/test"
-import { dismissFirstAccessWizardIfPresent, ensureCaixaAberto } from "../helpers"
+import { dismissFirstAccessWizardIfPresent, ensureCaixaAberto, selecionarTerminalSeSolicitado } from "../helpers"
 
 test.describe("PDV / Vendas", () => {
   test("abre vendas, área de caixa e fluxo leve de pagamento (modal)", async ({ page }) => {
     await page.goto("/dashboard/vendas")
     await dismissFirstAccessWizardIfPresent(page)
+    await selecionarTerminalSeSolicitado(page)
 
     await expect(
       page.getByPlaceholder(/Código \/ Bipe|Buscar produto|Digite produto|código/i),

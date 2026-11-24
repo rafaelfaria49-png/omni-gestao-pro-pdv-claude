@@ -22,17 +22,17 @@ import {
   buildContaReceberSummary,
   cancelContaReceber,
   getContaReceberByLocalKey,
-  liquidarContaReceber,
-  registrarPagamentoParcial,
-  estornarContaReceber,
   upsertContaReceber,
 } from "@/lib/financeiro/services"
+import { isRecebimentoLoteError, validarRecebimentoLote } from "@/lib/financeiro/services/recebimento-lote-service"
+import { executarRecebimentoFinanceiro, operacaoJaRegistrada } from "@/lib/financeiro/services/recebimento-financeiro-service"
 import {
-  createMovimentacaoEntradaFromReceber,
-  estornarMovimentacaoPorReferencia,
-} from "@/lib/financeiro/services/movimentacoes-service"
+  EstornoRecebimentoError,
+  estornarRecebimentoContaReceber,
+} from "@/lib/financeiro/services/estorno-recebimento-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { registrarRecebimentoCrSeCaixaAberto } from "@/lib/caixa/recebimento-cr-caixa"
+import { mapearNomesAmbiguos } from "@/lib/contas-receber-cliente-match"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -59,24 +59,6 @@ function parseHistorico(payload: unknown): HistEntry[] {
   return hist.filter((e) => e && typeof e === "object") as HistEntry[]
 }
 
-/**
- * Resolve `carteiraId` do payload do título, validando que existe na loja e
- * está ativa. Retorna `null` quando o título não tem carteira definida ou
- * quando a carteira foi removida/desativada (a movimentação não é vinculada).
- */
-async function resolveCarteiraIdFromPayload(payload: unknown, storeId: string): Promise<string | null> {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null
-  const raw = (payload as Record<string, unknown>).carteiraId
-  if (typeof raw !== "string") return null
-  const id = raw.trim()
-  if (!id) return null
-  const c = await prisma.carteiraFinanceira.findFirst({
-    where: { id, storeId, ativo: true },
-    select: { id: true },
-  })
-  return c?.id ?? null
-}
-
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const postSchema = z.object({
@@ -101,6 +83,10 @@ const patchSchema = z.discriminatedUnion("op", [
     localKey: z.string().min(1).max(260),
     observacao: z.string().max(2000).optional(),
     formaPagamento: z.string().max(80).optional(),
+    /** Identidade da operação: retry com a MESMA chave devolve o resultado gravado (sem 2ª baixa). */
+    idempotencyKey: z.string().min(1).max(160).optional(),
+    /** Saldo em aberto que o operador viu. Diferente do atual = 409 sem escrita. */
+    saldoEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("parcial"),
@@ -109,6 +95,8 @@ const patchSchema = z.discriminatedUnion("op", [
     valor: z.number().finite().positive("Valor deve ser positivo"),
     observacao: z.string().max(2000).optional(),
     formaPagamento: z.string().max(80).optional(),
+    idempotencyKey: z.string().min(1).max(160).optional(),
+    saldoEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("estornar"),
@@ -116,6 +104,10 @@ const patchSchema = z.discriminatedUnion("op", [
     localKey: z.string().min(1).max(260),
     modo: z.enum(["titulo_completo", "ultimo_pagamento"]),
     motivo: z.string().max(2000).optional(),
+    /** Identidade do pagamento (índice no `historico`). Retry do mesmo índice = 409 sem escrita. */
+    pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(),
+    /** Recebido que o operador viu. Diferente do atual = 409 sem escrita (retry seguro). */
+    recebidoEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("cancelar"),
@@ -197,6 +189,7 @@ export async function GET(req: Request) {
       const numero = typeof parcelaObj?.numero === "number" ? parcelaObj.numero : null
       const total = typeof parcelaObj?.total === "number" ? parcelaObj.total : null
       const parcelaLabel = numero && total ? `${numero}/${total}` : null
+      const clienteIdRaw = pl && typeof pl.clienteId === "string" ? pl.clienteId.trim() : ""
       return {
         id: (t.localKey?.trim() || t.id) as string,
         descricao: t.descricao,
@@ -205,12 +198,18 @@ export async function GET(req: Request) {
         vencimento: t.vencimento,
         status: t.status,
         parcela: parcelaLabel,
+        /** `Cliente.id` gravado pela origem (`payload.clienteId`) — identidade segura p/ agrupar. */
+        ...(clienteIdRaw ? { clienteId: clienteIdRaw } : {}),
       }
     })
 
+    // Nomes com 2+ cadastros na loja: o HUB não junta títulos só pelo nome nesses casos.
+    const clientesLoja = await prisma.cliente.findMany({ where: { storeId }, select: { id: true, name: true } })
+    const nomesAmbiguos = Array.from(mapearNomesAmbiguos(clientesLoja))
     return NextResponse.json({
       ok: true,
       rows,
+      nomesAmbiguos,
       summary: buildContaReceberSummary(titulos),
       audit: buildContaReceberAuditTrail(titulos),
       metadata: { source: "server", storeId, generatedAt: new Date().toISOString() },
@@ -321,10 +320,15 @@ export async function PATCH(req: Request) {
   try {
     await prismaEnsureConnected()
 
-    // Bloqueio de período fechado para operações de mutação
+    // Bloqueio de período fechado para operações de mutação. O retry de uma baixa JÁ gravada
+    // (mesma idempotencyKey) segue para o replay, que não escreve — igual ao `receber-lote`.
     if (["liquidar", "parcial", "estornar"].includes(parsed.data.op)) {
       const lock = await verificarPeriodoFechado(storeId, new Date())
-      if (lock.fechado) {
+      const chaveReplay =
+        (parsed.data.op === "liquidar" || parsed.data.op === "parcial") && parsed.data.idempotencyKey?.trim()
+          ? parsed.data.idempotencyKey.trim()
+          : ""
+      if (lock.fechado && !(chaveReplay && (await operacaoJaRegistrada(prisma, storeId, chaveReplay)))) {
         return err(
           "Período financeiro fechado. Reabra o fechamento para alterar lançamentos.",
           "periodo_fechado",
@@ -368,77 +372,110 @@ export async function PATCH(req: Request) {
       })
     }
 
-    if (parsed.data.op === "liquidar") {
-      // Saldo REAL em aberto ANTES de quitar (valor − pagamentos já no histórico).
-      // `res.data.valor` é a coluna BRUTA e NÃO diminui em baixas parciais via backend —
-      // usá-lo lançaria mais que o devido na movimentação/auditoria de títulos já parciais.
-      const atual = await getContaReceberByLocalKey(storeId, parsed.data.localKey)
-      const abertoAntes = atual ? buildContaReceberAuditTrail([atual])[0]?.saldoAberto ?? 0 : 0
-
-      const res = await liquidarContaReceber({
-        storeId,
-        localKey: parsed.data.localKey,
-        observacao: parsed.data.observacao,
-        formaPagamento: parsed.data.formaPagamento,
-        userLabel,
-        tituloSnapshot: atual ?? undefined,
-      })
-      if (!res.ok) {
-        return err(
-          res.reason,
-          `liquidar_${res.reason}`,
-          res.reason === "titulo_alterado" ? 409 : 422,
-        )
+    if (parsed.data.op === "liquidar" || parsed.data.op === "parcial") {
+      // Mesmo motor do `POST /api/financeiro/receber-lote` (1 título): título + histórico +
+      // movimentação + carteira numa ÚNICA transação — antes a movimentação era gravada
+      // depois, fora da transação, e uma falha nela era só logada (baixa sem entrada).
+      //  - com `idempotencyKey` (+ `saldoEsperado`): retry/clique duplo = replay sem 2ª baixa;
+      //  - sem chave (legado): chave gerada aqui — atômico, mas sem proteção de retry.
+      const d = parsed.data
+      const op = d.op
+      const chaveCliente = d.idempotencyKey?.trim() ?? ""
+      if (chaveCliente && d.saldoEsperado === undefined) {
+        return err("saldoEsperado é obrigatório junto com idempotencyKey", `${op}_saldo_esperado_obrigatorio`, 400)
       }
-      const valorMov = abertoAntes > 0 ? abertoAntes : res.data.valor
-      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
-      // Gerar movimentação de entrada (idempotente) — vincula à carteira do título se houver
-      await createMovimentacaoEntradaFromReceber(
-        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
-        valorMov,
-        { carteiraId },
-      ).catch((e) => console.error("[receber/liquidar mov]", e))
-      void logAuditoriaFinanceira({
-        storeId, entidade: "receber", entidadeId: res.data.id, acao: "liquidar", actor,
-        depois: { localKey: parsed.data.localKey, valor: valorMov, carteiraId, ...(parsed.data.formaPagamento ? { formaPagamento: parsed.data.formaPagamento } : {}) },
-      })
-      return NextResponse.json({ ok: true, op: "liquidar" })
-    }
-
-    if (parsed.data.op === "parcial") {
-      const res = await registrarPagamentoParcial({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, formaPagamento: parsed.data.formaPagamento, userLabel })
-      if (!res.ok) {
-        return err(
-          res.reason,
-          `parcial_${res.reason}`,
-          res.reason === "titulo_alterado" ? 409 : 422,
-        )
+      let saldoEsperado = d.saldoEsperado
+      if (saldoEsperado === undefined) {
+        const atual = await getContaReceberByLocalKey(storeId, d.localKey)
+        if (!atual) return err("not_found", `${op}_not_found`, 422)
+        saldoEsperado = buildContaReceberAuditTrail([atual])[0]?.saldoAberto ?? 0
+        if (op === "liquidar" && !(saldoEsperado > 0.009)) return err("ja_pago", "liquidar_ja_pago", 422)
       }
-      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
-      // Gerar movimentação de entrada parcial (idempotente por soma total)
-      await createMovimentacaoEntradaFromReceber(
-        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
-        parsed.data.valor,
-        { parcial: true, carteiraId },
-      ).catch((e) => console.error("[receber/parcial mov]", e))
-      void logAuditoriaFinanceira({
-        storeId, entidade: "receber", entidadeId: res.data.id, acao: "liquidar", actor,
-        depois: { localKey: parsed.data.localKey, valorPago: parsed.data.valor, parcial: true, carteiraId, ...(parsed.data.formaPagamento ? { formaPagamento: parsed.data.formaPagamento } : {}) },
+      const chave = chaveCliente || `fin-patch-${crypto.randomUUID()}`
+      const validacao = validarRecebimentoLote({
+        idempotencyKey: chave,
+        itens: [{ localKey: d.localKey, saldoEsperado, valorReceber: op === "parcial" ? d.valor : saldoEsperado }],
       })
-      return NextResponse.json({ ok: true, op: "parcial" })
+      if (!validacao.ok) return err(validacao.mensagem, `${op}_${validacao.code}`, 400)
+      let outcome: Awaited<ReturnType<typeof executarRecebimentoFinanceiro>>
+      try {
+        outcome = await prisma.$transaction(
+          (tx) =>
+            executarRecebimentoFinanceiro(
+              tx,
+              {
+                storeId,
+                formaPagamento: d.formaPagamento?.trim() ?? "",
+                observacao: d.observacao,
+                idempotencyKey: chave,
+                userLabel,
+              },
+              validacao.itens,
+            ),
+          { maxWait: 5_000, timeout: 15_000 },
+        )
+      } catch (e) {
+        if (isRecebimentoLoteError(e)) {
+          return NextResponse.json({ ok: false, error: e.message, code: `${op}_${e.code}`, detalhes: e.detalhes }, { status: e.status })
+        }
+        throw e
+      }
+      const item = outcome.itens[0]
+      if (!outcome.jaRegistrado && item) {
+        void logAuditoriaFinanceira({
+          storeId, entidade: "receber", entidadeId: item.tituloId, acao: "liquidar", actor,
+          depois: {
+            localKey: d.localKey, valor: item.valorRecebido, ...(op === "parcial" ? { parcial: true } : {}),
+            saldoDepois: item.saldoDepois, operacao: outcome.operacaoId,
+            ...(d.formaPagamento ? { formaPagamento: d.formaPagamento } : {}),
+          },
+        })
+      }
+      return NextResponse.json({
+        ok: true,
+        op,
+        jaRegistrado: outcome.jaRegistrado,
+        operacaoId: outcome.operacaoId,
+        valorRecebido: item?.valorRecebido ?? 0,
+        saldoDepois: item?.saldoDepois ?? 0,
+        statusFinal: item?.statusFinal ?? null,
+      })
     }
 
     if (parsed.data.op === "estornar") {
-      const res = await estornarContaReceber({ storeId, localKey: parsed.data.localKey, modo: parsed.data.modo, motivo: parsed.data.motivo, userLabel })
-      if (!res.ok) return err(res.reason, `estornar_${res.reason}`, 422)
-      // Estornar movimentação correspondente (idempotente)
-      await estornarMovimentacaoPorReferencia(storeId, res.data.id, "receber")
-        .catch((e) => console.error("[receber/estornar mov]", e))
-      void logAuditoriaFinanceira({
-        storeId, entidade: "receber", entidadeId: res.data.id, acao: "estornar", actor,
-        depois: { localKey: parsed.data.localKey, modo: parsed.data.modo, motivo: parsed.data.motivo },
+      // Ledger + movimentação (valor exato do pagamento) + compensação no Caixa numa única
+      // transação. Recusa = nada gravado; a mensagem diz por quê.
+      let r: Awaited<ReturnType<typeof estornarRecebimentoContaReceber>>
+      try {
+        r = await estornarRecebimentoContaReceber({
+          storeId,
+          localKey: parsed.data.localKey,
+          modo: parsed.data.modo,
+          pagamentoIndex: parsed.data.pagamentoIndex,
+          recebidoEsperado: parsed.data.recebidoEsperado,
+          motivo: parsed.data.motivo,
+          userLabel,
+        })
+      } catch (e) {
+        if (e instanceof EstornoRecebimentoError) return err(e.message, `estornar_${e.code}`, e.status)
+        throw e
+      }
+      if (!r.jaEstornado) {
+        void logAuditoriaFinanceira({
+          storeId, entidade: "receber", entidadeId: r.titulo.id, acao: "estornar", actor,
+          depois: {
+            localKey: parsed.data.localKey, modo: parsed.data.modo, motivo: parsed.data.motivo,
+            valorEstornado: r.valorEstornado, pagamentos: r.pagamentos, movimentacao: r.movimentacao,
+          },
+        })
+      }
+      return NextResponse.json({
+        ok: true,
+        op: "estornar",
+        jaEstornado: r.jaEstornado,
+        valorEstornado: r.valorEstornado,
+        pagamentos: r.pagamentos,
       })
-      return NextResponse.json({ ok: true, op: "estornar" })
     }
 
     // cancelar — não gera movimentação nova

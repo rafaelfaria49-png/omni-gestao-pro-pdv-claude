@@ -1,0 +1,16 @@
+# E2E autenticado — next start 127.0.0.1:3007 (build de produção da branch, commit 44c2250), PG descartável fin_receb_f9_qa_e2e, massa sintética
+
+## rodada 1 — financeiro-f9-estorno-aceite-002 (setup + 2 testes)
+  3 passed (16.1s)
+
+## rodada 2 — financeiro-hub-avisos-estorno-003 + 04-financeiro-v2 + 07-financeiro-relatorios-export (07 = seletor ambíguo na central de relatórios da main; branch não toca relatórios)
+    Error: expect.toBeVisible: Error: strict mode violation: getByText(/Central de inteligência/i) resolved to 2 elements:
+    test-results\specs-07-financeiro-relato-edd12-os-com-botões-de-exportação-chromium\test-failed-1.png
+  1 failed
+  3 passed (2.2m)
+
+## rodada 3 — financeiro-recebimentos-f9-print-001 (após TTL de 120 s do terminal)
+  4 passed (23.4s)
+
+## rodada 4 — financeiro-f9-tres-layouts-001 (Classic, Assistência, Supermercado)
+  8 passed (10.9m)

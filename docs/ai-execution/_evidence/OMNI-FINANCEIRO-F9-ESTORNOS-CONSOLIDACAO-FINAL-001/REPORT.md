@@ -1,0 +1,207 @@
+# OMNI-FINANCEIRO-F9-ESTORNOS-CONSOLIDACAO-FINAL-001 — relatório
+
+Data: 2026-11-24 · Repositório: rafaelfaria49-png/omni-gestao-pro-pdv-claude
+Branch: `feat/omni-financeiro-f9-estornos-final-001` · worktree `.worktrees/fin-f9-estornos-final-001`
+Base: `origin/main` **c2e9319** (pós-#394). Sem migration, sem schema, sem auth/proxy, sem Production, sem merge.
+
+## 1. Origem e reconciliação
+
+| PR | Head usado | Situação na main | Como entrou |
+|---|---|---|---|
+| #384 estorno por identidade + Caixa | `bb76132` | 0 de 2 commits na main | merge `133bfb5` — único conflito: `docs/ai/CURRENT_STATUS.md` (adendos mantidos, os dois) |
+| #341 F9 + HUB + comprovante | `6c4641f` | 1 de 9 commits já equivalente na main (heap do typecheck); demais fora | merge `1efa9ac`, sem conflito |
+| #388 avisos do HUB (Toaster) | `ca845f9` | 0 de 1 na main | merge `4b51e76`, sem conflito |
+
+Reaproveitado sem mudança: todo o código das três PRs; a suíte combinada `test/fin-f9-estorno-integ`
+(64d3bba) e o spec de aceite `e2e/specs/financeiro-f9-estorno-aceite-002.spec.ts` (bcba569) — commit
+`5b1755a`. O patch do Toaster que estava em bcba569 **não** foi copiado: veio da #388.
+As três PRs originais ficaram intocadas (evidência).
+
+## 2. Correções novas (commit `4057b12`)
+
+**R1 · PATCH parcial/liquidar sem idempotência e com movimentação fora da transação.**
+`PATCH /api/financeiro/receber` `op=parcial|liquidar` gravava título e histórico, e só depois, fora da
+transação, a movimentação (`.catch(console.error)`): uma falha deixava baixa sem entrada financeira, e
+retry ou clique duplo gravava 2º pagamento. Agora usa `executarRecebimentoFinanceiro` (o motor do
+`receber-lote`, #341): título + histórico + movimentação + carteira numa `$transaction`.
+- `idempotencyKey` + `saldoEsperado` (opcionais, juntos): retry = replay (`jaRegistrado: true`), mesma
+  chave com outro valor = 409 `*_idempotency_conflict`, saldo mudou = 409 `*_saldo_divergente`.
+- Sem chave (legado): chave gerada no servidor — atômico, sem proteção de retry. A tela do HUB já não
+  usa este caminho (usa `receber-lote`), só chamadores legados/API.
+- Período fechado continua bloqueando operação nova; replay de operação já gravada passa (igual ao lote).
+
+**R2 · Estorno da OS (`estornarRecebimentoOSV3`) sem identidade, sem saída financeira e com caixa cego.**
+Antes: estornava "o último" sem identidade, não lançava a saída na `MovimentacaoFinanceira` (fluxo de
+caixa ficava com a entrada inteira), criava `estorno_recebimento_cr` sem forma nem referência — o que
+**bloqueava** depois qualquer estorno do mesmo título pelo Financeiro (`estorno_de_caixa_legado_sem_referencia`)
+— e compensava a gaveta mesmo quando o pagamento nunca passou por ela (ex.: recebido no HUB).
+Agora, na mesma transação e travas de antes:
+- alvo = último pagamento ATIVO por `pagamentosAtivosDoHistorico`; histórico ambíguo = recusa;
+- entrada de caixa localizada por `localizarEntradaCaixaDoPagamento` (contrato da #384):
+  `encontrada` → compensação no **caixa atual aberto** com `refCaixaOperacaoId`, `historicoIndex` e a
+  forma da entrada original (por forma, no split); `sem_caixa` → nenhuma compensação;
+  `ambigua` → recusa sem escrita;
+- saída financeira com `estornarMovimentacaoDePagamentoReceber` (valor exato, carteira recalculada);
+- pré-condição `recebidoEsperado` (o hook da tela envia o recebido exibido): 2º clique/retry recusado.
+- Sessão fechada nunca é editada (exigência de caixa aberto mantida).
+
+**R3 · achado da revisão independente (P2-4), corrigido.** O recebimento misto da OS dividido por forma
+(ex.: 30 dinheiro + 20 pix) grava N entradas de caixa com o mesmo `operacaoId`, mas o pagamento no ledger
+não tinha `loteId` → o localizador não ligava as entradas e o estorno (OS ou HUB) seria recusado.
+- dados novos: `recebimento-misto-service` carimba `loteId = operacaoId` (mesmo campo do `receberOSV3`);
+- legado: `localizarEntradaCaixaDoPagamento` aceita o grupo de entradas com o MESMO `operacaoId`, numa só
+  sessão, cuja soma livre é exatamente o pagamento — só se for o único grupo e o único pagamento candidato.
+- P2-2 da revisão: `POST /api/financeiro/contas-receber/estornar-ultimo-pagamento` passa a aceitar
+  `recebidoEsperado` (sem chamador na UI; protege retry de API).
+
+Mudança de contrato a conhecer: compensação da OS continua na sessão ATUAL (o dinheiro sai da gaveta
+de agora); a do Financeiro (#384) continua na sessão de ORIGEM. As duas referenciam a entrada original,
+então nenhuma entrada é compensada duas vezes (G2).
+
+## 3. Testes
+
+PostgreSQL 17 descartável no scratchpad (porta própria, `SHOW data_directory` conferido), schema pelo
+datamodel vigente (`migrate diff --from-empty`). Nenhum banco real tocado.
+
+| Suíte | Resultado |
+|---|---|
+| **Nova** `test/fin-f9-estornos-final` (F1–F6 PATCH, G1–G7 estorno OS) | **RED 9/11 na base consolidada `5b1755a`** (F1–G5) → **GREEN 13/13**; G6/G7 (misto dividido) adicionados depois da revisão, sem rodada RED própria (`consolidacao-RED-base-5b1755a.txt`, `consolidacao-GREEN.txt`) |
+| `test/ops-v4-financeiro-retirada-garantia-00{1,2}` (FRG) / `ops-v4-fluxo-curto-006` | 77/77 · 18/18 (rerun pós-R3; 1 timeout intermitente de 5 s no T50, verde na repetição) |
+| `test/fin-f9-estorno-integ` (A–K #384+#341, Relatório Geral) | 14/14 |
+| `test/fin-estorno-p1` (#384) | 24/24 |
+| `test/fin-receb-f9-print` (#341) | 26/26 |
+| `test/ops-v3-recebimento-misto/recebimento-misto.pg.ts` | 36/36 (com o mock de sessão corrigido) |
+| `test/ops-v3-recebimento-misto/hardening-p1.pg.ts` | 22/22 |
+| `test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts` | 32/51 — **as mesmas 19 falhas na `origin/main`** (rotas globais/seed; pré-existente) |
+| Runner CI `scripts/ci/run-root-pg-suites.mjs` | OPS V4 fluxo 41/41, 006 18/18, 007 13/13, FRG 77/77; `aparelhos` não preparou no Windows (erro de stdio do `prisma migrate diff`; roda no CI Linux) |
+| Unit/componente afetados (Node 22) | 3196 pass; 6 falhas = 2 arquivos PG-only + 3 PDV instáveis sob carga, **verdes isolados** (131/131 e 200/200) |
+| Suíte da raiz sem PG (job Container do CI) | 1º run da PR: 5 falhas em 2 arquivos desta entrega — `receber-liquidar-saldo.test.ts` (harness em memória sem a trava consultiva do motor novo) e `recebimento-lote.test.ts` (chaves `operacaoId`/`recebidoEm` que a #341 acrescentou à resposta) — **corrigidas**; localmente 58/58. Falhas restantes só no Windows local (fiscal/auth/contador/caixa estático), ausentes no CI Linux |
+| `npm run build` | exit 0, "Compiled successfully" |
+| E2E autenticado (`next start` 127.0.0.1:3007 do build da branch, NextAuth real, PG descartável) | `financeiro-f9-estorno-aceite-002` 3/3 · `financeiro-recebimentos-f9-print-001` 4/4 · `financeiro-f9-tres-layouts-001` 8/8 · `financeiro-hub-avisos-estorno-003` + `04-financeiro-v2` verdes · `07-financeiro-relatorios-export` vermelho por seletor ambíguo (`Central de inteligência` ×2) na central de relatórios da main — branch não toca relatórios (`e2e.txt`) |
+| `npm run typecheck` (heap 6144) | exit 0 |
+| `npm run lint` | 0 erros (67 avisos pré-existentes) |
+
+Harness corrigido (só teste): as suítes `ops-v3-recebimento-misto/*.pg.ts` simulavam sessão com
+`storeAccess: "all"`, mas `canAccessStore` exige `allowedStoreIds` → 103/109 caíam no guard de loja
+na própria main. O mock agora lista as lojas criadas pela suíte.
+
+## 4. Relatório Geral (PR #381, já na main)
+
+Provado em PG pela consulta real `generalAggregates`: recebimento posterior não vira venda
+(classe `recebimento_titulo`), estorno abate (`estorno_recebimento`), caixa das sessões com recebimentos
+e estornos separados (integ D; G2: recebimentos 150 / estornos 150 após estorno pela OS + pelo HUB),
+lojas isoladas (consultas por `storeId`; F6 e integ multi-loja).
+
+## 5. Revisão independente (segurança e integridade financeira)
+
+Revisor separado, somente leitura, sobre `origin/main...HEAD`: **nenhum P0/P1**. Conferidos: estorno
+duplo / pagamento errado, baixa dupla, divergência título×histórico×movimentação×carteira×caixa, sessão
+fechada, referência inventada, escopo `storeId` em todo SQL cru, ordem de travas, sucesso sem confirmação
+na UI (HUB e F9), Relatório Geral. P2 apontados:
+- P2-1 (#384): janela de deadlock quando outro recebimento entra numa 3ª sessão entre a leitura prévia e a
+  trava do título — desfecho seguro (rollback total, `titulo_alterado`; lote faz replay). Não alterado.
+- P2-2: `recebidoEsperado` na rota `estornar-ultimo-pagamento` — **corrigido**.
+- P2-3 (pré-existente, igual na main): `POST /api/pdv/receber-conta` confere a sessão ABERTA fora da
+  transação e sem trava — recebimento pode cair numa sessão fechada no mesmo instante. **Corrigido no
+  HARDENING-002** (seção 6).
+- P2-4: misto dividido por forma — **corrigido (R3)**.
+- P2-5: política diferente para sessão de origem fechada (OS compensa no caixa atual; Financeiro recusa) —
+  ambas sem editar sessão fechada; decisão de produto.
+- P2-6 (Contas a PAGAR): `estornarMovimentacaoPorReferencia` (#341) estorna o líquido; no `pagar`
+  op=estornar "último" depois de re-pagamentos podia estornar a mais (na main, a menos). **Corrigido no
+  HARDENING-002** (seção 6) — o Pagar não usa mais essa função.
+
+## 6. HARDENING-002 (`OMNI-FINANCEIRO-F9-ESTORNOS-FINAL-HARDENING-002`)
+
+Base: head anterior `70e2d2e`; main reconciliada `f97e9de` (merge `9eacfaa`, conflito só no
+`CURRENT_STATUS.md`). Commits: `e5933cc`, `3959a5c`, `4b3fa47` + spec/evidências.
+
+**F9 × fechamento de caixa (P2-3).** `POST /api/pdv/receber-conta` relê e trava a sessão `FOR SHARE`
+DENTRO da transação (ordem sessão → título, igual ao estorno e à OS V3). O fechamento
+(`UPDATE … FECHADA`, rota inalterada) espera o recebimento; se fechou antes, o F9 vê `FECHADA` e recusa
+(`caixa_fechado`, 409, sem escrita). O replay de operação já gravada vale mesmo com a sessão fechada (antes:
+409). PG: H1 (fechamento primeiro → recusa), H2 (recebimento primeiro → o fechamento espera), H3 (replay após
+fechamento), H4 (clique duplo = 1 pagamento/1 caixa/1 movimentação).
+
+**Contas a Pagar por identidade (P2-6, e o defeito maior por trás dele).** Na main e na #397 anterior,
+`estornarContaPagar` "último" pegava o último `pagamento` do array MESMO JÁ ESTORNADO — dois estornos seguidos
+revertiam o mesmo pagamento (RED P6: índices `[2,2]`); a gravação era `update` cego (RED P9: lançamento perdido
+na concorrência); a movimentação era gravada depois, fora da transação, com heurística de soma (RED P12: a 2ª
+parcial menor ficou sem saída) e o estorno revertia o líquido do título. Agora:
+- alvo = último pagamento ATIVO por `pagamentosAtivosDoHistorico` (contrato do Receber); `pagamentoIndex`
+  opcional; histórico ambíguo (estorno sem ref, mesmo índice 2×) = 409 sem escrita;
+- PATCH liquidar/parcial/estornar numa transação: título `FOR UPDATE`, ledger com CAS (`updatedAt`),
+  movimentação e carteira na MESMA transação; saída por pagamento sem heurística;
+- estorno lança a entrada EXATA do pagamento (`estornarMovimentacaoDePagamentoPagar`, generalização da do
+  Receber), nunca abaixo do que o ledger ainda diz pago; o Pagar não usa mais `estornarMovimentacaoPorReferencia`
+  (que segue intacta para cancelar/corrigir venda);
+- pré-condições `pagoEsperado` (estorno) e `restanteEsperado` (pagamento), enviadas pelo HUB com o valor
+  exibido: clique duplo/retry = 409; `cancelContaPagar` com CAS;
+- HUB: o audit do Pagar passa a ser lido pelo `localKey` (título parcial aparecia com "pago 0").
+PG P1–P15: integral, parciais, estorno, novo pagamento após estorno, novo estorno, valores iguais, clique duplo,
+retry, concorrência, índice explícito, ambíguo, Relatório Geral (`pagamento_titulo` 150 / `estorno_pagamento` 50),
+isolamento por loja, cancelamento.
+
+**RED/GREEN.** `hardening-002.pg.ts` contra `70e2d2e`: 15/17 vermelhos
+(`hardening-002-RED-base-70e2d2e.txt`; P1–P5/P10 caem primeiro nos campos novos da resposta — o defeito que
+eles cobrem aparece isolado em P6/P12). Com a correção: 17/17 (+P14/P15 = 19); suíte da pasta 32/32.
+
+**Idempotência legado.** Ver seção 7: nenhum chamador ativo do PATCH legado do Receber sem chave; não há
+idempotência universal nesse caminho.
+
+**E2E 07.** Reproduzido na main `f97e9de` com o servidor FRIO (1ª execução): 2 `<p>` "Central de inteligência",
+o 2º fora da árvore de acessibilidade (cópia do streaming no 1º render). Aquecido, passa — por isso não
+aparecera na primeira tentativa. Corrigido só o seletor (`getByRole("paragraph")…`), mesma asserção;
+verde a frio na main e na branch (`e2e-07-main-baseline.txt`).
+
+**E2E autenticado (build da branch com a main f97e9de, `e2e-hardening-002.txt`).** Servidor frio: 07 corrigido,
+Contas a Pagar pela tela (spec novo `financeiro-pagar-identidade-h002`: 2 parciais + 2 estornos, pré-condições
+enviadas com o valor exibido e aceitas, refs `[1,0]`, saídas `[100,50]`, entradas `[50,100]`), avisos do HUB
+003, 04 e aceite F9+estorno 002 = 7/7; comprovante F9 4/4; três layouts 8/8 na repetição. Na 1ª tentativa dos
+três layouts o cupom do Clássico foi medido uma vez em 215,9 mm (Carta) e os retries caíram por timeout com o
+lock do terminal preso; não reproduziu na repetição e nenhum arquivo de impressão mudou nesta rodada —
+registrado como intermitência do harness, a observar.
+
+**PDV Black.** NÃO APLICÁVEL: é shell da superfície experimental `next` (gated por
+`NEXT_PUBLIC_OG_EXPERIMENTAL`, `lib/pdv/pdv-registry.ts`); o F9 dele abre a busca de cliente CPF/CNPJ
+(`components/pdv-next/PdvBlackEdition.tsx:477`), e nada em `components/pdv-next` usa `PdvRecebimentoModal`
+ou `/api/pdv/receber-conta`. Recebimento F9 existe só em Classic, Assistência e Supermercado (E2E 8/8).
+
+**Revisão independente (pós-ajuste):** nenhum P0/P1. P2 (todos pré-existentes ou fail-closed deliberado):
+1. estorno a menos em dado legado já divergente (movimentação zerada pelo estorno antigo do líquido): a saída
+   nunca passa do excedente; `divergente` vai só para a auditoria;
+2. títulos com estorno duplicado antigo ficam bloqueados (`historico_ambiguo`) — regularização manual;
+3. `ops/caixa/fechar` calcula o snapshot antes do `UPDATE`: um recebimento que commita nesse intervalo entra na
+   sessão (somado pelos leitores por sessão) mas não no payload congelado do fechamento; o `UPDATE` não exige
+   `status='ABERTA'` — rota de Caixa fora do escopo autorizado, proposta separada;
+4. `ops/contas-pagar-persist` (`replacePayload`) e o importador sobrescrevem o payload sem trava/CAS;
+5. `cancelContaPagar` permite cancelar título parcial sem reverter a movimentação;
+6. rotas legadas `financeiro/contas-pagar/*` não gravam movimentação (UI aparentemente não montada).
+
+## 7. Riscos residuais e procedimento
+
+- Títulos legados já estornados em duplicidade ou com estorno sem referência ficam **bloqueados**
+  (`historico_ambiguo` / `caixa_identidade_insuficiente`), nos dois caminhos. Regularização: conciliação
+  manual no Financeiro (lançamento de ajuste documentado), nunca edição de sessão fechada. Nenhum dado
+  histórico corrigido.
+- Estorno com o caixa de origem fechado (Financeiro): recusado com orientação (devolução no caixa atual
+  + ajuste pelo procedimento de conciliação) — contrato da #384, sem mudança.
+- `estornarRecebimentoOSV3` é Server Action que lança `Error`: em produção a mensagem chega mascarada
+  (só digest) — padrão pré-existente de todas as recusas dessa action; trocar por resultado devolvido é
+  frente própria.
+- PATCH legado (`/api/financeiro/receber` op=parcial|liquidar) sem `idempotencyKey` segue SEM proteção de
+  retry (agora atômico). Auditoria de chamadores (HARDENING-002): `FinanceiroRealContext.liquidarReceber`
+  e `receberParcial` são exportados mas nenhuma tela os usa (o HUB recebe por `receber-lote`); o único outro
+  chamador é o setup do E2E `financeiro-hub-avisos-estorno-003`. Não há idempotência universal nesse
+  caminho; contratos externos preservados.
+- Contas a Pagar: pagamentos (liquidar/parcial) são atômicos, serializados por título e protegidos pela
+  pré-condição `restanteEsperado` (o HUB envia o saldo exibido): clique duplo/retry depois de gravado = 409.
+  Não há chave de idempotência — um chamador de API que não envie a pré-condição ainda pode pagar 2×.
+  O estorno é protegido por `pagoEsperado`.
+- Painel legado `components/dashboard/financeiro/contas-pagar.tsx` (rotas `/api/financeiro/contas-pagar/*`):
+  só grava o ledger, nunca movimentação (igual na main). Passa a herdar a identidade no estorno e o CAS.
+- Espelho `pagamentoV3` da OS não é atualizado por baixas/estornos feitos pelo Financeiro (pré-existente
+  e documentado); as leituras de saldo/entrega usam o título (ledger autoritativo).
+- Painel legado `components/dashboard/financeiro/contas-receber.tsx` baixa no cliente e depois chama
+  `vincular-caixa` — fora do escopo, não alterado.
+- `06-pdv-caixa-historico` (E2E) segue desatualizado na main (não escolhe terminal) — pré-existente.

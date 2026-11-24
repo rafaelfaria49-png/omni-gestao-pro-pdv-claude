@@ -243,3 +243,74 @@ export function tituloPertenceAoCliente(
 ): boolean {
   return matchTituloCliente(titulo, cliente, opts) !== null
 }
+
+// ─── clientes com títulos em aberto (lista inicial do recebimento F5/F9) ─────────────
+
+/** "11977776666" → "•••6666"; vazio → null. */
+export function mascararFinal(v: string | null | undefined, n: number): string | null {
+  const d = String(v ?? "").replace(/\D/g, "")
+  return d.length > n ? `•••${d.slice(-n)}` : d ? `•••${d}` : null
+}
+
+export type ClienteComAberto = {
+  id: string
+  name: string
+  phone: string | null
+  document: string | null
+  qtdAbertos: number
+  totalAberto: number
+}
+
+/**
+ * Clientes da loja que têm títulos com saldo em aberto, maiores devedores primeiro.
+ *
+ * Usa o MESMO `tituloPertenceAoCliente` do modal (escada id → documento → telefone →
+ * nome único), então a lista inicial nunca oferece um cliente cujos títulos o modal
+ * esconderia — nem atribui a dívida de um homônimo. Título sem identificação segura
+ * simplesmente não entra (falso-negativo é preferível).
+ *
+ * Os candidatos de cada título vêm de índices por id e por nome normalizado; o
+ * veredito final é sempre do matcher.
+ */
+export function resumirClientesComAberto(
+  clientes: Iterable<{ id?: string | null; name?: string | null; phone?: string | null; document?: string | null }>,
+  titulos: Iterable<TituloClienteIdentidade & { saldoAberto: number }>,
+  opts: MatchTituloOptions,
+  limite = 50,
+): ClienteComAberto[] {
+  const porId = new Map<string, { id: string; name: string; phone: string | null; document: string | null }>()
+  const porNome = new Map<string, string[]>()
+  for (const c of clientes) {
+    const id = idKey(c.id)
+    const name = String(c.name ?? "").trim()
+    if (!id || !name) continue
+    // Lista enviada sem pedido a qualquer operador do caixa: só o mínimo para distinguir
+    // pessoas — final do telefone/documento, nunca o dado completo (minimização de PII).
+    porId.set(id, { id, name, phone: mascararFinal(c.phone, 4), document: mascararFinal(c.document, 3) })
+    const n = normalizeNomeCliente(name)
+    const lista = porNome.get(n)
+    if (lista) lista.push(id)
+    else porNome.set(n, [id])
+  }
+
+  const acc = new Map<string, ClienteComAberto>()
+  for (const t of titulos) {
+    const saldo = Number(t.saldoAberto)
+    if (!Number.isFinite(saldo) || saldo <= 0.009) continue
+    const candidatos = new Set<string>()
+    const tId = idKey(t.clienteId)
+    if (tId && porId.has(tId)) candidatos.add(tId)
+    for (const id of porNome.get(normalizeNomeCliente(t.cliente)) ?? []) candidatos.add(id)
+    for (const id of candidatos) {
+      const c = porId.get(id)!
+      if (!tituloPertenceAoCliente(t, c, opts)) continue
+      const cur = acc.get(id) ?? { ...c, qtdAbertos: 0, totalAberto: 0 }
+      cur.qtdAbertos += 1
+      cur.totalAberto = Math.round((cur.totalAberto + saldo) * 100) / 100
+      acc.set(id, cur)
+    }
+  }
+  return [...acc.values()]
+    .sort((a, b) => b.totalAberto - a.totalAberto || a.name.localeCompare(b.name, "pt-BR"))
+    .slice(0, Math.max(0, limite))
+}

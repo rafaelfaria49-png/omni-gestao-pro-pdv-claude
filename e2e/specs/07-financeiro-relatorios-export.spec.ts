@@ -9,7 +9,11 @@ test.describe("Financeiro — Fase 2 (central relatórios + export)", () => {
     await dismissFirstAccessWizardIfPresent(page)
 
     await expect(page.getByRole("heading", { name: /^Relatórios$/ })).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByText(/Central de inteligência/i)).toBeVisible()
+    // No 1º render com o servidor frio, o streaming do React deixa uma 2ª cópia OCULTA do
+    // parágrafo (fora da árvore de acessibilidade) até a troca do fallback; `getByText` a
+    // inclui e o modo estrito recusava o seletor — reproduzido na main f97e9de. `getByRole`
+    // só enxerga o que o usuário vê; a asserção (texto visível na central) é a mesma.
+    await expect(page.getByRole("paragraph").filter({ hasText: /Central de inteligência/i })).toBeVisible()
 
     await page.goto("/dashboard/financeiro-v2")
     await dismissFirstAccessWizardIfPresent(page)
