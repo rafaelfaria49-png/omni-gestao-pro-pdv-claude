@@ -22,6 +22,12 @@ import { prisma } from "@/lib/prisma"
  * autenticados, para que funcionário e ADMIN não tenham regras contraditórias.
  * Resolver isto exige migration aditiva (GOAL de Tenant/Organization).
  *
+ * OMNI-SAAS-001A: a fonte de (2) passou a existir — `Organization`/`Subscription` e o resolvedor
+ * central `lib/saas/entitlement.ts`, calculado em MODO SOMBRA no callback `jwt`
+ * (`token.storeEntitlements`). Este contrato continua IDÊNTICO de propósito: enquanto o
+ * enforcement não for autorizado (SAAS-002), devolver aqui o resultado do resolvedor mudaria o
+ * acesso de quem já usa o sistema. `SAAS_ENTITLEMENT_ENFORCE` não altera nada neste arquivo.
+ *
  * O que este módulo garante desde já:
  *   · sem sessão NextAuth não há acesso — um selo isolado nunca autentica;
  *   · utilizador inexistente ou desativado é recusado;

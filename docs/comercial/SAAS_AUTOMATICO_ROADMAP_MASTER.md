@@ -62,6 +62,8 @@ indivisível. **O cadastro público só liga em SAAS-006**, depois de 002 homolo
 
 ### SAAS-001A — Fundação comercial (dados, entitlement em sombra, email, cron)
 
+- **Estado:** implementado em PR draft (2026-11-24), migration só em PG descartável — ver
+  [`SAAS_001A_FUNDACAO_COMERCIAL.md`](SAAS_001A_FUNDACAO_COMERCIAL.md) (contratos, tabela-verdade, procedimento de Production, handoff 001B).
 - **Objetivo:** criar a entidade comercial e a fonte única do direito de uso, sem efeito sobre ninguém.
 - **Dependências:** autorização de schema; D-11 (provedor/domínio de email) para o envio real —
   sem ela, o adaptador roda em modo "registro" (grava na outbox, não envia).

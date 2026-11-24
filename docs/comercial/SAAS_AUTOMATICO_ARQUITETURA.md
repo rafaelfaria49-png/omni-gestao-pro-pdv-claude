@@ -4,8 +4,10 @@ GOAL `OMNI-SAAS-AUTOMATICO-ARQUITETURA-ROADMAP-000` · 2026-11-23 · base `d6136
 Estado atual e evidências: [`SAAS_AUTOMATICO_AUDITORIA_ESTADO_ATUAL.md`](SAAS_AUTOMATICO_AUDITORIA_ESTADO_ATUAL.md)
 (referências `C01…C46`). Regras de negócio: [`SAAS_AUTOMATICO_REGRAS_COMERCIAIS.md`](SAAS_AUTOMATICO_REGRAS_COMERCIAIS.md).
 
-**Nada deste documento está implementado.** Nomes de tabela e campo são a proposta para os
-GOALs SAAS-001A em diante; cada migration exige autorização de schema.
+**Estado (2026-11-24):** §3 (parte do 001A), §4 em modo sombra e §8 (infra) implementados no
+SAAS-001A, PR draft, sem migration em Production — detalhes e desvios em
+[`SAAS_001A_FUNDACAO_COMERCIAL.md`](SAAS_001A_FUNDACAO_COMERCIAL.md). O restante segue proposta;
+cada migration exige autorização de schema.
 
 ---
 

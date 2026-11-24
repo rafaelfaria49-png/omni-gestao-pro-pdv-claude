@@ -20,5 +20,7 @@
     }
   ],
 
-  "crons": []
+  "crons": [
+    { "path": "/api/cron/saas", "schedule": "0 9 * * *" }
+  ]
 }

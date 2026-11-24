@@ -158,8 +158,13 @@ model Store {
   // ─── Vestuário P02: grades/cores por loja (OMNI-VESTUARIO-P02 — aditivo; só relações inversas) ──
   vestuarioGrades          VestuarioGrade[]
   vestuarioCores           VestuarioCor[]
+  // ─── SaaS comercial (OMNI-SAAS-001A — aditivo) ──
+  /// Organização comercial dona da loja. NULL = loja legada: acesso pleno, sem limite (SAAS-ADR-07).
+  organizationId           String?
+  organization             Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([profile])
+  @@index([organizationId])
   @@map("stores")
 }
 
@@ -2256,6 +2261,8 @@ model AdminUser {
   dpAcessos DpAcesso[]
   dpPessoas DpPessoaUsuario[]
   dpAuditorias DpAuditoria[]
+  /** Vínculos com organizações comerciais (SaaS). A assinatura NÃO depende deste vínculo. */
+  organizationMemberships OrganizationMember[]
 
   // ─── Stripe / Billing ───────────────────────────────────────────────────────
   stripeCustomerId     String?   @unique
@@ -4262,4 +4269,191 @@ model SolicitacaoTesteComercial {
   @@index([ipHash, createdAt])
   @@index([status, createdAt])
   @@map("solicitacoes_teste_comercial")
+}
+
+// =================================================================================
+// SAAS COMERCIAL — OMNI-SAAS-001A (fundação; aditivo)
+// Arquitetura: docs/comercial/SAAS_AUTOMATICO_ARQUITETURA.md §3 (SAAS-ADR-01…08).
+// Receita da plataforma: NENHUMA destas tabelas é do Financeiro/Caixa/PDV do lojista.
+// Lojas existentes ficam com Store.organizationId = NULL (legado/pleno). Nada é migrado.
+// CHECKs e gatilhos de "só inserção" vivem na migration (não no datamodel).
+// =================================================================================
+
+/** Entidade comercial dona das lojas e da assinatura (SAAS-ADR-01). */
+model Organization {
+  id              String   @id @default(cuid())
+  nome            String
+  /** CPF/CNPJ só dígitos; opcional. */
+  documento       String?  @unique
+  contatoEmail    String
+  contatoWhatsapp String
+  /** self_service | assistido | legado_migrado */
+  origem          String
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  stores        Store[]
+  members       OrganizationMember[]
+  subscription  Subscription?
+  trialGrant    TrialGrant?
+  notifications NotificationOutbox[]
+
+  @@map("organizations")
+}
+
+/** Pessoa ligada à organização. Trocar o OWNER = mudar "papel"; a assinatura não muda. */
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  adminUserId    String
+  adminUser      AdminUser    @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  /** OWNER | BILLING | MEMBER */
+  papel          String
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@unique([organizationId, adminUserId])
+  @@index([adminUserId])
+  @@map("organization_members")
+}
+
+/**
+ * Assinatura 1:1 com a organização — fonte única do direito de uso, lida por
+ * resolverEntitlement (lib/saas/entitlement.ts). Instantes absolutos (timestamptz).
+ * "version" = compare-and-set em toda transição (SAAS-003).
+ */
+model Subscription {
+  id                      String       @id @default(cuid())
+  organizationId          String       @unique
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  planoId                 String
+  planoVersao             Int
+  /** trialing | trial_expired | pending_payment | active | past_due | canceled | suspended */
+  status                  String
+  trialStartedAt          DateTime?    @db.Timestamptz(3)
+  trialEndsAt             DateTime?    @db.Timestamptz(3)
+  currentPeriodStart      DateTime?    @db.Timestamptz(3)
+  currentPeriodEnd        DateTime?    @db.Timestamptz(3)
+  graceEndsAt             DateTime?    @db.Timestamptz(3)
+  cancelAtPeriodEnd       Boolean      @default(false)
+  canceledAt              DateTime?    @db.Timestamptz(3)
+  suspendedAt             DateTime?    @db.Timestamptz(3)
+  suspendedReason         String?
+  /** limitado | bloqueado — só com status = suspended. */
+  suspendedMode           String?
+  /** Instante a partir do qual escrita nova é recusada (SAAS-002). */
+  limitedSince            DateTime?    @db.Timestamptz(3)
+  /** Cópia do preço e do limite contratados: mudar o catálogo não altera contrato vigente. */
+  precoContratadoCentavos Int
+  limiteUsuariosPorLoja   Int
+  cortesiaAte             DateTime?    @db.Timestamptz(3)
+  provedor                String?
+  provedorCustomerId      String?
+  provedorSubscriptionId  String?      @unique
+  version                 Int          @default(0)
+  createdAt               DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime     @updatedAt @db.Timestamptz(3)
+
+  history SubscriptionHistory[]
+
+  @@index([status])
+  @@map("subscriptions")
+}
+
+/** Histórico de transições da assinatura. Só inserção (gatilho na migration). */
+model SubscriptionHistory {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  de             String?
+  para           String
+  motivo         String
+  /** sistema | webhook | plataforma:<adminUserId> */
+  ator           String
+  eventoId       String?
+  /** Subscription.version resultante da transição. */
+  versao         Int
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([subscriptionId, createdAt])
+  @@map("subscription_history")
+}
+
+/** Um teste gratuito por pessoa/empresa (email normalizado, WhatsApp, documento). */
+model TrialGrant {
+  id                  String       @id @default(cuid())
+  organizationId      String       @unique
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  emailNormalizado    String       @unique
+  whatsappNormalizado String?
+  documento           String?      @unique
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([whatsappNormalizado])
+  @@map("trial_grants")
+}
+
+/**
+ * Fila persistente de notificações (SAAS-ADR-06). "dedupeKey" UNIQUE impede disparo duplicado;
+ * o worker reivindica com FOR UPDATE SKIP LOCKED + lease ("lockedBy"/"lockedUntil").
+ * "dados" NUNCA guarda segredo, token bruto ou senha.
+ */
+model NotificationOutbox {
+  id                  String        @id @default(cuid())
+  organizationId      String?
+  organization        Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  /** email | interno | whatsapp */
+  canal               String
+  modelo              String
+  destino             String
+  dados               Json          @default("{}")
+  dedupeKey           String        @unique
+  agendadoPara        DateTime      @default(now()) @db.Timestamptz(3)
+  /** pendente | enviando | enviado | registrado | falhou | cancelado */
+  status              String        @default("pendente")
+  tentativas          Int           @default(0)
+  maxTentativas       Int           @default(5)
+  proximaTentativaEm  DateTime      @default(now()) @db.Timestamptz(3)
+  lockedBy            String?
+  lockedUntil         DateTime?     @db.Timestamptz(3)
+  primeiraTentativaEm DateTime?     @db.Timestamptz(3)
+  ultimaTentativaEm   DateTime?     @db.Timestamptz(3)
+  ultimoErro          String?
+  /** transitorio | permanente | desconhecido */
+  ultimoErroTipo      String?
+  provedor            String?
+  provedorMensagemId  String?
+  enviadoEm           DateTime?     @db.Timestamptz(3)
+  historico           Json          @default("[]")
+  createdAt           DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([status, proximaTentativaEm])
+  @@index([status, lockedUntil])
+  @@index([organizationId])
+  @@map("notification_outbox")
+}
+
+/**
+ * Trilha das ações comerciais da plataforma (estender teste, cortesia, suspender…).
+ * Só inserção (gatilho na migration). Sem FK: o registro sobrevive a qualquer mudança da entidade.
+ * NÃO substitui os logs operacionais de PDV/Caixa/Financeiro.
+ */
+model PlatformAuditLog {
+  id             String   @id @default(cuid())
+  atorId         String
+  acao           String
+  organizationId String?
+  storeId        String?
+  antes          Json?
+  depois         Json?
+  motivo         String
+  ipHash         String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([organizationId, createdAt])
+  @@index([atorId, createdAt])
+  @@index([acao, createdAt])
+  @@map("platform_audit_logs")
 }
