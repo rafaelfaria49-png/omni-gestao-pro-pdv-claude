@@ -1,0 +1,60 @@
+{
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "recordedAt": "2026-11-05T18:53:28.387Z",
+  "source": "OWNER_REPLY_IN_THIS_CHAT_AFTER_PR_334_PREPARATION",
+  "authorization": {
+    "neon": "AUTHORIZED_NEW_TEST_ONLY_FREE_PLAN_NO_PRODUCTION_SOURCE",
+    "vercel": "AUTHORIZED_EXACT_PROJECT_AND_D05_BRANCH_PREVIEW_ONLY",
+    "transport": "AUTHORIZED_PREPARATION_AND_PREVIEW_ACTIVATION_AFTER_SPECIFIC_COMMIT_REVIEW_CI_AND_ISOLATION",
+    "windowsInstall": "AUTHORIZED_COMPUTER_USER_AND_CONSENT_OPERATOR_NAME_WINDOW_STILL_REQUIRED",
+    "physicalTests": "CONDITIONAL_ISOLATED_ENVIRONMENT_AND_OPERATOR_WINDOW_REQUIRED",
+    "faultInjection": "REQUIRES_EXPLICIT_PRESENTIAL_CONFIRMATION_PER_EVENT",
+    "realPrinterUse": "AUTHORIZED_CONDITIONALLY_SYNTHETIC_D05_PRESENTIAL_ONLY"
+  },
+  "validatedTargets": {
+    "neonOrganization": {
+      "id": "org-young-bar-55840347",
+      "name": "Omni Gestão QA",
+      "plan": "free"
+    },
+    "vercel": {
+      "teamId": "team_IInBSQbKO8P5XpAsvz16Kc3g",
+      "projectId": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+      "projectName": "omni-gestao-pro",
+      "plan": "hobby",
+      "branch": "codex/omni-print-d05-homologacao-fisica-001"
+    }
+  },
+  "declaredHardware": {
+    "printer": "POS-80 USB",
+    "previousPort": "USB005",
+    "previousDriverVersion": "11.3.0.1",
+    "availablePaperMm": [
+      80
+    ],
+    "support58mm": "NOT_CONFIRMED",
+    "observedThisSession": true
+  },
+  "operator": {
+    "name": null,
+    "windowsUser": "RAFACELL\\rafae",
+    "sid": "S-1-5-21-2955230094-2425622295-3406629455-1002",
+    "equipmentConsentConfirmed": true,
+    "window": null
+  },
+  "production": {
+    "access": false,
+    "deploy": false,
+    "migrations": false,
+    "printing": "DISABLED"
+  },
+  "paidCostsAuthorized": false,
+  "supplementalOwnerReply": {
+    "source": "OWNER_REPLY_IN_THIS_CHAT_D04_COMPUTER_USER_CONSENT",
+    "operatorNameWasPlaceholder": true,
+    "windowWasPlaceholder": true,
+    "installationExecuted": false,
+    "pairingExecuted": false,
+    "physicalTestsExecuted": 0
+  }
+}

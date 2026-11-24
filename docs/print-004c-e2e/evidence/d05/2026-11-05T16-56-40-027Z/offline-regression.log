@@ -1,0 +1,54 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+ ❯ lib/vendas/offline-sync.component.test.ts (0 test)
+ ❯ lib/vendas/sale-sync-engine.test.ts (0 test)
+ ❯ lib/pdv/pending-identity-restore.test.ts (0 test)
+ ❯ lib/pdv/classic-offline-sequence.component.test.ts (0 test)
+ ❯ lib/pdv/pending-sale-attempt.test.ts (0 test)
+ ❯ lib/pdv/pending-local-effects.test.ts (0 test)
+ ❯ lib/vendas/sale-client-sync.test.ts (0 test)
+ ❯ lib/vendas/pending-sync-classification.test.ts (0 test)
+
+ Test Files  8 failed (8)
+      Tests  no tests
+   Start at  13:56:46
+   Duration  18.14s (transform 0ms, setup 0ms, import 0ms, tests 0ms, environment 11.99s)
+
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/pdv/classic-offline-sequence.component.test.ts [ lib/pdv/classic-offline-sequence.component.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\client\.tmp-1793897822240-vzq0h19sswq' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\client\2d935e71b146234afd07d5fea533a407012aeff9'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  lib/pdv/pending-identity-restore.test.ts [ lib/pdv/pending-identity-restore.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\.tmp-1793897818006-q22xrrts7ci' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\6e969b3082915795dd1196de287af349414438d5'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  lib/pdv/pending-local-effects.test.ts [ lib/pdv/pending-local-effects.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\.tmp-1793897823623-e2i7elzgxjh' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\814b6ea98fa265f4448dafd41ef9a94803b0ca7d'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  lib/pdv/pending-sale-attempt.test.ts [ lib/pdv/pending-sale-attempt.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\.tmp-1793897822929-ojjmozjls3' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\d8b640884ee2c0029dad0005698e6b62186dee45'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  lib/vendas/offline-sync.component.test.ts [ lib/vendas/offline-sync.component.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\client\.tmp-1793897812824-ycbtk05yu2e' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\client\d1c570269bf5e9bdaaaac7d70bceab45177599ff'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  lib/vendas/pending-sync-classification.test.ts [ lib/vendas/pending-sync-classification.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\.tmp-1793897825027-2o0pqrz1zme' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\611d0f3ae7c3f3526c53f0b3d625a908b2c7d7d4'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  lib/vendas/sale-client-sync.test.ts [ lib/vendas/sale-client-sync.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\.tmp-1793897824372-j0s280849wp' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\ssr\d9bea7a2f50ceba3f831dfde19a6cb07b9424e47'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  lib/vendas/sale-sync-engine.test.ts [ lib/vendas/sale-sync-engine.test.ts ]
+Error: EPERM: operation not permitted, rename 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\client\.tmp-1793897817319-jq7duitpxn' -> 'C:\Users\rafae\AppData\Local\Packages\sandbox.{433f9508-1b94-4a63-8057-d5eec07dc453}\AC\Temp\qYot27RJDSsot2KZefbrv\client\6bb426f8404f3471388ac09c241c1d9b4e26167e'
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+exit=1

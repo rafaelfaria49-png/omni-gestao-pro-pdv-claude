@@ -1,0 +1,22 @@
+✔ D05 build accepts only the reviewed Preview and never runs a step before isolation (3.4741ms)
+✔ outside the D05 branch the build is the unchanged project build (vercel.json must not stop main/#327) (0.9828ms)
+✔ auth origin overrides: empty string disables trusted host (UntrustedHost 500); only the D05 branch alias is accepted (2.0608ms)
+✔ foreign database, role, database name, missing TLS and pooled DIRECT_URL fail closed (1.3545ms)
+✔ private state rejects the repository itself and descendants before IO, allowing a sibling (2.0506ms)
+✔ D02 resolve preserves strict libpq TLS in the Prisma URL and retains previous modes (0.7591ms)
+✔ operator diagnostics redact full URLs, encoded passwords and independent secrets (1.0246ms)
+✔ preparation cannot open a human gate, transport, global Preview, production or automatic deployment (9.4604ms)
+✔ missing case, duplicate case, unsupported status and unapproved N/A fail (1.3096ms)
+✔ software/spooler success and a bare owner name cannot become physical PASS (0.8031ms)
+✔ complete synthetic record validates shape only; physical artifacts and human truth remain separate (8.0512ms)
+✔ artifact verifier refuses missing, changed and escaping evidence and wrong packages (19.841ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 238.8335
+
+exit=0

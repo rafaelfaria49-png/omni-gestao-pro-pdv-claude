@@ -1,0 +1,30 @@
+{
+  "project": {
+    "id": "super-credit-72834107",
+    "name": "omni-print-d05-homologacao-001",
+    "organizationId": "org-young-bar-55840347",
+    "plan": "free",
+    "pgVersion": 17,
+    "region": "aws-sa-east-1",
+    "createdAt": "2026-11-05T18:54:25Z"
+  },
+  "branch": {
+    "id": "br-billowing-cake-b627zsxv",
+    "name": "d05-homologacao",
+    "parentId": null,
+    "createdAt": "2026-11-05T18:54:25Z"
+  },
+  "endpoint": {
+    "id": "ep-nameless-boat-b6y438an",
+    "host": "ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech",
+    "pooledHost": "ep-nameless-boat-b6y438an-pooler.c-2.sa-east-1.aws.neon.tech",
+    "minCu": 0.25,
+    "maxCu": 0.25,
+    "suspendTimeoutSeconds": 0
+  },
+  "database": "omni_print_d05",
+  "role": "omni_print_d05_app",
+  "createdFromProduction": false,
+  "source": "NEW_EMPTY_PROJECT_NO_PARENT",
+  "paidPlanUpgrade": false
+}

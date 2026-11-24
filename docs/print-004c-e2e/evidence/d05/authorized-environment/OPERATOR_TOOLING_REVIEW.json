@@ -1,0 +1,24 @@
+{
+  "at": "2026-11-05T23:30:57.783Z",
+  "reviewer": "/root/d05_independent_review",
+  "status": "APPROVE",
+  "scripts": [
+    {
+      "name": "preview-control.mjs",
+      "sha256": "7e365ce2bef9f3e25ab4d0f64ac128016e536ed930f308e7de989f09277fbc68",
+      "archivedSource": "operator-scripts/preview-control.mjs.txt"
+    },
+    {
+      "name": "probe-preview.mjs",
+      "sha256": "1edbf686f567c962d1abe089d4251fea74af446af66ae8e9d3abcd1c768784e7",
+      "archivedSource": "operator-scripts/probe-preview.mjs.txt"
+    }
+  ],
+  "sourceCommit": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+  "plainCliErrorOutputRemoved": true,
+  "effectiveApiIdsRequiredForResume": true,
+  "failedDeploymentsPreservedById": true,
+  "firstFailurePreserved": true,
+  "firstPreviewDirectFlag": "0",
+  "physicalHomologation": "PENDING"
+}

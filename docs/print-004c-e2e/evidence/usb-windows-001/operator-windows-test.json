@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-11",
+  "timezone": "America/Sao_Paulo",
+  "queue": "POS-80",
+  "connection": "USB",
+  "paperMm": 80,
+  "operatorPresent": true,
+  "oneWindowsTestPageAuthorized": true,
+  "automatedCimAttempt": { "returnValue": 5, "result": "ACCESS_DENIED", "operatorReportedPaper": false },
+  "manualWindowsTest": {
+    "result": "OPERATOR_CONFIRMED_COMPLETE_PAGE_AND_CUT",
+    "source": "DIRECT_USER_REPLY_IN_THIS_CHAT",
+    "operatorReply": "Imprimiu uma página completa e cortou.",
+    "photoEvidence": null
+  },
+  "omniEscPosReceipt": "NOT_TESTED",
+  "accentsEscPos": "NOT_TESTED",
+  "cutEscPos": "NOT_TESTED",
+  "h01": "PARTIAL_OPERATOR_CONFIRMATION_PHOTO_SERIAL_AND_OPERATOR_NAME_PENDING",
+  "h02ThroughH18": "NOT_EXECUTED"
+}

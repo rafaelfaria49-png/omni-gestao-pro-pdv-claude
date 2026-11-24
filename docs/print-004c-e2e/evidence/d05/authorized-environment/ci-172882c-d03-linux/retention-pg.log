@@ -1,0 +1,25 @@
+reset print_lab_d03
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ tools/print-d03/retention.pg.test.ts (17 tests) 13689ms
+     ✓ R01 before seven days preserved; exact final boundary; dry run counts without changing any row  613ms
+     ✓ R02 purge is irreversible/idempotent; no DELETE; hashes, sendKey/requestKey, first slot and key refs survive  404ms
+     ✓ R03 second copy reconstructs the sale only with fresh authorized consent, two tabs converge after purge  429ms
+     ✓ R07 unconsumed expired requests lose only command; browser consent/reason/firstCopy remains permanent  404ms
+     ✓ R08 store-scoped job cannot touch the other store; replay stays scoped after cleanup  391ms
+     ✓ R10 lost response after COMMIT and two retention workers do not duplicate events or updates  364ms
+     ✓ R11 busy document is skipped without waiting, timeout rolls back and next run resumes  5301ms
+     ✓ R12 least privilege role runs without keys, cannot delete/change state/read commerce; invalid role is refused  417ms
+     ✓ R13 bounded pages handle volume, interrupted batches resume and busy rows remain for the next sweep  1899ms
+     ✓ R14 legacy cancellation after browser-while-SENDING + late NO_EFFECT + REPRINT cannot use the old browser date  309ms
+     ✓ R15 UNKNOWN alone is preserved, even with finished_at and released egress; oversized documents fail closed  606ms
+     ✓ R17 CLI defaults to dry run; execution disabled and invalid credentials never expose SQL/URL/secret  1029ms
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  23:06:31
+   Duration  14.24s (transform 306ms, setup 0ms, import 422ms, tests 13.69s, environment 0ms)
+
+
+exit=0

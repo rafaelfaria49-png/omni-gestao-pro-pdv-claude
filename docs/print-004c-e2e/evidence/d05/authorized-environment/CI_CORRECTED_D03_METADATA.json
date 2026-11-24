@@ -1,0 +1,224 @@
+{
+  "headSha": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+  "checkoutSha": "ef7674b96a5a7232b27215af4c9c2ca9c008a031",
+  "runId": 42126804958,
+  "runAttempt": 1,
+  "artifacts": [
+    {
+      "id": 13461631567,
+      "name": "omni-print-d03-windows",
+      "size_in_bytes": 1333,
+      "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461631567",
+      "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461631567/zip",
+      "expired": false,
+      "created_at": "2026-11-05T23:06:46Z",
+      "expires_at": "2027-02-03T23:05:00Z",
+      "updated_at": "2026-11-05T23:06:46Z",
+      "digest": "sha256:b6e903c0d31f36d89e485cd33b4e80f71d9005192b2e04ffc05361bc25147cf4",
+      "workflow_run": {
+        "id": 42126804958,
+        "repository_id": 1208557742,
+        "head_repository_id": 1208557742,
+        "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+        "head_sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef"
+      }
+    },
+    {
+      "id": 13461597431,
+      "name": "omni-print-d03-evidence",
+      "size_in_bytes": 32604,
+      "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461597431",
+      "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461597431/zip",
+      "expired": false,
+      "created_at": "2026-11-05T23:12:45Z",
+      "expires_at": "2027-02-03T23:05:00Z",
+      "updated_at": "2026-11-05T23:12:45Z",
+      "digest": "sha256:1b87b2f6f11840533f777a1d0aea2815faa444744104c7096b4ab61fa10b5ef2",
+      "workflow_run": {
+        "id": 42126804958,
+        "repository_id": 1208557742,
+        "head_repository_id": 1208557742,
+        "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+        "head_sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef"
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "id": 127592965345,
+      "name": "software",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 42126804958,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Iniciar evidências exclusivas desta execução",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run npm ci --no-audit --no-fund",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "PostgreSQL 17 descartável",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Inicializar laboratório exclusivo",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Run npx playwright install --with-deps chromium",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Bateria D03, D01-A1, D02, agentes, PDV, typecheck, lint e build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Mutações de invariantes críticos",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Consolidar somente evidências executadas",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Encerrar somente o laboratório desta execução",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        }
+      ]
+    },
+    {
+      "id": 127592966023,
+      "name": "windows-agent",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 42126804958,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Iniciar evidências exclusivas desta execução",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run npm ci --no-audit --no-fund",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Diário, protocolo e host PowerShell real sem impressora",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        }
+      ]
+    }
+  ]
+}

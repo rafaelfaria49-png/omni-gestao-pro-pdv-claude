@@ -1,0 +1,37 @@
+reset print_lab_pw
+
+Running 22 tests using 1 worker
+
+
+
+
+
+[1/22] e2e\specs\print-direct-004c.spec.ts:163:5 › PW1 impressão automática: venda CONFIRMADA → fila da impressora do terminal, sem janela/diálogo/preview
+[2/22] e2e\specs\print-direct-004c.spec.ts:183:5 › PW2 venda PENDENTE (falha de rede no writer) nunca chama a impressão direta
+[3/22] e2e\specs\print-direct-004c.spec.ts:197:5 › PW3 impressora desligada → aviso claro sem repetir a venda; religada → Tentar novamente imprime uma vez
+[4/22] e2e\specs\print-direct-004c.spec.ts:214:5 › PW4 segunda via explícita com confirmação de risco → SEGUNDA VIA na impressora
+[5/22] e2e\specs\print-direct-004c.spec.ts:230:5 › PW5 modo manual: nada é enviado até o operador clicar em Imprimir comprovante
+[6/22] e2e\specs\print-direct-004c.spec.ts:243:5 › PW6 agente fora do ar → 'não respondeu' sem impressão tardia; agente volta → Tentar novamente imprime uma vez
+[7/22] e2e\specs\print-direct-004c.spec.ts:259:5 › PW7 loja/terminal sem impressão direta ativada → fluxo atual intacto (sem chamada nova)
+[8/22] e2e\specs\print-direct-004c.spec.ts:267:5 › PW8 navegador por escolha explícita: registrado pelo servidor, HTML escapado e marcado; sem via térmica depois
+[9/22] e2e\specs\print-direct-004c.spec.ts:283:5 › PW9 resultado incerto: nada é reenviado; navegador exige confirmação e sai como SEGUNDA VIA
+[10/22] e2e\specs\print-direct-004c.spec.ts:304:5 › PW10 venda fora do contrato (KG) → volta ao fluxo anterior (automático e manual); nada térmico, nada pelo navegador
+[11/22] e2e\specs\print-direct-004c.spec.ts:314:5 › PW11 venda KG com impressão automática desligada → diálogo manual existente
+[12/22] e2e\specs\print-direct-004c.spec.ts:323:5 › PW21 agente escolhido com disponibilidade desconhecida: feedback REAL não tenta TCP nem navegador
+[13/22] e2e\specs\print-direct-004c.spec.ts:334:5 › PW22 KG recusado sem job: feedback/runtime REAIS preservam uma tentativa de rede explicitamente configurada
+[14/22] e2e\specs\print-direct-004c.spec.ts:391:5 › PW12 reimpressão registrada (Histórico/Conferência) pela térmica do caixa: risco informado, sai SEGUNDA VIA, nada pelo fluxo antigo
+[15/22] e2e\specs\print-direct-004c.spec.ts:417:5 › PW13 reimpressão registrada pelo navegador: HTML do servidor marcado SEGUNDA VIA - REIMPRESSAO, evento auditável, nada térmico
+[16/22] e2e\specs\print-direct-004c.spec.ts:437:5 › PW14 venda sem via registrada: reimpressão sai SEGUNDA VIA mesmo assim e fecha a 1ª via (nenhum 'original' depois)
+[17/22] e2e\specs\print-direct-004c.spec.ts:454:5 › PW15 duas abas: navegador pede nova confirmação quando outra aba já imprimiu; térmica nas duas abas converge em 1 via
+[18/22] e2e\specs\print-direct-004c.spec.ts:515:5 › PW16 resultado incerto da 1ª via: reimpressão informa o risco, sai uma SEGUNDA VIA e nada é reenviado sozinho
+[19/22] e2e\specs\print-direct-004c.spec.ts:536:5 › PW17 Omni Print desligado na loja: diálogo antigo idêntico, nenhuma chamada nova
+[20/22] e2e\specs\print-direct-004c.spec.ts:545:5 › PW18 venda fora do contrato (KG) ou servidor com o recurso fechado: volta ao fluxo antigo sem registrar nada
+[21/22] e2e\specs\print-direct-004c.spec.ts:568:5 › PW19 registro de impressão indisponível: nada imprime, nada volta ao fluxo antigo, a janela aberta é fechada
+[22/22] e2e\specs\print-direct-004c.spec.ts:587:5 › PW20 vias configuradas acima do limite da impressão direta: operador é avisado; saem só as 2 permitidas, sem erro nem repetição
+  22 passed (2.0m)
+(node:10828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+exit=0

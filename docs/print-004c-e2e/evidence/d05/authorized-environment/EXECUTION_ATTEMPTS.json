@@ -1,0 +1,38 @@
+{
+  "recordedAt": "2026-11-05T21:58:22.567Z",
+  "source": "LOCAL_TOOL_EXECUTIONS_IN_THIS_CHAT_WIP_AFTER_4f60faa",
+  "attempts": [
+    {
+      "operation": "synthetic-seed-replay",
+      "status": "FAIL",
+      "reason": "PRISMA_CONNECTION_INITIALIZATION_BEFORE_TRANSACTION",
+      "laterReplay": "PASS_IDEMPOTENT_DATABASE_READY_JSON"
+    },
+    {
+      "operation": "vitest-in-sandbox",
+      "status": "FAIL",
+      "reason": "EPERM_TEMP_RENAME_NO_TEST_EXECUTED",
+      "testProcessExit": 1,
+      "shellExit": 0,
+      "laterRun": "../2026-11-05T21-51-49-118Z/summary.json"
+    },
+    {
+      "operation": "d02-verify-strict-first",
+      "status": "FAIL",
+      "reason": "TCP_CONNECTION_TIMEOUT_BEFORE_TLS",
+      "evidence": "2026-11-05T21-51-25-981Z/summary.json",
+      "laterRun": "2026-11-05T21-55-06-905Z/summary.json"
+    },
+    {
+      "operation": "prisma-strict-proof-first",
+      "status": "FAIL",
+      "reason": "INCORRECT_ASSERTION_ON_BACKEND_PG_STAT_SSL_BEHIND_PROXY",
+      "connectionSucceeded": true,
+      "backendSsl": false,
+      "backendTlsVersion": null,
+      "laterProof": "STRICT_TLS.json"
+    }
+  ],
+  "productionAccess": false,
+  "physicalHomologation": "PENDING"
+}

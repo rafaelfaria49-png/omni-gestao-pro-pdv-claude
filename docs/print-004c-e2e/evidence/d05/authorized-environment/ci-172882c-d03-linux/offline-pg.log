@@ -1,0 +1,17 @@
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ lib/vendas/offline-sync.integration.test.ts (10 tests) 440ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  23:06:46
+   Duration  1.08s (transform 377ms, setup 0ms, import 527ms, tests 440ms, environment 0ms)
+
+NOTICE:  database "pdv_offline_sync_disposable" does not exist, skipping
+psql:/tmp/omni-print-d03-pg/baseline-main.sql:2: NOTICE:  schema "public" already exists, skipping
+stderr | lib/vendas/offline-sync.integration.test.ts > PDV offline sync — idempotência econômica em PostgreSQL real > T27 — pagamento divergente do total: nada gravado
+[ops/venda-persist/v2] pagamentos-total-divergente {"lojaId":"off-a-810ce1a0-1c65-4391-b2bb-c7fd891ef6b8"}
+
+
+exit=0

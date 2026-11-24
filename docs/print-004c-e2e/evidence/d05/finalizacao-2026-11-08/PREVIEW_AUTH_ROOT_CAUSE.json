@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-08",
+  "deploymentId": "dpl_B9vJfGhLWMuaJPqLkLArFyxzXmZa",
+  "symptom": "PREVIEW_PROBE_DISABLED.json failedPhase=ADMIN_CSRF; GET /api/auth/csrf -> HTTP 500, HEAD -> 400",
+  "runtimeLog": "[auth] authentication_failed (auth.ts logger masks the Auth.js error class), sources serverless and serverless-middleware",
+  "rootCause": "Branch override AUTH_URL=\"\" (and NEXTAUTH_URL=\"\") neutralised the inherited production origin, but @auth/core setEnvDefaults computes trustHost = !!(AUTH_URL ?? AUTH_TRUST_HOST ?? VERCEL ...): an empty string is not nullish, so trustHost=false and every /api/auth/* request fails with UntrustedHost",
+  "reproduction": "auth-trusthost-repro.jsonl (local @auth/core of this lockfile: AUTH_URL='' -> trustHost false; unset or origin -> true)",
+  "fixInCode": "d05IsolationErrors rejects AUTH_URL/NEXTAUTH_URL unless unset or exactly D05_TARGET.origin (branch alias); build and runtime of the D05 Preview fail closed on an empty override",
+  "fixInEnvironment": "AUTH_URL and NEXTAUTH_URL of the D05 branch must be the stable branch alias https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app",
+  "productAuthChanged": false,
+  "productionTouched": false,
+  "privateStateInspection": "non-secret keys only (AUTH_URL, NEXTAUTH_URL, AUTH_TRUST_HOST, flags); AUTH_SECRET length only",
+  "secretValuesInThisFile": false
+}

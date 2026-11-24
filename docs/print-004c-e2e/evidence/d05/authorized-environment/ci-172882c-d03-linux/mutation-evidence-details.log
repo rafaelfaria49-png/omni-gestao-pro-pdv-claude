@@ -1,0 +1,67 @@
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 746ms
+     ↓ R01 before seven days preserved; exact final boundary; dry run counts without changing any row
+     ↓ R02 purge is irreversible/idempotent; no DELETE; hashes, sendKey/requestKey, first slot and key refs survive
+     ↓ R03 second copy reconstructs the sale only with fresh authorized consent, two tabs converge after purge
+     ↓ R04 READY/SENDING/UNKNOWN and partial operations are preserved even after years
+     × R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved 647ms
+     ↓ R06 final failure waits for retry expiry; cancellation without a proven date is preserved
+     ↓ R07 unconsumed expired requests lose only command; browser consent/reason/firstCopy remains permanent
+     ↓ R08 store-scoped job cannot touch the other store; replay stays scoped after cleanup
+     ↓ R09 failure in the middle of a document rolls back content AND purge evidence, then resumes
+     ↓ R10 lost response after COMMIT and two retention workers do not duplicate events or updates
+     ↓ R11 busy document is skipped without waiting, timeout rolls back and next run resumes
+     ↓ R12 least privilege role runs without keys, cannot delete/change state/read commerce; invalid role is refused
+     ↓ R13 bounded pages handle volume, interrupted batches resume and busy rows remain for the next sweep
+     ↓ R14 legacy cancellation after browser-while-SENDING + late NO_EFFECT + REPRINT cannot use the old browser date
+     ↓ R15 UNKNOWN alone is preserved, even with finished_at and released egress; oversized documents fail closed
+     ↓ R16 B19/B23 historical REPRINT closes INITIAL permanently, including after purge
+     ↓ R17 CLI defaults to dry run; execution disabled and invalid credentials never expose SQL/URL/secret
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  23:12:32
+   Duration  1.28s (transform 309ms, setup 0ms, import 425ms, tests 746ms, environment 0ms)
+
+
+::error file=/home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/tools/print-d03/retention.pg.test.ts,title=tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved,line=155,column=193::AssertionError: expected [ { …(4) }, { …(4) } ] to deeply equal [ { …(4) }, { …(4) }, { …(4) } ]%0A%0A- Expected%0A+ Received%0A%0A@@ -1,20 +1,8 @@%0A  [%0A    {%0A      "details": {%0A-       "evidenceHash": "f6b3c8bf938429deb7df6578756bf7853eb8382c4eac2feca7136e4b580caa57",%0A-       "evidenceKey": "UNKNOWN:false",%0A-       "physicalPrintConfirmed": false,%0A-       "reason": "TIMEOUT_AFTER_SUBMIT",%0A-       "spoolJobId": null,%0A-     },%0A-     "evidence_hash": null,%0A-     "evidence_key": null,%0A-     "id": "2500a50f-f4bc-4154-b6c6-dbf8b23fbeb2",%0A-   },%0A-   {%0A-     "details": {%0A        "evidenceHash": "94431b25fa584849c9121f1cf6854b2b7319491a516dfed2554690719e31b8dc",%0A        "evidenceKey": "SPOOLER_ACCEPTED:false",%0A        "physicalPrintConfirmed": false,%0A        "reason": null,%0A        "spoolJobId": "123",%0A%0A ❯ tools/print-d03/retention.pg.test.ts:155:193%0A%0A
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved
+AssertionError: expected [ { …(4) }, { …(4) } ] to deeply equal [ { …(4) }, { …(4) }, { …(4) } ]
+
+- Expected
++ Received
+
+@@ -1,20 +1,8 @@
+  [
+    {
+      "details": {
+-       "evidenceHash": "f6b3c8bf938429deb7df6578756bf7853eb8382c4eac2feca7136e4b580caa57",
+-       "evidenceKey": "UNKNOWN:false",
+-       "physicalPrintConfirmed": false,
+-       "reason": "TIMEOUT_AFTER_SUBMIT",
+-       "spoolJobId": null,
+-     },
+-     "evidence_hash": null,
+-     "evidence_key": null,
+-     "id": "2500a50f-f4bc-4154-b6c6-dbf8b23fbeb2",
+-   },
+-   {
+-     "details": {
+        "evidenceHash": "94431b25fa584849c9121f1cf6854b2b7319491a516dfed2554690719e31b8dc",
+        "evidenceKey": "SPOOLER_ACCEPTED:false",
+        "physicalPrintConfirmed": false,
+        "reason": null,
+        "spoolJobId": "123",
+
+ ❯ tools/print-d03/retention.pg.test.ts:155:193
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

@@ -1,0 +1,27 @@
+
+ RUN  v4.1.4 D:/a/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+stdout | tools/print-d04/recovery.test.ts > D04 real Windows, synthetic data only > two simultaneous pairings consume exactly one synthetic code; a third preserves credentials
+PAIRED_DPAPI_CURRENT_USER
+
+ ✓ tools/print-d04/recovery.test.ts (24 tests) 14128ms
+     ✓ supervisor really restarts a killed child and latches after four starts  746ms
+     ✓ OS lease excludes two agents and does not alter the legitimate owner  1975ms
+     ✓ a live owner remains protected even when its guard has disappeared  2196ms
+     ✓ reused PID is distinguished by creation identity without killing that process  502ms
+     ✓ forced kill during send recovers UNKNOWN and never duplicates simulated paper  827ms
+     ✓ real PowerShell host exits after its Node parent is force-killed  2324ms
+     ✓ an unregistered legacy host blocks recovery and is never killed automatically  1588ms
+     ✓ two simultaneous pairings consume exactly one synthetic code; a third preserves credentials  1177ms
+     ✓ DPAPI round-trip uses the real current Windows user; malformed ciphertext fails closed  649ms
+     ✓ orphan host is reaped by verified identity and a reused PID is left untouched  1186ms
+     ✓ an unverified live host is preserved and blocks recovery  524ms
+ ✓ tools/print-d04/verify-artifact.test.ts (6 tests) 29ms
+
+ Test Files  2 passed (2)
+      Tests  30 passed (30)
+   Start at  22:01:34
+   Duration  14.61s (transform 115ms, setup 0ms, import 170ms, tests 14.16s, environment 0ms)
+
+
+exit=0

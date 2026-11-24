@@ -1,0 +1,16 @@
+{
+  "mode": "PLAN",
+  "signed": false,
+  "action": "INSTALL_DISABLED_LOGON_TASK",
+  "metadata": {
+    "releaseRoot": "C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgentApp-D05\\releases\\0.2.0-d04-1cfecac07fae",
+    "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+    "taskName": "OmniPrintAgent-Lab-D05",
+    "taskArguments": "\"C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgentApp-D05\\releases\\0.2.0-d04-1cfecac07fae\\supervisor.mjs\" --data-dir \"C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgent-D05\"",
+    "nodePath": "C:\\Users\\rafae\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe",
+    "ownerSid": "S-1-5-21-2955230094-2425622295-3406629455-1002",
+    "dataRoot": "C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgent-D05",
+    "version": "0.2.0-d04",
+    "installRoot": "C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgentApp-D05"
+  }
+}

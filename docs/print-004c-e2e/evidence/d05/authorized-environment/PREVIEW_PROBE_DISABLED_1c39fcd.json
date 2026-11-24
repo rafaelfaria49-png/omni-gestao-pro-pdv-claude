@@ -1,0 +1,55 @@
+{
+  "at": "2026-11-08T13:28:58.206Z",
+  "commit": "1c39fcd2e06a434f8e1dd49b67ef49f17b0bacbf",
+  "mode": "disabled",
+  "checks": [
+    {
+      "check": "ADMIN_SYNTHETIC_LOGIN",
+      "status": "PASS",
+      "userId": "d05-admin",
+      "role": "ADMIN",
+      "allowedStoreIds": [
+        "d05-synthetic-store"
+      ]
+    },
+    {
+      "check": "ADMIN_ONLY_SYNTHETIC_STORE_VISIBLE",
+      "status": "PASS"
+    },
+    {
+      "check": "ADMIN_PRINT_AUTHORITY",
+      "status": "PASS",
+      "httpStatus": 404
+    },
+    {
+      "check": "CAIXA_SYNTHETIC_LOGIN",
+      "status": "PASS",
+      "userId": "d05-operator",
+      "role": "CAIXA",
+      "allowedStoreIds": [
+        "d05-synthetic-store"
+      ]
+    },
+    {
+      "check": "CAIXA_ONLY_SYNTHETIC_STORE_VISIBLE",
+      "status": "PASS"
+    },
+    {
+      "check": "CAIXA_PRINT_AUTHORITY",
+      "status": "PASS",
+      "httpStatus": 404
+    },
+    {
+      "check": "HTTPS_AGENT_REQUIRES_CREDENTIAL",
+      "status": "PASS",
+      "httpStatus": 404,
+      "redirectsFollowed": false,
+      "tlsVerificationDisabled": false
+    }
+  ],
+  "status": "PASS",
+  "productionAccess": false,
+  "physicalHomologation": "PENDING",
+  "deploymentId": "dpl_7WpCYjjAzai3weEYYUd4rjx9U8EQ",
+  "url": "https://omni-gestao-pro-git-codex-o-ab41e6-rafaelfaria49-4373s-projects.vercel.app"
+}

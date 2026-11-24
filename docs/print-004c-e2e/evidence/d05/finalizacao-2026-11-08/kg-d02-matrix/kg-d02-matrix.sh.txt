@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# KG x Omni Print D02 migration-order matrix on the disposable PG17 lab (127.0.0.1:55581). Never a commercial database.
+set -u
+W=/c/Projetos/omni-gestao/.worktrees/omni-print-d05
+S="C:/Users/rafae/AppData/Local/Temp/claude/ca91f20b5c9b8be4/53ee9ca7-d853-4725-8d82-5a091111326a/scratchpad"
+OUT="$1"; mkdir -p "$OUT"
+BIN="/c/Program Files/PostgreSQL/17/bin"; P="-h 127.0.0.1 -p 55581 -U pgadmin -X -q -v ON_ERROR_STOP=1"
+KGREF=origin/claude/padaria-kg-release-readiness-a4-a8-001
+KG="20261025120000_estoque_quantidade_fracionada 20261029120000_manual_kg_sale_quantity 20261106120000_manual_kg_title_guard_indexed"
+D02="20261105120000_omni_print_d02_idx_vendas 20261105120100_omni_print_d02_idx_terminais 20261105120200_omni_print_d02_core"
+cd "$W"
+git show origin/main:prisma/schema.prisma > "$S/schema-main-ce9228c.prisma"
+/c/Users/rafae/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe node_modules/prisma/build/index.js migrate diff --from-empty --to-schema-datamodel "$S/schema-main-ce9228c.prisma" --script > "$S/baseline-main-ce9228c.sql" 2>/dev/null
+for m in $KG; do git show "$KGREF:prisma/migrations/$m/migration.sql" > "$S/kg-$m.sql"; done
+apply_d02() { for m in $D02; do "$BIN/psql" $P -d "$1" -f tools/print-d02/migrations/$m/migration.sql || return 1; done; }
+apply_kg() { for m in $KG; do "$BIN/psql" $P -d "$1" -f "$S/kg-$m.sql" || return 1; done; }
+summary="{"
+for order in d02_then_kg kg_then_d02; do
+  db=print_lab_kgx_$order
+  "$BIN/psql" $P -d postgres -c "DROP DATABASE IF EXISTS $db" -c "CREATE DATABASE $db"
+  "$BIN/psql" $P -d $db -1 -f "$S/baseline-main-ce9228c.sql" > /dev/null
+  if [ $order = d02_then_kg ]; then apply_d02 $db && apply_kg $db; else apply_kg $db && apply_d02 $db; fi
+  rc=$?
+  "$BIN/pg_dump" -h 127.0.0.1 -p 55581 -U pgadmin -s --no-owner $db | grep -v "^--" | grep -v "^$" | grep -v "^SET \|set_config" | grep -vE '^\\(un)?restrict ' >"$OUT/schema-$order.sql"
+  t=$("$BIN/psql" $P -d $db -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'print\_%'")
+  f=$("$BIN/psql" $P -d $db -tAc "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname LIKE 'p004\_%'")
+  k=$("$BIN/psql" $P -d $db -tAc "SELECT count(*) FROM information_schema.columns WHERE table_name='venda_itens' AND column_name='quantidadeKg'")
+  iv=$("$BIN/psql" $P -d $db -tAc "SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname IN ('p004_vendas_id_store_uq','p004_term_id_store_uq') AND i.indisvalid")
+  summary="$summary\"$order\":{\"exit\":$rc,\"printTables\":$t,\"p004Functions\":$f,\"kgColumn\":$k,\"validParentIndexes\":$iv},"
+  "$BIN/psql" $P -d postgres -c "DROP DATABASE $db"
+done
+if diff -q "$OUT/schema-d02_then_kg.sql" "$OUT/schema-kg_then_d02.sql" >/dev/null; then same=true; else same=false; diff "$OUT/schema-d02_then_kg.sql" "$OUT/schema-kg_then_d02.sql" | head -40 > "$OUT/schema-diff.txt"; fi
+echo "$summary\"schemasIdentical\":$same,\"base\":\"origin/main ce9228c\",\"kgRef\":\"$(git rev-parse --short $KGREF)\",\"lab\":\"PostgreSQL 17 disposable 127.0.0.1:55581\"}" > "$OUT/KG_D02_MATRIX.json"
+rm -f "$OUT"/schema-*.sql
+cat "$OUT/KG_D02_MATRIX.json"

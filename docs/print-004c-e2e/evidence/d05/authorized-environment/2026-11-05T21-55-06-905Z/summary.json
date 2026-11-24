@@ -1,0 +1,18 @@
+{
+  "operation": "d02-verify",
+  "at": "2026-11-05T21:55:06.908Z",
+  "projectId": "super-credit-72834107",
+  "branchId": "br-billowing-cake-b627zsxv",
+  "database": "omni_print_d05",
+  "source": "NEW_EMPTY_TEST_PROJECT",
+  "productionAccess": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "verify-prisma",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "ebc92bd83afbed8058898a9bc9668944a9b9198390eb0bf33bf993fce76ec3ef"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "headSha": "1613ef6dfb564a81ba4713644d9bd2696d7e87f5",
+  "mainSha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+  "pr331Sha": "b0de724b4abac15258e498a7a44ab700348ebe17",
+  "mergeBase": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+  "mainIsAncestor": true,
+  "readOnlyMergeTreeConflictMarkers": 0,
+  "scope": "TEXTUAL_PREPARATION_DELTA_ONLY_NO_FUNCTIONAL_PR331_INTEGRATION",
+  "branchesMerged": false,
+  "physicalHomologation": "PENDING"
+}

@@ -1,0 +1,13 @@
+reset print_lab_d03_synthetic
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ tools/print-004c-e2e/synthetic-regression.pg.test.ts (3 tests) 249ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  23:07:12
+   Duration  799ms (transform 324ms, setup 0ms, import 445ms, tests 249ms, environment 0ms)
+
+
+exit=0

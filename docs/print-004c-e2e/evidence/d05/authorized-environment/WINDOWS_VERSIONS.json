@@ -1,0 +1,24 @@
+{
+  "observedAt": "2026-11-05T22:09:36.7161170Z",
+  "readOnly": true,
+  "operatingSystem": {
+    "Caption": "Microsoft Windows 11 Home Single Language",
+    "Version": "10.0.26200",
+    "BuildNumber": "26200"
+  },
+  "computer": {
+    "Manufacturer": "SAMSUNG ELECTRONICS CO., LTD.",
+    "Model": "750XGK"
+  },
+  "powershell": "7.6.5",
+  "node": "24.22.1",
+  "printConfiguration": {
+    "PrinterName": "POS-80",
+    "PaperSize": null,
+    "Color": false,
+    "DuplexingMode": 0,
+    "Collate": true
+  },
+  "supportedRollWidths": "NOT_PROVEN_BY_DRIVER_DEFAULT",
+  "physicalHomologation": "PENDING"
+}

@@ -1,0 +1,1 @@
+{"sales":12,"spoolerCalls":12,"processes":3,"states":{"SPOOLER_ACCEPTED":11,"UNKNOWN":1},"maxPerSale":1,"killedInFlight":true,"killedSendKey":"46894b6c-84d0-4307-a1c1-68540946303d","killedAttemptId":"526b0a18-e86c-4b26-b64e-3e860bcaa691","killedJournalPhase":"SUBMITTING","killedProcessExit":{"code":null,"signal":"SIGKILL"},"at":"2026-11-08T12:36:26.653Z"}

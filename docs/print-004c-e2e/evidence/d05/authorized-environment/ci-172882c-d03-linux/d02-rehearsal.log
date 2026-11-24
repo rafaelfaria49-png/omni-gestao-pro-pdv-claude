@@ -1,0 +1,21 @@
+reset print_lab_d03_d02r
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+stdout | tools/print-004c-e2e/d02-rehearsal.pg.test.ts > D02 — ensaio de aplicação, trava e rollback do schema candidato > rollback com venda aberta: desiste inteiro (ledger intacto) em vez de travar; sem carga remove tudo sem tocar vendas; ciclo se repete
+D02 rollback under load: vendas read waited 1902 ms; rollback gave up after 2010 ms
+
+ ✓ tools/print-004c-e2e/d02-rehearsal.pg.test.ts (5 tests) 14803ms
+     ✓ 00 CONCURRENTLY com venda aberta por 1 s: novas vendas gravam durante a espera; índices terminam VÁLIDOS  1168ms
+     ✓ 01-futura como está (sem lock_timeout) com venda aberta: a migration espera e as vendas novas ficam presas atrás dela  2334ms
+     ✓ recorte (ii) = 01-futura + 02 numa transação COM a guarda no arquivo e venda aberta: desiste inteira em ~2 s, venda nova espera e segue, heartbeat do terminal não trava  2748ms
+     ✓ rollback com venda aberta: desiste inteiro (ledger intacto) em vez de travar; sem carga remove tudo sem tocar vendas; ciclo se repete  2892ms
+     ✓ 00 com venda aberta além do lock_timeout do arquivo (5 s): índice fica INVÁLIDO; reaplicar sem limpar falha; DROP CONCURRENTLY + reaplicar resolve  5574ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  23:08:26
+   Duration  15.34s (transform 304ms, setup 0ms, import 430ms, tests 14.80s, environment 0ms)
+
+
+exit=0

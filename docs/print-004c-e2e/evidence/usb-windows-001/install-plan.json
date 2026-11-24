@@ -1,0 +1,16 @@
+{
+    "metadata":  {
+                     "installRoot":  "C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgentApp-USB001",
+                     "nodePath":  "C:\\Users\\rafae\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe",
+                     "contentId":  "f6af488c0c5d59e70f555f640b2fd97224dbd315b26da8e669335051dec56a40",
+                     "version":  "0.2.0-d04",
+                     "ownerSid":  "S-1-5-21-2955230094-2425622295-3406629455-1002",
+                     "dataRoot":  "C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgent-USB001",
+                     "taskArguments":  "\"C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgentApp-USB001\\releases\\0.2.0-d04-f6af488c0c5d\\supervisor.mjs\" --data-dir \"C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgent-USB001\"",
+                     "taskName":  "OmniPrintAgent-Lab-USB001",
+                     "releaseRoot":  "C:\\Users\\rafae\\AppData\\Local\\OmniPrintAgentApp-USB001\\releases\\0.2.0-d04-f6af488c0c5d"
+                 },
+    "signed":  false,
+    "mode":  "PLAN",
+    "action":  "INSTALL_DISABLED_LOGON_TASK"
+}

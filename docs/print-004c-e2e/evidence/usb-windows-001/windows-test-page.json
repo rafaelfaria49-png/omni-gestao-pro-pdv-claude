@@ -1,0 +1,10 @@
+{
+  "At": "2026-11-11T10:48:17.2805390-03:00",
+  "Queue": "POS-80",
+  "Driver": "POS-80 11.3.0.1",
+  "Port": "USB005",
+  "WindowsReturnValue": 5,
+  "PhysicalResult": "AWAITING_OPERATOR",
+  "PagesRequested": 1,
+  "OperatorApproval": "PRESENT_CONFIRMED_ONE_WINDOWS_TEST_PAGE"
+}

@@ -1,0 +1,96 @@
+{
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "runId": "2026-11-05T17-01-25-697Z",
+  "at": "2026-11-05T17:01:25.713Z",
+  "sourceCommit": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+  "workingTreeChanged": true,
+  "node": "v24.22.1",
+  "platform": "win32",
+  "productionAccess": false,
+  "productionWrites": 0,
+  "windowsPhysicalInstallation": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "retention-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 174,
+      "sha256": "9b9146afafa67505202c4669cd2177b3f51e5af404a6752eb156910e3852c1b3"
+    },
+    {
+      "step": "offline-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 32,
+      "sha256": "0eae8f343eb52676fc53f4b1883b487dbc6fb932a79bd63f179dd855b71162a8"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 71,
+      "sha256": "32d244fae1318b166932db2c7035bd092f92bc055c9747f3e78848357a1bfb8a"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 55,
+      "sha256": "55f5afaf67d213e1a54cea2ee374cd1b7b81b3204cb4a5ca9d7f0a3a5506ce0f"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 23,
+      "sha256": "48ab89adffcedf0916840466614f310d3cecb62f476a206a29a13cf840e2d076"
+    },
+    {
+      "step": "d02-pg",
+      "status": "FAIL",
+      "exit": 1,
+      "signal": null,
+      "processError": null,
+      "seconds": 28,
+      "sha256": "6a3d62d21130b53869923de45e606d2562b987e31b1168ca1d664bd635ed12f4"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 36,
+      "sha256": "a2aab3f82e8e3c75dec26e7786721c658e8514ac9cd1b2888f9f5ba07e12cc44"
+    },
+    {
+      "step": "playwright",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 352,
+      "sha256": "50a9d9c7f5b3a80384155c0f8b271867814675b4c37173aee567da360325e56f"
+    },
+    {
+      "step": "recovery",
+      "status": "PASS",
+      "exit": 0,
+      "signal": null,
+      "processError": null,
+      "seconds": 191,
+      "sha256": "273e7d18f76942e5ac1a0efb0426588cef4fdb95d26be9b346c578389f11a3fa"
+    }
+  ]
+}

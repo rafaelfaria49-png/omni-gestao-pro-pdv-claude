@@ -1,0 +1,27 @@
+{
+  "created": {
+    "at": "2026-11-05T23:23:19.272Z",
+    "commit": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+    "projectId": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+    "branch": "codex/omni-print-d05-homologacao-fisica-001",
+    "id": "dpl_973a17utnmo8jysZAZWgT5QAnrKz",
+    "url": "omni-gestao-ne9q12jro-rafaelfaria49-4373s-projects.vercel.app",
+    "target": "preview",
+    "readyState": "INITIALIZING",
+    "directTransportEnabled": false,
+    "requestHadNoProjectSettingsOrAliases": true
+  },
+  "status": {
+    "at": "2026-11-05T23:25:05.213Z",
+    "projectId": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+    "id": "dpl_973a17utnmo8jysZAZWgT5QAnrKz",
+    "url": "omni-gestao-ne9q12jro-rafaelfaria49-4373s-projects.vercel.app",
+    "target": "preview",
+    "state": "ERROR",
+    "gitRef": "codex/omni-print-d05-homologacao-fisica-001",
+    "sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+    "buildCommand": "node tools/print-d05/build-preview.mjs",
+    "nodeVersion": "24.x",
+    "errorCode": "module_not_found"
+  }
+}

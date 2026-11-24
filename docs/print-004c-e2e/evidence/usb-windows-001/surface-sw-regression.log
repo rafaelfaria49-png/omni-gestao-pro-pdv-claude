@@ -1,0 +1,9 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-usb-windows-finalizacao-real-001
+
+
+ Test Files  3 passed (3)
+      Tests  51 passed (51)
+   Start at  11:05:01
+   Duration  16.47s (transform 695ms, setup 0ms, import 8.81s, tests 1.46s, environment 5.09s)
+

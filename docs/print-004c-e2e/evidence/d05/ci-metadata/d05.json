@@ -1,0 +1,198 @@
+{
+  "headSha": "1613ef6dfb564a81ba4713644d9bd2696d7e87f5",
+  "runId": 42071630596,
+  "artifacts": [
+    {
+      "id": 13436346693,
+      "name": "omni-print-d05-preparation-ubuntu-24.04",
+      "size_in_bytes": 29758,
+      "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13436346693",
+      "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13436346693/zip",
+      "expired": false,
+      "created_at": "2026-11-05T17:08:33Z",
+      "expires_at": "2027-02-03T17:08:21Z",
+      "updated_at": "2026-11-05T17:08:33Z",
+      "digest": "sha256:636f8686fca28f851f03a49eb1676530be372ac764d8363d502a447ae2f25dd3",
+      "workflow_run": {
+        "id": 42071630596,
+        "repository_id": 1208557742,
+        "head_repository_id": 1208557742,
+        "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+        "head_sha": "1613ef6dfb564a81ba4713644d9bd2696d7e87f5"
+      }
+    },
+    {
+      "id": 13435239340,
+      "name": "omni-print-d05-preparation-windows-2022",
+      "size_in_bytes": 29772,
+      "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13435239340",
+      "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13435239340/zip",
+      "expired": false,
+      "created_at": "2026-11-05T17:08:44Z",
+      "expires_at": "2027-02-03T17:08:21Z",
+      "updated_at": "2026-11-05T17:08:44Z",
+      "digest": "sha256:d8aaa9c6057680a0ec3293f4728316b5855ce7774bd717dbf8564f06e95abe0c",
+      "workflow_run": {
+        "id": 42071630596,
+        "repository_id": 1208557742,
+        "head_repository_id": 1208557742,
+        "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+        "head_sha": "1613ef6dfb564a81ba4713644d9bd2696d7e87f5"
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "id": 127400816511,
+      "name": "offline-preparation (ubuntu-24.04)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 42071630596,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run node --test tools/print-d05/readiness.test.mjs",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run node tools/print-d05/readiness.mjs check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run node tools/print-d04/package.mjs tools/print-d05/.artifacts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        }
+      ]
+    },
+    {
+      "id": 127400816601,
+      "name": "offline-preparation (windows-2022)",
+      "status": "completed",
+      "conclusion": "success",
+      "run_id": 42071630596,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run node --test tools/print-d05/readiness.test.mjs",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run node tools/print-d05/readiness.mjs check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run node tools/print-d04/package.mjs tools/print-d05/.artifacts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "operation": "baseline",
+  "at": "2026-11-05T19:13:51.969Z",
+  "projectId": "super-credit-72834107",
+  "branchId": "br-billowing-cake-b627zsxv",
+  "database": "omni_print_d05",
+  "source": "NEW_EMPTY_TEST_PROJECT",
+  "productionAccess": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "empty-target",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "273a6cece3613e55f0ee4d0ca2a50eaa7e914d5bb99557813ae4665332a217db"
+    },
+    {
+      "step": "generate-baseline",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "85100050f90cb34772cc4208243c0055a55734c43e1e2f314f944059f3a0337f"
+    },
+    {
+      "step": "apply-baseline",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "ad6e110bda8df4221f0784d3cc2fa145b393bc44178d95cf7f72d5fd707d7e1c"
+    },
+    {
+      "step": "d02-generator",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "d093662a9b07a9a75722658642531c22f1c746090be143cc53af55ef43995297"
+    },
+    {
+      "step": "d02-baseline-status",
+      "exit": 0,
+      "status": "PASS",
+      "sha256": "85fb5ab45e62e38043a330845fe3f7ff5d7925914d81b3aa12718b4372acb579"
+    }
+  ]
+}

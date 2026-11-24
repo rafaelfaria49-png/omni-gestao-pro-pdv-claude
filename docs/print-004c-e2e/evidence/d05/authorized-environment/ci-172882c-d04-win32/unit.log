@@ -1,0 +1,24 @@
+
+ RUN  v4.1.4 D:/a/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ lib/vendas/venda-cupom-mapper.test.ts (16 tests) 10ms
+ ✓ lib/printing/direct/direct-print.test.ts (12 tests) 58ms
+ ✓ tools/omni-print-agent/agent.test.ts (11 tests) 292ms
+ ✓ lib/printing/direct/store-print-links.test.ts (6 tests) 110ms
+ ✓ tools/print-d02/d02-guard.test.ts (6 tests) 67ms
+ ✓ tools/print-d03/options.test.ts (15 tests) 17ms
+ ✓ lib/printing/direct/homologation.test.ts (9 tests) 12ms
+ ✓ components/dashboard/vendas/reimpressao-registrada.static.test.ts (4 tests) 7ms
+ ✓ lib/printing/direct/legacy-raw-guard.test.ts (2 tests) 13ms
+ ✓ tools/omni-print-agent/spooler-windows.test.ts (6 tests) 5298ms
+     ✓ timeout → reset espera o host morrer; o host novo atende sem ser rejeitado pelo antigo; nenhum órfão  459ms
+     ✓ lista filas do Windows pelo host persistente (somente leitura)  3622ms
+     ✓ status de fila inexistente → exists=false (agente reportaria PRINTER_NOT_FOUND / NO_EFFECT)  1095ms
+
+ Test Files  10 passed (10)
+      Tests  87 passed (87)
+   Start at  23:06:14
+   Duration  6.38s (transform 613ms, setup 0ms, import 966ms, tests 5.88s, environment 2ms)
+
+
+exit=0

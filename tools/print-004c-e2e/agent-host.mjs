@@ -15,6 +15,15 @@ if (paperFile) {
     const sale = /Venda: (\S+)/.exec(Buffer.from(bytes).toString("latin1"))?.[1] ?? null
     const fd = openSync(paperFile, "a")
     try { writeSync(fd, JSON.stringify({ pid: process.pid, sale, doc }) + "\n"); fsyncSync(fd) } finally { closeSync(fd) }
+    // Test-only crash barrier: bytes crossed the simulated submit boundary, with SUBMITTING already fsync'ed.
+    // Block the child after IPC flush so an overloaded parent cannot miss a 1.5s timer window. No real adapter uses this.
+    if (spooler.faults[0] === "HOLD_SUBMIT_FOR_KILL") {
+      spooler.faults.shift()
+      await new Promise(resolve => process.send({ event: "SUBMIT_BARRIER_ENTERED", pid: process.pid, sale, doc }, () => {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000)
+        resolve()
+      }))
+    }
     return submit(name, bytes, doc)
   }
 }

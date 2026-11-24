@@ -1,0 +1,123 @@
+{
+  "checkedAt": "2026-11-05T16:54:37.388Z",
+  "goal": "OMNI-PRINT-D05-HOMOLOGACAO-FISICA-END-TO-END-001",
+  "pullRequests": [
+    {
+      "pr": 327,
+      "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/327",
+      "state": "open",
+      "merged": false,
+      "head": "claude/omni-print-004c-e2e-001",
+      "head_sha": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+      "base": "main",
+      "base_sha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+      "merge_commit_sha": "4de17b3baded58c8d4663b5a3890a9f7a84b9b93",
+      "draft": true,
+      "title": "[NÃO MERGEAR] Omni Print 004C — impressão direta candidata (desligada)"
+    },
+    {
+      "pr": 332,
+      "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/332",
+      "state": "closed",
+      "merged": true,
+      "head": "codex/omni-print-d03-expurgo-retencao-chaves-001",
+      "head_sha": "5fd8743ce0c67c0847b09429f1b9e6ae5cae1e5a",
+      "base": "claude/omni-print-004c-e2e-001",
+      "base_sha": "027bba5c9c505b349844cd22da62bb480b29b249",
+      "merge_commit_sha": "146430dd603ba18eda4d8a4b68575bffb98652e4",
+      "draft": false,
+      "title": "feat(print): D03 expurgo e retenção segura"
+    },
+    {
+      "pr": 333,
+      "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/333",
+      "state": "closed",
+      "merged": true,
+      "head": "codex/omni-print-d04-windows-agent-finalizacao-001",
+      "head_sha": "b9d4802ee4afff2156b24e02abb6f8ff0aec6803",
+      "base": "claude/omni-print-004c-e2e-001",
+      "base_sha": "146430dd603ba18eda4d8a4b68575bffb98652e4",
+      "merge_commit_sha": "0e9eb95d578c6c57e7e7f4b8b71355f460d970a4",
+      "draft": false,
+      "title": "feat(print): D04 agente Windows e instalação controlada"
+    },
+    {
+      "pr": 331,
+      "url": "https://github.com/rafaelfaria49-png/omni-gestao-pro-pdv-claude/pull/331",
+      "state": "open",
+      "merged": false,
+      "head": "claude/pdv-f8-troca-imediata-001",
+      "head_sha": "b0de724b4abac15258e498a7a44ab700348ebe17",
+      "base": "main",
+      "base_sha": "37acc3b7e71d20dcbe623e6a2f87347e54f49ee6",
+      "merge_commit_sha": "8ef2186ccf3f4c75c196db6ebe026c22c3851c4a",
+      "draft": true,
+      "title": "fix(pdv): F8 troca imediata segura no PDV Clássico (sem schema)"
+    }
+  ],
+  "workflowRuns": [
+    {
+      "id": 42043664290,
+      "name": "Ramos e Cadastros",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 107,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664290/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664290/logs",
+      "workflow_id": 391912785
+    },
+    {
+      "id": 42043664079,
+      "name": "Plataforma - acesso piloto",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 101,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664079/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664079/logs",
+      "workflow_id": 393013250
+    },
+    {
+      "id": 42043663972,
+      "name": "Omni Print D03 — retenção segura",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 11,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043663972/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043663972/logs",
+      "workflow_id": 407417517
+    },
+    {
+      "id": 42043664172,
+      "name": "Omni Print D02 — guarda das migrations",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 9,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664172/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664172/logs",
+      "workflow_id": 407203149
+    },
+    {
+      "id": 42043664038,
+      "name": "Omni Print D04 — agente Windows",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 6,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664038/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664038/logs",
+      "workflow_id": 407569987
+    },
+    {
+      "id": 42043664082,
+      "name": "PDV - visor de peso read-only",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 40,
+      "jobs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664082/jobs",
+      "logs_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/runs/42043664082/logs",
+      "workflow_id": 400596194
+    }
+  ],
+  "physicalExecution": false,
+  "productionAccess": false,
+  "productionWrites": 0
+}

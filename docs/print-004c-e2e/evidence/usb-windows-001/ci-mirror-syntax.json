@@ -1,0 +1,26 @@
+[
+  {
+    "file": ".github/workflows/omni-print-d03.yml",
+    "job": "software",
+    "yaml": "PASS",
+    "bashSyntax": "PASS"
+  },
+  {
+    "file": ".github/workflows/platform-pilot.yml",
+    "job": "authenticated",
+    "yaml": "PASS",
+    "bashSyntax": "PASS"
+  },
+  {
+    "file": ".github/workflows/ramos-cadastros.yml",
+    "job": "validate",
+    "yaml": "PASS",
+    "bashSyntax": "PASS"
+  },
+  {
+    "file": ".github/workflows/ramos-cadastros.yml",
+    "job": "e2e-authenticated",
+    "yaml": "PASS",
+    "bashSyntax": "PASS"
+  }
+]

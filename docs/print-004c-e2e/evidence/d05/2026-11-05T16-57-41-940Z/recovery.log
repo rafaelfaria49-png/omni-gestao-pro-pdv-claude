@@ -1,0 +1,48 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d05
+
+ ❯ tools/print-d04/recovery.test.ts (24 tests | 3 failed) 143100ms
+     × real PowerShell host exits after its Node parent is force-killed 31472ms
+     × an unregistered legacy host blocks recovery and is never killed automatically 12638ms
+     × orphan host is reaped by verified identity and a reused PID is left untouched 10644ms
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  3 failed | 27 passed (30)
+   Start at  14:20:07
+   Duration  146.11s (transform 509ms, setup 0ms, import 759ms, tests 143.21s, environment 1ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d04/recovery.test.ts > D04 real Windows, synthetic data only > real PowerShell host exits after its Node parent is force-killed
+ FAIL  tools/print-d04/recovery.test.ts > D04 real Windows, synthetic data only > orphan host is reaped by verified identity and a reused PID is left untouched
+Error: PROCESS_IDENTITY_UNPROVEN
+ ❯ failure tools/omni-print-agent/runtime.mjs:14:39
+     12|   PSModulePath: path.join(process.env.SystemRoot || 'C:/Windows', 'Sys…
+     13| export const psCommand = (args) => ({ command: powershell, args: ['-No…
+     14| const failure = code => Object.assign(new Error(code), { code })
+       |                                       ^
+     15|
+     16| function firstReply(child, timeoutMs = 30_000) {
+ ❯ Interface.<anonymous> tools/omni-print-agent/runtime.mjs:24:83
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tools/print-d04/recovery.test.ts > D04 real Windows, synthetic data only > an unregistered legacy host blocks recovery and is never killed automatically
+AssertionError: expected [Function] to throw error including 'LEGACY_HOST_UNPROVEN_REBOOT_REQUIRED' but got 'PROCESS_IDENTITY_UNPROVEN'
+
+Expected: "LEGACY_HOST_UNPROVEN_REBOOT_REQUIRED"
+Received: "PROCESS_IDENTITY_UNPROVEN"
+
+ ❯ tools/print-d04/recovery.test.ts:172:63
+    170|     cleanups.push(()=>{if(child.exitCode===null)child.kill('SIGKILL')})
+    171|     await once(child.stdout,'data')
+    172|     await expect(acquireLease(path.join(dir,'journal.jsonl'))).rejects…
+       |                                                               ^
+    173|     expect((await inspectProcess(child.pid)).state).toBe('alive')
+    174|     const exited=once(child,'exit');child.kill('SIGKILL');await exited
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+
+exit=1

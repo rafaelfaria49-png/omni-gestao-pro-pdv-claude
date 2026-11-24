@@ -1,0 +1,15 @@
+✔ preparation cannot open a human gate, transport, global Preview, production or automatic deployment (11.7124ms)
+✔ missing case, duplicate case, unsupported status and unapproved N/A fail (0.924ms)
+✔ software/spooler success and a bare owner name cannot become physical PASS (0.5441ms)
+✔ complete synthetic record validates shape only; physical artifacts and human truth remain separate (18.2259ms)
+✔ artifact verifier refuses missing, changed and escaping evidence and wrong packages (13.8645ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 260.3501
+
+exit=0

@@ -1,0 +1,53 @@
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 716ms
+     ↓ R01 before seven days preserved; exact final boundary; dry run counts without changing any row
+     × R02 purge is irreversible/idempotent; no DELETE; hashes, sendKey/requestKey, first slot and key refs survive 613ms
+     ↓ R03 second copy reconstructs the sale only with fresh authorized consent, two tabs converge after purge
+     ↓ R04 READY/SENDING/UNKNOWN and partial operations are preserved even after years
+     ↓ R05 evidence of UNKNOWN survives reconciliation; accepted with held egress is preserved
+     ↓ R06 final failure waits for retry expiry; cancellation without a proven date is preserved
+     ↓ R07 unconsumed expired requests lose only command; browser consent/reason/firstCopy remains permanent
+     ↓ R08 store-scoped job cannot touch the other store; replay stays scoped after cleanup
+     ↓ R09 failure in the middle of a document rolls back content AND purge evidence, then resumes
+     ↓ R10 lost response after COMMIT and two retention workers do not duplicate events or updates
+     ↓ R11 busy document is skipped without waiting, timeout rolls back and next run resumes
+     ↓ R12 least privilege role runs without keys, cannot delete/change state/read commerce; invalid role is refused
+     ↓ R13 bounded pages handle volume, interrupted batches resume and busy rows remain for the next sweep
+     ↓ R14 legacy cancellation after browser-while-SENDING + late NO_EFFECT + REPRINT cannot use the old browser date
+     ↓ R15 UNKNOWN alone is preserved, even with finished_at and released egress; oversized documents fail closed
+     ↓ R16 B19/B23 historical REPRINT closes INITIAL permanently, including after purge
+     ↓ R17 CLI defaults to dry run; execution disabled and invalid credentials never expose SQL/URL/secret
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  23:12:41
+   Duration  1.25s (transform 311ms, setup 0ms, import 428ms, tests 716ms, environment 0ms)
+
+
+::error file=/home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude/tools/print-d03/retention.pg.test.ts,title=tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R02 purge is irreversible/idempotent; no DELETE; hashes%2C sendKey/requestKey%2C first slot and key refs survive,line=113,column=45::AssertionError: expected null to be 'ENV_V1_1e2c5dd07ffe2218' // Object.is equality%0A%0A- Expected:%0A"ENV_V1_1e2c5dd07ffe2218"%0A%0A+ Received:%0Anull%0A%0A ❯ tools/print-d03/retention.pg.test.ts:113:45%0A%0A
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R02 purge is irreversible/idempotent; no DELETE; hashes, sendKey/requestKey, first slot and key refs survive
+AssertionError: expected null to be 'ENV_V1_1e2c5dd07ffe2218' // Object.is equality
+
+- Expected:
+"ENV_V1_1e2c5dd07ffe2218"
+
++ Received:
+null
+
+ ❯ tools/print-d03/retention.pg.test.ts:113:45
+    111|     ]) await expect(db.exec(q)).rejects.toThrow(/p004/)
+    112|     const audit = await db.query("SELECT details FROM public.print_eve…
+    113|     expect(audit[0].details.snapshotKeyRef).toBe(runtime.crypto.keyRef)
+       |                                             ^
+    114|     expect(audit[0].details.payloadKeyRefs[0].keyRef).toBe(runtime.cry…
+    115|     const replay = await core.create(user, f.p.key, f.p.command)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

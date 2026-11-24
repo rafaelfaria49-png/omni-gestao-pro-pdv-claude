@@ -1,0 +1,131 @@
+{
+  "projectId": "prj_wjkHKw2jFQfY8regMYtkYXwgavuz",
+  "branch": "codex/omni-print-d05-homologacao-fisica-001",
+  "at": "2026-11-05T19:15:00.423Z",
+  "valuesDiscarded": true,
+  "variables": [
+    {
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "DIRECT_URL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "DATABASE_URL",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "CONTADOR_SESSION_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "CONTADOR_PIN",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "WHATSAPP_WEBHOOK_STORE_ID",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "WHATSAPP_APP_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "WHATSAPP_ACCESS_TOKEN",
+      "type": "sensitive",
+      "target": [
+        "production",
+        "preview"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "WHATSAPP_VERIFY_TOKEN",
+      "type": "plain",
+      "target": [
+        "production",
+        "preview"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "ADMIN_DEFAULT_PASSWORD",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    },
+    {
+      "key": "AUTH_SECRET",
+      "type": "sensitive",
+      "target": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null
+    }
+  ]
+}

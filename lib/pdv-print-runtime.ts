@@ -29,6 +29,8 @@ export type PrintJobResult = {
 
 export type ExecutePrintOptions = {
   config: PdvImpressaoConfig
+  /** A venda escolheu Omni Print; indisponibilidade não autoriza tentar outro transporte. */
+  requireAgent?: boolean
   receiptFooter?: string | null
   /** URL pública da logo da unidade (Store.logoUrl). */
   logoUrl?: string | null
@@ -78,6 +80,9 @@ export async function printWithFallback(
 ): Promise<PrintJobResult> {
   if (opts.forceBrowserFallback) {
     return openBrowserFallback(opts)
+  }
+  if (opts.requireAgent) {
+    return { ok: false, error: "A impressão USB usa o agente Omni Print. Confira o pareamento e o vínculo deste terminal. A venda continua confirmada." }
   }
 
   // App Windows com impressora escolhida nesta estação: spooler direto, sem diálogo e sem 9100.
@@ -142,6 +147,7 @@ function openBrowserFallback(opts: ExecutePrintOptions, error?: string): PrintJo
 
 export async function printPdvSaleReceipt(params: {
   config: PdvImpressaoConfig
+  requireAgent?: boolean
   receiptFooter?: string | null
   logoUrl?: string | null
   input: PdvReceiptInput
@@ -192,6 +198,7 @@ export async function printPdvSaleReceipt(params: {
 
   return printWithFallback(bytes, {
     config: params.config,
+    requireAgent: params.requireAgent,
     receiptFooter: footer,
     logoUrl: params.logoUrl,
     filename: "recibo-pdv.bin",

@@ -1,0 +1,19 @@
+file:///C:/Projetos/omni-gestao/.worktrees/omni-print-d05/tools/print-004c-e2e/pg-lab.mjs:23
+  if (r.status !== 0) throw new Error(`${exe} ${args.join(" ")} -> ${r.status}\n${r.stdout}\n${r.stderr}`)
+                            ^
+
+Error: psql.exe -h 127.0.0.1 -p 57495 -U pgadmin -d postgres -v ON_ERROR_STOP=1 -X -q -c DROP DATABASE IF EXISTS print_lab_d03_d02r WITH (FORCE) -> 2
+
+psql: error: connection to server at "127.0.0.1", port 57495 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+
+    at run (file:///C:/Projetos/omni-gestao/.worktrees/omni-print-d05/tools/print-004c-e2e/pg-lab.mjs:23:29)
+    at psql (file:///C:/Projetos/omni-gestao/.worktrees/omni-print-d05/tools/print-004c-e2e/pg-lab.mjs:26:34)
+    at file:///C:/Projetos/omni-gestao/.worktrees/omni-print-d05/tools/print-004c-e2e/pg-lab.mjs:63:3
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async node:internal/modules/esm/loader:647:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.22.1
+
+exit=1

@@ -1,0 +1,21 @@
+reset print_lab_d03_d02
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ tools/print-d02/d02-migrations.pg.test.ts (8 tests) 71314ms
+     ✓ 1 banco vazio: índices → núcleo → verify → promote → resolve; migrate deploy sem pendências e schema idêntico ao prisma/schema.prisma  7726ms
+     ✓ 2 banco com dados (vendas, estoque, caixa, autenticação, cadastros): nada muda fora de print_*; PDV segue gravando; loja com registro de impressão não é excluída  3641ms
+     ✓ 3 venda simultânea: índices CONCURRENTLY não travam vendas; núcleo desiste inteiro em ~2 s sem travar heartbeat; tentativas espaçadas aplicam  9246ms
+     ✓ 4 índice inválido: venda aberta além de 5 s deixa o índice INVÁLIDO; sem --repair-invalid para e pede decisão; núcleo recusa; reparo recria VÁLIDO  6212ms
+     ✓ 5 reexecução e idempotência: a ferramenta reconhece o já aplicado; reexecução crua dos arquivos falha sem alterar nada; resolve não duplica  4406ms
+     ✓ 6 falhas entre etapas: parada após um índice, núcleo fora de ordem, registro Prisma ausente, promoção com CRLF e alvo errado  4164ms
+     ✓ 7 prisma migrate deploy: aplica as três pastas; falha por lock no núcleo vira falha sem nada parcial; P3009 até resolve --rolled-back; depois aplica  7377ms
+     ✓ 8 rollback por remoção: dados intactos; registro Prisma precisa ser apagado à mão; com as pastas na main, o próximo deploy reaplicaria  5952ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  23:07:14
+   Duration  71.84s (transform 302ms, setup 0ms, import 417ms, tests 71.31s, environment 0ms)
+
+
+exit=0

@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-11-05T21:58:22.578Z",
+  "event": "LEGACY_PLAIN_ENV_VALUE_IN_CLI_TOOL_OUTPUT",
+  "service": "Vercel",
+  "keyName": "WHATSAPP_VERIFY_TOKEN",
+  "valuePersistedInRepository": false,
+  "ownerNotified": true,
+  "valueRedactedFromSubsequentCollections": true,
+  "d05UsesIndependentValue": true,
+  "productionOrGlobalRotationPerformed": false
+}

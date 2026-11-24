@@ -1,0 +1,2 @@
+# The official manifest hashes .txt artifacts byte for byte; retain their canonical Git LF bytes on Windows.
+*.txt text eol=lf

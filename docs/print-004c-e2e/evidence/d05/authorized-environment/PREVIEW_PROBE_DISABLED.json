@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-07T21:56:11.676Z",
+  "commit": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+  "mode": "disabled",
+  "checks": [],
+  "status": "FAIL",
+  "productionAccess": false,
+  "physicalHomologation": "PENDING",
+  "deploymentId": "dpl_B9vJfGhLWMuaJPqLkLArFyxzXmZa",
+  "url": "https://omni-gestao-5uu04d0de-rafaelfaria49-4373s-projects.vercel.app",
+  "failedPhase": "ADMIN_CSRF"
+}

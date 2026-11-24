@@ -12,11 +12,13 @@ type PrintStatus = "printing" | "sent" | "failed"
 export interface PdvAutoPrintFeedbackProps {
   printInput: PdvReceiptInput | null
   impressaoConfig: PdvImpressaoConfig
+  requireAgent?: boolean
   logoUrl?: string
   onDismiss: () => void
 }
 
-function errorMessage(result: PrintJobResult, config: PdvImpressaoConfig): string {
+function errorMessage(result: PrintJobResult, config: PdvImpressaoConfig, requireAgent: boolean): string {
+  if (requireAgent) return result.error || "Confira o agente Omni Print deste terminal."
   if (result.via === "desktop") return `Impressora do Windows: ${result.error || "falha ao enviar."}`
   const target = config.impressoraHost.trim()
   if (target) return `Não foi possível alcançar ${target}:${config.impressoraPorta}. ${result.error || "Verifique a conexão."}`
@@ -27,6 +29,7 @@ function errorMessage(result: PrintJobResult, config: PdvImpressaoConfig): strin
 export function PdvAutoPrintFeedback({
   printInput,
   impressaoConfig,
+  requireAgent = false,
   logoUrl,
   onDismiss,
 }: PdvAutoPrintFeedbackProps) {
@@ -42,6 +45,7 @@ export function PdvAutoPrintFeedback({
       try {
         const result = await printPdvSaleReceipt({
           config: impressaoConfig,
+          requireAgent,
           logoUrl: logoUrl ?? null,
           receiptFooter: printInput.receiptFooter ?? undefined,
           input: printInput,
@@ -55,17 +59,17 @@ export function PdvAutoPrintFeedback({
         }
         else {
           setStatus("failed")
-          setError(errorMessage(result, impressaoConfig))
+          setError(errorMessage(result, impressaoConfig, requireAgent))
         }
         return result
       } catch (e) {
         const result = { ok: false, error: e instanceof Error ? e.message : String(e) } as PrintJobResult
         setStatus("failed")
-        setError(errorMessage(result, impressaoConfig))
+        setError(errorMessage(result, impressaoConfig, requireAgent))
         return result
       }
     },
-    [impressaoConfig, logoUrl, printInput],
+    [impressaoConfig, logoUrl, printInput, requireAgent],
   )
 
   useEffect(() => {
@@ -101,7 +105,7 @@ export function PdvAutoPrintFeedback({
             {status === "printing" ? "Enviando comprovante…" : status === "sent" ? "Comprovante enviado" : "Venda confirmada · impressão pendente"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {status === "printing" ? `${saleLabel}. O PDV continua livre para a próxima venda.` : status === "sent" ? sentTo ? `${saleLabel} · enviado à fila de ${sentTo}.` : `${saleLabel} · impressão térmica concluída.` : error}
+            {status === "printing" ? `${saleLabel}. O PDV continua livre para a próxima venda.` : status === "sent" ? sentTo ? `${saleLabel} · enviado à fila de ${sentTo}.` : `${saleLabel} · envio aceito pelo transporte. Confira o papel na impressora.` : error}
           </p>
         </div>
         <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-2 h-8 w-8 shrink-0" onClick={onDismiss} aria-label="Fechar aviso de impressão">

@@ -1,0 +1,5 @@
+alvo: banco=omni_print_d05 host=ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech papel=omni_print_d05_app PostgreSQL 17.11 (9045acd)
+p004_vendas_id_store_uq: criado VÁLIDO em 2114 ms
+p004_term_id_store_uq: criado VÁLIDO em 4612 ms
+
+exit=0

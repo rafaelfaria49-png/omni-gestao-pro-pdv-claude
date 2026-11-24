@@ -1,0 +1,437 @@
+{
+  "headSha": "172882c6e721bee506307c5ec2aac50ec2fca9ef",
+  "checkoutSha": "ef7674b96a5a7232b27215af4c9c2ca9c008a031",
+  "d04": {
+    "runId": 42126804856,
+    "runAttempt": 1,
+    "artifacts": [
+      {
+        "id": 13462280637,
+        "name": "omni-print-d04-windows-evidence",
+        "size_in_bytes": 10018,
+        "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13462280637",
+        "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13462280637/zip",
+        "expired": false,
+        "created_at": "2026-11-05T23:07:23Z",
+        "expires_at": "2027-02-03T23:05:00Z",
+        "updated_at": "2026-11-05T23:07:23Z",
+        "digest": "sha256:73e257c38b63b7b19b51e1aa234f7942b6743545705bc4e50e10ff8d899edb18",
+        "workflow_run": {
+          "id": 42126804856,
+          "repository_id": 1208557742,
+          "head_repository_id": 1208557742,
+          "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+          "head_sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef"
+        }
+      },
+      {
+        "id": 13462175550,
+        "name": "omni-print-d04-linux-evidence",
+        "size_in_bytes": 6991,
+        "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13462175550",
+        "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13462175550/zip",
+        "expired": false,
+        "created_at": "2026-11-05T23:05:39Z",
+        "expires_at": "2027-02-03T23:05:00Z",
+        "updated_at": "2026-11-05T23:05:39Z",
+        "digest": "sha256:6c7a27936f6ca548f3558827fbf38d1db68373031ae2e615e1950375e7177b78",
+        "workflow_run": {
+          "id": 42126804856,
+          "repository_id": 1208557742,
+          "head_repository_id": 1208557742,
+          "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+          "head_sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef"
+        }
+      },
+      {
+        "id": 13461791221,
+        "name": "omni-print-d04-windows-package-unsigned",
+        "size_in_bytes": 28315,
+        "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461791221",
+        "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461791221/zip",
+        "expired": false,
+        "created_at": "2026-11-05T23:07:25Z",
+        "expires_at": "2027-02-03T23:05:00Z",
+        "updated_at": "2026-11-05T23:07:25Z",
+        "digest": "sha256:1e4fbc089912ece20b9a0ba8e6c4afc1eaba8117b14d297309aefac5e366c84f",
+        "workflow_run": {
+          "id": 42126804856,
+          "repository_id": 1208557742,
+          "head_repository_id": 1208557742,
+          "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+          "head_sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef"
+        }
+      }
+    ],
+    "jobs": [
+      {
+        "id": 127592964925,
+        "name": "windows-laboratory",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 42126804856,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3
+          },
+          {
+            "name": "Evidências exclusivas do runner",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4
+          },
+          {
+            "name": "Run npm ci --no-audit --no-fund",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5
+          },
+          {
+            "name": "Recovery, DPAPI, pacote, instalação e tarefa em laboratório descartável",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Consolidar resultados reais",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9
+          },
+          {
+            "name": "Post Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 17
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 18
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 19
+          }
+        ]
+      },
+      {
+        "id": 127592965348,
+        "name": "linux-portability",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 42126804856,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3
+          },
+          {
+            "name": "Run node tools/print-d04/evidence.mjs --reset",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4
+          },
+          {
+            "name": "Run npm ci --no-audit --no-fund",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5
+          },
+          {
+            "name": "Run node tools/print-d04/verify.mjs recovery package d04-eslint",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Run node tools/print-d04/evidence.mjs",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8
+          },
+          {
+            "name": "Post Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 15
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 16
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 17
+          }
+        ]
+      }
+    ]
+  },
+  "d05": {
+    "runId": 42126804692,
+    "runAttempt": 1,
+    "artifacts": [
+      {
+        "id": 13461347669,
+        "name": "omni-print-d05-preparation-ubuntu-24.04",
+        "size_in_bytes": 29758,
+        "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461347669",
+        "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461347669/zip",
+        "expired": false,
+        "created_at": "2026-11-05T23:05:18Z",
+        "expires_at": "2027-02-03T23:05:00Z",
+        "updated_at": "2026-11-05T23:05:18Z",
+        "digest": "sha256:8ca26e5ac5957f80af648810600a4bc1e221addfa057890c921d2a4d8dfbfecd",
+        "workflow_run": {
+          "id": 42126804692,
+          "repository_id": 1208557742,
+          "head_repository_id": 1208557742,
+          "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+          "head_sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef"
+        }
+      },
+      {
+        "id": 13461242814,
+        "name": "omni-print-d05-preparation-windows-2022",
+        "size_in_bytes": 29772,
+        "url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461242814",
+        "archive_download_url": "https://api.github.com/repos/rafaelfaria49-png/omni-gestao-pro-pdv-claude/actions/artifacts/13461242814/zip",
+        "expired": false,
+        "created_at": "2026-11-05T23:06:08Z",
+        "expires_at": "2027-02-03T23:05:00Z",
+        "updated_at": "2026-11-05T23:06:08Z",
+        "digest": "sha256:fb33d6739f294673a75b8df65f548b9e63fa75ddb7bc02944a065720f23d3151",
+        "workflow_run": {
+          "id": 42126804692,
+          "repository_id": 1208557742,
+          "head_repository_id": 1208557742,
+          "head_branch": "codex/omni-print-d05-homologacao-fisica-001",
+          "head_sha": "172882c6e721bee506307c5ec2aac50ec2fca9ef"
+        }
+      }
+    ],
+    "jobs": [
+      {
+        "id": 127592964293,
+        "name": "offline-preparation (windows-2022)",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 42126804692,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3
+          },
+          {
+            "name": "Run node --test tools/print-d05/readiness.test.mjs tools/print-d05/isolation.test.mjs",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4
+          },
+          {
+            "name": "Run node tools/print-d05/readiness.mjs check",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5
+          },
+          {
+            "name": "Parse do armazenamento DPAPI sem executar alterações",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Run node tools/print-d04/package.mjs tools/print-d05/.artifacts",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Run node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9
+          },
+          {
+            "name": "Post Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 17
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 18
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 19
+          }
+        ]
+      },
+      {
+        "id": 127592964730,
+        "name": "offline-preparation (ubuntu-24.04)",
+        "status": "completed",
+        "conclusion": "success",
+        "run_id": 42126804692,
+        "logs_url": null,
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3
+          },
+          {
+            "name": "Run node --test tools/print-d05/readiness.test.mjs tools/print-d05/isolation.test.mjs",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4
+          },
+          {
+            "name": "Run node tools/print-d05/readiness.mjs check",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5
+          },
+          {
+            "name": "Parse do armazenamento DPAPI sem executar alterações",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 6
+          },
+          {
+            "name": "Run node tools/print-d04/package.mjs tools/print-d05/.artifacts",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Run node tools/print-d05/readiness.mjs package tools/print-d05/.artifacts/omni-print-agent-0.2.0-d04.zip tools/print-d05/.artifacts/omni-print-agent",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9
+          },
+          {
+            "name": "Post Run actions/setup-node@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 17
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 18
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 19
+          }
+        ]
+      }
+    ]
+  }
+}

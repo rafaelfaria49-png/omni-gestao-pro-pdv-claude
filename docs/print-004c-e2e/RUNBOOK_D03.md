@@ -85,3 +85,7 @@ Para desativar, remover `OMNI_PRINT_RETENTION_ENABLED`/não invocar `--execute`.
 | Cron produtivo | DESABILITADO; nenhum agendamento instalado |
 | Testes físicos/Chrome/Edge com impressora | PENDENTE |
 | Relatório de software/CI | `D03_EXPURGO_RETENCAO_CHAVES.md` e `evidence/d03/` |
+
+## 8. Finalização 2026-11-08
+
+Sem mudança de runtime de retenção. Bateria: retenção PG 17/17 no head pós-merge e PASS no head corrigido; cron segue desligado; nenhuma chave criada; papel de retenção sem superuser/bypassrls (ver `D03_EXPURGO_RETENCAO_CHAVES.md`). Logs internos do servidor deixaram de incluir a mensagem crua do banco (`failureKind`).

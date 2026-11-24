@@ -1,0 +1,3 @@
+not ok 2 - outside the D05 branch the build is the unchanged project build (vercel.json must not stop main/\#327)
+# pass 6
+# fail 1

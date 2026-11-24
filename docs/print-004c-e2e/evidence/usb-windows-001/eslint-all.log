@@ -1,0 +1,429 @@
+[BABEL] Note: The code generator has deoptimised the styling of C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\generated\prisma\edge.js as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\generated\prisma\index.js as it exceeds the max of 500KB.
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\app\actions\operacoes.ts
+  1471:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\app\dashboard\clientes\ClientesPageClient.tsx
+  341:6  warning  React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\app\dashboard\marketing-ia\components\PhonePreview.tsx
+   62:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  117:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  141:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\app\dashboard\marketing-ia\components\PostGeneratorTab.tsx
+  240:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\app\dashboard\marketing-ia\components\studio\bom-dia-modal.tsx
+  204:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\cadastros\lovable\components\cadastros\ConferenciaLoteProdutos.tsx
+  111:9  warning  The 'produtos' logical expression could make the dependencies of useMemo Hook (at line 115) change on every render. To fix this, wrap the initialization of 'produtos' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\cadastros\lovable\components\cadastros\MovimentacaoEstoqueModal.tsx
+  132:6  warning  React Hook useEffect has missing dependencies: 'bloqueio' and 'produto'. Either include them or remove the dependency array. If 'setNovoSaldo' needs the current value of 'produto', you can also switch to useReducer instead of useState and read 'produto' in the reducer  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\cadastros\lovable\routes\__root.tsx
+  56:7  warning  Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element  @next/next/no-head-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\configuracoes-v3\features\settings\sections\PdvSection.tsx
+  312:7   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  813:27  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\clientes\cadastro-clientes.tsx
+  381:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\configuracoes\backup-importador\importador-dados-externos.tsx
+  1832:6  warning  React Hook useMemo has an unnecessary dependency: 'correcaoPreviewRevision'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\configuracoes\configuracoes-sistema.tsx
+  273:6  warning  React Hook useEffect has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\configuracoes\gestao-unidades-saas.tsx
+  197:6  warning  React Hook useEffect has a missing dependency: 'selected'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\estoque\inventario-conciliacao.tsx
+  250:9  warning  The 'naoEncontrados' logical expression could make the dependencies of useMemo Hook (at line 262) change on every render. To fix this, wrap the initialization of 'naoEncontrados' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\financeiro\contas-receber.tsx
+  735:6  warning  React Hook useEffect has a missing dependency: 'baixaConta'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\os\ordens-servico.tsx
+  1470:27  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  1719:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\vendas\payment-modal.tsx
+  371:9  warning  The 'formasPagamento' logical expression could make the dependencies of useMemo Hook (at line 381) change on every render. To fix this, wrap the initialization of 'formasPagamento' in its own useMemo() Hook      react-hooks/exhaustive-deps
+  371:9  warning  The 'formasPagamento' logical expression could make the dependencies of useCallback Hook (at line 386) change on every render. To fix this, wrap the initialization of 'formasPagamento' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\vendas\pdv-classic.tsx
+   845:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+   908:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 1164) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+   908:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 1180) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+  1368:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array                                                                                react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\vendas\pdv-recebimento-modal.tsx
+  526:5  warning  React Hook useCallback has missing dependencies: 'matchOpts' and 'selectedCliente'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\vendas\pdv-supermercado.tsx
+  600:5  warning  React Hook useCallback has a missing dependency: 'accessoryModelColorEnabled'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  732:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array                       react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\vendas\pdv-venda-completa-enterprise.tsx
+  253:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  309:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\dashboard\vendas\venda-completa-enterprise.tsx
+  445:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  518:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\financeiro\lovable\context\FinanceiroRealContext.tsx
+  812:6  warning  React Hook useCallback has a missing dependency: 'emptyRelatorios'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\financeiro\lovable\routes\__root.tsx
+  57:7  warning  Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element  @next/next/no-head-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\ia-mestre\ChatMessage.tsx
+  154:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\ia-mestre\views\ConfiguracoesIaView.tsx
+  281:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\master-console\EmployeeFormSheet.tsx
+  39:11  warning  The attribute aria-disabled is not supported by the role form. This role is implicit on the element form  jsx-a11y/role-supports-aria-props
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\operacoes\lovable\components\operacoes\AnexosPanel.tsx
+  215:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\operacoes\lovable\components\operacoes\ChecklistTecnicoPanel.tsx
+  24:70  warning  React Hook useMemo has unnecessary dependencies: 'os.atualizadoEm' and 'os.id'. Either exclude them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\operacoes\lovable\components\operacoes\PortalClienteModal.tsx
+  82:58  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\painel-inicial\workspace-focus-context.tsx
+  64:6  warning  React Hook useEffect has a missing dependency: 'overlayState'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\app\api\ops\inventory\import\route.ts
+  87:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\app\dashboard\cadastros-v2\CadastrosV2Client.tsx
+  62:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+  64:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+  75:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+  77:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\app\dashboard\marketing-ia\components\PhonePreview.tsx
+   62:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  117:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  141:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\app\dashboard\marketing-ia\components\PostGeneratorTab.tsx
+  165:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\app\dashboard\marketing-ia\components\studio\bom-dia-modal.tsx
+  204:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\claude-export\app.jsx
+  3:14  error  'PDV' is not defined  react/jsx-no-undef
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\claude-export\modals.jsx
+   34:80  error  'Icon' is not defined  react/jsx-no-undef
+   77:31  error  'Icon' is not defined  react/jsx-no-undef
+  123:20  error  'Icon' is not defined  react/jsx-no-undef
+  132:10  error  'Icon' is not defined  react/jsx-no-undef
+  271:20  error  'Icon' is not defined  react/jsx-no-undef
+  324:43  error  'Icon' is not defined  react/jsx-no-undef
+  331:47  error  'Icon' is not defined  react/jsx-no-undef
+  335:43  error  'Icon' is not defined  react/jsx-no-undef
+  351:24  error  'Icon' is not defined  react/jsx-no-undef
+  391:10  error  'Icon' is not defined  react/jsx-no-undef
+  411:10  error  'Icon' is not defined  react/jsx-no-undef
+  430:12  error  'Icon' is not defined  react/jsx-no-undef
+  455:20  error  'Icon' is not defined  react/jsx-no-undef
+  458:20  error  'Icon' is not defined  react/jsx-no-undef
+  538:14  error  'Icon' is not defined  react/jsx-no-undef
+  564:18  error  'Icon' is not defined  react/jsx-no-undef
+  568:79  error  'Icon' is not defined  react/jsx-no-undef
+  583:43  error  'Icon' is not defined  react/jsx-no-undef
+  614:18  error  'Icon' is not defined  react/jsx-no-undef
+  623:12  error  'Icon' is not defined  react/jsx-no-undef
+  646:10  error  'Icon' is not defined  react/jsx-no-undef
+  651:30  error  'Icon' is not defined  react/jsx-no-undef
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\claude-export\modals2.jsx
+   78:6   error  'ModalShell' is not defined  react/jsx-no-undef
+   85:16  error  'Icon' is not defined        react/jsx-no-undef
+   99:16  error  'Icon' is not defined        react/jsx-no-undef
+  108:12  error  'Icon' is not defined        react/jsx-no-undef
+  111:12  error  'Icon' is not defined        react/jsx-no-undef
+  135:18  error  'Icon' is not defined        react/jsx-no-undef
+  142:16  error  'Icon' is not defined        react/jsx-no-undef
+  170:35  error  'Icon' is not defined        react/jsx-no-undef
+  222:98  error  'Icon' is not defined        react/jsx-no-undef
+  228:98  error  'Icon' is not defined        react/jsx-no-undef
+  250:20  error  'Icon' is not defined        react/jsx-no-undef
+  253:20  error  'Icon' is not defined        react/jsx-no-undef
+  261:16  error  'Icon' is not defined        react/jsx-no-undef
+  301:6   error  'ModalShell' is not defined  react/jsx-no-undef
+  309:32  error  'Icon' is not defined        react/jsx-no-undef
+  313:32  error  'Icon' is not defined        react/jsx-no-undef
+  321:12  error  'Icon' is not defined        react/jsx-no-undef
+  324:12  error  'Icon' is not defined        react/jsx-no-undef
+  341:12  error  'Icon' is not defined        react/jsx-no-undef
+  350:34  error  'Icon' is not defined        react/jsx-no-undef
+  396:6   error  'ModalShell' is not defined  react/jsx-no-undef
+  401:14  error  'Icon' is not defined        react/jsx-no-undef
+  406:14  error  'Icon' is not defined        react/jsx-no-undef
+  427:58  error  'Icon' is not defined        react/jsx-no-undef
+  428:58  error  'Icon' is not defined        react/jsx-no-undef
+  438:38  error  'Icon' is not defined        react/jsx-no-undef
+  483:24  error  'Icon' is not defined        react/jsx-no-undef
+  485:26  error  'Icon' is not defined        react/jsx-no-undef
+  486:26  error  'Icon' is not defined        react/jsx-no-undef
+  519:6   error  'ModalShell' is not defined  react/jsx-no-undef
+  521:10  error  'Icon' is not defined        react/jsx-no-undef
+  569:22  error  'Icon' is not defined        react/jsx-no-undef
+  604:6   error  'ModalShell' is not defined  react/jsx-no-undef
+  616:14  error  'Icon' is not defined        react/jsx-no-undef
+  633:14  error  'Icon' is not defined        react/jsx-no-undef
+  640:12  error  'Icon' is not defined        react/jsx-no-undef
+  649:16  error  'Icon' is not defined        react/jsx-no-undef
+  658:16  error  'Icon' is not defined        react/jsx-no-undef
+  693:12  error  'Icon' is not defined        react/jsx-no-undef
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\claude-export\pdv.jsx
+   404:12  error  'Icon' is not defined              react/jsx-no-undef
+   412:12  error  'Icon' is not defined              react/jsx-no-undef
+   421:12  error  'Icon' is not defined              react/jsx-no-undef
+   425:12  error  'Icon' is not defined              react/jsx-no-undef
+   431:12  error  'Icon' is not defined              react/jsx-no-undef
+   438:14  error  'Icon' is not defined              react/jsx-no-undef
+   446:14  error  'Icon' is not defined              react/jsx-no-undef
+   451:14  error  'Icon' is not defined              react/jsx-no-undef
+   470:14  error  'Icon' is not defined              react/jsx-no-undef
+   475:14  error  'Icon' is not defined              react/jsx-no-undef
+   486:39  error  'Icon' is not defined              react/jsx-no-undef
+   515:44  error  'Icon' is not defined              react/jsx-no-undef
+   532:16  error  'Icon' is not defined              react/jsx-no-undef
+   547:51  error  'Icon' is not defined              react/jsx-no-undef
+   607:28  error  'Icon' is not defined              react/jsx-no-undef
+   653:18  error  'Icon' is not defined              react/jsx-no-undef
+   658:18  error  'Icon' is not defined              react/jsx-no-undef
+   663:18  error  'Icon' is not defined              react/jsx-no-undef
+   694:83  error  'Icon' is not defined              react/jsx-no-undef
+   696:18  error  'Icon' is not defined              react/jsx-no-undef
+   701:18  error  'Icon' is not defined              react/jsx-no-undef
+   747:18  error  'Icon' is not defined              react/jsx-no-undef
+   757:18  error  'Icon' is not defined              react/jsx-no-undef
+   784:18  error  'Icon' is not defined              react/jsx-no-undef
+   793:16  error  'Icon' is not defined              react/jsx-no-undef
+   861:12  error  'Icon' is not defined              react/jsx-no-undef
+   867:10  error  'SearchModal' is not defined       react/jsx-no-undef
+   877:12  error  'QtyModal' is not defined          react/jsx-no-undef
+   885:10  error  'CustomerModal' is not defined     react/jsx-no-undef
+   892:10  error  'DiscountModal' is not defined     react/jsx-no-undef
+   900:10  error  'CpfNotaModal' is not defined      react/jsx-no-undef
+   907:10  error  'CancelModal' is not defined       react/jsx-no-undef
+   918:10  error  'SuspendModal' is not defined      react/jsx-no-undef
+   928:10  error  'PaymentModal' is not defined      react/jsx-no-undef
+   940:10  error  'ReturnModal' is not defined       react/jsx-no-undef
+   955:10  error  'LoyaltyModal' is not defined      react/jsx-no-undef
+   964:10  error  'CashOpsModal' is not defined      react/jsx-no-undef
+   973:10  error  'CashCloseModal' is not defined    react/jsx-no-undef
+   991:10  error  'TurnHistoryModal' is not defined  react/jsx-no-undef
+  1010:11  error  'SuccessModal' is not defined      react/jsx-no-undef
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\cadastros\lovable\routes\__root.tsx
+  56:7  warning  Do not use `<head>` element. Use `<Head />` from `next/head` instead. See: https://nextjs.org/docs/messages/no-head-element  @next/next/no-head-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\configuracoes-v3\features\settings\sections\GeralSection.tsx
+  156:6  warning  React Hook useEffect has a missing dependency: 'toast'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\clientes\cadastro-clientes.tsx
+  381:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\configuracoes\backup-importador\importador-dados-externos.tsx
+  1734:6  warning  React Hook useMemo has an unnecessary dependency: 'correcaoPreviewRevision'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\configuracoes\configuracoes-sistema.tsx
+  274:6  warning  React Hook useEffect has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\configuracoes\gestao-unidades-saas.tsx
+  125:6  warning  React Hook useEffect has a missing dependency: 'selected'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\estoque\servicos.tsx
+  204:35  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\financeiro\contas-receber.tsx
+  724:6  warning  React Hook useEffect has a missing dependency: 'baixaConta'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\header.tsx
+  125:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\mobile-nav.tsx
+  152:6  warning  React Hook useMemo has an unnecessary dependency: 'config.assinatura.plano'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\os\ordens-servico.tsx
+  1492:27  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  1741:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\vendas\pdv-assistencia-enterprise.tsx
+  222:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\vendas\pdv-classic.tsx
+  542:9  warning  The 'addToCart' function makes the dependencies of useCallback Hook (at line 608) change on every render. To fix this, wrap the definition of 'addToCart' in its own useCallback() Hook  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\vendas\pdv-supermercado.tsx
+  220:6  warning  React Hook useMemo has a missing dependency: 'products'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\dashboard\vendas\vendas-arquivo-geral.tsx
+  123:6  warning  React Hook useMemo has an unnecessary dependency: 'contasVersion'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\ia-mestre\ChatMessage.tsx
+  138:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\operacoes\lovable\components\operacoes\AnexosPanel.tsx
+  100:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\operacoes\lovable\components\operacoes\PortalClienteModal.tsx
+  82:58  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\studio\components\bom-dia-modal.tsx
+  134:5   error    Error: Calling setState from useMemo may trigger an infinite loop
+
+Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\studio\components\bom-dia-modal.tsx:134:5
+  132 |   // Reset when template changes
+  133 |   useMemo(() => {
+> 134 |     setMessage(tpl.caption);
+      |     ^^^^^^^^^^ Found setState() within useMemo()
+  135 |     setActiveTake(0);
+  136 |     setTakeMedia([null, null, null]);
+  137 |   }, [template, tpl.caption]);            react-hooks/set-state-in-render
+  135:5   error    Error: Calling setState from useMemo may trigger an infinite loop
+
+Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\studio\components\bom-dia-modal.tsx:135:5
+  133 |   useMemo(() => {
+  134 |     setMessage(tpl.caption);
+> 135 |     setActiveTake(0);
+      |     ^^^^^^^^^^^^^ Found setState() within useMemo()
+  136 |     setTakeMedia([null, null, null]);
+  137 |   }, [template, tpl.caption]);
+  138 |                                          react-hooks/set-state-in-render
+  136:5   error    Error: Calling setState from useMemo may trigger an infinite loop
+
+Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\studio\components\bom-dia-modal.tsx:136:5
+  134 |     setMessage(tpl.caption);
+  135 |     setActiveTake(0);
+> 136 |     setTakeMedia([null, null, null]);
+      |     ^^^^^^^^^^^^ Found setState() within useMemo()
+  137 |   }, [template, tpl.caption]);
+  138 |
+  139 |   const completedTakes = takeMedia.filter(Boolean).length;  react-hooks/set-state-in-render
+  137:6   warning  React Hook useMemo has an unnecessary dependency: 'template'. Either exclude it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      react-hooks/exhaustive-deps
+  252:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\tabs\CalendarTab.tsx
+  28:9  warning  The 'now' object construction makes the dependencies of useMemo Hook (at line 43) change on every render. To fix this, wrap the initialization of 'now' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\components\vendas-hub\lovable\routeTree.gen.ts
+  1:1  warning  Unused eslint-disable directive (no problems were reported)
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\lib\config-empresa.tsx
+  419:6  warning  React Hook useEffect has a missing dependency: 'config.assinatura'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  574:5  warning  React Hook useCallback has a missing dependency: 'config.empresa'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\lib\loja-ativa.tsx
+  253:6  warning  React Hook useCallback has an unnecessary dependency: 'lojas'. Either exclude it or remove the dependency array            react-hooks/exhaustive-deps
+  296:6  warning  React Hook useMemo has a missing dependency: 'lojaAtivaId'. Either include it or remove the dependency array               react-hooks/exhaustive-deps
+  311:5  warning  React Hook useMemo has an unnecessary dependency: 'lojaSelecionada?.id'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\lib\pdv-operator-id.ts
+  6:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-github-original\lib\perfil-loja-provider.tsx
+  90:6  warning  React Hook useCallback has an unnecessary dependency: 'lojaHeader'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\pdv-next\PdvBlackEdition.tsx
+  222:5  warning  React Hook useMemo has a missing dependency: 'pdvParams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\studio\components\bom-dia-modal.tsx
+  252:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\tabs\CalendarTab.tsx
+  28:9  warning  The 'now' object construction makes the dependencies of useMemo Hook (at line 43) change on every render. To fix this, wrap the initialization of 'now' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\vendas-hub\lovable\routeTree.gen.ts
+  1:1  warning  Unused eslint-disable directive (no problems were reported)
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\components\whatsapp\WhatsAppInbox.tsx
+  170:7  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\config-empresa.tsx
+  577:5  warning  React Hook useCallback has a missing dependency: 'config.empresa'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\estoque\deposito-core.test.ts
+  51:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\importador-avancado\parser.ts
+  119:7  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+  132:9  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\multi-loja-no-hardcoded-fallback.test.ts
+  136:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\operacoes-v3\event-publisher.ts
+  109:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+  118:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+  134:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+  154:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda-aprazo.test.ts
+  21:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda-caixa-original-fechado.test.ts
+  50:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda-colisao-loja.test.ts
+  59:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda-fractional.test.ts
+  48:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda-pix-aprazo-resync.test.ts
+  60:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda-replay-conflict.test.ts
+  77:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda-vale.test.ts
+  21:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\ops-upsert-venda.test.ts
+  48:3  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\pdv-operator-id.ts
+  6:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\pdv\use-pdv-capabilities.ts
+  30:5  warning  React Hook useMemo has an unnecessary dependency: 'storeId'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\lib\print-core-synthetic\db.ts
+  2:39  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\test\ops-v4-datas-ui-001\browser\fixture.tsx
+  25:3  warning  React Hook useEffect contains a call to 'setVisivel'. Without a list of dependencies, this can lead to an infinite chain of updates. To fix this, pass [v] as a second argument to the useEffect Hook  react-hooks/exhaustive-deps
+
+C:\Projetos\omni-gestao\.worktrees\omni-print-usb-windows-finalizacao-real-001\test\ops-v4-datas-ui-001\entrada-datas.test.tsx
+  235:3  warning  React Hook useEffect contains a call to 'setLegitima'. Without a list of dependencies, this can lead to an infinite chain of updates. To fix this, pass [v] as a second argument to the useEffect Hook  react-hooks/exhaustive-deps
+
+✖ 214 problems (105 errors, 109 warnings)
+  0 errors and 31 warnings potentially fixable with the `--fix` option.
+

@@ -1,0 +1,20 @@
+{
+  "projectId": "super-credit-72834107",
+  "branchId": "br-billowing-cake-b627zsxv",
+  "observedAt": "2026-11-05T19:31:11.291Z",
+  "afterSuccessfulIdempotentSeedReplay": [
+    {
+      "stores": 1,
+      "users": 2,
+      "products": 3,
+      "total_stock": 300,
+      "stock_ledger_rows": 3,
+      "terminals": 2,
+      "sales": 0,
+      "print_jobs": 0,
+      "d02_migrations": 3
+    }
+  ],
+  "productionAccess": false,
+  "physicalHomologation": "PENDING"
+}

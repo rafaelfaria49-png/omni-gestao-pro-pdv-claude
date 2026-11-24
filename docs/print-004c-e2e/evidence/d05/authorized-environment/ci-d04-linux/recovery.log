@@ -1,0 +1,15 @@
+
+ RUN  v4.1.4 /home/runner/work/omni-gestao-pro-pdv-claude/omni-gestao-pro-pdv-claude
+
+ ✓ tools/print-d04/recovery.test.ts (24 tests | 6 skipped) 3564ms
+     ✓ OS lease excludes two agents and does not alter the legitimate owner  1554ms
+     ✓ a live owner remains protected even when its guard has disappeared  1546ms
+ ✓ tools/print-d04/verify-artifact.test.ts (6 tests) 30ms
+
+ Test Files  2 passed (2)
+      Tests  24 passed | 6 skipped (30)
+   Start at  22:00:54
+   Duration  4.03s (transform 127ms, setup 0ms, import 182ms, tests 3.59s, environment 0ms)
+
+
+exit=0

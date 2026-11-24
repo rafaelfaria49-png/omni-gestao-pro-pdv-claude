@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-05T21:56:30.292Z",
+  "projectId": "super-credit-72834107",
+  "branchId": "br-billowing-cake-b627zsxv",
+  "privateStateValidated": true,
+  "prisma": {
+    "connectedIdentity": {
+      "db": "omni_print_d05",
+      "role": "omni_print_d05_app"
+    },
+    "sslmode": "require",
+    "sslaccept": "strict",
+    "query": "READ_ONLY_IDENTITY"
+  },
+  "libpq": {
+    "sslmode": "verify-full",
+    "channelBinding": "require",
+    "clientConnectionInfo": "You are connected to database \"omni_print_d05\" as user \"omni_print_d05_app\" on host \"ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech\" (address \"15.229.115.3\") at port \"5432\".\nSSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off, ALPN: postgresql)",
+    "certificateSource": "NODE_24_BUNDLED_PUBLIC_ROOTS",
+    "certificateBundleSha256": "15783a17671365196e5e4ba6ddea3132df72538fef70be91bbd91f45c85c170f"
+  },
+  "backendSslViewNotUsedAsClientProof": true,
+  "productionAccess": false,
+  "physicalHomologation": "PENDING"
+}

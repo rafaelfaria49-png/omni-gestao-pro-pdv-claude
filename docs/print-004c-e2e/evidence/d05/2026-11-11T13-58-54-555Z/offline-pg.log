@@ -1,0 +1,13 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-usb-windows-finalizacao-real-001
+
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  11:00:46
+   Duration  4.95s (transform 1.01s, setup 0ms, import 2.20s, tests 2.55s, environment 0ms)
+
+NOTICE:  database "pdv_offline_sync_disposable" does not exist, skipping
+psql:C:/Users/rafae/.codex/visualizations/2026/11/11/01a1cad6-e371-7d10-a2be-795fde37d608/omni-print-usb-pg17/baseline-main.sql:2: NOTICE:  schema "public" already exists, skipping
+
+exit=0

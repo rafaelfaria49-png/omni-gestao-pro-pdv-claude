@@ -1,0 +1,126 @@
+{
+  "at": "2026-11-05T22:05:52.942Z",
+  "headSha": "76ec7c363b915b871c6e91f55a17ceda862d9fb9",
+  "checkoutSha": "7c957a54c7074eb1a03d049fdd6dbca5f50a3d12",
+  "status": "PASS",
+  "evidence": [
+    {
+      "status": "PASS",
+      "headSha": "76ec7c363b915b871c6e91f55a17ceda862d9fb9",
+      "checkoutSha": "7c957a54c7074eb1a03d049fdd6dbca5f50a3d12",
+      "runId": 42117677050,
+      "runAttempt": 1,
+      "artifactId": 13458025499,
+      "artifactName": "omni-print-d04-windows-evidence",
+      "artifactDigest": "sha256:037834c5033765855a473ac1c9b8e09f5830656b14c15a3c5a53e857986cad40",
+      "platform": "win32",
+      "steps": [
+        {
+          "step": "unit",
+          "status": "PASS",
+          "tests": "87 passed (87)",
+          "sha256": "2aa4ed3e7de2543f629761d4065e3f1dbd6b12158671c0d804af8c90a96c8b43"
+        },
+        {
+          "step": "recovery",
+          "status": "PASS",
+          "tests": "30 passed (30)",
+          "sha256": "0d97d2eb278160c09d79b24d68affbcccd52f4cb06fed64f64d87d3919516ac1"
+        },
+        {
+          "step": "package",
+          "status": "PASS",
+          "tests": null,
+          "sha256": "2455cfcabcf82e7717dc42b51c1fe974bb5de25d07afe8b2abb567c8074abf06"
+        },
+        {
+          "step": "d04-eslint",
+          "status": "PASS",
+          "tests": null,
+          "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+        },
+        {
+          "step": "powershell-parse",
+          "status": "PASS",
+          "tests": null,
+          "sha256": "b6aa105adb1389fc898ea0567c3ed6b0a21b08bf29d08c28324fda2a3183e498"
+        },
+        {
+          "step": "installer",
+          "status": "PASS",
+          "tests": null,
+          "sha256": "3e6abf4eb84bcbf168f737f2ffbb2bd2fcf58164447b02c6d0f394e02453778b"
+        },
+        {
+          "step": "cross-user-dpapi",
+          "status": "PASS",
+          "tests": null,
+          "sha256": "34dd5e50f792c7e971e44f5e283d6afa2ade486b309c6306d6d72cea49901fb9"
+        }
+      ],
+      "physicalHomologation": "PENDING"
+    },
+    {
+      "status": "PASS",
+      "headSha": "76ec7c363b915b871c6e91f55a17ceda862d9fb9",
+      "checkoutSha": "7c957a54c7074eb1a03d049fdd6dbca5f50a3d12",
+      "runId": 42117677050,
+      "runAttempt": 1,
+      "artifactId": 13456337866,
+      "artifactName": "omni-print-d04-linux-evidence",
+      "artifactDigest": "sha256:589d805df55b3925f02a3c4d5b3b933f1f6ddc5e5123572735b03d940a133763",
+      "platform": "linux",
+      "steps": [
+        {
+          "step": "recovery",
+          "status": "PASS",
+          "tests": "24 passed | 6 skipped (30)",
+          "sha256": "1a61d3852738e6889ae98fd527df4eeb85c4b3b0374ba4436e5cbd2d3b0cdfc1"
+        },
+        {
+          "step": "package",
+          "status": "PASS",
+          "tests": null,
+          "sha256": "c824df74ccee4b8008282fdfaf7dded65ccbb7caf503e26c30beff0d1940c67c"
+        },
+        {
+          "step": "d04-eslint",
+          "status": "PASS",
+          "tests": null,
+          "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+        }
+      ],
+      "physicalHomologation": "PENDING"
+    }
+  ],
+  "packages": [
+    {
+      "id": 13456927393,
+      "name": "omni-print-d05-preparation-ubuntu-24.04",
+      "digest": "sha256:91fa28ce91f53bf01ec3ae0d4d8007c14ce1bab7e2931f193b7515c6480a2bd8",
+      "packageSha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+      "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+      "signature": null,
+      "status": "PASS"
+    },
+    {
+      "id": 13456657707,
+      "name": "omni-print-d05-preparation-windows-2022",
+      "digest": "sha256:ecc3dbc79e81b3ece6042220db887302d55a0f3b9a05ce08273a5c28beec1de0",
+      "packageSha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+      "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+      "signature": null,
+      "status": "PASS"
+    },
+    {
+      "id": 13457067616,
+      "name": "omni-print-d04-windows-package-unsigned",
+      "digest": "sha256:79c9c7755a14fa9b7e615aff50697a10551b26ad363595bbb318797f0eea27e0",
+      "packageSha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+      "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+      "signature": null,
+      "status": "PASS"
+    }
+  ],
+  "physicalHomologation": "PENDING"
+}

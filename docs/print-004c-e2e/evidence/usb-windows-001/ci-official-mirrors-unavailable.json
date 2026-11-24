@@ -1,0 +1,18 @@
+{
+  "head": "7a0abe923884e5faa1a6b1ffb51bec80dc48e939",
+  "run": 43048161987,
+  "job": 130617633176,
+  "classification": "UBUNTU_OFFICIAL_MIRRORS_DNS_UNAVAILABLE",
+  "hosts": [
+    "archive.ubuntu.com",
+    "security.ubuntu.com"
+  ],
+  "maxSecondsPerHost": 10,
+  "testsReached": false,
+  "testsDisabled": false,
+  "windowsAgentJob": "PASS",
+  "errors": [
+    "2026-11-11T15:26:03.5146829Z UBUNTU_OFFICIAL_MIRRORS_DNS_UNAVAILABLE",
+    "2026-11-11T15:26:03.5159727Z ##[error]Process completed with exit code 1."
+  ]
+}

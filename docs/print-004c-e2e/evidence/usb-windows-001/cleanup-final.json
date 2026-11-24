@@ -1,0 +1,24 @@
+{
+  "at": "2026-11-11T17:43:26.0997477-03:00",
+  "tasks": [
+    {
+      "TaskName": "OmniPrintAgent-Lab-D05",
+      "State": "Disabled"
+    },
+    {
+      "TaskName": "OmniPrintAgent-Lab-USB001",
+      "State": "Disabled"
+    }
+  ],
+  "ownProcesses": [],
+  "printer": {
+    "Name": "POS-80",
+    "DriverName": "POS-80 11.3.0.1",
+    "PortName": "USB005",
+    "PrinterStatus": "Normal",
+    "JobCount": 0
+  },
+  "spooler": "Running",
+  "dataPreserved": true,
+  "changes": "READ_ONLY"
+}

@@ -1,0 +1,215 @@
+{
+  "at": "2026-11-05T23:25:10.859Z",
+  "source": "VERCEL_API_FILTERED_OWN_BRANCH_ONLY",
+  "variables": [
+    {
+      "id": "JIuxA3LLg8E3zhkA",
+      "key": "WHATSAPP_WEBHOOK_STORE_ID",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "IjIkVnIa8rmy4NAP",
+      "key": "WHATSAPP_VERIFY_TOKEN",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "VCUD0eiN1AwhcYZS",
+      "key": "WHATSAPP_APP_SECRET",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "klxYKpQ17r5dZjCf",
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "2tfIueqqIcfk1j0A",
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "2htPOR3Dtk6auMWe",
+      "key": "WHATSAPP_ACCESS_TOKEN",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "hlNGr4Qy0AcKalX3",
+      "key": "NEXT_TELEMETRY_DISABLED",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "Nt5jlUQfhgHA0php",
+      "key": "MIGRATION_AUTHORITY_ENABLED",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "Ic41ovVQQjFd8kGr",
+      "key": "OMNI_PRINT_RETENTION_ENABLED",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "YftOx8s4e5RDXhVD",
+      "key": "OMNI_PRINT_DIRECT_RELEASE",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "bZ7Cr8CZc8f6OMOa",
+      "key": "OMNI_PRINT_DIRECT_ENABLED",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "2nvRCDlid4fvNs9l",
+      "key": "OMNI_PRINT_D05_ENVIRONMENT",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "wKGEIMP5aGsgHXxz",
+      "key": "CONTADOR_LEGACY_PORTAL",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "vrrlAStbTIuhkUtn",
+      "key": "NEXT_PUBLIC_APP_URL",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "MPTApW9TPvmB3qF1",
+      "key": "NEXTAUTH_URL",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "0Qe4vEPsF4gmoFne",
+      "key": "AUTH_URL",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "iIMCuv0lSXlVVz0K",
+      "key": "AUTH_TRUST_HOST",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "hQ1gH8YBUuh9p1sp",
+      "key": "NODE_ENV",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "ud8OrglBdJc11qKO",
+      "key": "CONTADOR_PIN",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "8xS1McrdOKNPPGmF",
+      "key": "CONTADOR_SESSION_SECRET",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "swHf7KtVJeXDYe4C",
+      "key": "OMNI_PRINT_SIGNING_KEY",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "6NJo0srOYYsJaKwT",
+      "key": "OMNI_PRINT_CONTENT_KEY",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "V4t5s5BDTL0wEcxw",
+      "key": "ADMIN_DEFAULT_PASSWORD",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "Q2oqJg5cvc62ddjX",
+      "key": "AUTH_SECRET",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "iAUnSaOSvL9rcNDR",
+      "key": "DIRECT_URL",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    },
+    {
+      "id": "SNSzT9lD8FGpE2BN",
+      "key": "DATABASE_URL",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "codex/omni-print-d05-homologacao-fisica-001"
+    }
+  ],
+  "secretValuesDiscarded": true
+}

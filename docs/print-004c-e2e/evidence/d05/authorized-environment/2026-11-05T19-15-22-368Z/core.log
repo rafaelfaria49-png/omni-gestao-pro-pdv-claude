@@ -1,0 +1,4 @@
+alvo: banco=omni_print_d05 host=ep-nameless-boat-b6y438an.c-2.sa-east-1.aws.neon.tech papel=omni_print_d05_app PostgreSQL 17.11 (9045acd)
+passo (ii) aplicado em 4953 ms (tentativa 1)
+
+exit=0

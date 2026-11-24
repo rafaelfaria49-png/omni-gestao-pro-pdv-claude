@@ -1,0 +1,7 @@
+{
+  "At": "2026-11-11T11:03:41.9075703-03:00",
+  "Endpoint": "D05_PREVIEW_TERMINAL_STATUS",
+  "Status": 404,
+  "Body": "{\"ok\":false,\"error\":\"DIRECT_PRINT_DISABLED\",\"reason\":\"OWNER_APPROVAL_REQUIRED\"}",
+  "ProductionAccess": false
+}

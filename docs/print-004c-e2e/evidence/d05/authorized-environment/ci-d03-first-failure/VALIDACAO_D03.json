@@ -1,0 +1,125 @@
+{
+  "goal": "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001",
+  "at": "2026-11-05T22:07:56.014Z",
+  "status": "FAIL",
+  "provenance": {
+    "startedAt": "2026-11-05T22:00:28.557Z",
+    "platform": "linux",
+    "githubRunId": "42117677163",
+    "githubRunAttempt": "1",
+    "commit": "7c957a54c7074eb1a03d049fdd6dbca5f50a3d12"
+  },
+  "productionExecution": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "generator",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "514d418684675f4df7db4e73921ddda85fb98a7676b1b92ddff9f9ff8fa81421"
+    },
+    {
+      "step": "d02-generator",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "d093662a9b07a9a75722658642531c22f1c746090be143cc53af55ef43995297"
+    },
+    {
+      "step": "unit",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "83 passed | 4 skipped (87)",
+      "sha256": "856906ffd6ff8e958bb32af834fbaf7face9f2c393d5be2c30d2437c8251fe8b"
+    },
+    {
+      "step": "offline-regression",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "135 passed (135)",
+      "sha256": "9b6374120958f31433e24519aecad5cff2adface282bcd1033a97d2b02e54aa9"
+    },
+    {
+      "step": "retention-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "17 passed (17)",
+      "sha256": "1f80e21a37e5db6f18047725a8297fecc0ec3d1abe37195ec5632809f30b27f6"
+    },
+    {
+      "step": "offline-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "10 passed (10)",
+      "sha256": "4574a4f13ebf1dc4f1e5305648ffc31ffd845067a5165eb6dcdbbb64280297ee"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "35 passed (35)",
+      "sha256": "402497b5ab3f97a711bd0868bd6af7ecded85487336637dcd75a0aab3c4e4158"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "FAIL",
+      "exit": 1,
+      "tests": "1 failed (1)",
+      "sha256": "d79fbe303bb34a0eadc4c10f9d78d822c6ffeef3c0fc80737924580b6c37c3c6"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "3 passed (3)",
+      "sha256": "fae84de93cbb7742a83d60de29c0b3f80d3e90a3db21cd64014384823502c1a2"
+    },
+    {
+      "step": "d02-pg",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "8 passed (8)",
+      "sha256": "88a7932f9141832433726df8cc584a75cbb20f15bd4019bf5d99cae04866016a"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "5 passed (5)",
+      "sha256": "e09adb92bfaf202ff37f7df3be7c852eb9429bd862afcad43ef4212690585657"
+    },
+    {
+      "step": "playwright",
+      "status": "PASS",
+      "exit": 0,
+      "tests": "19 passed (59.7s)",
+      "sha256": "2c8ace0c09af528a240e335cc66b79a1896aae11d8b46c2d70cce7583d5519d7"
+    },
+    {
+      "step": "typecheck",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "eslint",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "build",
+      "status": "PASS",
+      "exit": 0,
+      "tests": null,
+      "sha256": "383c633ef519cafb0a7981736c4deeab67f9baef7aaf4a917ae347bda4316c4f"
+    },
+    {
+      "step": "mutation",
+      "status": "PENDING"
+    }
+  ]
+}

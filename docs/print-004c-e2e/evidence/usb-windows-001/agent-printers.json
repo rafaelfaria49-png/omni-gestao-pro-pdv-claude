@@ -1,0 +1,16 @@
+[
+  {
+    "status": "3",
+    "isDefault": true,
+    "name": "POS-80",
+    "portKind": "USB",
+    "online": true
+  },
+  {
+    "status": "3",
+    "isDefault": false,
+    "name": "EPSON L4160 Series",
+    "portKind": "USB",
+    "online": true
+  }
+]

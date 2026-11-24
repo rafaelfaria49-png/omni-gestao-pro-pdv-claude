@@ -1,0 +1,481 @@
+{
+  "at": "2026-11-11T20:43:11.074Z",
+  "sourceBase": "0dbeb5d9267f9920dc1a763649989b3e37546d49",
+  "codeHead": "7a0abe923884e5faa1a6b1ffb51bec80dc48e939",
+  "files": [
+    {
+      "file": ".github/workflows/omni-print-d03.yml",
+      "status": "M"
+    },
+    {
+      "file": ".github/workflows/platform-pilot.yml",
+      "status": "M"
+    },
+    {
+      "file": ".github/workflows/ramos-cadastros.yml",
+      "status": "M"
+    },
+    {
+      "file": "app/api/print/raw/route.test.ts",
+      "status": "A"
+    },
+    {
+      "file": "app/api/print/raw/route.ts",
+      "status": "M"
+    },
+    {
+      "file": "components/dashboard/vendas/pdv-auto-print-feedback.tsx",
+      "status": "M"
+    },
+    {
+      "file": "components/dashboard/vendas/pdv-classic.tsx",
+      "status": "M"
+    },
+    {
+      "file": "components/dashboard/vendas/pdv-post-sale-dialog.tsx",
+      "status": "M"
+    },
+    {
+      "file": "docs/changelog/CHANGELOG.md",
+      "status": "M"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/d02-generator.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/d02-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/d02-rehearsal.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/d05-eslint.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/d05-plan.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/d05-tests.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/eslint.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/generator.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/offline-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/offline-regression.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/package-integrity.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/package.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/playwright.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/powershell-parse.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/retention-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/scenarios-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/summary.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/synthetic-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/two-agents-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/two-agents.jsonl",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/typecheck.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T13-58-54-555Z/unit.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-12-37-243Z/recovery.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-12-37-243Z/summary.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-15-09-378Z/build.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-15-09-378Z/summary.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-15-09-378Z/sw-proof.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/build.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/d02-generator.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/d02-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/d02-rehearsal.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/d05-eslint.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/d05-plan.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/d05-tests.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/eslint.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/generator.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/offline-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/offline-regression.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/package-integrity.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/package.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/playwright.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/powershell-parse.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/recovery.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/retention-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/scenarios-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/summary.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/sw-proof.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/synthetic-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/two-agents-pg.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/two-agents.jsonl",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/typecheck.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/d05/2026-11-11T14-29-42-020Z/unit.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/HASHES.json",
+      "status": "M"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/agent-printers.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/changed-files.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-attempt1-browser-dns.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-d03-attempt1-browser-dns.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-final.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-mirror-syntax-final.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-mirror-syntax.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-official-archive-dns.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-official-mirrors-unavailable.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-package.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-retry-2026-11-11T20-31Z.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/ci-retry-single-job-2026-11-11T20-37Z.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/cleanup-final.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/eslint-all.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/eslint-delta-final.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/eslint-delta.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/green-regression-final.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/green-regression.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/install-apply.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/install-plan.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/installed-diagnosis.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/lab-stop.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/lint-baseline-comparison.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/local-battery-final.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/npm-ci.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/operator-windows-test.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/playwright-routing-real.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/preview-disabled-probe.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/prisma-generate.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/qa-migration-history.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/qa-readonly.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/queue-final.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/red-regression.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/RESULTADO_USB_WINDOWS_001.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/review-regression.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/surface-sw-regression-final.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/surface-sw-regression.log",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/tasks-preserved.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/windows-detection.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/windows-test-page.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/worktree-inventory-final.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/evidence/usb-windows-001/worktree-inventory.json",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/RELATORIO_USB_WINDOWS_FINALIZACAO_001.md",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/REVISAO_USB_WINDOWS_FINALIZACAO_001.md",
+      "status": "A"
+    },
+    {
+      "file": "docs/print-004c-e2e/RUNBOOK_D02.md",
+      "status": "M"
+    },
+    {
+      "file": "e2e/fixtures/print-direct.ts",
+      "status": "M"
+    },
+    {
+      "file": "e2e/specs/print-direct-004c.spec.ts",
+      "status": "M"
+    },
+    {
+      "file": "lib/pdv-print-runtime.test.ts",
+      "status": "M"
+    },
+    {
+      "file": "lib/pdv-print-runtime.ts",
+      "status": "M"
+    },
+    {
+      "file": "tools/print-004c-e2e/manifest.mjs",
+      "status": "M"
+    },
+    {
+      "file": "tools/print-004c-e2e/sw-network-proof.mjs",
+      "status": "A"
+    },
+    {
+      "file": "tools/print-d03/verify.mjs",
+      "status": "M"
+    },
+    {
+      "file": "vercel.json",
+      "status": "M"
+    }
+  ],
+  "mainIncorporatedByNormalMerge": [
+    "app/api/financeiro/pagar/pagar-liquidar-saldo.test.ts",
+    "app/api/financeiro/receber/receber-liquidar-saldo.test.ts",
+    "app/api/financeiro/receber/vincular-caixa.test.ts",
+    "app/api/ops/caixa/sessoes/route.test.ts",
+    "app/api/ops/caixa/sessoes/route.ts",
+    "components/dashboard/caixa/caixa-historico-client.tsx",
+    "lib/caixa/historico-periodo.test.ts",
+    "lib/caixa/historico-periodo.ts",
+    "lib/relatorios/sw-network-only.test.ts",
+    "next.config.mjs",
+    "public/client-privacy-cache.js"
+  ],
+  "noFilesRemoved": true
+}
