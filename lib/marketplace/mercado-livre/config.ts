@@ -14,7 +14,7 @@ export type MercadoLivreConfig = {
   storeIds: ReadonlySet<string>
 }
 
-export function mercadoLivreConfig(env = process.env): MercadoLivreConfig | null {
+export function mercadoLivreConfig(env: Readonly<Record<string, string | undefined>> = process.env): MercadoLivreConfig | null {
   if (env.MELI_OAUTH_ENABLED !== "1") return null
   const storeIds = new Set((env.MELI_OAUTH_STORE_ALLOWLIST ?? "").split(",").map((id) => id.trim()).filter(Boolean))
   const clientId = env.MELI_OAUTH_CLIENT_ID?.trim()

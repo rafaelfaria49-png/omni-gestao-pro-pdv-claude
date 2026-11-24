@@ -123,6 +123,16 @@ export function MercadoLivreConnection({ storeId, connection, refetch }: {
     if (!connection.canRead) setPage(null)
   }, [connection.canRead])
 
+  useEffect(() => {
+    function restoreConnection(event: PageTransitionEvent) {
+      if (!event.persisted) return
+      setBusy(null)
+      void refetch()
+    }
+    window.addEventListener("pageshow", restoreConnection)
+    return () => window.removeEventListener("pageshow", restoreConnection)
+  }, [refetch])
+
   async function authorize() {
     setBusy("authorize")
     setError(null)
@@ -208,7 +218,8 @@ export function MercadoLivreConnection({ storeId, connection, refetch }: {
       {connection.enabled && (
         <div className="flex flex-wrap gap-2">
           {showAuthorize && <Button type="button" size="sm" disabled={!!busy} onClick={() => void authorize()}>
-            {busy === "authorize" ? <Loader2 className="animate-spin" /> : <Plug />}{authorizeLabel}
+            {busy === "authorize" ? <Loader2 className="animate-spin" /> : <Plug />}
+            {busy === "authorize" ? "Abrindo autorização…" : authorizeLabel}
           </Button>}
           {connection.canRead && <Button type="button" size="sm" variant={showAuthorize ? "outline" : "default"} disabled={!!busy} onClick={() => void loadListings()}>
             {busy === "list" ? <Loader2 className="animate-spin" /> : <Search />}{page ? "Primeira página" : "Consultar anúncios"}
