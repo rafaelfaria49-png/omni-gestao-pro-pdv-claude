@@ -549,7 +549,7 @@ test("Gerenciamento de cores, read-back na capinha e uso no PDV", async ({ page 
     await page.getByLabel("Nova cor da loja").fill("Azul-marinho")
     await page.getByLabel("Representação visual da nova cor").fill("#1e3a8a")
     await page.getByRole("button", { name: /Cadastrar cor/ }).click()
-    await expect(page.getByText("Azul-marinho")).toBeVisible()
+    await expect(page.getByText("Azul-marinho", { exact: true })).toBeVisible()
 
     // Duplicidade por espaço/maiúsculas/hífen recusada sem criar segunda linha
     await page.getByLabel("Nova cor da loja").fill("  AZUL  marinho ")
@@ -559,12 +559,12 @@ test("Gerenciamento de cores, read-back na capinha e uso no PDV", async ({ page 
 
     // Pesquisar cor e editar nome + representação visual
     await page.getByLabel("Pesquisar cores").fill("marinho")
-    await expect(page.getByText("Azul-marinho")).toBeVisible()
+    await expect(page.getByText("Azul-marinho", { exact: true })).toBeVisible()
     await page.getByRole("button", { name: "Editar Azul-marinho" }).click()
     await page.getByLabel("Nome da cor").fill("Azul-marinho fosco")
     await page.getByLabel("Representação visual de Azul-marinho").fill("#172554")
     await page.getByRole("button", { name: "Salvar cor" }).click()
-    await expect(page.getByText("Azul-marinho fosco")).toBeVisible()
+    await expect(page.getByText("Azul-marinho fosco", { exact: true })).toBeVisible()
     await page.getByLabel("Pesquisar cores").fill("")
   })
 
