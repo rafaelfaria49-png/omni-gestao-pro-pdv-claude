@@ -37,7 +37,8 @@ import type { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { POST as receberLoteHub } from "@/app/api/financeiro/receber-lote/route"
 import { PATCH as receberPatch } from "@/app/api/financeiro/receber/route"
-import { estornarRecebimentoOSV3, receberOSV3 } from "@/lib/operacoes-v3/pdv-servico-actions"
+import { estornarRecebimentoOSV3, receberOSV3, registrarRecebimentoMistoOSV3 } from "@/lib/operacoes-v3/pdv-servico-actions"
+import { hojeLojaV3 } from "@/lib/operacoes-v3/recebimento-misto-model"
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model"
 import { sumPagamentosFromHistoricoPayload } from "@/lib/financeiro/services/contas-receber-service"
 import { aggregateCaixaOperacoes } from "@/lib/caixa-fechamento-resumo"
@@ -68,6 +69,10 @@ let seq = 0
 const H = "x-assistec-loja-id"
 type Json = Record<string, any>
 const r2 = (n: number) => Math.round(n * 100) / 100
+const VENC = (() => {
+  const [a, m, d] = hojeLojaV3().split("-").map(Number)
+  return new Date(Date.UTC(a!, m!, d!)).toISOString().slice(0, 10)
+})()
 
 async function novaLoja(): Promise<string> {
   const id = `qa-final-${SUFIXO}-${++seq}`
@@ -364,6 +369,57 @@ describe("G · estornarRecebimentoOSV3 conciliado com Caixa e Financeiro", () =>
     const antes = await contagem(s)
     await expect(estornarRecebimentoOSV3(s, osId, { sessaoId, recebidoEsperado: 100 })).rejects.toThrow(/entrada de caixa/)
     expect(await contagem(s)).toEqual(antes)
+  })
+
+  it("G6. misto dividido por forma (30 dinheiro + 20 pix): estorno pela OS compensa as DUAS entradas pela forma", async () => {
+    const s = await novaLoja()
+    const sessaoId = await abrirCaixa(s)
+    const osId = await novaOS(s)
+    const r = await registrarRecebimentoMistoOSV3(s, osId, {
+      operacaoId: chave(),
+      sessaoId,
+      pagamentosAgora: [{ forma: "dinheiro", valor: 30 }, { forma: "pix", valor: 20 }],
+      saldoAPrazo: { valor: 350, vencimento: VENC },
+      saldoEsperado: 400,
+    })
+    expect(r.ok).toBe(true)
+    const lk = localKeyContaReceberOSV3(s, osId)
+    expect((await estado(s, lk)).hist[0]).toMatchObject({ tipo: "pagamento", valor: 50, loteId: expect.any(String) })
+
+    const est = await estornarRecebimentoOSV3(s, osId, { sessaoId, recebidoEsperado: 50 })
+    expect(est.estornado).toBe(50)
+    const e = await estado(s, lk)
+    expect(e.recebido).toBe(0)
+    expect(e.saidas).toEqual([50])
+    expect(e.caixaEst.map((c) => [(c.payload as Json).formaPagamento, c.valor]).sort()).toEqual([["dinheiro", 30], ["pix", 20]])
+    expect(e.gaveta.recebimentosContas).toBeCloseTo(0, 2)
+  })
+
+  it("G7. legado do misto (ledger sem loteId): o grupo de entradas da MESMA operação ainda é reconhecido", async () => {
+    const s = await novaLoja()
+    const sessaoId = await abrirCaixa(s)
+    const osId = await novaOS(s)
+    expect(
+      (await registrarRecebimentoMistoOSV3(s, osId, {
+        operacaoId: chave(),
+        sessaoId,
+        pagamentosAgora: [{ forma: "dinheiro", valor: 30 }, { forma: "pix", valor: 20 }],
+        saldoAPrazo: { valor: 350, vencimento: VENC },
+        saldoEsperado: 400,
+      })).ok,
+    ).toBe(true)
+    const lk = localKeyContaReceberOSV3(s, osId)
+    // formato gravado antes desta entrega: pagamento do misto sem `loteId`
+    const t = await prisma.contaReceberTitulo.findUniqueOrThrow({ where: { storeId_localKey: { storeId: s, localKey: lk } } })
+    const pl = t.payload as Json
+    const hist = (pl.historico as Json[]).map(({ loteId: _x, ...h }) => h)
+    await prisma.contaReceberTitulo.update({ where: { id: t.id }, data: { payload: { ...pl, historico: hist } as Prisma.InputJsonValue } })
+
+    const hub = await patch(s, { op: "estornar", localKey: lk, modo: "ultimo_pagamento", recebidoEsperado: 50 })
+    expect(hub.status).toBe(200)
+    const e = await estado(s, lk)
+    expect(e.caixaEst.map((c) => c.valor).sort()).toEqual([20, 30])
+    expect(e.gaveta.recebimentosContas).toBeCloseTo(0, 2)
   })
 
   it("G5. caixa atual fechado → recusa, nada gravado (sessão fechada nunca é editada)", async () => {

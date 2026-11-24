@@ -21,6 +21,8 @@ const bodySchema = z.object({
   localKey: z.string().min(1).max(260).optional(),
   motivo: z.string().max(2000).optional(),
   pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(),
+  /** Recebido que o operador viu. Diferente do atual = 409 sem escrita (retry sem índice não estorna OUTRO pagamento). */
+  recebidoEsperado: z.number().finite().nonnegative().max(1e12).optional(),
 })
 
 function pickTituloRef(input: { tituloId?: string | number; localKey?: string }): { id?: string; localKey?: string } {
@@ -89,6 +91,7 @@ export async function POST(request: Request) {
       localKey: ref.localKey,
       modo: "ultimo_pagamento",
       pagamentoIndex: parsed.data.pagamentoIndex,
+      recebidoEsperado: parsed.data.recebidoEsperado,
       motivo: parsed.data.motivo,
       userLabel,
     })

@@ -155,6 +155,29 @@ export function localizarEntradaCaixaDoPagamento(input: {
   if (livres.length > 0 && estornosSemReferencia > 0) return { kind: "ambigua", motivo: "estorno_de_caixa_legado_sem_referencia" }
   const candidatas = livres.filter((o) => !temIdentidade(o) && Math.abs(livre(o) - pagamento.valor) <= EPS)
   if (candidatas.length === 0) {
+    // Legado Operações V3 (misto dividido por forma, antes do `loteId` no ledger): UMA operação
+    // = N entradas com o MESMO `operacaoId`. Vale só se for o único grupo, numa sessão, cuja
+    // soma livre é exatamente este pagamento, e o único pagamento ativo candidato a ele.
+    const grupos = new Map<string, OperacaoCaixaTitulo[]>()
+    for (const o of livres) {
+      const k = str(rec(o.payload).operacaoId)
+      if (k && !temIdentidade(o)) grupos.set(k, [...(grupos.get(k) ?? []), o])
+    }
+    const gruposDoValor = [...grupos.values()].filter(
+      (g) =>
+        g.length > 1 &&
+        new Set(g.map((o) => o.sessaoId)).size === 1 &&
+        Math.abs(money(g.reduce((s, o) => s + livre(o), 0)) - pagamento.valor) <= EPS,
+    )
+    const paresDoGrupo = ativos.filter(
+      (a) =>
+        !planejadoPags.has(a.index) &&
+        Math.abs(a.valor - pagamento.valor) <= EPS &&
+        !recebimentos.some((o) => ligadaPorIdentidade(o, a)),
+    )
+    if (gruposDoValor.length === 1 && paresDoGrupo.length === 1) {
+      return { kind: "encontrada", parcelas: gruposDoValor[0]!.map((o) => ({ operacao: o, valor: livre(o) })) }
+    }
     const semExplicacao = livres.filter((o) => !ativos.some((a) => Math.abs(a.valor - livre(o)) <= EPS))
     if (semExplicacao.length > 0) return { kind: "ambigua", motivo: "entrada_de_caixa_sem_pagamento_correspondente" }
     return { kind: "sem_caixa" }
