@@ -1,0 +1,54 @@
+# E2E autenticado — fluxos legados (lojas com organizationId NULL), build local da branch 4d4c54e
+
+Ambiente: next start 127.0.0.1:3007 (build da branch, NextAuth real), PG 17 descartável fin_receb_f9_qa_saas
+preparado por scripts/saas/prepare-pg.mjs (migration SaaS REAL aplicada, drift zero) + test/fin-receb-f9-print/qa-bootstrap.mjs.
+Todas as 5 lojas do banco com organizationId NULL. Usuários sintéticos *.test; senha aleatória só no ambiente do processo.
+
+## Rodada 1 — 5 specs em sequência no MESMO banco
+[1/15] [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão
+[2/15] [chromium] › e2e\specs\02-pdv-vendas.spec.ts:5:7 › PDV / Vendas › abre vendas, área de caixa e fluxo leve de pagamento (modal)
+[3/15] [chromium] › e2e\specs\04-financeiro-v2.spec.ts:5:7 › Financeiro HUB v2 › carrega shell, abas e conteúdo principal
+[4/15] [chromium] › e2e\specs\10-permissoes-access-denied.spec.ts:5:7 › Permissões — aviso de acesso (querystring) › exibe alerta enterprise quando access=denied
+[5/15] [chromium] › e2e\specs\10-permissoes-access-denied.spec.ts:5:7 › Permissões — aviso de acesso (querystring) › exibe alerta enterprise quando access=denied (retry #1)
+  1) [chromium] › e2e\specs\10-permissoes-access-denied.spec.ts:5:7 › Permissões — aviso de acesso (querystring) › exibe alerta enterprise quando access=denied 
+    Error: expect.toBeVisible: Error: strict mode violation: getByText('Acesso não autorizado') resolved to 2 elements:
+        1) <div data-slot="alert-title" class="col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight text-foreground">Acesso não autorizado</div> aka getByRole('main').getByText('Acesso não au
+        2) <div data-slot="alert-title" class="col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight text-foreground">Acesso não autorizado</div> aka getByText('Acesso não autorizado').nth(1)
+    
+[6/15] [chromium] › e2e\specs\10-permissoes-access-denied.spec.ts:17:7 › Permissões — aviso de acesso (querystring) › exibe aviso quando storeAccess=denied
+[7/15] [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Clássico — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 80mm, 2ª via e foco
+[8/15] [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Clássico — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja
+[9/15] [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Assistência — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 58mm, 2ª via e foco
+[10/15] [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Assistência — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja
+[11/15] [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:151:7 › F9 Supermercado — caixa fechado, terminal, lista, busca nome/telefone/CPF, parcial, cupom 80mm, 2ª via e foco
+[12/15] [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:292:7 › F9 Supermercado — rede caída, resposta perdida, 403, 409 real, sem títulos, homônimos e outra loja
+[13/15] [chromium] › e2e\specs\financeiro-f9-tres-layouts-001.spec.ts:429:5 › API — perfil sem permissão (TÉCNICO) e loja sem vínculo recebem 403, sem nenhuma escrita
+[14/15] [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:48:5 › Financeiro HUB — parcial com comprovante real, lote por cliente numa operação e 2ª via sem nova baixa
+[15/15] [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:158:5 › PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e oferece comprovante
+[16/15] (retries) [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:226:5 › Financeiro HUB — integral, lote de 3 numa operação, tela de sucesso após a recarga, estorno e cup
+[17/15] (retries) [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:48:5 › Financeiro HUB — parcial com comprovante real, lote por cliente numa operação e 2ª via sem nova ba
+  2) [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:48:5 › Financeiro HUB — parcial com comprovante real, lote por cliente numa operação e 2ª via sem nova baixa 
+[18/15] (retries) [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:158:5 › PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e oferece comprovante (retry #1
+  3) [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:158:5 › PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e oferece comprovante 
+    Error: Timed out 20000ms waiting for expect(locator).toHaveCount(expected)
+    
+[19/15] (retries) [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:226:5 › Financeiro HUB — integral, lote de 3 numa operação, tela de sucesso após a recarga, estorno e cup
+  4) [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:226:5 › Financeiro HUB — integral, lote de 3 numa operação, tela de sucesso após a recarga, estorno e cupom 58 mm 
+  3 failed
+  1 flaky
+  11 passed (20.6m)
+
+## Rodada 2 — só as specs que falharam, banco recriado do zero
+[1/6] [setup] › e2e\auth.setup.ts:7:6 › autenticar e gravar sessão
+[2/6] [chromium] › e2e\specs\10-permissoes-access-denied.spec.ts:5:7 › Permissões — aviso de acesso (querystring) › exibe alerta enterprise quando access=denied
+[3/6] [chromium] › e2e\specs\10-permissoes-access-denied.spec.ts:17:7 › Permissões — aviso de acesso (querystring) › exibe aviso quando storeAccess=denied
+[4/6] [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:48:5 › Financeiro HUB — parcial com comprovante real, lote por cliente numa operação e 2ª via sem nova baixa
+requestfailed GET http://127.0.0.1:3007/api/ops/vendas-list?lojaId=000-qa-fin-f9 net::ERR_ABORTED
+requestfailed GET http://127.0.0.1:3007/api/version net::ERR_ABORTED
+[5/6] [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:158:5 › PDV Classic — F9 lista devedores, busca por telefone, recebe uma vez e oferece comprovante
+[6/6] [chromium] › e2e\specs\financeiro-recebimentos-f9-print-001.spec.ts:226:5 › Financeiro HUB — integral, lote de 3 numa operação, tela de sucesso após a recarga, estorno e cupom 58 mm
+  6 passed (42.5s)
+
+Leitura: as falhas da rodada 1 dependem do estado deixado pelos testes de layout (terminal/layout do PDV) no mesmo banco e de seletor ambíguo (2 alertas renderizados); isoladas passam 6/6. Nenhuma recusa de acesso, nenhum 500 de /api/stores*, cron sem segredo = 503.
+
+Log do servidor durante as 2 rodadas: saas_entitlement_shadow_failed = 0 · saas_entitlement_shadow = 0 (nenhuma loja com organização) · saas_entitlement_enforce_ignored = 0.
