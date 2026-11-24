@@ -5,6 +5,7 @@
  */
 import { spawn, spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
+import { once } from "node:events"
 import { createWriteStream } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { request as httpRequest } from "node:http"
@@ -130,9 +131,15 @@ try {
     if (app.exitCode !== null || Date.now() > deadline) throw new Error("Next.js de QA indisponível. Consulte o log local de testes.")
     await delay(1_000)
   }
-  run(["node_modules/@playwright/test/cli.js", "test", "--config", "e2e/marketplace-meli.playwright.config.ts", ...process.argv.slice(2)], {
-    ...localEnv, MELI_E2E_BASE_URL: origin, MELI_E2E_PASSWORD: password, MELI_E2E_PROVIDER_EVENTS: events,
+  // O proxy HTTPS roda neste processo e precisa manter o event loop livre durante o Playwright.
+  const browser = spawn(process.execPath, [
+    "node_modules/@playwright/test/cli.js", "test", "--config", "e2e/marketplace-meli.playwright.config.ts", ...process.argv.slice(2),
+  ], {
+    env: { ...localEnv, MELI_E2E_BASE_URL: origin, MELI_E2E_PASSWORD: password, MELI_E2E_PROVIDER_EVENTS: events },
+    stdio: "inherit",
   })
+  const [status] = await once(browser, "exit")
+  if (status !== 0) throw new Error("O Playwright reprovou o E2E do Marketplace.")
 } finally {
   app.kill()
   proxy.close()
