@@ -63,6 +63,11 @@ describe("configuração privada e criptografia", () => {
     expect(openMeli(config, scope, parts.join("."))).toBeNull()
   })
 
+  it("limita o Preview a vendedores de teste a partir do ambiente da implantação", () => {
+    expect(mercadoLivreConfig({ ...env, VERCEL_ENV: "preview" })?.testSellersOnly).toBe(true)
+    expect(mercadoLivreConfig({ ...env, VERCEL_ENV: "production" })?.testSellersOnly).toBe(false)
+  })
+
   it("não aceita loja implícita nem mutação de outra origem", () => {
     for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value)
     const req = (method: string, headers?: HeadersInit) => new Request(origin + "/api", { method, headers })

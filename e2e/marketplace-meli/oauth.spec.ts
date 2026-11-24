@@ -246,3 +246,37 @@ test("isola cursor e conta por loja, gira refresh uma vez e distingue limite, re
   expect(await db.marketplaceConnection.findUnique({ where: { id: "meli-qa-legacy" } })).toMatchObject({ accessToken: "[encrypted:placeholder]" })
   expect(await providerEvents("unexpected")).toBe(0)
 })
+
+test("Preview recusa identidade comercial e conserva reserva após exclusão ou recriação da loja sintética", async ({ page }) => {
+  const targetStore = "meli-qa-new"
+  await login(page, "manager-a", targetStore)
+  await finish(page.request, callback(await begin(page.request, targetStore), "commercial"), "test_seller_required")
+  expect((await readStatus(page.request, targetStore)).mercadoLivre).toMatchObject({
+    state: "insufficient_permissions", seller: null, canRead: false,
+  })
+  expect((await officialConnection(targetStore)).accessToken).toBe("")
+
+  const previous = await officialConnection(storeB)
+  const owner = await db.logsAuditoria.findFirstOrThrow({
+    where: { action: "marketplace.mercado_livre.seller_bound", metadata: { contains: '"sellerId":"745003"' } },
+  })
+  expect(JSON.parse(owner.metadata!)).toMatchObject({ storeId: storeB, sellerId: "745003" })
+  // Apenas a loja criada pelo fixture é removida do PostgreSQL isolado do teste.
+  await db.store.delete({ where: { id: storeB } })
+  expect(await db.marketplaceConnection.findUnique({ where: { id: previous.id } })).toBeNull()
+  await finish(page.request, callback(await begin(page.request, targetStore), "expiring"), "account_mismatch")
+  expect((await officialConnection(targetStore)).accessToken).toBe("")
+
+  const recreated = await db.store.create({ data: {
+    id: storeB, name: "Loja QA recriada", cnpj: "00.000.000/0002-72", moduleAccess: Prisma.DbNull,
+    createdAt: new Date(Date.now() + 1_000),
+  } })
+  const manager = await db.adminUser.findUniqueOrThrow({ where: { email: "manager-b@marketplace-qa.invalid" } })
+  await db.adminUserStore.create({ data: { storeId: recreated.id, adminUserId: manager.id } })
+  await login(page, "manager-b", recreated.id)
+  await finish(page.request, callback(await begin(page.request, recreated.id), "expiring"), "account_mismatch")
+  expect((await officialConnection(recreated.id)).accessToken).toBe("")
+
+  expect(await db.logsAuditoria.findUnique({ where: { id: owner.id } })).toEqual(owner)
+  expect(await providerEvents("unexpected")).toBe(0)
+})

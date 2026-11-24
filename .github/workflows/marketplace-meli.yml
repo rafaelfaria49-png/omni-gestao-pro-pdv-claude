@@ -57,7 +57,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: TypeScript integral
-        run: node --max-old-space-size=6144 node_modules/typescript/lib/tsc.js --noEmit --incremental false
+        run: npm run typecheck -- --incremental false
       - run: npx eslint app/api/marketplace app/dashboard/marketplace components/marketplace lib/marketplace scripts/marketplace e2e/marketplace-meli e2e/marketplace-meli.playwright.config.ts
       - run: npm test -- lib/marketplace
       - run: npm run build

@@ -7,7 +7,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { once } from "node:events"
 import { createWriteStream } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { request as httpRequest } from "node:http"
 import { createServer } from "node:https"
 import path from "node:path"
@@ -29,6 +29,9 @@ const evidence = path.resolve("test-results/marketplace-meli")
 const events = path.join(evidence, "provider-events.log")
 const password = randomBytes(24).toString("base64url")
 const secret = () => randomBytes(32).toString("base64url")
+const authSecret = secret()
+const clientSecret = secret()
+const encryptionKey = secret()
 const localEnv = {
   ...process.env, DATABASE_URL: database, DIRECT_URL: database, CHECKPOINT_DISABLE: "1",
   VERCEL: "0", VERCEL_ENV: "development", MIGRATION_AUTHORITY_ENABLED: "false",
@@ -59,12 +62,13 @@ try {
     { id: "meli-qa-b", cnpj: "00.000.000/0002-72" },
     { id: "meli-qa-off", cnpj: "00.000.000/0003-53" },
     { id: "meli-qa-no-module", cnpj: "00.000.000/0004-34" },
+    { id: "meli-qa-new", cnpj: "00.000.000/0005-15" },
   ]
   await db.store.createMany({ data: stores.map((store) => ({
     ...store, name: store.id, moduleAccess: store.id === "meli-qa-no-module" ? { version: 1, modules: ["home"] } : Prisma.DbNull,
   })) })
   const users = [
-    ["manager-a", ["meli-qa-a", "meli-qa-off", "meli-qa-no-module"]],
+    ["manager-a", ["meli-qa-a", "meli-qa-off", "meli-qa-no-module", "meli-qa-new"]],
     ["manager-b", ["meli-qa-b"]],
     ["second-a", ["meli-qa-a"]],
   ]
@@ -112,15 +116,17 @@ await new Promise((resolve, reject) => {
   proxy.once("error", reject)
   proxy.listen(httpsPort, "127.0.0.1", resolve)
 })
-const serverOutput = createWriteStream(path.join(evidence, "next.log"))
+const serverLog = path.join(evidence, "next.log")
+const serverOutput = createWriteStream(serverLog)
 const app = spawn(process.execPath, [
   "--import", "./scripts/marketplace/meli-provider-fixture.mjs",
   "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", String(appPort),
 ], {
   env: {
-    ...localEnv, NODE_ENV: "production", AUTH_URL: origin, NEXTAUTH_URL: origin, AUTH_TRUST_HOST: "true", AUTH_SECRET: secret(),
-    NEXT_TELEMETRY_DISABLED: "1", MELI_OAUTH_ENABLED: "1", MELI_OAUTH_STORE_ALLOWLIST: "meli-qa-a,meli-qa-b,meli-qa-no-module",
-    MELI_OAUTH_CLIENT_ID: "99990001", MELI_OAUTH_CLIENT_SECRET: secret(), MELI_OAUTH_ENCRYPTION_KEY: secret(),
+    ...localEnv, NODE_ENV: "production", AUTH_URL: origin, NEXTAUTH_URL: origin, AUTH_TRUST_HOST: "true", AUTH_SECRET: authSecret,
+    NEXT_TELEMETRY_DISABLED: "1", VERCEL_ENV: "preview", MELI_OAUTH_ENABLED: "1",
+    MELI_OAUTH_STORE_ALLOWLIST: "meli-qa-a,meli-qa-b,meli-qa-no-module,meli-qa-new",
+    MELI_OAUTH_CLIENT_ID: "99990001", MELI_OAUTH_CLIENT_SECRET: clientSecret, MELI_OAUTH_ENCRYPTION_KEY: encryptionKey,
     MELI_OAUTH_REDIRECT_URI: origin + "/api/marketplace/mercado-livre/callback", MELI_E2E_PROVIDER_EVENTS: events,
   },
   stdio: ["ignore", "pipe", "pipe"],
@@ -145,6 +151,13 @@ try {
   })
   const [status] = await once(browser, "exit")
   if (status !== 0) throw new Error("O Playwright reprovou o E2E do Marketplace.")
+  await new Promise((resolve) => { serverOutput.write("", resolve) })
+  const log = await readFile(serverLog, "utf8")
+  if ([password, authSecret, clientSecret, encryptionKey].some((value) => log.includes(value)) ||
+      /qa-(access|refresh)-|__Host-omni-meli-oauth=[\w.-]+|\/mercado-livre\/callback[^\s]*[?&](code|state)=/i.test(log)) {
+    throw new Error("O log do app registrou dados sensíveis do fixture OAuth.")
+  }
+  console.log("QA OAuth: app logs sem credenciais ou query do callback sintético.")
 } finally {
   app.kill()
   proxy.close()

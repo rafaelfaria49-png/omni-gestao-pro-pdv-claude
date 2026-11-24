@@ -12,6 +12,7 @@ export type MercadoLivreConfig = {
   origin: string
   key: Buffer
   storeIds: ReadonlySet<string>
+  testSellersOnly: boolean
 }
 
 export function mercadoLivreConfig(env: Readonly<Record<string, string | undefined>> = process.env): MercadoLivreConfig | null {
@@ -28,7 +29,7 @@ export function mercadoLivreConfig(env: Readonly<Record<string, string | undefin
   try {
     const url = new URL(redirectUri)
     if (url.protocol !== "https:" || redirectUri !== url.origin + MELI_CALLBACK_PATH) return null
-    return { clientId, clientSecret, redirectUri, origin: url.origin, key, storeIds }
+    return { clientId, clientSecret, redirectUri, origin: url.origin, key, storeIds, testSellersOnly: env.VERCEL_ENV === "preview" }
   } catch {
     return null
   }

@@ -9,7 +9,7 @@ if (!evidence || process.env.MELI_OAUTH_CLIENT_ID !== "99990001") throw new Erro
 const liveFetch = globalThis.fetch
 const codes = new Set()
 const refreshes = new Set()
-const sellers = { classic: 745001, different: 745002, expiring: 745003, revoked: 745003, limited: 745003, lost: 745003 }
+const sellers = { classic: 745001, different: 745002, expiring: 745003, revoked: 745003, limited: 745003, lost: 745003, commercial: 745004 }
 const token = (kind, expires = 21_600) => Response.json({
   access_token: `qa-access-${kind}`,
   refresh_token: `qa-refresh-${kind}`,
@@ -61,7 +61,7 @@ globalThis.fetch = async (input, init) => {
     emit("identity")
     return Response.json({
       id, nickname: `VENDEDOR-QA-${id}`, site_id: "MLB",
-      status: { site_status: "active" }, tags: ["test_user"], email: "never-expose@example.invalid",
+      status: { site_status: "active" }, tags: kind === "commercial" ? [] : ["test_user"], email: "never-expose@example.invalid",
     })
   }
   if (req.method === "GET" && url.pathname === `/users/${id}/items/search`) {

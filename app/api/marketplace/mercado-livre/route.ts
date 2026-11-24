@@ -29,8 +29,8 @@ export async function DELETE(req: Request) {
     if (denied) return denied
     const gate = await requireMarketplaceApi(req)
     if (!gate.ok) return gate.response
-    requireMeliConfig(req, gate.storeId)
-    await disconnectMercadoLivre(gate)
+    const config = requireMeliConfig(req, gate.storeId)
+    await disconnectMercadoLivre(config, gate)
     const response = meliJson({ ok: true })
     setMeliCookie(response, "", true)
     return response

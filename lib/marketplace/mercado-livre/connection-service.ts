@@ -3,7 +3,7 @@ import { z } from "zod"
 import type { MarketplaceConnection, Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import type { MarketplaceGrant, MarketplaceReadOnlyAdapter } from "../read-only-adapter"
-import type { MarketplaceReadConnection, MarketplaceReadPage } from "../read-only-types"
+import type { MarketplaceReadConnection, MarketplaceReadPage, MarketplaceSeller } from "../read-only-types"
 import { MELI_CONNECTION_PREFIX, MELI_STATE_TTL_MS, type MercadoLivreConfig } from "./config"
 import { opaqueId, openMeli, sealMeli, sha256 } from "./crypto"
 import { MeliFailure, meliFailure } from "./errors"
@@ -82,16 +82,53 @@ function writeState(
   })
 }
 
-async function audit(tx: Prisma.TransactionClient, actor: Actor, action: "authorized" | "disconnected") {
+async function audit(tx: Prisma.TransactionClient, actor: Actor, action: "authorized" | "disconnected", sellerId?: string) {
   await tx.logsAuditoria.create({
     data: {
       action: `marketplace.mercado_livre.${action}`,
       userLabel: actor.userId,
       detail: action === "authorized" ? "Autorização de leitura do Mercado Livre confirmada." : "Conexão Mercado Livre desconectada nesta unidade.",
-      metadata: JSON.stringify({ storeId: actor.storeId }),
+      metadata: JSON.stringify({ storeId: actor.storeId, connectionId: whereStore(actor.storeId).id, sellerId }),
       source: "marketplace",
     },
   })
+}
+
+async function reserveSeller(tx: Prisma.TransactionClient, actor: Actor, seller: MarketplaceSeller) {
+  await lock(tx, `marketplace:mercado-livre:seller:${seller.id}`)
+  const [store] = await tx.$queryRaw<{ createdAt: Date }[]>`
+    SELECT "createdAt" FROM stores WHERE id = ${actor.storeId} FOR KEY SHARE
+  `
+  if (!store) throw new MeliFailure("invalid_state")
+  const id = "meli-seller-owner-v1-" + sha256(seller.id)
+  const action = "marketplace.mercado_livre.seller_bound"
+  const metadata = JSON.stringify({ storeId: actor.storeId, storeCreatedAt: store.createdAt.toISOString(), sellerId: seller.id })
+  // O registro de auditoria fica fora do cascade de Store. O ID é fixo por vendedor.
+  const owner = await tx.logsAuditoria.findUnique({ where: { id }, select: { action: true, metadata: true } })
+  if (owner) {
+    if (owner.action !== action || owner.metadata !== metadata) throw new MeliFailure("account_mismatch")
+    return
+  }
+  // Compatibilidade com conexões verificadas antes do registro durável.
+  const previous = await tx.marketplaceConnection.findFirst({
+    where: {
+      id: { startsWith: MELI_CONNECTION_PREFIX }, provider, storeId: { not: actor.storeId },
+      metadata: { path: ["seller", "id"], equals: seller.id },
+    },
+    select: { id: true },
+  })
+  if (previous) throw new MeliFailure("account_mismatch")
+  await tx.logsAuditoria.create({
+    data: { id, action, metadata, source: "marketplace", userLabel: actor.userId, detail: "Vendedor Mercado Livre reservado à unidade." },
+  })
+}
+
+function sellerAllowed(config: MercadoLivreConfig, seller: MarketplaceSeller | undefined) {
+  return !config.testSellersOnly || !seller || seller.testAccount
+}
+
+function requireAllowedSeller(config: MercadoLivreConfig, seller: MarketplaceSeller | undefined) {
+  if (!sellerAllowed(config, seller)) throw new MeliFailure("test_seller_required")
 }
 
 function vaultContext(kind: string, scope: Scope) {
@@ -122,6 +159,7 @@ export async function describeMercadoLivre(storeId: string, config: MercadoLivre
   const row = await prisma.marketplaceConnection.findFirst({ where: whereStore(storeId) })
   if (!row) return initial
   const metadata = metadataOf(row)
+  if (!sellerAllowed(config, metadata.seller)) return { ...initial, state: "insufficient_permissions" }
   const grant = metadata.grant
   const scope = grant && metadata.seller ? { storeId, sellerId: metadata.seller.id, grantId: grant.id } : null
   const hasGrant = !!(scope && grant?.appId === config.clientId &&
@@ -143,12 +181,14 @@ export async function describeMercadoLivre(storeId: string, config: MercadoLivre
 
 export async function startMercadoLivre(config: MercadoLivreConfig, adapter: MarketplaceReadOnlyAdapter, actor: Actor) {
   const intent = {
-    ...actor,
+    storeId: actor.storeId,
+    userId: actor.userId,
     state: opaqueId(),
     verifier: opaqueId(),
     expiresAt: Date.now() + MELI_STATE_TTL_MS,
   }
   await forStore(actor.storeId, async (tx, row, metadata) => {
+    requireAllowedSeller(config, metadata.seller)
     if (activeRenewal(metadata) || (pendingIsActive(metadata) && metadata.pending?.used)) throw new MeliFailure("operation_in_progress")
     const pending = { digest: sha256(intent.state), expiresAt: intent.expiresAt, used: false }
     if (row) await writeState(tx, actor.storeId, { ...metadata, pending })
@@ -186,19 +226,11 @@ export async function finishMercadoLivre(
     const grant = await adapter.exchangeCode(code, intent.verifier)
     const seller = await adapter.identifySeller(grant.accessToken)
     if (grant.sellerId !== seller.id) throw new MeliFailure("account_mismatch")
+    requireAllowedSeller(config, seller)
     await forStore(intent.storeId, async (tx, _row, metadata) => {
       if (metadata.pending?.digest !== digest) throw new MeliFailure("invalid_state")
       if (metadata.seller && metadata.seller.id !== seller.id) throw new MeliFailure("account_mismatch")
-      // Uma conta externa fica reservada à loja que a verificou primeiro, inclusive após desconexão.
-      await lock(tx, `marketplace:mercado-livre:seller:${seller.id}`)
-      const existing = await tx.marketplaceConnection.findFirst({
-        where: {
-          id: { startsWith: MELI_CONNECTION_PREFIX }, provider, storeId: { not: intent.storeId },
-          metadata: { path: ["seller", "id"], equals: seller.id },
-        },
-        select: { id: true },
-      })
-      if (existing) throw new MeliFailure("account_mismatch")
+      await reserveSeller(tx, intent, seller)
       const grantId = opaqueId()
       await writeState(tx, intent.storeId, {
         state: "validated",
@@ -208,26 +240,29 @@ export async function finishMercadoLivre(
         ...encryptGrant(config, { storeId: intent.storeId, sellerId: seller.id, grantId }, grant),
         accountName: seller.nickname || "Mercado Livre",
       })
-      await audit(tx, intent, "authorized")
+      await audit(tx, intent, "authorized", seller.id)
     })
   } catch (error) {
     const failure = meliFailure(error)
     await forStore(intent.storeId, async (tx, _row, metadata) => {
       if (metadata.pending?.digest !== digest) return
-      const state = metadata.grant || failure.code === "denied" || failure.code === "account_mismatch" ? metadata.state :
-        failure.code === "insufficient_permissions" || failure.code === "reconnect_required" ? failure.code : "communication_error"
+      const denied = failure.code === "denied" || failure.code === "account_mismatch"
+      const insufficient = failure.code === "insufficient_permissions" || failure.code === "test_seller_required"
+      const state = metadata.grant || denied ? metadata.state : insufficient ? "insufficient_permissions" :
+        failure.code === "reconnect_required" ? "reconnect_required" : "communication_error"
       await writeState(tx, intent.storeId, { ...metadata, pending: undefined, state })
     })
     throw failure
   }
 }
 
-export async function disconnectMercadoLivre(actor: Actor) {
+export async function disconnectMercadoLivre(config: MercadoLivreConfig, actor: Actor) {
   await forStore(actor.storeId, async (tx, row, metadata) => {
+    requireAllowedSeller(config, metadata.seller)
     if (!row || (metadata.state === "disconnected" && !metadata.pending)) return
     if (activeRenewal(metadata) || (pendingIsActive(metadata) && metadata.pending?.used)) throw new MeliFailure("operation_in_progress")
     await writeState(tx, actor.storeId, { state: "disconnected", seller: metadata.seller }, emptyCredentials)
-    await audit(tx, actor, "disconnected")
+    await audit(tx, actor, "disconnected", metadata.seller?.id)
   })
 }
 
@@ -242,6 +277,7 @@ function readCursor(config: MercadoLivreConfig, scope: Scope, cursor: string | u
 async function prepareRead(config: MercadoLivreConfig, storeId: string, cursor: string | undefined) {
   return forStore(storeId, async (tx, row, metadata) => {
     const grant = metadata.grant
+    requireAllowedSeller(config, metadata.seller)
     if (pendingIsActive(metadata) || activeRenewal(metadata)) throw new MeliFailure("operation_in_progress")
     if (metadata.state === "insufficient_permissions" || metadata.state === "disconnected") throw new MeliFailure(metadata.state)
     if (!row || !metadata.seller || !grant || grant.appId !== config.clientId) throw new MeliFailure("reconnect_required")

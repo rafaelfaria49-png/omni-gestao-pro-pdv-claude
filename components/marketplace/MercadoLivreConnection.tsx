@@ -24,6 +24,7 @@ const notices = new Map([
   ["invalid_state", "Autorização inválida ou expirada. Reinicie a conexão."],
   ["session_required", "Entre com o mesmo usuário que iniciou a autorização e confirme o acesso à unidade."],
   ["account_mismatch", "A conta escolhida não pode ser vinculada nesta unidade. Use a conta autorizada para a loja."],
+  ["test_seller_required", "Para homologar neste Preview, autorize com um vendedor oficial de teste do Mercado Livre."],
   ["insufficient_permissions", "Confira as permissões de leitura e acesso offline no Mercado Livre antes de reconectar."],
   ["reconnect_required", "A autorização do Mercado Livre expirou ou foi revogada. Reconecte a conta."],
   ["rate_limited", "O Mercado Livre limitou as tentativas. Aguarde e reinicie a autorização."],
