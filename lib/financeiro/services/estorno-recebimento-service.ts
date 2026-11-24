@@ -254,7 +254,8 @@ export type EstornoRecebimentoResultado = {
   movimentacao: { valor: number; divergente: boolean }
 }
 
-async function lerOperacoesCaixaDoTitulo(tx: Tx, storeId: string, titulo: { id: string; localKey: string | null }): Promise<OperacaoCaixaTitulo[]> {
+/** Entradas e compensações de caixa ligadas ao título (lote incluído). Exportada para o estorno da OS V3. */
+export async function lerOperacoesCaixaDoTitulo(tx: Tx, storeId: string, titulo: { id: string; localKey: string | null }): Promise<OperacaoCaixaTitulo[]> {
   const rows = await tx.$queryRaw<Array<OperacaoCaixaTitulo & { valor: number | string }>>`
     SELECT o."id", o."sessaoId", s."status"::text AS "sessaoStatus", o."tipo", o."valor", o."at", o."payload"
     FROM "caixa_operacoes" o

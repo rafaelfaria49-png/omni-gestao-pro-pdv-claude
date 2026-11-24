@@ -325,7 +325,8 @@ export async function executarRecebimentoFinanceiro(
   // 6. Escrita.
   const forma = input.formaPagamento.trim()
   const obsBase = str(input.observacao)
-  const observacao = obsBase ? `${obsBase} · Financeiro · ${forma}` : `Recebimento Financeiro · ${forma}`
+  const sufixoForma = forma ? ` · ${forma}` : ""
+  const observacao = obsBase ? `${obsBase} · Financeiro${sufixoForma}` : `Recebimento Financeiro${sufixoForma}`
   const carteirasValidadas = new Map<string, string | null>()
   const carteirasAfetadas = new Set<string>()
   const resultados: RecebimentoFinanceiroItem[] = []
