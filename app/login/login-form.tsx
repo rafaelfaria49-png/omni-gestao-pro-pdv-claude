@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import { Eye, EyeOff } from "lucide-react"
@@ -8,6 +8,12 @@ import { signInAction } from "@/app/actions/auth"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  isCachePurgeRetryNeeded,
+  markCachePurgeRetryNeeded,
+  purgeAuthenticatedBrowserCaches,
+  triggerSilentServiceWorkerUpdate,
+} from "@/lib/auth/pwa-cache-privacy"
 
 function SubmitButton() {
   const { pending } = useFormStatus()
@@ -25,6 +31,30 @@ function SubmitButton() {
 export function LoginForm({ showDesktopDownload = false }: { showDesktopDownload?: boolean }) {
   const [state, formAction] = useActionState(signInAction, { error: null })
   const [showPassword, setShowPassword] = useState(false)
+  const [cacheCleanupWarning, setCacheCleanupWarning] = useState<string | null>(null)
+
+  // Proteção adicional na entrada de /login (só monta sem sessão ativa no servidor):
+  // limpa eventuais resíduos de CacheStorage de sessões anteriores/SW legado e aciona update
+  // silencioso do SW, sem tocar em localStorage/IndexedDB (fila offline do PDV preservada).
+  useEffect(() => {
+    let active = true
+    const hadRetryFlag = isCachePurgeRetryNeeded()
+    triggerSilentServiceWorkerUpdate()
+    void purgeAuthenticatedBrowserCaches().then((res) => {
+      if (!active) return
+      if (res.ok) {
+        markCachePurgeRetryNeeded(false)
+        setCacheCleanupWarning(null)
+      } else if (hadRetryFlag || res.failedCaches.length > 0 || res.error) {
+        setCacheCleanupWarning(
+          "Não foi possível limpar automaticamente o cache do navegador. Se este computador for compartilhado, feche o navegador antes do próximo acesso.",
+        )
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -53,7 +83,15 @@ export function LoginForm({ showDesktopDownload = false }: { showDesktopDownload
             <CardDescription>Use o email e senha cadastrados</CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={formAction} className="space-y-4">
+            <form
+              action={formAction}
+              onSubmit={() => {
+                // Segunda passada antes de autenticar o próximo usuário (espelho do LogoutGuard):
+                // apaga respostas atrasadas de sessão anterior que possam ter chegado durante o /login.
+                void purgeAuthenticatedBrowserCaches()
+              }}
+              className="space-y-4"
+            >
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -97,6 +135,12 @@ export function LoginForm({ showDesktopDownload = false }: { showDesktopDownload
               {state.error && (
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive ring-1 ring-destructive/20">
                   {state.error}
+                </p>
+              )}
+
+              {cacheCleanupWarning && (
+                <p role="status" className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  {cacheCleanupWarning}
                 </p>
               )}
 

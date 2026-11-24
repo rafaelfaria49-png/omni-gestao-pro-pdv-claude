@@ -86,7 +86,7 @@ const MODULOS_INCLUSOS = [
 const DUVIDAS = [
   {
     p: "Preciso instalar alguma coisa no computador da loja?",
-    r: "Não é obrigatório. O sistema funciona direto no navegador (Google Chrome ou Microsoft Edge) do computador da loja. A página Instalar no computador (/baixar) reúne as opções disponíveis para o computador e mostra a situação do instalador nativo para Windows, que segue em homologação.",
+    r: "Não é obrigatório. O sistema funciona direto no navegador (Google Chrome ou Microsoft Edge) e também pode ser instalado pelo próprio navegador como aplicativo (PWA), grátis e sem baixar arquivo, pela página Instalar no computador (/baixar). O instalador nativo para Windows com impressão direta segue em homologação.",
   },
   {
     p: "Como funcionam os 7 dias de teste gratuito acompanhado?",
@@ -338,12 +338,12 @@ export default function GestaoLojasPage() {
               </article>
 
               <article className="gl-access-card gl-access-card--muted">
-                <span className="gl-status gl-status--wait" style={{ width: "fit-content" }}>
-                  Windows em homologação
+                <span className="gl-status gl-status--ok" style={{ width: "fit-content" }}>
+                  PWA disponível · Windows em homologação
                 </span>
                 <h3>Instalar no computador</h3>
                 <p>
-                  O instalador nativo para Windows 10 e 11 segue em homologação e ainda não tem download público liberado. A página oficial mostra o que já está disponível para o computador e a situação da homologação.
+                  Instale hoje pelo Chrome ou Edge como aplicativo (PWA), com atalho na Área de Trabalho e janela própria, grátis e sem baixar arquivo. Na mesma página você acompanha a homologação do instalador nativo para Windows 10 e 11.
                 </p>
                 <div className="gl-access-card__actions">
                   <a className="gl-btn gl-btn--outline gl-btn--sm" href="/baixar">

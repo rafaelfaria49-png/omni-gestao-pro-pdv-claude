@@ -3,12 +3,29 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
 import vm from "node:vm"
 
 const ORIGEM = "https://pessoas.example.invalid"
 const pessoa = (url) => /^\/(api|dashboard)\/pessoas(?:\/|$)/.test(url.pathname)
 const plain = (value) => JSON.parse(JSON.stringify(value))
+const ALLOWED_CACHE_NAMES = new Set([
+  "google-fonts-webfonts",
+  "google-fonts-stylesheets",
+  "next-static-assets",
+  "public-pwa-assets",
+])
+const FORBIDDEN_CACHE_NAMES = new Set([
+  "apis",
+  "pages",
+  "pages-rsc",
+  "pages-rsc-prefetch",
+  "start-url",
+  "next-data",
+  "static-data-assets",
+  "static-js-assets",
+  "others",
+  "cross-origin",
+])
 
 async function verificarCachePrivado(publicDir) {
   const file = path.join(publicDir, "client-privacy-cache.js")
@@ -17,11 +34,15 @@ async function verificarCachePrivado(publicDir) {
     "/api/clientes", "/api/clientes/123?_rsc=synthetic", "/api/clients",
     "/api/import/clientes", "/api/ops/import/clientes", "/dashboard/clientes",
     "/dashboard/cadastros-v2?_rsc=synthetic",
-  ].map((url) => new URL(url, ORIGEM).href)
-  const preservar = [
     "/api/pessoas", "/api/pessoas/documentos?categoria=contrato",
     "/dashboard/pessoas", "/dashboard/pessoas/funcionarios?_rsc=synthetic",
     "/api/version", "/dashboard/estoque", "/api/clientes-extra",
+  ].map((url) => new URL(url, ORIGEM).href)
+  const preservar = [
+    "/_next/static/chunks/app.js",
+    "/icons/icon-192x192.png",
+    "/manifest.webmanifest",
+    "/apple-touch-icon.png",
     "https://outra.example.invalid/api/clientes",
   ].map((url) => new URL(url, ORIGEM).href)
   const stores = new Map(["pages", "apis", "historical-cache"].map((name) => [name, new Set([...remover, ...preservar])]))
@@ -56,8 +77,8 @@ async function verificarCachePrivado(publicDir) {
   assert.equal(pending.length, 1, "ativação deve aguardar a limpeza com waitUntil")
   await Promise.all(pending)
   for (const [name, entries] of stores) {
-    for (const url of remover) assert.ok(!entries.has(url), "cache histórico Clientes preservado: " + name + " " + url)
-    assert.deepEqual([...entries], preservar, "ativação afetou Pessoas/outros módulos: " + name)
+    for (const url of remover) assert.ok(!entries.has(url), "cache histórico privado preservado: " + name + " " + url)
+    assert.deepEqual([...entries], preservar, "ativação afetou assets públicos/cross-origin: " + name)
   }
 }
 
@@ -111,19 +132,6 @@ function primeira(routes, ctx) {
 function estrategia(handler) {
   return { kind: handler.kind, options: plain(handler.options) }
 }
-function estrategiaPadrao(rule) {
-  const options = {}, plugins = []
-  // A conversão Workbox respeita a ordem original das opções/plugins.
-  for (const [key, value] of Object.entries(rule.options ?? {})) {
-    if (key === "expiration") plugins.push({ kind: "ExpirationPlugin", options: value })
-    else if (key === "cacheableResponse") plugins.push({ kind: "CacheableResponsePlugin", options: value })
-    else if (key === "rangeRequests") plugins.push({ kind: "RangeRequestsPlugin", options: {} })
-    else if (key === "plugins") plugins.push(...value)
-    else options[key] = value
-  }
-  if (Object.keys(options).length || plugins.length) options.plugins = plugins
-  return { kind: rule.handler, options: plain(options) }
-}
 
 async function networkOnlyOffline(publicDir, dependency, options) {
   const workbox = {}
@@ -150,30 +158,6 @@ async function networkOnlyOffline(publicDir, dependency, options) {
   assert.equal(cachesUsadas, 0, "falha de rede Pessoas tentou cache/fallback")
 }
 
-async function mensagem(source, data, cacheHit = false) {
-  const trace = []
-  const self = { location: new URL(ORIGEM + "/swe-worker.js") }
-  const caches = { open: async (name) => {
-    trace.push(["open", name])
-    return {
-      match: async (url, options) => { trace.push(["match", String(url), options ?? null]); return cacheHit ? new Response("cached") : undefined },
-      put: async (url) => { trace.push(["put", name, String(url)]) },
-      add: async (url) => { trace.push(["add", name, String(url)]) },
-    }
-  } }
-  const fetch = async (url) => { trace.push(["fetch", String(url)]); return new Response("synthetic", { headers: { "Content-Type": "text/html" } }) }
-  vm.runInNewContext(source, { self, caches, fetch, URL, Promise }, { timeout: 10_000 })
-  assert.equal(typeof self.onmessage, "function", "worker sem handler")
-  await self.onmessage({ data })
-  return plain(trace)
-}
-function arquivos(dir) {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const file = path.join(dir, entry.name)
-    return entry.isDirectory() ? arquivos(file) : [file]
-  })
-}
-
 export async function inspectPwaBuild(ws, log = () => {}) {
   const publicDir = path.join(ws, "public")
   assert.ok(fs.existsSync(path.join(ws, ".next/BUILD_ID")), "build de produção ausente")
@@ -182,19 +166,19 @@ export async function inspectPwaBuild(ws, log = () => {}) {
   const locked = JSON.parse(fs.readFileSync(path.join(ws, "package-lock.json"), "utf8")).packages["node_modules/@ducanh2912/next-pwa"].version
   assert.equal(version, "10.2.9", "contrato next-pwa mudou; reavaliar antes de aceitar")
   assert.equal(version, locked, "pacote instalado diverge do lockfile")
-  const { runtimeCaching: defaults } = await import(pathToFileURL(path.join(pkgDir, "dist/index.js")).href)
   const sw = fs.readFileSync(path.join(publicDir, "sw.js"), "utf8")
   const { routes, manifest, dependencies } = await coletarRotas(sw, publicDir)
   assert.ok(manifest.every((entry) => !pessoa(new URL(typeof entry === "string" ? entry : entry.url, ORIGEM))), "Pessoas presente no precache")
   const networkOnly = routes.filter((r) => r.handler.kind === "NetworkOnly")
   assert.equal(networkOnly.length, 1, "exclusão NetworkOnly ausente/duplicada")
   assert.equal(networkOnly[0].method, "GET")
-  assert.deepEqual(plain(networkOnly[0].handler.options), {}, "Pessoas tem plugins/cache/fallback")
-  const genericas = routes.filter((r) => r !== networkOnly[0] && r.handler.options.cacheName !== "start-url")
-  assert.equal(genericas.length, defaults.length, "regras genéricas removidas/adicionadas")
-  for (let i = 0; i < defaults.length; i++) {
-    assert.deepEqual(estrategia(genericas[i].handler), estrategiaPadrao(defaults[i]), "estratégia/options/ordem alterados: " + defaults[i].options.cacheName)
-    assert.equal(genericas[i].method, defaults[i].method ?? "GET")
+  assert.deepEqual(plain(networkOnly[0].handler.options), {}, "NetworkOnly tem plugins/cache/fallback inesperados")
+  const nonNetworkOnly = routes.filter((r) => r !== networkOnly[0])
+  assert.ok(nonNetworkOnly.length > 0, "regras estáticas públicas em allowlist ausentes")
+  for (const route of nonNetworkOnly) {
+    const cacheName = route.handler.options?.cacheName
+    assert.ok(cacheName && ALLOWED_CACHE_NAMES.has(cacheName), "cache não autorizado na allowlist do SW: " + String(cacheName))
+    assert.ok(!FORBIDDEN_CACHE_NAMES.has(cacheName), "bucket genérico proibido no SW: " + String(cacheName))
   }
   const peoplePaths = [
     "/api/pessoas", "/api/pessoas/documentos", "/api/pessoas/documentos?categoria=contrato",
@@ -205,68 +189,53 @@ export async function inspectPwaBuild(ws, log = () => {}) {
   const provas = []
   for (const url of peoplePaths) for (const headers of variants) {
     const ctx = contexto(url, headers)
-    assert.equal(primeira(routes, ctx), networkOnly[0], "Pessoas caiu em cache genérico: " + url)
+    assert.equal(primeira(routes, ctx), networkOnly[0], "Pessoas caiu em cache: " + url)
     provas.push({ url, headers, handler: "NetworkOnly" })
   }
-  const outras = [
-    ["/api/version", {}, "apis"], ["/dashboard/estoque", {}, "pages"],
-    ["/dashboard/estoque?_rsc=synthetic", { RSC: "1" }, "pages-rsc"],
-    ["/dashboard/estoque?_rsc=synthetic", { RSC: "1", "Next-Router-Prefetch": "1" }, "pages-rsc-prefetch"],
-    ["/api/pessoas-extra", {}, "apis"], ["/dashboard/pessoas-extra", {}, "pages"],
-    ["https://outra.example.invalid/api/pessoas/documentos", {}, "cross-origin"],
-    ["https://outra.example.invalid/dashboard/pessoas", {}, "cross-origin"],
+  const outrasPrivadas = [
+    ["/", {}],
+    ["/api/version", {}],
+    ["/dashboard/estoque", {}],
+    ["/dashboard/estoque?_rsc=synthetic", { RSC: "1" }],
+    ["/dashboard/estoque?_rsc=synthetic", { RSC: "1", "Next-Router-Prefetch": "1" }],
+    ["/api/pessoas-extra", {}],
+    ["/dashboard/pessoas-extra", {}],
   ]
-  for (const [url, headers, cache] of outras) {
+  for (const [url, headers] of outrasPrivadas) {
     const ctx = contexto(url, headers)
-    const result = primeira(routes, ctx)
-    const old = defaults.find((r) => (r.method ?? "GET") === "GET" && aceita(r.urlPattern, ctx))
-    assert.ok(old, "baseline não encontrou rota")
-    assert.equal(result.handler.options.cacheName, cache, "regressão na rota " + url)
-    assert.deepEqual(estrategia(result.handler), estrategiaPadrao(old))
-    provas.push({ url, headers, handler: result.handler.kind, cache })
+    assert.equal(primeira(routes, ctx), networkOnly[0], "rota privada/mesma origem caiu em cache: " + url)
+    provas.push({ url, headers, handler: "NetworkOnly" })
   }
-  assert.notEqual(primeira(routes, contexto("/api/pessoas", {}, "POST")), networkOnly[0], "regra Pessoas não é exclusiva GET")
+  const estaticasAllowlist = [
+    ["/_next/static/chunks/app.js", "next-static-assets"],
+    ["/icons/icon-192x192.png", "public-pwa-assets"],
+    ["/manifest.webmanifest", "public-pwa-assets"],
+  ]
+  for (const [url, cache] of estaticasAllowlist) {
+    const result = primeira(routes, contexto(url))
+    assert.ok(result, "ativo público em allowlist sem rota: " + url)
+    assert.equal(result.handler.options.cacheName, cache, "cache inesperado para ativo público " + url)
+    provas.push({ url, headers: {}, handler: result.handler.kind, cache })
+  }
+  for (const crossUrl of [
+    "https://outra.example.invalid/api/pessoas/documentos",
+    "https://outra.example.invalid/dashboard/pessoas",
+  ]) {
+    assert.equal(primeira(routes, contexto(crossUrl)), undefined, "cross-origin arbitrário não deve ser cacheado: " + crossUrl)
+  }
+  assert.notEqual(primeira(routes, contexto("/api/pessoas", {}, "POST")), networkOnly[0], "regra NetworkOnly não é exclusiva GET")
   await networkOnlyOffline(publicDir, dependencies[0], networkOnly[0].handler.options)
 
+  // OMNI-PWA-OFFLINE-CACHE-LOGOUT-ISOLATION-P1-001: cacheOnFrontEndNav=false e cacheStartUrl=false
+  // eliminam completamente o worker auxiliar (swe-worker-*.js), impedindo warm-up/gravação em `pages`.
   const workers = fs.readdirSync(publicDir).filter((name) => /^swe-worker-[a-f0-9]+\.js$/.test(name))
-  assert.equal(workers.length, 1, "worker auxiliar ausente/ambíguo")
-  const workerName = workers[0]
-  const bytes = fs.readFileSync(path.join(publicDir, workerName))
-  const worker = bytes.toString("utf8")
-  const entry = manifest.find((e) => typeof e !== "string" && new URL(e.url, ORIGEM).pathname === "/" + workerName)
-  assert.ok(entry, "worker transformado não consta no manifesto")
-  assert.equal(entry.revision, createHash("md5").update(bytes).digest("hex"), "revision não corresponde ao worker transformado")
-  const references = arquivos(path.join(ws, ".next/static")).filter((file) => file.endsWith(".js") && fs.readFileSync(file, "utf8").includes("/" + workerName))
-  assert.ok(references.length > 0, "cliente não referencia worker real; cacheOnFrontEndNav pode estar desligado")
-  const original = fs.readFileSync(path.join(pkgDir, "dist/sw-entry-worker.js"), "utf8")
-  let mensagensPessoas = 0, mensagensOutras = 0
-  for (const type of ["__FRONTEND_NAV_CACHE__", "__START_URL_CACHE__"]) {
-    for (const url of [...peoplePaths, ORIGEM + "/dashboard/pessoas?query=synthetic", ORIGEM + "/api/pessoas/documentos"]) {
-      for (const cacheHit of [false, true]) for (const shouldCacheAggressively of [false, true]) {
-        assert.deepEqual(await mensagem(worker, { type, url, shouldCacheAggressively }, cacheHit), [], "worker leu/gravou/aqueceu Pessoas: " + url)
-        mensagensPessoas++
-      }
-    }
-    for (const url of ["/dashboard/estoque", "/api/pessoas-extra", "https://outra.example.invalid/dashboard/pessoas"]) {
-      for (const cacheHit of [false, true]) for (const shouldCacheAggressively of [false, true]) {
-        const data = { type, url, shouldCacheAggressively }
-        const trace = await mensagem(worker, data, cacheHit)
-        const anterior = await mensagem(original, data, cacheHit)
-        assert.deepEqual(trace, anterior, "worker mudou comportamento não-Pessoas: " + url)
-        if (type === "__FRONTEND_NAV_CACHE__" && !cacheHit) {
-          assert.ok(trace.some((r) => r[0] === "fetch"))
-          assert.ok(trace.some((r) => r[0] === "put" && r[1] === "pages"))
-        }
-        mensagensOutras++
-      }
-    }
-  }
-  log(`PWA next-pwa ${version}: ${peoplePaths.length * variants.length} requests Pessoas NetworkOnly; ${outras.length} rotas de regressão preservadas`)
-  log(`worker real: ${mensagensPessoas} mensagens Pessoas sem fetch/cache; ${mensagensOutras} mensagens externas preservadas; revision MD5 conferida`)
+  assert.equal(workers.length, 0, "worker auxiliar swe-worker não deve ser emitido com cacheOnFrontEndNav=false")
+
+  log(`PWA next-pwa ${version}: ${peoplePaths.length * variants.length + outrasPrivadas.length} requests privados/mesma-origem em NetworkOnly; ${estaticasAllowlist.length} ativos públicos em allowlist`)
+  log("worker auxiliar swe-worker ausente (cacheOnFrontEndNav=false, cacheStartUrl=false)")
   log("NetworkOnly real offline: 1 fetch, 0 acessos a cache, sem fallback")
   return {
-    nextPwaVersion: version, provas, mensagensPessoas, mensagensOutras, workerName,
-    workerRevision: entry.revision, workerSha256: createHash("sha256").update(bytes).digest("hex"),
+    nextPwaVersion: version, provas, mensagensPessoas: 0, mensagensOutras: 0, workerName: null,
     swSha256: createHash("sha256").update(sw).digest("hex"),
     routes: routes.map((r) => ({ method: r.method, ...estrategia(r.handler) })),
     offline: { fetches: 1, cacheAccesses: 0, fallback: false },
