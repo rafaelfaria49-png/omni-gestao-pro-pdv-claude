@@ -158,8 +158,11 @@ describe("H · F9 (PDV) × fechamento de caixa", () => {
     const fechamento = segurar((tx) => tx.$executeRaw`UPDATE "sessoes_caixa" SET "status" = 'FECHADA', "fechadaEm" = now() WHERE "id" = ${sessaoId}`)
     await fechamento.travado
     const recebimento = f9(s, corpoF9(sessaoId, lk, 100))
-    await esperarBloqueio(1) // o F9 está parado na trava da sessão
-    fechamento.soltar()
+    try {
+      await esperarBloqueio(1) // o F9 está parado na trava da sessão
+    } finally {
+      fechamento.soltar() // nunca deixa a transação segurando a sessão para o teste seguinte
+    }
     await fechamento.fim
     const r = await recebimento
     expect(r.status).toBe(409)
@@ -181,8 +184,11 @@ describe("H · F9 (PDV) × fechamento de caixa", () => {
     await esperarBloqueio(1)
     // `.then` dispara a PrismaPromise agora (ela é preguiçosa: sem consumidor, nada é enviado).
     const fechar = prisma.sessaoCaixa.update({ where: { id: sessaoId }, data: { status: "FECHADA", fechadaEm: new Date() } }).then((r) => r)
-    await esperarBloqueio(2) // o fechamento espera a trava do F9 na sessão
-    titulo.soltar()
+    try {
+      await esperarBloqueio(2) // o fechamento espera a trava do F9 na sessão
+    } finally {
+      titulo.soltar()
+    }
     await titulo.fim
     const r = await recebimento
     const fechada = await fechar
