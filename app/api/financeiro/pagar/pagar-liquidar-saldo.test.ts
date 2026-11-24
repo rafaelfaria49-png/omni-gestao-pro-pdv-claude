@@ -51,8 +51,28 @@ const h = vi.hoisted(() => {
     return row
   }
 
-  const prisma = {
+  const prisma: Record<string, any> = {
+    // PATCH liquidar/parcial/estornar roda numa transação (OMNI-FINANCEIRO-F9-ESTORNOS-FINAL-
+    // HARDENING-002): o próprio cliente em memória faz o papel do `tx`.
+    $transaction: async (fn: (tx: unknown) => unknown): Promise<unknown> => fn(prisma),
+    // `SELECT … FOR UPDATE` do título: em memória, só confirma a existência.
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join("?")
+      if (!sql.includes("contas_pagar_titulos") || !sql.includes("FOR UPDATE")) throw new Error(`query raw não simulada: ${sql}`)
+      const porId = sql.includes('"id" = ?')
+      const r = porId ? byId.get(String(values[0])) : titulos.get(ck(String(values[0]), String(values[1])))
+      if (!r || (porId && r.storeId !== values[1])) return []
+      return [{ id: r.id }]
+    },
     contaPagarTitulo: {
+      // Escrita com token otimista (CAS por `updatedAt`).
+      updateMany: async ({ where, data }: { where: { id?: string; storeId?: string; updatedAt?: Date }; data: Row }) => {
+        const row = where.id ? byId.get(where.id) : undefined
+        if (!row || (where.storeId && row.storeId !== where.storeId)) return { count: 0 }
+        if (!where.updatedAt || (row.updatedAt as Date).getTime() !== where.updatedAt.getTime()) return { count: 0 }
+        applyScalars(row, data)
+        return { count: 1 }
+      },
       findUnique: async ({ where }: { where: { storeId_localKey: { storeId: string; localKey: string } } }) => {
         const { storeId, localKey } = where.storeId_localKey
         return titulos.get(ck(storeId, localKey)) ?? null
@@ -106,7 +126,9 @@ const h = vi.hoisted(() => {
       async (_titulo: unknown, _valor: number, _opts?: Record<string, unknown>) =>
         ({ ok: true, action: "created" as const }),
     ),
-    estornoSpy: vi.fn(async (_storeId: string, _ref: string, _origem: string) => ({ ok: true, action: "created" as const })),
+    estornoSpy: vi.fn(async (_db: unknown, i: { storeId: string; tituloId: string; valor: number; pagoRestante: number }) => ({
+      valor: i.valor, divergente: false, movimentacaoId: "mov-estorno",
+    })),
     auditSpy: vi.fn(async (_arg: { acao?: string; depois?: { valor?: number } }) => undefined),
     reset: () => {
       titulos.clear()
@@ -146,7 +168,7 @@ vi.mock("@/lib/financeiro/services/auditoria-actor", () => ({
 }))
 vi.mock("@/lib/financeiro/services/movimentacoes-service", () => ({
   createMovimentacaoSaidaFromPagar: h.saidaSpy,
-  estornarMovimentacaoPorReferencia: h.estornoSpy,
+  estornarMovimentacaoDePagamentoPagar: h.estornoSpy,
 }))
 vi.mock("@/lib/financeiro/services/fechamento-service", () => ({
   verificarPeriodoFechado: vi.fn(async () => ({ fechado: false })),
@@ -265,18 +287,20 @@ describe("PATCH /api/financeiro/pagar — liquidação usa saldo restante real",
     expect(lastSaidaValor()).toBe(200.01)
   })
 
-  it("estorno após liquidação reverte a movimentação por referência e reabre o título", async () => {
+  it("estorno após liquidação reverte EXATAMENTE o pagamento estornado e reabre o título", async () => {
     await seedTitulo(365.01)
     await PATCH(patchReq({ op: "liquidar", localKey: LOCAL_KEY }))
 
     const res = await PATCH(patchReq({ op: "estornar", localKey: LOCAL_KEY, motivo: "Correção" }))
-    const json = (await res.json()) as { ok?: boolean; op?: string }
+    const json = (await res.json()) as { ok?: boolean; op?: string; valorEstornado?: number }
     expect(res.status).toBe(200)
     expect(json.op).toBe("estornar")
+    expect(json.valorEstornado).toBe(365.01)
 
-    // a reversão da saída é delegada à movimentação por referência (soma os movimentos originais)
+    // a entrada de estorno tem o valor do pagamento (identidade = índice no histórico),
+    // na mesma transação, e nunca deixa o líquido abaixo do que o ledger ainda diz pago
     expect(h.estornoSpy).toHaveBeenCalledTimes(1)
-    expect(h.estornoSpy.mock.calls.at(-1)).toEqual([STORE, expect.any(String), "pagar"])
+    expect(h.estornoSpy.mock.calls.at(-1)?.[1]).toEqual({ storeId: STORE, tituloId: expect.any(String), valor: 365.01, pagoRestante: 0 })
 
     // título reaberto, saldo de volta ao total
     const t = await getContaPagarByLocalKey(STORE, LOCAL_KEY)

@@ -622,6 +622,9 @@ async function executarSobATrava(
       valorPago: valorRecebidoAgora,
       observacao: obs,
       userLabel: ctx.operador,
+      // Identidade da operação no ledger (mesmo campo do `receberOSV3`): é por ela que o
+      // estorno acha as N entradas de caixa por forma deste pagamento.
+      loteId: n.operacaoId,
       tituloSnapshot: titulo,
       db: tx,
     });

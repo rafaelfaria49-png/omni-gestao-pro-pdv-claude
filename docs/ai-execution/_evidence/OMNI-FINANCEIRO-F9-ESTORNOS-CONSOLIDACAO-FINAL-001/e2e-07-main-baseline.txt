@@ -1,0 +1,39 @@
+# Spec 07 contra a main atual (f97e9de), build local next start 127.0.0.1:3007, PG descartável fin_receb_f9_qa_e2e
+
+## isolado: 07 original + 07 com seletor por papel (cópia)
+  3 passed (24.2s)
+
+## combinação da rodada da branch (hub-avisos-003 + 04 + 07) — rodada 1
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium\test-failed-1.png
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium-retry1\test-failed-1.png
+  1 failed
+  3 passed (3.1m)
+
+## combinação da rodada da branch (hub-avisos-003 + 04 + 07) — rodada 2
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium\test-failed-1.png
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium-retry1\test-failed-1.png
+  1 failed
+  3 passed (4.0m)
+
+hub-avisos-003 falha na main por desenho: é o spec da #388 (Toaster do HUB), que a main não tem.
+
+## main f97e9de, servidor FRIO, 07 original como 1ª execução → REPRODUZIDO
+    Error: expect.toBeVisible: Error: strict mode violation: getByText(/Central de inteligência/i) resolved to 2 elements:
+        1) <p class="text-sm font-medium text-muted-foreground">Central de inteligência</p> aka getByRole('paragraph').filter({ hasText: 'Central de inteligência' })
+        2) <p class="text-sm font-medium text-muted-foreground">Central de inteligência</p> aka getByText('Central de inteligência').nth(1)
+    test-results\specs-07-financeiro-relato-edd12-os-com-botões-de-exportação-chromium\test-failed-1.png
+  1 failed
+  1 passed (1.7m)
+
+## main f97e9de, servidor FRIO, 07 com seletor por papel como 1ª execução
+  2 passed (8.7s)
+
+## branch (build 4b3fa47), servidor FRIO, 07 original: mesma falha; aquecido: verde (combo 2x)
+    Error: expect.toBeVisible: Error: strict mode violation: getByText(/Central de inteligência/i) resolved to 2 elements:
+    test-results\specs-07-financeiro-relato-edd12-os-com-botões-de-exportação-chromium\test-failed-1.png
+  1 failed
+  1 passed (1.7m)
+  4 passed (51.1s)
+  4 passed (41.1s)
+
+Conclusão: falha de timing PRÉ-EXISTENTE na main (cópia oculta do streaming no 1º render frio). Corrigido só o seletor do spec, asserção funcional preservada.

@@ -1,0 +1,80 @@
+     × F1. parcial com idempotencyKey: clique duplo simultâneo + retry → UM pagamento, UMA entrada, replay 530ms
+     × F2. mesma chave com outro valor → 409 idempotency_conflict, sem escrita 39ms
+     × F3. saldoEsperado diferente do real (outra baixa no meio) → 409 saldo_divergente, sem escrita 123ms
+     × F4. chave sem saldoEsperado → 400, sem escrita 26ms
+     × F5. legado sem chave: parcial 100 + 50 + liquidar → entradas [100, 50, 150] na mesma transação; 2º liquidar = 422 sem escrita 39ms
+     × G1. 100 dinheiro + 50 pix → estorna os 50: saída 50, compensação ligada à entrada pix; 2º clique recusado sem escrita 93ms
+     × G2. depois do estorno pela OS, o Financeiro estorna o pagamento restante sem bloqueio e o Caixa zera 121ms
+     × G3. pagamento feito pelo Financeiro HUB (sem gaveta) estornado pela OS → saída financeira, nenhuma compensação de caixa 84ms
+     × G4. legado: entrada de caixa sem identidade e com valor que nenhum pagamento explica → recusa, nada gravado 78ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected [ undefined, undefined ] to deeply equal [ false, true ]
+- Expected
++ Received
+-   false,
+-   true,
++   undefined,
++   undefined,
+AssertionError: expected 200 to be 409 // Object.is equality
+- Expected
++ Received
+AssertionError: expected 200 to be 409 // Object.is equality
+- Expected
++ Received
+AssertionError: expected 200 to be 400 // Object.is equality
+- Expected
++ Received
+AssertionError: expected { ok: true, op: 'liquidar' } to match object { op: 'liquidar', …(3) }
+- Expected
++ Received
+-   "saldoDepois": 0,
+-   "statusFinal": "pago",
+-   "valorRecebido": 150,
+AssertionError: expected [] to deeply equal [ 50 ]
+- Expected
++ Received
+-   50,
+AssertionError: expected [ 100 ] to deeply equal [ 50, 100 ]
+- Expected
++ Received
+-   50,
+AssertionError: expected [] to deeply equal [ 80 ]
+- Expected
++ Received
+-   80,
+AssertionError: promise resolved "{ …(3) }" instead of rejecting
+- Expected
++ Received
+-   "message": "rejected promise",
++   "estornado": 100,
++   "os": {
++     "aberturaV3": {
++       "defeitoRelatado": "Tela quebrada",
++     },
++     "atualizadoEm": "2026-11-24T11:05:09.507Z",
++     "cliente": {
++       "nome": "Cliente OS QA 26",
++     },
++     "codigo": "OS-QA-26",
++     "equipamento": {
++       "marca": "Samsung",
++       "modelo": "A54",
++       "tipo": "Smartphone",
++     },
++     "garantia": {
++       "ativa": false,
++       "prazoDias": 90,
++     },
++     "operacaoStatusV3": "pronta",
++     "orcamento": {
++       "criadoEm": "2026-10-01T12:00:00.000Z",
++       "desconto": 0,
++       "id": "orc-26",
++       "pecas": [],
++       "servicos": [
++         {
++           "descricao": "Troca de tela",
++           "id": "s1-26",
++           "valor": 400,
++         },
++       ],

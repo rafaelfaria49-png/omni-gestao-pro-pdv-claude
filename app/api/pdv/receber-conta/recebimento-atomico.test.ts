@@ -76,6 +76,13 @@ const h = vi.hoisted(() => {
           return [{ lock: "" }]
         }
         const sql = strings.join("?")
+        // Sessão relida e travada DENTRO da transação (OMNI-FINANCEIRO-F9-ESTORNOS-FINAL-
+        // HARDENING-002): em memória, devolve o status atual da sessão da loja.
+        if (sql.includes("sessoes_caixa") && sql.includes("FOR SHARE")) {
+          ordem.push(`sessao:${String(values[0])}`)
+          const s = db.sessoes.find((x) => x.id === values[0] && x.storeId === values[1])
+          return s ? [{ status: s.status }] : []
+        }
         if (sql.includes("contas_receber_titulos") && sql.includes("FOR UPDATE")) {
           // Trava do título (upsert/cancelamento travados): em memória, só confirma a existência.
           const porId = sql.includes('"id" = ?')
