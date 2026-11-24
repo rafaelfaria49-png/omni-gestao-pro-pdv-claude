@@ -293,11 +293,8 @@ export async function cancelContaPagar(params: {
     motivo: safeStr(params.motivo) || undefined,
   })
 
-  const updated = await prisma.contaPagarTitulo.update({
-    where: { id: row.id },
-    data: { status: PAGAR_STATUS.CANCELADO, payload: merged as unknown as Prisma.InputJsonValue },
-  })
-  return { ok: true, data: updated }
+  // CAS: um cancelamento concorrente a um pagamento não pode apagar o pagamento do ledger.
+  return gravarComToken(prisma, row, { status: PAGAR_STATUS.CANCELADO, payload: merged })
 }
 
 export async function liquidarContaPagar(params: {

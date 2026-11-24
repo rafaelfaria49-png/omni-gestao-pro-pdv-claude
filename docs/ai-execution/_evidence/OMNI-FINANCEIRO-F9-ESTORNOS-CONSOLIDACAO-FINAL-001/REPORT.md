@@ -102,14 +102,14 @@ na UI (HUB e F9), Relatório Geral. P2 apontados:
   trava do título — desfecho seguro (rollback total, `titulo_alterado`; lote faz replay). Não alterado.
 - P2-2: `recebidoEsperado` na rota `estornar-ultimo-pagamento` — **corrigido**.
 - P2-3 (pré-existente, igual na main): `POST /api/pdv/receber-conta` confere a sessão ABERTA fora da
-  transação e sem trava — recebimento pode cair numa sessão fechada no mesmo instante. **Proposto em
-  separado** (travar a sessão FOR SHARE dentro da transação, como o lote/V3).
+  transação e sem trava — recebimento pode cair numa sessão fechada no mesmo instante. **Corrigido no
+  HARDENING-002** (seção 7).
 - P2-4: misto dividido por forma — **corrigido (R3)**.
 - P2-5: política diferente para sessão de origem fechada (OS compensa no caixa atual; Financeiro recusa) —
   ambas sem editar sessão fechada; decisão de produto.
-- P2-6 (Contas a PAGAR, fora do escopo): `estornarMovimentacaoPorReferencia` (#341) estorna o líquido; no
-  `pagar` op=estornar "último" depois de re-pagamentos pode estornar a mais (na main estornava a menos).
-  **Proposto em separado** — Contas a Pagar não faz parte deste GOAL.
+- P2-6 (Contas a PAGAR): `estornarMovimentacaoPorReferencia` (#341) estorna o líquido; no `pagar`
+  op=estornar "último" depois de re-pagamentos podia estornar a mais (na main, a menos). **Corrigido no
+  HARDENING-002** (seção 7) — o Pagar não usa mais essa função.
 
 ## 6. Riscos residuais e procedimento
 
@@ -122,7 +122,17 @@ na UI (HUB e F9), Relatório Geral. P2 apontados:
 - `estornarRecebimentoOSV3` é Server Action que lança `Error`: em produção a mensagem chega mascarada
   (só digest) — padrão pré-existente de todas as recusas dessa action; trocar por resultado devolvido é
   frente própria.
-- PATCH legado sem `idempotencyKey` segue sem proteção de retry (agora atômico). Nenhum chamador da UI.
+- PATCH legado (`/api/financeiro/receber` op=parcial|liquidar) sem `idempotencyKey` segue SEM proteção de
+  retry (agora atômico). Auditoria de chamadores (HARDENING-002): `FinanceiroRealContext.liquidarReceber`
+  e `receberParcial` são exportados mas nenhuma tela os usa (o HUB recebe por `receber-lote`); o único outro
+  chamador é o setup do E2E `financeiro-hub-avisos-estorno-003`. Não há idempotência universal nesse
+  caminho; contratos externos preservados.
+- Contas a Pagar: pagamentos (liquidar/parcial) são atômicos, serializados por título e protegidos pela
+  pré-condição `restanteEsperado` (o HUB envia o saldo exibido): clique duplo/retry depois de gravado = 409.
+  Não há chave de idempotência — um chamador de API que não envie a pré-condição ainda pode pagar 2×.
+  O estorno é protegido por `pagoEsperado`.
+- Painel legado `components/dashboard/financeiro/contas-pagar.tsx` (rotas `/api/financeiro/contas-pagar/*`):
+  só grava o ledger, nunca movimentação (igual na main). Passa a herdar a identidade no estorno e o CAS.
 - Espelho `pagamentoV3` da OS não é atualizado por baixas/estornos feitos pelo Financeiro (pré-existente
   e documentado); as leituras de saldo/entrega usam o título (ledger autoritativo).
 - Painel legado `components/dashboard/financeiro/contas-receber.tsx` baixa no cliente e depois chama

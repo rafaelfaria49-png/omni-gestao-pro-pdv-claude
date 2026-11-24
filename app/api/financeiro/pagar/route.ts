@@ -149,6 +149,8 @@ const patchSchema = z.discriminatedUnion("op", [
     lojaId: z.string().max(120).optional(),
     localKey: z.string().min(1).max(260),
     observacao: z.string().max(2000).optional(),
+    /** Saldo em aberto que o operador viu. Diferente do atual = 409 sem escrita (retry/clique duplo). */
+    restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("parcial"),
@@ -156,6 +158,7 @@ const patchSchema = z.discriminatedUnion("op", [
     localKey: z.string().min(1).max(260),
     valor: z.number().finite().positive("Valor deve ser positivo"),
     observacao: z.string().max(2000).optional(),
+    restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
   }),
   z.object({
     op: z.literal("estornar"),
@@ -412,6 +415,11 @@ export async function PATCH(req: Request) {
           // Saldo REAL em aberto ANTES de quitar (valor − pagamentos já no histórico): a
           // coluna `valor` é BRUTA e não diminui em baixas parciais.
           const abertoAntes = buildContaPagarAuditTrail([atual])[0]?.restante ?? 0
+          // Pré-condição do chamador: um retry depois de um pagamento já gravado (resposta
+          // perdida, clique duplo) encontra outro saldo e é recusado em vez de pagar de novo.
+          if (d.restanteEsperado !== undefined && Math.abs(abertoAntes - d.restanteEsperado) > 0.009) {
+            throw new FalhaPagar("titulo_alterado", 409)
+          }
           const res =
             d.op === "liquidar"
               ? await liquidarContaPagar({ storeId, id: tituloId, observacao: d.observacao, userLabel, db: tx })

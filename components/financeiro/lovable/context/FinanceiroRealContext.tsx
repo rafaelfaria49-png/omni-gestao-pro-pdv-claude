@@ -1055,15 +1055,28 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     await fetchData()
   }, [callApi, fetchData])
 
+  // Pré-condição: o saldo em aberto que o operador VIU. Um 2º clique ou retry depois de um
+  // pagamento já gravado é recusado (409) em vez de pagar de novo; a lista recarrega na falha.
+  const restanteVisto = useCallback((id: string) => {
+    const visto = pagar.find((p) => p.id === id)
+    return visto ? { restanteEsperado: Math.max(0, Math.round((visto.valor - visto.pago) * 100) / 100) } : {}
+  }, [pagar])
+
   const liquidarPagar = useCallback(async (id: string, observacao?: string) => {
-    await callApi("/api/financeiro/pagar", { op: "liquidar", localKey: id, observacao }, "PATCH")
-    await fetchData()
-  }, [callApi, fetchData])
+    try {
+      await callApi("/api/financeiro/pagar", { op: "liquidar", localKey: id, observacao, ...restanteVisto(id) }, "PATCH")
+    } finally {
+      await fetchData()
+    }
+  }, [callApi, fetchData, restanteVisto])
 
   const pagarParcial = useCallback(async (id: string, valor: number, observacao?: string) => {
-    await callApi("/api/financeiro/pagar", { op: "parcial", localKey: id, valor, observacao }, "PATCH")
-    await fetchData()
-  }, [callApi, fetchData])
+    try {
+      await callApi("/api/financeiro/pagar", { op: "parcial", localKey: id, valor, observacao, ...restanteVisto(id) }, "PATCH")
+    } finally {
+      await fetchData()
+    }
+  }, [callApi, fetchData, restanteVisto])
 
   const estornarPagar = useCallback(async (id: string, motivo?: string) => {
     // Pré-condição: o pago que o operador VIU. Um 2º clique/retry depois de um estorno já

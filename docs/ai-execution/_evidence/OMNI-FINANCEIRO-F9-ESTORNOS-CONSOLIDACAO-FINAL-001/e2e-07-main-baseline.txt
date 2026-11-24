@@ -1,0 +1,18 @@
+# Spec 07 contra a main atual (f97e9de), build local next start 127.0.0.1:3007, PG descartável fin_receb_f9_qa_e2e
+
+## isolado: 07 original + 07 com seletor por papel (cópia)
+  3 passed (24.2s)
+
+## combinação da rodada da branch (hub-avisos-003 + 04 + 07) — rodada 1
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium\test-failed-1.png
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium-retry1\test-failed-1.png
+  1 failed
+  3 passed (3.1m)
+
+## combinação da rodada da branch (hub-avisos-003 + 04 + 07) — rodada 2
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium\test-failed-1.png
+    test-results\specs-financeiro-hub-aviso-d17fa--tratar-recusa-como-sucesso-chromium-retry1\test-failed-1.png
+  1 failed
+  3 passed (4.0m)
+
+hub-avisos-003 falha na main por desenho: é o spec da #388 (Toaster do HUB), que a main não tem.

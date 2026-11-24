@@ -474,6 +474,35 @@ describe("P · Contas a Pagar — pagamento e estorno por identidade", () => {
     expect(soma("venda_avista")).toBe(0)
   })
 
+  it("P14. pagamento com restanteEsperado: clique duplo simultâneo e retry → UM pagamento, UMA saída", async () => {
+    const s = await novaLoja()
+    const lk = await novoTituloPagar(s, 300)
+    const corpo = { op: "parcial", localKey: lk, valor: 100, restanteEsperado: 300 }
+    const rs = await Promise.all([pagar(s, corpo), pagar(s, corpo)])
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409])
+    const antes = await contagem(s)
+    const retry = await pagar(s, corpo)
+    expect(retry.status).toBe(409)
+    expect(retry.body.code).toBe("parcial_titulo_alterado")
+    expect(await contagem(s)).toEqual(antes)
+    const liq = await pagar(s, { op: "liquidar", localKey: lk, restanteEsperado: 300 })
+    expect(liq.status).toBe(409)
+    const e = await estadoPagar(s, lk)
+    expect(e.saidas).toEqual([100])
+    expect(e.pago).toBe(100)
+    conciliado(e)
+  })
+
+  it("P15. cancelar título pendente continua funcionando (CAS) e não gera movimentação", async () => {
+    const s = await novaLoja()
+    const lk = await novoTituloPagar(s, 300)
+    const r = await pagar(s, { op: "cancelar", localKey: lk, motivo: "QA" })
+    expect(r.status).toBe(200)
+    const e = await estadoPagar(s, lk)
+    expect(e.titulo.status).toBe("cancelado")
+    expect(e.movs).toHaveLength(0)
+  })
+
   it("P13. título de outra loja não existe aqui → recusa, nada gravado em nenhuma das duas", async () => {
     const a = await novaLoja()
     const b = await novaLoja()
