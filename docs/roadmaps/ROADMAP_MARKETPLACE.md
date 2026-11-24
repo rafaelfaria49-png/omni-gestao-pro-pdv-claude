@@ -116,9 +116,8 @@ O HUB tem cadastro local por loja. A ativação do primeiro canal depende de con
 | M05 | Estoque, reservas e sincronização, usando o ledger canônico e os vínculos aprovados. |
 | M06 | Homologação e ativação por loja, com evidência oficial, rollback e aceite do proprietário. |
 
-### Fase 1 — Fundação (greenfield)
-**Objetivo:** arquitetura do adapter + cadastro de canais + OAuth ML.
-**Saída:** ADR aprovada; OAuth ML conectando; tela de "canais conectados" funcional.
+### Fase 1 — Fundação e piloto M01
+O HUB tem cadastro de canais por loja e um adaptador de leitura do Mercado Livre. A saída da fase é a autorização confirmada com vendedor oficial de teste e a consulta validada na loja piloto.
 
 ### Fase 2 — ML completo (1 marketplace fim-a-fim)
 **Objetivo:** Mercado Livre operando 100% — saldo sincronizado, pedidos importados, repasses conciliados.

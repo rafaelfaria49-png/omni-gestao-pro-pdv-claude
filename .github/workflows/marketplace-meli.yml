@@ -48,6 +48,7 @@ jobs:
       VERCEL: "0"
       VERCEL_ENV: development
       MIGRATION_AUTHORITY_ENABLED: "false"
+      MELI_OAUTH_ENABLED: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,7 +56,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run typecheck -- --incremental false
+      - name: TypeScript integral
+        run: node --max-old-space-size=6144 node_modules/typescript/lib/tsc.js --noEmit --incremental false
       - run: npx eslint app/api/marketplace app/dashboard/marketplace components/marketplace lib/marketplace scripts/marketplace e2e/marketplace-meli e2e/marketplace-meli.playwright.config.ts
       - run: npm test -- lib/marketplace
       - run: npm run build

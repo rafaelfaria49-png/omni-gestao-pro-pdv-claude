@@ -51,7 +51,7 @@ Fontes oficiais consultadas em 24/11/2026. [OAuth e PKCE](https://developers.mer
 
 ## Provas reproduzíveis
 
-- Contrato, escopos, AEAD, erros, paginação e isolamento do gate em `npm test -- lib/marketplace`. Tipos com `npm run typecheck -- --incremental false`.
+- Contrato, escopos, AEAD, erros, paginação e isolamento do gate em `npm test -- lib/marketplace`. O check integral do TypeScript usa `node --max-old-space-size=6144 node_modules/typescript/lib/tsc.js --noEmit --incremental false`. O primeiro CI esgotou o heap de 4 GB do script padrão.
 - O workflow **Marketplace Mercado Livre QA** executa lint, build e Playwright com Next.js, sessão NextAuth e PostgreSQL 17 descartável. O provedor é controlado por fixture, incluindo retorno OAuth, token de uso único, anúncios, variações, limite, rede e revogação.
 - Para execução local use Node 24, `npm ci`, `npm run build` e `npx playwright install chromium`. Execute `node scripts/marketplace/run-meli-e2e.mjs` com `MELI_E2E_DATABASE_URL` apontando para um banco vazio `omni_meli_e2e` no IP `127.0.0.1` e usuário `meli_qa`. O runner prepara uma cópia descartável do schema, usa TLS de teste no loopback e bloqueia chamadas oficiais em toda a superfície testada. Capturas e contadores saem em `test-results/marketplace-meli/`.
 - A execução sintética valida a aplicação e os contratos de rede. O aceite oficial continua condicionado à configuração do proprietário e à execução do passo 5. O teste com seller comercial é uma autorização separada.
