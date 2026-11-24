@@ -1,5 +1,10 @@
 # SaaS 100% automático — proposta separada (NÃO faz parte do piloto)
 
+> **Substituída como fonte de verdade em 2026-11-23** por
+> [`SAAS_AUTOMATICO_ROADMAP_MASTER.md`](SAAS_AUTOMATICO_ROADMAP_MASTER.md) (GOAL
+> `OMNI-SAAS-AUTOMATICO-ARQUITETURA-ROADMAP-000`). Mantida como registro histórico; o
+> mapeamento das fases S1–S7 para os GOALs SAAS-001A…006 está na §5 do roadmap.
+
 GOAL `OMNI-SAAS-LANCAMENTO-COMERCIAL-PILOTO-001` · 2026-11-22 · sobre `main` `8286a4a`.
 
 O piloto pago roda com provisionamento **assistido** e cobrança **manual**. Este documento
