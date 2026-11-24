@@ -42,7 +42,7 @@ npm run dev          # Start dev server on 0.0.0.0:3000
 npm run dev:clean    # Kill port 3000 then start dev
 npm run build        # prisma generate + Next.js build (webpack)
 npm run lint         # ESLint
-npm run typecheck    # tsc --noEmit com heap de 4 GB (gate canônico de tipos)
+npm run typecheck    # tsc --noEmit com heap de 6 GB (gate canônico de tipos)
 npm run test         # Vitest
 
 # Database
@@ -56,7 +56,7 @@ Type-check without building: **`npm run typecheck`**.
 > Use o script, não `npx tsc --noEmit` cru. Desde a entrada do `@aws-sdk/client-s3`
 > (Contador HUB · storage R2), o grafo de tipos não cabe no heap default do Node
 > (~2 GB) e o `tsc` morre com *JavaScript heap out of memory* — sem relação com erro
-> de tipo. O script sobe o heap para 4 GB, o que basta para rodar a frio. `skipLibCheck`
+> de tipo. O script sobe o heap para 6 GB (4 GB deixou de bastar com os modelos do SaaS, SAAS-001A). `skipLibCheck`
 > já está ligado e os imports do SDK já são mínimos; o tamanho é inerente ao pacote.
 
 ## Architecture
