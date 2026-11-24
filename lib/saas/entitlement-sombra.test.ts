@@ -49,7 +49,7 @@ describe("organizações em modo sombra", () => {
     const claims = await calcularEntitlementsSombra(db, ["nova", "loja-1"], { agora: AGORA, log })
     expect(claims?.nova).toEqual({ modo: "limitado", motivo: "teste_vencido", limitedSince: "2026-12-08T12:00:00.000Z" })
     expect(claims?.["loja-1"]).toEqual({ modo: "pleno", motivo: "legado" })
-    expect(log).toHaveBeenCalledWith("[saas] entitlement_sombra loja=nova modo=limitado motivo=teste_vencido aplicado=nao")
+    expect(JSON.parse(log.mock.calls[0][0])).toEqual({ event: "saas_entitlement_shadow", v: 1, storeId: "nova", modo: "limitado", motivo: "teste_vencido", applied: false, suppressed: 0 })
     expect(contadoresEntitlementSombra()).toEqual({ "limitado:teste_vencido": 1 })
   })
   it("loga a mesma decisão no máximo uma vez a cada 15 min por loja (conta todas)", async () => {
@@ -59,6 +59,8 @@ describe("organizações em modo sombra", () => {
     expect(log).toHaveBeenCalledTimes(1)
     await calcularEntitlementsSombra(db, ["nova"], { agora: new Date(AGORA.getTime() + 16 * 60_000), log })
     expect(log).toHaveBeenCalledTimes(2)
+    // A 2ª linha informa as 4 decisões caladas: somar 1 + suppressed por linha = 6 resoluções.
+    expect(JSON.parse(log.mock.calls[1][0])).toMatchObject({ suppressed: 4 })
     expect(contadoresEntitlementSombra()["limitado:teste_vencido"]).toBe(6)
   })
   it("organização sem assinatura → bloqueado (ausência não concede)", async () => {
@@ -82,8 +84,21 @@ describe("falha nunca afeta o login", () => {
     const logErro = vi.fn()
     const db = { store: { findMany: vi.fn(async () => { throw new Error('column "organizationId" does not exist — Failing row contains (segredo)') }) } } as unknown as EntitlementDb
     await expect(calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, logErro })).resolves.toBeUndefined()
-    expect(logErro).toHaveBeenCalledWith("[saas] entitlement_sombra_falhou")
+    expect(logErro).toHaveBeenCalledWith(JSON.stringify({ event: "saas_entitlement_shadow_failed", v: 1, suppressed: 0 }))
     expect(JSON.stringify(logErro.mock.calls)).not.toContain("segredo")
+  })
+  it("falhas em série logam no máximo 1 linha por minuto por instância, com a contagem calada", async () => {
+    const logErro = vi.fn()
+    const db = { store: { findMany: vi.fn(async () => { throw new Error("x") }) } } as unknown as EntitlementDb
+    vi.useFakeTimers()
+    try {
+      for (let i = 0; i < 10; i++) await calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, logErro })
+      expect(logErro).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(61_000)
+      await calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, logErro })
+      expect(JSON.parse(logErro.mock.calls[1][0])).toEqual({ event: "saas_entitlement_shadow_failed", v: 1, suppressed: 9 })
+      expect(contadoresEntitlementSombra().falha).toBe(11)
+    } finally { vi.useRealTimers() }
   })
   it("SAAS_ENTITLEMENT_ENFORCE=on só avisa (uma vez) e não muda o resultado", async () => {
     const log = vi.fn()
@@ -91,7 +106,7 @@ describe("falha nunca afeta o login", () => {
     const a = await calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, env: { SAAS_ENTITLEMENT_ENFORCE: "on" }, log })
     await calcularEntitlementsSombra(db, ["loja-1"], { agora: AGORA, env: { SAAS_ENTITLEMENT_ENFORCE: "on" }, log })
     expect(a).toEqual({ "loja-1": { modo: "pleno", motivo: "legado" } })
-    expect(log.mock.calls.filter(([l]) => String(l).includes("ignorado"))).toHaveLength(1)
+    expect(log.mock.calls.filter(([l]) => String(l).includes("saas_entitlement_enforce_ignored"))).toHaveLength(1)
   })
 })
 

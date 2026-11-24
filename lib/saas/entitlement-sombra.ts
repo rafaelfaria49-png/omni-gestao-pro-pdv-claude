@@ -94,37 +94,68 @@ export async function calcularEntitlementsSombra(
     return claims
   } catch {
     // Sem detalhes: a mensagem do Prisma pode carregar dados da linha.
-    logErro("[saas] entitlement_sombra_falhou")
+    registrarFalhaSombra(Date.now(), logErro)
     return undefined
   }
 }
 
 // ─── Observabilidade (sem PII: id interno da loja, modo e motivo) ─────────────────────────────
+//
+// Serverless: cada instância tem memória própria e efêmera (cold start zera tudo). Por isso a
+// fonte de verdade para decidir a ativação do enforcement são as LINHAS DE LOG estruturadas
+// (JSON, `event` estável, `v` versionado), agregadas no log drain/Vercel — não os contadores em
+// memória. Cada linha carrega `suppressed`: quantas decisões iguais a instância calou desde a
+// linha anterior daquela chave; somar `1 + suppressed` por linha aproxima o total de resoluções.
+// Contrato dos eventos: docs/comercial/SAAS_001A_FUNDACAO_COMERCIAL.md §5.
+
+export const EVENTO_SOMBRA = "saas_entitlement_shadow"
+export const EVENTO_SOMBRA_FALHOU = "saas_entitlement_shadow_failed"
+export const EVENTO_ENFORCE_IGNORADO = "saas_entitlement_enforce_ignored"
 
 const JANELA_LOG_MS = 15 * 60 * 1000
+const JANELA_FALHA_MS = 60 * 1000
 const MAX_CHAVES = 2000
 const ultimoLog = new Map<string, number>()
+const calados = new Map<string, number>()
 const contadores = new Map<string, number>()
 let enforceAvisado = false
+let ultimaFalha: number | undefined
+let falhasCaladas = 0
 
 function observarDecisaoSombra(storeId: string, modo: ModoAcesso, motivo: MotivoEntitlement, agoraMs: number, log: Log) {
   const chaveContador = `${modo}:${motivo}`
   contadores.set(chaveContador, (contadores.get(chaveContador) ?? 0) + 1)
   const chave = `${storeId}|${chaveContador}`
   const anterior = ultimoLog.get(chave)
-  if (anterior !== undefined && agoraMs - anterior < JANELA_LOG_MS) return
-  if (ultimoLog.size >= MAX_CHAVES) ultimoLog.clear()
+  if (anterior !== undefined && agoraMs - anterior < JANELA_LOG_MS) {
+    calados.set(chave, (calados.get(chave) ?? 0) + 1)
+    return
+  }
+  if (ultimoLog.size >= MAX_CHAVES) { ultimoLog.clear(); calados.clear() }
+  const suppressed = calados.get(chave) ?? 0
+  calados.delete(chave)
   ultimoLog.set(chave, agoraMs)
-  log(`[saas] entitlement_sombra loja=${storeId} modo=${modo} motivo=${motivo} aplicado=nao`)
+  log(JSON.stringify({ event: EVENTO_SOMBRA, v: 1, storeId, modo, motivo, applied: false, suppressed }))
+}
+
+function registrarFalhaSombra(agoraMs: number, logErro: Log) {
+  contadores.set("falha", (contadores.get("falha") ?? 0) + 1)
+  if (ultimaFalha !== undefined && agoraMs - ultimaFalha < JANELA_FALHA_MS) { falhasCaladas++; return }
+  ultimaFalha = agoraMs
+  logErro(JSON.stringify({ event: EVENTO_SOMBRA_FALHOU, v: 1, suppressed: falhasCaladas }))
+  falhasCaladas = 0
 }
 
 function avisarEnforceIgnorado(log: Log) {
   if (enforceAvisado) return
   enforceAvisado = true
-  log("[saas] SAAS_ENTITLEMENT_ENFORCE=on ignorado: enforcement não existe no SAAS-001A (modo sombra)")
+  log(JSON.stringify({ event: EVENTO_ENFORCE_IGNORADO, v: 1, motivo: "enforcement inexistente no SAAS-001A" }))
 }
 
-/** Contagem, por processo, das decisões que TERIAM restringido o acesso (`modo:motivo`). */
+/**
+ * Contagem desta INSTÂNCIA (`modo:motivo` e `falha`) desde o último cold start. Útil para teste e
+ * depuração; NÃO serve como métrica de ativação (ver comentário acima).
+ */
 export function contadoresEntitlementSombra(): Record<string, number> {
   return Object.fromEntries(contadores)
 }
@@ -132,6 +163,9 @@ export function contadoresEntitlementSombra(): Record<string, number> {
 /** Só para testes. */
 export function reiniciarObservabilidadeSombra() {
   ultimoLog.clear()
+  calados.clear()
   contadores.clear()
   enforceAvisado = false
+  ultimaFalha = undefined
+  falhasCaladas = 0
 }

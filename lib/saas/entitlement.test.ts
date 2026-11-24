@@ -129,6 +129,31 @@ describe("suspensão", () => {
   })
 })
 
+// Regra comercial APROVADA pelo proprietário (GOAL OMNI-SAAS-001A-MERGE-MIGRATION-READINESS-002,
+// 2026-11-24): suspensão administrativa prevalece sobre cortesia e sobre extensão do teste.
+describe("precedência da suspensão (regra aprovada)", () => {
+  const futuro = ms(T0, 30 * DIA)
+  it.each([
+    ["cortesia vigente", { cortesiaAte: futuro }],
+    ["teste estendido (trialEndsAt no futuro)", { trialEndsAt: futuro }],
+    ["cortesia + teste estendido + período pago vigente", { cortesiaAte: futuro, trialEndsAt: futuro, currentPeriodEnd: futuro, graceEndsAt: futuro }],
+  ])("suspensão limitada vence %s", (_n, extra) => {
+    expect(r(sub({ status: "suspended", ...extra }), T0)).toMatchObject({ modo: "limitado", motivo: "suspenso" })
+  })
+  it.each([
+    ["cortesia vigente", { cortesiaAte: futuro }],
+    ["teste estendido", { trialEndsAt: futuro }],
+  ])("suspensão bloqueada vence %s", (_n, extra) => {
+    expect(r(sub({ status: "suspended", suspendedMode: "bloqueado", ...extra }), T0)).toMatchObject({ modo: "bloqueado", motivo: "suspenso" })
+  })
+  it("ao reativar (sai de suspended), a cortesia volta a valer", () => {
+    expect(r(sub({ status: "trial_expired", trialEndsAt: ms(T0, -DIA), cortesiaAte: futuro }), T0)).toMatchObject({ modo: "pleno", motivo: "cortesia" })
+  })
+  it("extensão do teste sem suspensão devolve o pleno", () => {
+    expect(r(sub({ status: "trialing", trialEndsAt: futuro }), ms(T0, 10 * DIA))).toMatchObject({ modo: "pleno", motivo: "teste" })
+  })
+})
+
 describe("cortesia", () => {
   const ate = ms(T0, 5 * DIA)
   it.each(STATUS_ASSINATURA.filter((s) => s !== "suspended"))("sobrepõe %s enquanto vigente", (status) => {
