@@ -4,8 +4,8 @@
  * COMPAT-PROFISSIONAL-001 — Cores, Preferências e Relatórios do Compat (por loja).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertTriangle, BarChart3, Check, Loader2, Palette, Pencil, Plus, Power, Settings2, X } from "lucide-react"
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
+import { AlertTriangle, BarChart3, Check, Loader2, Palette, Pencil, Plus, Power, Search, Settings2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,11 +13,18 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { AcessorioModoCaptura } from "@/lib/acessorios/types"
-import type { CorEfetiva } from "@/lib/compat/cores-loja"
+import {
+  corEquivalenciaKey,
+  corPadraoComMesmoNome,
+  filtrarCoresPorBusca,
+  sugerirVisualParaCor,
+  type CorEfetiva,
+} from "@/lib/compat/cores-loja"
 import type { CompatPreferencias } from "@/lib/compat/organizacao"
 import {
   ativarCorPadrao,
   atualizarCor,
+  atualizarVisualCorPadrao,
   carregarCores,
   carregarOrganizacao,
   carregarRelatorio,
@@ -28,6 +35,7 @@ import {
   type MarcaDTO,
   type RelatorioDTO,
 } from "@/lib/compat/compat-client"
+import { CorSwatch, CorVisualPicker } from "./cor-swatch"
 
 function Vazio({ children }: { children: React.ReactNode }) {
   return <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">{children}</p>
@@ -37,18 +45,23 @@ function Vazio({ children }: { children: React.ReactNode }) {
 // Cores
 // ---------------------------------------------------------------------------
 
-export function CoresPanel({ lojaHeader }: { lojaHeader: string | null }) {
+export function CoresPanel({ lojaHeader, onChanged }: { lojaHeader: string | null; onChanged?: () => void }) {
+  const uid = useId()
   const [cores, setCores] = useState<CorEfetiva[]>([])
   const [erro, setErro] = useState("")
   const [nova, setNova] = useState("")
+  const [novoVisual, setNovoVisual] = useState("#64748B")
+  const [visualManual, setVisualManual] = useState(false)
+  const [busca, setBusca] = useState("")
   const [busy, setBusy] = useState(false)
-  const [editando, setEditando] = useState<{ id: string; label: string; version: number } | null>(null)
+  const [editando, setEditando] = useState<{ id: string; label: string; visual: string; version: number } | null>(null)
+  const [editandoPadrao, setEditandoPadrao] = useState<{ id: string; label: string; visual: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!lojaHeader) return
     const r = await carregarCores(lojaHeader)
     if (r.ok) {
-      setCores(r.cores)
+      setCores(Array.isArray(r.cores) ? r.cores : [])
       setErro("")
     } else setErro(r.error)
   }, [lojaHeader])
@@ -63,98 +76,271 @@ export function CoresPanel({ lojaHeader }: { lojaHeader: string | null }) {
     setBusy(false)
     setErro(r.ok ? "" : (r.error ?? "Falha ao gravar."))
     await load()
+    if (r.ok) onChanged?.()
     return r.ok
   }
 
+  const padrao = useMemo(() => filtrarCoresPorBusca(cores.filter((c) => c.origem === "padrao"), busca), [cores, busca])
+  const proprias = useMemo(() => filtrarCoresPorBusca(cores.filter((c) => c.origem === "loja"), busca), [cores, busca])
+
   if (!lojaHeader) return <Vazio>Selecione uma loja.</Vazio>
-  const padrao = cores.filter((c) => c.origem === "padrao")
-  const proprias = cores.filter((c) => c.origem === "loja")
+
+  const validarDuplicidadeLocal = (label: string, ignorarId?: string): string | null => {
+    const equiv = corEquivalenciaKey(label)
+    if (equiv.length < 2) return "Informe o nome da cor."
+    const padraoKey = corPadraoComMesmoNome(label)
+    if (padraoKey) {
+      const corP = cores.find((c) => c.origem === "padrao" && c.id === padraoKey)
+      return `A cor “${corP?.label ?? label.trim()}” já existe na lista padrão. Ative-a abaixo ou escolha outro nome.`
+    }
+    const dupLoja = cores.find((c) => c.origem === "loja" && c.id !== ignorarId && corEquivalenciaKey(c.label) === equiv)
+    if (dupLoja) {
+      return dupLoja.ativo
+        ? `Já existe a cor “${dupLoja.label}” nesta loja.`
+        : `Já existe a cor “${dupLoja.label}” (inativa) nesta loja. Reative-a em vez de cadastrar novamente.`
+    }
+    return null
+  }
 
   return (
     <section aria-label="Cores" className="min-w-0 space-y-4">
       <div className="min-w-0">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground"><Palette className="h-4 w-4 text-primary" /> Cores</h2>
         <p className="text-xs text-muted-foreground">
-          Cores oferecidas no PDV. Desativar ou renomear não altera vendas já registradas (o nome fica gravado na venda).
+          Cores oferecidas no cadastro de produtos e no PDV. Desativar ou renomear preserva referências históricas de produtos e vendas.
         </p>
       </div>
       {erro && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{erro}</p>}
 
       <form
-        className="flex min-w-0 flex-wrap items-end gap-2 rounded-xl border border-border bg-card p-3"
+        className="min-w-0 space-y-3 rounded-xl border border-border bg-card p-3"
         onSubmit={(e) => {
           e.preventDefault()
-          if (!nova.trim()) return
-          void run(() => criarCor(lojaHeader, nova)).then((ok) => ok && setNova(""))
+          const msg = validarDuplicidadeLocal(nova)
+          if (msg) {
+            setErro(msg)
+            return
+          }
+          void run(() => criarCor(lojaHeader, nova, novoVisual)).then((ok) => {
+            if (ok) {
+              setNova("")
+              setNovoVisual("#64748B")
+              setVisualManual(false)
+            }
+          })
         }}
       >
-        <div className="min-w-0 flex-1 basis-48">
-          <Label htmlFor="compat-nova-cor">Nova cor da loja</Label>
-          <Input id="compat-nova-cor" value={nova} maxLength={40} onChange={(e) => setNova(e.target.value)} placeholder="Ex.: Azul bebê, Rosa pink" />
+        <div className="flex min-w-0 flex-wrap items-end gap-2">
+          <div className="min-w-0 flex-1 basis-48">
+            <Label htmlFor={`${uid}-nova-cor`}>Nova cor da loja</Label>
+            <Input
+              id={`${uid}-nova-cor`}
+              value={nova}
+              maxLength={40}
+              onChange={(e) => {
+                const v = e.target.value
+                setNova(v)
+                if (!visualManual) setNovoVisual(sugerirVisualParaCor(v))
+              }}
+              placeholder="Ex.: Azul-marinho, Rosa bebê, Lilás pastel"
+            />
+          </div>
+          <Button type="submit" disabled={busy || !nova.trim()}>
+            <Plus className="mr-1 h-4 w-4" /> Cadastrar cor
+          </Button>
         </div>
-        <Button type="submit" disabled={busy || !nova.trim()}>
-          <Plus className="mr-1 h-4 w-4" /> Cadastrar cor
-        </Button>
+        <CorVisualPicker
+          id={`${uid}-nova-cor-visual`}
+          label="Representação visual da nova cor"
+          value={novoVisual}
+          disabled={busy}
+          onChange={(v) => {
+            setNovoVisual(v)
+            setVisualManual(true)
+          }}
+        />
       </form>
 
-      <div className="min-w-0 space-y-2">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cores da loja</h3>
-        {proprias.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma cor própria cadastrada.</p>}
-        <ul className="min-w-0 divide-y divide-border rounded-lg border border-border bg-card">
-          {proprias.map((c) => (
-            <li key={c.id} className="flex min-w-0 items-center gap-2 px-3 py-2">
-              {editando?.id === c.id ? (
-                <form
-                  className="flex min-w-0 flex-1 items-center gap-1"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    void run(() => atualizarCor(lojaHeader, c.id, { version: editando.version, label: editando.label })).then(
-                      (ok) => ok && setEditando(null),
-                    )
-                  }}
-                >
-                  <Input aria-label="Nome da cor" value={editando.label} maxLength={40} className="h-8" onChange={(e) => setEditando({ ...editando, label: e.target.value })} />
-                  <Button type="submit" size="icon" variant="ghost" className="h-8 w-8" aria-label="Salvar" disabled={busy}><Check className="h-4 w-4" /></Button>
-                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label="Cancelar" onClick={() => setEditando(null)}><X className="h-4 w-4" /></Button>
-                </form>
-              ) : (
-                <>
-                  <span className={cn("min-w-0 flex-1 truncate text-sm", c.ativo ? "text-foreground" : "text-muted-foreground line-through")}>{c.label}</span>
-                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label={`Renomear ${c.label}`} disabled={busy}
-                    onClick={() => setEditando({ id: c.id, label: c.label, version: c.version })}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" disabled={busy}
-                    onClick={() => void run(() => atualizarCor(lojaHeader, c.id, { version: c.version, ativo: !c.ativo }))}>
-                    <Power className="mr-1 h-3.5 w-3.5" /> {c.ativo ? "Desativar" : "Reativar"}
-                  </Button>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+      <div className="relative min-w-0">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          aria-label="Pesquisar cores"
+          placeholder="Pesquisar cores (ex.: azul-marinho, preto, fumê, transparente)…"
+          className="pl-9"
+        />
       </div>
 
       <div className="min-w-0 space-y-2">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cores padrão</h3>
-        <div className="flex flex-wrap gap-1.5">
-          {padrao.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              disabled={busy || c.id === "outra"}
-              aria-pressed={c.ativo}
-              title={c.id === "outra" ? "Sempre disponível (texto livre)" : c.ativo ? "Clique para desativar nesta loja" : "Clique para reativar"}
-              onClick={() => void run(() => ativarCorPadrao(lojaHeader, c.id, !c.ativo))}
-              className={cn(
-                "rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
-                c.ativo ? "border-primary/40 bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground line-through",
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Cores da loja ({proprias.length})
+        </h3>
+        {proprias.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            {busca.trim() ? "Nenhuma cor própria corresponde à pesquisa." : "Nenhuma cor própria cadastrada."}
+          </p>
+        )}
+        {proprias.length > 0 && (
+          <ul className="min-w-0 divide-y divide-border rounded-lg border border-border bg-card">
+            {proprias.map((c) => (
+              <li key={c.id} className="min-w-0 px-3 py-2">
+                {editando?.id === c.id ? (
+                  <form
+                    className="min-w-0 space-y-2"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const msg = validarDuplicidadeLocal(editando.label, c.id)
+                      if (msg) {
+                        setErro(msg)
+                        return
+                      }
+                      void run(() =>
+                        atualizarCor(lojaHeader, c.id, {
+                          version: editando.version,
+                          label: editando.label,
+                          visual: editando.visual,
+                        }),
+                      ).then((ok) => ok && setEditando(null))
+                    }}
+                  >
+                    <div className="flex min-w-0 items-center gap-1">
+                      <Input
+                        aria-label="Nome da cor"
+                        value={editando.label}
+                        maxLength={40}
+                        className="h-8 min-w-0 flex-1"
+                        onChange={(e) => setEditando({ ...editando, label: e.target.value })}
+                      />
+                      <Button type="submit" size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Salvar cor" disabled={busy}><Check className="h-4 w-4" /></Button>
+                      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Cancelar edição" onClick={() => setEditando(null)}><X className="h-4 w-4" /></Button>
+                    </div>
+                    <CorVisualPicker
+                      id={`${uid}-edit-visual-${c.id}`}
+                      label={`Representação visual de ${c.label}`}
+                      value={editando.visual}
+                      disabled={busy}
+                      onChange={(visual) => setEditando({ ...editando, visual })}
+                    />
+                  </form>
+                ) : (
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <CorSwatch visual={c.visual} size="md" />
+                    <span className={cn("min-w-0 flex-1 truncate text-sm", c.ativo ? "text-foreground" : "text-muted-foreground line-through")}>
+                      {c.label}
+                    </span>
+                    {!c.ativo && <Badge variant="outline" className="text-[10px] text-muted-foreground">inativa</Badge>}
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      aria-label={`Editar ${c.label}`}
+                      disabled={busy}
+                      onClick={() => setEditando({ id: c.id, label: c.label, visual: c.visual, version: c.version })}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      disabled={busy}
+                      onClick={() => void run(() => atualizarCor(lojaHeader, c.id, { version: c.version, ativo: !c.ativo }))}
+                    >
+                      <Power className="mr-1 h-3.5 w-3.5" /> {c.ativo ? "Desativar" : "Reativar"}
+                    </Button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="min-w-0 space-y-2">
+        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Cores padrão ({padrao.length})
+        </h3>
+        {padrao.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma cor padrão corresponde à pesquisa.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {padrao.map((c) => (
+              <div
+                key={c.id}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border pl-2 pr-1 py-0.5 text-sm transition-colors",
+                  c.ativo ? "border-primary/40 bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground",
+                )}
+              >
+                <button
+                  type="button"
+                  disabled={busy || c.id === "outra"}
+                  aria-pressed={c.ativo}
+                  title={c.id === "outra" ? "Sempre disponível (texto livre)" : c.ativo ? "Clique para desativar nesta loja" : "Clique para reativar"}
+                  onClick={() => void run(() => ativarCorPadrao(lojaHeader, c.id, !c.ativo))}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full py-0.5 pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                    !c.ativo && "line-through",
+                  )}
+                >
+                  <CorSwatch visual={c.visual} size="sm" />
+                  <span>{c.label}</span>
+                </button>
+                {c.id !== "outra" && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label={`Editar visual de ${c.label}`}
+                    title={`Editar representação visual de ${c.label}`}
+                    onClick={() => setEditandoPadrao(editandoPadrao?.id === c.id ? null : { id: c.id, label: c.label, visual: c.visual })}
+                    className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {editandoPadrao && (
+          <div className="min-w-0 space-y-2 rounded-lg border border-border bg-card p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-foreground">
+                Representação visual de “{editandoPadrao.label}” nesta loja
+              </p>
+              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Fechar editor visual" onClick={() => setEditandoPadrao(null)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <CorVisualPicker
+              id={`${uid}-edit-padrao-${editandoPadrao.id}`}
+              label={`Representação visual de ${editandoPadrao.label}`}
+              value={editandoPadrao.visual}
+              disabled={busy}
+              onChange={(visual) => setEditandoPadrao({ ...editandoPadrao, visual })}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setEditandoPadrao(null)} disabled={busy}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  void run(() => atualizarVisualCorPadrao(lojaHeader, editandoPadrao.id, editandoPadrao.visual)).then(
+                    (ok) => ok && setEditandoPadrao(null),
+                  )
+                }
+              >
+                Salvar visual
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )

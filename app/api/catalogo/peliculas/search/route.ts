@@ -9,7 +9,7 @@ import {
   isManualModelKey,
   lojaModeloCanonicalName,
   overridesUtilizaveis,
-  searchDeviceModelsComLoja,
+  searchDeviceModelsComLojaPagina,
   type LojaModelo,
 } from "@/lib/catalogo-aparelhos/loja-catalogo"
 import {
@@ -195,7 +195,11 @@ export async function GET(req: Request) {
     }
 
     const marcasOcultas = await marcasOcultasParaLoja(storeId)
-    const matches = searchDeviceModelsComLoja(index, lojaIndex, q, { limit, brand, marcasOcultas })
+    // COMPAT-BUSCA-MODELOS-NATURAL-001: paginada — o "Mostrar mais" pede o offset seguinte.
+    const offsetRaw = parseInt(url.searchParams.get("offset") ?? "", 10)
+    const offset = Number.isFinite(offsetRaw) ? Math.min(Math.max(offsetRaw, 0), 10_000) : 0
+    const page = searchDeviceModelsComLojaPagina(index, lojaIndex, q, { limit, offset, brand, marcasOcultas })
+    const matches = page.results
     const results = await withPeliculaGroups(
       index,
       storeId,
@@ -223,6 +227,9 @@ export async function GET(req: Request) {
       ok: true,
       query: q,
       results,
+      total: page.total,
+      hasMore: page.hasMore,
+      nextOffset: page.nextOffset,
       ...(results.length === 0
         ? { message: "Nenhum aparelho encontrado. Confira a grafia ou confirme o modelo fisicamente." }
         : {}),
