@@ -3,7 +3,14 @@ import {
   LIMITE_GLOBAL_POR_10_MIN, LIMITE_POR_ORIGEM_POR_HORA, atualizarStatusSolicitacao, gerarProtocolo, hashOrigem,
   registrarSolicitacaoTeste, vincularProvisionamento, type SolicitacaoDb,
 } from "./solicitacao-teste"
-import { resolverGestaoLojasConfig, PLANOS_GESTAO_LOJAS } from "./gestao-lojas-oferta"
+import {
+  OFERTA_COMERCIAL_GESTAO_LOJAS,
+  PLANOS_GESTAO_LOJAS,
+  formatarWhatsappComercial,
+  isPlanoGestaoLojas,
+  linkWhatsappComercial,
+  resolverGestaoLojasConfig,
+} from "./gestao-lojas-oferta"
 
 type Row = Record<string, unknown> & { id: string; protocolo: string; emailAberto: string | null; ipHash: string; createdAt: Date; status: string; historico: unknown }
 
@@ -232,24 +239,32 @@ describe("utilitários", () => {
   })
 })
 
-describe("resolverGestaoLojasConfig (falha fechado)", () => {
-  it("sem variáveis: sem preço, sem download, sem contato direto", () => {
-    expect(resolverGestaoLojasConfig({})).toEqual({ exibirPrecosPropostos: false, downloadWindowsUrl: null, contatoWhatsapp: null, contatoEmail: null })
+describe("resolverGestaoLojasConfig e oferta autorizada (falha fechado)", () => {
+  it("sem variáveis: sem contato direto", () => {
+    expect(resolverGestaoLojasConfig({})).toEqual({ contatoWhatsapp: null, contatoEmail: null })
   })
-  it("preço só com o valor exato 1", () => {
-    for (const v of ["true", "yes", "0", " 1"]) expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS: v }).exibirPrecosPropostos).toBe(false)
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS: "1" }).exibirPrecosPropostos).toBe(true)
+  it("download do Windows não tem canal próprio na landing: URL direta é ignorada (canal único em /baixar)", () => {
+    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "https://dl.example.com/Setup.exe" })).not.toHaveProperty("downloadWindowsUrl")
   })
-  it("download só com https válido", () => {
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "http://x/a.exe" }).downloadWindowsUrl).toBeNull()
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "javascript:alert(1)" }).downloadWindowsUrl).toBeNull()
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL: "https://dl.example.com/Setup.exe" }).downloadWindowsUrl).toBe("https://dl.example.com/Setup.exe")
-  })
-  it("contatos malformados ficam ocultos", () => {
+  it("contatos malformados ficam ocultos e contato válido é normalizado", () => {
     expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_CONTATO_WHATSAPP: "(00) 00000-0000", GESTAO_LOJAS_CONTATO_EMAIL: "suporte@" })).toMatchObject({ contatoWhatsapp: null, contatoEmail: null })
-    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_CONTATO_WHATSAPP: "+55 11 91234-5678" }).contatoWhatsapp).toBe("5511912345678")
+    expect(resolverGestaoLojasConfig({ GESTAO_LOJAS_CONTATO_WHATSAPP: "+55 14 99861-0730" }).contatoWhatsapp).toBe("5514998610730")
+    expect(formatarWhatsappComercial("5514998610730")).toBe("(14) 99861-0730")
+    expect(linkWhatsappComercial("5514998610730")).toBe("https://wa.me/5514998610730")
   })
-  it("planos propostos: valores da decisão do proprietário, em centavos", () => {
-    expect(PLANOS_GESTAO_LOJAS.map((p) => [p.id, p.precoMensalCentavos, p.operadoresPropostos])).toEqual([["essencial", 3990, 1], ["comercio", 6990, 2], ["comercio-plus", 9990, 3]])
+  it("oferta única autorizada: R$ 69,90/mês, até 2 usuários, 7 dias acompanhados e cobrança manual", () => {
+    expect(OFERTA_COMERCIAL_GESTAO_LOJAS).toMatchObject({
+      precoMensalCentavos: 6990,
+      usuariosInclusos: 2,
+      diasTesteGratuito: 7,
+      cobrancaManual: true,
+      acompanhamentoManual: true,
+    })
+  })
+  it("mantém compatibilidade retroativa para registros históricos em PLANOS_GESTAO_LOJAS", () => {
+    for (const id of ["vendas-e-estoque", "essencial", "comercio", "comercio-plus"]) {
+      expect(isPlanoGestaoLojas(id)).toBe(true)
+    }
+    expect(PLANOS_GESTAO_LOJAS.some((p) => p.id === "comercio" && p.precoMensalCentavos === 6990)).toBe(true)
   })
 })

@@ -1,100 +1,36 @@
 # Vendas e Estoque — design system da página comercial
 
-Página: `app/gestao-lojas/page.tsx` · estilos: `components/gestao-lojas/gestao-lojas.css` (todos os
-tokens sob `.gl`, sem vazar para o ERP) · feito com a skill oficial `frontend-design` (Anthropic).
+Página: `app/gestao-lojas/page.tsx` · estilos: `components/gestao-lojas/gestao-lojas.css` (todos os tokens sob `.gl`, isolados do ERP).
 
-## Direção
+Atualizado no `GOAL=OMNI-GESTAO-LOJAS-LANDING-PREMIUM-INTEGRACAO-001`.
 
-**Assunto:** o balcão de uma loja pequena — caixa, produto na prateleira, comprovante na mão do cliente.
-**Público:** dono ou dona de loja de variedades, acessórios ou pequeno comércio, lendo no celular ou no
-computador do caixa. **Trabalho da página:** fazer a pessoa pedir um teste, sem prometer o que não existe.
+## Direção visual
 
-**Elemento-assinatura (o único "ousado"):** o comprovante térmico, com picote serrilhado e tipografia
-monoespaçada de impressora. Aparece no hero (sobre a tela real do PDV), na seção de impressão e na
-confirmação do pedido — onde vira o "recibo" do protocolo. É o único movimento automático da página
-(uma "impressão" de 0,9 s), desligado com `prefers-reduced-motion`.
-
-O resto é quieto: fundo papel-frio, texto em tinta oceano, uma única cor de ação, sem gradiente, sem
-neon, sem cartões idênticos com sombra.
-
-## Tokens
-
-| Token | Valor | Uso |
-|---|---|---|
-| `--gl-ink` | `#0b2a3f` | texto principal, faixa do pedido de teste |
-| `--gl-ink-soft` | `#33566d` | texto secundário (7:1 sobre o papel) |
-| `--gl-brand` | `#0369a1` | ação primária, links, foco — mesma cor do ícone oficial |
-| `--gl-brand-strong` | `#075985` | hover/pressionado |
-| `--gl-paper` | `#f6f9fb` | fundo da página (frio, não creme) |
-| `--gl-surface` | `#ffffff` | formulário, telas, comprovante |
-| `--gl-line` | `#d3dfe7` | réguas e bordas |
-| `--gl-sky` | `#e0f2fe` | realce informativo (nota da impressora) |
-| `--gl-ok` / `--gl-ok-bg` | `#166534` / `#dcfce7` | selo "Disponível" |
-| `--gl-wait` / `--gl-wait-bg` | `#854d0e` / `#fef3c7` | selo "Em liberação", aviso de proposta de preço |
-| `--gl-error` | `#b91c1c` | erro de campo |
-
-Cores derivadas do ícone `public/omni-gestao-pro-icon.svg` (`#0c4a6e → #0369a1`, realce `#7dd3fc`).
-Nenhuma cor fica fora dos tokens (os `#000` restantes são canais de máscara do picote).
+- **Identidade oficial:** derivada das logos aprovadas (`omni-logo-icon.webp` e `omni-logo-seal.webp`): azul-marinho profundo (`#061428` / `#0a2240`), azul elétrico (`#0ea5e9` / `#0284c7` / `#38bdf8`) e neutros de aço escovado (`#f8fafc` / `#f1f5f9` / `#e2e8f0`).
+- **Elemento-assinatura preservado:** o comprovante térmico com picote serrilhado e tipografia monoespaçada aparece no Hero (sobre o canto inferior do palco do PDV sem cobrir o total), na seção de comprovantes e na confirmação do protocolo.
+- **Honestidade comercial:** oferta única autorizada (`R$ 69,90/mês`, `até 2 usuários por loja`, `7 dias de teste gratuito acompanhado`), cobrança e acompanhamento manuais, sem checkout automático, sem prova social inventada e sem promessa de recursos indisponíveis (IA, fiscal, marketplace, EXE não homologado).
 
 ## Tipografia
 
-- **Bricolage Grotesque** 600/700 — títulos. Grotesca com personalidade, compressão ótica nos tamanhos grandes.
-- **Inter** (`--font-sans` do app) — texto. Mantém continuidade com o sistema que o cliente vai usar.
-- **IBM Plex Mono** 500/700 — **somente** no comprovante e no protocolo (é o que uma térmica imprime).
+- **Plus Jakarta Sans** (`600`, `700`, `800`) — títulos e CTAs.
+- **Inter** (`--font-sans`) — corpo e continuidade com o sistema interno.
+- **IBM Plex Mono** (`500`, `700`) — comprovante térmico, URL das molduras e protocolo.
 
-Escala: 14 · 16 · 18 · 22 · 26–36 (fluida) · 36–60 (fluida). Títulos com `-0.02em`, `text-wrap: balance`.
-Linhas de texto ≤ ~36rem. Sem caixa-alta em rótulos, sem sobretítulos, sem palavra destacada no título.
+## Componentes e interatividade
 
-## Layout
+| Componente | Papel |
+|---|---|
+| `GestaoLojasHeader` | Cabeçalho fixo escuro, menu gaveta mobile (`hidden` quando fechado, fecha com `Escape`), WhatsApp só quando `GESTAO_LOJAS_CONTATO_WHATSAPP` estiver configurado |
+| `HeroStage` | Captura real do PDV em moldura escura, botão `Ampliar`, atalhos para abas (`Ver Caixa`, `Ver Estoque`, `Ver Clientes`) e comprovante térmico |
+| `SistemaShowcase` | Vitrine em 4 abas com teclado (`ArrowLeft`/`ArrowRight`/`Home`/`End`), Lightbox modal acessível (`Escape`, setas, retorno de foco) e complemento de Relatórios operacionais + Comprovantes |
+| `SolicitacaoTesteForm` | Fluxo real persistente (`POST /api/comercial/solicitacoes-teste`), validação por campo, máscara amigável de WhatsApp, honeypot, confirmação com protocolo e recibo ("Acesso ainda não criado") |
+| `MobileStickyBar` | Barra fixa inferior (`< 768px`) com `IntersectionObserver` em `#solicitar` para ocultar automaticamente ao chegar no formulário |
 
-- Grade de 12 colunas efetiva, `max-width: 74rem`, margem lateral fluida (16px no celular).
-- Texto sempre alinhado à esquerda. Seções separadas por régua de 1px; benefícios com régua de 2px em tinta.
-- Recursos alternam texto (5/12) e tela real (7/12) a partir de 1024px; empilham abaixo disso.
-- Um único bloco escuro: o pedido de teste (`#solicitar`), para a ação principal não se perder.
-- Numeração só onde há sequência real (os 3 passos do pedido).
-
-```
-[marca]                       Recursos  Navegador e Windows  Planos  Dúvidas   Entrar [Pedir teste]
-O balcão da sua loja,         ┌──────── tela real do PDV ─────────┐
-organizado.                   │                                    │
-texto de apoio                │                                    │  ┌─comprovante─┐
-[Pedir um teste] [Ver o sistema] └──────────────────────────────────┘  └─/\/\/\/\/\──┘
-```
-
-## Componentes
-
-| Componente | Onde | Regra |
-|---|---|---|
-| `.gl-btn--primary` / `--ghost` | CTAs | altura mínima 48px (40px no `--sm`); verbo que diz o que acontece |
-| `.gl-btn[aria-disabled]` | download não liberado | tracejado, sem link, explica o motivo ao lado |
-| `.gl-shot` | telas do sistema | sempre captura real com dados fictícios + legenda dizendo isso |
-| `.gl-receipt` | comprovante | exemplo marcado como fictício; `role="img"` com descrição |
-| `.gl-status--ok/--wait` | segmentos | "Disponível" só para o que está em produção |
-| `.gl-form` | pedido de teste | campos nativos (fora do `data-slot` da densidade operacional), erro por campo com `aria-describedby`, foco no 1º erro |
-| `.gl-confirm` | confirmação | só com protocolo vindo do servidor; diz "acesso ainda não criado" |
-| `.gl-faq` | dúvidas | `<details>` nativo (teclado e leitor de tela sem JS) |
-
-## Acessibilidade
-
-Link "Pular para o conteúdo", foco visível de 3px em tudo, `aria-invalid` + mensagem por campo,
-confirmação recebe foco, contraste AA em todos os pares de token, `prefers-reduced-motion` respeitado,
-alvos de toque ≥ 40px, sem rolagem horizontal em 375px.
-
-## Chaves de ambiente da página (todas falham fechado)
+## Chaves de ambiente (falham fechado)
 
 | Variável | Efeito |
 |---|---|
-| `GESTAO_LOJAS_EXIBIR_PRECOS_PROPOSTOS=1` | mostra os 3 planos propostos com aviso de "em avaliação" (só QA) |
-| `GESTAO_LOJAS_WINDOWS_DOWNLOAD_URL` | URL `https` do instalador homologado; sem ela, botão desligado |
-| `GESTAO_LOJAS_CONTATO_WHATSAPP` / `_EMAIL` | canais diretos; sem eles, a página não mostra número/email |
+| `GESTAO_LOJAS_CONTATO_WHATSAPP` | Número em dígitos (`55` + DDD + telefone); formatado automaticamente e oculto se ausente ou inválido |
+| `GESTAO_LOJAS_CONTATO_EMAIL` | Email comercial direto; oculto se ausente ou inválido |
 
-A página é estática (`force-static`): as chaves são lidas **no build**. Ligar ou desligar exige redeploy.
-
-## Limites conhecidos do pedido de teste
-
-- O limite por origem (5/h) usa o 1º IP de `x-forwarded-for`. Na Vercel o cabeçalho é reescrito pela
-  plataforma; fora dela (proxy que só acrescenta) o limite pode ser contornado. O limite global
-  (60 a cada 10 min) continua valendo, mas uma enxurrada com IPs rotativos pode esgotá-lo e atrasar
-  pedidos reais. Sem captcha: só campo-isca. Reavaliar antes de divulgar a página em escala.
-- Repetir o pedido com um email que já tem pedido aberto devolve o mesmo protocolo (sem expor dados
-  do pedido anterior além do protocolo).
+O canal de instalação no computador (Windows/PWA) é único em `/baixar` (conciliado com a frente Desktop / PR #385). A página `/gestao-lojas` não expõe links diretos `.exe`.
