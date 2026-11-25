@@ -51,7 +51,7 @@ const BRANCH_IMPACT_SUMMARY: Record<BusinessBranch, string> = {
 
 const OPERATIONAL_DESCRIPTIONS: Record<string, string> = {
   "service.technical": "Ordens de serviço, bancada técnica, laudo e acompanhamento de reparos.",
-  "catalog.deviceCompatibility": "Vincula películas, capas e peças aos modelos compatíveis no cadastro.",
+  "catalog.deviceCompatibility": "Associa produtos e peças à lista de aparelhos compatíveis no cadastro.",
   "pdv.accessoryModelColor": "Habilita seletor rápido de modelo e cor de acessórios no PDV.",
   "catalog.serializedDevices":
     "Desligado por padrão em todos os ramos. Ative por unidade, apenas se a loja vender aparelhos.",
