@@ -15,12 +15,14 @@
  * Recusa qualquer host que não seja loopback (nunca toca Production).
  * Uso: APARELHOS_TEST_DATABASE_URL=postgresql://user@127.0.0.1:55471/aparelhos_pg node scripts/aparelhos/prepare-pg.mjs
  */
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 import { execFileSync } from "node:child_process"
 import { mkdtempSync, writeFileSync, rmSync, readdirSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 const url = (process.env.APARELHOS_TEST_DATABASE_URL ?? "").trim()
+localFixtureDatasource(url)
 if (!url) throw new Error("BLOQUEIO_EXPLICITO_PG: defina APARELHOS_TEST_DATABASE_URL (PostgreSQL descartável).")
 const host = new URL(url).hostname.toLowerCase()
 if (!["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("BLOQUEIO_EXPLICITO_PG: somente loopback.")

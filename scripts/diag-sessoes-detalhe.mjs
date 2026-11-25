@@ -3,7 +3,8 @@
  * node --env-file=.env scripts/diag-sessoes-detalhe.mjs
  */
 import { PrismaClient } from "../generated/prisma/index.js"
-const prisma = new PrismaClient()
+import { scriptDatasource } from "./prisma-datasource.mjs"
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 const iso = (d) => (d ? new Date(d).toISOString().slice(0, 19).replace("T", " ") : "—")
 const brl = (n) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(n) || 0)
 

@@ -6,6 +6,7 @@
  * se no seu Postgres os nomes forem diferentes.
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
 const SCHEMA = "public"
 const TABLE_VENDAS = "vendas"
@@ -15,7 +16,7 @@ const COL_VENDA_FK = "venda_id"
 
 const CLIENTE_ALVO = "CLETON RICARDO SIQUEIRA"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 async function main() {
   const qV = `"${SCHEMA}"."${TABLE_VENDAS}"`

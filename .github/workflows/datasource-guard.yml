@@ -1,0 +1,67 @@
+name: Datasource guard
+
+on:
+  pull_request:
+    paths:
+      - 'lib/db/**'
+      - 'lib/prisma*'
+      - 'scripts/**'
+      - 'test/datasource-preflight.ts'
+      - 'vitest.config.ts'
+      - 'package*.json'
+      - '.github/workflows/datasource-guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: omni_guard_ci
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: omni_guard_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U omni_guard_ci -d omni_guard_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://omni_guard_ci:isolated_ci_only@127.0.0.1:55432/omni_guard_ci
+      DIRECT_URL: postgresql://omni_guard_ci:isolated_ci_only@127.0.0.1:55432/omni_guard_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: node --test lib/db/datasource-policy.test.mjs scripts/vercel-build.test.mjs
+      - run: npm ci --no-audit --no-fund
+      - run: npm exec -- vitest run lib/prisma.datasource.test.ts
+      - name: Read-only Prisma smoke with disposable PostgreSQL
+        run: |
+          node --import tsx <<'JS'
+          const assert = require('node:assert/strict')
+          const { prisma } = require('./lib/prisma.ts')
+          async function smoke() {
+            try {
+              const rows = await prisma.$queryRaw`
+                SELECT current_database() AS database, current_user AS role
+              `
+              assert.deepEqual(rows, [{ database: 'omni_guard_ci', role: 'omni_guard_ci' }])
+              console.log('ISOLATION_DISPOSABLE_PRISMA_OK')
+            } finally {
+              await prisma.$disconnect()
+            }
+          }
+          smoke().catch(() => {
+            console.error('ISOLATION_DISPOSABLE_PRISMA_FAILED')
+            process.exitCode = 1
+          })
+          JS

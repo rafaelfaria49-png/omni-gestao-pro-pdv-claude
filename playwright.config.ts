@@ -1,8 +1,10 @@
 import path from "node:path"
 import { config as loadEnv } from "dotenv"
 import { defineConfig, devices } from "@playwright/test"
+import { verifyTestDatasources } from "./lib/db/datasource-policy.mjs"
 
 loadEnv({ path: path.join(__dirname, ".env") })
+verifyTestDatasources()
 
 /** NEXTAUTH em `localhost` com baseURL em `127.0.0.1` partia cookies / redirects no login E2E. */
 function alignNextAuthUrlForLoopbackE2E(): void {

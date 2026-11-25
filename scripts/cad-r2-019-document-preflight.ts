@@ -28,6 +28,7 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import { toStrongDocumentKey } from "@/lib/cadastros/client-identity/document.js"
 import {
   classifyDocumentBucket,
@@ -56,7 +57,7 @@ function opaqueKeyHash(storeId: string, key: string): string {
 
 async function main(): Promise<void> {
   const { batchSize } = parseArgs(process.argv.slice(2))
-  const db = new PrismaClient()
+  const db = new PrismaClient({ datasourceUrl: scriptDatasource() })
   try {
     let total = 0
     let empty = 0

@@ -1,5 +1,6 @@
 /** Somente banco QA exclusivo; nunca lê nem escreve Production. */
 import { PrismaClient, type Prisma } from "../../generated/prisma";
+import { scriptDatasource } from "../prisma-datasource.mjs"
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { hashSupervisorPin, newOpaqueUnusablePin } from "../../lib/auth/pin-hash";
@@ -10,7 +11,7 @@ import { MODULES } from "../../lib/auth/access-policy";
 async function main() {
   const url = new URL(process.env.DATABASE_URL!);
   if (url.pathname !== "/omni_ops_edicao_qa" || !url.hostname.includes("ep-lucky-tree-b68myr8i") || process.env.VERCEL_ENV === "production") throw new Error("Seed restrito ao banco QA exclusivo da edição OS.");
-  const db = new PrismaClient();
+  const db = new PrismaClient({ datasourceUrl: scriptDatasource() });
   const storeId = "qa-edicao-os";
   const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
   const agora = new Date().toISOString(), vencimento = "2027-03-10";

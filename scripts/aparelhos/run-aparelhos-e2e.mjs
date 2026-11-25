@@ -8,6 +8,7 @@
  * Uso: APARELHOS_TEST_DATABASE_URL=postgresql://user@127.0.0.1:55471/aparelhos_e2e node scripts/aparelhos/run-aparelhos-e2e.mjs
  * Pré-requisito: `npm run build` desta árvore.
  */
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 import { spawn, spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
@@ -15,6 +16,7 @@ import path from "node:path"
 import bcrypt from "bcryptjs"
 
 const database = (process.env.APARELHOS_TEST_DATABASE_URL ?? "").trim()
+localFixtureDatasource(database)
 if (!database) throw new Error("BLOQUEIO_EXPLICITO_PG: defina APARELHOS_TEST_DATABASE_URL.")
 const url = new URL(database)
 if (!["127.0.0.1", "localhost", "::1"].includes(url.hostname) || !url.pathname.includes("aparelhos_e2e")) {

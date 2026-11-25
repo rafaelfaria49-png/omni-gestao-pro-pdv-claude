@@ -24,6 +24,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    setupFiles: [resolve(root, "test/datasource-preflight.ts")],
     include: ["**/*.test.ts", "**/*.spec.ts"],
     exclude: [
       "node_modules/**",

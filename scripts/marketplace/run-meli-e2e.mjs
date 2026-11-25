@@ -3,6 +3,7 @@
  * Next.js compilado + NextAuth real + PostgreSQL descartável. Somente o provedor externo usa fixture.
  * Uso: MELI_E2E_DATABASE_URL=postgresql://meli_qa:...@127.0.0.1:5432/omni_meli_e2e node scripts/marketplace/run-meli-e2e.mjs
  */
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 import { spawn, spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { once } from "node:events"
@@ -17,6 +18,7 @@ import forge from "node-forge"
 import { Prisma, PrismaClient } from "../../generated/prisma/index.js"
 
 const database = process.env.MELI_E2E_DATABASE_URL ?? ""
+localFixtureDatasource(database)
 const url = new URL(database)
 if (url.protocol !== "postgresql:" || url.hostname !== "127.0.0.1" || url.username !== "meli_qa" ||
   !/^\/omni_meli_e2e(?:_[a-z0-9]{1,20})?$/.test(url.pathname) || url.search || url.hash) {
