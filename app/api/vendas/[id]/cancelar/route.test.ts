@@ -90,9 +90,12 @@ const h = vi.hoisted(() => {
   }
 
   const tx = {
+    // Lock por venda (OMNI-PDV-TROCAS-…-P1-001) — serialização trivial no fake.
+    $executeRaw: async () => 0,
     venda: {
       findFirst: async ({ where }: { where: Row }) =>
         db.vendas.find((v) => v.pedidoId === where.pedidoId && v.storeId === where.storeId) ?? null,
+      findUnique: async ({ where }: { where: { id: string } }) => db.vendas.find((v) => v.id === where.id) ?? null,
       update: async ({ where, data }: { where: { id: string }; data: Row }) => {
         const v = db.vendas.find((x) => x.id === where.id)
         if (v) Object.assign(v, data)
@@ -102,6 +105,8 @@ const h = vi.hoisted(() => {
     devolucaoVenda: {
       findMany: async ({ where }: { where: Row }) =>
         db.devolucoes.filter((d) => d.storeId === where.storeId && d.vendaLocalId === where.vendaLocalId),
+      count: async ({ where }: { where: Row }) =>
+        db.devolucoes.filter((d) => d.storeId === where.storeId && d.vendaLocalId === where.vendaLocalId).length,
     },
     usoCreditoCliente: {
       findMany: async ({ where }: { where: Row }) =>

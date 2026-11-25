@@ -14,6 +14,9 @@ import type { Prisma } from "@/generated/prisma"
 import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { z } from "zod"
+import { linhasComDisponibilidade, linhasDaVenda } from "@/lib/pdv/trocas/troca-disponibilidade"
+import { ehTituloDaVenda, recebimentoDaVenda, titulosDaVendaWhere } from "@/lib/pdv/trocas/troca-recebimento"
+import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -21,6 +24,36 @@ export const revalidate = 0
 
 function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+}
+
+class VendaComSaldoEmAbertoError extends Error {
+  readonly code = "VENDA_COM_SALDO_EM_ABERTO"
+  constructor(saldo: number) {
+    super(`Venda com ${saldo.toFixed(2)} ainda a receber (a prazo/carnê): devolução financeira bloqueada até a quitação.`)
+    this.name = "VendaComSaldoEmAbertoError"
+  }
+}
+
+class DevolucaoAcimaDoDisponivelError extends Error {
+  readonly code = "DEVOLUCAO_ACIMA_DO_DISPONIVEL"
+  constructor(nome: string, disponivel: number) {
+    super(`${nome}: quantidade acima do disponível para devolução (disponível: ${disponivel}).`)
+    this.name = "DevolucaoAcimaDoDisponivelError"
+  }
+}
+
+/** Replay legítimo = mesma venda e mesmos itens/quantidades. */
+function isMesmaDevolucaoLegada(
+  existing: { vendaLocalId: string; itens: Array<{ inventoryId: string | null; quantidade: number }> },
+  data: { vendaLocalId: string; itens: Array<{ inventoryId?: string; quantidade: number }> },
+): boolean {
+  if ((existing.vendaLocalId || "") !== (data.vendaLocalId || "")) return false
+  const assinatura = (rows: Array<{ inventoryId?: string | null; quantidade: number }>) =>
+    rows
+      .map((r) => `${(r.inventoryId ?? "").trim()}×${r.quantidade}`)
+      .sort()
+      .join("|")
+  return assinatura(existing.itens) === assinatura(data.itens)
 }
 
 const itemSchema = z.object({
@@ -87,9 +120,26 @@ export async function POST(req: Request) {
   // ── Idempotência: se já existir, retornar como sucesso ──────────────────────
   const existing = await prisma.devolucaoVenda.findUnique({
     where: { storeId_localId: { storeId: lojaId, localId: data.localId } },
-    select: { id: true, localId: true },
+    select: { id: true, localId: true, vendaLocalId: true, itens: { select: { inventoryId: true, quantidade: true } } },
   })
   if (existing) {
+    // OMNI-PDV-TROCAS-…-P1-001: o `localId` legado (DEV-AAAA-NNNN) é um contador POR
+    // NAVEGADOR — dois terminais geram o mesmo número. Só é replay se for a MESMA
+    // devolução (mesma venda e mesmos itens); senão é colisão e nada pode ser dado como
+    // sincronizado (antes, o servidor respondia ok e a devolução sumia em silêncio).
+    if (!isMesmaDevolucaoLegada(existing, data)) {
+      console.warn(
+        "[ops/devolucao] local-id-colisao",
+        JSON.stringify({ lojaId, localId: data.localId, vendaExistente: existing.vendaLocalId, vendaRecebida: data.vendaLocalId }),
+      )
+      return NextResponse.json(
+        {
+          error: "Este número de devolução já pertence a outra devolução (outro terminal). Refaça pela tela de Trocas.",
+          code: "DEVOLUCAO_LOCAL_ID_COLISAO",
+        },
+        { status: 409 },
+      )
+    }
     return NextResponse.json({ ok: true, devolucaoId: existing.id, idempotente: true })
   }
 
@@ -138,11 +188,55 @@ export async function POST(req: Request) {
       // valores do client com warning.
       let creditoEfetivo = data.tipo === "somente_estoque" ? 0 : data.creditoEmitido
       if (data.vendaLocalId) {
+        // Mesmo lock do fluxo novo (`/api/ops/trocas`): devoluções da mesma venda em série.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pdv-devolucao:${lojaId}:${data.vendaLocalId}`}))`
         const vendaOrigem = await tx.venda.findFirst({
           where: { pedidoId: data.vendaLocalId, storeId: lojaId },
-          select: { itens: { select: { inventoryId: true, quantidade: true, lineTotal: true } } },
+          select: {
+            total: true,
+            payload: true,
+            contaReceberTituloId: true,
+            itens: { select: { inventoryId: true, nome: true, quantidade: true, precoUnitario: true, lineTotal: true }, orderBy: { id: "asc" } },
+          },
         })
         if (vendaOrigem) {
+          // Quantidade é autoridade do SERVIDOR: devoluções já persistidas desta venda
+          // (inclusive as do fluxo novo) — nunca o `qtyReturned` do navegador.
+          const anteriores = await tx.devolucaoVenda.findMany({
+            where: { storeId: lojaId, vendaLocalId: data.vendaLocalId },
+            select: { id: true, localId: true, tipo: true, at: true, payload: true, itens: { select: { inventoryId: true, nome: true, quantidade: true } } },
+          })
+          const disp = linhasComDisponibilidade(linhasDaVenda(vendaOrigem.payload, vendaOrigem.itens), anteriores).linhas
+          const livrePorChave = new Map<string, number>()
+          for (const l of disp) {
+            for (const k of new Set([l.inventoryId, l.produtoId].filter(Boolean))) {
+              livrePorChave.set(k, (livrePorChave.get(k) ?? 0) + l.disponivel)
+            }
+          }
+          for (const it of data.itens) {
+            const k = (it.inventoryId ?? "").trim()
+            if (!k) continue
+            const livre = livrePorChave.get(k)
+            if (livre !== undefined && it.quantidade > livre) {
+              throw new DevolucaoAcimaDoDisponivelError(it.nome || k, livre)
+            }
+            if (livre !== undefined) livrePorChave.set(k, livre - it.quantidade)
+          }
+          // OMNI-PDV-TROCAS-…-P1-002: só devolve dinheiro/crédito do que foi RECEBIDO.
+          if (data.tipo !== "somente_estoque") {
+            const titulos = (
+              await tx.contaReceberTitulo.findMany({
+                where: titulosDaVendaWhere(lojaId, data.vendaLocalId, vendaOrigem.contaReceberTituloId),
+                select: { id: true, localKey: true, status: true, valor: true, payload: true },
+              })
+            ).filter((t) => ehTituloDaVenda(t, data.vendaLocalId, vendaOrigem.contaReceberTituloId))
+            const rec = recebimentoDaVenda(
+              vendaOrigem.total,
+              (vendaOrigem.payload as { paymentBreakdown?: unknown } | null)?.paymentBreakdown,
+              titulos.map((t) => ({ status: t.status, valor: t.valor, pago: sumPagamentosHistorico(t.payload) })),
+            )
+            if (rec.saldoAberto > 0.009) throw new VendaComSaldoEmAbertoError(rec.saldoAberto)
+          }
           let totalCalc = 0
           let todasResolvidas = true
           for (const it of data.itens) {
@@ -310,7 +404,10 @@ export async function POST(req: Request) {
     // Vale-Troca NÃO é dinheiro novo: a saída financeira representa o valor que
     // sai do caixa/financeiro pela devolução (reembolso real), nunca entrada
     // simulada do vale; devolução parcial movimenta somente o valor devolvido.
-    if (valorTotalEfetivo > 0 && data.tipo !== "somente_estoque") {
+    // OMNI-PDV-TROCAS-…-P1-001: só reembolso (`devolucao`) tira dinheiro. Vale-troca e
+    // troca criam crédito (passivo), não saída — antes a saída era lançada também para
+    // eles e o financeiro registrava dinheiro saindo que nunca saiu.
+    if (valorTotalEfetivo > 0 && data.tipo === "devolucao") {
       try {
         await createSaida({
           storeId: lojaId,
@@ -327,7 +424,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, devolucaoId: devolucao.id, devolucao })
   } catch (e) {
-    if (e instanceof AparelhoDevolucaoBloqueadaError) {
+    if (e instanceof AparelhoDevolucaoBloqueadaError || e instanceof DevolucaoAcimaDoDisponivelError || e instanceof VendaComSaldoEmAbertoError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
     }
     const msg = e instanceof Error ? e.message : String(e)

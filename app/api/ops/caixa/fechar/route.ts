@@ -1,4 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { resumoDevolucoesCaixa } from "@/lib/pdv/trocas/troca-caixa"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
@@ -133,20 +134,57 @@ export async function POST(req: Request) {
       computadoEm: agora.toISOString(),
     }
 
-    const sessao = await prisma.sessaoCaixa.update({
-      where: { id: sessaoId },
-      data: {
-        status: "FECHADA",
-        saldoFinal: saldoFinal ?? null,
-        saldoContado: saldoContado ?? null,
-        observacao: obsMerge,
-        fechadaEm: agora,
-        payload: payloadFinal,
-      },
-      select: { id: true, fechadaEm: true, status: true },
-    })
+    // OMNI-PDV-TROCAS-…-P1-002 — devolução × fechamento: a linha da sessão é travada
+    // (`FOR UPDATE`, a mesma que `/api/ops/trocas` trava antes de pagar reembolso). Com ela
+    // travada, o reembolso em dinheiro da sessão é recalculado no servidor; se o resumo que o
+    // operador conferiu não o considerou (devolução feita durante a contagem), o fechamento é
+    // recusado para reconferir — nunca grava um "esperado" que ignora dinheiro que saiu.
+    const resultado = await prisma.$transaction(async (tx) => {
+      const travada = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT "status"::text AS status FROM "sessoes_caixa"
+        WHERE "id" = ${sessaoId} AND "storeId" = ${lojaId}
+        FOR UPDATE`
+      if (!travada[0] || travada[0].status !== "ABERTA") return { erro: "fechada" as const }
+      const devs = await tx.devolucaoVenda.findMany({
+        where: { storeId: lojaId, sessaoId },
+        select: { id: true, tipo: true, valorTotal: true, payload: true },
+      })
+      const devCaixa = resumoDevolucoesCaixa(devs)
+      const resumoCliente = (payload as { resumoFechamento?: { reembolsosDinheiro?: unknown } } | undefined)?.resumoFechamento
+      const considerado = Number(resumoCliente?.reembolsosDinheiro ?? 0) || 0
+      if (Math.abs(considerado - devCaixa.reembolsosDinheiro) > 0.009) {
+        return { erro: "desatualizado" as const, devCaixa }
+      }
+      const sessao = await tx.sessaoCaixa.update({
+        where: { id: sessaoId },
+        data: {
+          status: "FECHADA",
+          saldoFinal: saldoFinal ?? null,
+          saldoContado: saldoContado ?? null,
+          observacao: obsMerge,
+          fechadaEm: agora,
+          payload: { ...(payloadFinal as Record<string, unknown>), devolucoesCaixaServer: devCaixa } as Prisma.InputJsonValue,
+        },
+        select: { id: true, fechadaEm: true, status: true },
+      })
+      return { sessao }
+      // A troca segura a mesma linha por até 25 s: o fechamento ESPERA em vez de falhar.
+    }, { maxWait: 15_000, timeout: 35_000 })
+    if ("erro" in resultado) {
+      if (resultado.erro === "fechada") {
+        return NextResponse.json({ error: "Sessão não encontrada ou já fechada." }, { status: 404 })
+      }
+      return NextResponse.json(
+        {
+          error: "Houve devolução com dinheiro nesta sessão que o resumo não considerou. Recarregue o fechamento e confira de novo.",
+          code: "RESUMO_DESATUALIZADO_DEVOLUCAO",
+          reembolsosDinheiro: resultado.devCaixa?.reembolsosDinheiro ?? 0,
+        },
+        { status: 409 },
+      )
+    }
 
-    return NextResponse.json({ ok: true, sessao })
+    return NextResponse.json({ ok: true, sessao: resultado.sessao })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[ops/caixa/fechar]", msg)

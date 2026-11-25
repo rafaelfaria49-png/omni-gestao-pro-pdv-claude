@@ -66,6 +66,8 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
   const [ops, setOps] = useState<CaixaOperacaoDetalhe[]>([])
   const [vendasSessao, setVendasSessao] = useState<VendaSessaoDetalheItem[]>([])
   const [opsOk, setOpsOk] = useState(false)
+  /** Reembolsos de devolução da sessão por forma (servidor) — OMNI-PDV-TROCAS-…-P1-002. */
+  const [devCaixa, setDevCaixa] = useState<{ reembolsosDinheiro: number; reembolsosPix: number }>({ reembolsosDinheiro: 0, reembolsosPix: 0 })
   const [opsCarregando, setOpsCarregando] = useState(false)
 
   // Reconcilia o status autoritativo das vendas (cancelamentos feitos na tela Vendas).
@@ -78,6 +80,7 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
   useEffect(() => {
     if (!active || !sessaoId?.trim() || !lojaAtivaId) {
       setOps([])
+      setDevCaixa({ reembolsosDinheiro: 0, reembolsosPix: 0 })
       setVendasSessao([])
       setOpsOk(false)
       return
@@ -90,8 +93,16 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
       cache: "no-store",
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((j: { sessao?: { operacoes?: CaixaOperacaoDetalhe[] }; vendas?: VendaSessaoDetalheItem[] }) => {
+      .then((j: {
+        sessao?: { operacoes?: CaixaOperacaoDetalhe[] }
+        vendas?: VendaSessaoDetalheItem[]
+        totais?: { devolucoesCaixa?: { reembolsosDinheiro?: number; reembolsosPix?: number } }
+      }) => {
         if (cancelled) return
+        setDevCaixa({
+          reembolsosDinheiro: Number(j.totais?.devolucoesCaixa?.reembolsosDinheiro) || 0,
+          reembolsosPix: Number(j.totais?.devolucoesCaixa?.reembolsosPix) || 0,
+        })
         const o = j.sessao?.operacoes
         setOps(
           Array.isArray(o)
@@ -112,6 +123,7 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
       .catch(() => {
         if (cancelled) return
         setOps([])
+        setDevCaixa({ reembolsosDinheiro: 0, reembolsosPix: 0 })
         setVendasSessao([])
         setOpsOk(false)
       })
@@ -149,6 +161,8 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
       qtdRecebimentosContas: opsAgg.qtdRecebimentosContas,
       // Mesmas operações, separadas por origem (contas × O.S.) e por forma (GOAL 003A).
       recebimentos: aggregateRecebimentosSessao(ops),
+      // Só com o servidor confirmado: sem a sessão do servidor não há reembolso conhecido.
+      ...(usarOpsServidor ? devCaixa : {}),
     })
     const canceladas = sessionSales.filter((s) => s.status === "cancelada")
     const totalCanceladas = round2(canceladas.reduce((s, v) => s + (v.total ?? 0), 0))
@@ -177,5 +191,6 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
     opsOk,
     opsCarregando,
     vendasSessao,
+    devCaixa,
   ])
 }

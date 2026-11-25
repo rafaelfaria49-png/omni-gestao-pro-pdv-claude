@@ -217,6 +217,11 @@ export interface ResumoGavetaDinheiro {
   estornosDinheiro: number
   suprimentos: number
   sangrias: number
+  /**
+   * Reembolsos de devolução e sobras de troca pagos em DINHEIRO nesta sessão (deduzem a
+   * gaveta). Ausente quando zero — snapshots antigos continuam idênticos.
+   */
+  reembolsosDinheiro?: number
   /** `saldoDinheiroEsperado` — fórmula da gaveta preservada. */
   esperado: number
 }
@@ -239,6 +244,7 @@ export function calcularRecebidoSessao(input: {
   suprimentos: number
   sangrias: number
   dinheiroEsperado: number
+  reembolsosDinheiro?: number
 }): {
   recebidoPorOrigem: ResumoRecebidoPorOrigem
   recebidoPorForma: ResumoRecebidoPorForma
@@ -298,6 +304,7 @@ export function calcularRecebidoSessao(input: {
     estornosDinheiro: rec.estornos.dinheiro,
     suprimentos: round2(input.suprimentos),
     sangrias: round2(input.sangrias),
+    ...((input.reembolsosDinheiro ?? 0) > 0 ? { reembolsosDinheiro: round2(input.reembolsosDinheiro!) } : {}),
     esperado: round2(input.dinheiroEsperado),
   }
 

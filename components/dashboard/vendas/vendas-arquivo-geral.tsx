@@ -73,6 +73,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
+import { VendaItensTrocasPanel } from "./venda-itens-trocas-panel"
 import type { VendaDetalhe } from "@/lib/vendas/venda-detalhe-contract"
 import { SupervisorGateDialog } from "@/components/dashboard/caixa/supervisor-gate-dialog"
 import { ESTORNO_STEP_UP_ACTION } from "@/lib/vendas/estorno-step-up-contract"
@@ -2380,6 +2381,9 @@ export function VendasArquivoGeral() {
                     )}
                   </div>
                 </section>
+
+                {/* Códigos por item + trocas/devoluções (servidor) — OMNI-PDV-TROCAS-…-P1-001 */}
+                <VendaItensTrocasPanel key={detalhe.id} storeId={storeId} pedidoId={detalhe.id} />
 
                 {/* Payments + Total */}
                 <section className="overflow-hidden rounded-xl border border-border bg-background/40">

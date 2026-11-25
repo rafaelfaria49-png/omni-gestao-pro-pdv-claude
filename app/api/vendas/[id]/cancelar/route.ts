@@ -43,6 +43,14 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
+class VendaMudouDuranteCancelamentoError extends Error {
+  readonly code = "VENDA_ALTERADA_DURANTE_CANCELAMENTO"
+  constructor() {
+    super("A venda recebeu uma troca ou devolução enquanto era cancelada. Recarregue e tente de novo.")
+    this.name = "VendaMudouDuranteCancelamentoError"
+  }
+}
+
 function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
 }
@@ -218,6 +226,17 @@ export async function POST(
       },
     })
 
+    // OMNI-PDV-TROCAS-…-P1-001: a venda nascida de uma troca imediata consome o crédito da
+    // própria troca; cancelá-la devolveria esse crédito a um titular que pode nem existir
+    // (troca sem CPF). A reversão dela é pela tela de Troca/Devolução, não pelo cancelamento.
+    const payloadVenda = venda.payload && typeof venda.payload === "object" && !Array.isArray(venda.payload) ? (venda.payload as Record<string, unknown>) : {}
+    if (payloadVenda.trocaOrigem && typeof payloadVenda.trocaOrigem === "object") {
+      return NextResponse.json(
+        { ok: false, error: "Esta venda foi gerada por uma troca. Para desfazer, registre a devolução dela em Troca/Devolução.", code: "VENDA_DE_TROCA" },
+        { status: 409 },
+      )
+    }
+
     const hasPartialReturn = devolucoes.length > 0 && venda.status !== "devolvida"
 
     if (hasPartialReturn && !forcar) {
@@ -264,6 +283,14 @@ export async function POST(
     }> = []
 
     await prisma.$transaction(async (tx) => {
+      // Mesmo lock das devoluções/trocas (`/api/ops/trocas`, `/api/ops/devolucao`): uma troca
+      // que comitasse entre a leitura acima e este ponto não entraria no netting.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pdv-devolucao:${storeId}:${pedidoId}`}))`
+      const devolucoesAgora = await tx.devolucaoVenda.count({ where: { storeId, vendaLocalId: pedidoId } })
+      const statusAgora = await tx.venda.findUnique({ where: { id: venda.id }, select: { status: true } })
+      if (devolucoesAgora !== devolucoes.length || statusAgora?.status !== venda.status) {
+        throw new VendaMudouDuranteCancelamentoError()
+      }
       if (vendaComAparelho) {
         titulosCancelados = await cancelarTitulosAparelhosTx(tx, { storeId, pedidoId, tituloId: venda.contaReceberTituloId,
           motivo: motivo.trim(), operador: operadorLedger })
@@ -437,6 +464,18 @@ export async function POST(
             select: { valor: true },
           })
           valorJaRefund = arredonda2(refunds.reduce((s, m) => s + (m.valor ?? 0), 0))
+          // Vale-troca e troca devolvem o valor ao cliente como CRÉDITO (sem saída de caixa
+          // desde OMNI-PDV-TROCAS-…-P1-001). Esse valor já saiu da venda: sem descontá-lo, o
+          // cancelamento estornaria em dinheiro o que o cliente já levou em produto ou vale.
+          // Devolução legada que tenha saída própria já foi contada acima (não soma duas vezes).
+          const comSaida = new Set((await tx.movimentacaoFinanceira.findMany({
+            where: { storeId, referenciaId: { in: devIds }, tipo: "saida", origem: "devolucao_pdv" },
+            select: { referenciaId: true },
+          })).map((m) => m.referenciaId))
+          const emCredito = devolucoes
+            .filter((d) => (d.tipo === "troca" || d.tipo === "vale_credito") && !comSaida.has(d.id))
+            .reduce((s, d) => s + (d.valorTotal ?? 0), 0)
+          valorJaRefund = arredonda2(valorJaRefund + emCredito)
         }
         const valorEstorno = arredonda2(Math.max(0, valorEntrada - valorJaRefund))
         if (valorEstorno > 0) {
@@ -532,7 +571,7 @@ export async function POST(
       },
     })
   } catch (e) {
-    if (e instanceof AparelhoCancelamentoBloqueadoError) {
+    if (e instanceof AparelhoCancelamentoBloqueadoError || e instanceof VendaMudouDuranteCancelamentoError) {
       return NextResponse.json({ ok: false, error: e.message, code: e.code }, { status: 409 })
     }
     const msg = e instanceof Error ? e.message : String(e)
