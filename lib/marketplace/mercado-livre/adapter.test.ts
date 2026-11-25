@@ -193,3 +193,155 @@ describe("consulta autorizada de anúncios", () => {
     await expect(adapter.listAds("fake-access", sellerId, "expired")).rejects.toMatchObject({ code: "invalid_cursor" })
   })
 })
+
+const sellerIdNext = "9223372036854775807"
+const safeMaxId = "9007199254740991"
+const aboveSafeA = "9007199254740992"
+const aboveSafeB = "9007199254740993"
+
+describe("integridade Int64, bordas JSON e isolamento em Node 20 e Node 24", () => {
+  it.each([
+    ["inteiro seguro", "745001"],
+    ["Number.MAX_SAFE_INTEGER", safeMaxId],
+    ["acima do limite seguro A", aboveSafeA],
+    ["acima do limite seguro B", aboveSafeB],
+    ["Int64 19 dígitos (penúltimo)", sellerId],
+    ["Int64 19 dígitos (máximo)", sellerIdNext],
+  ])("preserva exatamente %s em /oauth/token e /users/me", async (_label, id) => {
+    request
+      .mockResolvedValueOnce(new Response(`{"access_token":"tok","refresh_token":"ref","user_id":${id},"expires_in":21600,"token_type":"Bearer","scope":"read offline_access"}`))
+      .mockResolvedValueOnce(new Response(`{"id":${id},"site_id":"MLB","nickname":"LOJA-${id}","status":{"site_status":"active"},"tags":["test_user"]}`))
+
+    const grant = await adapter.exchangeCode("code-1", "verifier-1")
+    const seller = await adapter.identifySeller(grant.accessToken)
+    expect(grant.sellerId).toBe(id)
+    expect(seller.id).toBe(id)
+    expect(grant.sellerId).toBe(seller.id)
+  })
+
+  it("distingue IDs Int64 consecutivos entre grant e /users/me e no AEAD entre lojas", async () => {
+    request
+      .mockResolvedValueOnce(new Response(`{"access_token":"tok","refresh_token":"ref","user_id":${sellerId},"expires_in":21600,"token_type":"Bearer","scope":"read offline_access"}`))
+      .mockResolvedValueOnce(new Response(`{"id":${sellerIdNext},"site_id":"MLB","nickname":"OUTRA","tags":["test_user"]}`))
+
+    const grant = await adapter.exchangeCode("code-1", "verifier-1")
+    const seller = await adapter.identifySeller(grant.accessToken)
+    expect(grant.sellerId).toBe(sellerId)
+    expect(seller.id).toBe(sellerIdNext)
+    expect(grant.sellerId).not.toBe(seller.id)
+
+    const cipherA = sealMeli(config, ["access-token", "store-a", sellerId, "grant-1"], "secret-a")
+    expect(openMeli(config, ["access-token", "store-a", sellerId, "grant-1"], cipherA)).toBe("secret-a")
+    expect(openMeli(config, ["access-token", "store-a", sellerIdNext, "grant-1"], cipherA)).toBeNull()
+    expect(openMeli(config, ["access-token", "store-b", sellerId, "grant-1"], cipherA)).toBeNull()
+  })
+
+  it("preserva IDs Int64 consecutivos em variantes, family_id numérico, preços com centavos, quantidades e strings com JSON", async () => {
+    const jsonLikeTitle = `{"id":${sellerIdNext},"seller_id":${aboveSafeB},"price":"nao-e-numero"}`
+    const rawMultiget = `[
+      {
+        "code": 200,
+        "body": {
+          "id": "MLB9223372036854775807",
+          "seller_id": ${sellerId},
+          "title": ${JSON.stringify(jsonLikeTitle)},
+          "status": "active",
+          "currency_id": "BRL",
+          "price": 129.95,
+          "available_quantity": 15,
+          "user_product_id": "MLBU9223372036854775807",
+          "family_id": ${sellerIdNext},
+          "family_name": "Linha Int64",
+          "pictures": [{"id": "pic-int64", "secure_url": "${figure}"}],
+          "variations": [
+            {
+              "id": ${sellerId},
+              "price": 129.95,
+              "available_quantity": 7,
+              "picture_ids": ["pic-int64"],
+              "attributes": [{"id": "SELLER_SKU", "value_name": "SKU-A"}],
+              "attribute_combinations": [{"id": "COLOR", "value_name": "Preto"}, {"id": "SIZE", "value_name": "M"}]
+            },
+            {
+              "id": ${sellerIdNext},
+              "price": 134.50,
+              "available_quantity": 8,
+              "picture_ids": ["pic-int64"],
+              "attributes": [{"id": "SELLER_SKU", "value_name": "SKU-B"}],
+              "attribute_combinations": [{"id": "COLOR", "value_name": "Branco"}, {"id": "SIZE", "value_name": "G"}]
+            }
+          ]
+        }
+      }
+    ]`
+
+    request
+      .mockResolvedValueOnce(search(["MLB9223372036854775807"]))
+      .mockResolvedValueOnce(new Response(rawMultiget))
+
+    const page = await adapter.listAds("fake-access", sellerId)
+    expect(page.listings).toHaveLength(1)
+    const [listing] = page.listings
+    expect(listing.id).toBe("MLB9223372036854775807")
+    expect(listing.title).toBe(jsonLikeTitle)
+    expect(listing.price).toBe(129.95)
+    expect(listing.availableQuantity).toBe(15)
+    expect(listing.userProductId).toBe("MLBU9223372036854775807")
+    expect(listing.familyId).toBe(sellerIdNext)
+    expect(listing.variations.map((v) => ({ id: v.id, price: v.price, qty: v.availableQuantity }))).toEqual([
+      { id: sellerId, price: 129.95, qty: 7 },
+      { id: sellerIdNext, price: 134.5, qty: 8 },
+    ])
+  })
+
+  it("recusa item de vendedor Int64 consecutivo diferente com account_mismatch", async () => {
+    const rawMultiget = `[{"code":200,"body":{"id":"MLB1","seller_id":${sellerIdNext},"status":"active","price":10.25,"available_quantity":1}}]`
+    request
+      .mockResolvedValueOnce(search(["MLB1"]))
+      .mockResolvedValueOnce(new Response(rawMultiget))
+
+    await expect(adapter.listAds("fake-access", sellerId)).rejects.toMatchObject({ code: "account_mismatch" })
+  })
+
+  it("aceita chaves JSON escapadas para identificadores Int64 sem perda de precisão", async () => {
+    request.mockResolvedValueOnce(new Response(`{"\\u0069d":${sellerIdNext},"site_id":"MLB","nickname":"ESCAPED","tags":["test_user"]}`))
+    await expect(adapter.identifySeller("fake-access")).resolves.toEqual({
+      id: sellerIdNext,
+      nickname: "ESCAPED",
+      siteStatus: null,
+      testAccount: true,
+    })
+  })
+
+  it.each([
+    ["JSON inválido", '{"id":9223372036854775806,"site_id":"MLB",}'],
+    ["zero", '{"id":0,"site_id":"MLB"}'],
+    ["negativo", '{"id":-9223372036854775806,"site_id":"MLB"}'],
+    ["fracionário", '{"id":123.45,"site_id":"MLB"}'],
+    ["fracionário .0", '{"id":123.0,"site_id":"MLB"}'],
+    ["notação exponencial", '{"id":1e18,"site_id":"MLB"}'],
+    ["20 dígitos fora do contrato", '{"id":10000000000000000000,"site_id":"MLB"}'],
+    ["string com zero à esquerda", '{"id":"0123","site_id":"MLB"}'],
+    ["booleano", '{"id":true,"site_id":"MLB"}'],
+    ["campo duplicado literal", `{"id":1,"id":${sellerId},"site_id":"MLB"}`],
+    ["campo duplicado com escape", `{"id":1,"\\u0069d":${sellerId},"site_id":"MLB"}`],
+  ])("rejeita fail-closed em /users/me para %s", async (_label, body) => {
+    request.mockResolvedValueOnce(new Response(body))
+    await expect(adapter.identifySeller("fake-access")).rejects.toMatchObject({ code: "communication_error" })
+  })
+
+  it.each([
+    ["family_id negativo", `[{"code":200,"body":{"id":"MLB1","seller_id":${sellerId},"status":"active","family_id":-10}}]`],
+    ["family_id fracionário", `[{"code":200,"body":{"id":"MLB1","seller_id":${sellerId},"status":"active","family_id":10.5}}]`],
+    ["family_id exponencial", `[{"code":200,"body":{"id":"MLB1","seller_id":${sellerId},"status":"active","family_id":1e18}}]`],
+    ["variation id negativo", `[{"code":200,"body":{"id":"MLB1","seller_id":${sellerId},"status":"active","variations":[{"id":-5}]}}]`],
+    ["variation id exponencial", `[{"code":200,"body":{"id":"MLB1","seller_id":${sellerId},"status":"active","variations":[{"id":1e10}]}}]`],
+    ["campo duplicado no multiget", `[{"code":200,"body":{"id":"MLB1","seller_id":${sellerId},"seller_id":${sellerIdNext},"status":"active"}}]`],
+  ])("rejeita fail-closed em /items para %s", async (_label, rawMultiget) => {
+    request
+      .mockResolvedValueOnce(search(["MLB1"]))
+      .mockResolvedValueOnce(new Response(rawMultiget))
+
+    await expect(adapter.listAds("fake-access", sellerId)).rejects.toMatchObject({ code: "communication_error" })
+  })
+})
