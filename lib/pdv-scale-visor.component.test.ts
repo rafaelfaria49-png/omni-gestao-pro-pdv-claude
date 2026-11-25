@@ -26,6 +26,16 @@ let records: Record<string, Printer>
 let writes: Array<{ store: string; body: { printerConfig: Printer } }>
 let failPut: boolean, failGet: boolean, malformedPut: boolean
 let device: ReturnType<typeof simulatedScale>
+/** Resolve no próprio commit em que o elemento surge, antes do flush assíncrono dos efeitos passivos:
+ * reproduz de forma determinística o clique humano que chega logo após o carregamento. */
+function atCommit<T extends Element>(find: () => T | null): Promise<T> {
+  const now = find()
+  if (now) return Promise.resolve(now)
+  return new Promise((resolve) => {
+    const mo = new MutationObserver(() => { const el = find(); if (el) { mo.disconnect(); resolve(el) } })
+    mo.observe(document.body, { subtree: true, childList: true, attributes: true })
+  })
+}
 function tree(showSettings = false) {
   return React.createElement(StoreSettingsProvider, null,
     showSettings ? React.createElement(PdvScaleVisorSettingsCard) : null,
@@ -123,12 +133,25 @@ describe("Provider e cartão reais com servidor/serial simulados", () => {
     fireEvent.click(await screen.findByRole("checkbox"))
     fireEvent.click(screen.getByRole("button", { name: "Salvar visor" }))
     await screen.findByRole("alert")
+    await act(async () => {})
+    // O rascunho sobrevive à falha e à sincronização seguinte com o servidor.
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false)
     expect(screen.queryByText("Preferência do visor salva nesta unidade.")).toBeNull()
     expect(screen.getByRole("button", { name: "Salvar visor" })).toBeTruthy()
     expect(records["loja-a"].pdvScaleVisorVisible).toBeUndefined()
     fireEvent.click(screen.getByRole("button", { name: "Cancelar visor" }))
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true)
     expect(screen.queryByRole("alert")).toBeNull()
+  })
+  it("primeiro clique logo após carregar não é revertido pela sincronização com o servidor", async () => {
+    render(tree(true))
+    const check = await atCommit(() => screen.queryByRole("checkbox", { name: "Exibir visor de peso no PDV" }))
+    fireEvent.click(check)
+    expect((check as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByRole("button", { name: "Salvar visor" })).toBeTruthy()
+    await act(async () => {})
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByRole("button", { name: "Salvar visor" })).toBeTruthy()
   })
   it("troca A/B descarta leitura, conexão e draft na primeira renderização; retorno não reconecta", async () => {
     records["loja-b"].pdvScaleVisorVisible = true

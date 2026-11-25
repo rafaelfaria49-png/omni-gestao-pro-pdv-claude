@@ -153,8 +153,11 @@ describe("local capture session", () => {
     vi.useFakeTimers()
     const { rec, events, fake } = capture(undefined, { endGraceMs: 100 })
     rec.error("language-not-supported")
+    expect(rec.aborted).toBe(false)
     vi.advanceTimersByTime(100)
     expect(events).toEqual([{ type: "error", code: "language-not-supported" }, { type: "end" }])
+    // An engine that never ends after an error does not keep the microphone: grace aborts it.
+    expect(rec.aborted).toBe(true)
     expect(fake.instances).toHaveLength(1)
     expect(fake.instances[0].processLocally).toBe(true)
   })

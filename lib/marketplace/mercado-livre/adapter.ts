@@ -5,12 +5,12 @@ import type { MarketplaceReadListing, MarketplaceReadPage, MarketplaceSeller } f
 import { MELI_NUMERIC_ID_PATTERN } from "../read-only-types"
 import type { MercadoLivreConfig } from "./config"
 import { MeliFailure } from "./errors"
+import { parseMeliJson } from "./meli-json"
 
 const AUTHORIZATION_URL = "https://auth.mercadolivre.com.br/authorization"
 const API_ORIGIN = "https://api.mercadolibre.com"
 const PAGE_SIZE = 20
 const TIMEOUT_MS = 5_000
-const EXTERNAL_IDS = new Set(["id", "user_id", "seller_id", "family_id"])
 export const meliNumericId = z.string().regex(new RegExp(`^${MELI_NUMERIC_ID_PATTERN}$`))
 const itemId = z.string().regex(/^MLB[0-9]{1,19}$/)
 const optionalText = z.string().max(500).nullish()
@@ -80,14 +80,6 @@ function retrySeconds(value: string | null) {
   if (!value) return 30
   const seconds = /^\d+$/.test(value) ? Number(value) : Math.ceil((Date.parse(value) - Date.now()) / 1000)
   return Number.isFinite(seconds) ? Math.max(1, Math.min(3600, seconds)) : 30
-}
-
-/** IDs do Mercado Livre podem ser Int64. Preserva os dígitos originais do JSON em Node 24. */
-function parseMeliJson(body: string): unknown {
-  return JSON.parse(body, (key, value, context?: { source?: string }) => {
-    if (!EXTERNAL_IDS.has(key) || typeof value !== "number") return value
-    return context?.source ?? (Number.isSafeInteger(value) ? String(value) : null)
-  })
 }
 
 function mediaUrl(value: string | null | undefined): string | null {

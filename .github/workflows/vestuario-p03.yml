@@ -1,0 +1,109 @@
+name: Vestuario P03 - identificacao e etiquetas QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/identificacao/**"
+      - "lib/cadastros/gtin.ts"
+      - "app/actions/identificacao-etiquetas.ts"
+      - "app/actions/cadastros.ts"
+      - "app/actions/cadastros.access.test.ts"
+      - "lib/vestuario/**"
+      - "app/api/identificacao/**"
+      - "components/vestuario/**"
+      - "components/cadastros/lovable/components/cadastros/CadastrosHub.tsx"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20261116090000_identificadores_etiquetas_p03/**"
+      - "scripts/vestuario/**"
+      - "e2e/vestuario-p03/**"
+      - "e2e/vestuario-p03.playwright.config.ts"
+      - "next.config.mjs"
+      - "package*.json"
+      - "docs/vestuario/**"
+      - ".github/workflows/vestuario-p03.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vestuario-p03-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  identification-pg-pdf-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: p03_qa
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: vest_p02_p03_pg
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U p03_qa -d vest_p02_p03_pg" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      VESTUARIO_P02_TEST_DATABASE_URL: postgresql://p03_qa:isolated_ci_only@127.0.0.1:5432/vest_p02_p03_pg
+      VESTUARIO_P03_TEST_DATABASE_URL: postgresql://p03_qa:isolated_ci_only@127.0.0.1:5432/vest_p02_p03_pg
+      DATABASE_URL: postgresql://p03_qa:isolated_ci_only@127.0.0.1:5432/vest_p02_p03_pg
+      DIRECT_URL: postgresql://p03_qa:isolated_ci_only@127.0.0.1:5432/vest_p02_p03_pg
+      AUTH_SECRET: isolated-p03-fixture-without-production-authority
+      AUTH_TRUST_HOST: "true"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+      VESTUARIO_P03_QA_SEED_LEGACY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci --no-audit --no-fund
+      - name: Contratos, acesso, componentes, PDF e regressão HUB/P01/P02
+        run: >-
+          node node_modules/vitest/vitest.mjs run lib/identificacao lib/vestuario
+          lib/cadastros/business-catalog.component.test.ts lib/cadastros/gtin.test.ts
+          --exclude "**/*.integration.test.ts" --maxWorkers=2
+      - name: Decodificação independente dos PDFs reais (PDFium + ZXing-C++)
+        run: |
+          python -m pip install -r scripts/vestuario/requirements-p03-qa.txt
+          python scripts/vestuario/verify-p03-pdf.py
+      - name: Preparo QA com legado sintético anterior à migration P03 e drift zero
+        run: VESTUARIO_P02_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/vestuario/prepare-pg.mjs
+      - name: PostgreSQL real - constraints, multiloja, concorrência, replay e guards P01
+        run: node node_modules/vitest/vitest.mjs run lib/identificacao/service.integration.test.ts lib/vestuario/catalog-service.integration.test.ts --maxWorkers=1 --testTimeout=60000
+      - name: Typecheck integral
+        run: npm run typecheck
+      - name: Lint P03
+        run: >-
+          node node_modules/eslint/bin/eslint.js lib/identificacao app/actions/identificacao-etiquetas.ts
+          app/api/identificacao components/vestuario/IdentificacaoEtiquetasPanel.tsx
+          scripts/vestuario e2e/vestuario-p03 e2e/vestuario-p03.playwright.config.ts next.config.mjs
+      - name: Build sem migration nem deployment
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: E2E autenticado - app, NextAuth e PG reais, somente hardware simulado
+        env:
+          VESTUARIO_P02_TEST_DATABASE_URL: postgresql://p03_qa:isolated_ci_only@127.0.0.1:5432/vest_p02_e2e_p03
+        run: |
+          PGPASSWORD=isolated_ci_only psql -h 127.0.0.1 -U p03_qa -d vest_p02_p03_pg -c 'CREATE DATABASE vest_p02_e2e_p03'
+          VESTUARIO_P02_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/vestuario/run-vestuario-p03-e2e.mjs
+      - name: Decodificação independente do PDF recebido no E2E autenticado
+        run: python scripts/vestuario/verify-p03-pdf.py --e2e
+      - name: Evidências QA sem banco nem credenciais
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vestuario-p03-qa
+          path: |
+            test-results/vestuario-p03/pdf
+            test-results/vestuario-p03-e2e
+          retention-days: 7
+          if-no-files-found: ignore

@@ -51,6 +51,9 @@ vi.mock("@/app/actions/cadastros", () => ({
   upsertEquipamentoModelo: vi.fn(), upsertFornecedor: h.upsertFornecedor, upsertTecnico: h.upsertTecnico, updateCliente: vi.fn(),
   upsertServico: vi.fn(), deleteProduto: vi.fn(), getUltimoBatchProdutos: vi.fn(async () => null),
 }))
+vi.mock("@/app/actions/identificacao-etiquetas", () => ({
+  getIdentificacaoStatus: vi.fn(async () => ({ enabled: false })),
+}))
 vi.mock("@/app/actions/vestuario-catalogo", () => ({
   getVestuarioCatalogoStatus: vi.fn(async () => ({ enabled: false })),
 }))
@@ -144,7 +147,7 @@ describe("Categorias / Marcas — padrão global", () => {
   it("chips em ordem pt-BR, por id (legado duplicado não se confunde) e inativação acessível", async () => {
     await abrirAba("Categorias / Marcas")
     const card = (await screen.findByText("Categorias de produtos")).closest("div.rounded-2xl") as HTMLElement
-    const inativar = within(card).getAllByRole("button", { name: /^Inativar / })
+    const inativar = await within(card).findAllByRole("button", { name: /^Inativar / })
     expect(inativar.map((b) => b.getAttribute("aria-label"))).toEqual([
       "Inativar capinhas",
       "Inativar Capinhas",
