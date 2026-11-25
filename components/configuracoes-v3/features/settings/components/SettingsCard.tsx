@@ -1,39 +1,97 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cn } from "../../../lib/utils";
 
-interface SettingsCardProps {
+export interface SettingsCardProps {
   title?: string;
   description?: string;
+  icon?: ReactNode;
   children: ReactNode;
   className?: string;
+  bodyClassName?: string;
   footer?: ReactNode;
-  /** Badge ou ação alinhada ao título (ex.: Em breve). */
+  footerHint?: ReactNode;
+  /** Feedback contextual ancorado acima do rodapé do card. */
+  feedback?: ReactNode;
+  /** Badge ou ação alinhada ao título (ex.: Em breve, Alterações não salvas). */
   headerExtra?: ReactNode;
 }
 
-export function SettingsCard({ title, description, children, className, footer, headerExtra }: SettingsCardProps) {
+export function SettingsCard({
+  title,
+  description,
+  icon,
+  children,
+  className,
+  bodyClassName,
+  footer,
+  footerHint,
+  feedback,
+  headerExtra,
+}: SettingsCardProps) {
   return (
-    <div
-      className={cn(
-        "min-w-0 rounded-xl border border-border bg-card shadow-sm transition-shadow duration-200 hover:shadow-md",
-        className,
-      )}
-    >
+    <div className={cn("cfg-card min-w-0 overflow-hidden", className)}>
       {(title || description || headerExtra) && (
-        <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-          <div className="min-w-0 flex-1">
-            {title && <h3 className="text-base font-semibold leading-snug tracking-tight text-foreground">{title}</h3>}
-            {description && (
-              <p className="mt-1.5 text-sm font-normal leading-relaxed text-muted-foreground">{description}</p>
-            )}
+        <div
+          className="flex flex-col gap-2.5 border-b px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+          style={{ borderColor: "var(--cfg-border)" }}
+        >
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+            {icon ? (
+              <span
+                aria-hidden="true"
+                className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-primary"
+                style={{
+                  backgroundColor: "var(--cfg-inset)",
+                  borderColor: "var(--cfg-border)",
+                }}
+              >
+                {icon}
+              </span>
+            ) : null}
+            <div className="min-w-0 flex-1">
+              {title && (
+                <h3
+                  className="text-[14.5px] font-semibold leading-snug tracking-tight"
+                  style={{ color: "var(--cfg-fg)" }}
+                >
+                  {title}
+                </h3>
+              )}
+              {description && (
+                <p
+                  className="mt-0.5 text-xs font-normal leading-relaxed"
+                  style={{ color: "var(--cfg-muted)" }}
+                >
+                  {description}
+                </p>
+              )}
+            </div>
           </div>
-          {headerExtra ? <div className="shrink-0">{headerExtra}</div> : null}
+          {headerExtra ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">{headerExtra}</div>
+          ) : null}
         </div>
       )}
-      <div className="min-w-0 px-4 py-5 sm:px-6">{children}</div>
+
+      <div className={cn("min-w-0 px-4 py-4 sm:px-5", bodyClassName)}>
+        {children}
+        {feedback ? <div className="mt-4">{feedback}</div> : null}
+      </div>
+
       {footer && (
-        <div className="flex items-center justify-end gap-3 border-t border-border bg-card-muted px-6 py-3 rounded-b-xl">
-          {footer}
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 sm:px-5"
+          style={{
+            borderColor: "var(--cfg-border)",
+            backgroundColor: "var(--cfg-inset)",
+          }}
+        >
+          {footerHint ? (
+            <span className="text-xs" style={{ color: "var(--cfg-muted)" }}>
+              {footerHint}
+            </span>
+          ) : null}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{footer}</div>
         </div>
       )}
     </div>

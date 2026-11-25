@@ -1,29 +1,51 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/configuracoes-v3/components/ui/button";
+import { SettingsFeedbackBanner } from "./SettingsFeedbackBanner";
 
 type Props = {
   /** Texto curto abaixo do aviso (opcional). */
   hint?: string;
+  /** Quando true, orienta seleção pelo topo sem referenciar a aba Lojas (visão cliente). */
+  clientMode?: boolean;
+  /** Ação opcional para abrir a seção Lojas (visão plataforma). */
+  onSelectStore?: () => void;
 };
 
 /** Bloqueio explícito quando nenhuma unidade está selecionada na Config V3. */
-export function UnidadeAtivaRequiredBanner({ hint }: Props) {
+export function UnidadeAtivaRequiredBanner({ hint, clientMode = false, onSelectStore }: Props) {
   return (
-    <div
-      role="status"
-      className="flex gap-3 rounded-xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-foreground"
+    <SettingsFeedbackBanner
+      variant="warning"
+      title="Nenhuma unidade ativa"
+      action={
+        !clientMode && onSelectStore ? (
+          <Button type="button" variant="outline" size="sm" onClick={onSelectStore}>
+            Selecionar em Lojas
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        ) : undefined
+      }
     >
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-      <div className="min-w-0 space-y-1">
-        <p className="font-medium">Nenhuma unidade ativa</p>
-        <p className="text-muted-foreground">
-          Abra a seção{" "}
-          <span className="font-medium text-foreground">Lojas</span> e selecione a unidade cujas configurações
-          deseja editar. Preferências não são compartilhadas entre unidades.
+      <p style={{ color: "var(--cfg-muted)" }}>
+        {clientMode ? (
+          "Selecione a unidade no topo da tela para visualizar e editar os dados da loja."
+        ) : (
+          <>
+            Abra a seção{" "}
+            <span className="font-semibold" style={{ color: "var(--cfg-fg)" }}>
+              Lojas
+            </span>{" "}
+            e selecione a unidade cujas configurações deseja editar. Preferências não são compartilhadas entre unidades.
+          </>
+        )}
+      </p>
+      {hint ? (
+        <p className="mt-1 text-xs" style={{ color: "var(--cfg-muted)" }}>
+          {hint}
         </p>
-        {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      </div>
-    </div>
+      ) : null}
+    </SettingsFeedbackBanner>
   );
 }

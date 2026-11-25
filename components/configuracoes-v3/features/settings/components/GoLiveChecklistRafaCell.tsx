@@ -3,31 +3,37 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import {
-  CheckCircle2,
-  CircleDashed,
-  ClipboardList,
-  HelpCircle,
-  ArrowRight,
-  ExternalLink,
-  PlayCircle,
-} from "lucide-react";
+import { ArrowDown, ArrowRight, ClipboardList, ExternalLink } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
-import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useStoreSettings } from "@/lib/store-settings-provider";
 import type { SectionId } from "../sections";
-type ItemStatus = "done" | "review" | "pending";
+import { SettingsStatusBadge, type SettingsStatusTone } from "./SettingsStatusBadge";
+import { SettingsCollapsible } from "./SettingsCollapsible";
+import { cn } from "../../../lib/utils";
 
-type ChecklistItem = {
+export type OperationalItemStatus = "done" | "review" | "pending" | "not_verified" | "forbidden";
+
+export type OperationalChecklistItem = {
   id: string;
   label: string;
   hint: string;
-  status: ItemStatus;
+  status: OperationalItemStatus;
   targetSection?: SectionId;
-  linkLabel?: string;
+  localTarget?: "name" | "contactWhatsapp";
+  linkLabel: string;
 };
+
+export type GoLiveEmpresaSnapshot = {
+  nomeFantasia: string;
+  cnpj: string;
+  telefone: string;
+  email: string;
+  whatsapp: string;
+};
+
+type ChecklistFilter = "all" | "attention" | "done";
 
 function safePrinterRecord(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
@@ -73,59 +79,52 @@ function hasFinanceiroBasico(cardFees: unknown): boolean {
   const meta = Number(c.metaFaturamento);
   if (Number.isFinite(meta) && meta > 0) return true;
   const maqs = c.maquininhas;
-  if (Array.isArray(maqs) && maqs.some((m) => m && typeof m === "object" && (m as { ativo?: boolean }).ativo === true)) {
+  if (
+    Array.isArray(maqs) &&
+    maqs.some((m) => m && typeof m === "object" && (m as { ativo?: boolean }).ativo === true)
+  ) {
     return true;
   }
   return false;
 }
 
-function statusIcon(status: ItemStatus) {
-  if (status === "done") return <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden />;
-  if (status === "review") return <HelpCircle className="h-5 w-5 shrink-0 text-warning" aria-hidden />;
-  return <CircleDashed className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />;
-}
-
-function statusBadge(status: ItemStatus) {
-  if (status === "done") {
-    return (
-      <Badge className="bg-success/15 text-success hover:bg-success/15 border-0 font-normal">
-        Concluído
-      </Badge>
-    );
-  }
-  if (status === "review") {
-    return (
-      <Badge variant="secondary" className="border-warning/30 bg-warning/10 font-normal text-foreground">
-        Revisar
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="secondary" className="font-normal">
-      Pendente
-    </Badge>
-  );
-}
-
-export type GoLiveEmpresaSnapshot = {
-  nomeFantasia: string;
-  cnpj: string;
-  telefone: string;
-  email: string;
-  whatsapp: string;
+const STATUS_META: Record<
+  OperationalItemStatus,
+  { label: string; tone: SettingsStatusTone; dotColor: string }
+> = {
+  done: { label: "Concluído", tone: "done", dotColor: "var(--cfg-success-dot)" },
+  review: { label: "Revisar", tone: "review", dotColor: "var(--cfg-warning-dot)" },
+  pending: { label: "Pendente", tone: "pending", dotColor: "var(--cfg-subtle)" },
+  not_verified: { label: "Não verificado", tone: "not_verified", dotColor: "var(--cfg-info-fg)" },
+  forbidden: { label: "Sem permissão", tone: "readonly", dotColor: "var(--cfg-info-fg)" },
 };
 
-export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSnapshot }) {
-  const { navigateToSection } = useConfiguracoesNav();
+/**
+ * Avalia o estado de prontidão operacional exclusivamente com dados confirmados do servidor.
+ * Nunca considera edições não salvas como etapa concluída.
+ */
+export function useOperationalReadiness(
+  confirmedEmpresa: GoLiveEmpresaSnapshot,
+  enabled = true,
+  basicsLoaded = true,
+) {
   const { lojaAtivaId } = useLojaAtiva();
-  const { hydrated, settings } = useStoreSettings();
+  const { hydrated, loaded, settings } = useStoreSettings();
   const { data: session } = useSession();
+  const sessionUserId = session?.user?.id ?? null;
 
-  const [usersCheck, setUsersCheck] = useState<"idle" | "loading" | "ok" | "review" | "forbidden">("idle");
+  const [usersCheck, setUsersCheck] = useState<
+    "idle" | "loading" | "ok" | "review" | "forbidden" | "unverified"
+  >("idle");
 
   useEffect(() => {
-    if (!session?.user) {
-      setUsersCheck("review");
+    const storeId = lojaAtivaId?.trim() ?? "";
+    if (!enabled || !storeId) {
+      setUsersCheck("idle");
+      return;
+    }
+    if (!sessionUserId) {
+      setUsersCheck("unverified");
       return;
     }
     let cancelled = false;
@@ -134,7 +133,7 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
       try {
         const res = await fetch("/api/admin/users", { credentials: "include", cache: "no-store" });
         if (!res.ok) {
-          if (!cancelled) setUsersCheck(res.status === 403 ? "forbidden" : "review");
+          if (!cancelled) setUsersCheck(res.status === 403 ? "forbidden" : "unverified");
           return;
         }
         const j = (await res.json().catch(() => ({}))) as {
@@ -144,87 +143,92 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
         const operational = users.filter(
           (u) =>
             u.active !== false &&
-            ["CAIXA", "VENDEDOR", "GERENTE", "OPERADOR", "TECNICO"].includes(String(u.role || "").toUpperCase()),
+            ["CAIXA", "VENDEDOR", "GERENTE", "OPERADOR", "TECNICO"].includes(
+              String(u.role || "").toUpperCase(),
+            ),
         );
         if (!cancelled) setUsersCheck(operational.length >= 1 ? "ok" : "review");
       } catch {
-        if (!cancelled) setUsersCheck("review");
+        if (!cancelled) setUsersCheck("unverified");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [session?.user]);
+  }, [enabled, sessionUserId, lojaAtivaId]);
 
-  const items = useMemo((): ChecklistItem[] => {
+  const items = useMemo((): OperationalChecklistItem[] => {
     const storeId = lojaAtivaId?.trim() ?? "";
-    const nome = empresa.nomeFantasia.trim();
+    const nome = confirmedEmpresa.nomeFantasia.trim();
     const hasEmpresa =
       !!storeId &&
+      basicsLoaded &&
       nome.length >= 2 &&
-      (empresa.telefone.trim().length >= 8 ||
-        empresa.cnpj.replace(/\D/g, "").length >= 11 ||
-        empresa.email.includes("@"));
+      (confirmedEmpresa.telefone.trim().length >= 8 ||
+        confirmedEmpresa.cnpj.replace(/\D/g, "").length >= 11 ||
+        confirmedEmpresa.email.includes("@"));
 
     const wa =
-      empresa.whatsapp.trim() ||
-      (storeId ? String(settings?.contactWhatsapp ?? "").trim() : "");
+      (basicsLoaded ? confirmedEmpresa.whatsapp.trim() : "") ||
+      (storeId && loaded ? String(settings?.contactWhatsapp ?? "").trim() : "");
     const hasWhatsapp = Boolean(storeId && wa.replace(/\D/g, "").length >= 10);
-
     const hasLoja = !!storeId;
 
-    let pdvStatus: ItemStatus = "pending";
-    if (!storeId) pdvStatus = "pending";
-    else if (!hydrated) pdvStatus = "review";
-    else if (hasMeaningfulPdvConfig(settings?.printerConfig)) pdvStatus = "done";
-    else pdvStatus = "review";
+    const resolveSettingsCheck = (check: boolean): OperationalItemStatus => {
+      if (!storeId) return "pending";
+      if (!hydrated || !loaded) return "not_verified";
+      return check ? "done" : "review";
+    };
 
-    let vendasStatus: ItemStatus = "pending";
-    if (!storeId) vendasStatus = "pending";
-    else if (!hydrated) vendasStatus = "review";
-    else if (hasVendasParamsInPrinter(settings?.printerConfig)) vendasStatus = "done";
-    else vendasStatus = "review";
+    const empresaStatus: OperationalItemStatus = !storeId
+      ? "pending"
+      : !basicsLoaded
+        ? "not_verified"
+        : hasEmpresa
+          ? "done"
+          : "review";
 
-    let impressaoStatus: ItemStatus = "review";
-    if (!storeId) impressaoStatus = "pending";
-    else if (!hydrated) impressaoStatus = "review";
-    else if (hasImpressaoConfig(settings?.printerConfig)) impressaoStatus = "done";
+    const whatsappStatus: OperationalItemStatus = !storeId
+      ? "pending"
+      : !basicsLoaded && !loaded
+        ? "not_verified"
+        : hasWhatsapp
+          ? "done"
+          : "review";
 
-    let finStatus: ItemStatus = "pending";
-    if (!storeId) finStatus = "pending";
-    else if (!hydrated) finStatus = "review";
-    else if (hasFinanceiroBasico(settings?.cardFees)) finStatus = "done";
-    else finStatus = "review";
-
-    let usersStatus: ItemStatus = "review";
+    let usersStatus: OperationalItemStatus = "review";
     if (!storeId) usersStatus = "pending";
-    else if (usersCheck === "loading" || usersCheck === "idle") usersStatus = "review";
-    else if (usersCheck === "ok") usersStatus = "done";
-    else if (usersCheck === "forbidden") usersStatus = "review";
-    else usersStatus = "review";
+    else if (usersCheck === "loading" || usersCheck === "idle" || usersCheck === "unverified") {
+      usersStatus = "not_verified";
+    } else if (usersCheck === "ok") {
+      usersStatus = "done";
+    } else if (usersCheck === "forbidden") {
+      usersStatus = "forbidden";
+    } else {
+      usersStatus = "review";
+    }
 
     return [
       {
         id: "empresa",
         label: "Dados da empresa preenchidos",
-        hint: "Nome da unidade e pelo menos telefone, CNPJ ou e-mail.",
-        status: hasEmpresa ? "done" : storeId ? "review" : "pending",
-        targetSection: "geral",
-        linkLabel: "Ir para Geral",
+        hint: "Nome da unidade e pelo menos telefone, CNPJ ou e-mail confirmados no servidor.",
+        status: empresaStatus,
+        localTarget: "name",
+        linkLabel: "Editar dados",
       },
       {
         id: "whatsapp",
         label: "WhatsApp configurado",
-        hint:
-          "Número da loja em contatos (Geral). Webhook Meta no servidor não é validado aqui — confira em Integrações se necessário.",
-        status: hasWhatsapp ? "done" : storeId ? "review" : "pending",
-        targetSection: "geral",
-        linkLabel: "Ir para Geral",
+        hint: "Número da loja salvo em contatos (Geral). O webhook Meta no servidor é conferido em Integrações.",
+        status: whatsappStatus,
+        localTarget: "contactWhatsapp",
+        linkLabel: "Editar contato",
       },
       {
         id: "loja",
         label: "Unidade ativa selecionada",
-        hint: "Todas as configurações abaixo valem para a unidade ativa.",
+        hint: "Todas as configurações abaixo valem exclusivamente para a unidade ativa.",
         status: hasLoja ? "done" : "pending",
         targetSection: "lojas",
         linkLabel: "Ir para Lojas",
@@ -233,33 +237,35 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
         id: "pdv",
         label: "PDV configurado",
         hint: "Fluxo principal (Clássico, Assistência ou Rápido / Grade) salvo na unidade.",
-        status: pdvStatus,
+        status: resolveSettingsCheck(hasMeaningfulPdvConfig(settings?.printerConfig)),
         targetSection: "pdv",
         linkLabel: "Ir para PDV",
       },
       {
         id: "vendas",
         label: "Vendas e orçamentos configurados",
-        hint: "Garantia, validade, formas de pagamento e flags de PDV em printerConfig.pdvParams.",
-        status: vendasStatus,
+        hint: "Garantia, validade e formas de pagamento definidas para a unidade.",
+        status: resolveSettingsCheck(hasVendasParamsInPrinter(settings?.printerConfig)),
         targetSection: "vendas",
         linkLabel: "Ir para Vendas",
       },
       {
         id: "impressao",
         label: "Impressão PDV (opcional)",
-        hint: "Host da impressora, auto-print ou rodapé em printerConfig.impressao — revise se usar cupom térmico.",
-        status: impressaoStatus,
+        hint: "Host da impressora térmica, auto-print ou rodapé — revise se utilizar cupom térmico.",
+        status: resolveSettingsCheck(hasImpressaoConfig(settings?.printerConfig)),
         targetSection: "pdv",
-        linkLabel: "Ir para PDV",
+        linkLabel: "Revisar PDV",
       },
       {
         id: "usuarios",
         label: "Usuários operacionais criados",
         hint:
           usersCheck === "forbidden"
-            ? "Sem permissão para listar utilizadores — confirme manualmente na equipa."
-            : "Pelo menos um utilizador ativo (caixa, vendedor, gerente, etc.).",
+            ? "Sem permissão para listar usuários — confirme manualmente na equipe."
+            : usersCheck === "unverified"
+              ? "Não foi possível consultar a lista de usuários agora. Confira na aba Usuários."
+              : "Pelo menos um usuário ativo na equipe (caixa, vendedor, gerente, operador ou técnico).",
         status: usersStatus,
         targetSection: "usuarios",
         linkLabel: "Ir para Usuários",
@@ -267,169 +273,264 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
       {
         id: "financeiro",
         label: "Financeiro básico configurado",
-        hint: "Meta de faturamento ou maquininha ativa em cardFees da unidade.",
-        status: finStatus,
+        hint: "Meta de faturamento ou maquininha ativa cadastrada para a unidade.",
+        status: resolveSettingsCheck(hasFinanceiroBasico(settings?.cardFees)),
         targetSection: "financeiro",
         linkLabel: "Ir para Financeiro",
       },
     ];
-  }, [empresa, hydrated, lojaAtivaId, settings?.cardFees, settings?.contactWhatsapp, settings?.printerConfig, usersCheck]);
+  }, [
+    basicsLoaded,
+    confirmedEmpresa,
+    hydrated,
+    loaded,
+    lojaAtivaId,
+    settings?.cardFees,
+    settings?.contactWhatsapp,
+    settings?.printerConfig,
+    usersCheck,
+  ]);
 
   const doneCount = items.filter((i) => i.status === "done").length;
-  const reviewCount = items.filter((i) => i.status === "review").length;
+  const attentionCount = items.length - doneCount;
+  const percent = items.length > 0 ? Math.round((doneCount / items.length) * 100) : 0;
+  const hasCoreSetup = Boolean(
+    lojaAtivaId?.trim() && items.find((i) => i.id === "empresa")?.status === "done",
+  );
 
-  return (
-    <div className="overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/8 via-card to-card shadow-soft">
-      <div className="border-b border-border/80 px-6 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Checklist Go Live RafaCell</h2>
-              <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                Prepare a unidade antes de abrir o PDV e a operação diária. Itens automáticos usam dados já carregados;
-                os marcados como <span className="font-medium text-foreground">Revisar</span> exigem confirmação humana.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="tabular-nums font-normal">
-              {doneCount}/{items.length} concluídos
-            </Badge>
-            {reviewCount > 0 ? (
-              <Badge variant="secondary" className="font-normal">
-                {reviewCount} para revisar
-              </Badge>
-            ) : null}
-          </div>
+  return {
+    items,
+    doneCount,
+    attentionCount,
+    totalCount: items.length,
+    percent,
+    hasCoreSetup,
+  };
+}
+
+export interface GoLiveChecklistProps {
+  empresa: GoLiveEmpresaSnapshot;
+  /** Quando fornecido pelo Unit Identity Ribbon, reutiliza os itens já computados sem duplicar fetches. */
+  precomputedItems?: OperationalChecklistItem[];
+  /** Embutido dentro do Unit Identity Ribbon (sem card externo duplicado). */
+  embedded?: boolean;
+  /** Foco contextual em Dados da empresa sem sair da aba Geral. */
+  onFocusEmpresa?: (field: "name" | "contactWhatsapp") => void;
+}
+
+export function GoLiveChecklistRafaCell({
+  empresa,
+  precomputedItems,
+  embedded = false,
+  onFocusEmpresa,
+}: GoLiveChecklistProps) {
+  const { navigateToSection, requestExternalNavigation } = useConfiguracoesNav();
+  const [filter, setFilter] = useState<ChecklistFilter>("all");
+  const fallback = useOperationalReadiness(empresa, !precomputedItems);
+  const items = precomputedItems ?? fallback.items;
+
+  const doneCount = items.filter((i) => i.status === "done").length;
+  const attentionCount = items.length - doneCount;
+
+  const filteredItems = useMemo(() => {
+    if (filter === "attention") return items.filter((i) => i.status !== "done");
+    if (filter === "done") return items.filter((i) => i.status === "done");
+    return items;
+  }, [filter, items]);
+
+  const body = (
+    <div id="checklist-prontidao">
+      {/* Cabeçalho interno */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5 sm:px-5"
+        style={{
+          borderColor: "var(--cfg-border)",
+          backgroundColor: "var(--cfg-surface)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <h3 className="text-xs font-semibold" style={{ color: "var(--cfg-fg)" }}>
+            Checklist de prontidão operacional
+          </h3>
         </div>
+        <p className="text-xs" style={{ color: "var(--cfg-muted)" }}>
+          Reflete apenas dados confirmados no servidor
+        </p>
       </div>
 
-      <ul className="divide-y divide-border/80 px-2 py-1 sm:px-4">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex min-w-0 items-start gap-3">
-              {statusIcon(item.status)}
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">{item.label}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{item.hint}</p>
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pl-2">
-              {statusBadge(item.status)}
-              {item.targetSection && item.linkLabel ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => navigateToSection(item.targetSection!)}
-                >
-                  {item.linkLabel}
-                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                </Button>
-              ) : null}
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <div className="border-t border-border/80 px-6 py-5 space-y-5">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-            <PlayCircle className="h-5 w-5" aria-hidden />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Testar operação</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Teste depois de salvar as configurações nesta tela. Os atalhos abaixo abrem outros módulos do painel sem
-              alterar o que você configurou aqui.
-            </p>
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-xs font-medium text-foreground">Abrir módulos</p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href="/dashboard/vendas">
-                Abrir PDV
-                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href="/dashboard/operacoes-v2">
-                Operações HUB
-                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href="/dashboard">
-                Dashboard
-                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href="/dashboard/whatsapp">
-                WhatsApp HUB
-                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-xs font-medium text-foreground">Continuar configuração</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { id: "geral" as const, label: "Geral" },
-                { id: "pdv" as const, label: "PDV" },
-                { id: "vendas" as const, label: "Vendas" },
-                { id: "financeiro" as const, label: "Financeiro" },
-                { id: "usuarios" as const, label: "Usuários" },
-              ] as const
-            ).map(({ id, label }) => (
-              <Button
-                key={id}
+      {/* Barra de filtros acessíveis (toggle button group) */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 sm:px-5"
+        style={{
+          borderColor: "var(--cfg-border)",
+          backgroundColor: "var(--cfg-inset)",
+        }}
+      >
+        <div role="group" aria-label="Filtrar itens do checklist" className="inline-flex flex-wrap items-center gap-1">
+          {(
+            [
+              { id: "all" as const, label: `Todos (${items.length})` },
+              { id: "attention" as const, label: `Para revisar (${attentionCount})` },
+              { id: "done" as const, label: `Concluídos (${doneCount})` },
+            ] as const
+          ).map((tab) => {
+            const selected = filter === tab.id;
+            return (
+              <button
+                key={tab.id}
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 border border-border/80"
-                onClick={() => navigateToSection(id)}
+                aria-pressed={selected}
+                onClick={() => setFilter(tab.id)}
+                className={cn(
+                  "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                )}
+                style={{
+                  backgroundColor: selected ? "var(--cfg-surface)" : "transparent",
+                  borderColor: selected ? "var(--cfg-border)" : "transparent",
+                  color: selected ? "var(--cfg-fg)" : "var(--cfg-muted)",
+                }}
               >
-                {label}
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </Button>
-            ))}
-          </div>
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
-
-        <ul className="space-y-1.5 rounded-lg border border-border/60 bg-card-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          <li>
-            <span className="font-medium text-foreground">PDV:</span> após mudar layout ou modo em Configurações,
-            recarregue a tela de vendas para aplicar a preferência.
-          </li>
-          <li>
-            <span className="font-medium text-foreground">WhatsApp HUB:</span> abre o painel de conversas; não confirma
-            webhook Meta nem envio real — isso depende das variáveis no servidor.
-          </li>
-          <li>
-            <span className="font-medium text-foreground">Dashboard:</span> KPIs e gráficos podem misturar dados reais e
-            pré-visualizações; valide o que importa para a operação.
-          </li>
-        </ul>
+        <span className="text-xs" style={{ color: "var(--cfg-subtle)" }}>
+          Itens em <strong style={{ color: "var(--cfg-fg-body)" }}>Revisar</strong> pedem confirmação humana
+        </span>
       </div>
 
-      <p className="border-t border-border/80 px-6 py-3 text-xs text-muted-foreground">
-        Este checklist não substitui testes no PDV, WhatsApp ou financeiro real. Não envia dados ao servidor além das
-        APIs já usadas pelo painel.
-      </p>
+      {/* Lista de verificação */}
+      {filteredItems.length === 0 ? (
+        <div className="px-4 py-6 text-center text-xs sm:px-5" style={{ color: "var(--cfg-muted)" }}>
+          {filter === "attention"
+            ? "Todos os itens verificados estão concluídos para esta unidade."
+            : "Nenhum item concluído ainda para esta unidade."}
+        </div>
+      ) : (
+        <ul className="divide-y" style={{ borderColor: "var(--cfg-border)" }}>
+          {filteredItems.map((item) => {
+            const meta = STATUS_META[item.status];
+            return (
+              <li
+                key={item.id}
+                className="flex flex-col gap-2 px-4 py-2.5 transition-colors hover:bg-[var(--cfg-inset)] sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                style={{ borderColor: "var(--cfg-border)" }}
+              >
+                <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                  <span
+                    aria-hidden="true"
+                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: meta.dotColor }}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium leading-snug" style={{ color: "var(--cfg-fg)" }}>
+                      {item.label}
+                    </p>
+                    <p className="mt-0.5 text-xs leading-snug" style={{ color: "var(--cfg-muted)" }}>
+                      {item.hint}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2 pl-4 sm:pl-0">
+                  <SettingsStatusBadge tone={meta.tone}>{meta.label}</SettingsStatusBadge>
+                  {item.localTarget && onFocusEmpresa ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onFocusEmpresa(item.localTarget!)}
+                    >
+                      {item.linkLabel}
+                      <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  ) : item.targetSection ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigateToSection(item.targetSection!)}
+                    >
+                      {item.linkLabel}
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Rodapé operacional compacto + observações técnicas retráteis */}
+      <div
+        className="space-y-2.5 border-t px-4 py-3 sm:px-5"
+        style={{
+          borderColor: "var(--cfg-border)",
+          backgroundColor: "var(--cfg-inset)",
+        }}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold" style={{ color: "var(--cfg-fg-body)" }}>
+            Testar operação:
+          </span>
+          {(
+            [
+              { href: "/dashboard/vendas", label: "Abrir PDV" },
+              { href: "/dashboard/operacoes-v2", label: "Operações HUB" },
+              { href: "/dashboard", label: "Dashboard" },
+              { href: "/dashboard/whatsapp", label: "WhatsApp HUB" },
+            ] as const
+          ).map((mod) => (
+            <Button key={mod.href} variant="outline" size="sm" asChild>
+              <Link
+                href={mod.href}
+                onClick={(event) => {
+                  if (requestExternalNavigation(mod.href, mod.label)) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                {mod.label}
+                <ExternalLink className="h-3 w-3 opacity-70" aria-hidden="true" />
+              </Link>
+            </Button>
+          ))}
+        </div>
+
+        <SettingsCollapsible
+          title="Observações técnicas (3)"
+          summary="Recomendações de recarga do PDV, validação de WhatsApp e leitura do Dashboard"
+          expandedSummary="Este checklist não substitui testes reais nos módulos operacionais e não envia dados além das APIs do painel."
+        >
+          <ul className="space-y-1.5 text-xs leading-relaxed" style={{ color: "var(--cfg-muted)" }}>
+            <li>
+              <strong style={{ color: "var(--cfg-fg)" }}>PDV:</strong> após mudar layout ou modo em Configurações,
+              recarregue a tela de vendas para aplicar a preferência.
+            </li>
+            <li>
+              <strong style={{ color: "var(--cfg-fg)" }}>WhatsApp HUB:</strong> abre o painel de conversas; não confirma
+              webhook Meta nem envio real — isso depende das variáveis no servidor.
+            </li>
+            <li>
+              <strong style={{ color: "var(--cfg-fg)" }}>Dashboard:</strong> valide os indicadores reais após concluir o
+              cadastro operacional da unidade.
+            </li>
+          </ul>
+        </SettingsCollapsible>
+      </div>
     </div>
   );
+
+  if (embedded) {
+    return (
+      <div className="border-t" style={{ borderColor: "var(--cfg-border)" }}>
+        {body}
+      </div>
+    );
+  }
+
+  return <section className="cfg-card overflow-hidden">{body}</section>;
 }
