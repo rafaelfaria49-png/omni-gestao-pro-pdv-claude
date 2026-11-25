@@ -165,14 +165,20 @@ export const salvarPreferencias = (
 export const carregarCores = (loja: Loja) =>
   get<{ cores: CorEfetiva[]; linhas: CorLoja[] }>(loja, "/api/catalogo/compat/cores")
 
-export const criarCor = (loja: Loja, label: string) =>
-  send<{ id: string }>(loja, "/api/catalogo/compat/cores", "POST", { label })
+export const criarCor = (loja: Loja, label: string, visual?: string) =>
+  send<{ id: string; visual?: string }>(loja, "/api/catalogo/compat/cores", "POST", { label, ...(visual ? { visual } : {}) })
 
-export const atualizarCor = (loja: Loja, id: string, patch: { version: number; label?: string; ativo?: boolean }) =>
-  send<{ id: string }>(loja, "/api/catalogo/compat/cores", "PATCH", { id, ...patch })
+export const atualizarCor = (
+  loja: Loja,
+  id: string,
+  patch: { version: number; label?: string; ativo?: boolean; visual?: string },
+) => send<{ id: string }>(loja, "/api/catalogo/compat/cores", "PATCH", { id, ...patch })
 
-export const ativarCorPadrao = (loja: Loja, baseKey: string, ativo: boolean) =>
-  send<{ id: string }>(loja, "/api/catalogo/compat/cores", "PATCH", { baseKey, ativo })
+export const ativarCorPadrao = (loja: Loja, baseKey: string, ativo: boolean, visual?: string) =>
+  send<{ id: string }>(loja, "/api/catalogo/compat/cores", "PATCH", { baseKey, ativo, ...(visual ? { visual } : {}) })
+
+export const atualizarVisualCorPadrao = (loja: Loja, baseKey: string, visual: string) =>
+  send<{ id: string }>(loja, "/api/catalogo/compat/cores", "PATCH", { baseKey, visual })
 
 // ── Vínculos ────────────────────────────────────────────────────────────────
 

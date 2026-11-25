@@ -2,7 +2,7 @@ import { requireModuleApi } from "@/lib/auth/module-access"
 import { NextResponse } from "next/server"
 import { requireMarketplaceApi } from "@/lib/marketplace/api-gate"
 import {
-  deleteMarketplaceConnection,
+  disconnectSimulatedMarketplaceConnection,
   patchMarketplaceConnection,
   serializeMarketplaceConnection,
 } from "@/lib/marketplace/services/marketplace-connections-service"
@@ -68,7 +68,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const { id } = await ctx.params
   if (!id?.trim()) return NextResponse.json({ error: "id obrigatório" }, { status: 400 })
   await prismaEnsureConnected()
-  const ok = await deleteMarketplaceConnection(gate.storeId, id)
+  const ok = await disconnectSimulatedMarketplaceConnection(gate.storeId, id)
   if (!ok) return NextResponse.json({ error: "Conexão não encontrada" }, { status: 404 })
   return NextResponse.json({ ok: true })
 }

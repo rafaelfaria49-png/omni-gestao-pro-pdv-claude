@@ -4,7 +4,21 @@
  */
 import { describe, expect, it } from "vitest"
 import { ACESSORIO_CORES_PADRAO } from "@/lib/acessorios/cores"
-import { corLabelKey, corPadraoComMesmoNome, coresEfetivas, opcoesDeCorParaProduto, sanitizeCorLabel, type CorLoja } from "./cores-loja"
+import {
+  COR_PADRAO_VISUAL,
+  corEquivalenciaKey,
+  corLabelKey,
+  corPadraoComMesmoNome,
+  coresEfetivas,
+  extractCoresVisualFromConfig,
+  filtrarCoresPorBusca,
+  mergeCoresVisualIntoConfig,
+  opcoesDeCorParaProduto,
+  sanitizeCorLabel,
+  sanitizeCorVisual,
+  sugerirVisualParaCor,
+  type CorLoja,
+} from "./cores-loja"
 import {
   COMPAT_PREFERENCIAS_PADRAO,
   localNomeKey,
@@ -48,6 +62,34 @@ describe("cores da loja", () => {
     // captura de cor desativada = nenhuma opção
     expect(opcoesDeCorParaProduto([], linhas, null)).toEqual([])
   })
+
+  it("representação visual, busca tolerante e equivalência com hífen/acento/espaço", () => {
+    expect(corEquivalenciaKey("Azul-marinho")).toBe(corEquivalenciaKey("  AZUL   marinho "))
+    expect(corEquivalenciaKey("Azúl-marinho")).toBe(corEquivalenciaKey("azul marinho"))
+    expect(corPadraoComMesmoNome("azul-claro")).toBe("azul_claro")
+    expect(sanitizeCorVisual("#1e3a8a")).toBe("#1E3A8A")
+    expect(sanitizeCorVisual("transparente")).toBe("transparente")
+    expect(sanitizeCorVisual("FUME")).toBe("fume")
+    expect(sanitizeCorVisual("colorida")).toBe("colorida")
+    expect(sanitizeCorVisual("javascript:alert(1)")).toBeNull()
+    expect(sanitizeCorVisual("#123")).toBeNull()
+    expect(sugerirVisualParaCor("Azul-marinho")).toBe("#1E3A8A")
+    expect(sugerirVisualParaCor("Transparente fosco")).toBe("transparente")
+    expect(sugerirVisualParaCor("Fumê escuro")).toBe("fume")
+
+    const merged = mergeCoresVisualIntoConfig({ GOOGLE: true, MOTOROLA: false }, { c1: "#1E3A8A", preto: "#000000" })
+    expect(merged.GOOGLE).toBe(true)
+    expect(merged.MOTOROLA).toBe(false)
+    expect(extractCoresVisualFromConfig(merged)).toEqual({ c1: "#1E3A8A", preto: "#000000" })
+
+    const linhas = [cor({ id: "c1", label: "Azul-marinho" })]
+    const efetivas = coresEfetivas(linhas, { c1: "#0F172A", rosa: "#F472B6" })
+    expect(efetivas.find((c) => c.id === "c1")?.visual).toBe("#0F172A")
+    expect(efetivas.find((c) => c.id === "rosa")?.visual).toBe("#F472B6")
+    expect(efetivas.find((c) => c.id === "transparente")?.visual).toBe(COR_PADRAO_VISUAL.transparente)
+    expect(filtrarCoresPorBusca(efetivas, "azul mar").map((c) => c.label)).toEqual(["Azul-marinho"])
+    expect(filtrarCoresPorBusca(efetivas, "lilas").map((c) => c.label)).toEqual(["Lilás"])
+  })
 })
 
 describe("painéis e fileiras", () => {
@@ -79,9 +121,18 @@ describe("painéis e fileiras", () => {
     expect(rotuloLocalizacao({ painelNome: "Painel 1" })).toBe("Painel 1")
   })
 
-  it("preferências: PATCH parcial ignora valores inválidos", () => {
-    const p = mergePreferencias({ ...COMPAT_PREFERENCIAS_PADRAO, version: 2 }, { posicoesHabilitadas: true, modoCorPadrao: "xyz" })
-    expect(p).toEqual({ posicoesHabilitadas: true, modoModeloPadrao: "opcional", modoCorPadrao: "opcional", marcasConfig: {}, version: 2 })
+  it("preferências: PATCH parcial ignora valores inválidos e chaves reservadas __*", () => {
+    const p = mergePreferencias(
+      { ...COMPAT_PREFERENCIAS_PADRAO, version: 2 },
+      { posicoesHabilitadas: true, modoCorPadrao: "xyz", marcas: { __coresVisual: true, Google: false } },
+    )
+    expect(p).toEqual({
+      posicoesHabilitadas: true,
+      modoModeloPadrao: "opcional",
+      modoCorPadrao: "opcional",
+      marcasConfig: { GOOGLE: false },
+      version: 2,
+    })
   })
 })
 

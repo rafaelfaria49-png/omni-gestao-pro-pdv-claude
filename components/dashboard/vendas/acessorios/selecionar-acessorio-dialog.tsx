@@ -39,9 +39,10 @@ import { rotuloLocalizacao } from "@/lib/compat/organizacao"
 import type { AcessorioColorKey } from "@/lib/acessorios/cores"
 import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { CadastrarModeloAparelhoDialog } from "@/components/dashboard/catalogo/cadastrar-modelo-aparelho-dialog"
+import { MostrarMaisModelos } from "@/components/dashboard/catalogo/mostrar-mais-modelos"
+import { useBuscaModelos } from "@/components/dashboard/catalogo/use-busca-modelos"
 
 // COMPAT-PROFISSIONAL-001 — cores da loja e "onde está" com cache curto em memória: o PDV
 // não pode esperar rede a cada item. Falha de rede = segue só com a paleta padrão (nunca bloqueia).
@@ -168,9 +169,6 @@ export function SelecionarAcessorioDialog({
   const [ondeEsta, setOndeEsta] = useState<string | null>(null)
 
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<DeviceSearchResult[]>([])
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
   const [modelo, setModelo] = useState<ModeloSelecionado | null>(null)
   const [colorKey, setColorKey] = useState<AcessorioColorKey | null>(null)
   const [customColor, setCustomColor] = useState("")
@@ -181,15 +179,25 @@ export function SelecionarAcessorioDialog({
   // e cadastro de modelo novo sem sair da venda. Não mexe em carrinho, preço ou estoque.
   const { lojaAtivaId } = useLojaAtiva()
   const lojaHeader = (lojaAtivaId ?? "").trim() || null
+  // COMPAT-BUSCA-MODELOS-NATURAL-001: busca na base única, paginada (ordem natural + "Mostrar mais").
+  // Debounce + cancelamento: resposta antiga abortada nunca sobrescreve a busca mais nova.
+  const busca = useBuscaModelos({
+    query,
+    lojaHeader,
+    enabled: open && mostraModelo,
+    debounceMs: 300,
+    errorMessage: "Falha ao buscar modelos. Tente novamente.",
+  })
+  const { results, limpar: limparBusca } = busca
+  const searching = busca.loading
+  const searchError = busca.error || null
   const [cadastroOpen, setCadastroOpen] = useState(false)
   const [cadastroNome, setCadastroNome] = useState("")
 
   const resetTemporaryState = useCallback(() => {
     const empty = createEmptyAccessoryDialogState()
     setQuery(empty.query)
-    setResults(empty.results)
-    setSearching(empty.searching)
-    setSearchError(empty.searchError)
+    limparBusca()
     setModelo(empty.modelo)
     setColorKey(empty.colorKey)
     setCustomColor(empty.customColor)
@@ -199,7 +207,7 @@ export function SelecionarAcessorioDialog({
     setCorLojaId(null)
     setOndeEsta(null)
     setCoresProntas(false)
-  }, [])
+  }, [limparBusca])
 
   const closeAndReset = useCallback(() => {
     closeAccessoryDialog(resetTemporaryState, onCancel)
@@ -242,51 +250,6 @@ export function SelecionarAcessorioDialog({
     }
   }, [open, modelo, config?.tipo, lojaHeader])
 
-  // Busca na base única com debounce + cancelamento da requisição anterior:
-  // resposta antiga abortada nunca sobrescreve o resultado da busca mais nova.
-  useEffect(() => {
-    if (!open || !mostraModelo) return
-    const q = query.trim()
-    if (q.length < 2) {
-      setResults([])
-      setSearching(false)
-      setSearchError(null)
-      return
-    }
-    setSearching(true)
-    setSearchError(null)
-    const controller = new AbortController()
-    const timer = window.setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/catalogo/aparelhos/search?q=${encodeURIComponent(q)}`, {
-          credentials: "include",
-          cache: "no-store",
-          signal: controller.signal,
-          ...(lojaHeader ? { headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader } } : {}),
-        })
-        if (!res.ok) {
-          setResults([])
-          setSearchError("Falha ao buscar modelos. Tente novamente.")
-          return
-        }
-        const data = (await res.json().catch(() => null)) as
-          | { results?: DeviceSearchResult[] }
-          | null
-        setResults(Array.isArray(data?.results) ? data.results : [])
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return
-        setResults([])
-        setSearchError("Falha ao buscar modelos. Tente novamente.")
-      } finally {
-        if (!controller.signal.aborted) setSearching(false)
-      }
-    }, 300)
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-  }, [query, open, mostraModelo, lojaHeader])
-
   const selectionCandidate = useMemo(
     () => ({
       version: 1,
@@ -327,7 +290,7 @@ export function SelecionarAcessorioDialog({
   const handleSelectModelo = (r: DeviceSearchResult) => {
     setModelo({ modelKey: r.modelKey, brand: r.brand, name: r.canonicalName || r.modelKey })
     setQuery("")
-    setResults([])
+    limparBusca()
     setConfirmErrors([])
   }
 
@@ -481,6 +444,14 @@ export function SelecionarAcessorioDialog({
                             </span>
                           </button>
                         ))}
+                      {!searching && busca.hasMore && (
+                        <MostrarMaisModelos
+                          mostrados={results.length}
+                          total={busca.total}
+                          loading={busca.loadingMore}
+                          onMostrarMais={() => void busca.carregarMais()}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -590,7 +561,7 @@ export function SelecionarAcessorioDialog({
           onCreated={(m) => {
             setModelo({ modelKey: m.modelKey, brand: m.brand, name: m.canonicalName })
             setQuery("")
-            setResults([])
+            limparBusca()
             setConfirmErrors([])
           }}
         />

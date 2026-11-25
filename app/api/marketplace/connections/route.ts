@@ -24,6 +24,8 @@ export async function GET(req: Request) {
   const rows = await listMarketplaceConnections(gate.storeId)
   return NextResponse.json({
     connections: rows.map(serializeMarketplaceConnection),
+  }, {
+    headers: { "Cache-Control": "private, no-store", Vary: "Cookie, X-Assistec-Loja-Id" },
   })
 }
 
@@ -45,6 +47,9 @@ export async function POST(req: Request) {
       { error: "provider inválido. Use: MERCADO_LIVRE | SHOPEE | AMAZON | MAGALU." },
       { status: 400 }
     )
+  }
+  if (provider === "MERCADO_LIVRE") {
+    return NextResponse.json({ error: "Use Conectar Mercado Livre para autorizar a conta no canal oficial." }, { status: 409 })
   }
   const accountRaw =
     body && typeof body === "object" && "accountName" in body ? (body as { accountName?: unknown }).accountName : ""

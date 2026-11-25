@@ -234,6 +234,11 @@ const nextConfig = {
         headers: securityHeaders,
       },
       {
+        // A política geral também chega aos redirects do Route Handler.
+        source: "/api/marketplace/mercado-livre/callback",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
         source: "/dashboard",
         headers: privateNoStoreHeaders,
       },

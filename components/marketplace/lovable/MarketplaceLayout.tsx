@@ -39,13 +39,12 @@ import {
   Download as DownloadIcon,
   Search as SearchIcon,
 } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { MarketplaceSettingsDrawer } from "./MarketplaceSettingsDrawer";
 import { useToast } from "@/hooks/use-toast";
 import { useLojaAtiva } from "@/lib/loja-ativa";
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useMarketplaceConnections } from "@/components/marketplace/use-marketplace-connections";
 import { MarketplaceConnectionsReal } from "@/components/marketplace/MarketplaceConnectionsReal";
 import { MarketplaceCatalogReal } from "@/components/marketplace/MarketplaceCatalogReal";
@@ -53,20 +52,6 @@ import { MarketplaceAnnouncementsPanel } from "@/components/marketplace/Marketpl
 
 const PENDING_TOAST_DESCRIPTION =
   "Funcionalidade em preparação. Integração real será ativada nas próximas etapas.";
-
-function formatTimeAgoPt(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  const diffMs = Date.now() - d.getTime();
-  if (diffMs < 0) return "—";
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `há ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `há ${h} h`;
-  const days = Math.floor(h / 24);
-  return `há ${days} d`;
-}
 
 const alerts = [
   {
@@ -274,29 +259,18 @@ export default function MarketplaceLayout() {
   const { lojaAtivaId } = useLojaAtiva();
   const mpHub = useMarketplaceConnections(lojaAtivaId);
 
-  useEffect(() => {
-    if (!lojaAtivaId?.trim()) setCatalogProductCount(null);
-  }, [lojaAtivaId]);
-
-  const lastGlobalSync = useMemo(() => {
-    let max: string | null = null;
-    for (const c of mpHub.connections) {
-      if (!c.lastSyncAt) continue;
-      if (!max || new Date(c.lastSyncAt) > new Date(max)) max = c.lastSyncAt;
-    }
-    return max;
-  }, [mpHub.connections]);
-
-  const [catalogProductCount, setCatalogProductCount] = useState<number | null>(null);
+  const [catalog, setCatalog] = useState<{ storeId: string | null; count: number } | null>(null);
+  const catalogProductCount = catalog && catalog.storeId === lojaAtivaId ? catalog.count : null;
+  const setCatalogProductCount = useCallback((count: number) => setCatalog({ storeId: lojaAtivaId, count }), [lojaAtivaId]);
 
   const summary = useMemo(
     () => [
-      { label: "Vendas hoje", value: "R$ 28.940", delta: "+12,4%", icon: TrendingUp, tone: "text-success" },
-      { label: "Pedidos ativos", value: "146", delta: "+8 novos", icon: ShoppingCart, tone: "text-info" },
+      { label: "Vendas hoje", value: "R$ 28.940", delta: "Demonstração", icon: TrendingUp, tone: "text-muted-foreground" },
+      { label: "Pedidos ativos", value: "146", delta: "Demonstração", icon: ShoppingCart, tone: "text-muted-foreground" },
       {
-        label: "Marketplaces conectados",
+        label: "Conexões oficiais validadas",
         value: String(mpHub.connectedCount),
-        delta: mpHub.connectedCount > 0 ? "Canais ativos" : "Nenhum canal",
+        delta: mpHub.connectedCount > 0 ? "Mercado Livre" : "Nenhuma conta validada",
         icon: Plug,
         tone: "text-primary",
       },
@@ -316,46 +290,6 @@ export default function MarketplaceLayout() {
       title: "Integração pendente",
       description: PENDING_TOAST_DESCRIPTION,
     });
-
-  const syncAllConnected = async () => {
-    const sid = lojaAtivaId?.trim();
-    if (!sid) {
-      toast({
-        title: "Unidade não selecionada",
-        description: "Selecione a loja no cabeçalho para sincronizar.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const targets = mpHub.connections.filter((c) => c.status === "CONNECTED");
-    if (targets.length === 0) {
-      toast({ title: "Nada para sincronizar", description: "Conecte ao menos um canal primeiro." });
-      return;
-    }
-    for (const c of targets) {
-      const r = await fetch(`/api/marketplace/connections/${encodeURIComponent(c.id)}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          [ASSISTEC_LOJA_HEADER]: sid,
-        },
-        body: JSON.stringify({ simulateSync: true }),
-      });
-      if (!r.ok) {
-        const j = (await r.json().catch(() => null)) as { error?: string } | null;
-        toast({
-          title: "Sincronização interrompida",
-          description: j?.error || `Erro ${r.status}`,
-          variant: "destructive",
-        });
-        await mpHub.refetch();
-        return;
-      }
-    }
-    await mpHub.refetch();
-    toast({ title: "Sincronização concluída", description: "Todos os canais conectados foram processados." });
-  };
 
   const [autos, setAutos] = useState(() => Object.fromEntries(automations.map((a) => [a.id, a.on])));
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -419,35 +353,20 @@ export default function MarketplaceLayout() {
 
         {/* Page header */}
         <div className="px-4 sm:px-8 pt-8 pb-4 animate-fade-in">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-medium text-muted-foreground mb-3">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-soft" />
-            {mpHub.connectedCount}{" "}
-            {mpHub.connectedCount === 1 ? "canal conectado" : "canais conectados"} · Última sincronização{" "}
-            {formatTimeAgoPt(lastGlobalSync)}
-          </div>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="min-w-0">
               <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">Marketplace</h1>
               <p className="mt-2 text-sm sm:text-base text-muted-foreground max-w-3xl">
-                Gerencie canais de venda, produtos, pedidos e automações em um só lugar.
+                Conecte sua conta Mercado Livre e consulte os anúncios da unidade selecionada.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void syncAllConnected()}
-                title="Sincronizar todos os canais conectados"
-                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-              >
-                <RefreshCw className="h-4 w-4" /> Sincronizar agora
-              </button>
-              <button
-                onClick={showPendingToast}
-                title="Integração pendente"
+              <a
+                href="#conexoes-marketplace"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shadow-[var(--shadow-glow)]"
               >
-                <Plus className="h-4 w-4" /> Publicar produto
-              </button>
+                <Plug className="h-4 w-4" /> Conexões da unidade
+              </a>
               <button
                 onClick={() => setSettingsOpen(true)}
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
@@ -493,10 +412,10 @@ export default function MarketplaceLayout() {
             <SectionHeader
               icon={Bell}
               title="Central de alertas"
-              subtitle="Itens críticos que precisam da sua atenção"
+              subtitle="Exemplos de alertas · Em preparação"
               action={
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-0.5 text-xs font-semibold text-warning">
-                  {alerts.length} ativos
+                  {alerts.length} exemplos
                 </span>
               }
             />
@@ -533,18 +452,18 @@ export default function MarketplaceLayout() {
           </section>
 
           {/* ============ Conexões (dados reais) ============ */}
-          <section>
+          <section id="conexoes-marketplace" className="scroll-mt-20">
             <SectionHeader
               icon={Plug}
               title="Conexões de marketplace"
-              subtitle="Contas vinculadas a esta unidade, com histórico de sincronização persistido"
+              subtitle="Autorize a leitura de anúncios na unidade selecionada"
             />
-            <MarketplaceConnectionsReal storeId={lojaAtivaId} hub={mpHub} />
+            <MarketplaceConnectionsReal key={lojaAtivaId} storeId={lojaAtivaId} hub={mpHub} />
           </section>
 
           {/* ============ Ações rápidas ============ */}
           <section>
-            <SectionHeader icon={Zap} title="Ações rápidas" subtitle="Operações comuns em um clique" />
+            <SectionHeader icon={Zap} title="Ações rápidas" subtitle="Em preparação" />
             <div className="surface-card rounded-2xl border border-border bg-card p-3 flex flex-wrap gap-2">
               {quickActions.map((q) => {
                 const Icon = q.icon;
@@ -577,6 +496,7 @@ export default function MarketplaceLayout() {
               subtitle="Produtos do cadastro (estoque) por unidade — exportação e sync gravam MarketplaceProductLink e MarketplaceSyncLog"
             />
             <MarketplaceCatalogReal
+              key={lojaAtivaId}
               storeId={lojaAtivaId}
               connections={mpHub.connections}
               onProductCount={setCatalogProductCount}
@@ -588,10 +508,11 @@ export default function MarketplaceLayout() {
           <section>
             <SectionHeader
               icon={Tags}
-              title="Anúncios por canal"
-              subtitle="Painel operacional dos vínculos MarketplaceProductLink — filtros, ações simuladas e logs por produto/canal"
+              title="Anúncios simulados por canal"
+              subtitle="Histórico local de demonstração"
             />
             <MarketplaceAnnouncementsPanel
+              key={lojaAtivaId}
               storeId={lojaAtivaId}
               connections={mpHub.connections}
               onActivity={() => mpHub.refetch()}
@@ -603,7 +524,7 @@ export default function MarketplaceLayout() {
             <SectionHeader
               icon={ShoppingCart}
               title="Pedidos"
-              subtitle="Todos os pedidos consolidados dos seus canais"
+              subtitle="Pedidos de demonstração · Em preparação"
               action={
                 <div className="flex items-center gap-2">
                   <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
@@ -714,7 +635,7 @@ export default function MarketplaceLayout() {
             <SectionHeader
               icon={MessageSquare}
               title="SAC unificado"
-              subtitle="Todas as conversas dos seus canais em um só inbox"
+              subtitle="Conversas de demonstração · Em preparação"
               action={<AIBadge label="Resposta IA" />}
             />
             <div className="surface-card rounded-2xl border border-border bg-card overflow-hidden grid grid-cols-1 md:grid-cols-[300px_1fr] min-h-[480px]">
@@ -823,7 +744,7 @@ export default function MarketplaceLayout() {
             <SectionHeader
               icon={FileText}
               title="Notas fiscais (NF-e)"
-              subtitle="Emita e acompanhe o status fiscal dos seus pedidos"
+              subtitle="Status fiscais de demonstração · Em preparação"
               action={
                 <button
                   onClick={showPendingToast}
@@ -892,7 +813,7 @@ export default function MarketplaceLayout() {
             <SectionHeader
               icon={Sparkles}
               title="Automação inteligente"
-              subtitle="Deixe a IA cuidar das tarefas repetitivas"
+              subtitle="Automações de demonstração · Em preparação"
               action={<AIBadge label="IA Ativa" />}
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -944,7 +865,7 @@ export default function MarketplaceLayout() {
 
           {/* ============ Analytics ============ */}
           <section>
-            <SectionHeader icon={BarChart3} title="Analytics" subtitle="Performance por canal e produtos campeões" />
+            <SectionHeader icon={BarChart3} title="Analytics" subtitle="Indicadores de demonstração · Em preparação" />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="surface-card rounded-2xl border border-border bg-card p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -996,7 +917,7 @@ export default function MarketplaceLayout() {
             <SectionHeader
               icon={DollarSign}
               title="Visão de lucro"
-              subtitle="Margem real consolidada e por canal"
+              subtitle="Margem de demonstração · Em preparação"
               action={<AIBadge label="Insight IA" />}
             />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

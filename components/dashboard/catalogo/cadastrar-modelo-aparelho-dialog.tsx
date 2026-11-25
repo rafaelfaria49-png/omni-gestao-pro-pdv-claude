@@ -82,7 +82,8 @@ export function CadastrarModeloAparelhoDialog({
     setBusy(false)
   }, [open, initialName])
 
-  const canSave = !busy && brand.trim().length > 0 && name.trim().length >= 2
+  // COMPAT-BUSCA-MODELOS-NATURAL-001: "7", "8", "X" são nomes válidos (marca iPhone → "iPhone 7").
+  const canSave = !busy && brand.trim().length > 0 && name.trim().length > 0
 
   const handleSave = async () => {
     if (!canSave) return
@@ -129,6 +130,11 @@ export function CadastrarModeloAparelhoDialog({
             lojaHeader={lojaHeader}
             errors={failure?.errors}
             autoFocus
+            onUsarExistente={(m) => {
+              if (busy) return
+              onCreated({ modelKey: m.modelKey, brand: m.brand, canonicalName: m.canonicalName || m.modelKey }, null)
+              onOpenChange(false)
+            }}
           />
 
           <div className="space-y-1.5">

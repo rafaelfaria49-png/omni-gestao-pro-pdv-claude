@@ -19,6 +19,8 @@ import {
 } from "@/lib/catalogo-aparelhos/loja-catalogo-store"
 import {
   addLocalizacao,
+  chaveLockCores,
+  chaveLockPreferencias,
   chaveLockPrincipal,
   createCorLoja,
   createFileira,
@@ -26,6 +28,7 @@ import {
   deleteLocal,
   getPreferencias,
   listCoresLoja,
+  listCoresVisual,
   listLocalizacoes,
   listOrganizacao,
   listDevolucoesPorVenda,
@@ -313,18 +316,23 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
   // ── Cores ──────────────────────────────────────────────────────────────────
 
   it("cores: cadastra, impede duplicata por grafia e nome da paleta, renomeia, desativa e isola", async () => {
-    const c = await createCorLoja(db, A, "u-a", { label: "Azul Bebê" })
+    const c = await createCorLoja(db, A, "u-a", { label: "Azul Bebê", visual: "#93C5FD" })
     expect(c.ok).toBe(true)
     if (!c.ok) return
+    expect(c.value.visual).toBe("#93C5FD")
     expect(await createCorLoja(db, A, "u-a", { label: "azul  bebe" })).toMatchObject({ ok: false, code: "DUPLICATE" })
+    expect(await createCorLoja(db, A, "u-a", { label: "Azul-bebê" })).toMatchObject({ ok: false, code: "DUPLICATE" })
     expect(await createCorLoja(db, A, "u-a", { label: "Preto" })).toMatchObject({ ok: false, code: "DUPLICATE" })
-    expect((await updateCorLoja(db, A, "u-a", c.value.id, { version: 1, label: "Azul bebê claro" })).ok).toBe(true)
+    expect(await createCorLoja(db, A, "u-a", { label: "Cor Ruim", visual: "red;drop" })).toMatchObject({ ok: false, code: "INVALID" })
+    expect((await updateCorLoja(db, A, "u-a", c.value.id, { version: 1, label: "Azul-marinho", visual: "#1E3A8A" })).ok).toBe(true)
     expect((await updateCorLoja(db, A, "u-a", c.value.id, { version: 2, ativo: false })).ok).toBe(true)
     expect((await setCorPadraoAtiva(db, A, "u-a", "fume", false)).ok).toBe(true)
+    expect((await setCorPadraoAtiva(db, A, "u-a", "rosa", undefined, "#F472B6")).ok).toBe(true)
     expect(await setCorPadraoAtiva(db, A, "u-a", "outra", false)).toMatchObject({ ok: false, code: "INVALID" })
-    const efetivas = coresEfetivas(await listCoresLoja(db, A))
+    const efetivas = coresEfetivas(await listCoresLoja(db, A), await listCoresVisual(db, A))
     expect(efetivas.find((x) => x.id === "fume")?.ativo).toBe(false)
-    expect(efetivas.find((x) => x.id === c.value.id)).toMatchObject({ label: "Azul bebê claro", ativo: false })
+    expect(efetivas.find((x) => x.id === "rosa")?.visual).toBe("#F472B6")
+    expect(efetivas.find((x) => x.id === c.value.id)).toMatchObject({ label: "Azul-marinho", ativo: false, visual: "#1E3A8A" })
     expect(await listCoresLoja(db, B)).toEqual([])
     expect(await updateCorLoja(db, B, "u-b", c.value.id, { version: 3, ativo: true })).toMatchObject({ ok: false, code: "NOT_FOUND" })
   })
@@ -424,5 +432,80 @@ describe.skipIf(!TEST_URL)("Compat profissional — PostgreSQL descartável", ()
     await expect(
       db.compatLocalizacao.create({ data: { storeId: A, painelId: p1, modelKey: "" } }),
     ).rejects.toThrow()
+  })
+
+  it("concorrência de cores e integridade de __coresVisual × marcasConfig (sem migration)", async () => {
+    // 1. Criação concorrente de equivalentes (hífen × espaço × caixa): exatamente 1 grava, demais DUPLICATE.
+    const corridaCreate = await Promise.all([
+      createCorLoja(db, A, "u-a1", { label: "Verde-limão", visual: "#84CC16" }),
+      createCorLoja(db, A, "u-a2", { label: "Verde limão", visual: "#65A30D" }),
+      createCorLoja(db, A, "u-a3", { label: "  VERDE   LIMAO ", visual: "#4D7C0F" }),
+    ])
+    expect(corridaCreate.filter((r) => r.ok)).toHaveLength(1)
+    expect(corridaCreate.filter((r) => !r.ok && r.code === "DUPLICATE")).toHaveLength(2)
+
+    // 2. Edição concorrente de duas cores distintas para o mesmo nome equivalente: só 1 vence.
+    const r1 = await createCorLoja(db, A, "u-a1", { label: "Terracota A", visual: "#C2410C" })
+    const r2 = await createCorLoja(db, A, "u-a2", { label: "Terracota B", visual: "#9A3412" })
+    expect(r1.ok && r2.ok).toBe(true)
+    if (!r1.ok || !r2.ok) return
+    const corridaRename = await Promise.all([
+      updateCorLoja(db, A, "u-a1", r1.value.id, { version: 1, label: "Coral-vivo" }),
+      updateCorLoja(db, A, "u-a2", r2.value.id, { version: 1, label: "Coral vivo" }),
+    ])
+    expect(corridaRename.filter((r) => r.ok)).toHaveLength(1)
+    expect(corridaRename.filter((r) => !r.ok && r.code === "DUPLICATE")).toHaveLength(1)
+
+    // 3. Escrita concorrente de marcas/preferências + visual de cores na MESMA loja: nenhum sobrescreve o outro.
+    const prefAntes = await getPreferencias(db, A)
+    const [prefRes, vis1, vis2] = await Promise.all([
+      setPreferencias(db, A, "u-a1", {
+        version: prefAntes.version,
+        marcas: { Samsung: false, __coresVisual: true as unknown as boolean },
+      }),
+      setCorPadraoAtiva(db, A, "u-a2", "azul", undefined, "#1D4ED8"),
+      setCorPadraoAtiva(db, A, "u-a3", "verde", undefined, "#15803D"),
+    ])
+    expect(prefRes.ok).toBe(true)
+    expect(vis1.ok).toBe(true)
+    expect(vis2.ok).toBe(true)
+
+    const prefDepois = await getPreferencias(db, A)
+    expect(prefDepois.marcasConfig.SAMSUNG).toBe(false)
+    expect(prefDepois.marcasConfig.GOOGLE).toBe(true)
+    expect(Object.keys(prefDepois.marcasConfig).some((k) => k.startsWith("__") || k === "CORESVISUAL")).toBe(false)
+
+    const visuaisDepois = await listCoresVisual(db, A)
+    expect(visuaisDepois.azul).toBe("#1D4ED8")
+    expect(visuaisDepois.verde).toBe("#15803D")
+    expect(visuaisDepois.rosa).toBe("#F472B6")
+
+    // 4. Isolamento do lock entre lojas: lock na Loja A não bloqueia Loja B; zero lock residual após commit.
+    const estado = (p: Promise<unknown>) =>
+      Promise.race([p.then(() => "ok"), new Promise((r) => setTimeout(() => r("esperando"), 350))])
+    let soltar!: () => void
+    const liberado = new Promise<void>((r) => (soltar = r))
+    let travado!: () => void
+    const segurando = new Promise<void>((r) => (travado = r))
+    const dono = db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${chaveLockCores(A)}))::text AS lock`
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${chaveLockPreferencias(A)}))::text AS lock`
+      travado()
+      await liberado
+    }, { timeout: 20000 })
+    await segurando
+
+    const writeB = createCorLoja(db, B, "u-b", { label: "Azul-petróleo", visual: "#0F766E" })
+    expect(await estado(writeB)).toBe("ok")
+    expect((await writeB).ok).toBe(true)
+
+    const writeA = createCorLoja(db, A, "u-a", { label: "Cobre metálico", visual: "#B45309" })
+    expect(await estado(writeA)).toBe("esperando")
+    soltar()
+    await dono
+    expect((await writeA).ok).toBe(true)
+
+    const sobra = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`
+    expect(sobra[0].n).toBe(0)
   })
 })

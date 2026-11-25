@@ -2,14 +2,15 @@ import type { MarketplaceConnectionStatus, MarketplaceProvider } from "@/generat
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { MARKETPLACE_PROVIDER_IDS } from "@/lib/marketplace/providers"
+import { MELI_CONNECTION_PREFIX } from "@/lib/marketplace/mercado-livre/config"
 
 const TOKEN_PLACEHOLDER = "[encrypted:placeholder]"
 
 const SYNC_MESSAGES = [
-  "Sincronizando anúncios…",
-  "Pedidos importados",
-  "Estoque sincronizado",
-  "Preço atualizado",
+  "Simulação de leitura de anúncios",
+  "Simulação de importação de pedidos",
+  "Simulação de sincronização de estoque",
+  "Simulação de atualização de preço",
 ] as const
 
 /** Select único para listagem / API — evita uniões de payload sem `syncLogs`. */
@@ -40,6 +41,7 @@ export function serializeMarketplaceConnection(row: MarketplaceConnectionApiRow)
     id: row.id,
     storeId: row.storeId,
     provider: row.provider,
+    mode: "simulation" as const,
     accountName: row.accountName,
     status: row.status,
     metadata: row.metadata ?? null,
@@ -72,7 +74,7 @@ function metadataToPrismaUpdate(
 
 export async function listMarketplaceConnections(storeId: string): Promise<MarketplaceConnectionApiRow[]> {
   return prisma.marketplaceConnection.findMany({
-    where: { storeId },
+    where: { storeId, NOT: { id: { startsWith: MELI_CONNECTION_PREFIX } } },
     orderBy: [{ provider: "asc" }, { createdAt: "asc" }],
     select: MARKETPLACE_CONNECTION_API_SELECT,
   })
@@ -107,6 +109,7 @@ export async function patchMarketplaceConnection(input: {
   metadata?: Record<string, unknown> | null
   simulateSync?: boolean
 }): Promise<MarketplaceConnectionApiRow | null> {
+  if (input.id.startsWith(MELI_CONNECTION_PREFIX)) return null
   const existing = await prisma.marketplaceConnection.findFirst({
     where: { id: input.id, storeId: input.storeId },
   })
@@ -124,7 +127,7 @@ export async function patchMarketplaceConnection(input: {
         })),
       }),
       prisma.marketplaceConnection.update({
-        where: { id: input.id },
+        where: { id: input.id, storeId: input.storeId },
         data: {
           status: "CONNECTED",
           lastSyncAt: now,
@@ -153,7 +156,7 @@ export async function patchMarketplaceConnection(input: {
   }
 
   await prisma.marketplaceConnection.update({
-    where: { id: input.id },
+    where: { id: input.id, storeId: input.storeId },
     data,
   })
   return prisma.marketplaceConnection.findFirst({
@@ -162,8 +165,9 @@ export async function patchMarketplaceConnection(input: {
   })
 }
 
-export async function deleteMarketplaceConnection(storeId: string, id: string) {
-  const r = await prisma.marketplaceConnection.deleteMany({ where: { id, storeId } })
+export async function disconnectSimulatedMarketplaceConnection(storeId: string, id: string) {
+  if (id.startsWith(MELI_CONNECTION_PREFIX)) return false
+  const r = await prisma.marketplaceConnection.updateMany({ where: { id, storeId }, data: { status: "DISCONNECTED" } })
   return r.count === 1
 }
 

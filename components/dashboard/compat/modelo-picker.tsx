@@ -5,13 +5,14 @@
  * grafias diferentes e busca parcial. Teclado: ↑/↓ navega, Enter seleciona, Esc limpa.
  */
 
-import { useEffect, useId, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { Loader2, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { DeviceSearchResult } from "@/lib/catalogo-aparelhos/types"
+import { MostrarMaisModelos } from "@/components/dashboard/catalogo/mostrar-mais-modelos"
+import { useBuscaModelos } from "@/components/dashboard/catalogo/use-busca-modelos"
 
 export type ModeloEscolhido = { modelKey: string; canonicalName: string; brand: string; source?: "global" | "loja" }
 
@@ -36,57 +37,25 @@ export function ModeloPicker({
 }) {
   const uid = useId()
   const [q, setQ] = useState("")
-  const [results, setResults] = useState<DeviceSearchResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
   const [ativo, setAtivo] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const excluirKey = excluir.join("|")
-
+  // COMPAT-BUSCA-MODELOS-NATURAL-001: busca paginada (ordem natural + "Mostrar mais").
+  const busca = useBuscaModelos({ query: q, lojaHeader })
+  const { loading, error } = busca
+  const results = useMemo(() => {
+    const fora = new Set(excluirKey ? excluirKey.split("|") : [])
+    return busca.results.filter((r) => !fora.has(r.modelKey))
+  }, [busca.results, excluirKey])
+  const termo = q.trim()
   useEffect(() => {
-    const termo = q.trim()
-    if (termo.length < 2) {
-      setResults([])
-      setLoading(false)
-      setError("")
-      return
-    }
-    setLoading(true)
-    const controller = new AbortController()
-    const t = window.setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/catalogo/aparelhos/search?q=${encodeURIComponent(termo)}`, {
-          credentials: "include",
-          cache: "no-store",
-          signal: controller.signal,
-          ...(lojaHeader ? { headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader } } : {}),
-        })
-        if (!res.ok) throw new Error(String(res.status))
-        const data = (await res.json()) as { results?: DeviceSearchResult[] }
-        const fora = new Set(excluirKey ? excluirKey.split("|") : [])
-        if (!controller.signal.aborted) {
-          setResults((data.results ?? []).filter((r) => !fora.has(r.modelKey)))
-          setAtivo(0)
-          setError("")
-        }
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return
-        setResults([])
-        setError("Falha ao buscar modelos.")
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
-      }
-    }, 250)
-    return () => {
-      window.clearTimeout(t)
-      controller.abort()
-    }
-  }, [q, lojaHeader, excluirKey])
+    setAtivo(0)
+  }, [termo])
 
   const escolher = (r: DeviceSearchResult) => {
     onSelect({ modelKey: r.modelKey, canonicalName: r.canonicalName || r.modelKey, brand: r.brand, source: r.source })
     setQ("")
-    setResults([])
+    busca.limpar()
     queueMicrotask(() => inputRef.current?.focus())
   }
 
@@ -183,6 +152,14 @@ export function ModeloPicker({
               </span>
             </button>
           ))}
+          {!loading && busca.hasMore && (
+            <MostrarMaisModelos
+              mostrados={busca.results.length}
+              total={busca.total}
+              loading={busca.loadingMore}
+              onMostrarMais={() => void busca.carregarMais()}
+            />
+          )}
         </div>
       )}
     </div>

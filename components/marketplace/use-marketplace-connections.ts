@@ -1,10 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { MarketplaceConnectionDTO, MarketplaceProviderCode } from "@/lib/marketplace/connection-api-types"
+import type { MarketplaceReadConnection } from "@/lib/marketplace/read-only-types"
 
-type ApiList = { connections: MarketplaceConnectionDTO[] }
+type ApiList = { connections: MarketplaceConnectionDTO[]; mercadoLivre: MarketplaceReadConnection }
+type Snapshot = { storeId: string; data?: ApiList; error?: string; loading: boolean }
 
 function headersJson(storeId: string): HeadersInit {
   return {
@@ -14,42 +16,44 @@ function headersJson(storeId: string): HeadersInit {
 }
 
 export function useMarketplaceConnections(storeId: string | null) {
-  const [connections, setConnections] = useState<MarketplaceConnectionDTO[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const store = storeId?.trim() || null
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
+  const activeStore = useRef<string | null>(null)
+  const request = useRef<AbortController | null>(null)
 
   const refetch = useCallback(async () => {
-    if (!storeId?.trim()) {
-      setConnections([])
-      setError(null)
-      return
-    }
-    setLoading(true)
-    setError(null)
+    if (!store || activeStore.current !== store) return
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
+    setSnapshot((previous) => ({
+      storeId: store, loading: true, data: previous?.storeId === store ? previous.data : undefined,
+    }))
     try {
-      const r = await fetch("/api/marketplace/connections", {
+      const r = await fetch("/api/marketplace/mercado-livre/status", {
+        method: "POST",
         credentials: "include",
         cache: "no-store",
-        headers: { [ASSISTEC_LOJA_HEADER]: storeId.trim() },
+        headers: { [ASSISTEC_LOJA_HEADER]: store },
+        signal: controller.signal,
       })
-      const j = (await r.json().catch(() => null)) as ApiList & { error?: string }
-      if (!r.ok) {
-        setError(j?.error || `Erro ${r.status}`)
-        setConnections([])
-        return
-      }
-      setConnections(Array.isArray(j?.connections) ? j.connections : [])
+      const j = (await r.json().catch(() => null)) as (ApiList & { error?: string }) | null
+      if (controller.signal.aborted) return
+      if (r.ok && j) setSnapshot({ storeId: store, loading: false, data: j })
+      else setSnapshot({ storeId: store, loading: false, error: j?.error || `Erro ${r.status}` })
     } catch {
-      setError("Falha ao carregar conexões")
-      setConnections([])
-    } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setSnapshot({ storeId: store, loading: false, error: "Falha ao carregar conexões" })
     }
-  }, [storeId])
+  }, [store])
 
   useEffect(() => {
+    activeStore.current = store
     void refetch()
-  }, [refetch])
+    return () => {
+      activeStore.current = null
+      request.current?.abort()
+    }
+  }, [store, refetch])
 
   const connect = useCallback(
     async (provider: MarketplaceProviderCode, accountName?: string) => {
@@ -101,17 +105,19 @@ export function useMarketplaceConnections(storeId: string | null) {
     [storeId, refetch]
   )
 
-  const connectedCount = connections.filter((c) => c.status === "CONNECTED").length
+  const current = snapshot?.storeId === store ? snapshot : null
+  const mercadoLivre = current?.data?.mercadoLivre ?? null
 
   return {
-    connections,
-    loading,
-    error,
+    connections: current?.data?.connections ?? [],
+    mercadoLivre,
+    loading: Boolean(store && (!current || current.loading)),
+    error: current?.error ?? null,
     refetch,
     connect,
     disconnect,
     simulateSync,
-    connectedCount,
+    connectedCount: mercadoLivre?.state === "validated" ? 1 : 0,
   }
 }
 
