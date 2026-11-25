@@ -133,6 +133,9 @@ describe("Provider e cartão reais com servidor/serial simulados", () => {
     fireEvent.click(await screen.findByRole("checkbox"))
     fireEvent.click(screen.getByRole("button", { name: "Salvar visor" }))
     await screen.findByRole("alert")
+    await act(async () => {})
+    // O rascunho sobrevive à falha e à sincronização seguinte com o servidor.
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false)
     expect(screen.queryByText("Preferência do visor salva nesta unidade.")).toBeNull()
     expect(screen.getByRole("button", { name: "Salvar visor" })).toBeTruthy()
     expect(records["loja-a"].pdvScaleVisorVisible).toBeUndefined()

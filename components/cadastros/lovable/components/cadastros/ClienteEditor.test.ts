@@ -387,6 +387,32 @@ describe("HUB real client editor: local voice dictation", () => {
     await screen.findByLabelText("Sugestão: Nome")
     expect(h.interpret).toHaveBeenCalledWith("loja-b", "Nome: Loja B", "text")
   })
+  it.each(["close", "store", "hide", "restart"] as const)(
+    "an errored session still waiting for the engine's end is aborted on %s, never left running", async (action) => {
+      const fake = useEngine()
+      const p = props(); const view = render(React.createElement(ClienteEditorDialog, { ...p, open: true }))
+      await screen.findByRole("button", { name: "Ditar por voz" })
+      const rec = await dictate(fake, ["SYNTHETIC-ERRORED"])
+      act(() => rec.error("network"))
+      // Grace interval: error reported, engine has not ended yet.
+      expect(rec.aborted).toBe(false)
+      if (action === "close") view.rerender(React.createElement(ClienteEditorDialog, { ...p, open: false }))
+      if (action === "store") view.rerender(React.createElement(ClienteEditorDialog, { ...p, storeId: "loja-b", open: true }))
+      if (action === "hide") act(() => { window.dispatchEvent(new Event("pagehide")) })
+      if (action === "restart") click("Ditar por voz")
+      expect(rec.aborted).toBe(true)
+      act(() => { rec.result("SYNTHETIC-LATE", true); rec.end() })
+      expect(screen.queryByText(/SYNTHETIC-/)).toBeNull()
+      if (action === "restart") {
+        const next = fake.last()
+        expect(next).not.toBe(rec)
+        expect(next.configAtStart).toMatchObject({ processLocally: true })
+        expect(label().readOnly).toBe(true)
+        click("Cancelar ditado")
+        expect(next.aborted).toBe(true)
+      }
+      expect(fake.instances.every((r) => r.configAtStart === null || r.configAtStart.processLocally)).toBe(true)
+    })
   it("hiding the tab or leaving the page cancels an active capture", async () => {
     const fake = useEngine()
     render(React.createElement(ClienteEditor, props()))

@@ -82,6 +82,8 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   const [autoStopped, setAutoStopped] = useState(false)
   const [source, setSource] = useState<ClientCaptureSource>("text")
   const voiceSession = useRef<VoiceBrowserSession | null>(null)
+  /** Session that reported an error and waits for the engine's end (grace timeout): still holds the microphone. */
+  const voiceDraining = useRef<VoiceBrowserSession | null>(null)
   const voiceSerial = useRef(0)
   const supportSerial = useRef(0)
   const voiceStartedAt = useRef(0)
@@ -97,7 +99,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     : support.status === "unavailable" ? CLIENT_VOICE_SUPPORT_MESSAGES[support.reason] : CLIENT_VOICE_SUPPORT_MESSAGES[support.status]
   const extractedLabel = source === "voice" ? "Extraído da transcrição por voz" : "Extraído do texto"
   useEffect(() => {
-    const lifecycle = mounted, pending = request, session = voiceSession, sessions = voiceSerial, supports = supportSerial
+    const lifecycle = mounted, pending = request, session = voiceSession, draining = voiceDraining, sessions = voiceSerial, supports = supportSerial
     const probing = probeHandle, probes = probeSerial
     lifecycle.current = true
     return () => {
@@ -105,6 +107,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
       // Close, store switch, cancel and navigation unmount the editor: stop the engine silently.
       sessions.current++; supports.current++; probes.current++
       session.current?.dispose(); session.current = null
+      draining.current?.dispose(); draining.current = null
       probing.current?.cancel(); probing.current = null
     }
   }, [])
@@ -121,12 +124,13 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   }, [editing])
   useEffect(() => {
     // Hidden tab or leaving the page never keeps the microphone open.
-    const session = voiceSession, probing = probeHandle
+    const session = voiceSession, draining = voiceDraining, probing = probeHandle
     const onHide = (event: Event) => {
       if (event.type === "visibilitychange" && document.visibilityState !== "hidden") return
       const active = session.current
       session.current = null
       active?.cancel()
+      draining.current?.dispose(); draining.current = null
       probing.current?.cancel()
     }
     document.addEventListener("visibilitychange", onHide)
@@ -160,9 +164,17 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     const active = voiceSession.current
     voiceSession.current = null
     active?.cancel()
+    releaseDrainingVoice()
+  }
+  /** Aborts an errored session still waiting for the engine's end, so it never outlives the next action. */
+  function releaseDrainingVoice() {
+    const draining = voiceDraining.current
+    voiceDraining.current = null
+    draining?.dispose()
   }
   function startVoice() {
     if (support.status !== "available" || voiceSession.current || voiceActive || probe.running || interpreting || saving) return
+    releaseDrainingVoice()
     const serial = ++voiceSerial.current
     request.current++
     setInterpreting(false)
@@ -180,6 +192,9 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
       setVoice((v) => reduceClientVoiceCapture(v, event))
       // The session is released by its own terminal event, never by a status effect: a pending
       // effect from the render before the click would otherwise drop the session just started.
+      // An error is not the engine's end: the session keeps draining (and is aborted by the next action).
+      if (event.type === "error" && voiceSession.current) voiceDraining.current = voiceSession.current
+      if (event.type === "end" || event.type === "cancel") voiceDraining.current = null
       if (event.type === "end" || event.type === "cancel" || event.type === "error") voiceSession.current = null
       // A missing local pack surfaces as one of these errors: re-check, never go remote.
       if (event.type === "error" && (event.code === "language-not-supported" || event.code === "service-not-allowed")) refreshSupport()
@@ -228,6 +243,7 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
   /** Minimal native call in the same browser, independent of the editor adapter. */
   function runBrowserProbe() {
     if (support.status !== "available" || probe.running || voiceActive || voiceSession.current || saving) return
+    releaseDrainingVoice()
     const serial = ++probeSerial.current
     const handle = runNativeLocalProbe({
       win: window, lang: CLIENT_VOICE_POLICY.lang, quality: support.quality,
