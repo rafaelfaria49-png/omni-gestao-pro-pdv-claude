@@ -158,6 +158,11 @@ model Store {
   // ─── Vestuário P02: grades/cores por loja (OMNI-VESTUARIO-P02 — aditivo; só relações inversas) ──
   vestuarioGrades          VestuarioGrade[]
   vestuarioCores           VestuarioCor[]
+  identificadores          IdentificadorProduto[]
+  chavesIdentificacao      IdentificadorChave[]
+  solicitacoesIdentificacao IdentificacaoSolicitacao[]
+  etiquetaLotes            EtiquetaLote[]
+  etiquetaTentativas       EtiquetaTentativa[]
 
   @@index([profile])
   @@map("stores")
@@ -834,6 +839,8 @@ model Produto {
   produtoDepositos        ProdutoDeposito[]
   /** Vestuário P02 (aditivo): fonte autoritativa do modo COM_GRADE. Ausente = produto simples. */
   vestuarioGrade          VestuarioProdutoGrade?
+  identificadores        IdentificadorProduto[]
+  chavesIdentificacao    IdentificadorChave[]
 
   /** Vestuário P02: alvo das FKs compostas (produto, loja). `id` já é único; não muda nenhum dado. */
   @@unique([id, storeId], name: "id_storeId")
@@ -4221,7 +4228,10 @@ model VestuarioVariante {
   updatedBy      String                @default("") @map("updatedBy")
   createdAt      DateTime              @default(now()) @map("createdAt")
   updatedAt      DateTime              @updatedAt @map("updatedAt")
+  identificadores IdentificadorProduto[]
+  chavesIdentificacao IdentificadorChave[]
 
+  @@unique([id, storeId, produtoId], name: "id_storeId_produtoId")
   @@unique([storeId, produtoId, corId, tamanhoId], name: "storeId_produtoId_corId_tamanhoId")
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcodeInterno], name: "storeId_barcodeInterno")
@@ -4262,4 +4272,102 @@ model SolicitacaoTesteComercial {
   @@index([ipHash, createdAt])
   @@index([status, createdAt])
   @@map("solicitacoes_teste_comercial")
+}
+
+// P03 QA — identificadores permanentes e impressão, sem estoque/venda.
+model IdentificadorProduto {
+  id          String @id @default(cuid())
+  storeId     String
+  store       Store @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  produtoId   String
+  produto     Produto @relation(fields: [produtoId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  varianteId  String?
+  variante    VestuarioVariante? @relation(fields: [varianteId, storeId, produtoId], references: [id, storeId, produtoId], onDelete: Restrict, onUpdate: Restrict)
+  tipo        String
+  valor       String
+  formato     String?
+  origem      String
+  evidencia   String
+  ativo       Boolean @default(true)
+  version     Int @default(1)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  chaves      IdentificadorChave[]
+  solicitacoes IdentificacaoSolicitacao[]
+  @@unique([id, storeId], name: "id_storeId")
+  @@index([storeId, produtoId, varianteId])
+  @@map("identificadores_produto")
+}
+
+model IdentificadorChave {
+  storeId       String
+  chave         String
+  store         Store @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  produtoId     String
+  produto       Produto @relation(fields: [produtoId, storeId], references: [id, storeId], onDelete: Cascade, onUpdate: Restrict)
+  varianteId    String?
+  variante      VestuarioVariante? @relation(fields: [varianteId, storeId, produtoId], references: [id, storeId, produtoId], onDelete: Cascade, onUpdate: Restrict)
+  identificadorId String?
+  identificador IdentificadorProduto? @relation(fields: [identificadorId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  createdAt     DateTime @default(now())
+  @@id([storeId, chave])
+  @@index([identificadorId])
+  @@index([storeId, produtoId, varianteId])
+  @@map("identificador_chaves")
+}
+
+model EtiquetaLote {
+  id          String @id @default(cuid())
+  storeId     String
+  store       Store @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  snapshot    Json @db.JsonB
+  total       Int
+  originalId  String?
+  original    EtiquetaLote? @relation("Reimpressao", fields: [originalId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  reimpressoes EtiquetaLote[] @relation("Reimpressao")
+  motivo      String @default("")
+  createdBy   String
+  createdAt   DateTime @default(now())
+  tentativas  EtiquetaTentativa[]
+  solicitacoes IdentificacaoSolicitacao[]
+  @@unique([id, storeId], name: "id_storeId")
+  @@index([storeId, createdAt])
+  @@map("etiqueta_lotes")
+}
+
+model EtiquetaTentativa {
+  id          String @id @default(cuid())
+  storeId     String
+  store       Store @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  loteId      String
+  lote        EtiquetaLote @relation(fields: [loteId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  estado      String @default("SOLICITADO")
+  createdBy   String
+  confirmedBy String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  solicitacoes IdentificacaoSolicitacao[]
+  @@unique([id, storeId], name: "id_storeId")
+  @@index([storeId, loteId])
+  @@map("etiqueta_tentativas")
+}
+
+model IdentificacaoSolicitacao {
+  id          String @id @default(cuid())
+  storeId     String
+  store       Store @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  operacao    String
+  chave       String
+  hash        String
+  identificadorId String?
+  identificador IdentificadorProduto? @relation(fields: [identificadorId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  loteId      String?
+  lote        EtiquetaLote? @relation(fields: [loteId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  tentativaId String?
+  tentativa   EtiquetaTentativa? @relation(fields: [tentativaId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  @@unique([storeId, operacao, chave], name: "storeId_operacao_chave")
+  @@map("identificacao_solicitacoes")
 }

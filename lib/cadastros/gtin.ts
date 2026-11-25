@@ -26,6 +26,12 @@ function checkDigitIsValid(value: string): boolean {
   return (10 - (sum % 10)) % 10 === supplied
 }
 
+/** P03: embalagem GTIN-14, separada do scanner legado EAN/UPC (defaults não mudam). */
+export function validarGtin14(raw: string): boolean {
+  return /^\d{14}$/.test(raw) && !/^0+$/.test(raw) && checkDigitIsValid(raw)
+    && !(raw.startsWith("0") && /^2[0-9]/.test(raw.slice(1)))
+}
+
 /**
  * Valida EAN-8, EAN-13 e UPC-A pelo dígito verificador.
  * Prefixos 20–29 continuam aptos à consulta local, mas são marcados como internos

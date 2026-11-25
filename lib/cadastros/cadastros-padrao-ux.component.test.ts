@@ -51,6 +51,9 @@ vi.mock("@/app/actions/cadastros", () => ({
   upsertEquipamentoModelo: vi.fn(), upsertFornecedor: h.upsertFornecedor, upsertTecnico: h.upsertTecnico, updateCliente: vi.fn(),
   upsertServico: vi.fn(), deleteProduto: vi.fn(), getUltimoBatchProdutos: vi.fn(async () => null),
 }))
+vi.mock("@/app/actions/identificacao-etiquetas", () => ({
+  getIdentificacaoStatus: vi.fn(async () => ({ enabled: false })),
+}))
 vi.mock("@/app/actions/vestuario-catalogo", () => ({
   getVestuarioCatalogoStatus: vi.fn(async () => ({ enabled: false })),
 }))
