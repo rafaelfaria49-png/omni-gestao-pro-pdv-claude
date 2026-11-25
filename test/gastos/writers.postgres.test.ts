@@ -987,20 +987,26 @@ describe.skipIf(!process.env.GASTOS_G002_TEST_DATABASE_URL)("G002 writers Postgr
     expect(await prisma.movimentacaoFinanceira.findUniqueOrThrow({ where: { id: move.id } })).toMatchObject({ categoriaId: cat.id, pagarTituloId: row.id, descricao: "Metadado histórico" })
   })
 
-  it("papel não owner com SELECT concedido continua sem linhas por RLS nas sete tabelas", async () => {
+  // Contrato 20261126150000 (runtime restrito): papel não dono e sem contexto vê o EMPRESARIAL
+  // (como antes das migrations — senão PDV/Financeiro ficariam indisponíveis) e NENHUMA linha pessoal.
+  it("papel não owner com SELECT concedido não vê nenhuma linha pessoal por RLS e vê o empresarial", async () => {
     const p = await context(), c = await conta(p)
     await titulo(p, { carteiraId: c.id })
+    const pessoaisDono = await prisma.carteiraFinanceira.count({ where: { storeId: null } })
+    expect(pessoaisDono).toBeGreaterThan(0)
+    const empresaDono = await prisma.carteiraFinanceira.count({ where: { storeId: { not: null } } })
     await prisma.$transaction(async tx => {
       await tx.$executeRawUnsafe("SET LOCAL ROLE gastos_g002_anon")
       const [identity] = await tx.$queryRaw<Array<{ user: string }>>`SELECT current_user AS user`
       expect(identity.user).toBe("gastos_g002_anon")
-      expect(await tx.financeiroPerfil.count()).toBe(0)
-      expect(await tx.perfilMembro.count()).toBe(0)
-      expect(await tx.categoriaGasto.count()).toBe(0)
-      expect(await tx.carteiraFinanceira.count()).toBe(0)
-      expect(await tx.contaPagarTitulo.count()).toBe(0)
-      expect(await tx.contaReceberTitulo.count()).toBe(0)
-      expect(await tx.movimentacaoFinanceira.count()).toBe(0)
+      expect(await tx.financeiroPerfil.count({ where: { tipo: "PESSOAL" } })).toBe(0)
+      expect(await tx.categoriaGasto.count({ where: { storeId: null } })).toBe(0)
+      expect(await tx.carteiraFinanceira.count({ where: { storeId: null } })).toBe(0)
+      expect(await tx.contaPagarTitulo.count({ where: { storeId: null } })).toBe(0)
+      expect(await tx.contaReceberTitulo.count({ where: { storeId: null } })).toBe(0)
+      expect(await tx.movimentacaoFinanceira.count({ where: { storeId: null } })).toBe(0)
+      expect(await tx.carteiraFinanceira.count({ where: { storeId: { not: null } } })).toBe(empresaDono)
     })
   })
+
 })

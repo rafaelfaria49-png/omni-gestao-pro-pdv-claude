@@ -7,6 +7,7 @@ import { storeDoContexto, type FinanceiroDb } from "./financeiro-scope"
 import type { FinanceiroContextoAutorizado } from "./types"
 import { hashOperacaoGasto, identificadorOperacao, instante, normalizarPropostaGasto, OperacaoGastoError } from "./operacao-schema"
 import { z } from "zod"
+import { aplicarContextoRls } from "./rls-contexto"
 
 export async function lockGasto(tx: FinanceiroDb, partes: readonly string[]) {
   const chave = JSON.stringify(["gastos:g004", ...partes])
@@ -49,6 +50,8 @@ export async function emTransacaoGasto<T>(contexto: unknown,
   const access = await revalidateFinanceiroContexto(contexto, "edit")
   if (!access.ok) throw new OperacaoGastoError("acesso_negado", access.status)
   return prisma.$transaction(async tx => {
+    // RLS: linhas pessoais só nesta transação e só para o dono revalidado acima.
+    await aplicarContextoRls(tx, access.contexto)
     await tx.$queryRaw`SELECT id FROM admin_users WHERE id=${access.contexto.userId} FOR SHARE`
     return fn(tx, access.contexto)
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 5000, timeout: 20000 })

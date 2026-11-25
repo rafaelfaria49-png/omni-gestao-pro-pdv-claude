@@ -206,6 +206,9 @@ export async function comLeituraFinanceira<T>(
   const { getEnterprisePermissions } = await import("@/lib/auth/enterprise-permissions")
   return prisma.$transaction(async db => {
     await db.$executeRaw`SET TRANSACTION READ ONLY`
+    // RLS: linhas pessoais só nesta transação e só para o dono revalidado acima.
+    const { aplicarContextoRls } = await import("./rls-contexto")
+    await aplicarContextoRls(db, ctx)
     const user = await db.adminUser.findUnique({ where: { id: ctx.userId }, select: { active: true, role: true } })
     if (!user?.active || !getEnterprisePermissions(user.role).financeiro.view) throw new FinanceiroReadError()
     if (ctx.tipo === "EMPRESA" && !await db.adminUserStore.findUnique({

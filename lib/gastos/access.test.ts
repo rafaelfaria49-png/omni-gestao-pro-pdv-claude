@@ -4,9 +4,14 @@ import { prisma } from "@/lib/prisma"
 import { requireFinanceiroPerfilAccess, revalidateFinanceiroContexto } from "./access"
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }))
-vi.mock("@/lib/prisma", () => ({ prisma: {
-  adminUser: { findUnique: vi.fn() }, financeiroPerfil: { findFirst: vi.fn() },
-} }))
+vi.mock("@/lib/prisma", () => {
+  // RLS: o perfil PESSOAL é lido numa transação que declara o dono (set_config local).
+  const prisma: Record<string, unknown> = {
+    adminUser: { findUnique: vi.fn() }, financeiroPerfil: { findFirst: vi.fn() }, $queryRaw: vi.fn(async () => []),
+  }
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma))
+  return { prisma }
+})
 
 const login = (userId = "u1", allowedStoreIds = ["L1"]) => vi.mocked(auth).mockResolvedValue({
   user: { id: userId, role: "ADMIN", storeAccess: "restricted", allowedStoreIds },
@@ -84,6 +89,21 @@ describe("contexto financeiro privado", () => {
       id: "u1", role: "ADMIN", storeAccess: "restricted", allowedStoreIds: ["L1"], storeModules: { L1: ["home", "finance"] },
     } } as never)
     expect((await requireFinanceiroPerfilAccess(empresa)).ok).toBe(true)
+  })
+
+  it("RLS: o perfil PESSOAL é lido declarando como dono o usuário da SESSÃO; EMPRESA não declara", async () => {
+    const raw = (prisma as unknown as { $queryRaw: ReturnType<typeof vi.fn> }).$queryRaw
+    raw.mockClear()
+    await requireFinanceiroPerfilAccess({ ...pessoal, perfilId: "P1" })
+    const chamada = raw.mock.calls.find(c => String((c[0] as TemplateStringsArray).join("?")).includes("app.gm_owner_user"))
+    expect(chamada?.slice(1)).toEqual(["u1"])
+    raw.mockClear()
+    vi.mocked(prisma.financeiroPerfil.findFirst).mockResolvedValue({ id: "E1", tipo: "EMPRESA", storeId: "L1", ownerAdminUserId: null } as never)
+    vi.mocked(auth).mockResolvedValue({ user: {
+      id: "u1", role: "ADMIN", storeAccess: "restricted", allowedStoreIds: ["L1"], storeModules: { L1: ["finance"] },
+    } } as never)
+    expect((await requireFinanceiroPerfilAccess({ tipo: "EMPRESA", perfilId: "E1", storeId: "L1" })).ok).toBe(true)
+    expect(raw).not.toHaveBeenCalled()
   })
 
   it("não diferencia perfil ausente de perfil privado de outro dono", async () => {

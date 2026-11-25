@@ -26,6 +26,7 @@ import "server-only"
 import { createHash } from "node:crypto"
 import type { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { isSerializedDeviceProduct } from "@/lib/aparelhos/serialized-product"
 import { APARELHO_REVERSAO_NAO_INTEGRADA, operacaoTocaAparelho } from "@/lib/aparelhos/sale-reversal"
@@ -740,8 +741,12 @@ async function registrarNaTransacao(
   // ── 5. Saída financeira SOMENTE quando dinheiro sai de fato (reembolso/excedente) ──
   // Vale-troca e crédito consumido na troca não são saída de caixa.
   if (reembolsoValor > 0 && formaReembolso) {
+    // Reconciliação Gestor Money (G002): fato novo pela ponte de escopo — com o módulo desligado
+    // grava só a precisão em centavos; ligado, entra no perfil EMPRESA da loja na mesma transação.
+    const escopoReembolso = await dadosFinanceirosEmpresa(tx, storeId, reembolsoValor)
     await tx.movimentacaoFinanceira.create({
       data: {
+        ...escopoReembolso,
         storeId,
         tipo: "saida",
         valor: reembolsoValor,

@@ -5,6 +5,7 @@ import type { Prisma } from "@/generated/prisma"
 import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { FinanceiroContextoAutorizado } from "./types"
 import { gestorMoneyAtivo } from "./ativacao"
+import { aplicarContextoRls } from "./rls-contexto"
 
 export type FinanceiroDb = Prisma.TransactionClient
 export const LIMITE_CENTAVOS = BigInt("9000000000000")
@@ -221,6 +222,8 @@ export async function comContextoFinanceiro<T>(
   if (!access.ok) throw new FinanceiroScopeError(access.status)
   const contexto = access.contexto
   return emTransacaoFinanceira(undefined, async (tx) => {
+    // RLS: linhas pessoais só nesta transação e só para o dono revalidado acima.
+    await aplicarContextoRls(tx, contexto)
     // Travas compartilhadas mantêm ativo/papel e grants desta gravação até o commit.
     await tx.$queryRaw`SELECT "id" FROM "admin_users" WHERE "id" = ${contexto.userId} FOR SHARE`
     const user = await tx.adminUser.findUnique({ where: { id: contexto.userId }, select: { active: true, role: true } })

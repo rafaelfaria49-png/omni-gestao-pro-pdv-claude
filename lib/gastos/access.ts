@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { requireEnterpriseSession } from "@/lib/auth/guard-enterprise"
 import { canAccessStore, canUseModule, getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { declararDonoPessoalRls } from "./rls-contexto"
 import type {
   FinanceiroAcao,
   FinanceiroAccessResult,
@@ -41,7 +42,7 @@ export async function requireFinanceiroPerfilAccess(
     // Reconciliação main: EMPRESA também exige o módulo finance contratado para a loja (access-policy).
     if (seletor.tipo === "EMPRESA" && (!canAccessStore(base.session, seletor.storeId)
       || !canUseModule(base.session, "finance", seletor.storeId))) return negado()
-    const perfil = await prisma.financeiroPerfil.findFirst({
+    const consultaPerfil = {
       where: seletor.tipo === "PESSOAL"
         ? { id: seletor.perfilId, tipo: "PESSOAL", ativo: true, ownerAdminUserId: userId }
         : {
@@ -49,7 +50,15 @@ export async function requireFinanceiroPerfilAccess(
             membros: { some: { adminUserId: userId, storeId: seletor.storeId, revogadoEm: null } },
           },
       select: { id: true, tipo: true, storeId: true, ownerAdminUserId: true },
-    })
+    } as const
+    // RLS (contrato 20261126150000): o perfil PESSOAL só é visível na transação que declara o dono
+    // — o próprio usuário da sessão, nunca um id vindo do cliente.
+    const perfil = seletor.tipo === "PESSOAL"
+      ? await prisma.$transaction(async (tx) => {
+          await declararDonoPessoalRls(tx, userId)
+          return tx.financeiroPerfil.findFirst(consultaPerfil)
+        })
+      : await prisma.financeiroPerfil.findFirst(consultaPerfil)
     if (!perfil) return negado()
     // A FK composta do membro exige AdminUserStore atual; sua exclusão revoga o grant.
     const escopo = perfil.tipo === "PESSOAL"
