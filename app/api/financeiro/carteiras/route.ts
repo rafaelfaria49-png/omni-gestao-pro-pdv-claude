@@ -1,4 +1,6 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
+import { consultarFinanceiroEmpresa, reaisConsulta, diaNoFusoConsulta } from "@/lib/gastos/query"
 import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
@@ -30,14 +32,12 @@ export async function GET(req: NextRequest) {
   const apenasAtivas = req.nextUrl.searchParams.get("ativas") === "1"
 
   try {
-    const carteiras = await listarCarteiras(storeId, apenasAtivas)
-    const saldoTotal = carteiras
-      .filter((c) => c.ativo)
-      .reduce((acc, c) => acc + c.saldoAtual, 0)
-
-    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, carteiras, saldoTotal }))
-  } catch {
-    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
+    const q=await consultarFinanceiroEmpresa(storeId,{dataInicio:"1900-01-01",dataFim:diaNoFusoConsulta(new Date())})
+    const carteiras=q.contas.filter(c=>!apenasAtivas||c.ativo).map(c=>({...c,storeId,saldoAtual:reaisConsulta(c.saldoCentavos),saldoInicial:reaisConsulta(c.saldoInicialCentavos)}))
+    return respostaFinanceiraPrivada(NextResponse.json({ok:true,carteiras,saldoTotal:reaisConsulta(q.saldoCentavos),apuracao:{asOf:q.asOf,base:q.base,versaoCalculo:q.versaoCalculo,criterios:q.criterios,semCarteira:q.semCarteira}}))
+  } catch (e) {
+    const erro=erroConsultaFinanceira(e)
+    return respostaFinanceiraPrivada(NextResponse.json(erro.body,{status:erro.status}))
   }
 }
 

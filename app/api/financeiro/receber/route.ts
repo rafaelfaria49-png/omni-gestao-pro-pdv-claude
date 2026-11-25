@@ -1,4 +1,6 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
+import { consultarFinanceiroEmpresa, reaisConsulta, resumoTitulosConsulta, diaNoFusoConsulta } from "@/lib/gastos/query"
 /**
  * /api/financeiro/receber
  *

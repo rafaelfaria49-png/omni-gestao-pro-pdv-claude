@@ -1,4 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
 /**
  * GET /api/financeiro/relatorios/rankings
  *
@@ -11,13 +12,8 @@ import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gast
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { prismaEnsureConnected } from "@/lib/prisma"
-import {
-  getTopReceitas,
-  getTopDespesas,
-  getAnaliseCarteiras,
-  buildFiltroPreset,
-  type PeriodoFiltro,
-} from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { consultarFinanceiroEmpresa } from "@/lib/gastos/query"
+import { apuracaoConsulta, projetarRankingConsulta, projetarAnaliseCarteirasConsulta, buildFiltroPreset, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,21 +30,19 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
 
   const preset = url.searchParams.get("preset")
+  try {
   let filtro: PeriodoFiltro = preset ? buildFiltroPreset(preset) : {}
   if (url.searchParams.get("dataInicio")) filtro.dataInicio = url.searchParams.get("dataInicio")!
   if (url.searchParams.get("dataFim")) filtro.dataFim = url.searchParams.get("dataFim")!
   if (url.searchParams.get("carteiraId")) filtro.carteiraId = url.searchParams.get("carteiraId")!
   const take = parseInt(url.searchParams.get("take") ?? "10", 10)
 
-  try {
     await prismaEnsureConnected()
-    const [topReceitas, topDespesas, carteiras] = await Promise.all([
-      getTopReceitas(storeId, filtro, take),
-      getTopDespesas(storeId, filtro, take),
-      getAnaliseCarteiras(storeId, filtro),
-    ])
-    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, topReceitas, topDespesas, carteiras }))
-  } catch {
-    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
+    const q=await consultarFinanceiroEmpresa(storeId,filtro)
+    const topReceitas=projetarRankingConsulta(q,"receitaCentavos",take),topDespesas=projetarRankingConsulta(q,"despesaCentavos",take),carteiras=projetarAnaliseCarteirasConsulta(q)
+    return respostaFinanceiraPrivada(NextResponse.json({ok:true,topReceitas,topDespesas,carteiras,apuracao:apuracaoConsulta(q)}))
+  } catch (e) {
+    const erro=erroConsultaFinanceira(e)
+    return respostaFinanceiraPrivada(NextResponse.json(erro.body,{status:erro.status}))
   }
 }

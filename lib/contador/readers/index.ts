@@ -293,16 +293,16 @@ export async function carregarFontesComCliente(
       select: { valorTotal: true },
     }),
     cliente.movimentacaoFinanceira.findMany({
-      where: leituraEmpresaWhere(scope.storeId, { storeId: scope.storeId, createdAt: noPeriodo }),
-      select: { tipo: true, origem: true, valor: true },
+      where: leituraEmpresaWhere(scope.storeId, { storeId: scope.storeId, OR: [{ ocorridoEm: noPeriodo }, { ocorridoEm: null, createdAt: noPeriodo }] }),
+      select: { tipo: true, origem: true, valor: true, valorCentavos: true },
     }),
     cliente.contaReceberTitulo.findMany({
       where: leituraEmpresaWhere(scope.storeId, { storeId: scope.storeId }),
-      select: { valor: true, status: true, vencimento: true },
+      select: { valor: true, valorCentavos: true, ativo: true, payload: true, status: true, vencimento: true },
     }),
     cliente.contaPagarTitulo.findMany({
       where: leituraEmpresaWhere(scope.storeId, { storeId: scope.storeId }),
-      select: { valor: true, status: true, vencimento: true },
+      select: { valor: true, valorCentavos: true, ativo: true, payload: true, alocacoesPagamento: { select: { pagamentoId: true, valorCentavos: true, pagamento: { select: { tipo: true } } } }, status: true, vencimento: true },
     }),
     cliente.sessaoCaixa.findMany({
       where: { storeId: scope.storeId, abertaEm: noPeriodo },
@@ -346,11 +346,12 @@ export async function carregarFontes(
 ): Promise<FontesContador> {
   await requireLeituraContadorEmpresa(scope)
   await prismaEnsureConnected()
-  return carregarFontesComCliente(
-    scope,
-    resolvePeriodoUtc(competencia),
-    prisma as unknown as ContadorReaderClient,
-  )
+  return prisma.$transaction(async db=>{
+    await db.$executeRaw`SET TRANSACTION READ ONLY`
+    const result=await carregarFontesComCliente(scope,resolvePeriodoUtc(competencia),db as unknown as ContadorReaderClient)
+    await requireLeituraContadorEmpresa(scope)
+    return result
+  },{isolationLevel:"RepeatableRead",timeout:20000})
 }
 
 /** Conveniência: carrega fontes reais e monta o DTO. Read-only. */

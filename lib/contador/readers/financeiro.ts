@@ -1,3 +1,4 @@
+import { centavosConsulta, saldoTituloConsulta, reaisConsulta, type TituloParaConsulta } from "@/lib/gastos/query-calculo"
 /**
  * Contador HUB · agregação financeira read-only.
  *
@@ -37,12 +38,8 @@ const STATUS_TITULO_FECHADO = new Set([
   "cancelada",
 ])
 
-export type MovimentacaoRow = { tipo: string; origem: string | null; valor: number }
-export type TituloRow = { valor: number; status: string; vencimento: string }
-
-function numeroFinito(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : 0
-}
+export type MovimentacaoRow = { tipo: string; origem: string | null; valor: number; valorCentavos?: { toString(): string } | null }
+export type TituloRow = TituloParaConsulta & { vencimento: string }
 
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
   if (!Number.isInteger(ano) || ano < 1 || ano > 9999) return false
@@ -124,9 +121,10 @@ function agregarTitulos(
   quantidade: FinanceiroContador["titulosReceberQuantidade"]
 } {
   const abertos = rows.filter((r) => !STATUS_TITULO_FECHADO.has((r.status ?? "").toLowerCase().trim()))
-  let soma = 0
+  let somaCentavos = BigInt(0)
   let qtd = 0
   let semVencimento = 0
+  let inconsistentes = 0
 
   for (const r of abertos) {
     const p = parseVencimento(r.vencimento)
@@ -135,14 +133,14 @@ function agregarTitulos(
       continue
     }
     if (p.ano === competencia.ano && p.mes === competencia.mes) {
-      soma += numeroFinito(r.valor)
-      qtd += 1
+      try { const saldo=saldoTituloConsulta(r); if(saldo.restante>BigInt(0)){somaCentavos+=saldo.restante;qtd+=1} } catch { inconsistentes+=1 }
     }
   }
 
-  const obs = "Posição atual: títulos em aberto com vencimento na competência."
-  if (semVencimento > 0) {
-    const nota = `${obs} ${semVencimento} título(s) aberto(s) sem vencimento reconhecível ficaram fora.`
+  const soma=reaisConsulta(somaCentavos)
+  const obs = "Posição atual: saldo restante dos títulos em aberto com vencimento na competência."
+  if (semVencimento > 0 || inconsistentes > 0) {
+    const nota = `${obs} ${semVencimento} título(s) aberto(s) sem vencimento reconhecível ficaram fora.${inconsistentes ? ` ${inconsistentes} título(s) com precisão/histórico que exige revisão ficaram fora.` : ""}`
     return {
       total: monetarioParcial(soma, fonte, nota),
       quantidade: numericoParcial(qtd, fonte, nota),
@@ -160,16 +158,18 @@ export function agregarFinanceiro(input: {
   pagar: readonly TituloRow[]
   competencia: { ano: number; mes: number }
 }): FinanceiroContador {
-  let entradas = 0
-  let saidas = 0
-  let estornos = 0
-  let transferencias = 0
+  let entradas = BigInt(0)
+  let saidas = BigInt(0)
+  let estornos = BigInt(0)
+  let transferencias = BigInt(0)
   let transferenciasQuantidade = 0
-  let naoClassificados = 0
+  let naoClassificados = BigInt(0)
   let naoClassificadosQuantidade = 0
+  let anomalias = 0
 
   for (const m of input.movimentacoes) {
-    const valor = numeroFinito(m.valor)
+    let valor: bigint
+    try { valor = centavosConsulta(m.valor, m.valorCentavos) } catch { anomalias++; continue }
     const classificacao = classificarMovimento(m)
     if (classificacao === "entrada") entradas += valor
     else if (classificacao === "saida") saidas += valor
@@ -186,14 +186,16 @@ export function agregarFinanceiro(input: {
   const cr = agregarTitulos(input.receber, input.competencia, FONTE_CR)
   const cp = agregarTitulos(input.pagar, input.competencia, FONTE_CP)
   const obsMov = "Realizados via movimentações; exclui transferências e reversões."
+  const monetario = (v: bigint, obs: string) => anomalias
+    ? monetarioParcial(reaisConsulta(v), FONTE_MOV, `${obs} ${anomalias} movimento(s) com precisão que exige revisão ficaram fora.`)
+    : monetarioReal(reaisConsulta(v), FONTE_MOV, obs)
 
   return Object.freeze({
-    entradasRealizadas: monetarioReal(entradas, FONTE_MOV, obsMov),
-    saidasRealizadas: monetarioReal(saidas, FONTE_MOV, obsMov),
-    estornos: monetarioReal(estornos, FONTE_MOV, "Classificado à parte; fora de entradas/saídas."),
-    transferencias: monetarioReal(
+    entradasRealizadas: monetario(entradas, obsMov),
+    saidasRealizadas: monetario(saidas, obsMov),
+    estornos: monetario(estornos, "Classificado à parte; fora de entradas/saídas."),
+    transferencias: monetario(
       transferencias,
-      FONTE_MOV,
       "Volume das pernas de transferencias internas; neutro no resultado economico.",
     ),
     transferenciasQuantidade: numericoReal(transferenciasQuantidade, FONTE_MOV),
@@ -201,7 +203,7 @@ export function agregarFinanceiro(input: {
       naoClassificadosQuantidade === 0
         ? monetarioReal(0, FONTE_MOV)
         : monetarioParcial(
-            naoClassificados,
+            reaisConsulta(naoClassificados),
             FONTE_MOV,
             "Origens fora da allowlist economica; nao incorporadas a entradas/saidas.",
           ),

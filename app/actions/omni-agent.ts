@@ -2,7 +2,8 @@
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
-import { leituraComandosOmniEmpresaWhere, requireLeituraFinanceiraEmpresa, requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
+import { FinanceiroReadError, leituraComandosOmniEmpresaWhere, requireLeituraFinanceiraEmpresa, requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
 import type { OmniAgentInterpretacao } from "@/lib/omni-agent/types"
 import { INTENT_MODULE } from "@/lib/omni-agent/types"
 import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret"
@@ -495,6 +496,7 @@ export type OmniAgentReportsSnapshotDTO = {
   intentCounts: OmniAgentIntentCountDTO[]
   financeiroHoje: Awaited<ReturnType<typeof getResumoExecutivo>> | null
   financeiroSemPermissao: boolean
+  financeiroErro?: ReturnType<typeof erroConsultaFinanceira>["body"] | null
 }
 
 export async function getOmniAgentReportsSnapshot(storeId: string): Promise<OmniAgentReportsSnapshotDTO> {
@@ -527,18 +529,20 @@ export async function getOmniAgentReportsSnapshot(storeId: string): Promise<Omni
   let financeiroHoje: Awaited<ReturnType<typeof getResumoExecutivo>> | null = null
   const financeGate = INTENT_MODULE.FINANCE_SUMMARY
   let financeiroSemPermissao = !financeGate?.(g.permissions)
+  let financeiroErro: ReturnType<typeof erroConsultaFinanceira>["body"] | null = null
 
   if (financeGate?.(g.permissions)) {
     try {
       await requireLeituraFinanceiraEmpresa(sid)
       financeiroHoje = await getResumoExecutivo(sid, buildFiltroPreset("hoje"))
-    } catch {
+    } catch (e) {
       financeiroHoje = null
-      financeiroSemPermissao = true
+      financeiroSemPermissao = e instanceof FinanceiroReadError && e.status === 403
+      financeiroErro = erroConsultaFinanceira(e).body
     }
   }
 
-  return { stats, intentCounts, financeiroHoje, financeiroSemPermissao }
+  return { stats, intentCounts, financeiroHoje, financeiroSemPermissao, financeiroErro }
 }
 
 export type OmniAgentAutomationDTO = {

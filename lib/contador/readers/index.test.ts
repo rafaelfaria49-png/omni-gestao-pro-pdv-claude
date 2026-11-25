@@ -147,7 +147,6 @@ describe("carregarFontesComCliente (fronteiras Prisma)", () => {
     const temporais = [
       [db.venda.findMany, "at"],
       [db.devolucaoVenda.findMany, "at"],
-      [db.movimentacaoFinanceira.findMany, "createdAt"],
       [db.sessaoCaixa.findMany, "abertaEm"],
       [db.caixaOperacao.findMany, "at"],
     ] as const
@@ -158,6 +157,11 @@ describe("carregarFontesComCliente (fronteiras Prisma)", () => {
       expect(chamada.where[campo]).toEqual({ gte: periodo.inicio, lt: periodo.fimExclusivo })
       expect(chamada.where[campo]).not.toHaveProperty("lte")
     }
+    const faixaMovimento = { gte: periodo.inicio, lt: periodo.fimExclusivo }
+    expect(primeiraChamada(db.movimentacaoFinanceira.findMany).where.OR).toEqual([
+      { ocorridoEm: faixaMovimento }, { ocorridoEm: null, createdAt: faixaMovimento },
+    ])
+    expect(primeiraChamada(db.movimentacaoFinanceira.findMany).where).not.toHaveProperty("createdAt")
     const perfilEmpresarial = { OR: [{ perfilId: null }, { perfil: { is: { tipo: "EMPRESA", storeId: "loja-a" } } }] }
     const whereEmpresarial = { storeId: "loja-a", AND: [{ storeId: "loja-a" }, perfilEmpresarial] }
     expect(primeiraChamada(db.contaReceberTitulo.findMany).where).toEqual(whereEmpresarial)
@@ -376,7 +380,7 @@ const CASOS_TEMPORAIS: readonly {
 }[] = [
   { nome: "Venda.at", delegate: "venda", fonte: "vendas", campo: "at", dado: (n) => ({ total: n, status: "concluida", payload: null }) },
   { nome: "DevolucaoVenda.at", delegate: "devolucaoVenda", fonte: "devolucoes", campo: "at", dado: (n) => ({ valorTotal: n }) },
-  { nome: "MovimentacaoFinanceira.createdAt", delegate: "movimentacaoFinanceira", fonte: "movimentacoes", campo: "createdAt", dado: (n) => ({ tipo: "entrada", origem: "venda", valor: n }) },
+  { nome: "MovimentacaoFinanceira.createdAt legado sem ocorridoEm", delegate: "movimentacaoFinanceira", fonte: "movimentacoes", campo: "createdAt", dado: (n) => ({ tipo: "entrada", origem: "venda", valor: n }) },
   { nome: "SessaoCaixa.abertaEm", delegate: "sessaoCaixa", fonte: "sessoes", campo: "abertaEm", dado: (n) => ({ status: "fechada", saldoFinal: n, saldoContado: n }) },
   { nome: "CaixaOperacao.at", delegate: "caixaOperacao", fonte: "operacoes", campo: "at", dado: (n) => ({ tipo: "sangria", valor: n }) },
 ]
@@ -393,7 +397,9 @@ describe("fronteiras temporais semiabertas por query", () => {
     const db = clienteVazio()
     substituirFindMany(db, caso.delegate, async (args) => {
       const where = args.where as Record<string, unknown>
-      const faixa = where[caso.campo] as { gte: Date; lt: Date }
+      const faixa = (caso.fonte === "movimentacoes"
+        ? (where.OR as [{ ocorridoEm: unknown }, { ocorridoEm: null; createdAt: unknown }])[1].createdAt
+        : where[caso.campo]) as { gte: Date; lt: Date }
       return eventos
         .filter((evento) => evento.instante >= faixa.gte && evento.instante < faixa.lt)
         .map((evento) => evento.dado)
@@ -401,10 +407,27 @@ describe("fronteiras temporais semiabertas por query", () => {
 
     const fontes = await carregarFontesComCliente(scopeValido(), periodo, db)
     expect(fontes[caso.fonte]).toEqual([caso.dado(2), caso.dado(3)])
-    expect(primeiraChamada(db[caso.delegate].findMany).where[caso.campo]).toEqual({
+    const where = primeiraChamada(db[caso.delegate].findMany).where
+    const faixa = caso.fonte === "movimentacoes"
+      ? (where.OR as [{ ocorridoEm: unknown }, { ocorridoEm: null; createdAt: unknown }])[1].createdAt
+      : where[caso.campo]
+    expect(faixa).toEqual({
       gte: periodo.inicio,
       lt: periodo.fimExclusivo,
     })
+  })
+  it("ocorridoEm conserva os quatro limites mesmo quando createdAt pertence a outro mês", async () => {
+    const periodo = resolvePeriodoUtc(competencia), db = clienteVazio()
+    const eventos = [periodo.inicio.getTime() - 1, periodo.inicio.getTime(), periodo.fimExclusivo.getTime() - 1, periodo.fimExclusivo.getTime()]
+      .map((at, i) => ({ ocorridoEm: new Date(at), createdAt: new Date("2026-08-10T12:00:00Z"), valor: i + 1 }))
+    db.movimentacaoFinanceira.findMany = vi.fn(async args => {
+      const where = args.where as { OR: [{ ocorridoEm: { gte: Date; lt: Date } }] }
+      const range = where.OR[0].ocorridoEm
+      return eventos.filter(e => e.ocorridoEm >= range.gte && e.ocorridoEm < range.lt)
+        .map(e => ({ tipo: "saida", origem: "pagar", valor: e.valor }))
+    })
+    const fontes = await carregarFontesComCliente(scopeValido(), periodo, db)
+    expect(fontes.movimentacoes).toEqual([{ tipo: "saida", origem: "pagar", valor: 2 }, { tipo: "saida", origem: "pagar", valor: 3 }])
   })
 })
 

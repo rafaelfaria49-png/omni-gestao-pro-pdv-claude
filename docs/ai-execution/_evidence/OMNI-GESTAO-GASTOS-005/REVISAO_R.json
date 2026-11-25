@@ -1,0 +1,1962 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-005",
+  "status": "APPROVED",
+  "family": "Anthropic",
+  "modelRequested": "claude-sonnet-5-5",
+  "modelsObserved": [
+    "claude-sonnet-5-5"
+  ],
+  "cli": "2.1.288 (Claude Code)",
+  "effort": "high",
+  "sessionId": "8db88b8c-ad1f-40ab-8620-c88873f18ee0",
+  "startedAt": "2026-10-23T05:16:39.805Z",
+  "finishedAt": "2026-10-23T05:18:00.957Z",
+  "readTools": 22,
+  "packet": "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\23\\01a16672-b095-7202-8895-5cf8f4aa76c5\\G005-execution\\review-r3-submission",
+  "manifestSha256": "ffd803ebbe559115400c599677f1e4582546563ae1ecc17fa7028dd4cdbd1289",
+  "eventsSha256": "71ab4813e68df5566738cbbe1db44ecd95d1d739acfffb61a314684bdad6a2a2",
+  "resultSha256": "6e2f6993aab13a61ce004988df70db82f545853200b8511fa5fa7d89e294f7c0",
+  "readTraceSha256": "ef5c2d9e3e465e79f3a2d0feebf59c60d803c327bce116ca4ca8ea806ffe2ef7",
+  "decisionSha256": "51cdf915d6a968ec6ec7383b724a72b77f94c0461f62602c63daa63514652e9b",
+  "lintEvidenceHashes": {
+    "baseline": "024a59a400aee86a7a73d6030bce2055043dfd7a8cc54f679c14fdade1201469",
+    "current": "25c4b9808a002d90522b2451c4a458db386877d0fdc71cee0f418d2386662442",
+    "differential": "dcdd1292f694df49c605e1f83c9505bf95fae3d8e36fd6d92c2ec878ac166671"
+  },
+  "lintExceptionAccepted": true,
+  "decision": {
+    "verdict": "APPROVED",
+    "scope": "Revisão R3 (delta) independente, Anthropic claude-sonnet-5-5, do OMNI-GESTAO-GASTOS-005 (C4). Revisei apenas o delta posterior à R2 (sessão 4c3d1b67-f4bd-4d1e-a061-e20d7c2aaab5) e os novos hashes, sem reabrir os 6 P3 já aceitos. Li R2_DELTA_EOF.md, previous/r2-result.json, source-delta-r3.json, fixture-eof-correction.json e o R2-to-current.diff. Do diff, li as 4 páginas de metadados e o hunk da fixture, que fica no fim do arquivo. Também li source-audit.json, quality-summary.json, lint-differential.json, os recibos pg-g005-r9, lint-focused-r5, typecheck-r7, build-r3 e unit-regression-r7, e os contadores de vitest e de pares de lint. Usei só Read/Glob/Grep. Não executei nada, não editei nada e não recomputei sha256: confiei nos recibos e conferi a consistência cruzada entre eles.",
+    "inspectedFiles": [
+      "evidence/R2_DELTA_EOF.md",
+      "previous/r2-result.json",
+      "evidence/source-delta-r3.json",
+      "evidence/fixture-eof-correction.json",
+      "R2-to-current.diff (5 arquivos: GOAL, MATRIZ, RELATORIO, REVISAO_R e test/gastos/g005-fixtures.ts)",
+      "evidence/source-audit.json",
+      "evidence/quality-summary.json",
+      "evidence/lint-differential.json",
+      "evidence/lint-diagnostic-pairs.json (contagem de pares e de 'identical')",
+      "evidence/lint-focused-r5.{receipt,eslint}.json",
+      "evidence/pg-g005-r9.{receipt,vitest}.json",
+      "evidence/unit-regression-r7.{receipt,vitest}.json",
+      "evidence/typecheck-r7.receipt.json",
+      "evidence/build-r3.{receipt.json,log}"
+    ],
+    "evidence": [
+      "Hunk da fixture: o R2-to-current.diff altera test/gastos/g005-fixtures.ts em um único hunk '@@ -86,4 +86,3 @@'. O hunk remove só a última linha vazia depois do '}' que fecha provaG005. Nenhuma linha de código muda. É coerente com equalBeforeTrailingWhitespace=true e com os hashes before 6d4eca6e… e after c8ccc203…, idênticos em fixture-eof-correction.json, source-delta-r3.json e quality-summary.json. O commonContentSha256 3b4cb946… está registrado.",
+      "Escopo do delta: o diff R2→atual contém exatamente 5 arquivos. Quatro são metadados (GOAL.md, MATRIZ_METRICAS_CONSUMIDORES.json, RELATORIO.md, REVISAO_R.json) e um é a fixture. Nenhum arquivo produtivo aparece no diff. As mudanças dos metadados são status, rótulos de gate (r8→r9, r6→r7), hashes de recibo, o bloco 'review' com o histórico R2 e texto documental. A MATRIZ muda apenas status, esclarecimento do consolidado, gates e bloco review.",
+      "Fontes produtivas: o source-audit lista query.ts 5258bb2b…c8f8 e query-calculo.ts 0229703d…, os mesmos hashes da R2. Os recibos pg-g005-r9 e lint-focused-r5 trazem sourceBefore e sourceAfter idênticos entre si e iguais aos do source-audit para todos os arquivos de código e teste. As diferenças entre os hashes de GOAL, RELATORIO, MATRIZ e REVISAO nos recibos (gates às 05:09–05:10) e no source-audit (05:16) são só de metadados reescritos depois dos gates. Isso é esperado e não afeta código.",
+      "Auditoria: pass=true, errors=[], indexEmpty=true, diffCheckExit=0, branch codex/omni-gestao-gastos-005, base e head fad3d202… e origin/main 0adec212…. Os 33 'changed' são exatamente os 33 da allowlist. Os 11 arquivos novos (as 7 fontes e testes novos da G005 e os 4 metadados) trazem whitespaceClean=true, inclusive test/gastos/g005-fixtures.ts, o que fecha o defeito do stagedcheck. protectedProof tem 29 arquivos com unchangedAfterEol=true (schema, as 5 migrations, auth, proxy, prisma, package/lock, read-scope, read-cache, writers, fechamento-service e fixtures G002/G003/G004). writerProof lista 39 funções unchanged=true.",
+      "Gates renovados: pg-g005-r9 tem 23 totais, 23 passados, 0 falhas, 0 pendentes, exitCode 0 e sourceUnchanged true. unit-regression-r7 tem 898/898, 0 falhas, 0 pendentes, exitCode 0 e sourceUnchanged true. typecheck-r7 e build-r3 têm exitCode 0 e sourceUnchanged true, e o build-r3.log registra MIGRATION_SKIPPED. No lint focado r5 (30 arquivos) não há nenhum errorCount ou warningCount maior que 0, e o recibo tem exitCode 0 e sourceUnchanged true. Os gates G001 24, G002/M1/N10/N11 97, PDV 6, V3/OS 109, G003 102 (r4) e G004 57 (r6) são os mesmos da R2, com recibos e resultSha256 inalterados no quality-summary. Total 418 PG distintos e 898 unitários, 0 skip. quality-summary traz sourceChangedAfterGates=false. Os G003/G004 e os writers imutáveis continuam os da R2. Os testes G003 e G004 não importam a fixture alterada (declarado no RELATORIO, não verificado por mim), e G005 e unitários, que a carregam, foram reexecutados e passaram.",
+      "Lint, reexecução real: lint-differential.json registra o g005 reexecutado de 05:12:24 a 05:14:43 (exitCode 1, esperado no baseline), posterior à correção do EOF (05:07:43) e ao pg-g005-r9. Não é rehash de dados antigos. Os números são g004 4491 arquivos, 105 erros e 113 avisos, e g005 4501 arquivos, 105 erros e 113 avisos, ambos com 0 fatais e sourceUnchanged=true. Os hashes declarados batem com o prompt: baseline 024a59a4…1469 e current 25c4b980…2442. O differential dcdd1292…6671 está no prompt e no quality-summary, mas o lint-differential.json não contém o próprio hash, então não pude conferi-lo no arquivo. eslint.config.mjs, package.json e package-lock.json têm hashes iguais nos dois lados, com os mesmos node_modules físicos, Node v26.12.1 e base Git fad3d202… (5808 blobs verificados, gitBlobsVerified=true). diagnostics tem before 218, after 218, matched 218, added [] e removed []. lint-diagnostic-pairs.json tem 218 ocorrências de 'identical' e nenhum 'identical: false'. O sha do arquivo de pares (16232bde…dd9e) é o mesmo da R2, como esperado para diagnósticos idênticos. O eolFixOffsetProof tem equalExceptCrlf=true em todas as entradas. LINT_GLOBAL=BASELINE_FAIL e LINT_DELTA=PASS. Nenhum arquivo alterado pela G005 tem diagnóstico.",
+      "Mudança do hash 'current' do lint (ce0c35b4…→25c4b980…): aparece apesar de nenhum diagnóstico mudar e de a única alteração de código ser um EOF numa fixture sem diagnósticos. Compatível com a reexecução integral do resultado bruto, que carrega metadados por arquivo. O conteúdo comparado (218 pares) é o que sustenta o aceite, e ele é idêntico. Não encontrei no pacote explicação byte a byte da diferença do hash bruto. Não bloqueia, ver limitations.",
+      "Limitações da R2 preservadas e declaradas nos metadados: precheck parcial e validação por GETs/logs com remediação humana antes de futura implantação, READ COMMITTED herdado no fechamento, Node 26.12.1 contra engines 24.x, sem SLA, risco de merge remoto do analytics e nenhuma consulta à produção."
+    ],
+    "findings": [
+      {
+        "priority": "P3",
+        "file": "evidence/lint-differential.json",
+        "line": "48",
+        "proof": "O hash bruto 'current' do lint mudou (ce0c35b4…→25c4b980…) sem mudança de diagnóstico e com delta de código restrito a EOF numa fixture. A comparação de 218 pares, que o aceite usa, é idêntica. O pacote não traz explicação byte a byte da diferença do bruto. O differential dcdd1292… não está dentro do próprio lint-differential.json.",
+        "fix": "Não bloqueia. Se a trilha de auditoria exigir, registrar no REVISAO_R final qual campo do formatador de lint varia entre execuções. O aceite está amarrado ao conteúdo diagnóstico e aos hashes."
+      }
+    ],
+    "lintExceptionAccepted": true,
+    "lintExceptionNote": "Aceite EXPRESSO e específico para estes três hashes: baseline 024a59a400aee86a7a73d6030bce2055043dfd7a8cc54f679c14fdade1201469 (105 erros/113 avisos), current 25c4b9808a002d90522b2451c4a458db386877d0fdc71cee0f418d2386662442 (105/113) e differential dcdd1292f694df49c605e1f83c9505bf95fae3d8e36fd6d92c2ec878ac166671. Fundamentos: reexecução integral após o EOF, 218 pares individuais todos idênticos, 0 added e 0 removed, mesma config/lock/dependências/Node/base Git, normalização limitada a raiz absoluta e LF/CRLF com prova por fonte, nenhum diagnóstico em arquivo alterado e lint focado 0/0. LINT_GLOBAL continua BASELINE_FAIL; não é PASS e não deve ser declarado como PASS. O aceite perde a validade se qualquer fonte produtiva ou de teste mudar depois, o que exige novo lint e nova revisão.",
+    "lintEvidenceHashes": {
+      "baseline": "024a59a400aee86a7a73d6030bce2055043dfd7a8cc54f679c14fdade1201469",
+      "current": "25c4b9808a002d90522b2451c4a458db386877d0fdc71cee0f418d2386662442",
+      "differential": "dcdd1292f694df49c605e1f83c9505bf95fae3d8e36fd6d92c2ec878ac166671"
+    },
+    "approvedForLocalCommit": true,
+    "productionApproval": false,
+    "limitations": [
+      "Revisão estática (Read/Glob/Grep): não executei testes, lint, build nem typecheck e não recomputei nenhum sha256. O hunk da fixture, as contagens dos gates e os pares de lint foram conferidos por leitura e contagem. Os hashes dos JSONs de lint e do arquivo de pares não foram recomputados por mim.",
+      "Só revisei o delta pós-R2. Os resultados funcionais da R2 (P1/P2/P3, A13, autorização, bases e rótulos) não foram refeitos e dependem de as fontes produtivas terem hashes iguais aos da R2. Isso eu verifiquei pelos hashes do source-audit e dos recibos, sem recomputá-los.",
+      "O commit local deve incluir somente os 33 caminhos da allowlist, depois de confirmar o SHA base fad3d202…, a branch codex/omni-gestao-gastos-005 e um stagedcheck limpo (git diff --cached --check). A finalização pós-R3 só pode atualizar GOAL, RELATORIO, MATRIZ e REVISAO_R. Qualquer mudança em código ou teste invalida este parecer e o aceite de lint.",
+      "Mantidas as limitações da R2: precheck parcial; validação por GETs/DTO e logs, com remediação humana por writers canônicos e nova reconciliação antes de futura implantação; READ COMMITTED herdado no fechamento; política herdada de cancelamento_pdv; ledger e títulos agregados em memória, sem SLA; Node 26.12.1 contra engines 24.x; risco de merge com origin/main (analytics remoto com gate de módulo finance) que exige conciliação manual. Nenhuma produção foi consultada.",
+      "Este parecer não aprova produção, push, merge, deploy, DDL/backfill/grants, WhatsApp, ativação pessoal nem G006. Autoriza apenas um commit local dos caminhos da allowlist."
+    ]
+  },
+  "reviewedSources": [
+    {
+      "file": "app/actions/cadastros.ts",
+      "sha256": "a56177890e043e8dd16370b873466e2de2f588e13d1db487a40d99e62954b578"
+    },
+    {
+      "file": "app/actions/omni-agent-memory.test.ts",
+      "sha256": "2f3dd114f4a16e66f3e55b10e936002e8690a95164a5b9db88413e39578eb7da"
+    },
+    {
+      "file": "app/actions/omni-agent-memory.ts",
+      "sha256": "8fa95c60bc4888f58aa2753b4702e294f926847b551a2d8137a3e6473838bfc8"
+    },
+    {
+      "file": "app/actions/omni-agent-timeline.test.ts",
+      "sha256": "43254ee7e29bb3ba05fada0383b4e7ecbc652f78db360f1306e86e5a99ec456f"
+    },
+    {
+      "file": "app/actions/omni-agent-timeline.ts",
+      "sha256": "b11f22e39e8d85ae3eeeeb7093bd59191e813b1ca614595b8d160d378ed752c1"
+    },
+    {
+      "file": "app/actions/omni-agent.ts",
+      "sha256": "6564d04a044f96d32e6cf50833ccd3a52ca74a6247f1d99fc2a71b985a4739f0"
+    },
+    {
+      "file": "app/actions/operacoes.ts",
+      "sha256": "f7d92afb1cf74858fc83f974dfc4fe027cebbe9d87fb19662afaa7b5ed3175cb"
+    },
+    {
+      "file": "app/actions/ordens.ts",
+      "sha256": "509f15bcc9c76967c2cd6cdc948b559982d558db7565a8743281aeb5f5f01ec3"
+    },
+    {
+      "file": "app/api/dashboard/elite/route.ts",
+      "sha256": "5b5f75866c01978c54686bc441208b2e1bdcb575fc2a132c2125e928968be0dd"
+    },
+    {
+      "file": "app/api/financeiro/analytics/route.ts",
+      "sha256": "72fab0a4868f4513168224368cf9052a9dedbbf1cdc8a2dcba37e8a6f0bf769b"
+    },
+    {
+      "file": "app/api/financeiro/auditoria/[entidade]/[entidadeId]/route.ts",
+      "sha256": "4b3c7d3eb4d86e044b8e83947020c0829193b962fd8c30b65bb6c8dddeab3915"
+    },
+    {
+      "file": "app/api/financeiro/auditoria/route.ts",
+      "sha256": "bf62f41bd362f10a6fc1e36e0fe625d74bd7c74f2f29a7fafd3a3e4393d72fff"
+    },
+    {
+      "file": "app/api/financeiro/carteiras/route.ts",
+      "sha256": "5c8e2ee414d79fc581cc21f2258428934324a5074384c83a11648f8846a1c718"
+    },
+    {
+      "file": "app/api/financeiro/conciliacao/route.ts",
+      "sha256": "057d3a16bd56f945eb4ebcaa009e51d6f5d21a6bcc06c2014c0342e4392ac526"
+    },
+    {
+      "file": "app/api/financeiro/dre/route.ts",
+      "sha256": "07882e243a47736eed389c7ec82622f9bd8fb69ccdd8a39f75e2d86d4c30edc4"
+    },
+    {
+      "file": "app/api/financeiro/fechamentos/route.ts",
+      "sha256": "0f2931cf489729bb01f6793424c5394370c8d7fd8bbc60d02563a167827eb648"
+    },
+    {
+      "file": "app/api/financeiro/fluxo-caixa/route.ts",
+      "sha256": "beeb9123e0194ca51624d39fcc302c70173c6e78dcb3e313434677b97e494006"
+    },
+    {
+      "file": "app/api/financeiro/movimentacoes/route.ts",
+      "sha256": "ad9aaeb6235b71c996a4b172b671c95ec4d4033989668eaaf5bceacf7e6667dd"
+    },
+    {
+      "file": "app/api/financeiro/pagar/operacoes/route.ts",
+      "sha256": "f9083aa53041e60376f3b123207b2538457d657c8033eab48a6e7801c69f20cf"
+    },
+    {
+      "file": "app/api/financeiro/pagar/pagar-liquidar-saldo.test.ts",
+      "sha256": "883595d2492aacd86c031eb21b2f011ea4181eb84bdb39d40e43dae24d841569"
+    },
+    {
+      "file": "app/api/financeiro/pagar/route.ts",
+      "sha256": "ab9d7eee2dfd1a216a5b1276f02cbf74a3387448d91a42a4d7348be277717c62"
+    },
+    {
+      "file": "app/api/financeiro/receber/receber-liquidar-saldo.test.ts",
+      "sha256": "e8546f259d7cc6e3596edfa1c7124ee128a7d5f31605d1cb95deb59ad49c353a"
+    },
+    {
+      "file": "app/api/financeiro/receber/route.ts",
+      "sha256": "473984c8a2fa8d65cfb2c31afd782610ebb416690d90418c7af4419021eca380"
+    },
+    {
+      "file": "app/api/financeiro/receber/vincular-caixa.test.ts",
+      "sha256": "ec5cd1ec49027f89042fbfad96671b6946d2c52d8f16542aacb282b831a044d1"
+    },
+    {
+      "file": "app/api/financeiro/relatorios/categorias/route.ts",
+      "sha256": "103cc1904ed31222a0ddd31aafcab30463de36511300615b935e1d38ca35ee4f"
+    },
+    {
+      "file": "app/api/financeiro/relatorios/exportar/route.ts",
+      "sha256": "bf8e55bf9f00fdc05ba38ac830fb6f4d1a8c202be565174e9dbc1f0239f1ff30"
+    },
+    {
+      "file": "app/api/financeiro/relatorios/fluxo/route.ts",
+      "sha256": "a47a188187b0700890a40c4aabe46efe66a5b837fa4f7b3ceb20318004b4ce88"
+    },
+    {
+      "file": "app/api/financeiro/relatorios/indicadores/route.ts",
+      "sha256": "0863537f2460a2520854e6032769b820dee278bc00a2f8e4b410e5d5b4e195a3"
+    },
+    {
+      "file": "app/api/financeiro/relatorios/rankings/route.ts",
+      "sha256": "d320d73af9d6197f9b7e7cd39336fd0f355e4345dead65a97ef251c5e7031ed9"
+    },
+    {
+      "file": "app/api/financeiro/relatorios/resumo/route.ts",
+      "sha256": "92aaf2794fbff7297ff0ef4476848d8e677da2cfd05deb1fde8c3574ab0deb25"
+    },
+    {
+      "file": "app/api/ops/caixa/sessao-detalhe/route.test.ts",
+      "sha256": "498c7bc494be3fedee5e07c0b02ea5ca221f7b8723e85b69f31ba518e70c01ca"
+    },
+    {
+      "file": "app/api/ops/caixa/sessao-detalhe/route.ts",
+      "sha256": "885947c4eeedd5f4cd8582f340f885a59801af6f6f93d2043fbbcbb5f7bd3800"
+    },
+    {
+      "file": "app/api/ops/contas-pagar-persist/route.ts",
+      "sha256": "8e77263f44c07ab9338d5112b37ef2aab25736ccb367b615361701f2b0583614"
+    },
+    {
+      "file": "app/api/ops/contas-receber-list/canonical-list.test.ts",
+      "sha256": "7cb6e8d5b8d98a7e633f3c3184b94a73cad9cf19ec499a92289778458aa5a0d0"
+    },
+    {
+      "file": "app/api/ops/contas-receber-list/route.ts",
+      "sha256": "5c9be26f97522c04c488b7ea2e9e2aa8238964b98c8bad55d1a1849d38a8ced8"
+    },
+    {
+      "file": "app/api/ops/contas-receber-persist/route.ts",
+      "sha256": "c3e432584cf003036b4350dd2e9321dda4d1e0eb623be558a2dc7225827890f3"
+    },
+    {
+      "file": "app/api/ops/ordens/import/route.ts",
+      "sha256": "5790166ddb9c60dae064f326be49965e02faa1b904d87faa681761ae39b401c2"
+    },
+    {
+      "file": "app/api/ops/sync-legacy-financeiro/route.ts",
+      "sha256": "7501244ac4b556bd913dab66d4e367611799c891ac4c39052274b29d24359587"
+    },
+    {
+      "file": "app/api/pdv/receber-conta-lote/recebimento-lote-lock.postgres.test.ts",
+      "sha256": "550d4943679977477d52e93c43975e7e8d76bf405f6ff329ce8c3f58bcd75464"
+    },
+    {
+      "file": "app/api/pdv/receber-conta-lote/recebimento-lote.test.ts",
+      "sha256": "64200b2a9c2ed05f7ef8eda6025161cc6367f251ee7bef9352195e1864b09c04"
+    },
+    {
+      "file": "app/api/pdv/receber-conta-lote/route.ts",
+      "sha256": "41e857723472f622e4e2aea75740931f0a0ca78d25b4be6931416264256f8f0b"
+    },
+    {
+      "file": "app/api/pdv/receber-conta/recebimento-atomico.test.ts",
+      "sha256": "19007612fe2daec2135a7a0e9966a2669446dd63901d3049b5bb273f4940d0b0"
+    },
+    {
+      "file": "app/api/pdv/receber-conta/route.ts",
+      "sha256": "cc8d0122f32a09210938b16351a0cebf4cde39741944fd5b20554dae9977db01"
+    },
+    {
+      "file": "app/api/vendas/[id]/cancelar/route.ts",
+      "sha256": "dfd640f9a172884496785bbce1199ced50b77ec9006e43f53a37e93072060a86"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir-itens/route.ts",
+      "sha256": "3b20ae01f1d116498511a8f1c95d432b829f05ebedee4e5c9787ed25de598465"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir-titulo/route.ts",
+      "sha256": "740fa3629d84bf8cb6bd234371426131f713519ceb1ee038d02d40504fa1c38a"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir/route.ts",
+      "sha256": "8975c593df2a080d09cb82ebdfcc976a5e80fef98a42952507ae24b17ffe6d00"
+    },
+    {
+      "file": "app/api/vendas/[id]/route.ts",
+      "sha256": "c2955905fed27e9855f83c7d1cef8eb1f289224018cad6b1d529686bec38e0b9"
+    },
+    {
+      "file": "app/api/whatsapp/contacts/route.ts",
+      "sha256": "4d2474e2c8d3025429b17632a7e5dad923f4b56aad983a2ddf5c80143e7f7f45"
+    },
+    {
+      "file": "auth.config.ts",
+      "sha256": "55b61aa58492e35a56a769cba32216c7a4e483dd28460c19923756d5c08e107b"
+    },
+    {
+      "file": "auth.ts",
+      "sha256": "c4c4aad06a2a7c6f128016301c248970d5c70bc8e4db1839be0d9ecef7450200"
+    },
+    {
+      "file": "components/configuracoes-v3/features/settings/section-routing.ts",
+      "sha256": "c79f5f66f26238fa22b06060310524a511099e0962afcfa8c3d05ea277b706f3"
+    },
+    {
+      "file": "components/financeiro/lovable/context/FinanceiroRealContext.tsx",
+      "sha256": "046a5ecaa7a76bca33a6c79ac6d0d7433df6f0177555aba9111217ae882f55a9"
+    },
+    {
+      "file": "components/operacoes/lovable/api/_helpers.ts",
+      "sha256": "c110909cf20296b98c1d771afe916ba08b46facc3bb4e99354440aab6898515f"
+    },
+    {
+      "file": "components/operacoes/lovable/api/os.ts",
+      "sha256": "63ef75b6ad11912543be0425fff286ccbddd25b926613a2da6ee03fe8a4f0261"
+    },
+    {
+      "file": "components/operacoes/lovable/types/os.ts",
+      "sha256": "a5ae2abc56388f2d33b682ca7a31097f58dfff596016dc89702236eb8eeab5ed"
+    },
+    {
+      "file": "components/operacoes/lovable/types/venda.ts",
+      "sha256": "9fcd64473968c09dddc265487cb810a61b8afa9e13e5a8c4eabcc3c9114d70f6"
+    },
+    {
+      "file": "components/operacoes/lovable/utils/os-status.ts",
+      "sha256": "2d0254761240cb27554da4c7e4ca855c2498f5224f15c827043d7471de7af304"
+    },
+    {
+      "file": "docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-002/AUDITORIA_PRE_MIGRATION.sql",
+      "sha256": "ad2fdfc8d3eec5a1ee9f22d1397c5e045eba248b435649146bda7c9a158db2bd"
+    },
+    {
+      "file": "eslint.config.mjs",
+      "sha256": "26ac6490b9fd0cc1d0326f1ce44a9ebb393ed23a04f3c4bac8ea8404798d2eb2"
+    },
+    {
+      "file": "lib/acessorios/types.ts",
+      "sha256": "1618af5e36e6c6b2ac3250073bc987dcd6d5b89ec974ffc500d3b174a30a0e33"
+    },
+    {
+      "file": "lib/api-auth.ts",
+      "sha256": "493b5e1b637763d50546eb749fb8dac0be18944d794bfbcea0cd24d110876c24"
+    },
+    {
+      "file": "lib/assistec-headers.ts",
+      "sha256": "991e3c2f0c58c4eaa33fcf7b45d19492905d4200ccf713de4a978b738ebd6499"
+    },
+    {
+      "file": "lib/auth/api-enterprise-guard.ts",
+      "sha256": "eb4414430be9e1e3e622e32bb05ce93e9eecfd74edd4e68199bbd363688474dc"
+    },
+    {
+      "file": "lib/auth/enterprise-permissions.ts",
+      "sha256": "4e297b0aa602915d85082b86d402e8380654a1a2f9c7e700bc5c93dcd3b394e0"
+    },
+    {
+      "file": "lib/auth/guard-enterprise.ts",
+      "sha256": "aa9d3312a526b80e2125c8a07e917afd0d32a6b55c2d5f623dec1f507e0755d6"
+    },
+    {
+      "file": "lib/auth/pin-authorization.ts",
+      "sha256": "ef6306e65564ddabcc8e7783d80f3b33ad8090cb58b30b0cc6dd1698f048dd52"
+    },
+    {
+      "file": "lib/auth/pin-hash.ts",
+      "sha256": "88ff478c10f2ad87ba3da181588aa458a6ca1b9b8ab3185820007c5815e878bb"
+    },
+    {
+      "file": "lib/auth/proxy-enterprise-dashboard.ts",
+      "sha256": "43b7fa155fba97a36e3b66adff7532b20e2ff3780a3bcca6f9c18a9dbccca3f9"
+    },
+    {
+      "file": "lib/auth/proxy-session-gate.ts",
+      "sha256": "05f6bbc061002af8579bdea55fff7b12cf438b72b8738cf029b5624ae16d79b5"
+    },
+    {
+      "file": "lib/auth/session-entitlement.ts",
+      "sha256": "27acc382e6bb99e8ccf96bb8cc898ba591efc4019f47fdeb9fc3da4574106c1b"
+    },
+    {
+      "file": "lib/auth/session-operator.ts",
+      "sha256": "254d842e5027e1860c9e72c1ae8c3baf90e1a3b0e6ec91f58c80154142a1d0ed"
+    },
+    {
+      "file": "lib/auth/verify-supervisor-pin.ts",
+      "sha256": "e7cf565123e6e4cc01475a0d8fe33fc4f42bd20f4a9e66986c7b3caee2101bea"
+    },
+    {
+      "file": "lib/barcode-lookup/index.ts",
+      "sha256": "362cf6faa461154312e9d78ffe5167d822c310f2734dc3c48012c5d8a48329cf"
+    },
+    {
+      "file": "lib/cadastros/cadastros-action-access.ts",
+      "sha256": "8bc6278715015e70276e6be830158fd02ae44ce00e53a8a7694ac2a785d6c6de"
+    },
+    {
+      "file": "lib/cadastros/cadastros-api-access.ts",
+      "sha256": "d0fd1fee5407b645017de011d57e4d20a860dc007c14e1e6d9fd95e81135c6be"
+    },
+    {
+      "file": "lib/cadastros/cadastros-audit-principal.ts",
+      "sha256": "a4245da0fc1e8c9075ddfeceaa262c547de8656aa108bd6463c304995b17519d"
+    },
+    {
+      "file": "lib/cadastros/client-identity/document.ts",
+      "sha256": "475a04a83da7937d202ff5581700fdfb01a6342cde0150cdf280991968601f8c"
+    },
+    {
+      "file": "lib/cadastros/client-privacy.ts",
+      "sha256": "da96f915df6c3023795f105fc00bad3ef52b9ce4fa167d2bf64bf7225c60b3bb"
+    },
+    {
+      "file": "lib/cadastros/client-write-contract.ts",
+      "sha256": "b7518b4be1016b9d4534bc03ee7440ca64f688d930f605ae8453ed4916097a72"
+    },
+    {
+      "file": "lib/cadastros/client-write-service.ts",
+      "sha256": "3fa0b48f37ea11cd4a281f11cf0110865676c8f8e6fda13c5fbfacef9e218909"
+    },
+    {
+      "file": "lib/cadastros/gtin.ts",
+      "sha256": "6b40d1ad6f95e99063b42b2dea365114ace0edcd8129c51cc12c7ee6ea9f5d7c"
+    },
+    {
+      "file": "lib/cadastros/importacao-produtos/index.ts",
+      "sha256": "4233296fc8c1a5bb053b1463d9c0d2c5a5b03830e07beedbae815e2fe948cdc7"
+    },
+    {
+      "file": "lib/cadastros/product-write-contract.ts",
+      "sha256": "af89cb521d825f4311de2b484686fb51c2c23b94f991e476fa0f005badecb6cb"
+    },
+    {
+      "file": "lib/cadastros/product-write-service.ts",
+      "sha256": "d4cb16f8f13585e91432ace47e93332480f271df41897e9863b9f150ec6602f3"
+    },
+    {
+      "file": "lib/cadastros/produtos-listagem-sql.ts",
+      "sha256": "cdc0f4eec297cc5e0fd5308174752bcf6fad4ce7324023bbe04829e91d732e5b"
+    },
+    {
+      "file": "lib/caixa-fechamento-resumo.ts",
+      "sha256": "2eab7f1cb3f6a9c1475a03b9bb2f5592dab410cc6e61d015227ddb627c6620cd"
+    },
+    {
+      "file": "lib/caixa/recebimento-cr-caixa.ts",
+      "sha256": "cefe46ee9b8417aca4093a059b6c3fa0d0e8140cb9f5c40e7ce6c6f476f2a10d"
+    },
+    {
+      "file": "lib/caixa/sessao-vendas-escopo.ts",
+      "sha256": "c6a1df8209ff6a2d4ca4db2dac38a88d8ed4fbda19e16215c31933c48e704732"
+    },
+    {
+      "file": "lib/config-empresa.tsx",
+      "sha256": "46a30393e2175845c22ccfdf42b35cb5397d87644faff735464c570014259f3b"
+    },
+    {
+      "file": "lib/contador/auth-externa/acessos.ts",
+      "sha256": "1f6034c68e6a3e5ccb00bcde4271de5e0dd63aab7f52469329307bdd48c4e147"
+    },
+    {
+      "file": "lib/contador/auth-externa/convites.ts",
+      "sha256": "5c682aa479022b09621e2481dd0acb073c3adca0d6532d17fafb55007ec453eb"
+    },
+    {
+      "file": "lib/contador/auth-externa/escopo-externo.test.ts",
+      "sha256": "afaf82a0d64b9eac9de2419097b3e5818cd615a6f6a670829fcbe6ee1d5f46aa"
+    },
+    {
+      "file": "lib/contador/auth-externa/escopo-externo.ts",
+      "sha256": "83f0b28b5145c17e7b5017aa8bb98cbc16891501400284aa54e7b50ca214b357"
+    },
+    {
+      "file": "lib/contador/auth-externa/eventos.ts",
+      "sha256": "949029cfb64f6e09a3578fd398594609be7a0d466fabf90647a093b4dcb49918"
+    },
+    {
+      "file": "lib/contador/auth-externa/fakes.ts",
+      "sha256": "1345e80a0f98e2e449fa1ebd5b6a74571e2310f8edebf72aa8cf44ee453bdde2"
+    },
+    {
+      "file": "lib/contador/auth-externa/proxy-publico.ts",
+      "sha256": "396a1e4d5568f986274d602132959fc2263d8537505d2215b85bdb8b3bb4a09a"
+    },
+    {
+      "file": "lib/contador/auth-externa/repo-prisma.ts",
+      "sha256": "0a81478b20e5483708a638d3842402ea4bc72a698a442ac16f5738b290e505f1"
+    },
+    {
+      "file": "lib/contador/auth-externa/sessao.ts",
+      "sha256": "70b8fe939e1c2744d994c9e902fc40a2a5618d6426404a7244a6cfb8f452545f"
+    },
+    {
+      "file": "lib/contador/auth-externa/tipos.ts",
+      "sha256": "35eb02dbce9322eab927c116fe8c475573f760ac9c49cae40edea34d25f2a5bc"
+    },
+    {
+      "file": "lib/contador/auth-externa/usuarios.ts",
+      "sha256": "6c1146b5b997e38a7ac50bedc87e813cf866958b38d62566a3848910d4ca4fef"
+    },
+    {
+      "file": "lib/contador/auth/legacy-session.ts",
+      "sha256": "36030d6038c8d72824031709314882cee11318edf44a76b48189006e2ea3d5f1"
+    },
+    {
+      "file": "lib/contador/competencia.ts",
+      "sha256": "6359c2c60fa4337426ae62fb141e2692cfa945526dee3c8507a7a3fca3af5c33"
+    },
+    {
+      "file": "lib/contador/documentos/storage-types.ts",
+      "sha256": "96483160178294549c63ab97da6e488dfe20ca544cf30193cec41b7fbaf49633"
+    },
+    {
+      "file": "lib/contador/fechamento/index.ts",
+      "sha256": "d797736e60ad8abb044888b6209ab28953eb1da6468c83e50a2a2e9074312a40"
+    },
+    {
+      "file": "lib/contador/fechamento/montar-checklist.ts",
+      "sha256": "a62c7fcd5052b6ceb98408f6b6f912c0913ba27d691877e888ba4a84828052e0"
+    },
+    {
+      "file": "lib/contador/fechamento/tipos.ts",
+      "sha256": "83ee061c9d9f14c8a8e6df79ea087952fa63fae54f681b4f8c7f36b9e8c2216e"
+    },
+    {
+      "file": "lib/contador/legado/rota-legada.ts",
+      "sha256": "df20503f62dd5f1971f89586d146507fd1a1b9db1a2be3bc6667084b798f150c"
+    },
+    {
+      "file": "lib/contador/pacote/builder.ts",
+      "sha256": "7bd4ace2b1578fae3a12e855638e6e9f8a850b5008c41949796d75fbcc564ce9"
+    },
+    {
+      "file": "lib/contador/pacote/carregar-fontes.ts",
+      "sha256": "ed8fcb1b17aeef532025d9eaac5844647aeac655fcb1c1ea910b6ae7dff3d851"
+    },
+    {
+      "file": "lib/contador/pacote/correcoes-008c.test.ts",
+      "sha256": "e95e4ee69972cbadee6e4c6d120aca2874ee14c21ea1b55911bad0d17ebb1c64"
+    },
+    {
+      "file": "lib/contador/pacote/correcoes-008d.test.ts",
+      "sha256": "995cbf309278c5c46b057d0176ef008d3b6840d9f4ad0c17bba3150d297c004e"
+    },
+    {
+      "file": "lib/contador/pacote/csv.ts",
+      "sha256": "5574042ccfaab58c5c041649db64dbf2e668632c21111f87cc21b2aa31946c4f"
+    },
+    {
+      "file": "lib/contador/pacote/fontes.ts",
+      "sha256": "0f1b592261c58f1945b41d0f8359740b7d4b5d7cdccaa975b2138ccd32f86d56"
+    },
+    {
+      "file": "lib/contador/pacote/manifest.ts",
+      "sha256": "c7e1f1bb1438b0dcca74895c96d18a35bb0a3160980afb6db5e15499ea5b639f"
+    },
+    {
+      "file": "lib/contador/pacote/pacote.test.ts",
+      "sha256": "6d2f34fd1ef29493e38114af216b3951efac4f6313791b08753bb77c1e9555c9"
+    },
+    {
+      "file": "lib/contador/pacote/seguranca.ts",
+      "sha256": "0ef7fabd9607b2c9369966d9a0e31307ac801e4aeacd43b6168ab2292a29c2be"
+    },
+    {
+      "file": "lib/contador/pacote/tipos.ts",
+      "sha256": "91bf51445cda203a435a5400d7ebabe4115cf5b450f7682d3f096ca6c499ef21"
+    },
+    {
+      "file": "lib/contador/pacote/zip.test.ts",
+      "sha256": "00449e0fe609424fa23b2fdcacdf81af56353cb93b51d24ea845b1a6a8abc11a"
+    },
+    {
+      "file": "lib/contador/pacote/zip.ts",
+      "sha256": "5af2e5b73b37f0c3810edff0e55e928fcff5b92acd48a29d0127324415112f3e"
+    },
+    {
+      "file": "lib/contador/readers/caixa.test.ts",
+      "sha256": "9d85ee57ce9362330da247a14b57067ab2e7c28425e0e19db7b019a624e3f7fa"
+    },
+    {
+      "file": "lib/contador/readers/caixa.ts",
+      "sha256": "6f5a5ccbb83696d68c0b40af9bda7e0de36fb9e33ffd2f65577b4bbe79bd0807"
+    },
+    {
+      "file": "lib/contador/readers/devolucoes.ts",
+      "sha256": "039f99036b82e021b4af5baff76009e49c92c12907b3496eaae9607098a79ec8"
+    },
+    {
+      "file": "lib/contador/readers/financeiro.test.ts",
+      "sha256": "5d8b1230237840afe9fddb6f3fe5adab6c10696d31fdca322fffff28e0df2346"
+    },
+    {
+      "file": "lib/contador/readers/financeiro.ts",
+      "sha256": "a7beb92c64b44e16ba8bef2be490f500a66232147287ef8d1a1863d21213f3c6"
+    },
+    {
+      "file": "lib/contador/readers/fiscal.ts",
+      "sha256": "e8df9543d4a455d99c816b292ec73576e5d4f4a6106f244e34033c510de83ec7"
+    },
+    {
+      "file": "lib/contador/readers/index.test.ts",
+      "sha256": "c5e06beac44147be225d901808894d1020e099f678b3095ba1f5beddb0b42eeb"
+    },
+    {
+      "file": "lib/contador/readers/index.ts",
+      "sha256": "972134438e7ee142d1d323d99a3e4099a1a0688abbf1cf1985290b0ef9a33f11"
+    },
+    {
+      "file": "lib/contador/readers/serializacao.test.ts",
+      "sha256": "70f10b8da5615fea31883fdd32c6884691ed25a79d1ce210ca34cc33ccede6ec"
+    },
+    {
+      "file": "lib/contador/readers/tipos.ts",
+      "sha256": "85fa2c71eb7cdd3d31d156a963f4d1ddb3dadf884c9336465ac01c30984d1e7a"
+    },
+    {
+      "file": "lib/contador/readers/vendas.test.ts",
+      "sha256": "ad7b2741b83a6c00bb036ca24ac929c4fb4492167d03ddb111c7faf8857ae12d"
+    },
+    {
+      "file": "lib/contador/readers/vendas.ts",
+      "sha256": "8773ce7b7e9f6e7877356021bf2c1382ee4fa5d6e7bb4efc8f9875e0ef7dc5d4"
+    },
+    {
+      "file": "lib/contador/scope-core.test.ts",
+      "sha256": "93696a8a0e8b67b8e1e649dc72ca0efb45930b9d9df6a2563dc23df701ee8a2b"
+    },
+    {
+      "file": "lib/contador/scope-core.ts",
+      "sha256": "5bddf4ebc28f73c38c6c6fc87073e310910062137cc25dcbc6955141d4553208"
+    },
+    {
+      "file": "lib/contador/scope.test.ts",
+      "sha256": "0632308cb62eb7d358bdad4b1b40b241c8b14b87743973d705e077f85e1238bf"
+    },
+    {
+      "file": "lib/contador/scope.ts",
+      "sha256": "0e3339508f8daeb379620614217e1590759b74a04e39a9e1c055aa13a2060caf"
+    },
+    {
+      "file": "lib/contas-receber-aberto.ts",
+      "sha256": "f0e0ee1ce9242d817bcd0245f5a774e2a5555dc454041a2bbef42d17ca9fb64b"
+    },
+    {
+      "file": "lib/contas-receber-cliente-match.ts",
+      "sha256": "1e4f3d01cb506fb6383ab3bc4a060903ed46d310d507b97cdce38bd78ca5948a"
+    },
+    {
+      "file": "lib/contas-receber-pagamentos.ts",
+      "sha256": "25cc704e90b78661e61044a88fa684ec1ad8ffa9da3bd1e317fb28a32de3fa75"
+    },
+    {
+      "file": "lib/contas-receber-prisma-queries.ts",
+      "sha256": "f98d33be85b72a76e2f8255ab24f0540e6ccfc43f4a6e4ba12f4daa051356925"
+    },
+    {
+      "file": "lib/contas-receber-types.ts",
+      "sha256": "83163bba5bb4e262553f72460d632cfed443f5b39d6c8ceafe4d199455ab9819"
+    },
+    {
+      "file": "lib/estoque/stock-ledger-contract.ts",
+      "sha256": "e5112b020b58216a391bcec389d7c54d2a477162323570b8fa1a692a3c41800d"
+    },
+    {
+      "file": "lib/estoque/stock-ledger-service.ts",
+      "sha256": "bd4b5d985d3930daf33551c0243a87bd565375867be484c7962dee4c78f6083c"
+    },
+    {
+      "file": "lib/estoque/stock-ledger-test-fake.ts",
+      "sha256": "27df162a72ac9d752098c42dcbbf7cc35775c90727083ffc40fee779dd4c613e"
+    },
+    {
+      "file": "lib/events/event-bus.ts",
+      "sha256": "2b04e906aa3899a2c5024d4d4c13236850e213760e6327ba47f39febbee72a6e"
+    },
+    {
+      "file": "lib/feature-flags.ts",
+      "sha256": "2de999641855178080398325f0270e51b2c9a51f3e09d395e44da0d8dded2a1e"
+    },
+    {
+      "file": "lib/financeiro/adapters/os-faturamento.ts",
+      "sha256": "aa30633f19e353cd56c3fda5694ebd9470724097e88f53217b937815734f9d93"
+    },
+    {
+      "file": "lib/financeiro/contracts/local-key.ts",
+      "sha256": "7536e3cb933adb9cf1022a49f7e2f597b692f016217496e3569172035cec840b"
+    },
+    {
+      "file": "lib/financeiro/contracts/origem.ts",
+      "sha256": "09ecf57569cc865233c90a5104cd72280fe7d7e3d7754fb66f579649f8ab4791"
+    },
+    {
+      "file": "lib/financeiro/contracts/payload.ts",
+      "sha256": "d302de29b5ed6b593ca50d616cf02bd3fdf1900dd6bea09109dd58f53f33feb8"
+    },
+    {
+      "file": "lib/financeiro/contracts/status.ts",
+      "sha256": "716635d79e762d184eb6baf514577d89321a7cd6c5e6fcdc08f14d7dcbd50e29"
+    },
+    {
+      "file": "lib/financeiro/contracts/valores.test.ts",
+      "sha256": "878c29c76d69176ece5014b2ea2d9f483364b4e191671ab224cfb8eb1af95dfa"
+    },
+    {
+      "file": "lib/financeiro/contracts/valores.ts",
+      "sha256": "672db4da6cff2cfc264251651c7a34937394a2cb81e170471b6e460610945c34"
+    },
+    {
+      "file": "lib/financeiro/correcao-pagamento-plan.test.ts",
+      "sha256": "2fdaacd200836dc27bd501096b5dfae0549acc45a93b2f8dd9905396ebe648a0"
+    },
+    {
+      "file": "lib/financeiro/correcao-pagamento-plan.ts",
+      "sha256": "4a61054083c0150a5e8245381abd368f3eb5d5ec3410e2f8445fce6fb7032e48"
+    },
+    {
+      "file": "lib/financeiro/pagamento-operacao-client.ts",
+      "sha256": "6c8bfd37ec9610b163fdcdbf68b74a0a9f4bef218662b21ca48e4a938a5405fe"
+    },
+    {
+      "file": "lib/financeiro/services/auditoria-actor.ts",
+      "sha256": "4d3affbfd3a123509ba11f5f4a18ca1b3f2a5637b86beee765b2a664d05afa77"
+    },
+    {
+      "file": "lib/financeiro/services/auditoria-financeira-service.ts",
+      "sha256": "e6a5de6c5e770580d73f3c809245d8c370630f14c7f8a34b894379960ec7555b"
+    },
+    {
+      "file": "lib/financeiro/services/carteira-service.ts",
+      "sha256": "f42656298665c516c75b78bcf16209e270b88c060751c5b86f6572491af63dc1"
+    },
+    {
+      "file": "lib/financeiro/services/carteiras-service.ts",
+      "sha256": "4fb0d967e543c04f5b09d58161f8b733c6fb27bfcdcb7d54d78f0fda392cfb50"
+    },
+    {
+      "file": "lib/financeiro/services/conciliacao-service.ts",
+      "sha256": "fb4e701ad854c6b522f7c7c77a272c24633deb020c015239f27312e17afe874e"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "sha256": "77fc459253a5d1a11a972ee89c1ddcdd59ed248ac772f9bbd36d14fabdbd229b"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-cancelar.test.ts",
+      "sha256": "1c6c53dd2e38351fe524f27b632c506a8a329d47f57550493943bb3ffd46b359"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-canonicalidade.test.ts",
+      "sha256": "3796ed5c2d97306f94e49f07c3badc2bc242b50e8da0dd9e934ddf67ac36cb15"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-parcial.test.ts",
+      "sha256": "f62a755897c8b349c3cc31780452a6a72aa9d0c2494213a4149e2ad682112d4a"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-service.ts",
+      "sha256": "de1a1dc9554287f4213d95b1f72b6fc6b1b039bd9f30c689fa0540368573acee"
+    },
+    {
+      "file": "lib/financeiro/services/dre-service.ts",
+      "sha256": "e92ddff195231427858658c28801f3cf5266513310068d4fb25fd3308c29f4b6"
+    },
+    {
+      "file": "lib/financeiro/services/fechamento-service.ts",
+      "sha256": "6447f7233e434013d2a942cc796deb35b580ee03122fb05e4ec3d24a4aab7321"
+    },
+    {
+      "file": "lib/financeiro/services/fluxo-caixa-service.ts",
+      "sha256": "4e099d125274ce9c43446289645e3e91a27bd51bc098a9d67fe84e48d61b3f7f"
+    },
+    {
+      "file": "lib/financeiro/services/index.ts",
+      "sha256": "3e2f970d54277684d59dab3b10022cc0f2f8ee2caab1bb3d18e68d45b8ca9bef"
+    },
+    {
+      "file": "lib/financeiro/services/ledger-service.ts",
+      "sha256": "e1ba81367cbb4bc1ca83843d867dcae7ed9a8ceb1c7d6bcecbdf48a05e7f39ee"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacao-financeira-classify.ts",
+      "sha256": "e7d6401090461aa9ce77e44a14cd7c74aa5b55d552ec653a930c4683b6624ad0"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "sha256": "189bf58090f417a154fa92f396973a03ace6d74738cf0b7b03c91d277659293d"
+    },
+    {
+      "file": "lib/financeiro/services/movimento-service.ts",
+      "sha256": "0a98e25e8cc140c31cafb0571663589499c8fae1e7b96e5c71652dd1af389744"
+    },
+    {
+      "file": "lib/financeiro/services/recebimento-lote-service.ts",
+      "sha256": "33d0d6aef7c74d701400778901788ac77210880b6a2a3f19849d2324304ef199"
+    },
+    {
+      "file": "lib/financeiro/services/relatorios-financeiros-service.ts",
+      "sha256": "4fde6a2c3e7f5708b306b53918ef096056cd181a24a5ace71dd2c98156ea3039"
+    },
+    {
+      "file": "lib/financeiro/services/saldo-service.ts",
+      "sha256": "b19d0c2955053373aa0b61988cc055b89d8b5f2c0109a9fc369a8e4f248a77b0"
+    },
+    {
+      "file": "lib/fiscal/payment/pix-qr-kind.ts",
+      "sha256": "02225f8de79cc456d2fec20980ce2de00c1f2d1fdc4346c7097f8fbfdb44c59d"
+    },
+    {
+      "file": "lib/fiscal/payment/types.ts",
+      "sha256": "d27d2499ede1f4e7c00d71815628a48b06a3b417834bd0e46bd958bdc01d40b6"
+    },
+    {
+      "file": "lib/fiscal/venda-fiscal-state-machine.ts",
+      "sha256": "b53332b4b37fa121f936164ec95fc020dfab82b8ae633906305d23d2fdd6fe2f"
+    },
+    {
+      "file": "lib/gastos/access.test.ts",
+      "sha256": "9fcb40dd2545f5d40ffcf5fd00051e2ed81405d97f9986ee090a18333a587156"
+    },
+    {
+      "file": "lib/gastos/access.ts",
+      "sha256": "6b6d648a1c70cacae3d53c1cb6f808e5390bc497536ddec10b043398cf12f99a"
+    },
+    {
+      "file": "lib/gastos/apply.test.ts",
+      "sha256": "43d2c073ecffd3bb8d9c429c16bd8c827f970ed4b76bcc2f954987bbaf52f6ad"
+    },
+    {
+      "file": "lib/gastos/apply.ts",
+      "sha256": "d206b3d8415f380de39926b792c769544b7c1d43ab05e16ec126eb54ad39a0b9"
+    },
+    {
+      "file": "lib/gastos/cartoes.test.ts",
+      "sha256": "64081e1ae3726296d9ac567c1f385c2ac8395bef3bce7c64453366dfe2bb6214"
+    },
+    {
+      "file": "lib/gastos/cartoes.ts",
+      "sha256": "dbbc489b1b9e419899a34d7e33cdc0aa38639354b8279baefa6b735950d00371"
+    },
+    {
+      "file": "lib/gastos/categorias.ts",
+      "sha256": "15a774a2d716af213ce7594b77671309369965442fc4cd0c340cfe49f9f531ad"
+    },
+    {
+      "file": "lib/gastos/contas.ts",
+      "sha256": "37968683b0c9f29965bf5e62be6841ed1b1edfd6d07e1a77edcc53bb9f03c5a4"
+    },
+    {
+      "file": "lib/gastos/documentos-fixture.ts",
+      "sha256": "89606844bee3b4b9989d8bb1541b3357c6c93793ad178e8c2b5fced82588a7cf"
+    },
+    {
+      "file": "lib/gastos/documentos.test.ts",
+      "sha256": "a6d537ebe4dd9faee4884ccf38283f3ee562e9454f1673d1975376b82db9fe7e"
+    },
+    {
+      "file": "lib/gastos/documentos.ts",
+      "sha256": "57355c7002b6dd4613a102842e0090a54390ba85bc4b5710391132226521cedd"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.test.ts",
+      "sha256": "d643b6b1b09821cfcec421182db0344df19a2fbdb7e8fd5814d3c657e8b0e15b"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "sha256": "034f02e5fec4dc7fb4b32b79254141469cef6067a70571eaf6f8eae636c3a3ea"
+    },
+    {
+      "file": "lib/gastos/fornecedores.ts",
+      "sha256": "a51cfeb8c7cce563aed8b97d49f7822ecaea02b8df9d00889a7764e5b766c7cc"
+    },
+    {
+      "file": "lib/gastos/operacao-schema.ts",
+      "sha256": "55da45e0a894def3f16e551b108bdb992bc25b2e1cae2cd4e999776d46681638"
+    },
+    {
+      "file": "lib/gastos/operacoes.ts",
+      "sha256": "1f6d44a427082d6f90053cc597de8fb743c4c942c593b19a7e022f49643053b2"
+    },
+    {
+      "file": "lib/gastos/pagamentos.ts",
+      "sha256": "d9c8bcf3d25360c5479164ad7c1f9af23c0e612540d68228ebda7a1e52ac4167"
+    },
+    {
+      "file": "lib/gastos/periodo.ts",
+      "sha256": "eb68d61d30efef5f105f4d508c2cdeba10601c4ca78dc740d390ac7ac9f8cdc2"
+    },
+    {
+      "file": "lib/gastos/query-calculo.ts",
+      "sha256": "0229703d230dcd0aac9b1b3427e90c4b67ae03698847232c4dbc762d80bcd85d"
+    },
+    {
+      "file": "lib/gastos/query.test.ts",
+      "sha256": "e95e4bd3b94e10adffd8a4f421b46f10bce625c5fb88446cc310a649eff39a3c"
+    },
+    {
+      "file": "lib/gastos/query.ts",
+      "sha256": "5258bb2b318e28009e5d5117160e161e4cbf1db9e7d8c0142f2ec8ddefe7c8f8"
+    },
+    {
+      "file": "lib/gastos/read-cache.test.ts",
+      "sha256": "17cb9027bfe323cb0b54d197997655a6ea65d37fdc7caf40bc7c5bd1f0f33757"
+    },
+    {
+      "file": "lib/gastos/read-cache.ts",
+      "sha256": "a795cb55066e3162ddfdeb30cbf92a72b560f620a678445f2a7dad1d19adbd00"
+    },
+    {
+      "file": "lib/gastos/read-scope.test.ts",
+      "sha256": "73c03c148d2c9d2c55e58dc14f22e227cab5c24421b32813dfa0dfb27405c8fb"
+    },
+    {
+      "file": "lib/gastos/read-scope.ts",
+      "sha256": "63ba6a550035e2b81b67b51ce1e7ba17dcce8a30676495f1b37c5bb0b77a235a"
+    },
+    {
+      "file": "lib/gastos/types.ts",
+      "sha256": "57b3104ed436089fa0e12ea20e93adf929e53b35c2ce1dba4b4659045482a223"
+    },
+    {
+      "file": "lib/import-normalize.ts",
+      "sha256": "5d654fb5dc56db33fa483992a1c117eff8e27720cabd3b131baf707050cc2933"
+    },
+    {
+      "file": "lib/importador-avancado/merger.ts",
+      "sha256": "9ae54241a8ca758a19f6f9b5add8bc4a3869ea5787ce4cce7fe692775cec574a"
+    },
+    {
+      "file": "lib/importador-avancado/persistidor-canonical-014.test.ts",
+      "sha256": "bb228a5431a0ae46beb74fc1de959eaae64158925df954387321f8e978b5b7e7"
+    },
+    {
+      "file": "lib/importador-avancado/persistidor.ts",
+      "sha256": "7a6a8de497b2c8048352ddc55c2016b7f4b4d38db1633b830e430308383e8c09"
+    },
+    {
+      "file": "lib/importador-avancado/types.ts",
+      "sha256": "50b7d4822f851133add6deb04d775b14b53aa2609b7b192e8d41c36ec2be348f"
+    },
+    {
+      "file": "lib/loja-ativa-seed.ts",
+      "sha256": "e1a876dedf2f78eaa0258d6785684e7893a9bf96a8f8bd86469b5f9d51d3ba68"
+    },
+    {
+      "file": "lib/loja-ativa.tsx",
+      "sha256": "3cd5a23c70353fdc0475d33d27b0a63c954fac423089e946e6c3e2ca0a0b1ebf"
+    },
+    {
+      "file": "lib/navigation/legacy-routes.ts",
+      "sha256": "3f049d4c9d2705c5f076414f346619630005b2d086a9ec94cbaf9754c0bc7761"
+    },
+    {
+      "file": "lib/omni-agent/audit-log.ts",
+      "sha256": "adc85ef2389f36f884ecf3c8f54b3ea5fdc59a08810af548b767590f70fdb5df"
+    },
+    {
+      "file": "lib/omni-agent/canal.ts",
+      "sha256": "1c80321ee1d9e0d05590f94b288b29921f09bfecfb3e226dbe215b2733d4338f"
+    },
+    {
+      "file": "lib/omni-agent/config.test.ts",
+      "sha256": "3a3f462ee76d6d088574bc0dfdad3774cbbba2c533e1cddcb24762d7fd354cd7"
+    },
+    {
+      "file": "lib/omni-agent/config.ts",
+      "sha256": "1f31a0060cf65afe77c8c6f514be562387b5cb3aea0e77d6e901eaacc10c573f"
+    },
+    {
+      "file": "lib/omni-agent/domain-events.ts",
+      "sha256": "4fb21703d1a578fd32acde4e483eca61a016b1e9eb32d7e2124fda2c70e31d01"
+    },
+    {
+      "file": "lib/omni-agent/executor.ts",
+      "sha256": "7b14bb07cfd441c069af3f4b3aebea79a73ba15335ec59442fc5b06245ff33c4"
+    },
+    {
+      "file": "lib/omni-agent/hub-display.ts",
+      "sha256": "99941e84714a5725fadb2455fbd85a70f1ee052ab16089d4e11140e119eedda9"
+    },
+    {
+      "file": "lib/omni-agent/interpret-expense.ts",
+      "sha256": "2c81a32eab571d9cd1a9f575d45ae609f6927d8d33dd3d360f0d3ace6478fcb5"
+    },
+    {
+      "file": "lib/omni-agent/interpret-finance-query.test.ts",
+      "sha256": "d776c66f10a04ce1cc7a369eec551ae8c9071f1437cf2df2f22597fbf4d125ef"
+    },
+    {
+      "file": "lib/omni-agent/interpret-receivable.ts",
+      "sha256": "7e98b97ced2625140663cfe98f5ccf107e814bbccb32a4c6c1068e9d1b703f8a"
+    },
+    {
+      "file": "lib/omni-agent/interpret.ts",
+      "sha256": "53025f5fda5ea18d37225c112c8422af465d882843d0916d5e23c668a552ab59"
+    },
+    {
+      "file": "lib/omni-agent/memory-writer.ts",
+      "sha256": "48bf0775c28d1ad637d70077938626b363e518d02579b7aff9d7f4e8a51e4e02"
+    },
+    {
+      "file": "lib/omni-agent/memory.test.ts",
+      "sha256": "62f3f5dee8c8b40dab0b4bff83603b49eef863e01cd59cb8b0fb5d6b9156161c"
+    },
+    {
+      "file": "lib/omni-agent/memory.ts",
+      "sha256": "025b1a1cf74dcaa15ef7e65ce583fb0bf3fe9bdf2ff7ac3611bd15f591654373"
+    },
+    {
+      "file": "lib/omni-agent/omni-automation-triggers.ts",
+      "sha256": "197340a4beb8e0189412b7035fac069050c5e43c6cb12567063f1a9a00982999"
+    },
+    {
+      "file": "lib/omni-agent/timeline.test.ts",
+      "sha256": "71351d9f4d279357820dd08d49309cf043dee006e8fa098abaf4d9437fe2e64f"
+    },
+    {
+      "file": "lib/omni-agent/timeline.ts",
+      "sha256": "49868229a40744a02f4290f57eeb8160fe5bf51c14b796088b31a1823fd543c3"
+    },
+    {
+      "file": "lib/omni-agent/types.ts",
+      "sha256": "48b679f67eec56be917db05a8d4d8c881c072abda28d0a33612e3fa531b1b3dc"
+    },
+    {
+      "file": "lib/operacoes-v3/dados-basicos-model.ts",
+      "sha256": "58f628108fcf08e0492a9b1f16dcff450a60835dce5243470b00a898b994419e"
+    },
+    {
+      "file": "lib/operacoes-v3/datas-operacionais-model.ts",
+      "sha256": "3e3fc5e5de335140726ed7cf4ddf8ce6dec0599eba77cc8729379864fa99bb3a"
+    },
+    {
+      "file": "lib/operacoes-v3/delivery-financial-guard.ts",
+      "sha256": "7c8b938e1ed8a7e8658a6262960fb2cd3dddf4b5203d506af7c184b1bd80c18c"
+    },
+    {
+      "file": "lib/operacoes-v3/elegibilidade-comercial.ts",
+      "sha256": "ef3d239fc00314475aa964259e294c806617c6e89861e64ec340d2f99b9ca7be"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.test.ts",
+      "sha256": "d0b74264db5378270e527de4ff6edb30544fbcd0491dc6e913f0cef1ee8c4534"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.ts",
+      "sha256": "32c338ec8b45fad9605075c24a5e7f437915c852fd09c4ee34bd21a82203ad31"
+    },
+    {
+      "file": "lib/operacoes-v3/estoque-sync.ts",
+      "sha256": "9accef09fb2f1d3f0f5647438495905cd98696c49cc9983a12585e7a2fb68d39"
+    },
+    {
+      "file": "lib/operacoes-v3/event-model.ts",
+      "sha256": "9973ec5d77b9553e8416d09fbd36703da661573668af1188e7f2f94ba8fb08f3"
+    },
+    {
+      "file": "lib/operacoes-v3/event-publisher.ts",
+      "sha256": "9e43cb69ec5b1837518224b9064fcd017b9210916496ce6f83cf174a32daf815"
+    },
+    {
+      "file": "lib/operacoes-v3/formalizacao-aprovacao-actions.test.ts",
+      "sha256": "d6a487d49a4dadd3e38903edf7071bd907e5a907bb808a10475f87bff1dc0331"
+    },
+    {
+      "file": "lib/operacoes-v3/formalizacao-aprovacao-actions.ts",
+      "sha256": "f5550d336253241011e037f5c4a384250357bd55d713ff865aab3adc12ff5876"
+    },
+    {
+      "file": "lib/operacoes-v3/formalizacao-aprovacao-model.ts",
+      "sha256": "7cc876e1c924371b8d4b490ae241f1f689fae212f21a31f7b6e60d929dd2735f"
+    },
+    {
+      "file": "lib/operacoes-v3/garantia-empresa-server.ts",
+      "sha256": "97148971f2db758c45920f2563a58f733bc8f45946d1d76716f84d527aed02ed"
+    },
+    {
+      "file": "lib/operacoes-v3/garantia-servicos-model.ts",
+      "sha256": "50376438bef42bf04f6c943b1b43d87784dd01842a49d86de30ec2d9e4c74e4d"
+    },
+    {
+      "file": "lib/operacoes-v3/garantia-termos-model.ts",
+      "sha256": "5c4d1981533e3b7beaf5cdba5249c1293af0aed9a4109b7c50950e0cbcacf9e3"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-actions.ts",
+      "sha256": "134d7174056c207b48e3b055e610ec49d708ac05c8422726cac5923ff8bcb061"
+    },
+    {
+      "file": "lib/operacoes-v3/orcamento-model.ts",
+      "sha256": "6a3ba1fc090ffd3f03303203d55cbffde0c6dbae6dcf3c86011f479324bf7c0f"
+    },
+    {
+      "file": "lib/operacoes-v3/os-payload-import.ts",
+      "sha256": "86d4163198d7f6f1018a2ee0e4746ae7e99e2d8424c085637399d62c46ecb2ee"
+    },
+    {
+      "file": "lib/operacoes-v3/os-payload-lock.ts",
+      "sha256": "7515064b9bf081c9ee7595746a7e22f7c6a1e127d4c796fd9e3baaa272b67f3c"
+    },
+    {
+      "file": "lib/operacoes-v3/payment-model.ts",
+      "sha256": "e9be52dfaf33b21a3117464acac299dded7e30d720dad0f44dbe3084a88c3ece"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-a-prazo.test.ts",
+      "sha256": "f415f68232463ee30d593721881d17e6cb8a6ab4f76903548e576fee5e31b28e"
+    },
+    {
+      "file": "lib/operacoes-v3/pdv-servico-actions.ts",
+      "sha256": "d96cdd09d12699975c52e7e8ad8f1e8ae2be2ade506089b6c3f71585136d6342"
+    },
+    {
+      "file": "lib/operacoes-v3/pos-venda-model.ts",
+      "sha256": "bef385321bb60a47f23fdb7dd6fa1c1eb967273c2a1ec71ee3f506c87bfc4022"
+    },
+    {
+      "file": "lib/operacoes-v3/print-model.ts",
+      "sha256": "4737878477d45865f9c370c0bd2fcb8fba949508d22608108fc1518b700c49da"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-actions.ts",
+      "sha256": "16740d7bdedef0bb134677e2b0c4103e510e1bf5ebea1f0ab41660dd12792bce"
+    },
+    {
+      "file": "lib/operacoes-v3/producao-model.ts",
+      "sha256": "acfed425b090fd3b7c8aed705e9c024411fc3fdf5499da3031b8b09de97be18a"
+    },
+    {
+      "file": "lib/operacoes-v3/prova-entrada-model.ts",
+      "sha256": "78f9e7f5a50aa782322ed18fa4587b872f417f9e8e07c7089e030aaf34355829"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-model.test.ts",
+      "sha256": "d3ba9095f2eb3b30de1ec45c71b244f9135b024ead15dd3cdaa388e4b169c6a0"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-model.ts",
+      "sha256": "eb89c4211ddbf40bf30a0a5b94829ab7a3790020b41449e8db81f62d6cb8908b"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "sha256": "236c7aa5195c71fc6c64ab4e18081f6210fbd743407251ca77e62fc4a41a8d66"
+    },
+    {
+      "file": "lib/operacoes-v3/retorno-auto-close-actions.ts",
+      "sha256": "d0e3509a6e9ccdb9fe42f391da3ac81d9ed726820a1858c75d82adab135ee9ab"
+    },
+    {
+      "file": "lib/operacoes-v3/status-actions.ts",
+      "sha256": "e1f8d490242485d1d5c927d798d453dae63cc5d6248cbd64795a1296a1cd5783"
+    },
+    {
+      "file": "lib/operacoes-v3/status-machine.ts",
+      "sha256": "9c2a45469dd17a1abbb19fe64d3602fb192708510a5be1fdc22910bdec02f483"
+    },
+    {
+      "file": "lib/operacoes-v4/financeiro-v4.ts",
+      "sha256": "81fe320da965787c4e9190f7688cabbdd470f1439b1f48eaf423e4a91223194c"
+    },
+    {
+      "file": "lib/operacoes-v4/financial-projection-actions.test.ts",
+      "sha256": "2eac4daaab0b93ca7855d62a2c46ff6cae616006ffc01d1dcb13a2dc447540c7"
+    },
+    {
+      "file": "lib/operacoes-v4/financial-projection-actions.ts",
+      "sha256": "775f38b6e81bc3dd0b08224f24ffd5a6502b81cd2c33f53d0656fcd8b34629d1"
+    },
+    {
+      "file": "lib/operacoes-v4/financial-projection.test.ts",
+      "sha256": "f52963f58622162d319fd35f9a92b8fca3337122d16cce7a405dd36e434a67cf"
+    },
+    {
+      "file": "lib/operacoes-v4/financial-projection.ts",
+      "sha256": "80a0f63391b89f6f5464c58f5c952cc658896109e74a4855fac5da2a88df1e12"
+    },
+    {
+      "file": "lib/operacoes-v4/retirada-fluxo-v4.ts",
+      "sha256": "47dd488d9621e2dffa4fc9660827df51b92703d484c2ac0ee88ab4608d1a1d9b"
+    },
+    {
+      "file": "lib/operacoes-v4/situacao-atendimento-v4.ts",
+      "sha256": "1dd3f1c13a66b54acaa70036110803f82b47992dd355ca2cebe73976d760c2cb"
+    },
+    {
+      "file": "lib/operacoes/adapters/os-estoque.ts",
+      "sha256": "b3575cfd44c509b2c502ebff63de06111192ad7811c5818b7e3b7583ac359cb9"
+    },
+    {
+      "file": "lib/operacoes/assert-active-store.ts",
+      "sha256": "9e0a79af368b976e79d8cc17df0d2b51f68cde6dd63b184e1d6118f054697336"
+    },
+    {
+      "file": "lib/operacoes/services/financeiro-sync-service.ts",
+      "sha256": "e84eebc9dcca91672026533c474e8c77f64e0b521179f45e57d993b0f0c836b8"
+    },
+    {
+      "file": "lib/operacoes/services/garantia-operacional-service.ts",
+      "sha256": "fe82f03697819e1543375964b61f673988703e9d829142f96d3d217c300fb926"
+    },
+    {
+      "file": "lib/operacoes/services/hydration-service.ts",
+      "sha256": "d95801d54556ebe49d3c20a310d4383e6c54f4bb85c7c48396d7b0d5c12cc958"
+    },
+    {
+      "file": "lib/operacoes/services/operacao-hub-flow.ts",
+      "sha256": "b595705f1ee6c18542c3a969011587809737c44f2b0c2e8de5b6cb7fe2c638b5"
+    },
+    {
+      "file": "lib/operacoes/services/orcamento-builder.ts",
+      "sha256": "a6810d031d9fa2221c1bb403f0b0ca7767bd26f96b1b2f3e936c15ac6e345e7f"
+    },
+    {
+      "file": "lib/operacoes/services/orcamento-policy-service.ts",
+      "sha256": "ca1ead635e40a2c75f0d585faac04ec21244e3a340515dac293847376bcc705e"
+    },
+    {
+      "file": "lib/operacoes/services/os-helpers.ts",
+      "sha256": "ecd4a22c568e784372f11daaecac8b2745535eb7c57262348211e718600fc3d5"
+    },
+    {
+      "file": "lib/operacoes/services/os-prisma-itens-sync.ts",
+      "sha256": "2b90bab438a54f3d49127ec17f4d05f80091693f6aa01f03c25c435ec77f849b"
+    },
+    {
+      "file": "lib/operacoes/services/payload-service.ts",
+      "sha256": "fc8a52a69e6ba5517fc13f525a8445586f6d57e437980227ad1b68137cc2f731"
+    },
+    {
+      "file": "lib/operacoes/services/status-service.ts",
+      "sha256": "1e7a875912740f5bc163c3d4cbe43ef2af4fd2db63341d265874ba277b72e6cb"
+    },
+    {
+      "file": "lib/operacoes/services/timeline-service.ts",
+      "sha256": "794ee3f4ab46c0262b3c08d32f0ac8acc045c5b96496756006921ca29d4a75e7"
+    },
+    {
+      "file": "lib/operations-sale-types.ts",
+      "sha256": "19f0fcfcef0561b036d45844b1e90ec0ffb37f3481d43761eed7a25863d0aec8"
+    },
+    {
+      "file": "lib/ops-api-gate.ts",
+      "sha256": "1721ce72ce9435e764238a47a9c67867ea89f45e7737f0eeb99d1914ac2752a8"
+    },
+    {
+      "file": "lib/ops-upsert-venda-accessory-selection.test.ts",
+      "sha256": "243a28e1d9cb88406356cde8c75e1a5a649d45d30efcb84df84f64985b13f402"
+    },
+    {
+      "file": "lib/ops-upsert-venda-aprazo.test.ts",
+      "sha256": "83175ff2978f45c9fd4c117c2c62ad2e2721fe9007a7f2ef3cb1f4349f7da433"
+    },
+    {
+      "file": "lib/ops-upsert-venda-caixa-original-fechado.test.ts",
+      "sha256": "c0ef186008af93f7c58c2243cfa36dfbad43a785c7c3a34d115257c54f589d2d"
+    },
+    {
+      "file": "lib/ops-upsert-venda-colisao-loja.test.ts",
+      "sha256": "f8ba4452b1bc9e33aa76a96aab447ff5e6cc8359128cff2c15ec881d68b24db0"
+    },
+    {
+      "file": "lib/ops-upsert-venda-fiscal-handoff.test.ts",
+      "sha256": "8f091985d32ece7f4aa0e5ff9ca494ec39d9037522d1def2ffbab2824fc45f41"
+    },
+    {
+      "file": "lib/ops-upsert-venda-fractional.test.ts",
+      "sha256": "5cb33d8615f6298820516796e1d1f7ce4d22af831b6b9ef743672cb3404a780a"
+    },
+    {
+      "file": "lib/ops-upsert-venda-historical-recovery.test.ts",
+      "sha256": "1d316780443a743c1a1e4deebc76fe6bb6829338ccb9e4da308554e3f448d51c"
+    },
+    {
+      "file": "lib/ops-upsert-venda-lines-integrity.test.ts",
+      "sha256": "545b75f3b3af21939de03178cc630c49e646a698dc62ec092899ffce65ab36ef"
+    },
+    {
+      "file": "lib/ops-upsert-venda-pix-aprazo-resync.test.ts",
+      "sha256": "8baa65d29155ca978a0671f3dbc18e2dfa531384ae4a00dc85746b34a5665c36"
+    },
+    {
+      "file": "lib/ops-upsert-venda-replay-conflict.test.ts",
+      "sha256": "b553abf668754b4a99302a2b86b0e69ae24f011bda917bfe2485b041865ec984"
+    },
+    {
+      "file": "lib/ops-upsert-venda-safety.test.ts",
+      "sha256": "2768cf44c95069a86611f382764920db71b01b6480afde3abce0548c7c9de8c2"
+    },
+    {
+      "file": "lib/ops-upsert-venda-vale-concorrencia.test.ts",
+      "sha256": "8dff5b2bbee1a23242cf5caf208cfbaf255f52deb3a1904d5c2b698b6aaadc2d"
+    },
+    {
+      "file": "lib/ops-upsert-venda-vale.test.ts",
+      "sha256": "e6ab29cfc33ad1b090289d3635a7b957e0b1216fc72f0c01eed7c3b3e0cf9352"
+    },
+    {
+      "file": "lib/ops-upsert-venda.test.ts",
+      "sha256": "8db8cb2f18a4ff2b67a412b45185a3b8d0f2d0813f21b3be28103b8d7e3555bc"
+    },
+    {
+      "file": "lib/ops-upsert-venda.ts",
+      "sha256": "2d4b55454d601041b0a38a2e843c33eac0a44c18fe9aaf6a073ffdc8af6f8389"
+    },
+    {
+      "file": "lib/os-pdv-virtual-lines.ts",
+      "sha256": "9e732e7f429a9c34877a1d98d059622fc1db501af97324444500fa3141361074"
+    },
+    {
+      "file": "lib/os/faturamento.ts",
+      "sha256": "ee9269201f1eba62e36f34c6d037471c3e7164cef3f352963ec01b296f55f9f6"
+    },
+    {
+      "file": "lib/os/garantia.ts",
+      "sha256": "266c150255cc87c7c3e0fb8fe8c10927b35299617facaa9e8c199b0519424102"
+    },
+    {
+      "file": "lib/pdv-mount-diagnostics.ts",
+      "sha256": "de07fec8dfa93bdf5d86b01ff876fb749a28efcf1edaaa981de50565e6232afd"
+    },
+    {
+      "file": "lib/prisma.ts",
+      "sha256": "69c900ce4bedbf7f43695376154e3d31a209403a8b968256f18b0e2cfc74daa6"
+    },
+    {
+      "file": "lib/produto-fiscal.ts",
+      "sha256": "47cef9d3dae628c4365f7ce00cebc1ac3f84e3f27bd7e7e852f82c9cb1f30688"
+    },
+    {
+      "file": "lib/produto-sku-normalize.ts",
+      "sha256": "c6ca80fdeae25ff9a9422f0ad846a0280d123bd1b7c2764a721dccb81069555f"
+    },
+    {
+      "file": "lib/produtos/duplicate-product.ts",
+      "sha256": "f4006f2f74689c28c13a0f5c665f4a3b9136aae21b46b8ca05b0ed57eadfa726"
+    },
+    {
+      "file": "lib/require-admin.ts",
+      "sha256": "48bac0bec372c9d3df502bf291163e434d0c7925672ba65ecebd866f1fbc923d"
+    },
+    {
+      "file": "lib/sale-line-classification.ts",
+      "sha256": "3f22133d233678383f532f41944a0dfb006be3a09ff4a8199e01385fb6361626"
+    },
+    {
+      "file": "lib/store-defaults.ts",
+      "sha256": "3bba95cf9b893ee7f560b4202b5ab32c3f596d59179a128d993fdee7de7e62db"
+    },
+    {
+      "file": "lib/store-display-name.ts",
+      "sha256": "a5364a9334774817154be818f460629cfba1a9b28dd63bdfac42161df022d8e6"
+    },
+    {
+      "file": "lib/store-id-from-request.ts",
+      "sha256": "d2ef4c72bb598904eaad88f874e52e873654942f6f5b1fc605a6177eb15e5d3d"
+    },
+    {
+      "file": "lib/subscription-seal.ts",
+      "sha256": "377f521ffc7848ecd0816ea5f8ea89f015dff4bacfcacc7e63faed6590dac35b"
+    },
+    {
+      "file": "lib/trusted-time.ts",
+      "sha256": "b30af25a4ef66be8a45316eb8b6d79760e89b089ff78073b96ca449f3516511c"
+    },
+    {
+      "file": "lib/vendas/accessory-selection-readback.ts",
+      "sha256": "b93c53a8662c27c5030a66d64b319b4c5a8458206f15e1fa7d65be1338809a4f"
+    },
+    {
+      "file": "lib/vendas/correcao-cliente-titulo-plan.ts",
+      "sha256": "a647db792a6cff1f9313000b681a4d7ff04dd7d8140132f10cb2ee75af172855"
+    },
+    {
+      "file": "lib/vendas/correcao-itens-plan.ts",
+      "sha256": "7aa417fa28ae3bff41bf436489b0135d8c485d47b3579a3098f1ba1af6681201"
+    },
+    {
+      "file": "lib/vendas/estorno-recebivel-guard.ts",
+      "sha256": "0b90aef14a8c08f5ef15809a03acf37df646d703a4141c0b27c225e03fd3ccdb"
+    },
+    {
+      "file": "lib/vendas/estorno-sessao-guard.ts",
+      "sha256": "a4d01724059feddd2497319fdeff4b81ffad6ebebc6236c3cbd62c08801edb30"
+    },
+    {
+      "file": "lib/vendas/estorno-step-up-contract.ts",
+      "sha256": "62e9cdfd54b4a96c3d1fb3f4f54e774e8f07190f9e96c3038b0e3f95d84ccb09"
+    },
+    {
+      "file": "lib/vendas/fiscal-payment-handoff.ts",
+      "sha256": "0cf78e1bcf06d5436b9e3ed7ac7cb755f3872b7acd7179235e0f55dbcf3b6a7e"
+    },
+    {
+      "file": "lib/vendas/guard-correcao-venda.ts",
+      "sha256": "4dbe9fc83df49976938e0158f58c25034960fdd26cd95a5516aed7301441a301"
+    },
+    {
+      "file": "lib/vendas/guard-estorno-venda.ts",
+      "sha256": "5a23fef26c0589aeb5e391cb395cc4c2dc4258f0eea96d0eb9fe7249345a1e08"
+    },
+    {
+      "file": "lib/vendas/legacy-sale-fingerprint.ts",
+      "sha256": "7f5318cde66165f63516cb595bfd5563f7ef228dbe8ee6ccb7991fc42c8cda14"
+    },
+    {
+      "file": "lib/vendas/preserve-sale-line-payload.ts",
+      "sha256": "d4329ba26cb464ea7928dc7e8c8da25404dc3a845bf9fb2b93f32b7a81d3e32a"
+    },
+    {
+      "file": "lib/vendas/quarantine-recovery-planner.ts",
+      "sha256": "8f6fcc634f097a23ed8360e828cf20a4af7d8e235c7a522fab20d229ab2f3c15"
+    },
+    {
+      "file": "lib/vendas/sale-identity-conflict.ts",
+      "sha256": "9e5f64beacd3d0769e16bf6297a717c3514b5d7c71f1590682c1630ae9beb0d4"
+    },
+    {
+      "file": "lib/vendas/sale-identity-contracts.ts",
+      "sha256": "cfc60b74feb96dd86dea0015abef1aabdb0ae21f1ee8ea25ebf7b8f89b585968"
+    },
+    {
+      "file": "lib/vendas/sale-numbering-runtime-gate.ts",
+      "sha256": "e8f9b188e7c3d1a255cf5eba02a383b6037bc21529cadc89da38e290cd8a4852"
+    },
+    {
+      "file": "lib/vendas/sale-quantity-contract.ts",
+      "sha256": "6fdb48ee7cd6216d4ab312193f44c51e93d3ec0482823d5baf1f4a964d07733b"
+    },
+    {
+      "file": "lib/vendas/sale-sync-flags.ts",
+      "sha256": "851fcf6aed4fef82fb5a30e7e432da3e7ec53bc17f5b0b3b89962b198767e6ec"
+    },
+    {
+      "file": "lib/vendas/sale-writer-v2.ts",
+      "sha256": "38c7bcee92e5698a2c2a06e7f3d8ed8b8a222ff037042310f8cd5672a89402b4"
+    },
+    {
+      "file": "lib/vendas/sanitize-sale-line-payload.ts",
+      "sha256": "4727e420ef97facd1cf0eb2fd63ace822564a21152ac8f6caedd9d9326262395"
+    },
+    {
+      "file": "lib/vendas/venda-financeiro-resumo.ts",
+      "sha256": "a28f121bef65ac485dbf94819e8205857fe325e0756abb45912db9cea12fc41f"
+    },
+    {
+      "file": "lib/whatsapp.ts",
+      "sha256": "a5eec28b242f6e18b2253c72f378f007d3da5428f5639719588dc7f7d747f39f"
+    },
+    {
+      "file": "lib/whatsapp/store-credentials.ts",
+      "sha256": "fd9fe0db24e186799fce5ba2ff41fd3e20979eae5c57beb0a0611c21435ea4db"
+    },
+    {
+      "file": "lib/whatsapp/whatsapp-api-guard.ts",
+      "sha256": "452fb0f649bd3469056fd45cf5282cc02ef84e7ee80fe5b0489910a9511827d4"
+    },
+    {
+      "file": "lib/whatsapp/whatsapp-service.ts",
+      "sha256": "570fb866837eee04ad9d03bfd1b185bf72ef6ae7dbb39e654102e3936ab6e84b"
+    },
+    {
+      "file": "next.config.mjs",
+      "sha256": "73ad63b0194758efe239629d9ec85e14db5b56cf452cbdb39c0951bc65e8336e"
+    },
+    {
+      "file": "prisma/migrations/20261019194000_gastos_perfis_autorizacao/migration.sql",
+      "sha256": "f3c590ee5a8cbca28fc94fb2280505597edd537a082263bd90bc2a0240d326a8"
+    },
+    {
+      "file": "prisma/migrations/20261020130000_gastos_contas_writers/migration.sql",
+      "sha256": "209b3c825b6646f09ec2dc1ca90ffc7017dd429f7116cd628f599be4884483c6"
+    },
+    {
+      "file": "prisma/migrations/20261021120000_gastos_readers_documentos/migration.sql",
+      "sha256": "64ced4b5b8baed459e40b0479eac564a22162fd196f7f540a6ff03fca199b95c"
+    },
+    {
+      "file": "prisma/migrations/20261022120000_gastos_operacoes_atomicas/migration.sql",
+      "sha256": "dcc48dc8c10eeba97a8fa26d5095da492703fe708738f40b2eab5c3bb050bdc1"
+    },
+    {
+      "file": "prisma/schema.prisma",
+      "sha256": "306e7b8cae38af538b19c1cd8648ee42ac84db579e22ec0691656c4505df5971"
+    },
+    {
+      "file": "proxy.ts",
+      "sha256": "056479684ee5301efa30652c1c2c7a12f983dd47bc6f99f73d8566a45e7b3170"
+    },
+    {
+      "file": "public/client-privacy-cache.js",
+      "sha256": "a480ef7e9763634d83d99cae3aba69d86f76e45cdf34a56427c0dd7bc089b8b0"
+    },
+    {
+      "file": "scripts/lib/os-payload-lock.mjs",
+      "sha256": "81f373f3b13ba7a767da4da9b9235db49227bb9ccdf2dcbec3d660b68bf16a20"
+    },
+    {
+      "file": "scripts/seed-contas-receber-os.mjs",
+      "sha256": "c7fbb590324cd386180edbd275f811a37704d615b3707066740521371d766ce6"
+    },
+    {
+      "file": "test/gastos/cartoes.postgres.test.ts",
+      "sha256": "f865ca58df284096d051cbb22a2bf9edc66d0a8cca43bfb7f78d1d6e162e7abf"
+    },
+    {
+      "file": "test/gastos/concorrencia-g004.postgres.test.ts",
+      "sha256": "4f06e7ebe7e23b9e1085a28da78020ebaf69fe09c6df15caf50562f96a64e1ef"
+    },
+    {
+      "file": "test/gastos/consumidores-g005.postgres.test.ts",
+      "sha256": "d447b81a33186d4d9c1c80d9adadf8b7bc6079fb280989dbb68152949a08b559"
+    },
+    {
+      "file": "test/gastos/documentos.postgres.test.ts",
+      "sha256": "a8bf99d64255dde3efa4e189863235618e9301476a8b98db78162b0465fedae2"
+    },
+    {
+      "file": "test/gastos/g002-fixtures.ts",
+      "sha256": "b2601299d32b459dbe634aa48bde57c9e22de7540e9a868358fdd7382d6d40ba"
+    },
+    {
+      "file": "test/gastos/g003-fixtures.ts",
+      "sha256": "4af9faa139ad7fd6287e229b95ed03c1f560d2dcf8a50ac17cd0283d4608d28a"
+    },
+    {
+      "file": "test/gastos/g004-fixtures.ts",
+      "sha256": "81d26aa2c7b6b66c70f112a81143c2f315010ac9baf25357d32ed65b784f0d00"
+    },
+    {
+      "file": "test/gastos/g005-fixtures.ts",
+      "sha256": "c8ccc203485cb1a756c9894f7347b14898c13fedcacbc5054383a80250dd66ad"
+    },
+    {
+      "file": "test/gastos/migration-g004.postgres.test.ts",
+      "sha256": "98a79eb9ef9b9127bcb40584fef96f3cbce206710012e72f2ee1fc1bf11db616"
+    },
+    {
+      "file": "test/gastos/migration.postgres.test.ts",
+      "sha256": "9da058e32feb09d6951e9186b31dbd342414d9acb01ccca77c79596b433681bd"
+    },
+    {
+      "file": "test/gastos/operacoes-http.postgres.test.ts",
+      "sha256": "2c509ef1ba054a08826d5082c71f5607f6e2d5adc54e37dbff08930daffaa9e6"
+    },
+    {
+      "file": "test/gastos/operacoes.postgres.test.ts",
+      "sha256": "4ecc871e92e771a9b8a10d9f7d83e65a27a9602d0f2187fbdb3b1a8c4b9f9309"
+    },
+    {
+      "file": "test/gastos/perfis.postgres.test.ts",
+      "sha256": "b867ae70f08258246bdfffd3eb27e101c2d75111709a14efbbf3e6b8be24093a"
+    },
+    {
+      "file": "test/gastos/readers.postgres.test.ts",
+      "sha256": "527b2088ea620e7e4b877d065ea2fa0f4932547a6c35fdf2dafdecacc48fb547"
+    },
+    {
+      "file": "test/gastos/reconciliacao.postgres.test.ts",
+      "sha256": "ca703eac660a1a043fefeb147df92934dd79d77c60a114294a3e340e1ae3cf2d"
+    },
+    {
+      "file": "test/gastos/rollback-g004.postgres.test.ts",
+      "sha256": "f9f171263eb7dfbc9681e9ffaea517427244c8caa473591f778f4ff519cc5845"
+    },
+    {
+      "file": "test/gastos/writers-routes.postgres.test.ts",
+      "sha256": "bafbe5d873f479c24206d370e6c2ae07c8c84b714ca11b6bfb15ce47ce5450df"
+    },
+    {
+      "file": "test/gastos/writers.postgres.test.ts",
+      "sha256": "049b7e74a424da585f8bcf1b1fc8c0cf63d54bf1e38bffb3e9a1a4b48eb538b4"
+    },
+    {
+      "file": "test/ops-v3-recebimento-misto/hardening-p1-transitivos.pg.ts",
+      "sha256": "0dff9e4921d483fd900b3071d50da4d41cb116cde486d767c976779de6bab7a4"
+    },
+    {
+      "file": "test/ops-v3-recebimento-misto/hardening-p1.pg.ts",
+      "sha256": "587d79e2150a7d6264926a66893f3f025bbe37d926d0da2d32a6c5f6bb629931"
+    },
+    {
+      "file": "test/ops-v3-recebimento-misto/qa-bootstrap.mjs",
+      "sha256": "146c1c66c57646fb2ba7f883c58a8982d8bbfc427b366769c3fc31d7266b50df"
+    },
+    {
+      "file": "test/ops-v3-recebimento-misto/recebimento-misto.pg.ts",
+      "sha256": "950740cee9d411807483803c5a1d7db7d2ccc7ba1300c336a0c0a8d149c51b31"
+    },
+    {
+      "file": "vitest.config.ts",
+      "sha256": "c1b3b79a7c1ba0a09ca3e553bfd099c62854b40299110d05890b8cff528b7d37"
+    }
+  ],
+  "sourceUnchangedAfterReview": true,
+  "metadataFinalizationOnly": [
+    "GOAL.md",
+    "RELATORIO.md",
+    "MATRIZ_METRICAS_CONSUMIDORES.json",
+    "REVISAO_R.json"
+  ],
+  "productionApproval": false,
+  "localCommit": {
+    "authorized": true,
+    "expectedCount": 1,
+    "expectedParent": "fad3d202a5556c1170af07b94181e668aa4d21a7",
+    "pendingAtRecordCreation": true,
+    "finalShaLocation": "recibo externo local-commit.json e entrega final"
+  },
+  "recordedAt": "2026-10-23T05:19:05.292Z",
+  "previousReviews": [
+    {
+      "tag": "r1",
+      "verdict": "CHANGES_REQUESTED",
+      "modelsObserved": [
+        "claude-sonnet-5-5"
+      ],
+      "sessionId": "b5e22012-37d9-489e-a950-d28cbac1bcf4",
+      "cli": "2.1.288 (Claude Code)",
+      "resultSha256": "4d0bf4871ef1ea2e4e35f214e2ee6910a04a89d8d5b512054eb699ecf5783998",
+      "eventsSha256": "debddeda0537011f5ee8544cc443e9ae090856de174a8b1a27bad39d369b816e",
+      "decision": {
+        "verdict": "CHANGES_REQUESTED",
+        "scope": "Revisão R independente (Anthropic, claude-sonnet-5-5), rodada 1, do OMNI-GESTAO-GASTOS-005 (C4). Li o código integral e o G005.diff. Também li o schema Prisma, os recibos de gate e os artefatos de lint. Só usei Read/Glob/Grep, então não executei nada e não recomputei nenhum hash. Não há revisão anterior em previous/. O parecer é sobre a árvore atual: query.ts sha256 8fd76398…, a mesma em todos os recibos finais.",
+        "inspectedFiles": [
+          "REQUEST.txt",
+          "evidence/quality-summary.json",
+          "evidence/allowlist.json",
+          "evidence/source-audit.json",
+          "G005.diff",
+          "current/lib/gastos/query.ts",
+          "current/lib/gastos/query-calculo.ts",
+          "current/lib/gastos/query.test.ts",
+          "current/lib/gastos/read-scope.ts",
+          "current/lib/gastos/periodo.ts",
+          "current/lib/gastos/financeiro-scope.ts",
+          "current/prisma/schema.prisma (MovimentacaoFinanceira, ContaPagarTitulo, ContaReceberTitulo, CarteiraFinanceira)",
+          "current/lib/financeiro/services/{relatorios-financeiros,fluxo-caixa,dre,fechamento}-service.ts",
+          "current/lib/financeiro/services/movimentacao-financeira-classify.ts",
+          "current/lib/financeiro/services/movimentacoes-service.ts",
+          "current/app/api/financeiro/{analytics,carteiras,pagar,receber}/route.ts",
+          "current/app/api/financeiro/relatorios/{exportar,resumo,rankings,indicadores}/route.ts",
+          "current/components/financeiro/lovable/context/FinanceiroRealContext.tsx",
+          "current/lib/omni-agent/{executor,interpret}.ts",
+          "current/app/actions/omni-agent.ts",
+          "current/lib/contador/readers/{financeiro,index,index.test}.ts",
+          "current/lib/contador/pacote/carregar-fontes.ts",
+          "current/test/gastos/{reconciliacao,consumidores-g005}.postgres.test.ts",
+          "current/test/gastos/{g005-fixtures,g003-fixtures}.ts",
+          "current/test/gastos/readers.postgres.test.ts",
+          "current/docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-005/{GOAL.md,RELATORIO.md,MATRIZ_METRICAS_CONSUMIDORES.json,REVISAO_R.json}",
+          "evidence/a13-numerico.json",
+          "evidence/snapshot-concorrente.json",
+          "evidence/pg-g005-r5.{log,receipt.json}",
+          "evidence/regressoes/G004-execution/pg-regression-g004-r1|r2|r3|http-r4.{log,receipt.json}",
+          "evidence/lint-differential.json",
+          "evidence/lint-global-g004.json",
+          "evidence/lint-global-g005.json",
+          "evidence/lint-eol-source-proof.json",
+          "evidence/lint-eol-fixtext-conversions.json",
+          "evidence/lint-focused-r2.{eslint.json,receipt.json}",
+          "baseline/ (versões G004 dos arquivos alterados)"
+        ],
+        "evidence": [
+          "A13 está correto. Os oito passos batem exatamente com o comando humano (banco/caixa/aberto/despesa em centavos). Os saldos e o aberto são conferidos por SQL independente (reconciliacao.postgres.test.ts:3417-3437; evidence/a13-numerico.json). Final: banco 48499, caixa 5000, consolidado 53499. 36501−20000=16501 e quitação=0 foram verificados. Crédito não gera caixa, a fatura aloca sem nova despesa, a transferência é neutra no resultado e o estorno é individual. Os contadores (3 gastos, 2 títulos) confirmam que não há segunda despesa.",
+          "Autorização e escopo estão corretos. consultarFinanceiroEmpresa revalida sessão, vínculo, permissão e membro/perfil dentro da transação RepeatableRead + READ ONLY (query.ts:45-57, 243-246). comLeituraFinanceira faz o mesmo para o contexto pessoal opaco (read-scope.ts:186-216). Perfil ausente restringe a perfilId NULL da mesma loja (query.ts:35-43), sem provisionar nada. Contas, categorias ou referências de outro perfil dão 404/503 sem expor dados (query.ts:80-94). Os testes cobrem perfilId forjado, conta pessoal, categoria forjada, grant revogado e outra loja. Os GETs deixam o estado inalterado (estadoG005 igual antes e depois).",
+          "O snapshot PostgreSQL é válido. O recibo mostra PIDs 27992 e 8808 (distintos), isolamento repeatable read e read-only on. A pausa é determinística, sem sleep. O snapshot é fixado pela query de sonda do proxy, que é o primeiro SELECT depois de SET TRANSACTION. A leitura iniciada antes do COMMIT mantém aberto=36501, despesa=0 e saldo=100000; a seguinte mostra 0 / 36501 / 63499.",
+          "A14 usa 601 movimentos (mais que a página anterior) sem take/slice nos totais. A17 cobre SP 23h59/00h01, mudança de mês, ocorridoEm≠createdAt, compra em setembro com fatura em outubro, estorno em mês posterior e fechamento seguido de consulta histórica. A precisão anômala (1.001) é recusada sem arredondar. A19 cobre CP/CR com o mesmo ID/localKey e FK explícita com precedência; a ambiguidade legada lança 'vinculo_legado_exige_revisao'.",
+          "Os consumidores API (pagar/receber/analytics/relatórios), o Provider React em JSDOM, CSV e XLSX parseados, o Agent e o Contador concordam em 16501→0. O Agent ignora o total sugerido pelo modelo, exige período e categoria inequívocos e recusa perfil pessoal. As bases estão rotuladas: ATUAL_NO_SNAPSHOT, CAIXA_COM_CLASSIFICACAO_DRE e FLUXO_FISICO. O valorPagoTitulos é posição, e o status quitado legado sem histórico não vira caixa (query-calculo.ts:86-90).",
+          "Gates (verificados nos recibos): G005 18/18, unitários 898, G001 24, G002 97, PDV 6, V3/OS 109, G003 102, G004 57 (r1), http-r4 6/6. Typecheck exit 0, build exit 0 com MIGRATION_SKIPPED, diff-check 0, lint focado 0/0 nos 23 arquivos. Todos os recibos finais trazem query.ts 8fd76398…; apenas G004-r1 usou o sha 979c4fd… (fonte anterior). A allowlist foi respeitada: os 27 arquivos de source-audit.changed são exatamente os de allowlist.json.",
+          "Retestes G004: r2 teve 50 PASS e 1 timeout de 5s (operacoes.postgres 'revisão expirada…'). r3 teve 49 PASS e 2 timeouts de 5s (HTTP 'HUB conserva identidade…' e 'falha SQL real…'). O teste que falhou em r2 passou em r3, e os 6 HTTP passaram em r4 no mesmo limite de 5s. A memória livre nesses recibos era de 0,08–0,33 GiB. Os testes que falharam são distintos entre as rodadas e não exercitam os leitores alterados. Considero a suficiência ACEITÁVEL como condição não bloqueante, com a causa explicitamente não provada. A rodada r3 NÃO é toda verde e não deve ser declarada assim. O delta exigido abaixo vai alterar as fontes, então o G004 completo deve ser reexecutado sobre os novos hashes, sem depender da união de rodadas.",
+          "Lint: baseline 105/113 e atual 105/113. A comparação tem 218 pares idênticos, 0 adicionados e 0 removidos. A mesma config/lock/node_modules/Node e a base materializada via git archive (5808 blobs verificados) estão registradas. A normalização é estreita (71 conversões de range e 3 de fixText, com prova LF-equal por arquivo). Nenhum arquivo alterado tem diagnóstico no lint global (FinanceiroRealContext aparece com messages:[]). Não recomputei os 218 pares um a um nem o sha256 de cada JSON; usei os agregados declarados, cuja consistência entre quality-summary e lint-differential.json conferi."
+        ],
+        "findings": [
+          {
+            "priority": "P1",
+            "file": "lib/gastos/query.ts",
+            "line": "192-193, 222 (consumido em lib/financeiro/services/fluxo-caixa-service.ts:52 e app/api/financeiro/carteiras/route.ts)",
+            "proof": "O saldo só soma movimentos com carteiraId (movimentos.filter(m => m.carteiraId === c.id)), mas receita e despesa incluem todos os movimentos do escopo. MovimentacaoFinanceira.carteiraId é opcional (schema.prisma:1481). Escrevem movimentos sem carteira: PDV/venda (lib/ops-upsert-venda.ts:1158-1169; dadosFinanceirosEmpresa não devolve carteiraId, financeiro-scope.ts:187), cancelar/corrigir venda e saídas do Omni Agent (movimentacoes-service.ts:655, 704). Efeito comprovado em readers.postgres.test.ts: fluxo.saldoAtual era −133,45 (soma de todos os movimentos) e passou a −123,45, porque o movimento g003-legado-mov (R$10, sem carteira, g003-fixtures.ts:126) saiu do saldo. O 'oráculo SQL' saldoLedgerEmpresaSQL faz LEFT JOIN por carteira e reproduz a mesma exclusão. O teste foi ajustado ao novo semântico e não prova que ele esteja certo. Uma loja que vende no PDV sem carteiras passa a ter saldoAtual=0 no fluxo com entradas>0, sem nenhum sinal no DTO, na MATRIZ ou em coverageLimitations. Isso viola 'não expor métrica sem cobertura confiável' (§5) e a reconciliação saldo×ledger.",
+            "fix": "Sem schema novo. Adicionar ao DTO `semCarteira: { quantidade, entradasCentavos, saidasCentavos }`, calculado só sobre movimentos elegíveis sem carteira. Declarar criterios.saldoContas='SOMENTE_MOVIMENTOS_COM_CARTEIRA' e propagar o aviso em fluxo-caixa (`apuracao`), nos indicadores e em carteiras/apuracao. Adicionar teste PostgreSQL com movimento PDV sem carteira que prove três coisas: saldo inalterado, resíduo sinalizado e receita contada. Documentar a decisão na MATRIZ e nos coverageLimitations. Se a decisão for contar esses movimentos no saldo consolidado, registrar a política em decisão específica."
+          },
+          {
+            "priority": "P2",
+            "file": "lib/gastos/query.ts; lib/financeiro/services/dre-service.ts:202; lib/financeiro/services/fechamento-service.ts:222-227; app/api/financeiro/*/route.ts (catch genérico)",
+            "line": "query.ts:101-105, 168-171, 188; dre-service.ts:202",
+            "proof": "O fail-closed é seguro para os números, porque nenhum total errado é produzido. Operacionalmente ele é insuficiente. apurar() sempre calcula o estado de TODOS os títulos, contas e movimentos do escopo. Um único registro legado com valor ≤0 (query.ts:103), precisão fora de centavos, status 'parcial' sem histórico (query-calculo.ts:89) ou estorno legado sem lastro derruba pagar/receber (listas do HUB), fluxo, relatórios, DRE, Agent e fecharMes. O DRE e o fechamento só precisam de `eventos` (dre-service.ts:202), mas falham por causa de títulos antigos não relacionados. Os routes engolem o código do erro (`catch {}` → 503 genérico) e omni-agent.ts:513-517 rotula como 'sem permissão'. Não há nem diagnóstico para o operador, nem auditoria pré-implantação do volume de anomalias. O Contador, em contraste, degrada por linha com marcação parcial.",
+            "fix": "Sem escrita. (a) Registrar no servidor, de forma estruturada, o `code` e o id do registro ofensor, sem PII, e devolver um código estável ao chamador. (b) Fazer o caminho de DRE/fechamento não depender de anomalia de títulos: separar `apurarEventos` de `apurarPosicoes`. (c) Fornecer uma query read-only de contagem de anomalias para rodar antes da implantação e anexar o resultado. (d) Alternativamente, aceitar expressamente no REVISAO_R o bloqueio total com plano de remediação humano."
+          },
+          {
+            "priority": "P2",
+            "file": "app/api/financeiro/relatorios/rankings/route.ts; app/api/financeiro/relatorios/indicadores/route.ts",
+            "line": "rankings:42-46; indicadores:39-43",
+            "proof": "Cada resposta combina 3 chamadas independentes (getTopReceitas, getTopDespesas e getAnaliseCarteiras; ou getIndicadoresExecutivos, getComparativoMensal e getComparativoAnual). Cada uma abre sua própria transação RepeatableRead, com asOf diferente e carga completa do ledger (3× o custo). Num único resultado exibido, as partes podem vir de versões financeiras diferentes numa quitação concorrente, o que o §12 proíbe. O teste de snapshot só cobre uma chamada a consultarFinanceiroEmpresa.",
+            "fix": "Chamar consultarFinanceiroEmpresa uma vez por request e projetar tudo a partir do mesmo DTO. Exportar projetores puros para topReceitas/topDespesas/carteiras, e para comparativos a partir de um DTO com a janela necessária. Adicionar teste de coerência: todas as partes com o mesmo asOf."
+          },
+          {
+            "priority": "P3",
+            "file": "lib/gastos/query.ts; lib/financeiro/services/fechamento-service.ts",
+            "line": "query.ts:249-253; fechamento-service.ts:211, 227",
+            "proof": "consultarFinanceiroEmpresaNaTransacao executa as ~7 queries de apurar() sob o isolamento herdado do chamador. fecharMes usa o padrão READ COMMITTED, e o resultado é persistido em snapshotDRE. O lock de competência cobre só os writers G004 (periodo.ts:7, 20); PDV e writers legados não o tomam. O risco prático é baixo, porque o DRE consome apenas eventos, mas o comentário do código sugere uma garantia que não existe.",
+            "fix": "Documentar que esse caminho não é snapshot-isolado. Se possível, ler os eventos do fechamento com uma única query agregada ou um teste de concorrência com escrita legada simultânea. Registrar a limitação no RELATORIO."
+          },
+          {
+            "priority": "P3",
+            "file": "lib/financeiro/services/relatorios-financeiros-service.ts; app/api/financeiro/relatorios/{resumo,rankings,indicadores,categorias,fluxo,exportar}/route.ts",
+            "line": "relatorios-financeiros-service.ts:209-217; resumo/route.ts:30-31; exportar/route.ts:278",
+            "proof": "buildFiltroPreset passou a lançar Error para presets desconhecidos e é chamado fora do try. `?preset=xyz` agora resulta em exceção não tratada (HTTP 500) em seis rotas; antes caía no padrão do mês. O HUB só envia presets válidos.",
+            "fix": "Capturar e responder 422 com mensagem fixa, ou manter o padrão anterior com sinalização explícita."
+          },
+          {
+            "priority": "P3",
+            "file": "app/api/financeiro/relatorios/exportar/route.ts",
+            "line": "212-252",
+            "proof": "Um `tipo` não reconhecido (ex.: 'fluxo_caixa') cai no ramo legado final. Ele exporta movimentações brutas por createdAt em UTC, com take 5000 e sem netting de transferências/estornos, num arquivo chamado fluxo_caixa. Isso é uma segunda autoridade fora do serviço. 'cobrancas_os' continua exportando o valor bruto do título.",
+            "fix": "Responder 400 para tipo desconhecido, ou mapear explicitamente para o serviço. Rotular/limitar cobrancas_os como valor original."
+          },
+          {
+            "priority": "P3",
+            "file": "lib/gastos/query.ts; lib/contador/readers/financeiro.ts",
+            "line": "query.ts:127-129; financeiro.ts:73-82",
+            "proof": "Saídas com origem 'cancelamento_pdv' (reembolso de venda cancelada) entram em despesaRealizada e no Agent como gasto, porque a classificação do serviço só reconhece estorno_receber e devolucao_*. O Contador classifica esse mesmo movimento como estorno. É comportamento herdado do DRE e dos relatórios, mas a MATRIZ não declara a diferença. O resultado líquido não é afetado, só os brutos de receita e despesa.",
+            "fix": "Declarar na MATRIZ (despesaRealizada inclui devoluções de venda em caixa, ou separá-las), ou classificar via referenciaId com lastro, como já é feito para estorno_receber."
+          },
+          {
+            "priority": "P3",
+            "file": "test/gastos/reconciliacao.postgres.test.ts",
+            "line": "3417-3437",
+            "proof": "Banco, caixa e aberto têm SQL independente, mas despesa e receita realizadas são comparadas apenas com literais. A neutralidade da transferência e o líquido do estorno não têm SQL próprio. O pedido era 'provas SQL' para as oito posições.",
+            "fix": "Adicionar um agregador SQL independente de despesa/receita líquida por passo, excluindo transferência e aplicando a compensação por compensaMovimentacaoId."
+          },
+          {
+            "priority": "P3",
+            "file": "app/api/financeiro/analytics/route.ts; app/api/financeiro/pagar|receber/route.ts",
+            "line": "analytics:20-26; pagar/receber GET (apresentacao.categoria)",
+            "proof": "Três pontos. (1) A soma por movimento acumula Number em reais (valor:(p?.valor??0)+reaisConsulta(...)) em vez de BigInt, o que pode gerar resíduos de ponto flutuante. (2) resultadoLoja.loja passou a ser o storeId em vez do nome da loja. (3) apresentacao.categoria vem de categoriaId, e títulos legados com payload.planoContas/categoria sem categoriaId passam a mostrar 'Sem categoria' na lista do HUB.",
+            "fix": "Somar em centavos e converter uma vez; devolver o nome da loja; usar payload.planoContas/categoria como rótulo de apresentação (nunca para filtrar)."
+          },
+          {
+            "priority": "P3",
+            "file": "evidence/source-audit.json; docs/.../RELATORIO.md; GOAL.md",
+            "line": "source-audit.json:6; RELATORIO.md:5; GOAL.md:9",
+            "proof": "origin/main aparece como 0adec2121ed4… no source-audit e como 040fcc76fdf7… no RELATORIO/GOAL. O GOAL diz que o remoto mudou analytics e conciliação, e o G005 reescreveu analytics inteiro; o conflito de merge futuro e os guards remotos não foram avaliados.",
+            "fix": "Reconciliar o SHA registrado com um fetch somente leitura e registrar o risco de merge do analytics no RELATORIO. Não integrar automaticamente."
+          }
+        ],
+        "lintExceptionAccepted": false,
+        "lintExceptionNote": "Pré-avaliação: para os hashes atuais, todos os critérios verificáveis estão atendidos. São a mesma config/lock/node_modules/Node, 218 correspondentes, 0 adicionados/0 removidos, zero diagnóstico nos 23 arquivos alterados e normalização LF/CRLF estreita e comprovada. Não concedo o aceite agora porque a correção do P1 (e dos P2) altera fontes e os hashes mudam. Peço a renovação do aceite no delta, sobre os novos hashes, sem herdar este. Não verifiquei os 218 pares um a um.",
+        "lintEvidenceHashes": {
+          "baseline": "024a59a400aee86a7a73d6030bce2055043dfd7a8cc54f679c14fdade1201469",
+          "current": "47eb27000d5008b99f4519fa9cdee9e0cdc9f40db122a0d19f8726881e60f518",
+          "differential": "c0208d730ca6ccbe78bddc5edf5b8725612707c5f450203310c891c193345e15"
+        },
+        "approvedForLocalCommit": false,
+        "productionApproval": false,
+        "limitations": [
+          "Revisão estática: só Read/Glob/Grep. Não executei testes, builds nem lint, e não recomputei sha256 de nenhum arquivo. Confiei nos recibos (sourceUnchanged e hashes de fonte) e conferi que os hashes de lint declarados aparecem no lint-differential.json e no quality-summary.",
+          "Não confirmei que os 218 pares de lint são individualmente idênticos. Verifiquei os agregados, os zeros por arquivo alterado e as provas de EOL.",
+          "O G004 não tem uma execução completa verde sobre a fonte final. Cada um dos 51 testes de domínio/HTTP passou ao menos uma vez nela (r3 e r4), os 6 de migration só passaram sobre a fonte anterior (r1, SQL imutável), e as rodadas r2 e r3 falharam por timeout com pouca RAM. A causa exata não foi provada. Reexecutar o conjunto completo sobre os novos hashes.",
+          "Node 26.12.1 versus engines 24.x e a pouca RAM observada permanecem como riscos de ambiente. Nada foi validado em runtime 24.x.",
+          "Desempenho: o ledger inteiro é carregado em memória a cada consulta, o DRE e as listas repetem a carga e algumas buscas são lineares. Não há SLA de produção. É um limite explícito, que não exijo remover neste GOAL.",
+          "O comportamento do GET depende de grants empresariais vigentes (requisito já existente). Nenhum grant, DDL ou dado de produção foi avaliado ou aprovado.",
+          "A suficiência do fail-closed depende do volume real de anomalias legadas em produção, que o pacote não quantifica (ver P2).",
+          "Este parecer não aprova produção, push, deploy, WhatsApp nem G006. O commit local só pode ser feito depois de um novo parecer APPROVED sobre o delta."
+        ]
+      }
+    },
+    {
+      "tag": "r2",
+      "verdict": "APPROVED",
+      "modelsObserved": [
+        "claude-sonnet-5-5"
+      ],
+      "sessionId": "4c3d1b67-f4bd-4d1e-a061-e20d7c2aaab5",
+      "cli": "2.1.288 (Claude Code)",
+      "resultSha256": "34db89a69fa0fdcb5bc7bebbc08a908be519155ded0745eeef9d6de3046a73f4",
+      "eventsSha256": "8993375af46095a2428c0f7bd4ab43f129d48d09476f271f741feb17526c560b",
+      "decision": {
+        "verdict": "APPROVED",
+        "scope": "Revisão R2 (delta) independente, Anthropic claude-sonnet-5-5, do OMNI-GESTAO-GASTOS-005 (C4). Parti de evidence/R1_DELTA.md, previous/r1-result.json, R1-to-current.diff e evidence/quality-summary.json. Li integralmente query.ts e query-calculo.ts atuais, o diff R1→atual (1785 linhas), partes de dre-service, exportar, executor e read-scope, e os brutos de evidência: a13-numerico, saldo-sem-carteira, auditoria-qualidade-qa, snapshots-relatorios, source-audit, allowlist, recibos e vitest.json dos gates, lint-differential, lint-diagnostic-pairs e lint-focused-r4. Só usei Read/Glob/Grep. Não executei testes nem lint e não recomputei hashes. Confiei nos recibos (sourceUnchanged, sha de fontes) e conferi a consistência cruzada entre eles. Cada P1/P2/P3 da R1 foi reavaliado contra o código atual, sem herdar aprovação.",
+        "inspectedFiles": [
+          "REQUEST.txt",
+          "evidence/R1_DELTA.md",
+          "previous/r1-result.json",
+          "R1-to-current.diff (integral)",
+          "evidence/quality-summary.json",
+          "evidence/allowlist.json",
+          "evidence/source-audit.json",
+          "current/lib/gastos/query.ts (integral)",
+          "current/lib/gastos/query-calculo.ts (integral)",
+          "current/lib/gastos/read-scope.ts (classe FinanceiroReadError, guards)",
+          "current/lib/financeiro/services/dre-service.ts (getDREPeriodo)",
+          "current/lib/financeiro/services/relatorios-financeiros-service.ts (projetores, buildFiltroPreset, via diff)",
+          "current/lib/financeiro/services/fluxo-caixa-service.ts (via diff)",
+          "current/lib/omni-agent/executor.ts (FINANCE_SUMMARY)",
+          "current/app/actions/omni-agent.ts (getOmniAgentReportsSnapshot)",
+          "current/app/api/financeiro/relatorios/exportar/route.ts",
+          "current/app/api/financeiro/{analytics,carteiras,pagar,receber}/route.ts e relatorios/{rankings,indicadores,resumo,categorias,fluxo}/route.ts (via diff)",
+          "current/test/gastos/{consumidores-g005,reconciliacao,readers}.postgres.test.ts (trechos do diff)",
+          "current/docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-005/MATRIZ_METRICAS_CONSUMIDORES.json",
+          "baseline/app/api/financeiro/carteiras/route.ts (saldoTotal só com contas ativas, comportamento preservado)",
+          "evidence/a13-numerico.json",
+          "evidence/saldo-sem-carteira.json",
+          "evidence/auditoria-qualidade-qa.json",
+          "evidence/snapshots-relatorios.json",
+          "evidence/snapshot-concorrente.json (conferido na R1; recibo r8 inalterado)",
+          "evidence/pg-g005-r8.{receipt,vitest}.json",
+          "evidence/unit-regression-r6.vitest.json",
+          "evidence/regressoes/G004-execution/{pg-regression-g001-r1,g002-r1,pdv-r1,g003-r4,g004-r6,v3-g004-r3}.{receipt,vitest}.json",
+          "evidence/lint-differential.json",
+          "evidence/lint-diagnostic-pairs.json (218 pares)",
+          "evidence/lint-focused-r4.{receipt,eslint}.json",
+          "evidence/lint-global-g004.json e lint-global-g005.json (apenas por busca de caminhos)"
+        ],
+        "evidence": [
+          "P1 saldo sem carteira — RESOLVIDO. query.ts:201-204 calcula semCarteira {quantidade, entradasCentavos, saidasCentavos} sobre movimentos elegíveis sem carteira, até o mesmo corte do saldo (elegivel). query.ts:211 declara criterios.saldoContas='SOMENTE_MOVIMENTOS_COM_CARTEIRA' e semCarteiraIndependeDoFiltroDeConta. A propagação está em carteiras/apuracao (carteiras/route.ts:33), fluxo-caixa apuracao (fluxo-caixa-service.ts:161), apuracaoConsulta → indicadores/resumo/rankings e Agent (executor.ts:199-200 via resumo.apuracao). Teste PG real (pg-g005-r8, 23/23): saldo 100000 inalterado, receita 1000 contada e resíduo {1,1000,0} em carteiras, resumo e fluxo (saldo-sem-carteira.json). G003 reconcilia por SQL ledger integral −13345 = atribuído −12345 − resíduo 1000 (readers.postgres.test.ts:130-135). A fixture original não mudou.",
+          "P2 anomalia — RESOLVIDO com ressalvas operacionais. (a) comRegistro/erroRegistro (query.ts:31-39) registram no servidor apenas {evento, code, tabela, registroId}. O teste prova que o log não contém a descrição 'NAO_LOGAR_PII' e que o corpo da resposta não contém o id. erroConsultaFinanceira devolve code estável e mensagem fixa em pagar, receber, analytics, carteiras, relatórios e exportar (status 409/422/400/403/404/503 conforme o erro). O overview do Agent separa permissão (FinanceiroReadError 403) de indisponibilidade com financeiroErro. (b) carregarConsulta (eventos) está separada de apurarPosicoes (títulos e contas). consultarEventosFinanceirosEmpresaNaTransacao alimenta o DRE e o fechamento, e o teste prova que um título 1.001 devolve 409 em pagar mas o DRE continua disponível. (c) auditarQualidadeFinanceiraEmpresa (query.ts:296-325) é interna, RepeatableRead + READ ONLY, devolve só contagens por código e declara 'PRECHECK_NAO_SUBSTITUI_VALIDACAO_INTEGRAL_DE_VINCULOS'. Ensaio em QA: 0→1 anomalia sintética (precisao_legada_exige_revisao), estadoInalterado=true, produção não consultada. (d) O RELATORIO declara o plano humano antes da implantação: rodar o precheck, avaliar contadores e logs, remediar por writers canônicos e repetir a reconciliação. Julgo o fail-closed suficiente para integridade numérica: nenhum total errado é produzido e nada é arredondado. A suficiência operacional depende desse plano e do volume real, que é desconhecido (ver limitations).",
+          "P2 snapshots compostos — RESOLVIDO. indicadores/route.ts e rankings/route.ts chamam consultarFinanceiroEmpresa uma vez e projetam tudo do mesmo DTO (projetarIndicadoresConsulta, projetarComparativoMensalConsulta/AnualConsulta a partir de q.calendario, projetarRankingConsulta, projetarAnaliseCarteirasConsulta). Teste PG real: vi.spyOn(prisma,'$transaction') chamado 1 vez por resposta, e indicadores, comparativoMensal e comparativoAnual com o mesmo asOf (snapshots-relatorios.json). O calendário vem dos mesmos fatos (eventosCompletos).",
+          "P3 R1 destinadas: fechamento — comentário e RELATORIO declaram isolamento herdado READ COMMITTED (dre-service.ts:200-201, query.ts:283); fechamento-service e locks intactos (protectedProof). Preset — buildFiltroPreset lança ConsultaFinanceiraError('periodo_exige_esclarecimento',422) e as seis rotas capturam; teste PG verifica 422 nas seis. Export — tipo desconhecido → 400 'tipo_exportacao_invalido', fallback cru/UTC/take5000 removido (exportar/route.ts:225). 'dre' preservado como fonte de caixa rotulada (finalidade FONTE_CAIXA_PARA_DRE_CLASSIFICADA_NO_RELATORIO, arquivo dre_fonte_caixa). 'cobrancas_os' ganhou baseValor=VALOR_ORIGINAL_DO_TITULO. cancelamento_pdv — política herdada e diferença do Contador declaradas na MATRIZ (cancelamentoPdvLegado); o resultado líquido não muda. Apresentação — analytics soma BigInt e converte uma vez, loja vem de q.lojaNome, e o rótulo legado de título (planoContas/categoria) só apresenta (categoriaNome desse rótulo → categoria_exige_esclarecimento, testado). Remoto — origin/main reconciliado em 0adec212…, o risco de merge do analytics (gate de módulo finance remoto) está registrado sem integração automática.",
+          "A13 — CONFIRMADO nas 8 posições exatas do comando humano em centavos, com SQL independente de saldo por conta, aberto e agora receita/despesa líquidas por passo (a13-numerico.json: realizadoSQL em todos os 8 passos). O agregador SQL (reconciliacao.postgres.test.ts +38/+46) exclui origem 'transferencia%' e aplica a compensação via compensaMovimentacaoId, não o classificador do serviço. Valores: inicial 100000/0/36501/0; PIX 98000/0/36501/2000; parcial 78000/16501/22000 (36501−20000=16501); quitação 61499/0/38501; transferência 56499+5000/38501 (neutra); crédito aberto 10000, banco e caixa inalterados; fatura 46499/0/48501; estorno 48499+5000/46501. Receita SQL = 0 em todos. Consolidado final 53499.",
+          "Autorização, contexto e privacidade — INALTERADOS e coerentes. revalidarEmpresa dentro da transação RepeatableRead + READ ONLY revalida usuário ativo, permissão, vínculo, perfil e membro. Perfil ausente restringe a perfilId NULL da mesma loja (whereScope, query.ts:57), sem provisionar. O contexto pessoal exige o objeto opaco G001 (comLeituraFinanceira). lojaNome vem apenas da loja autorizada. O DTO não carrega descrição, payload ou IDs estrangeiros. FKs estrangeiras de movimentos e títulos visíveis seguem 503 sem exposição; a validação de títulos agora ocorre só nos que passam ao DTO, sem vazamento. Testes PG: forjados, grant revogado, perfil ausente e GETs sem mutação (estadoG005 igual antes e depois).",
+          "Bases e rótulos — corretos: CAIXA_REALIZADO líquido, ATUAL_NO_SNAPSHOT para títulos, valorPagoTitulos como posição, legado quitado sem histórico não vira caixa (query-calculo.ts:86-90), CAIXA_COM_CLASSIFICACAO_DRE, FLUXO_FISICO. O Contador preserva política própria. A MATRIZ foi atualizada (semCarteira, relatorios_compostos, precheck_qualidade, export_dre, export_cobrancas_os, coverageLimitations).",
+          "Gates verificados nos vitest.json e recibos: G005 23/23 (r8), unitários 898/898 (r6), G001 24, G002/M1/N10/N11 97, PDV 6, V3/OS 109, G003 102 (r4), G004 57/57 (r6, uma rodada completa com as 6 migrations em bancos novos). Total 418 PG distintos, 0 skip e 0 fail. query.ts sha256 5258bb2b…c8f8 e query-calculo.ts 0229703d… idênticos em pg-g005-r8, unit-r6, typecheck-r6, build-r2, lint-focused-r4 e G003-r4/G004-r6. Typecheck integral exit 0, build exit 0 com MIGRATION_SKIPPED, lint focado 0/0 nos 30 arquivos. source-audit: pass=true, diffCheckExit=0, indexEmpty, errors=[]. Os 33 arquivos alterados estão exatamente na allowlist. Schema, migrations, auth, read-scope, read-cache, writers, fechamento-service e fixtures G002/G003/G004 estão byte-iguais após normalização de EOL. Os corpos dos writers de pagar, receber, carteiras e omni-agent.ts estão imutáveis por AST. Em omni-agent.ts mudam apenas imports, o tipo do DTO e getOmniAgentReportsSnapshot.",
+          "Lint — avaliado individualmente, sem herdar o aceite G004. Hashes de lint-differential.json batem com os do prompt (baseline 024a59a4…1469, current ce0c35b4…d048). O hash do differential e o do pares (16232bde…dd9e) são os declarados; não os recomputei. Mesma eslint.config.mjs, package.json e package-lock.json (hashes idênticos), mesmos node_modules físicos e mesmo Node 26.12.1. Base G004 materializada por git archive com 5808 blobs verificados, 105 erros/113 avisos em ambos, 0 fatais. lint-diagnostic-pairs.json contém 218 pares: contei 218 'ordinal' e 218 'identical: true', nenhum false. Cada par traz diagnóstico completo (ruleId, severidade, mensagem, linha/coluna, nodeType, sugestões e fix) e SHA canônico base=atual. Added=[] e removed=[]. A normalização é restrita: 71 conversões de range e 3 de fixText por CRLF→LF, com prova por arquivo de fonte integral idêntica salvo CRLF (eolFixOffsetProof, equalExceptCrlf=true). Nenhum dos 218 pares está em arquivo alterado pela G005; o único caminho com 'financeiro' é components/financeiro/lovable/routes/__root.tsx, fora da allowlist. Lint focado nos 30 arquivos alterados: 0 erros/0 avisos."
+        ],
+        "findings": [
+          {
+            "priority": "P3",
+            "file": "lib/gastos/query.ts",
+            "line": "211, 256",
+            "proof": "criterios.saldoContas='SOMENTE_MOVIMENTOS_COM_CARTEIRA' descreve os movimentos incluídos, mas o saldo consolidado (query.ts:256) ainda exclui contas inativas e do tipo crédito (comportamento herdado: o baseline também somava só c.ativo). Movimentos em contas inativas ou de crédito não entram em semCarteira nem no consolidado. A regra da MATRIZ perdeu a menção anterior a 'contas ativas não crédito'. O detalhe por conta continua em contas[], então não há perda de informação, só imprecisão de rótulo.",
+            "fix": "Não bloqueia. Em ajuste futuro, acrescentar 'consolidado = contas ativas não crédito' ao texto da MATRIZ e ao criterios (por exemplo saldoConsolidadoInclui). Sem schema novo."
+          },
+          {
+            "priority": "P3",
+            "file": "test/gastos/readers.postgres.test.ts",
+            "line": "135",
+            "proof": "A identidade de reconciliação é Math.round(saldoAtual*100) − semCarteira.saidasCentavos == ledgerCompleto. Só vale porque, nessa fixture, entradasCentavos=0 e a abertura é 0. A fórmula geral é saldoAtribuído + entradas − saídas do resíduo = ledger integral. O caso com entrada sem carteira está coberto no teste consumidores-g005 (saldo 100000, receita 1000, resíduo 1000), mas sem oráculo SQL do ledger integral.",
+            "fix": "Não bloqueia. Generalizar a asserção para incluir entradasCentavos e a abertura, ou somar um caso SQL com resíduo de entrada."
+          },
+          {
+            "priority": "P3",
+            "file": "lib/gastos/query.ts",
+            "line": "315-319",
+            "proof": "O precheck subdetecta em relação ao fail-closed do cálculo. A tolerância SQL de precisão (|valor*100−round|>1e-5 centavos, ≈1e-7 reais) é mais frouxa que centavosConsulta (1e-10 reais, query-calculo.ts:16). 'Parcial sem histórico' trata qualquer historico[] não vazio como válido, enquanto saldoTituloConsulta só conta eventos dos tipos pagamento/liquidacao/estorno_pagamento. Não cobre compensação ou vínculo ambíguo nem status quitado com pago≠total. O precheck diz isso (campo limite e lista verificacoes), mas um resultado vazio não garante que os GETs funcionarão. O ensaio só provou a detecção de 1.001, e o ramo perfilId nulo do precheck não foi exercitado.",
+            "fix": "Não bloqueia, pois está declarado. Antes da implantação, validar chamando os próprios GETs/DTO e os logs registroId em cópia autorizada, e não confiar só no precheck vazio. Em G futuro, alinhar tolerância e tipos de histórico, e oferecer listagem de IDs para o operador autorizado."
+          },
+          {
+            "priority": "P3",
+            "file": "lib/gastos/query.ts",
+            "line": "30-39, 322",
+            "proof": "O precheck devolve só contagens, e o log técnico registra o primeiro registro que falha em cada requisição (a exceção aborta a apuração). Descobrir todos os registros ofensores exige iterar GET→log→remediar→GET. É operacionalmente pesado para uma loja com vários legados, embora seguro. É a lacuna entre 'sem escrita e sem SQL neste GOAL' e a remediação humana documentada.",
+            "fix": "Não bloqueia. Planejar a remediação como lote controlado (por exemplo a listagem somente leitura de IDs em goal próprio) antes de habilitar o HUB para lojas com legado."
+          },
+          {
+            "priority": "P3",
+            "file": "app/actions/omni-agent.ts",
+            "line": "519",
+            "proof": "financeiroSemPermissao = e instanceof FinanceiroReadError && e.status === 403. Um 401 (sessão expirada) cai como 'indisponível' com code consulta_financeira_indisponivel, e financeiroSemPermissao=false. É um caso de borda sem impacto financeiro, e antes tudo virava 'sem permissão'.",
+            "fix": "Não bloqueia. Tratar 401 e 403 como acesso negado se a UI do overview depender disso."
+          },
+          {
+            "priority": "P3",
+            "file": "evidence/lint-differential.json",
+            "line": "36, 44",
+            "proof": "fileCount 4491 (G004) vs 4501 (G005): +10 arquivos. Identifiquei 7 novos arquivos .ts da G005 (query.ts, query-calculo.ts, query.test.ts, interpret-finance-query.test.ts, g005-fixtures.ts, reconciliacao e consumidores-g005); os outros 3 não consegui explicar só pela leitura estática. Não afeta o delta de diagnósticos (added=[], removed=0), porque qualquer diagnóstico novo apareceria como 'added'.",
+            "fix": "Não bloqueia. Registrar no RELATORIO a lista dos arquivos extras ao refinalizar os metadados."
+          }
+        ],
+        "lintExceptionAccepted": true,
+        "lintExceptionNote": "Aceite EXPRESSO e específico para estes três hashes: baseline 024a59a400aee86a7a73d6030bce2055043dfd7a8cc54f679c14fdade1201469 (105 erros/113 avisos), current ce0c35b4fd27e5e7df235200d3ed8fff69e7f136a633476d70b97c730d00d048 (105/113) e differential e05970d16b3ea22ea31719c5157a5f356daf785f2a6c8eb4440a5de93f39d91e. Fundamentos: comparação individual de 218 pares (todos identical, 0 added, 0 removed), mesma config/lock/node_modules/Node, base Git verificada, normalização restrita a raiz absoluta e LF/CRLF com prova de fonte, nenhum diagnóstico em arquivo alterado e lint focado 0/0. LINT_GLOBAL continua BASELINE_FAIL; não é PASS e não deve ser declarado como PASS. Não herdei nenhum aceite anterior. O aceite perde a validade se qualquer fonte produtiva mudar depois, o que exige novo lint e nova R.",
+        "lintEvidenceHashes": {
+          "baseline": "024a59a400aee86a7a73d6030bce2055043dfd7a8cc54f679c14fdade1201469",
+          "current": "ce0c35b4fd27e5e7df235200d3ed8fff69e7f136a633476d70b97c730d00d048",
+          "differential": "e05970d16b3ea22ea31719c5157a5f356daf785f2a6c8eb4440a5de93f39d91e"
+        },
+        "approvedForLocalCommit": true,
+        "productionApproval": false,
+        "limitations": [
+          "Revisão estática (Read/Glob/Grep): não executei testes, build, typecheck nem lint e não recomputei sha256. Confiei nos recibos e conferi sua consistência cruzada (sha de query.ts e query-calculo.ts, contagens, exitCode, sourceUnchanged). O sha256 de cada JSON de lint e o do arquivo de pares não foram recomputados por mim; conferi que os declarados no prompt batem com lint-differential.json.",
+          "O commit local deve incluir somente os 33 caminhos da allowlist. A finalização de REVISAO_R.json, GOAL.md e RELATORIO.md depois deste parecer não pode alterar fontes produtivas; qualquer mudança em fonte invalida este parecer e o aceite de lint.",
+          "G001 (24), G002 (97), PDV (6) e V3/OS (109) rodaram em recibos anteriores ao delta R1, com query.ts 8fd76398… (versão anterior). A vinculação é aos writers imutáveis por AST e hash de protectedProof. Esses testes carregam os módulos de rota (PATCH/DELETE de pagar/receber), cujo grafo de import mudou, mas G003-r4 e G004-r6 rodaram sobre as fontes finais e exercitam as mesmas rotas. Aceito como suficiente, não como reexecução completa desses conjuntos sobre as fontes finais.",
+          "Que as 6 adições à allowlist foram enumeradas ANTES da edição é uma alegação documental (GOAL e REVISAO_R) que o pacote estático não permite verificar por timestamp. O §4 humano já autoriza leitores diretamente afetados, e os 33 caminhos correspondem exatamente ao source-audit.",
+          "A suficiência do fail-closed depende do volume real de anomalias legadas em produção, que é desconhecido e não foi consultado, por proibição do GOAL. Um único título ou movimento anômalo bloqueia pagar/receber, fluxo, relatórios, Agent e exportações da loja afetada (o DRE e o fechamento ficam isolados de anomalias de títulos). A implantação exige antes: precheck, GETs e logs em ambiente autorizado, remediação humana por writers canônicos e nova reconciliação. Não houve SQL, grant ou consulta de produção, e este parecer não aprova nada disso.",
+          "O DRE no fechamento herda READ COMMITTED (sem promessa de snapshot G005 frente a writers legados que não tomam o lock de competência). O DRE avulso e as consultas públicas usam RepeatableRead READ ONLY.",
+          "Política herdada mantida e declarada: cancelamento_pdv sem vínculo estruturado conta como saída/despesa bruta na consulta e como estorno na apresentação do Contador. O resultado líquido coincide, mas os brutos diferem.",
+          "Performance: o ledger e os títulos do escopo são carregados e agregados em memória a cada consulta, e algumas buscas são lineares. Não há SLA de produção.",
+          "Node 26.12.1 versus engines 24.x: nada foi validado em runtime 24.x.",
+          "Merge futuro com origin/main (0adec212…): o analytics remoto acrescenta requireModuleApi(finance) e altera guards. Exige conciliação manual com os guards G003/perfil, sem regressão de privacidade. Nenhuma integração foi feita.",
+          "Este parecer não aprova produção, push, deploy, DDL/backfill/grants, WhatsApp, ativação pessoal nem G006. Autoriza apenas um commit local dos caminhos da allowlist, após confirmar SHA, branch codex/omni-gestao-gastos-005, pai fad3d202… e árvore limpa."
+        ]
+      }
+    }
+  ],
+  "metadataFinalization": {
+    "at": "2026-10-23T05:19:37.874Z",
+    "sourceProductUnchanged": true,
+    "lintInventorySha256": "1386cdffc9ef343017aad4ea1076b5fe10289414a4366a4c3af43f4b12db4fb7",
+    "lintExtraFiles": [
+      {
+        "file": "lib/gastos/query-calculo.ts",
+        "diagnostics": 0,
+        "sha256": "0229703d230dcd0aac9b1b3427e90c4b67ae03698847232c4dbc762d80bcd85d"
+      },
+      {
+        "file": "lib/gastos/query.test.ts",
+        "diagnostics": 0,
+        "sha256": "e95e4bd3b94e10adffd8a4f421b46f10bce625c5fb88446cc310a649eff39a3c"
+      },
+      {
+        "file": "lib/gastos/query.ts",
+        "diagnostics": 0,
+        "sha256": "5258bb2b318e28009e5d5117160e161e4cbf1db9e7d8c0142f2ec8ddefe7c8f8"
+      },
+      {
+        "file": "lib/omni-agent/interpret-finance-query.test.ts",
+        "diagnostics": 0,
+        "sha256": "d776c66f10a04ce1cc7a369eec551ae8c9071f1437cf2df2f22597fbf4d125ef"
+      },
+      {
+        "file": "public/sw.js",
+        "diagnostics": 0,
+        "sha256": "f01e58e537c1131af6c4594b91d4d6bf8e9f2e4e38a52b7a6f71f2f752a8411b"
+      },
+      {
+        "file": "public/swe-worker-5c72df51bb1f6ee0.js",
+        "diagnostics": 0,
+        "sha256": "ad1e63918b7bb79a8b1e04395af8a76725c9f7f9b4e928d8b887a34844c4e2d0"
+      },
+      {
+        "file": "public/workbox-79213d1a.js",
+        "diagnostics": 0,
+        "sha256": "e1bc9c04d3a08b1f7d499fd292907b572aa4a7677d83dbd8e34128afaed333e1"
+      },
+      {
+        "file": "test/gastos/consumidores-g005.postgres.test.ts",
+        "diagnostics": 0,
+        "sha256": "d447b81a33186d4d9c1c80d9adadf8b7bc6079fb280989dbb68152949a08b559"
+      },
+      {
+        "file": "test/gastos/g005-fixtures.ts",
+        "diagnostics": 0,
+        "sha256": "c8ccc203485cb1a756c9894f7347b14898c13fedcacbc5054383a80250dd66ad"
+      },
+      {
+        "file": "test/gastos/reconciliacao.postgres.test.ts",
+        "diagnostics": 0,
+        "sha256": "ca703eac660a1a043fefeb147df92934dd79d77c60a114294a3e340e1ae3cf2d"
+      }
+    ],
+    "generatedArtifactsIgnored": ".gitignore:38:public/sw.js\tpublic/sw.js\n.gitignore:44:public/swe-worker-*.js\tpublic/swe-worker-5c72df51bb1f6ee0.js\n.gitignore:40:public/workbox-*.js\tpublic/workbox-79213d1a.js",
+    "nonBlockingP3Count": 1,
+    "disposition": "Limitações não bloqueantes preservadas no parecer; cobertura de contas ativas não crédito e inventário de artefatos esclarecidos apenas na documentação. Nenhum teste ou código modificado após R2.",
+    "previousR2NonBlockingP3Count": 6,
+    "rawLintFieldDelta": {
+      "at": "2026-10-23T05:19:36.967Z",
+      "priorSha256": "ce0c35b4fd27e5e7df235200d3ed8fff69e7f136a633476d70b97c730d00d048",
+      "currentSha256": "25c4b9808a002d90522b2451c4a458db386877d0fdc71cee0f418d2386662442",
+      "differences": [
+        {
+          "path": "files.4292.sourceSha256",
+          "file": "C:\\Projetos\\omni-gestao\\.worktrees\\omni-gestao-gastos-005\\public\\sw.js",
+          "before": "c5c591489bc8adaca9bcaedbd18111ba0023f538e6fa6701b98be73e713c0b3b",
+          "after": "f01e58e537c1131af6c4594b91d4d6bf8e9f2e4e38a52b7a6f71f2f752a8411b"
+        },
+        {
+          "path": "files.4387.sourceSha256",
+          "file": "C:\\Projetos\\omni-gestao\\.worktrees\\omni-gestao-gastos-005\\test\\gastos\\g005-fixtures.ts",
+          "before": "6d4eca6e3dec2271f9eb8e560b9df84abc95a9ecfa613ad5642d4605146333d3",
+          "after": "c8ccc203485cb1a756c9894f7347b14898c13fedcacbc5054383a80250dd66ad"
+        }
+      ],
+      "diagnosticsIdentical": true,
+      "meaning": "Somente2sourceSha256: fixture EOF e public/sw.js regenerado pelo build oficial. Regras/mensagens/posições/contagens/ordem não mudaram.",
+      "differentialSelfHash": "Armazenado fora do próprio JSON em quality-summary e REVISAO_R, evitando autorreferência."
+    }
+  }
+}

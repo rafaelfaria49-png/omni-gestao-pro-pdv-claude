@@ -540,12 +540,12 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
     const auditItem = auditMap.get(id)
     const valor = safeNum(row.valor)
     const status = normalizeReceberStatus(safeStr(row.status))
-    const saldoAberto = auditItem
+    const saldoAberto = typeof row.restante === "number" ? safeNum(row.restante) : auditItem
       ? safeNum(auditItem.saldoAberto)
       : status === "pago" || status === "cancelado"
         ? 0
         : valor
-    const recebido = Math.max(0, valor - saldoAberto)
+    const recebido = typeof row.pago === "number" ? safeNum(row.pago) : Math.max(0, valor - saldoAberto)
     const descricao = safeStr(row.descricao)
     const parcelaRaw = typeof row.parcela === "string" ? row.parcela.trim() : ""
     result.push({
@@ -579,7 +579,7 @@ function normalizePagarRows(rows: unknown[], audit: unknown[]): ContaPagar[] {
     const auditItem = auditMap.get(id)
     const valor = safeNum(row.valor)
     const status = normalizePagarStatus(safeStr(row.status))
-    const pago = auditItem ? safeNum(auditItem.pago) : status === "pago" ? valor : 0
+    const pago = typeof row.pago === "number" ? safeNum(row.pago) : auditItem ? safeNum(auditItem.pago) : status === "pago" ? valor : 0
     const descricao = safeStr(row.descricao)
     const parcelaRaw = typeof row.parcela === "string" ? row.parcela.trim() : ""
     result.push({

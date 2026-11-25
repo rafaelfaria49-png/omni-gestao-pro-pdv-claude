@@ -1,4 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
 /**
  * GET /api/financeiro/relatorios/indicadores
  *
@@ -8,13 +9,8 @@ import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gast
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { prismaEnsureConnected } from "@/lib/prisma"
-import {
-  getIndicadoresExecutivos,
-  getComparativoMensal,
-  getComparativoAnual,
-  buildFiltroPreset,
-  type PeriodoFiltro,
-} from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { consultarFinanceiroEmpresa } from "@/lib/gastos/query"
+import { apuracaoConsulta, projetarIndicadoresConsulta, projetarComparativoMensalConsulta, projetarComparativoAnualConsulta, buildFiltroPreset, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -31,21 +27,19 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
 
   const preset = url.searchParams.get("preset")
+  try {
   let filtro: PeriodoFiltro = preset ? buildFiltroPreset(preset) : {}
   if (url.searchParams.get("dataInicio")) filtro.dataInicio = url.searchParams.get("dataInicio")!
   if (url.searchParams.get("dataFim")) filtro.dataFim = url.searchParams.get("dataFim")!
 
   const meses = parseInt(url.searchParams.get("meses") ?? "12", 10)
 
-  try {
     await prismaEnsureConnected()
-    const [indicadores, comparativoMensal, comparativoAnual] = await Promise.all([
-      getIndicadoresExecutivos(storeId, filtro),
-      getComparativoMensal(storeId, Math.min(meses, 24)),
-      getComparativoAnual(storeId, 3),
-    ])
-    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, indicadores, comparativoMensal, comparativoAnual }))
-  } catch {
-    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
+    const q=await consultarFinanceiroEmpresa(storeId,filtro)
+    const indicadores=projetarIndicadoresConsulta(q),comparativoMensal=projetarComparativoMensalConsulta(q,Math.min(meses,24)),comparativoAnual=projetarComparativoAnualConsulta(q,3)
+    return respostaFinanceiraPrivada(NextResponse.json({ok:true,indicadores,comparativoMensal,comparativoAnual,apuracao:apuracaoConsulta(q)}))
+  } catch (e) {
+    const erro=erroConsultaFinanceira(e)
+    return respostaFinanceiraPrivada(NextResponse.json(erro.body,{status:erro.status}))
   }
 }

@@ -1,7 +1,10 @@
+import { consultarFinanceiroEmpresa } from "@/lib/gastos/query"
+import { ConsultaFinanceiraError } from "@/lib/gastos/query-calculo"
+import { projetarResumoConsulta } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { prisma } from "@/lib/prisma"
 import { createOS } from "@/app/actions/operacoes"
 import { listClientes, listProdutos } from "@/app/actions/cadastros"
-import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { buildFiltroPreset, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireLeituraFinanceiraEmpresa } from "@/lib/gastos/read-scope"
 import {
   createMovimentacaoEntradaFromOmniAgent,
@@ -107,7 +110,7 @@ function buildMinimalOSPayload(
   }
 }
 
-export type OmniAgentExecutorWideResult = OmniAgentExecutorResult | { ok: false; actionLabel: string; error: string; ambiguousClientes?: { id: string; nome: string; telefone: string }[] }
+export type OmniAgentExecutorWideResult = OmniAgentExecutorResult | { ok: false; actionLabel: string; error: string; code?: string; ambiguousClientes?: { id: string; nome: string; telefone: string }[] }
 
 export async function executeOmniAgentIntent(
   storeId: string,
@@ -173,18 +176,33 @@ export async function executeOmniAgentIntent(
 
     if (intent === "FINANCE_SUMMARY") {
       await requireLeituraFinanceiraEmpresa(storeId)
-      const preset = (fields.preset ?? "hoje").trim() || "hoje"
-      const filtro = buildFiltroPreset(preset)
-      const resumo = await getResumoExecutivo(storeId, filtro)
-      return {
-        ok: true,
-        actionLabel: interp.action,
-        payload: {
-          periodo: resumo.periodo,
-          indicadores: resumo.indicadores,
-          topReceitas: resumo.topReceitas.slice(0, 5),
-          topDespesas: resumo.topDespesas.slice(0, 5),
-        },
+      if(fields.perfil&&fields.perfil!=="EMPRESA"||fields.perfilId||fields.ownerAdminUserId||fields.storeId&&fields.storeId!==storeId){
+        return {ok:false,actionLabel:interp.action,error:"Selecione o perfil empresarial autorizado para esta consulta."}
+      }
+      const preset=(fields.preset??"").trim()
+      const periodoExplicito = !!fields.dataInicio && !!fields.dataFim
+      if (!!fields.dataInicio !== !!fields.dataFim || (!periodoExplicito && !["hoje","ontem","7dias","30dias","estemes","mespassado"].includes(preset)&&fields.consulta!=="PAGAR_ABERTO")){
+        return {ok:false,actionLabel:interp.action,error:"Informe o período da consulta financeira."}
+      }
+      if ((fields.base && fields.base !== "CAIXA_REALIZADO") || (fields.moeda && fields.moeda !== "BRL")) {
+        return { ok: false, actionLabel: interp.action, error: "Esta consulta exige base de caixa realizado em BRL." }
+      }
+      if (fields.categoria && fields.categoriaNome && fields.categoria !== fields.categoriaNome) {
+        return { ok: false, actionLabel: interp.action, error: "Esclareça a categoria financeira antes de consultar o total." }
+      }
+      const filtro: PeriodoFiltro = periodoExplicito ? { dataInicio: fields.dataInicio, dataFim: fields.dataFim } : buildFiltroPreset(preset||"estemes")
+      if(fields.categoriaId)filtro.categoriaId=fields.categoriaId
+      if(fields.categoriaNome || fields.categoria)filtro.categoriaNome=fields.categoriaNome || fields.categoria
+      if(fields.carteiraId)filtro.carteiraId=fields.carteiraId
+      try{
+        const q=await consultarFinanceiroEmpresa(storeId,filtro),resumo=projetarResumoConsulta(q)
+        return {ok:true,actionLabel:interp.action,payload:{periodo:resumo.periodo,indicadores:resumo.indicadores,topReceitas:resumo.topReceitas,topDespesas:resumo.topDespesas,
+          apuracao:resumo.apuracao,valores:{despesaRealizadaCentavos:q.despesaRealizadaCentavos,pagarAbertoCentavos:q.pagarAbertoCentavos,receberAbertoCentavos:q.receberAbertoCentavos,valorPagoTitulosCentavos:q.valorPagoTitulosCentavos},
+          categorias:q.porCategoria}}
+      }catch(e){
+        if(e instanceof ConsultaFinanceiraError&&e.code.startsWith("categoria_"))return {ok:false,actionLabel:interp.action,error:"Esclareça a categoria financeira antes de consultar o total."}
+        if(e instanceof ConsultaFinanceiraError)return {ok:false,actionLabel:interp.action,error:"Consulta financeira indisponível: os registros exigem revisão.",code:e.code}
+        throw e
       }
     }
 

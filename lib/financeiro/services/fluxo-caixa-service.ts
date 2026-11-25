@@ -1,19 +1,7 @@
-/**
- * Fluxo de Caixa Service — dados operacionais em tempo real.
- *
- * Fontes:
- *  - MovimentacaoFinanceira → entradas/saídas realizadas
- *  - ContaReceberTitulo     → receber aberto, vencido, próximos
- *  - ContaPagarTitulo       → pagar aberto, vencido, próximos
- */
-
-import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
-import { prisma } from "@/lib/prisma"
-import { parseDateStringSafe, isOverdueDateString, safeMoney } from "@/lib/financeiro/contracts/valores"
-import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify"
-
-// ─── tipos públicos ───────────────────────────────────────────────────────────
-
+/** Fluxo físico, posição atual dos títulos e saldo pelo ledger canônico G005. */
+import { type ConsultaFinanceiraDTO, consultarFinanceiroEmpresa, reaisConsulta } from "@/lib/gastos/query"
+import { centavosConsulta, dataCivilConsulta, diaNoFusoConsulta, deslocarDiaConsulta } from "@/lib/gastos/query-calculo"
+import { safeMoney } from "@/lib/financeiro/contracts/valores"
 export type FluxoDia = {
   data: string      // yyyy-mm-dd
   label: string     // dd/mm
@@ -38,6 +26,7 @@ export type AlertaFinanceiro = {
 }
 
 export type FluxoCaixaResumo = {
+  apuracao: { base: "FLUXO_FISICO"; resultado: "CAIXA_REALIZADO"; asOf: string; versaoCalculo: string; semCarteira: { quantidade:number; entradasCentavos:string; saidasCentavos:string }; criterios: ConsultaFinanceiraDTO["criterios"] }
   saldoAtual: number
   entradasHoje: number
   saidasHoje: number
@@ -56,204 +45,27 @@ export type FluxoCaixaResumo = {
   alertas: AlertaFinanceiro[]
 }
 
-// ─── helpers internos ─────────────────────────────────────────────────────────
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0)
-}
-
-function endOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
-}
-
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1)
-}
-
-function dayKey(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${day}`
-}
-
-function dayLabel(d: Date): string {
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`
-}
-
-function isBetweenDays(vencimento: string, fromDate: Date, toDate: Date): boolean {
-  const d = parseDateStringSafe(vencimento)
-  if (!d) return false
-  const from = startOfDay(fromDate)
-  const to = endOfDay(toDate)
-  return d >= from && d <= to
-}
-
-function diasRestantes(vencimento: string, hoje: Date): number {
-  const d = parseDateStringSafe(vencimento)
-  if (!d) return 999
-  const diff = startOfDay(d).getTime() - startOfDay(hoje).getTime()
-  return Math.round(diff / (1000 * 60 * 60 * 24))
-}
-
-function isStatusAberto(status: string): boolean {
-  const s = (status ?? "").toLowerCase()
-  return s === "pendente" || s === "parcial" || s === "vencido"
-}
-
-// ─── funções exportadas ───────────────────────────────────────────────────────
 
 export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaResumo> {
-  const sid = (storeId ?? "").trim()
-  if (!sid) throw new Error("fluxo-caixa-service: storeId obrigatório")
-
-  const now = new Date()
-  const todayStart = startOfDay(now)
-  const todayEnd = endOfDay(now)
-  const mesStart = startOfMonth(now)
-  const em7Dias = new Date(now)
-  em7Dias.setDate(now.getDate() + 7)
-
-  // Buscar todos os dados em paralelo
-  const [
-    todasMovs,
-    todosReceber,
-    todosPagar,
-    todasCarteiras,
-  ] = await Promise.all([
-    prisma.movimentacaoFinanceira.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId: sid }),
-      select: { id: true, tipo: true, valor: true, descricao: true, origem: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.contaReceberTitulo.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId: sid }),
-      select: { id: true, cliente: true, descricao: true, valor: true, vencimento: true, status: true },
-    }),
-    prisma.contaPagarTitulo.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId: sid }),
-      select: { id: true, descricao: true, valor: true, vencimento: true, status: true, payload: true },
-    }),
-    prisma.carteiraFinanceira.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId: sid, ativo: true }),
-      select: { id: true, nome: true, tipo: true, saldoAtual: true },
-    }),
-  ])
-
-  // ── Saldo atual e fluxo por período ───────────────────────────────────────
-  let saldoAtual = 0
-  let entradasHoje = 0
-  let saidasHoje = 0
-  let entradasMes = 0
-  let saidasMes = 0
-
-  // Mapa para fluxo diário (últimos 30 dias)
-  const fluxoDiarioMap = new Map<string, { entrada: number; saida: number }>()
-  const hoje30 = new Date(now)
-  hoje30.setDate(now.getDate() - 29)
-  for (let i = 0; i <= 29; i++) {
-    const d = new Date(hoje30)
-    d.setDate(hoje30.getDate() + i)
-    fluxoDiarioMap.set(dayKey(d), { entrada: 0, saida: 0 })
-  }
-
-  for (const m of todasMovs) {
-    const o = m.origem ?? ""
-    const v = safeMoney(m.valor)
-    const isEntrada = m.tipo === "entrada"
-    const isSaida = m.tipo === "saida"
-    const ignoraAgregadoLoja = isOrigemTransferenciaInterna(o)
-
-    if (isEntrada) saldoAtual = safeMoney(saldoAtual + v)
-    if (isSaida) saldoAtual = safeMoney(saldoAtual - v)
-
-    // Fluxo do período: movimentação de caixa real (inclui estornos e devoluções); transferências entre carteiras não duplicam resultado da loja
-    if (!ignoraAgregadoLoja) {
-      if (m.createdAt >= todayStart && m.createdAt <= todayEnd) {
-        if (isEntrada) entradasHoje = safeMoney(entradasHoje + v)
-        if (isSaida) saidasHoje = safeMoney(saidasHoje + v)
-      }
-      if (m.createdAt >= mesStart) {
-        if (isEntrada) entradasMes = safeMoney(entradasMes + v)
-        if (isSaida) saidasMes = safeMoney(saidasMes + v)
-      }
-    }
-
-    const k = dayKey(m.createdAt)
-    if (fluxoDiarioMap.has(k) && !ignoraAgregadoLoja) {
-      const entry = fluxoDiarioMap.get(k)!
-      if (isEntrada) entry.entrada = safeMoney(entry.entrada + v)
-      if (isSaida) entry.saida = safeMoney(entry.saida + v)
-    }
-  }
-
-  const fluxoDiarioUltimos30Dias: FluxoDia[] = Array.from(fluxoDiarioMap.entries())
-    .map(([key, val]) => {
-      const d = new Date(key + "T00:00:00")
-      return {
-        data: key,
-        label: dayLabel(d),
-        entrada: val.entrada,
-        saida: val.saida,
-        saldo: safeMoney(val.entrada - val.saida),
-      }
-    })
-    .sort((a, b) => a.data.localeCompare(b.data))
-
-  // ── Contas a receber ───────────────────────────────────────────────────────
-  let totalReceberAberto = 0
-  let totalVencidosReceber = 0
-  let qtdVencidosReceber = 0
-  const proximosReceberItems: FluxoCaixaProximo[] = []
-
-  for (const cr of todosReceber) {
-    if (!isStatusAberto(cr.status)) continue
-    const v = safeMoney(cr.valor)
-    totalReceberAberto = safeMoney(totalReceberAberto + v)
-
-    if (isOverdueDateString(cr.vencimento)) {
-      totalVencidosReceber = safeMoney(totalVencidosReceber + v)
-      qtdVencidosReceber++
-    } else if (isBetweenDays(cr.vencimento, now, em7Dias)) {
-      proximosReceberItems.push({
-        id: cr.id,
-        descricao: cr.cliente || cr.descricao,
-        valor: v,
-        vencimento: cr.vencimento,
-        diasRestantes: diasRestantes(cr.vencimento, now),
-      })
-    }
-  }
-  proximosReceberItems.sort((a, b) => a.diasRestantes - b.diasRestantes)
-
-  // ── Contas a pagar ─────────────────────────────────────────────────────────
-  let totalPagarAberto = 0
-  let totalVencidosPagar = 0
-  let qtdVencidosPagar = 0
-  const proximosPagarItems: FluxoCaixaProximo[] = []
-
-  for (const cp of todosPagar) {
-    if (!isStatusAberto(cp.status)) continue
-    const v = safeMoney(cp.valor)
-    totalPagarAberto = safeMoney(totalPagarAberto + v)
-    const p = cp.payload && typeof cp.payload === "object" ? (cp.payload as Record<string, unknown>) : {}
-    const fornecedor = String(p.fornecedorNome ?? cp.descricao ?? "")
-
-    if (isOverdueDateString(cp.vencimento)) {
-      totalVencidosPagar = safeMoney(totalVencidosPagar + v)
-      qtdVencidosPagar++
-    } else if (isBetweenDays(cp.vencimento, now, em7Dias)) {
-      proximosPagarItems.push({
-        id: cp.id,
-        descricao: fornecedor || cp.descricao,
-        valor: v,
-        vencimento: cp.vencimento,
-        diasRestantes: diasRestantes(cp.vencimento, now),
-      })
-    }
-  }
-  proximosPagarItems.sort((a, b) => a.diasRestantes - b.diasRestantes)
-
+  const hoje = diaNoFusoConsulta(new Date()), mes = hoje.slice(0,7), from = deslocarDiaConsulta(hoje,-29)
+  const q = await consultarFinanceiroEmpresa(storeId,{dataInicio:from < mes+"-01" ? from : mes+"-01",dataFim:hoje})
+  const saldoAtual = reaisConsulta(q.saldoCentavos)
+  const somar = (rows: typeof q.eventos, tipo: string) => reaisConsulta(rows.filter(e=>!e.transferencia&&e.tipo===tipo).reduce((s,e)=>s+BigInt(e.valorCentavos),BigInt(0)))
+  const doDia=q.eventos.filter(e=>e.dia===hoje), doMes=q.eventos.filter(e=>e.dia.startsWith(mes))
+  const entradasHoje=somar(doDia,"entrada"),saidasHoje=somar(doDia,"saida"),entradasMes=somar(doMes,"entrada"),saidasMes=somar(doMes,"saida")
+  const fluxoDiarioUltimos30Dias: FluxoDia[]=Array.from({length:30},(_,i)=>{
+    const data=deslocarDiaConsulta(from,i),rows=q.eventos.filter(e=>e.dia===data),entrada=somar(rows,"entrada"),saida=somar(rows,"saida")
+    return {data,label:data.slice(8,10)+"/"+data.slice(5,7),entrada,saida,saldo:safeMoney(entrada-saida)}
+  })
+  const totalReceberAberto=reaisConsulta(q.receberAbertoCentavos),totalPagarAberto=reaisConsulta(q.pagarAbertoCentavos)
+  const dias=(v:string)=>{try{return Math.round((Date.parse(dataCivilConsulta(v))-Date.parse(hoje))/86400000)}catch{return null}}
+  const vencidos=(rows:typeof q.pagar)=>rows.filter(t=>BigInt(t.restanteCentavos)>BigInt(0)&&dias(t.vencimento)!==null&&dias(t.vencimento)!<0)
+  const vr=vencidos(q.receber),vp=vencidos(q.pagar),qtdVencidosReceber=vr.length,qtdVencidosPagar=vp.length
+  const totalVencidosReceber=reaisConsulta(vr.reduce((s,t)=>s+BigInt(t.restanteCentavos),BigInt(0))),totalVencidosPagar=reaisConsulta(vp.reduce((s,t)=>s+BigInt(t.restanteCentavos),BigInt(0)))
+  const proximos=(rows:typeof q.pagar):FluxoCaixaProximo[]=>rows.filter(t=>BigInt(t.restanteCentavos)>BigInt(0)&&dias(t.vencimento)!==null&&dias(t.vencimento)!>=0&&dias(t.vencimento)!<=7).map(t=>({id:t.id,descricao:t.contraparte||t.descricao,valor:reaisConsulta(t.restanteCentavos),vencimento:t.vencimento,diasRestantes:dias(t.vencimento)!})).sort((a,b)=>a.diasRestantes-b.diasRestantes)
+  const proximosReceberItems=proximos(q.receber),proximosPagarItems=proximos(q.pagar)
+  const totalProximos = (items: FluxoCaixaProximo[]) => reaisConsulta(items.reduce((s, item) => s + centavosConsulta(item.valor), BigInt(0)))
+  const todasCarteiras=q.contas.filter(c=>c.ativo&&c.tipo!=="credito").map(c=>({...c,saldoAtual:reaisConsulta(c.saldoCentavos)}))
   // ── Alertas financeiros ────────────────────────────────────────────────────
   const alertas: AlertaFinanceiro[] = []
 
@@ -322,7 +134,7 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
 
   const venceHojeReceber = proximosReceberItems.filter((x) => x.diasRestantes === 0)
   if (venceHojeReceber.length > 0) {
-    const total = venceHojeReceber.reduce((s, x) => s + x.valor, 0)
+    const total = totalProximos(venceHojeReceber)
     alertas.push({
       tipo: "proximo_vencimento",
       mensagem: `${venceHojeReceber.length} recebimento${venceHojeReceber.length > 1 ? "s" : ""} vence${venceHojeReceber.length > 1 ? "m" : ""} hoje — ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`,
@@ -333,7 +145,7 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
 
   const venceHojePagar = proximosPagarItems.filter((x) => x.diasRestantes === 0)
   if (venceHojePagar.length > 0) {
-    const total = venceHojePagar.reduce((s, x) => s + x.valor, 0)
+    const total = totalProximos(venceHojePagar)
     alertas.push({
       tipo: "proximo_vencimento",
       mensagem: `${venceHojePagar.length} pagamento${venceHojePagar.length > 1 ? "s" : ""} vence${venceHojePagar.length > 1 ? "m" : ""} hoje — ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`,
@@ -346,6 +158,7 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
   alertas.sort((a, b) => Number(b.urgente) - Number(a.urgente))
 
   return {
+    apuracao: { base: "FLUXO_FISICO", resultado: "CAIXA_REALIZADO", asOf: q.asOf, versaoCalculo: q.versaoCalculo, semCarteira:q.semCarteira, criterios:q.criterios },
     saldoAtual,
     entradasHoje,
     saidasHoje,
@@ -359,12 +172,12 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
     qtdVencidosReceber,
     qtdVencidosPagar,
     proximosRecebimentos7Dias: {
-      total: safeMoney(proximosReceberItems.reduce((s, x) => s + x.valor, 0)),
+      total: totalProximos(proximosReceberItems),
       count: proximosReceberItems.length,
       items: proximosReceberItems.slice(0, 5),
     },
     proximosPagamentos7Dias: {
-      total: safeMoney(proximosPagarItems.reduce((s, x) => s + x.valor, 0)),
+      total: totalProximos(proximosPagarItems),
       count: proximosPagarItems.length,
       items: proximosPagarItems.slice(0, 5),
     },

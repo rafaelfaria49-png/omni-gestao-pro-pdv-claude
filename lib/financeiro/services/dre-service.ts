@@ -1,3 +1,5 @@
+import { consultarEventosFinanceirosEmpresaNaTransacao, reaisConsulta } from "@/lib/gastos/query"
+import { diaNoFusoConsulta, intervaloConsulta } from "@/lib/gastos/query-calculo"
 /**
  * DRE Service — Demonstração do Resultado do Exercício (mensal).
  *
@@ -80,6 +82,7 @@ export type AlertaDRE = {
 }
 
 export type DREMensal = {
+  baseApuracao: "CAIXA_COM_CLASSIFICACAO_DRE"
   periodo: { mes: number; ano: number; label: string }
 
   // Receitas
@@ -190,32 +193,21 @@ async function getDREPeriodo(
   ano: number,
   db: FinanceiroDb,
 ): Promise<Omit<DREMensal, "comparativo" | "historico6Meses" | "alertas" | "tendencia">> {
-  const inicio = new Date(ano, mes - 1, 1)
-  const fim = new Date(ano, mes, 0, 23, 59, 59, 999)
+  const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`
+  const dataFim = new Date(Date.UTC(ano, mes, 0)).toISOString().slice(0, 10)
+  const range = intervaloConsulta(dataInicio, dataFim)
 
-  // Busca movimentações + títulos pagos no período — em paralelo, sem N+1
+  // Fatos de caixa separados das posições: título legado anômalo não bloqueia a DRE.
+  // Na composição de fechamento, o isolamento é herdado (READ COMMITTED), sem promessa de snapshot G005.
   const [movs, crPagos, cpPagos] = await Promise.all([
-    db.movimentacaoFinanceira.findMany({
-      where: leituraEmpresaWhere(storeId, {
-        storeId,
-        createdAt: { gte: inicio, lte: fim },
-      }),
-      select: {
-        id: true,
-        tipo: true,
-        origem: true,
-        valor: true,
-        referenciaId: true,
-        descricao: true,
-      },
-    }),
+    consultarEventosFinanceirosEmpresaNaTransacao(storeId,db,{dataInicio:String(ano)+"-"+String(mes).padStart(2,"0")+"-01",dataFim:new Date(Date.UTC(ano,mes,0)).toISOString().slice(0,10)}).then(q=>q.eventos.map(e=>({id:e.id,tipo:e.tipo,origem:e.origem,valor:reaisConsulta(e.valorCentavos),referenciaId:e.referenciaTituloId,categoriaEstruturada:e.categoriaId?e.categoria:null}))),
 
     // Títulos a receber pagos/parciais no período para ticket médio
     db.contaReceberTitulo.findMany({
       where: leituraEmpresaWhere(storeId, {
         storeId,
         status: { in: ["pago", "parcial"] },
-        updatedAt: { gte: inicio, lte: fim },
+        updatedAt: range,
       }),
       select: { id: true, valor: true },
     }),
@@ -225,7 +217,7 @@ async function getDREPeriodo(
       where: leituraEmpresaWhere(storeId, {
         storeId,
         status: "pago",
-        updatedAt: { gte: inicio, lte: fim },
+        updatedAt: range,
       }),
       select: { id: true, payload: true },
     }),
@@ -290,7 +282,7 @@ async function getDREPeriodo(
     }
 
     // Demais saídas: despesa/custo via CP vinculado
-    const cat = m.referenciaId ? (cpCatMap.get(m.referenciaId) ?? "Outros") : "Outros"
+    const cat = m.categoriaEstruturada ?? (m.referenciaId ? (cpCatMap.get(m.referenciaId) ?? "Outros") : "Outros")
     const tipo = classifyCategoria(cat)
     const catFormatada = cat.charAt(0).toUpperCase() + cat.slice(1)
 
@@ -316,6 +308,7 @@ async function getDREPeriodo(
     : 0
 
   return {
+    baseApuracao: "CAIXA_COM_CLASSIFICACAO_DRE",
     periodo: { mes, ano, label: mesLabel(mes, ano) },
     receitaBruta,
     receitasDetalhadas: agrupaPorCategoria(receitaItems, receitaBruta),
@@ -345,12 +338,18 @@ export async function getDREMensal(
   ano?: number,
   db: FinanceiroDb = prisma,
 ): Promise<DREMensal> {
+  if(db===prisma){
+    return prisma.$transaction(async tx=>{
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`
+      return getDREMensal(storeId,mes,ano,tx)
+    },{isolationLevel:"RepeatableRead",timeout:20000})
+  }
   const sid = (storeId ?? "").trim()
   if (!sid) throw new Error("dre-service: storeId obrigatório")
 
   const now = new Date()
-  const mesFinal = mes ?? now.getMonth() + 1
-  const anoFinal = ano ?? now.getFullYear()
+  const mesFinal = mes ?? Number(diaNoFusoConsulta(now).slice(5,7))
+  const anoFinal = ano ?? Number(diaNoFusoConsulta(now).slice(0,4))
 
   // Mês anterior para comparativo
   let mesAnt = mesFinal - 1

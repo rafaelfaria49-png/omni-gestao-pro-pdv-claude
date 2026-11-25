@@ -70,6 +70,20 @@ function semEstrangeiros(text: string) {
   for (const perfil of [E2, P1, P2]) expect(text).not.toContain(perfil)
 }
 
+async function saldoLedgerEmpresaSQL() {
+  const [row] = await prisma.$queryRaw<Array<{ centavos: string }>>`
+    SELECT SUM(saldo)::bigint::text AS centavos FROM (
+      SELECT c.id, COALESCE(c."saldoInicialCentavos",c."saldoInicial"::numeric*100)
+        + COALESCE(SUM(CASE WHEN m.tipo='entrada' THEN COALESCE(m."valorCentavos",m.valor::numeric*100)
+            ELSE -COALESCE(m."valorCentavos",m.valor::numeric*100) END),0) AS saldo
+      FROM carteiras_financeiras c LEFT JOIN movimentacoes_financeiras m
+        ON m."carteiraId"=c.id AND m."storeId"=${L1} AND (m."perfilId"=${E1} OR m."perfilId" IS NULL)
+      WHERE c."storeId"=${L1} AND (c."perfilId"=${E1} OR c."perfilId" IS NULL) AND c.ativo=TRUE AND c.tipo<>'credito'
+      GROUP BY c.id) contas`
+  expect(row.centavos).toBe("-12345") // fixture G003 intacta; abertura + ledger, sem usar saldoAtual
+  return Number(row.centavos) / 100
+}
+
 describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 readers reais / PostgreSQL", () => {
   beforeEach(prepararG003)
   afterEach(() => vi.unstubAllEnvs())
@@ -96,7 +110,7 @@ describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 readers reais 
     const a = await (await resumo(request(`/api/financeiro/relatorios/resumo?${qs}`))).json()
     const b = await (await indicadores(request(`/api/financeiro/relatorios/indicadores?${qs}`))).json()
     const esperado = { receitaTotal: 0, despesaTotal: 133.45, lucroLiquido: -133.45,
-      saldoConsolidado: 100, receberPendente: 375.01, pagarPendente: 375.01 }
+      saldoConsolidado: await saldoLedgerEmpresaSQL(), receberPendente: 375.01, pagarPendente: 375.01 }
     expect(a.indicadores).toMatchObject(esperado)
     expect(b.indicadores).toMatchObject(esperado)
     expect(a.topDespesas).toHaveLength(2)
@@ -106,13 +120,19 @@ describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 readers reais 
     semEstrangeiros(JSON.stringify([a, b]))
   }, 60_000)
 
-  it("DRE e fluxo têm fontes empresariais com totais conhecidos, sem exigir reconciliação G005", async () => {
+  it("DRE conserva classificação e o fluxo compartilha saldo canônico G005 sem dados privados", async () => {
     const a = await (await dre(request("/api/financeiro/dre"))).json()
     expect(a.dre).toMatchObject({ receitaBruta: 0, custos: 0, totalDespesas: 133.45,
       despesasVariaveis: 133.45, lucroLiquido: -133.45, totalMovimentacoes: 2 })
     const b = await (await fluxo(request("/api/financeiro/fluxo-caixa"))).json()
-    expect(b).toMatchObject({ saldoAtual: -133.45, entradasHoje: 0, saidasHoje: 133.45,
+    expect(b).toMatchObject({ saldoAtual: await saldoLedgerEmpresaSQL(), entradasHoje: 0, saidasHoje: 133.45,
       entradasMes: 0, saidasMes: 133.45, saldoMes: -133.45, totalReceberAberto: 375.01, totalPagarAberto: 375.01 })
+    expect(b.apuracao.semCarteira).toEqual({ quantidade: 1, entradasCentavos: "0", saidasCentavos: "1000" })
+    const [ledgerCompleto] = await prisma.$queryRaw<Array<{ centavos: string }>>`
+      SELECT SUM(CASE WHEN tipo='entrada' THEN 1 ELSE -1 END * COALESCE("valorCentavos",round(valor*100)::bigint))::bigint::text centavos
+      FROM movimentacoes_financeiras WHERE "storeId"=${L1} AND ("perfilId"=${E1} OR "perfilId" IS NULL)`
+    expect(ledgerCompleto.centavos).toBe("-13345")
+    expect(Math.round(b.saldoAtual * 100) - Number(b.apuracao.semCarteira.saidasCentavos)).toBe(Number(ledgerCompleto.centavos))
     expect(b.fluxoDiarioUltimos30Dias.reduce((sum: number, row: { saida: number }) => sum + row.saida, 0)).toBeCloseTo(133.45)
     semEstrangeiros(JSON.stringify([a, b]))
   }, 60_000)
@@ -125,14 +145,14 @@ describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 readers reais 
     const c = await (await categorias(request(`/api/financeiro/relatorios/categorias?${qs}`))).json()
     expect(c.receitas).toEqual([])
     expect(c.despesas.map((row: { categoria: string; total: number; qtd: number }) => ({ categoria: row.categoria, total: row.total, qtd: row.qtd })))
-      .toEqual([{ categoria: "pagar", total: 123.45, qtd: 1 }, { categoria: "manual", total: 10, qtd: 1 }])
+      .toEqual([{ categoria: `CATEGORIA_${E1}`, total: 123.45, qtd: 1 }, { categoria: "Sem categoria", total: 10, qtd: 1 }])
     const r = await (await rankings(request(`/api/financeiro/relatorios/rankings?${qs}`))).json()
     expect(r.topReceitas).toEqual([])
     expect(r.topDespesas.map((row: { valor: number }) => row.valor)).toEqual([123.45, 10])
     expect(r.carteiras.map((row: { id: string }) => row.id).sort()).toEqual([ids(E1).conta, "g003-legado-conta"].sort())
-    expect(r.carteiras.reduce((sum: number, row: { saldoAtual: number }) => sum + row.saldoAtual, 0)).toBe(100)
+    expect(r.carteiras.reduce((sum: number, row: { saldoAtual: number }) => sum + row.saldoAtual, 0)).toBe(await saldoLedgerEmpresaSQL())
     const cs = await (await carteiras(request("/api/financeiro/carteiras"))).json()
-    expect(cs.saldoTotal).toBe(100)
+    expect(cs.saldoTotal).toBe(await saldoLedgerEmpresaSQL())
     expect(cs.carteiras).toHaveLength(2)
     semEstrangeiros(JSON.stringify([f, c, r, cs]))
   }, 60_000)

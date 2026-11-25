@@ -1,3 +1,4 @@
+import { centavosConsulta, saldoTituloConsulta, reaisConsulta, type TituloParaConsulta } from "@/lib/gastos/query-calculo"
 /**
  * Contador HUB · Pacote do Contador — carga detalhada por fonte (GOAL 008B).
  *
@@ -145,13 +146,15 @@ type DevolucaoRaw = {
   at: Date
 }
 type MovimentacaoRaw = {
+  valorCentavos?: { toString(): string } | null
+  ocorridoEm?: Date | null
   id: string
   tipo: string
   origem: string | null
   valor: number
   createdAt: Date
 }
-type TituloRaw = { id: string; valor: number; status: string; vencimento: string }
+type TituloRaw = TituloParaConsulta & { id: string; vencimento: string }
 type SessaoRaw = {
   id: string
   status: string
@@ -442,8 +445,8 @@ export async function carregarFontesPacoteComCliente(
       buscarPagina: (cursor, tamanho) =>
         contarQuery(() =>
           cliente.movimentacaoFinanceira.findMany({
-            where: leituraEmpresaWhere(storeId, { storeId, createdAt: noPeriodo }),
-            select: { id: true, tipo: true, origem: true, valor: true, createdAt: true },
+            where: leituraEmpresaWhere(storeId, { storeId, OR: [{ ocorridoEm: noPeriodo }, { ocorridoEm: null, createdAt: noPeriodo }] }),
+            select: { id: true, tipo: true, origem: true, valor: true, valorCentavos: true, createdAt: true, ocorridoEm: true },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             take: tamanho,
             ...argsCursor(cursor),
@@ -458,7 +461,7 @@ export async function carregarFontesPacoteComCliente(
         contarQuery(() =>
           cliente.contaReceberTitulo.findMany({
             where: leituraEmpresaWhere(storeId, { storeId }),
-            select: { id: true, valor: true, status: true, vencimento: true },
+            select: { id: true, valor: true, valorCentavos: true, ativo: true, payload: true, status: true, vencimento: true },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             take: tamanho,
             ...argsCursor(cursor),
@@ -473,7 +476,7 @@ export async function carregarFontesPacoteComCliente(
         contarQuery(() =>
           cliente.contaPagarTitulo.findMany({
             where: leituraEmpresaWhere(storeId, { storeId }),
-            select: { id: true, valor: true, status: true, vencimento: true },
+            select: { id: true, valor: true, valorCentavos: true, ativo: true, payload: true, alocacoesPagamento: { select: { pagamentoId: true, valorCentavos: true, pagamento: { select: { tipo: true } } } }, status: true, vencimento: true },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             take: tamanho,
             ...argsCursor(cursor),
@@ -718,12 +721,15 @@ export async function carregarFontesPacoteComCliente(
         rej += 1
         continue
       }
+      let valor: number
+      try { valor = reaisConsulta(centavosConsulta(m.valor, m.valorCentavos)) } catch { rej++; continue }
+      const ocorrido = m.ocorridoEm ?? m.createdAt
       linhas.push({
         movimentacaoId: m.id,
-        data: m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt ?? ""),
+        data: ocorrido instanceof Date ? ocorrido.toISOString() : String(ocorrido ?? ""),
         tipo: String(m.tipo ?? ""),
         classificacao: classificarMovimento(String(m.tipo ?? ""), m.origem ?? null),
-        valor: arred(num(m.valor)),
+        valor,
         origem: String(m.origem ?? ""),
       })
     }
@@ -754,13 +760,15 @@ export async function carregarFontesPacoteComCliente(
         continue
       }
       if (venc.ano !== competencia.ano || venc.mes !== competencia.mes) continue
-      const original = arred(num(t.valor))
+      let original:number,restante:number
+      try {const saldo=saldoTituloConsulta(t);original=reaisConsulta(saldo.total);restante=reaisConsulta(saldo.restante)}catch{rej+=1;continue}
+      if(restante===0)continue
       linhas.push({
         tituloId: t.id,
         vencimento: String(t.vencimento ?? ""),
         status: String(t.status ?? ""),
         valorOriginal: original,
-        valorAberto: original, // aberto por construção (fechados já foram descartados)
+        valorAberto: restante, // mesma regra canônica G005, incluindo parciais e compensações
         disponibilidade: "real", // vencimento válido e dentro da competência
       })
     }
@@ -838,9 +846,9 @@ export async function carregarFontesPacoteComCliente(
   const agregado: FontesContador = {
     vendas: (vendasRaw ?? []).map((v) => ({ total: num(v.total), status: v.status, payload: v.payload })),
     devolucoes: (devolucoesRaw ?? []).map((d) => ({ valorTotal: num(d.valorTotal) })),
-    movimentacoes: (movRaw ?? []).map((m) => ({ tipo: String(m.tipo ?? ""), origem: m.origem ?? null, valor: num(m.valor) })),
-    receber: (receberRaw ?? []).map((t) => ({ valor: num(t.valor), status: String(t.status ?? ""), vencimento: String(t.vencimento ?? "") })),
-    pagar: (pagarRaw ?? []).map((t) => ({ valor: num(t.valor), status: String(t.status ?? ""), vencimento: String(t.vencimento ?? "") })),
+    movimentacoes: (movRaw ?? []).map((m) => ({ tipo: String(m.tipo ?? ""), origem: m.origem ?? null, valor: m.valor, valorCentavos: m.valorCentavos })),
+    receber: (receberRaw ?? []).map((t) => ({ ...t, status: String(t.status ?? ""), vencimento: String(t.vencimento ?? "") })),
+    pagar: (pagarRaw ?? []).map((t) => ({ ...t, status: String(t.status ?? ""), vencimento: String(t.vencimento ?? "") })),
     sessoes: (sessoesRaw ?? []).map((s) => ({ status: String(s.status ?? ""), saldoFinal: s.saldoFinal, saldoContado: s.saldoContado })),
     operacoes: (operacoesRaw ?? []).map((o) => ({ tipo: String(o.tipo ?? ""), valor: num(o.valor) })),
     falhas: Object.freeze(falhas),
@@ -867,10 +875,10 @@ export async function carregarFontesPacote(input: {
 }): Promise<FontesDetalhadasPacote> {
   await requireLeituraContadorEmpresa(input.scope)
   await prismaEnsureConnected()
-  return carregarFontesPacoteComCliente(
-    input.scope,
-    resolvePeriodoUtc(input.competencia),
-    input.competencia,
-    prisma as unknown as PacoteReaderClient,
-  )
+  return prisma.$transaction(async db=>{
+    await db.$executeRaw`SET TRANSACTION READ ONLY`
+    const result=await carregarFontesPacoteComCliente(input.scope,resolvePeriodoUtc(input.competencia),input.competencia,db as unknown as PacoteReaderClient)
+    await requireLeituraContadorEmpresa(input.scope)
+    return result
+  },{isolationLevel:"RepeatableRead",timeout:20000})
 }

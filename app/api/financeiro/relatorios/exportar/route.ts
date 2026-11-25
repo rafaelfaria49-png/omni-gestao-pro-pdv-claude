@@ -1,4 +1,7 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { ConsultaFinanceiraError } from "@/lib/gastos/query-calculo"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
+import { consultarFinanceiroEmpresa, reaisConsulta } from "@/lib/gastos/query"
 /**
  * GET /api/financeiro/relatorios/exportar
  *
@@ -62,56 +65,11 @@ async function toXLSX(rows: Row[], sheetName: string): Promise<Buffer> {
 async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): Promise<{ rows: Row[]; filename: string }> {
   const range = toDateRange(filtro)
 
-  if (tipo === "movimentacoes") {
-    const rows = await prisma.movimentacaoFinanceira.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
-      select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
-    return {
-      filename: "movimentacoes",
-      rows: rows.map((r) => ({
-        id: r.id, tipo: r.tipo, descricao: r.descricao,
-        valor: r.valor, origem: r.origem ?? "",
-        data: r.createdAt.toISOString().slice(0, 10),
-      })),
-    }
-  }
-
-  if (tipo === "receber") {
-    const rows = await prisma.contaReceberTitulo.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
-      select: { id: true, localKey: true, cliente: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
-    return {
-      filename: "contas_receber",
-      rows: rows.map((r) => ({
-        id: r.id, localKey: r.localKey, cliente: r.cliente ?? "",
-        descricao: r.descricao, valor: r.valor, status: r.status,
-        vencimento: r.vencimento ?? "", createdAt: r.createdAt.toISOString().slice(0, 10),
-      })),
-    }
-  }
-
-  if (tipo === "pagar") {
-    const rows = await prisma.contaPagarTitulo.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
-      select: { id: true, localKey: true, fornecedor: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
-    return {
-      filename: "contas_pagar",
-      rows: rows.map((r) => ({
-        id: r.id, localKey: r.localKey ?? "",
-        fornecedor: typeof r.fornecedor === "string" ? r.fornecedor : (r.fornecedor ? String((r.fornecedor as { name?: string }).name ?? "") : ""),
-        descricao: r.descricao, valor: r.valor, status: r.status,
-        vencimento: r.vencimento ?? "", createdAt: r.createdAt.toISOString().slice(0, 10),
-      })),
-    }
+  if (["movimentacoes","pagar","receber","fluxo","dre"].includes(tipo)) {
+    const q=await consultarFinanceiroEmpresa(storeId,filtro)
+    const criterios={base_apuracao:q.base,finalidade:tipo==="dre"?"FONTE_CAIXA_PARA_DRE_CLASSIFICADA_NO_RELATORIO":"MOVIMENTOS_E_POSICOES",timezone:q.timezone,data_inicio:q.periodo.dataInicio,data_fim:q.periodo.dataFim,as_of:q.asOf,versao_calculo:q.versaoCalculo,posicao_titulos:q.criterios.posicaoTitulos}
+    if(tipo==="pagar"||tipo==="receber")return {filename:"contas_"+tipo,rows:q[tipo].map(t=>({id:t.id,localKey:t.localKey??"",descricao:t.descricao,valor:reaisConsulta(t.valorCentavos),valorOriginal:reaisConsulta(t.valorCentavos),valorPago:reaisConsulta(t.pagoCentavos),valorRestante:reaisConsulta(t.restanteCentavos),valorAberto:reaisConsulta(t.restanteCentavos),status:t.status,vencimento:t.vencimento,categoriaId:t.categoriaId??"",...criterios}))}
+    return {filename:tipo==="dre"?"dre_fonte_caixa":tipo==="fluxo"?"fluxo_caixa":"movimentacoes",rows:q.eventos.map(e=>({id:e.movimentoId,alocacao:e.id,tipo:e.tipo,descricao:e.descricao,valor:reaisConsulta(e.valorCentavos),receitaRealizada:reaisConsulta(e.receitaCentavos),despesaRealizada:reaisConsulta(e.despesaCentavos),transferencia:e.transferencia?"sim":"nao",categoriaId:e.categoriaId??"",categoria:e.categoria,origem:e.origem,data:e.dia,ocorridoEm:e.ocorridoEm,...criterios}))}
   }
 
   if (tipo === "conciliacoes") {
@@ -271,6 +229,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         cliente: r.cliente ?? "",
         descricao: r.descricao,
         valor: r.valor,
+        baseValor: "VALOR_ORIGINAL_DO_TITULO",
         status: r.status,
         vencimento: r.vencimento ?? "",
         criadoEm: r.createdAt.toISOString().slice(0, 10),
@@ -278,23 +237,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
     }
   }
 
-  // fluxo = movimentações simplificadas (padrão fallback)
-  const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
-    select: { tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-    take: 5000,
-  })
-  return {
-    filename: "fluxo_caixa",
-    rows: rows.map((r) => ({
-      tipo: r.tipo,
-      descricao: r.descricao,
-      valor: r.valor,
-      origem: r.origem ?? "",
-      data: r.createdAt.toISOString().slice(0, 10),
-    })),
-  }
+  throw new ConsultaFinanceiraError("tipo_exportacao_invalido",400)
 }
 
 export async function GET(req: Request) {
@@ -322,11 +265,13 @@ export async function GET(req: Request) {
   const formato = (url.searchParams.get("formato") ?? "csv").toLowerCase()
   const preset = url.searchParams.get("preset")
 
+  try {
   let filtro: PeriodoFiltro = preset ? buildFiltroPreset(preset) : {}
   if (url.searchParams.get("dataInicio")) filtro.dataInicio = url.searchParams.get("dataInicio")!
   if (url.searchParams.get("dataFim")) filtro.dataFim = url.searchParams.get("dataFim")!
+  if (url.searchParams.get("carteiraId")) filtro.carteiraId=url.searchParams.get("carteiraId")!
+  if (url.searchParams.get("categoriaId")) filtro.categoriaId=url.searchParams.get("categoriaId")!
 
-  try {
     await prismaEnsureConnected()
     const { rows, filename } = await fetchRows(storeId, tipo, filtro)
 
@@ -350,7 +295,8 @@ export async function GET(req: Request) {
         "Content-Disposition": `attachment; filename="${filename}_${new Date().toISOString().slice(0, 10)}.csv"`,
       },
     }))
-  } catch {
-    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
+  } catch (e) {
+    const erro=erroConsultaFinanceira(e)
+    return respostaFinanceiraPrivada(NextResponse.json(erro.body,{status:erro.status}))
   }
 }

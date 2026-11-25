@@ -1,0 +1,343 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-005",
+  "status": "APPROVED_FOR_LOCAL_COMMIT",
+  "criteria": {
+    "base": "CAIXA_REALIZADO",
+    "moeda": "BRL",
+    "timezone": "America/Sao_Paulo",
+    "versaoCalculo": "g005-caixa-1",
+    "centavos": "BigInt interno; strings decimais JSON",
+    "dataEconomica": "ocorridoEm; fallback CREATED_AT_LEGADO quando ausente",
+    "intervalo": "datas civis inclusivas, SQL/instantes semiabertos; limitado a asOf",
+    "saldo": "SOMENTE_MOVIMENTOS_COM_CARTEIRA: abertura+ledger atribuído até fim do período/asOf; não é a soma de todo caixa da loja. Resíduo sem carteira é informado separadamente. Consolidado soma somente contas ativas não crédito; contas[] preserva o detalhe de contas inativas e crédito, que não entram em semCarteira por terem atribuição.",
+    "titulos": "posição ATUAL_NO_SNAPSHOT, filtrável por conta/categoria; não reconstrução histórica por vencimento",
+    "pagamento": "alocações estruturadas individuais + histórico legado sem pagamentoId; espelhos não somam novamente",
+    "legadoQuitado": "sem histórico, status quitado prova apenas posição atual; não gera caixa realizado",
+    "cobertura": "anomalias e vínculos/precisão ambíguos recusam; sem estimativa ou correção por GET",
+    "semCarteira": "Quantidade e entradas/saídas físicas sem carteira até o mesmo corte do saldo; independente de categoria e filtro de conta, pois não existe atribuição de conta.",
+    "cancelamentoPdvLegado": "Saída cancelamento_pdv SEM compensaMovimentacaoId mantém política de caixa herdada: despesa realizada. Contador exibe como estorno. Resultado líquido coincide; brutos têm políticas diferentes. Com vínculo estruturado, compensação reduz receita do original.",
+    "diagnostico": "Anomalia recusa o total com code estável; servidor registra code/tabela/id técnico, sem descrição/payload/valor. DRE usa eventos sem calcular posições de títulos."
+  },
+  "metrics": [
+    {
+      "metrica": "despesaRealizadaCentavos",
+      "regra": "saídas não transferência menos estornos válidos de saída; cancelamento_pdv legado sem vínculo é saída/despesa, política herdada explicitada",
+      "base": "CAIXA_REALIZADO",
+      "consumidores": [
+        "serviço",
+        "analytics",
+        "relatórios",
+        "CSV/XLSX movimentos",
+        "Agent"
+      ],
+      "provas": "A13; consumidores parcial/quitação; fatura alocada"
+    },
+    {
+      "metrica": "receitaRealizadaCentavos",
+      "regra": "entradas não transferência menos devoluções/estornos vinculados de entrada",
+      "base": "CAIXA_REALIZADO",
+      "consumidores": [
+        "serviço",
+        "analytics",
+        "relatórios",
+        "CSV/XLSX movimentos",
+        "Agent"
+      ],
+      "provas": "M1 recebível; regressões PDV/OS; devoluções"
+    },
+    {
+      "metrica": "saldoCentavos",
+      "regra": "SOMENTE_MOVIMENTOS_COM_CARTEIRA: abertura+ledger atribuído até fim do período/asOf; não é a soma de todo caixa da loja. Resíduo sem carteira é informado separadamente. Consolidado soma somente contas ativas não crédito; contas[] preserva o detalhe de contas inativas e crédito, que não entram em semCarteira por terem atribuição.",
+      "base": "POSICAO_CONTAS_ATE_CORTE",
+      "consumidores": [
+        "serviço",
+        "GET carteiras",
+        "HUB",
+        "relatórios",
+        "fluxo"
+      ],
+      "provas": "A13 oito posições; saldo materializado divergente; SQL independente"
+    },
+    {
+      "metrica": "pagarAbertoCentavos",
+      "regra": "face menos pagamentos líquidos válidos; cancelados zero",
+      "base": "ATUAL_NO_SNAPSHOT",
+      "consumidores": [
+        "serviço",
+        "GET pagar",
+        "HUB",
+        "analytics",
+        "relatórios",
+        "CSV/XLSX pagar",
+        "Agent"
+      ],
+      "provas": "36501−20000=16501; quitação0; crédito/fatura; A19"
+    },
+    {
+      "metrica": "receberAbertoCentavos",
+      "regra": "face menos recebimentos líquidos individuais",
+      "base": "ATUAL_NO_SNAPSHOT",
+      "consumidores": [
+        "serviço",
+        "GET receber",
+        "HUB",
+        "analytics",
+        "relatórios",
+        "CSV/XLSX receber",
+        "Agent"
+      ],
+      "provas": "M1 recebível; G002/N10/N11"
+    },
+    {
+      "metrica": "valorPagoTitulosCentavos/valorRecebidoTitulosCentavos",
+      "regra": "posição paga dos títulos; não valor pago apenas no intervalo",
+      "base": "ATUAL_NO_SNAPSHOT",
+      "consumidores": [
+        "serviço",
+        "GET pagar/receber",
+        "HUB",
+        "CSV/XLSX títulos",
+        "Agent"
+      ],
+      "provas": "espelho JSON/estruturado; parcial/quitação; status quitado legado explicitado"
+    },
+    {
+      "metrica": "porCategoria",
+      "regra": "partes de alocações pelo categoriaId estruturado; sem descrição heurística",
+      "base": "CAIXA_REALIZADO",
+      "consumidores": [
+        "serviço",
+        "analytics",
+        "relatórios",
+        "CSV/XLSX movimentos",
+        "Agent"
+      ],
+      "provas": "601 linhas; categorias diferentes na fatura e estorno alocado"
+    },
+    {
+      "metrica": "contas.entradasCentavos/saidasCentavos",
+      "regra": "fluxo físico inclui pernas de transferência; devolução entra/sai fisicamente",
+      "base": "FLUXO_FISICO",
+      "consumidores": [
+        "serviço",
+        "fluxo",
+        "CSV/XLSX fluxo"
+      ],
+      "provas": "A13 transferência; G003 oráculo independente de abertura"
+    },
+    {
+      "metrica": "DRE",
+      "regra": "eventos oficiais; mesmos custos/fixas/variáveis, exclusões de ajustes e sistema e ticket anteriores",
+      "base": "CAIXA_COM_CLASSIFICACAO_DRE",
+      "consumidores": [
+        "DRE",
+        "fechamento G004"
+      ],
+      "provas": "G004 fechamento/rollback; unitários DRE; política preservada"
+    },
+    {
+      "metrica": "Contador títulos",
+      "regra": "saldo restante dos títulos com vencimento na competência; posição atual",
+      "base": "POSICAO_ATUAL_POR_COMPETENCIA_VENCIMENTO",
+      "consumidores": [
+        "reader financeiro",
+        "pacote Contador"
+      ],
+      "provas": "consumidores16501→0; G003 privacy/docs; quatro fronteiras de data"
+    },
+    {
+      "metrica": "Contador movimentos",
+      "regra": "eventos econômicos; brutos/estornos apresentados separadamente pela política existente; cancelamento_pdv é estorno nesta apresentação própria",
+      "base": "FLUXO_CONTADOR_EXISTENTE",
+      "consumidores": [
+        "reader financeiro",
+        "pacote Contador"
+      ],
+      "provas": "ocorridoEm vs sincronização; G003102; devoluções apresentadas separadamente"
+    },
+    {
+      "metrica": "quantidadeRegistros",
+      "regra": "movimentos únicos do conjunto autorizado completo, inclusive transferências",
+      "base": "CONTAGEM_LEDGER_NO_PERIODO",
+      "consumidores": [
+        "serviço",
+        "relatórios",
+        "Agent"
+      ],
+      "provas": "mais de uma página601; sem take500/5000 nos totais"
+    },
+    {
+      "metrica": "semCarteira",
+      "regra": "Quantidade e entradas/saídas físicas sem carteira até o mesmo corte do saldo; independente de categoria e filtro de conta, pois não existe atribuição de conta.",
+      "base": "RESIDUO_ATE_CORTE_SALDO",
+      "consumidores": [
+        "DTO oficial",
+        "carteiras/apuracao",
+        "fluxo/apuracao",
+        "indicadores/apuracao",
+        "resumo",
+        "Agent"
+      ],
+      "provas": [
+        "saldo-sem-carteira.json",
+        "G003: ledger integral−13345 = saldo atribuído−12345 − resíduo1000"
+      ]
+    },
+    {
+      "metrica": "relatorios_compostos",
+      "regra": "Uma consulta financeira por resposta; projetores puros de indicadores/rankings/carteiras/calendário usam o mesmo DTO/asOf",
+      "base": "SNAPSHOT_UNICO_POR_REQUEST",
+      "consumidores": [
+        "relatorios/indicadores",
+        "relatorios/rankings"
+      ],
+      "provas": [
+        "snapshots-relatorios.json",
+        "teste PostgreSQL:1transaction por request e séries com mesmo asOf"
+      ]
+    },
+    {
+      "metrica": "precheck_qualidade",
+      "regra": "auditarQualidadeFinanceiraEmpresa: autorizado, RepeatableRead READ ONLY; contagens por código de precisão base, tipo/valor de movimento e parcial sem histórico/alocação. Não certifica todos os vínculos ou conteúdo do JSON.",
+      "base": "DIAGNOSTICO_SOMENTE_LEITURA",
+      "consumidores": [
+        "operador interno autorizado antes de implantação"
+      ],
+      "provas": [
+        "auditoria-qualidade-qa.json:0→1 anomalia sintética, sem mutação; produção não consultada"
+      ]
+    },
+    {
+      "metrica": "export_dre",
+      "regra": "Tipo documentado dre é fonte oficial de caixa para a DRE, explicitamente rotulada FONTE_CAIXA_PARA_DRE_CLASSIFICADA_NO_RELATORIO; não é a DRE classificada. Tipo desconhecido400.",
+      "base": "CAIXA_REALIZADO",
+      "consumidores": [
+        "CSV/XLSX dre_fonte_caixa"
+      ],
+      "provas": [
+        "G003102 testes, incluindo dre CSV/XLSX e fontes conhecidas"
+      ]
+    },
+    {
+      "metrica": "export_cobrancas_os",
+      "regra": "Valor original do título com baseValor=VALOR_ORIGINAL_DO_TITULO; não saldo restante ou receita realizada",
+      "base": "VALOR_ORIGINAL_DO_TITULO",
+      "consumidores": [
+        "CSV/XLSX cobrancas_os"
+      ],
+      "provas": [
+        "G003 exports conhecidos"
+      ]
+    }
+  ],
+  "evidenceDirectory": "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\23\\01a16672-b095-7202-8895-5cf8f4aa76c5\\G005-execution",
+  "gates": [
+    {
+      "name": "G005",
+      "label": "pg-g005-r9",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "ce1d7792254390dc622cbef70fa91133ea356f5f5674ac8430c875b23c0c7600",
+      "resultSha256": "9ee08a145378f655a0a0f544306e5b73017d06be5555bce6ac1ed8f2ecf6b242"
+    },
+    {
+      "name": "Unitários/contratos",
+      "label": "unit-regression-r7",
+      "passed": 898,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "9da008cc38dc59c5a4b7df4945e6f98c434321ea05d2eb61837129a3787d8526",
+      "resultSha256": "db43854096f5b31448502ce00d523a88e83656c7a571305156f6cc53a8562b02"
+    },
+    {
+      "name": "G001",
+      "label": "regressoes/G004-execution/pg-regression-g001-r1",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "422d0f0878b964064ad19a5a04ab60d788f9e76ee3d031e5dad26cc422a296b7",
+      "resultSha256": "ebf553cb7b0ae48504b1015362fe691e03bf5aece4a94f0ecbeaed7f24875c41"
+    },
+    {
+      "name": "G002/M1/N10/N11",
+      "label": "regressoes/G004-execution/pg-regression-g002-r1",
+      "passed": 97,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "8685c4cf6d25143cb8a337700e7b958256c223291c8f89eca68b0091f3dcf2ae",
+      "resultSha256": "4d5c3ce2a34477db06ea43c9460e8b5626a3f6c92c81f62f82917f2785698256"
+    },
+    {
+      "name": "PDV",
+      "label": "regressoes/G004-execution/pg-regression-pdv-r1",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "351b4188954958d7945ab35496857bc4c59a8fde0e9a4f554fea31fada3d1d19",
+      "resultSha256": "066563afefcee27868fd69c8abaef1c3e981868ecae82ab8b48c4dc581d570b0"
+    },
+    {
+      "name": "V3/OS",
+      "label": "regressoes/G004-execution/v3-g004-r3",
+      "passed": 109,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "593b77b2b368673624d1e0935cd6519f33d8a3d500baaf94b4460e3d6be184bf",
+      "resultSha256": "8da34ba88e6430813fd5c16a1e3c37c4557bea728050909b05b529b222c960cf"
+    },
+    {
+      "name": "G003/cache/documentos",
+      "label": "regressoes/G004-execution/pg-regression-g003-r4",
+      "passed": 102,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "748a3314dd835e2849abf2146b417afbf47e7087c8b81414b6ffe65b21151013",
+      "resultSha256": "ed77b098c29457263115fb35b64538ead1da71e13d00456abe4810a386399577"
+    },
+    {
+      "name": "G004 domínio/HTTP/migrations",
+      "label": "regressoes/G004-execution/pg-regression-g004-r6",
+      "passed": 57,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "sourceUnchanged": true,
+      "receiptSha256": "e09250c073b0aacc5498b45326b3904825771d6f22cbdd22e556047d2bd1188e",
+      "resultSha256": "1c54dc2ad9014e7c85813107bd6d17f8ac3eb0736be17fb2f82d1f52a32f1f5e"
+    }
+  ],
+  "postgresUniqueTests": 418,
+  "unitTests": 898,
+  "scope": "somente leitores e testes/evidências autorizados; nenhum writer/schema/auth/WhatsApp modificado",
+  "coverageLimitations": [
+    "Saldo de contas exclui movimentos sem carteira; o resíduo explicitado impede prometer saldo total de toda a loja. Receita/despesa incluem esses fatos autorizados.",
+    "Títulos são posição atual, não reconstrução histórica; quitado legado sem histórico não comprova data/método de caixa.",
+    "Anomalias de eventos ainda podem bloquear consultas; code/registro técnico e precheck read-only permitem remediação humana. Produção não auditada nem autorizada neste GOAL.",
+    "DRE standalone usa RepeatableRead READ ONLY; composição de fechamento herda READ COMMITTED e não promete snapshot G005 diante de writers legados. Nenhum lock/writer alterado.",
+    "Ledger completo e agregações em memória; sem SLA de produção certificado.",
+    "Node26.12.1 versus engines24.x, sem validação em24 nem alteração global/dependência."
+  ],
+  "review": {
+    "verdict": "APPROVED",
+    "modelsObserved": [
+      "claude-sonnet-5-5"
+    ],
+    "sessionId": "8db88b8c-ad1f-40ab-8620-c88873f18ee0",
+    "lintExceptionAccepted": true
+  }
+}
