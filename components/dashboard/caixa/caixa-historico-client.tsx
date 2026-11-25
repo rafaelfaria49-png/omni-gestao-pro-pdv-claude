@@ -38,7 +38,7 @@ import {
   htmlBlocoFechamento,
   htmlBlocosFechamento,
   montarBlocosFechamento,
-  dinheiroEsperadoGravado,
+  dinheiroEsperadoGravado as dinheiroEsperadoDoFechamento,
   normalizarResumoFechamento,
   ORIGEM_VENDA_LABEL,
   type LinhaBloco,
@@ -667,7 +667,7 @@ function SessaoDetalheView({
   const payload = sessao.payload as Record<string, unknown> | null
   const ledger = payload?.ledger as Record<string, number> | null
   const resumo = normalizarResumoFechamento(payload?.resumoFechamento)
-  const esperadoDinheiroOriginal = dinheiroEsperadoGravado(payload, resumo)
+  const esperadoDinheiroOriginal = dinheiroEsperadoDoFechamento(payload, resumo)
 
   // Contas × O.S. × estornos lidos das operações (GOAL 003A). Com resumo: blocos do
   // fechamento; sem resumo (sessão legada): vendas do ledger + recebimentos das operações.
