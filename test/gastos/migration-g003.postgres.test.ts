@@ -15,7 +15,7 @@ const kinds = ["empty", "history"] as const
 const clients = kinds.map(kind => new PrismaClient({ datasources: { db: {
   url: `postgresql://gastos_g003@127.0.0.1:55495/${database(kind)}`,
 } }, log: [] }))
-const migrationPath = resolve("prisma/migrations/20261021120000_gastos_readers_documentos/migration.sql")
+const migrationPath = resolve("prisma/migrations/20261126120000_gastos_readers_documentos/migration.sql")
 const sql = readFileSync(migrationPath, "utf8")
 const snapshots = new Map<string, unknown>()
 

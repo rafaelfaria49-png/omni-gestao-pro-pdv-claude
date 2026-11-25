@@ -23,7 +23,7 @@ describe.each(["empty", "history"])("G004 migration no baseline %s", kind => {
     identity = actual
     expect(await db.$queryRaw`SELECT to_regclass('gastos_revisoes') IS NULL AS ausente`).toEqual([{ ausente: true }])
     before = await historico()
-    const file = resolve("prisma/migrations/20261022120000_gastos_operacoes_atomicas/migration.sql")
+    const file = resolve("prisma/migrations/20261126130000_gastos_operacoes_atomicas/migration.sql")
     const sha256 = createHash("sha256").update(readFileSync(file)).digest("hex")
     const output = execFileSync("C:/Program Files/PostgreSQL/17/bin/psql.exe", ["-X", "-w", "-h", "127.0.0.1", "-p", "55496", "-U", "gastos_g004", "-d", database, "-v", "ON_ERROR_STOP=1", "-f", file],
       { encoding: "utf8", windowsHide: true })
