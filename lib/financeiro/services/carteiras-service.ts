@@ -12,6 +12,50 @@ import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { dadosFinanceirosEmpresa, emTransacaoFinanceira, FinanceiroScopeError, FINANCEIRO_CONTA_LOCK_PREFIX, precisaoLegada } from "@/lib/gastos/financeiro-scope"
 import type { CarteiraFinanceira, Prisma } from "@/generated/prisma"
+import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
+import { storeDoContexto, type FinanceiroDb, LIMITE_CENTAVOS } from "@/lib/gastos/financeiro-scope"
+import { centavosLegadosExatos } from "@/lib/gastos/pagamentos"
+import { OperacaoGastoError, ordemBinaria } from "@/lib/gastos/operacao-schema"
+
+/** Ordem compartilhada com transferências/baixas G002. Inclui contas históricas dos títulos. */
+export async function travarCarteirasGasto(tx: FinanceiroDb, ctx: FinanceiroContextoAutorizado, ids: string[], selecionada?: string, compensacao = false) {
+  const rows = new Map<string, CarteiraFinanceira>()
+  for (const id of [...new Set(ids)].sort(ordemBinaria)) {
+    const key = `${FINANCEIRO_CONTA_LOCK_PREFIX}:${ctx.tipo === "EMPRESA" ? ctx.storeId : ctx.perfilId}:${id}`
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))::text AS lock`
+    await tx.$queryRaw`SELECT id FROM carteiras_financeiras WHERE id=${id} AND "storeId" IS NOT DISTINCT FROM ${storeDoContexto(ctx)}
+      AND ("perfilId"=${ctx.perfilId} OR ("perfilId" IS NULL AND ${ctx.tipo === "EMPRESA"})) FOR NO KEY UPDATE`
+    let row = await tx.carteiraFinanceira.findFirst({ where: { id, storeId: storeDoContexto(ctx),
+      ...(ctx.tipo === "PESSOAL" ? { perfilId: ctx.perfilId } : { OR: [{ perfilId: ctx.perfilId }, { perfilId: null }] }) } })
+    if (!row || (id === selecionada && ((!compensacao && !row.ativo) || row.tipo === "credito"))) {
+      throw new OperacaoGastoError("conta_indisponivel", 404)
+    }
+    if (!row.perfilId) row = await tx.carteiraFinanceira.update({ where: { id }, data: { perfilId: ctx.perfilId } })
+    rows.set(id, row)
+  }
+  return rows
+}
+
+/** Ledger canônico sob o lock da conta; não usa o saldo materializado como autoridade. */
+export async function saldoCarteiraGasto(tx: FinanceiroDb, ctx: FinanceiroContextoAutorizado, conta: CarteiraFinanceira, gravar = false) {
+  let saldo = centavosLegadosExatos(conta.saldoInicial)
+  if (conta.saldoInicialCentavos !== null && BigInt(conta.saldoInicialCentavos.toString()) !== saldo) throw new OperacaoGastoError("precisao_legada_exige_revisao", 409)
+  const movimentos = await tx.movimentacaoFinanceira.findMany({ where: { carteiraId: conta.id, storeId: storeDoContexto(ctx),
+    ...(ctx.tipo === "PESSOAL" ? { perfilId: ctx.perfilId } : { OR: [{ perfilId: ctx.perfilId }, { perfilId: null }] }) },
+    select: { tipo: true, valor: true, valorCentavos: true } })
+  for (const m of movimentos) {
+    const v = centavosLegadosExatos(m.valor)
+    if (!["entrada", "saida"].includes(m.tipo) || v <= BigInt(0) || (m.valorCentavos !== null && BigInt(m.valorCentavos.toString()) !== v)) {
+      throw new OperacaoGastoError("precisao_legada_exige_revisao", 409)
+    }
+    saldo += m.tipo === "entrada" ? v : -v
+  }
+  if (saldo > LIMITE_CENTAVOS || saldo < -LIMITE_CENTAVOS) throw new OperacaoGastoError("saldo_fora_limite", 409)
+  if (gravar) await tx.carteiraFinanceira.update({ where: { id: conta.id }, data: {
+    saldoInicialCentavos: centavosLegadosExatos(conta.saldoInicial).toString(),
+    saldoAtual: Number(saldo) / 100, saldoAtualCentavos: saldo.toString(), precisaoStatus: "CENTAVOS" } })
+  return saldo
+}
 
 /** Recusa de negócio que precisa desfazer provisionamento antes de manter o contrato ok:false. */
 class TransferenciaRecusada extends Error {}

@@ -2,7 +2,7 @@ import "server-only"
 import { createHash, randomUUID } from "node:crypto"
 import { z } from "zod"
 import type { Prisma } from "@/generated/prisma"
-import { comContextoFinanceiro, storeDoContexto } from "./financeiro-scope"
+import { comContextoFinanceiro, storeDoContexto, type FinanceiroDb } from "./financeiro-scope"
 import { comLeituraFinanceira, FinanceiroReadError, leituraPerfilWhere } from "./read-scope"
 import { documentoStorageRef, type DocumentoStoragePort } from "./documentos-fixture"
 import type { FinanceiroContextoAutorizado } from "./types"
@@ -118,9 +118,13 @@ export async function autorizarDownloadDocumentoGasto(contexto: unknown, documen
 
 /** Vínculos reais e extensíveis por migration futura; não inventar FK de Gasto/Operação G004. */
 export async function vincularDocumentoGasto(contexto: unknown, documentoId: string, input: unknown) {
+  return comContextoFinanceiro(contexto, (db, ctx) => vincularDocumentoGastoNaTransacao(db, ctx, documentoId, input))
+}
+
+/** Composição pelo motor G004; o chamador mantém autorização e locks na mesma transação. */
+export async function vincularDocumentoGastoNaTransacao(db: FinanceiroDb, ctx: FinanceiroContextoAutorizado, documentoId: string, input: unknown) {
   const parsed = alvoSchema.safeParse(input)
   if (!id.safeParse(documentoId).success || !parsed.success) throw new FinanceiroReadError(404)
-  return comContextoFinanceiro(contexto, async (db, ctx) => {
     const documento = await db.documentoGasto.findFirst({ where: { ...documentoWhere(ctx, documentoId), estado: { not: "QUARENTENA" } }, select: { id: true } })
     if (!documento) throw new FinanceiroReadError(404)
     const alvo = parsed.data, where = { ...leituraPerfilWhere(ctx), id: alvo.id }
@@ -136,7 +140,6 @@ export async function vincularDocumentoGasto(contexto: unknown, documentoId: str
     const row = await db.documentoVinculo.findFirst({ where: { documentoId, perfilId: ctx.perfilId, ...target }, select: { id: true } })
     if (!row) throw new FinanceiroReadError(404)
     return { id: row.id, documentoId, alvo }
-  })
 }
 
 /** Orfandade não é descarte: quarentena após 24h, revisão em 30 dias, sem excluir bytes/histórico.

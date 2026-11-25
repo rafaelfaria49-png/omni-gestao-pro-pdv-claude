@@ -18,6 +18,7 @@
  */
 
 import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
+import type { FinanceiroDb } from "@/lib/gastos/financeiro-scope"
 import { prisma } from "@/lib/prisma"
 import {
   isOrigemDevolucaoPdv,
@@ -187,13 +188,14 @@ async function getDREPeriodo(
   storeId: string,
   mes: number,
   ano: number,
+  db: FinanceiroDb,
 ): Promise<Omit<DREMensal, "comparativo" | "historico6Meses" | "alertas" | "tendencia">> {
   const inicio = new Date(ano, mes - 1, 1)
   const fim = new Date(ano, mes, 0, 23, 59, 59, 999)
 
   // Busca movimentações + títulos pagos no período — em paralelo, sem N+1
   const [movs, crPagos, cpPagos] = await Promise.all([
-    prisma.movimentacaoFinanceira.findMany({
+    db.movimentacaoFinanceira.findMany({
       where: leituraEmpresaWhere(storeId, {
         storeId,
         createdAt: { gte: inicio, lte: fim },
@@ -209,7 +211,7 @@ async function getDREPeriodo(
     }),
 
     // Títulos a receber pagos/parciais no período para ticket médio
-    prisma.contaReceberTitulo.findMany({
+    db.contaReceberTitulo.findMany({
       where: leituraEmpresaWhere(storeId, {
         storeId,
         status: { in: ["pago", "parcial"] },
@@ -219,7 +221,7 @@ async function getDREPeriodo(
     }),
 
     // Títulos a pagar pagos no período para classificação de categoria
-    prisma.contaPagarTitulo.findMany({
+    db.contaPagarTitulo.findMany({
       where: leituraEmpresaWhere(storeId, {
         storeId,
         status: "pago",
@@ -341,6 +343,7 @@ export async function getDREMensal(
   storeId: string,
   mes?: number,
   ano?: number,
+  db: FinanceiroDb = prisma,
 ): Promise<DREMensal> {
   const sid = (storeId ?? "").trim()
   if (!sid) throw new Error("dre-service: storeId obrigatório")
@@ -365,9 +368,9 @@ export async function getDREMensal(
 
   // Buscar DRE atual + anterior + histórico em paralelo
   const [atual, anterior, ...historicoParcial] = await Promise.all([
-    getDREPeriodo(sid, mesFinal, anoFinal),
-    getDREPeriodo(sid, mesAnt, anoAnt),
-    ...periodos.slice(0, 5).map((p) => getDREPeriodo(sid, p.mes, p.ano)),
+    getDREPeriodo(sid, mesFinal, anoFinal, db),
+    getDREPeriodo(sid, mesAnt, anoAnt, db),
+    ...periodos.slice(0, 5).map((p) => getDREPeriodo(sid, p.mes, p.ano, db)),
   ])
 
   // Histórico 6 meses (inclui o atual)

@@ -2,6 +2,7 @@ import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { dadosFinanceirosEmpresa, emTransacaoFinanceira, limparOwnershipSnapshot, manterReferenciaSnapshot, referenciaSnapshotEmpresa, type FinanceiroDb, type SnapshotVinculoAviso } from "@/lib/gastos/financeiro-scope"
 import type { Prisma, ContaPagarTitulo } from "@/generated/prisma"
+import { centavosLegadosExatos } from "@/lib/gastos/pagamentos"
 import { FINANCEIRO_ORIGEM } from "@/lib/financeiro/contracts/origem"
 import {
   buildContaPagarPayload,
@@ -53,6 +54,25 @@ export function sumPagamentosFromHistoricoPayloadContaPagar(payload: unknown): n
     if (t === "estorno_pagamento") s -= v
   }
   return safeMoney(s)
+}
+
+/** Projeção de compatibilidade; fatos estruturados já foram gravados no mesmo tx.
+ * Nunca aceita histórico do request nem substitui um evento anterior.
+ */
+export async function projetarPagamentoEstruturadoContaPagar(db: FinanceiroDb, row: ContaPagarTitulo, event: {
+  pagamentoId: string; operacaoId: string; movimentoId: string; valorCentavos: bigint;
+  estorno: boolean; pagoEm: Date; motivo?: string
+}, pagoLiquidoCentavos: bigint) {
+  const total = centavosLegadosExatos(row.valor)
+  const status = pagoLiquidoCentavos === total ? "pago" : pagoLiquidoCentavos > BigInt(0) ? "parcial" : "pendente"
+  const payload = appendFinanceiroHistorico(asPayloadRecord(row.payload), {
+    tipo: event.estorno ? "estorno_pagamento" : "pagamento", valor: Number(event.valorCentavos) / 100,
+    pagamentoId: event.pagamentoId, operacaoId: event.operacaoId, movimentoId: event.movimentoId,
+    dataPagamento: event.pagoEm.toISOString(), ...(event.motivo ? { motivo: event.motivo } : {}),
+  })
+  const cas = await db.contaPagarTitulo.updateMany({ where: { id: row.id, versaoFinanceira: row.versaoFinanceira },
+    data: { status, payload: payload as Prisma.InputJsonObject, versaoFinanceira: { increment: 1 } } })
+  if (cas.count !== 1) throw new Error("Conflito de versão financeira")
 }
 
 export type ContaPagarServiceResult<T> = { ok: true; data: T } | { ok: false; reason: string }
@@ -182,7 +202,9 @@ async function gravarComToken(
   // Reconciliação G002: o escopo EMPRESA (perfil/precisão) entra na MESMA escrita com token.
   const res = await db.contaPagarTitulo.updateMany({
     where: { id: row.id, storeId: row.storeId, updatedAt: row.updatedAt },
-    data: { ...(data.escopo ?? {}), status: data.status, payload: data.payload as unknown as Prisma.InputJsonValue },
+    // Reconciliação G004: a escrita legada (#397) também avança versaoFinanceira — o CAS do motor
+    // atômico (projetarPagamentoEstruturadoContaPagar) nunca aceita um token anterior a ela.
+    data: { ...(data.escopo ?? {}), status: data.status, payload: data.payload as unknown as Prisma.InputJsonValue, versaoFinanceira: { increment: 1 } },
   })
   if (res.count !== 1) return { ok: false, reason: "titulo_alterado" }
   const updated = await db.contaPagarTitulo.findFirst({ where: { id: row.id, storeId: row.storeId } })

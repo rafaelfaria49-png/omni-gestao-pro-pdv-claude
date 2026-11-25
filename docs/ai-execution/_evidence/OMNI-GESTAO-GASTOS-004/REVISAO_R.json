@@ -1,0 +1,417 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-004",
+  "status": "APPROVED",
+  "requestedFamily": "Anthropic",
+  "requestedRuntime": "Claude Code",
+  "requestedModel": "claude-sonnet-5-5",
+  "finalTag": "r2",
+  "lintExceptionAccepted": true,
+  "approvedForLocalCommit": true,
+  "productionApproval": false,
+  "condition": "Após R2 somente este REVISAO_R.json recebe o parecer; fontes e demais documentos preservam os hashes aprovados. Relatório externo registra encerramento e SHA posterior.",
+  "reviews": [
+    {
+      "goal": "OMNI-GESTAO-GASTOS-004",
+      "tag": "r1",
+      "review": {
+        "verdict": "CHANGES_REQUESTED",
+        "reviewer": {
+          "model": "claude-sonnet-5-5 (Anthropic, Claude Code)",
+          "mode": "somente leitura (Read/Glob/Grep); nenhum comando/SQL/edição; sem credenciais/.env",
+          "independence": "revisão nova; R2 G003 não herdada; REVISAO_R.json de G004 permanece status=PENDING, reviews=[] (não escrevi nele)"
+        },
+        "scope": "G004 C4 dinheiro/schema/privacidade, base 451b0e41ccf96215ed6c30e45ea2844dd0101faf. Cobre migration + schema.prisma, domínio lib/gastos/*, consumidores diretos (pagar PATCH/operacoes, client M1, FinanceiroRealContext, fechamento/DRE), testes PG/unit, recibos/logs de gates e evidência de lint.",
+        "approvedForLocalCommit": false,
+        "productionApproval": false,
+        "lintExceptionAccepted": false,
+        "lintExceptionNote": "Pré-avaliação: critérios atendidos para os hashes atuais (ver lintEvidenceHashes): mesmo comando/config/deps/Node, 218 correspondentes, 0 adicionados e 0 removidos, e zero diagnóstico nos arquivos alterados. Mantenho o aceite NÃO concedido: a correção do P1 altera fontes, e os hashes mudam. Renovar o aceite no delta, sobre os novos hashes, sem herdar este.",
+        "lintEvidenceHashes": {
+          "baseline_g003": "67bcd38707df8c3687cbf316e913cb6d5a4a669c0318f94b8af062b2b1a15fbf",
+          "current_g004": "75be6df5f023b7d57a20b0b1a6aa56e59b7a4420459fb8e3667cc8717327dd80",
+          "differential": "f947b93162f6306d656a8280d01e9c940fddc2b7b1f37a3f874c33067cdb980f",
+          "provenance": "Os valores foram lidos de current-gates.json, RELATORIO.md e lint-differential.json, que são coerentes entre si. Não recalculei SHA-256, porque as ferramentas permitidas não executam hash."
+        },
+        "findings": [
+          {
+            "priority": "P1",
+            "title": "Estorno HUB: recusa definitiva nunca libera o recibo do browser, e a revisão expirada vira beco sem saída",
+            "files": [
+              "app/api/financeiro/pagar/route.ts:356-357",
+              "lib/financeiro/pagamento-operacao-client.ts:98-106",
+              "components/financeiro/lovable/context/FinanceiroRealContext.tsx:982-991,1048",
+              "lib/gastos/apply.ts:232-236,275",
+              "lib/gastos/operacoes.ts:94-97"
+            ],
+            "proof": "(1) O client só remove o recibo se json.operacaoRejeitada===true (client:105). O ramo PagamentoLegadoError define essa flag (route:361), mas o ramo OperacaoGastoError (route:356-357) nunca a define. Assim periodo_fechado, estorno_acima_pagamento, pagamento_exige_revisao, estorno_exige_alocacoes, saldo/ID recusados e revisao_expirada, todos sem efeito, deixam o recibo para sempre. (2) A chave do recibo é hash([loja,canal,tipo,referencia,op]). Qualquer pedido diferente (outro motivo, por exemplo) falha com 'confirmação pendente deste título com outros dados' (client:89). O UI só envia {op,localKey,motivo}, nunca pagamentoId/movimentoId (Context:1048), então o usuário não tem como escolher outro alvo. (3) estornarPagamentoHub reutiliza a revisão existente do grupo hub-estorno:<chave> (apply:232-236). Ela expira em 30 min, e aplicarOperacaoGasto falha com revisao_expirada (operacoes:96). Um 503 transitório seguido de retry após 30 min, ou um periodo_fechado resolvido tarde, trava o estorno desse título no navegador. Nada disso corrompe dinheiro, mas é regressão funcional de um fluxo que o G004 reescreveu, e quebra o contrato M1/G002 em que recusa definitiva sem efeito libera a chave. Nenhum teste cobre isso: o client test só cobre 500, rede e ACK divergente, e o HTTP test só cobre resposta perdida seguida de sucesso.",
+            "correction": "(a) No handler pagar PATCH, devolver operacaoRejeitada:true para OperacaoGastoError 4xx (a transação já deu rollback). (b) Em estornarPagamentoHub, se a revisão existente do grupo está PRONTA e expirada e não há operação, encadear nova versão (mesmo conteúdo) ou responder recusa definitiva com a flag, para o client trocar a chave. (c) Testes: client (4xx com flag libera e 5xx conserva), HTTP/PG (periodo_fechado, depois reabertura, depois nova intenção sem efeito duplicado) e PG de revisão expirada no HUB. (d) Documentar no GOAL/decisão que a chave só é descartada em recusa definitiva."
+          },
+          {
+            "priority": "P2",
+            "title": "Fronteira de mês e fuso America/Sao_Paulo só provada em unitário puro; fechamento default usa UTC",
+            "files": [
+              "lib/gastos/apply.test.ts:24-27",
+              "lib/financeiro/services/fechamento-service.ts:70-72,118-124,149-151"
+            ],
+            "proof": "O pedido exige testar fronteira de mês e fuso nos contratos financeiros. Só diaSaoPaulo() puro é testado. Nenhum teste PG aplica pagamento com instante 2026-11-01T01:59Z (dia bancário 31/10) contra fechamento de outubro/novembro. Além disso, dateToDataRef()/verificarPeriodoFechado(new Date()) usam o dia UTC. O fecharDia() sem data fecha o dia UTC, enquanto o G004 bloqueia pelo dia SP; entre 21h e 24h SP os dois divergem. É pré-existente, mas agora relevante.",
+            "correction": "Adicionar teste PG da fronteira: instante 01:59Z e 03:00Z contra fechamentos diário e mensal, com replay sem mudar a data. Fazer fecharDia() sem data usar diaSaoPaulo (ou documentar a divergência como limitação ao G005 sem mudar a regra)."
+          },
+          {
+            "priority": "P2",
+            "title": "Injeção de falhas não cobre os caminhos de maior risco e asserta qualquer erro",
+            "files": [
+              "test/gastos/rollback-g004.postgres.test.ts:9-15,19,28"
+            ],
+            "proof": "As dez injeções rodam só com GASTO_PAGO (e CONTA_PAGAR no caso 'titulo'). Nenhuma injeta falha em PAGAR_TITULO/PAGAR_FATURA/ESTORNO. Isso deixa de fora o UPDATE da projeção JSON/status/versaoFinanceira do título (projetarPagamentoEstruturadoContaPagar) e os contadores de compensação nos triggers, que são exatamente o cenário 'título pago sem movimento'. O assert é rejects.toThrow() sem checar G004_QA_FAILURE. Mitigação parcial: o mesmo revisao/chave aplica depois de remover o trigger, o que atribui a falha ao trigger.",
+            "correction": "Adicionar injeção após o UPDATE de contas_pagar_titulos em PAGAR_TITULO, após a alocação/contador em ESTORNAR_PAGAMENTO e em PAGAR_FATURA, comparando o snapshot antes/depois. Assertar a mensagem injetada."
+          },
+          {
+            "priority": "P3",
+            "title": "Corridas provam invariantes, não contenção",
+            "files": [
+              "test/gastos/concorrencia-g004.postgres.test.ts:43-56,57-81,100-109"
+            ],
+            "proof": "Os resultados esperados (um sucesso e uma recusa saldo_conta_insuficiente/estorno_acima_pagamento) também ocorrem com execução sequencial. A prova de PIDs é só pids.length>=2 sobre o perfil, sem relacionar sobreposição. Só os testes de ID estrangeiro e de doc+perfil observam bloqueio real, via pg_stat_activity e lock mantido por outra conexão. Os clientes a/b são usados para segurar locks e inativar perfil; as operações usam o pool do app.",
+            "correction": "Em pelo menos saldo, estorno e fechamento, observar wait_event_type='Lock' (ou pg_locks) antes de liberar, para certificar a contenção."
+          },
+          {
+            "priority": "P3",
+            "title": "Saldo da conta relê todo o ledger em memória, duas vezes por pagamento",
+            "files": [
+              "lib/financeiro/services/carteiras-service.ts:40-59 (saldoCarteiraGasto)"
+            ],
+            "proof": "findMany de todos os movimentos da conta dentro da transação (timeout de 20 s, apply.ts via emTransacaoGasto), uma vez na checagem de saldo e outra ao gravar. Em contas com muito histórico, a operação falha com segurança por timeout, mas fica indisponível.",
+            "correction": "Somar via SQL (numeric) mantendo as recusas de precisão legada (aggregate/queryRaw), ou materializar o contador sob o mesmo lock."
+          },
+          {
+            "priority": "P3",
+            "title": "Registrar como limitação de implantação e comportamento",
+            "files": [
+              "app/api/financeiro/pagar/operacoes/route.ts:20-21",
+              "lib/gastos/operacoes.ts:17-23",
+              "lib/gastos/apply.ts:244-269",
+              "lib/financeiro/services/fechamento-service.ts (fecharMes)",
+              "prisma/migrations/20261022120000_gastos_operacoes_atomicas/migration.sql:2,823"
+            ],
+            "proof": "(i) O estorno HUB agora exige PerfilMembro (G001). Sem os grants empresariais, o operador recebe 403 onde antes funcionava. Isso é o gate externo já declarado, mas deve constar no relatório como regressão de produção até a concessão. (ii) Pagamentos anteriores ao M1 (sem movimentoId/pagamentoId no histórico) ou títulos com perfilId NULL dão pagamento_exige_revisao/titulo_indisponivel sem caminho de resolução no UI. É 'ambíguo exige revisão' por desenho, mas é irrecuperável pelo UI. (iii) fecharMes: falha do snapshot DRE agora aborta o fechamento (antes era engolida), e a auditoria entrou na transação (antes era silenciosa). Mudança correta, mas comportamental. (iv) A migration G004 é a única com BEGIN/COMMIT explícitos (G001-G003 não têm). O caminho 'prisma migrate deploy' não foi exercido (psql -f; build com MIGRATION_SKIPPED). O baseline físico é 'pré-G001 gerado do Git', não o histórico real.",
+            "correction": "Registrar (i)-(iv) em GOAL/RELATORIO como limites e gates externos. Opcional: alinhar o estilo de transação da migration ao das anteriores."
+          },
+          {
+            "priority": "P3",
+            "title": "Documento só bloqueia nova despesa quando ligado a título",
+            "files": [
+              "lib/gastos/apply.ts:79-88"
+            ],
+            "proof": "Um documento já ligado a uma movimentação de outro Gasto G004 pode sustentar um novo GASTO_PAGO com outra chave. Isso é coerente com 'hash de bytes não é identidade universal' e com o pedido (só título), mas a deduplicação por fato depende do grupo/chave do chamador.",
+            "correction": "Documentar; revisar no G006/G010 quando houver associação foto/áudio."
+          }
+        ],
+        "evidenceVerified": {
+          "allowlist": "final-source-audit.json: 35 caminhos alterados, todos dentro da allowlist de 37 (os dois não alterados, documentos.test.ts e read-cache.test.ts, são condicionais); nenhum wildcard. Migrations G001-G003, access.ts, financeiro-scope.ts, auth*.ts, proxy.ts, package*.json, next.config e public/client-privacy-cache.js estão com hash inalterado; ancestrais G001/G002/G003 preservados; diffCheckExit=0; sem sobreposição com origin/main.",
+          "gates": "Recibos de todos os gates têm o mesmo apply.ts (7a371f76…) e a mesma migration (5cf8110b…), sourceUnchanged=true. Typecheck exit 0 (npm run typecheck, 4 GB). Build exit 0 com MIGRATION_SKIPPED. Vitest JSON: unit-focused 43, domínio PG 43, migration 6, G001 24, G002 97, PDV 6, V3/OS 109, G003 102, unit-regression 820; 0 falhas, 0 pending/todo, success=true. PG distintos: 43+6+24+97+6+109+102 = 387. Unitários distintos: 820+43−6 = 857.",
+          "migration": "gastos_validar_escopo (migration:706-821) difere da versão G002 (20261020130000:166-280) só pelo AND NOT (movimentacoes_financeiras AND g004_compensacao_individual_valida(j)) nas linhas 746-747. FKs compostas (id,perfilId) com CHECK/trigger cobrindo storeId NULL pessoal; RLS habilitado com 0 policies nas 9 tabelas; imutabilidade; contadores derivados só em pg_trigger_depth()>1; FK pagamento→movimento DEFERRABLE INITIALLY DEFERRED; constraint triggers finais no COMMIT (operação/resultado/auditoria/outbox/alocações/movimento/soma de títulos). O teste de migration prova owner não-super/NOBYPASSRLS e, separadamente, SET LOCAL ROLE gastos_g004_reader (não-owner) vendo 0 linhas.",
+          "domain": "Revalidação G001 opaca antes da transação e de novo (usuário, perfil, grants) dentro dela, inclusive no replay; clone do contexto recusado. Identidade UNIQUE(perfilId,chave)/(perfilId,grupoChave)/revisaoId com hash canônico; divergência dá 409; mesmo valor com chaves distintas é válido. Uma transação READ COMMITTED sem retry nem catch que engula erro. Ordem de locks no código bate com a documentada: usuário, chave, grupo/revisão, competências, documento, ciclos, títulos em ordem binária, perfil/grants, contas (mesma chave G002), originais. SELECTs de lock filtrados por perfil/loja (inclui NULL pessoal) e provados por teste com recurso estrangeiro travado em outra conexão. Centavos BRL ≤ 9e12 (zod + CHECK); saldo relido sob lock; conta histórica inativa só aceita compensação individual, e gasto novo é recusado; crédito não é caixa. Estornos limitados por pagamento, alocação e movimento (app + SQL). HUB: alvo resolvido uma vez, persistido, sem heurística por valor/horário. Sem eslint-disable, ts-ignore, skip ou fails nos diffs.",
+          "lint": "Mesmo comando (eslint . com formatter completo), mesmos hashes de eslint.config.mjs, package.json e package-lock.json, mesmo node_modules físico, Node v26.12.1 nos dois lados. G003 105E/113W e G004 105E/113W; 218 correspondentes, 0 adicionados, 0 removidos. Zero diagnóstico (messages=[]) nos arquivos alterados em lib/gastos, lib/financeiro, app/api/financeiro/pagar, test/gastos e FinanceiroRealContext. Lint focado: 30 arquivos com 0 erros e 0 avisos. A normalização EOL/offset é simétrica; os arquivos convertidos têm hash bruto idêntico entre G003 e G004."
+        },
+        "inspectedFiles": [
+          "REQUEST.txt",
+          "current/docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-004/{GOAL.md,CONTRATOS_OPERACOES.json,RELATORIO.md,REVISAO_R.json}",
+          "current/docs/decisions/OMNI-GESTAO-GASTOS-004-OPERACOES-ATOMICAS.md",
+          "G004.diff (inclui schema.prisma, migration e 35 arquivos)",
+          "current/prisma/migrations/20261022120000_gastos_operacoes_atomicas/migration.sql (integral)",
+          "current/prisma/migrations/20261020130000_gastos_contas_writers/migration.sql (função escopo)",
+          "current/lib/gastos/{apply,operacoes,operacao-schema,pagamentos,periodo,cartoes,fornecedores,documentos,financeiro-scope}.ts",
+          "current/lib/financeiro/services/{contas-pagar,movimentacoes,carteiras,fechamento,auditoria-financeira}-service.ts",
+          "current/lib/financeiro/pagamento-operacao-client.ts (+ test)",
+          "current/app/api/financeiro/pagar/{route.ts,operacoes/route.ts}",
+          "current/components/financeiro/lovable/context/FinanceiroRealContext.tsx",
+          "current/test/gastos/{g004-fixtures,operacoes.postgres,concorrencia-g004.postgres,rollback-g004.postgres,operacoes-http.postgres,cartoes.postgres,migration-g004.postgres}.test.ts",
+          "current/lib/gastos/apply.test.ts",
+          "current/eslint.config.mjs",
+          "evidence/{current-gates,final-source-audit,allowlist,lint-differential,lint-eol-source-proof,lint-global-g004,lint-focused-r3.receipt,sql-preapply-review-*,meio-r2-provision-receipt,vitest-g004.config.mjs,run-lint-differential.cjs,lint-diagnostics-formatter.cjs,run-matrix.cjs,run-v3-g004-r2.cjs}",
+          "evidence/*.receipt.json e *.vitest.json de todos os gates; build-r2.log; typecheck-postbuild-r7.log"
+        ],
+        "requiredBeforeApproval": [
+          "Corrigir o P1 (flag de recusa definitiva, revisão expirada no HUB) com testes unitário, HTTP e PG.",
+          "Fechar o P2 de fronteira de mês e fuso com teste PG, e o P2 de cobertura de injeção de falhas (PAGAR_TITULO/FATURA/ESTORNO, mensagem injetada).",
+          "Reexecutar os gates afetados (focados, PG domínio e regressões pertinentes, typecheck, build) e o lint diferencial individual G003→G004 com novos hashes.",
+          "Submeter o delta para revisão R, que decide o aceite da exceção de lint para os novos hashes.",
+          "Registrar P3 (i)-(iv) em GOAL/RELATORIO como limites ou gates externos."
+        ],
+        "limitations": [
+          "Revisão somente leitura: não executei testes, SQL, typecheck, build ou lint. A conformidade dos gates foi aferida pelos recibos, JSON do vitest, logs e hashes de fontes. Não recalculei os SHA-256 de lint e migration; usei os valores declarados e coerentes entre as evidências.",
+          "Provas PostgreSQL ocorreram em cluster descartável com baseline físico pré-G001 gerado do Git, não no histórico real de migrations. 'prisma migrate deploy' não foi exercido (MIGRATION_SKIPPED).",
+          "O owner SQL de QA não certifica produção. A prova RLS cobre leitura por papel não-owner; não vi prova de bloqueio de escrita não-owner. Sem FORCE RLS, e DBA/owner não é adversário, conforme o pedido.",
+          "Node local 26.12.1 contra package engines 24.x é limitação registrada; sem alteração de dependências.",
+          "Grants empresariais explícitos continuam pré-condição externa de implantação. Nenhuma homologação de produção, publicação, backfill ou G005 é declarada.",
+          "Não escrevi arquivos: REVISAO_R.json não foi alterado. Este parecer é a única saída."
+        ]
+      },
+      "provenance": {
+        "realClaudeCode": true,
+        "family": "Anthropic",
+        "requestedModel": "claude-sonnet-5-5",
+        "observedModels": [
+          "claude-sonnet-5-5"
+        ],
+        "sessionId": "411bdae8-3d6f-4ad9-a302-5bf10c49d0f6",
+        "cli": "2.1.288 (Claude Code)",
+        "startedAt": "2026-10-22T16:56:08.731Z",
+        "finishedAt": "2026-10-22T17:09:09.947Z",
+        "exitCode": 0,
+        "readTools": 102,
+        "inputManifestSha256": "ba816b1e92cfd09e3a8a32abd323a0c29fd3f0025992b3adc80dec5ec43b0172",
+        "promptSha256": "b431c957d136b097a0abbd786997ea274d659672a4efe3690b481ce586d1b71d",
+        "eventsSha256": "a86d586379a25ceacd5e7723abb93614fbc815be087ab2125f313a535cac8d8c",
+        "resultSha256": "87e4bc3c0c4d06f0047ed4734b930adc2e0cbab10f3ccd599c4acd97a90487f3",
+        "runResultSha256": "fde090970f27f86d62f23f04a816c83b372be0211a490b3902c7f211be14d49c",
+        "currentLintHashes": [
+          "67bcd38707df8c3687cbf316e913cb6d5a4a669c0318f94b8af062b2b1a15fbf",
+          "75be6df5f023b7d57a20b0b1a6aa56e59b7a4420459fb8e3667cc8717327dd80",
+          "f947b93162f6306d656a8280d01e9c940fddc2b7b1f37a3f874c33067cdb980f"
+        ],
+        "reviewContainsAllCurrentLintHashes": true,
+        "productionApproval": false
+      }
+    },
+    {
+      "goal": "OMNI-GESTAO-GASTOS-004",
+      "tag": "r2",
+      "review": {
+        "verdict": "APPROVED",
+        "reviewer": {
+          "model": "claude-sonnet-5-5 (Anthropic, Claude Code)",
+          "mode": "somente leitura (Read/Glob/Grep); nenhum comando, SQL, hash ou edição; sem credenciais/.env",
+          "independence": "Revisão nova. Não herdei o aceite do R2 G003 nem o pré-parecer de lint da R1. O parecer R1 (CHANGES_REQUESTED) foi lido e permanece preservado."
+        },
+        "scope": "G004 C4, delta R1→R2 sobre a base 451b0e41ccf96215ed6c30e45ea2844dd0101faf. Cobre as correções do P1, dos dois P2 e do P3 de contenção, os gates repetidos, a exceção de lint sobre os hashes novos e as condições do commit local. Schema e migration G004 têm o mesmo SHA da R1 (migration 5cf8110b…). Não reabri a migration nesta rodada; a revisão integral dela é a da R1.",
+        "approvedForLocalCommit": true,
+        "productionApproval": false,
+        "lintExceptionAccepted": true,
+        "lintExceptionNote": "Aceite expresso e limitado aos hashes abaixo. Critérios conferidos nos arquivos: mesmo comando eslint '.' com formatter completo, mesmos hashes de eslint.config.mjs (26ac6490…), package.json (83f615fa…) e package-lock.json (21048103…), mesmo node_modules físico, Node v26.12.1 nos dois lados. G003 e G004 têm 105 erros e 113 avisos. A comparação individual deu 218 correspondentes, added=[] e removed=[]. Todos os arquivos alterados em lib/gastos, lib/financeiro, app/api/financeiro/pagar, test/gastos e FinanceiroRealContext estão com errorCount=0 e warningCount=0 no lint-global-g004.json. Os 18 arquivos novos do G004 também estão sem diagnóstico. A prova EOL/offset é simétrica: o hash bruto é idêntico em G003 e G004 e o diagnóstico continua presente. O aceite não cobre o lint global (BASELINE_FAIL histórico) e não vale para nenhum outro hash. Qualquer mudança de fonte, config ou deps invalida o aceite.",
+        "lintEvidenceHashes": {
+          "baseline_g003": "67bcd38707df8c3687cbf316e913cb6d5a4a669c0318f94b8af062b2b1a15fbf",
+          "current_g004": "7c3f86e9c8ff9fba22685ff69172daa8d68ea30265f197e275476a7d1bba3eb7",
+          "differential": "ae3ecf7dd6dd4a11727a06b72778c749a1c8cba1c90cbc01f07ace817f970f6c",
+          "provenance": "Baseline e current estão em lint-differential.json, current-gates.json, RELATORIO.md e no diff do CONTRATOS_OPERACOES.json, e batem entre si. O hash do differential está em current-gates.json, RELATORIO.md e no diff do CONTRATOS; não aparece dentro do próprio lint-differential.json. Não recalculei nenhum SHA-256, porque as ferramentas permitidas não executam hash."
+        },
+        "r1FindingsResolution": [
+          {
+            "id": "P1 recibo preso / revisão expirada: RESOLVIDO",
+            "verified": "app/api/financeiro/pagar/route.ts:356-359 devolve operacaoRejeitada para OperacaoGastoError 4xx, exceto acesso_negado e operacao_conteudo_divergente. O client (lib/financeiro/pagamento-operacao-client.ts:105-106) só libera o recibo com operacaoId exato, flag true e status 4xx. Percorri os caminhos de replay (apply.ts:60-74 e 224-236): uma operação já aplicada devolve o resultado persistido antes de qualquer checagem de período, expiração ou título. Nesses caminhos os únicos erros 4xx possíveis são acesso_negado e operacao_conteudo_divergente, que são justamente os excluídos. Logo, uma recusa liberada nunca esconde um COMMIT anterior. A revisão expirada vira recusa definitiva 409 sem renovar data, versão ou alvo (operacoes.ts:96). Os testes cobrem o cenário de ponta a ponta. O unitário prova que 4xx com flag libera a chave e que 5xx, 409 sem flag e ID divergente a conservam. O HTTP/PG prova período fechado → recibo liberado → reabertura → nova chave → um único ESTORNO, saldo 100000. Outro HTTP/PG prova 503 por trigger na outbox, chave conservada, +31 min, revisao_expirada com snapshot idêntico e recibo liberado, e depois nova chave com um único estorno. Um terceiro prova que o grant revogado devolve 403 acesso_negado com a chave mantida, e que a restauração do acesso faz replay dos mesmos IDs."
+          },
+          {
+            "id": "P2 fuso America/Sao_Paulo: RESOLVIDO",
+            "verified": "fechamento-service.ts:71-73 faz dateToDataRef usar diaSaoPaulo. Isso vale para fecharDia sem data (linha 152), Date explícita (151) e verificarPeriodoFechado (123). Três casos PG em operacoes.postgres.test.ts cobrem o diário e o mensal em 01:59Z e 03:00Z de 01/11, a reabertura e o replay com Date fake em 2026-12-01 sem mudar pagoEm. Cobrem também fecharDia() sem data em 01:59Z, que resulta em 2026-10-31."
+          },
+          {
+            "id": "P2 injeções de falha: RESOLVIDO",
+            "verified": "rollback-g004.postgres.test.ts:30 exige a mensagem G004_QA_FAILURE nas 10 injeções originais. Três casos novos exigem G004_QA_FAILURE_DELTA, na projeção do UPDATE em contas_pagar_titulos (PAGAR_TITULO), no UPDATE do título da fatura com 2 alocações e no UPDATE do contador da alocação original do estorno. Cada caso compara o snapshot integral antes e depois do rollback e aplica a mesma chave depois de remover só o trigger de QA. Os ids da fatura são ordenados em binário, então o alvo é o segundo título processado. O DDL de QA novo está revisado em sql-preapply-review-r2-delta.json (newMigration=false, canonicalTriggersDisabled=false, productionDDL=false)."
+          },
+          {
+            "id": "P3 contenção: RESOLVIDO",
+            "verified": "concorrencia-g004.postgres.test.ts: disputarSobLock segura o recurso numa transação (carteira FOR UPDATE, ou o advisory lock de competência). Em seguida exige, via pg_stat_activity e pg_blocking_pids (dependência transitiva até o detentor), esperando.length igual ao número de operações com wait_event_type='Lock'. Só então libera. Usado em saldo, estorno e fechamento. Não serializa as operações nem altera timeout ou retry do produto."
+          },
+          {
+            "id": "P3 limites de desempenho, implantação, legado e documento: REGISTRADOS",
+            "verified": "GOAL, decisão e RELATORIO registram: 403 sem PerfilMembro empresarial, legado sem resolução no UI, fecharMes abortando em falha de DRE ou auditoria, custo linear do ledger com timeout seguro de 20 s, pipeline de migration não ensaiado (psql -f, MIGRATION_SKIPPED), RLS não-owner provada só para leitura e documento não sendo identidade universal do fato."
+          }
+        ],
+        "findings": [
+          {
+            "priority": "P3",
+            "title": "Mudança de dia civil em verificarPeriodoFechado(new Date()) afeta chamadores legados",
+            "file": "lib/financeiro/services/fechamento-service.ts:71-73",
+            "proof": "Os chamadores de verificarPeriodoFechado com Date estão em pdv/receber-conta*, vendas/[id]/*, financeiro/pagar|receber|movimentacoes, lib/operacoes-v3/pdv-servico-actions.ts e app/actions/operacoes.ts. Entre 21h e 24h de São Paulo eles passam a checar o dia SP em vez do dia UTC. O ajuste é consistente com o contrato bancário, e as regressões PG de PDV (6), V3/OS (109) e G002 passam. A documentação cita 'instantes Date', mas não lista esses chamadores.",
+            "correction": "Não bloqueia. Citar essa abrangência no relatório final como mudança comportamental intencional. A reconciliação ampla fica para o G005."
+          },
+          {
+            "priority": "P3",
+            "title": "acesso_negado e operacao_conteudo_divergente conservam o recibo por desenho",
+            "file": "app/api/financeiro/pagar/route.ts:358-359",
+            "proof": "Essas recusas não provam ausência de resultado anterior, então a chave fica. Um operador que perde o grant de forma permanente fica com o recibo preso para aquele título neste navegador até recuperar o acesso. Não corrompe dinheiro, e a regra é documentada e provada no PG HTTP.",
+            "correction": "Registrar como limite de implantação. Se necessário, tratar com um fluxo autorizado separado, sem heurística."
+          },
+          {
+            "priority": "P3",
+            "title": "Evidência e testes com pontos menores",
+            "file": "evidence/lint-differential.json (refreshCurrentOnly.reason); test/gastos/concorrencia-g004.postgres.test.ts (disputarSobLock)",
+            "proof": "(a) O texto de refreshCurrentOnly.reason descreve um delta anterior e não o desta rodada. Os hashes e os dados estão corretos, é só cosmético. (b) O prazo de 3 s para observar os dois waiters pode gerar falso negativo em máquina lenta. Falha fechada, nunca falso positivo. (c) O Date fake do vitest troca apenas o relógio do Node, não o now() do PostgreSQL, e os asserts não dependem do now() do banco.",
+            "correction": "Opcional. Nenhuma ação é condição do commit."
+          }
+        ],
+        "evidenceVerified": {
+          "allowlist": "final-source-audit.json: pass=true, head=451b0e41…, 35 caminhos alterados dentro da allowlist de 37, nenhum wildcard, indexEmpty=true, diffCheckExit=0. Migrations G001-G003, access.ts, financeiro-scope.ts, auth*.ts, proxy.ts, package*.json, next.config.mjs e public/client-privacy-cache.js estão com hash inalterado. Ancestrais G001/G002/G003 preservados, sem sobreposição com o remoto, checkout primária preservada.",
+          "gates": "Vitest JSON (success=true, 0 falhas, 0 pending, 0 todo; nenhum teste com status skipped, pending, todo ou failed): unit-focused-r5 45, pg-domain-review-r9 51, pg-migration-meio-r2 6, g001-r3 24, g002-r3 97, pdv-r3 6, v3-g004-r3 109, g003-r3 102, unit-regression-r4 820, pg-routes-g002-r4 41. PG distintos: 51+6+24+97+6+109+102 = 395. Os 41 de pg-routes-g002-r4 vêm de writers-routes.postgres.test.ts, que já faz parte do g002-r3, e por isso não são somados. Unitários distintos: 820+45−6 = 859. Typecheck exit 0, build exit 0 com MIGRATION_SKIPPED e 'Compiled successfully', lint focado exit 0 (30 arquivos). Cada recibo tem sourceUnchanged=true. Os hashes dos fontes de código (route.ts 21c29598…, fechamento-service a0dbaaf9…, apply.ts 7a371f76…, operacoes-http.test 1a23ed00…, migration 5cf8110b…, schema.prisma 306e7b8c…) são idênticos entre o final-source-audit e os recibos que os listam. Os fontes de código não mudaram depois dos gates. Só os cinco documentos .md/.json do GOAL mudaram.",
+          "migrationAndSchema": "Mesmo SHA da R1 (5cf8110b…). Nenhuma newMigration no delta; sql-preapply-review-r2-delta.json confirma. A prova de migration (6 testes) é da rodada meio-r2, declarada como inalterada e coerente com a ausência de mudança em SQL ou schema.",
+          "domainAndLocks": "Lidos apply.ts, operacoes.ts, periodo.ts e operacao-schema.ts integrais. A ordem de locks segue o contrato: usuário, chave, grupo/revisão, competências, documento, ciclos, títulos em ordem binária, perfil e grants, contas, originais. Uma transação READ COMMITTED, sem retry nem catch que engula erro. A revalidação G001 é feita antes da transação e de novo dentro dela, inclusive no replay."
+        },
+        "inspectedFiles": [
+          "REQUEST.txt",
+          "evidence/R2_DELTA.md",
+          "previous/review-r1-structured.json",
+          "R1-to-R2.diff (872 linhas, integral)",
+          "evidence/current-gates.json",
+          "evidence/final-source-audit.json",
+          "evidence/lint-differential.json (configuração, hashes, matched/added/removed, provas EOL)",
+          "evidence/lint-global-g004.json (entradas de lib/gastos, lib/financeiro, app/api/financeiro/pagar, test/gastos e FinanceiroRealContext)",
+          "evidence/sql-preapply-review-r2-delta.json",
+          "evidence/*.receipt.json (pg-domain-review-r9 integral; grep de exitCode, sourceUnchanged e hashes nos demais)",
+          "evidence/*.vitest.json (contagens e nomes dos testes novos)",
+          "evidence/build-r3.log",
+          "current/app/api/financeiro/pagar/route.ts (PATCH)",
+          "current/lib/financeiro/pagamento-operacao-client.ts",
+          "current/lib/financeiro/services/fechamento-service.ts",
+          "current/lib/gastos/{apply,operacoes,periodo,operacao-schema}.ts",
+          "grep dos OperacaoGastoError em current/lib",
+          "grep dos chamadores de verificarPeriodoFechado e fecharDia em current/"
+        ],
+        "limitations": [
+          "Revisão somente leitura. Não executei testes, SQL, typecheck, build nem lint. Os resultados dos gates foram aferidos pelos recibos, pelos JSON do vitest, pelos logs e pelos hashes que eles declaram.",
+          "Não recalculei SHA-256 de lint, de migration ou de fontes. Conferi igualdade e coerência entre as evidências.",
+          "As provas PostgreSQL foram feitas em cluster descartável com baseline físico pré-G001 gerado do Git. Isso não é o histórico real de migrations, e prisma migrate deploy não foi exercido (MIGRATION_SKIPPED). A prova de RLS não-owner é de leitura. O owner de QA não certifica produção.",
+          "A migration e o schema não foram relidos nesta rodada. Sua aprovação vem da R1, com SHA idêntico.",
+          "Node local 26.12.1 contra package engines 24.x é limitação registrada, sem alteração de dependências.",
+          "Grants empresariais explícitos continuam pré-condição externa de implantação. O estorno HUB retorna 403 sem PerfilMembro até a concessão por operador autorizado.",
+          "Condição do commit local: só os 37 caminhos da allowlist, com git add por caminho exato. Nenhum fonte de código pode mudar depois deste parecer, pois isso invalidaria os gates e o aceite de lint. Apenas o REVISAO_R.json pode receber o registro deste parecer.",
+          "Nenhuma homologação de produção, publicação, backfill, grant produtivo ou G005 é declarada ou autorizada."
+        ]
+      },
+      "returnedEnvelope": {
+        "goal": "OMNI-GESTAO-GASTOS-004",
+        "tag": "r2-delta",
+        "review": {
+          "verdict": "APPROVED",
+          "reviewer": {
+            "model": "claude-sonnet-5-5 (Anthropic, Claude Code)",
+            "mode": "somente leitura (Read/Glob/Grep); nenhum comando, SQL, hash ou edição; sem credenciais/.env",
+            "independence": "Revisão nova. Não herdei o aceite do R2 G003 nem o pré-parecer de lint da R1. O parecer R1 (CHANGES_REQUESTED) foi lido e permanece preservado."
+          },
+          "scope": "G004 C4, delta R1→R2 sobre a base 451b0e41ccf96215ed6c30e45ea2844dd0101faf. Cobre as correções do P1, dos dois P2 e do P3 de contenção, os gates repetidos, a exceção de lint sobre os hashes novos e as condições do commit local. Schema e migration G004 têm o mesmo SHA da R1 (migration 5cf8110b…). Não reabri a migration nesta rodada; a revisão integral dela é a da R1.",
+          "approvedForLocalCommit": true,
+          "productionApproval": false,
+          "lintExceptionAccepted": true,
+          "lintExceptionNote": "Aceite expresso e limitado aos hashes abaixo. Critérios conferidos nos arquivos: mesmo comando eslint '.' com formatter completo, mesmos hashes de eslint.config.mjs (26ac6490…), package.json (83f615fa…) e package-lock.json (21048103…), mesmo node_modules físico, Node v26.12.1 nos dois lados. G003 e G004 têm 105 erros e 113 avisos. A comparação individual deu 218 correspondentes, added=[] e removed=[]. Todos os arquivos alterados em lib/gastos, lib/financeiro, app/api/financeiro/pagar, test/gastos e FinanceiroRealContext estão com errorCount=0 e warningCount=0 no lint-global-g004.json. Os 18 arquivos novos do G004 também estão sem diagnóstico. A prova EOL/offset é simétrica: o hash bruto é idêntico em G003 e G004 e o diagnóstico continua presente. O aceite não cobre o lint global (BASELINE_FAIL histórico) e não vale para nenhum outro hash. Qualquer mudança de fonte, config ou deps invalida o aceite.",
+          "lintEvidenceHashes": {
+            "baseline_g003": "67bcd38707df8c3687cbf316e913cb6d5a4a669c0318f94b8af062b2b1a15fbf",
+            "current_g004": "7c3f86e9c8ff9fba22685ff69172daa8d68ea30265f197e275476a7d1bba3eb7",
+            "differential": "ae3ecf7dd6dd4a11727a06b72778c749a1c8cba1c90cbc01f07ace817f970f6c",
+            "provenance": "Baseline e current estão em lint-differential.json, current-gates.json, RELATORIO.md e no diff do CONTRATOS_OPERACOES.json, e batem entre si. O hash do differential está em current-gates.json, RELATORIO.md e no diff do CONTRATOS; não aparece dentro do próprio lint-differential.json. Não recalculei nenhum SHA-256, porque as ferramentas permitidas não executam hash."
+          },
+          "r1FindingsResolution": [
+            {
+              "id": "P1 recibo preso / revisão expirada: RESOLVIDO",
+              "verified": "app/api/financeiro/pagar/route.ts:356-359 devolve operacaoRejeitada para OperacaoGastoError 4xx, exceto acesso_negado e operacao_conteudo_divergente. O client (lib/financeiro/pagamento-operacao-client.ts:105-106) só libera o recibo com operacaoId exato, flag true e status 4xx. Percorri os caminhos de replay (apply.ts:60-74 e 224-236): uma operação já aplicada devolve o resultado persistido antes de qualquer checagem de período, expiração ou título. Nesses caminhos os únicos erros 4xx possíveis são acesso_negado e operacao_conteudo_divergente, que são justamente os excluídos. Logo, uma recusa liberada nunca esconde um COMMIT anterior. A revisão expirada vira recusa definitiva 409 sem renovar data, versão ou alvo (operacoes.ts:96). Os testes cobrem o cenário de ponta a ponta. O unitário prova que 4xx com flag libera a chave e que 5xx, 409 sem flag e ID divergente a conservam. O HTTP/PG prova período fechado → recibo liberado → reabertura → nova chave → um único ESTORNO, saldo 100000. Outro HTTP/PG prova 503 por trigger na outbox, chave conservada, +31 min, revisao_expirada com snapshot idêntico e recibo liberado, e depois nova chave com um único estorno. Um terceiro prova que o grant revogado devolve 403 acesso_negado com a chave mantida, e que a restauração do acesso faz replay dos mesmos IDs."
+            },
+            {
+              "id": "P2 fuso America/Sao_Paulo: RESOLVIDO",
+              "verified": "fechamento-service.ts:71-73 faz dateToDataRef usar diaSaoPaulo. Isso vale para fecharDia sem data (linha 152), Date explícita (151) e verificarPeriodoFechado (123). Três casos PG em operacoes.postgres.test.ts cobrem o diário e o mensal em 01:59Z e 03:00Z de 01/11, a reabertura e o replay com Date fake em 2026-12-01 sem mudar pagoEm. Cobrem também fecharDia() sem data em 01:59Z, que resulta em 2026-10-31."
+            },
+            {
+              "id": "P2 injeções de falha: RESOLVIDO",
+              "verified": "rollback-g004.postgres.test.ts:30 exige a mensagem G004_QA_FAILURE nas 10 injeções originais. Três casos novos exigem G004_QA_FAILURE_DELTA, na projeção do UPDATE em contas_pagar_titulos (PAGAR_TITULO), no UPDATE do título da fatura com 2 alocações e no UPDATE do contador da alocação original do estorno. Cada caso compara o snapshot integral antes e depois do rollback e aplica a mesma chave depois de remover só o trigger de QA. Os ids da fatura são ordenados em binário, então o alvo é o segundo título processado. O DDL de QA novo está revisado em sql-preapply-review-r2-delta.json (newMigration=false, canonicalTriggersDisabled=false, productionDDL=false)."
+            },
+            {
+              "id": "P3 contenção: RESOLVIDO",
+              "verified": "concorrencia-g004.postgres.test.ts: disputarSobLock segura o recurso numa transação (carteira FOR UPDATE, ou o advisory lock de competência). Em seguida exige, via pg_stat_activity e pg_blocking_pids (dependência transitiva até o detentor), esperando.length igual ao número de operações com wait_event_type='Lock'. Só então libera. Usado em saldo, estorno e fechamento. Não serializa as operações nem altera timeout ou retry do produto."
+            },
+            {
+              "id": "P3 limites de desempenho, implantação, legado e documento: REGISTRADOS",
+              "verified": "GOAL, decisão e RELATORIO registram: 403 sem PerfilMembro empresarial, legado sem resolução no UI, fecharMes abortando em falha de DRE ou auditoria, custo linear do ledger com timeout seguro de 20 s, pipeline de migration não ensaiado (psql -f, MIGRATION_SKIPPED), RLS não-owner provada só para leitura e documento não sendo identidade universal do fato."
+            }
+          ],
+          "findings": [
+            {
+              "priority": "P3",
+              "title": "Mudança de dia civil em verificarPeriodoFechado(new Date()) afeta chamadores legados",
+              "file": "lib/financeiro/services/fechamento-service.ts:71-73",
+              "proof": "Os chamadores de verificarPeriodoFechado com Date estão em pdv/receber-conta*, vendas/[id]/*, financeiro/pagar|receber|movimentacoes, lib/operacoes-v3/pdv-servico-actions.ts e app/actions/operacoes.ts. Entre 21h e 24h de São Paulo eles passam a checar o dia SP em vez do dia UTC. O ajuste é consistente com o contrato bancário, e as regressões PG de PDV (6), V3/OS (109) e G002 passam. A documentação cita 'instantes Date', mas não lista esses chamadores.",
+              "correction": "Não bloqueia. Citar essa abrangência no relatório final como mudança comportamental intencional. A reconciliação ampla fica para o G005."
+            },
+            {
+              "priority": "P3",
+              "title": "acesso_negado e operacao_conteudo_divergente conservam o recibo por desenho",
+              "file": "app/api/financeiro/pagar/route.ts:358-359",
+              "proof": "Essas recusas não provam ausência de resultado anterior, então a chave fica. Um operador que perde o grant de forma permanente fica com o recibo preso para aquele título neste navegador até recuperar o acesso. Não corrompe dinheiro, e a regra é documentada e provada no PG HTTP.",
+              "correction": "Registrar como limite de implantação. Se necessário, tratar com um fluxo autorizado separado, sem heurística."
+            },
+            {
+              "priority": "P3",
+              "title": "Evidência e testes com pontos menores",
+              "file": "evidence/lint-differential.json (refreshCurrentOnly.reason); test/gastos/concorrencia-g004.postgres.test.ts (disputarSobLock)",
+              "proof": "(a) O texto de refreshCurrentOnly.reason descreve um delta anterior e não o desta rodada. Os hashes e os dados estão corretos, é só cosmético. (b) O prazo de 3 s para observar os dois waiters pode gerar falso negativo em máquina lenta. Falha fechada, nunca falso positivo. (c) O Date fake do vitest troca apenas o relógio do Node, não o now() do PostgreSQL, e os asserts não dependem do now() do banco.",
+              "correction": "Opcional. Nenhuma ação é condição do commit."
+            }
+          ],
+          "evidenceVerified": {
+            "allowlist": "final-source-audit.json: pass=true, head=451b0e41…, 35 caminhos alterados dentro da allowlist de 37, nenhum wildcard, indexEmpty=true, diffCheckExit=0. Migrations G001-G003, access.ts, financeiro-scope.ts, auth*.ts, proxy.ts, package*.json, next.config.mjs e public/client-privacy-cache.js estão com hash inalterado. Ancestrais G001/G002/G003 preservados, sem sobreposição com o remoto, checkout primária preservada.",
+            "gates": "Vitest JSON (success=true, 0 falhas, 0 pending, 0 todo; nenhum teste com status skipped, pending, todo ou failed): unit-focused-r5 45, pg-domain-review-r9 51, pg-migration-meio-r2 6, g001-r3 24, g002-r3 97, pdv-r3 6, v3-g004-r3 109, g003-r3 102, unit-regression-r4 820, pg-routes-g002-r4 41. PG distintos: 51+6+24+97+6+109+102 = 395. Os 41 de pg-routes-g002-r4 vêm de writers-routes.postgres.test.ts, que já faz parte do g002-r3, e por isso não são somados. Unitários distintos: 820+45−6 = 859. Typecheck exit 0, build exit 0 com MIGRATION_SKIPPED e 'Compiled successfully', lint focado exit 0 (30 arquivos). Cada recibo tem sourceUnchanged=true. Os hashes dos fontes de código (route.ts 21c29598…, fechamento-service a0dbaaf9…, apply.ts 7a371f76…, operacoes-http.test 1a23ed00…, migration 5cf8110b…, schema.prisma 306e7b8c…) são idênticos entre o final-source-audit e os recibos que os listam. Os fontes de código não mudaram depois dos gates. Só os cinco documentos .md/.json do GOAL mudaram.",
+            "migrationAndSchema": "Mesmo SHA da R1 (5cf8110b…). Nenhuma newMigration no delta; sql-preapply-review-r2-delta.json confirma. A prova de migration (6 testes) é da rodada meio-r2, declarada como inalterada e coerente com a ausência de mudança em SQL ou schema.",
+            "domainAndLocks": "Lidos apply.ts, operacoes.ts, periodo.ts e operacao-schema.ts integrais. A ordem de locks segue o contrato: usuário, chave, grupo/revisão, competências, documento, ciclos, títulos em ordem binária, perfil e grants, contas, originais. Uma transação READ COMMITTED, sem retry nem catch que engula erro. A revalidação G001 é feita antes da transação e de novo dentro dela, inclusive no replay."
+          },
+          "inspectedFiles": [
+            "REQUEST.txt",
+            "evidence/R2_DELTA.md",
+            "previous/review-r1-structured.json",
+            "R1-to-R2.diff (872 linhas, integral)",
+            "evidence/current-gates.json",
+            "evidence/final-source-audit.json",
+            "evidence/lint-differential.json (configuração, hashes, matched/added/removed, provas EOL)",
+            "evidence/lint-global-g004.json (entradas de lib/gastos, lib/financeiro, app/api/financeiro/pagar, test/gastos e FinanceiroRealContext)",
+            "evidence/sql-preapply-review-r2-delta.json",
+            "evidence/*.receipt.json (pg-domain-review-r9 integral; grep de exitCode, sourceUnchanged e hashes nos demais)",
+            "evidence/*.vitest.json (contagens e nomes dos testes novos)",
+            "evidence/build-r3.log",
+            "current/app/api/financeiro/pagar/route.ts (PATCH)",
+            "current/lib/financeiro/pagamento-operacao-client.ts",
+            "current/lib/financeiro/services/fechamento-service.ts",
+            "current/lib/gastos/{apply,operacoes,periodo,operacao-schema}.ts",
+            "grep dos OperacaoGastoError em current/lib",
+            "grep dos chamadores de verificarPeriodoFechado e fecharDia em current/"
+          ],
+          "limitations": [
+            "Revisão somente leitura. Não executei testes, SQL, typecheck, build nem lint. Os resultados dos gates foram aferidos pelos recibos, pelos JSON do vitest, pelos logs e pelos hashes que eles declaram.",
+            "Não recalculei SHA-256 de lint, de migration ou de fontes. Conferi igualdade e coerência entre as evidências.",
+            "As provas PostgreSQL foram feitas em cluster descartável com baseline físico pré-G001 gerado do Git. Isso não é o histórico real de migrations, e prisma migrate deploy não foi exercido (MIGRATION_SKIPPED). A prova de RLS não-owner é de leitura. O owner de QA não certifica produção.",
+            "A migration e o schema não foram relidos nesta rodada. Sua aprovação vem da R1, com SHA idêntico.",
+            "Node local 26.12.1 contra package engines 24.x é limitação registrada, sem alteração de dependências.",
+            "Grants empresariais explícitos continuam pré-condição externa de implantação. O estorno HUB retorna 403 sem PerfilMembro até a concessão por operador autorizado.",
+            "Condição do commit local: só os 37 caminhos da allowlist, com git add por caminho exato. Nenhum fonte de código pode mudar depois deste parecer, pois isso invalidaria os gates e o aceite de lint. Apenas o REVISAO_R.json pode receber o registro deste parecer.",
+            "Nenhuma homologação de produção, publicação, backfill, grant produtivo ou G005 é declarada ou autorizada."
+          ]
+        },
+        "provenance": {
+          "realClaudeCode": true,
+          "family": "Anthropic",
+          "requestedModel": "claude-sonnet-5-5",
+          "productionApproval": false
+        }
+      },
+      "provenance": {
+        "realClaudeCode": true,
+        "family": "Anthropic",
+        "requestedModel": "claude-sonnet-5-5",
+        "observedModels": [
+          "claude-sonnet-5-5"
+        ],
+        "sessionId": "f7d50172-1608-4e03-bce6-17f291f3c668",
+        "cli": "2.1.288 (Claude Code)",
+        "startedAt": "2026-10-22T17:46:32.816Z",
+        "finishedAt": "2026-10-22T17:51:28.333Z",
+        "exitCode": 0,
+        "readTools": 49,
+        "inputManifestSha256": "904234a87f0319391e17d8f35c31b7966b48e6b27bea587d3451a4657ff86ea7",
+        "promptSha256": "20580cf1a2f14a4c5b4e5d21a63d7fb6ab736311bef8a7a22b620367101f29a0",
+        "eventsSha256": "3ff718e7847851d5ee9787ead630168491749ecd9030ed6fe425241d5b084a0a",
+        "resultSha256": "d88e1cbc32f35b0283b4602b16712e081453eed8ab1ea8292080dbee655b4570",
+        "runResultSha256": "7fdfd30d6c440e224062342be2cf4461c95dd4d9529720a0e705b291a2e63b94",
+        "currentLintHashes": [
+          "67bcd38707df8c3687cbf316e913cb6d5a4a669c0318f94b8af062b2b1a15fbf",
+          "7c3f86e9c8ff9fba22685ff69172daa8d68ea30265f197e275476a7d1bba3eb7",
+          "ae3ecf7dd6dd4a11727a06b72778c749a1c8cba1c90cbc01f07ace817f970f6c"
+        ],
+        "reviewContainsAllCurrentLintHashes": true,
+        "productionApproval": false
+      }
+    }
+  ]
+}

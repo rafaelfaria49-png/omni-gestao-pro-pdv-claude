@@ -1,0 +1,300 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-004",
+  "base": "451b0e41ccf96215ed6c30e45ea2844dd0101faf",
+  "classificacao": "C4",
+  "allowlist": "GOAL.md",
+  "identity": {
+    "namespace": [
+      "perfilId",
+      "chave"
+    ],
+    "hash": "SHA256 de proposta normalizada/campos ordenados; centavos canônicos; conjuntos de alocações ordenados",
+    "sameKeySamePayload": "resultado/IDs persistidos, autorização atual revalidada",
+    "sameKeyDifferentPayload": "409 sem efeitos",
+    "sameGroupOtherKey": "409; uma operação por grupo/revisão",
+    "browser": "recibo persistente UUID/hashes + Web Lock; ACK da mesma chave; falha incerta conserva intenção"
+  },
+  "context": {
+    "source": "G001 opaco WeakSet e revalidação atual",
+    "pessoal": "um perfil por AdminUser sem Store; somente motor interno",
+    "empresa": "Store real + AdminUserStore + PerfilMembro não revogado + papel atual",
+    "http": "/api/financeiro/pagar/operacoes resolve somente EMPRESA no servidor"
+  },
+  "api": [
+    {
+      "file": "lib/gastos/operacoes.ts",
+      "functions": [
+        "prepararRevisaoGasto",
+        "corrigirRevisaoGasto",
+        "cancelarRevisaoGasto",
+        "expirarRevisaoGasto",
+        "contextoEmpresaOperacao"
+      ]
+    },
+    {
+      "file": "lib/gastos/apply.ts",
+      "functions": [
+        "aplicarOperacaoGasto",
+        "estornarPagamentoHub"
+      ]
+    },
+    {
+      "file": "lib/gastos/cartoes.ts",
+      "functions": [
+        "cadastrarCartaoGasto",
+        "cadastrarCicloGasto"
+      ]
+    }
+  ],
+  "models": [
+    "GastoRevisao",
+    "FinanceiroOperacao",
+    "Gasto",
+    "PagamentoFinanceiro",
+    "AlocacaoPagamento",
+    "CartaoInstrumento",
+    "CartaoCiclo",
+    "FinanceiroOperacaoEvento",
+    "GastoOutbox"
+  ],
+  "effects": {
+    "GASTO_PAGO": {
+      "gasto": 1,
+      "titulo": 0,
+      "pagamento": 1,
+      "alocacao": 1,
+      "saida": 1
+    },
+    "CONTA_PAGAR": {
+      "gasto": 1,
+      "titulo": 1,
+      "pagamento": 0,
+      "saida": 0
+    },
+    "PAGAR_TITULO": {
+      "gasto": 0,
+      "tituloNovo": 0,
+      "pagamento": 1,
+      "alocacao": "título existente",
+      "saida": 1
+    },
+    "COMPRA_CREDITO": {
+      "gasto": 1,
+      "titulo": "1 por parcela/ciclo explicitamente informado",
+      "pagamento": 0,
+      "saida": 0
+    },
+    "PAGAR_FATURA": {
+      "gasto": 0,
+      "tituloNovo": 0,
+      "pagamento": 1,
+      "alocacao": "N obrigações existentes do mesmo ciclo",
+      "saida": 1
+    },
+    "ESTORNAR_PAGAMENTO": {
+      "gasto": 0,
+      "tituloNovo": 0,
+      "pagamento": "1 compensatório",
+      "alocacao": "referência à alocação original",
+      "entrada": 1
+    },
+    "ESTORNAR_LEGADO": {
+      "public": false,
+      "pagamento": "compensatório; não backfilla pagamento antigo",
+      "movimento": "compensa movimento individual M1 identificado"
+    }
+  },
+  "canonical": {
+    "titles": "ContaPagarTitulo",
+    "money": "MovimentacaoFinanceira",
+    "balance": "CarteiraFinanceira",
+    "json": "projeção compatível com pagamentoId; interno soma alocações + somente JSON sem pagamentoId",
+    "precision": "centavos inteiros BRL positivos ≤9000000000000; precisão legada G002; anomalia recusa",
+    "bank": "saldoInicial + ledger sob lock, não limite de crédito/saldo materializado",
+    "dates": "dataGasto DATE; pagoEm UTC; dia bancário America/Sao_Paulo; competência/vencimento/createdAt distintos"
+  },
+  "locks": [
+    "AdminUser SHARE",
+    "advisory chave operação",
+    "grupo e revisão",
+    "competências ordenadas",
+    "documento",
+    "instrumentos/ciclos ordenados",
+    "todos os títulos em ordem binária",
+    "perfil/grants SHARE",
+    "todas as contas na chave G002 e ordem binária",
+    "pagamentos/alocações/movimentos originais"
+  ],
+  "transaction": {
+    "isolation": "READ COMMITTED",
+    "maxWaitMs": 5000,
+    "timeoutMs": 20000,
+    "commit": "operação/CAS/fato/título/pagamento/alocação/movimento/saldo/auditoria/outbox/resultado em uma transação",
+    "retryDeadlock": false,
+    "sqlErrors": "propagam rollback; não retornam sucesso"
+  },
+  "constraints": {
+    "migration": "prisma/migrations/20261022120000_gastos_operacoes_atomicas/migration.sql",
+    "sha256": "5cf8110b23c3f8114732ab1ac8a0f925225f14d47d8605e06fecb167c09b37c3",
+    "compositeFK": "id/perfilId + storeId IS NOT DISTINCT FROM, incluindo NULL pessoal",
+    "rls": "nove tabelas fechadas, nenhum policy público/BYPASS",
+    "immutable": "fatos + revisão/reserva com única transição",
+    "refund": "contadores derivados atômicos por original/alocação; fatos compensatórios imutáveis",
+    "deferred": "FK pagamento→movimento e consistência operação/resultado/auditoria/outbox/alocações/movimento no COMMIT"
+  },
+  "compat": {
+    "M1": "chaves distintas continuam duas baixas; replay de recibo M1 preservado",
+    "estornoHub": "idempotencyKey obrigatória e escolha do alvo persistida; sem catch de falha monetária",
+    "legacyAmbiguous": "recusa/revisão explícita; sem backfill",
+    "cards": "ciclo/parcela completos; sem PAN/CVV ou limite como caixa",
+    "supplier": "ID/documento válido/nome na loja atual; homônimo exige escolha; pessoal só contraparte textual",
+    "documents": "G003 privado; vínculo via mesmo TransactionClient; documento ligado a título exige pagar esse título"
+  },
+  "tests": {
+    "unitFocused": {
+      "label": "unit-focused-r5",
+      "tests": 45,
+      "failed": 0,
+      "pending": 0
+    },
+    "domain": {
+      "label": "pg-domain-review-r9",
+      "tests": 51,
+      "failed": 0,
+      "pending": 0
+    },
+    "migration": {
+      "label": "pg-migration-meio-r2",
+      "tests": 6,
+      "failed": 0,
+      "pending": 0
+    },
+    "g001": {
+      "label": "pg-regression-g001-r3",
+      "tests": 24,
+      "failed": 0,
+      "pending": 0
+    },
+    "g002": {
+      "label": "pg-regression-g002-r3",
+      "tests": 97,
+      "failed": 0,
+      "pending": 0
+    },
+    "pdv": {
+      "label": "pg-regression-pdv-r3",
+      "tests": 6,
+      "failed": 0,
+      "pending": 0
+    },
+    "osV3": {
+      "label": "v3-g004-r3",
+      "tests": 109,
+      "failed": 0,
+      "pending": 0
+    },
+    "g003": {
+      "label": "pg-regression-g003-r3",
+      "tests": 102,
+      "failed": 0,
+      "pending": 0
+    },
+    "unitRegressions": {
+      "label": "unit-regression-r4",
+      "tests": 820,
+      "failed": 0,
+      "pending": 0
+    },
+    "g002RoutesFinal": {
+      "label": "pg-routes-g002-r4",
+      "tests": 41,
+      "failed": 0,
+      "pending": 0,
+      "retestAlreadyCountedInG002": true
+    }
+  },
+  "acceptance": {
+    "A06": "financeiro comprovado; canal futuro",
+    "A07": "CAS/correção/cancelamento/expiração internos comprovados; UX G008",
+    "A08": "obrigações/pagamentos/centavos comprovados",
+    "A09": "identidade financeira comprovada; wamid/job G006/G007",
+    "A10": "um fato/grupo comprovado; associação mídia G010",
+    "A11": "cartão/crédito/fatura comprovados",
+    "A12": "contexto/contas/fornecedor/documento/período pertinentes comprovados",
+    "A16": "atomicidade/outbox persistida comprovadas; entrega G006/G008",
+    "A19": "regressão vendas/OS/estoque + cartões comprovada; rascunhos posteriores",
+    "allA01A20": false
+  },
+  "externalGates": [
+    "grants empresariais explícitos revisados antes de implantação",
+    "identidade/cutover do banco produtivo via fluxo separado",
+    "Node local26.12.1 versus engines24.x, sem alterar dependências",
+    "storage de Gastos somente fixture",
+    "sem implantação, WhatsApp, público pessoal ou G005"
+  ],
+  "quality": {
+    "typecheck": {
+      "status": "PASS",
+      "label": "typecheck-review-r9",
+      "exitCode": 0
+    },
+    "lintFocused": {
+      "status": "PASS",
+      "label": "lint-focused-r4",
+      "files": 30,
+      "errors": 0,
+      "warnings": 0
+    },
+    "lintGlobal": {
+      "status": "BASELINE_FAIL",
+      "errors": 105,
+      "warnings": 113
+    },
+    "lintDelta": {
+      "status": "PASS",
+      "newDiagnostics": 0,
+      "matched": 218,
+      "hashes": {
+        "global": "BASELINE_FAIL",
+        "delta": "PASS",
+        "baseline": {
+          "fileCount": 4476,
+          "errorCount": 105,
+          "warningCount": 113,
+          "fatalErrorCount": 0,
+          "sha256": "67bcd38707df8c3687cbf316e913cb6d5a4a669c0318f94b8af062b2b1a15fbf",
+          "sourceUnchanged": true
+        },
+        "current": {
+          "fileCount": 4494,
+          "errorCount": 105,
+          "warningCount": 113,
+          "fatalErrorCount": 0,
+          "sha256": "7c3f86e9c8ff9fba22685ff69172daa8d68ea30265f197e275476a7d1bba3eb7",
+          "sourceUnchanged": true
+        },
+        "matched": 218,
+        "added": 0,
+        "removed": 0,
+        "baselineSha256": "67bcd38707df8c3687cbf316e913cb6d5a4a669c0318f94b8af062b2b1a15fbf",
+        "currentSha256": "7c3f86e9c8ff9fba22685ff69172daa8d68ea30265f197e275476a7d1bba3eb7",
+        "differentialSha256": "ae3ecf7dd6dd4a11727a06b72778c749a1c8cba1c90cbc01f07ace817f970f6c"
+      }
+    },
+    "build": {
+      "status": "PASS",
+      "label": "build-r3",
+      "exitCode": 0,
+      "migration": "MIGRATION_SKIPPED"
+    },
+    "reviewR": "PENDING_DELTA_R2_REAL_SONNET_5_5"
+  },
+  "evidenceDirectory": "C:\\Users\\rafae\\.codex\\visualizations\\2026\\10\\21\\01a1601f-4e52-74a1-8887-2c958c8c5d2b\\G004-execution",
+  "productionApproval": false,
+  "counts": {
+    "postgresDistinct": 395,
+    "unitDistinct": 859,
+    "duplicateUnitExecutions": 6,
+    "duplicatePostgresExecutions": 41
+  }
+}

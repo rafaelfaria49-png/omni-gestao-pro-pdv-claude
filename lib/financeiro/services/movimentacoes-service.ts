@@ -15,6 +15,24 @@ import { dadosFinanceirosEmpresa, emTransacaoFinanceira, FinanceiroScopeError, p
 import type { ContaPagarTitulo, ContaReceberTitulo, MovimentacaoFinanceira, Prisma } from "@/generated/prisma"
 import { recalcularSaldoCarteira } from "@/lib/financeiro/services/carteiras-service"
 import { normalizePagarStatus, normalizeReceberStatus } from "@/lib/financeiro/contracts/status"
+import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
+import { storeDoContexto, type FinanceiroDb } from "@/lib/gastos/financeiro-scope"
+
+/** Apenas dentro da aplicação G004, após locks/validações; usa o ledger do HUB. */
+export async function criarMovimentoOperacaoGasto(tx: FinanceiroDb, ctx: FinanceiroContextoAutorizado, p: {
+  id: string; operacaoId: string; carteiraId: string; valor: bigint; pagoEm: Date; formaPagamento: string;
+  estorno: boolean; descricao: string; tituloId?: string; categoriaId?: string; compensaMovimentacaoId?: string
+}) {
+  return tx.movimentacaoFinanceira.create({ data: {
+    id: p.id, perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), operacaoFinanceiraId: p.operacaoId,
+    tipo: p.estorno ? "entrada" : "saida", origem: p.estorno ? "estorno_pagar" : "pagar",
+    referenciaId: p.tituloId ?? p.operacaoId, pagarTituloId: p.estorno ? null : p.tituloId ?? null,
+    categoriaId: p.estorno ? null : p.categoriaId ?? null, descricao: p.descricao,
+    carteiraId: p.carteiraId, valor: Number(p.valor) / 100, valorCentavos: p.valor.toString(), precisaoStatus: "CENTAVOS",
+    formaPagamento: p.formaPagamento, ocorridoEm: p.pagoEm,
+    compensaMovimentacaoId: p.compensaMovimentacaoId ?? null,
+  } })
+}
 
 // ─── tipos públicos ───────────────────────────────────────────────────────────
 

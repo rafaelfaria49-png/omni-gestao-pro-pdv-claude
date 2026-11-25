@@ -7,7 +7,7 @@ export type PagamentoPendenteInput = {
   canal: "financeiro" | "pdv"
   tipo: "pagar" | "receber"
   referencia: string
-  op: "parcial" | "liquidar"
+  op: "parcial" | "liquidar" | "estornar"
   sessaoId?: string
   pedido: Record<string, unknown>
 }
@@ -20,6 +20,7 @@ function validarPedido(input: PagamentoPendenteInput) {
   const p = input.pedido
   const texto = (v: unknown, max: number, min = 0) => v === undefined || (typeof v === "string" && v.length >= min && v.length <= max)
   if (p.op !== input.op || !texto(p.localKey, 260, 1) || !texto(p.observacao, 2000)
+    || (input.op === "estornar" && (input.canal !== "financeiro" || input.tipo !== "pagar" || !texto(p.motivo, 2000)))
     || !texto(p.lojaId, 120) || !texto(p.formaPagamento, input.canal === "pdv" ? 120 : 80)
     || (input.canal === "pdv" && (!texto(p.sessaoId, 120, 1) || !input.sessaoId || input.sessaoId.length > 120))
     || (input.op === "parcial" && (typeof p.valor !== "number" || !Number.isFinite(p.valor) || p.valor <= 0
@@ -62,7 +63,8 @@ export async function principalPagamentoBrowser(): Promise<string> {
 
 /**
  * Reserva sob Web Lock (também entre abas), libera antes da rede e só remove após
- * ACK da mesma identidade. Reabrir a tela/recarregar não transforma retry em nova
+ * ACK da mesma identidade ou recusa 4xx definitiva identificada pelo servidor.
+ * Reabrir a tela/recarregar não transforma retry em nova
  * intenção. O armazenamento contém UUID/hashes, sem payload financeiro ou credencial.
  * `ambiente` permite ensaiar o contrato do browser sem simular persistência financeira.
  */
