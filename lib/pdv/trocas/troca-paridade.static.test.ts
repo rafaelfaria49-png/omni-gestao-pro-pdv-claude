@@ -35,6 +35,12 @@ describe("paridade das entradas de troca/devolução", () => {
     expect(ui).not.toContain("finalizeSaleTransaction")
   })
 
+  it("CTRL do PDV Clássico guarda o 'pressionado' num ref (re-render entre keydown/keyup não perde o atalho)", () => {
+    const classic = ler("components/dashboard/vendas/pdv-classic.tsx")
+    expect(classic).not.toMatch(/let ctrlDown = false/)
+    expect(classic).toContain("const ctrlDownRef = useRef(false)")
+  })
+
   it("a fila antiga não é mais reenviada automaticamente (só ação manual por devolução)", () => {
     const store = ler("lib/operations-store.tsx")
     expect(store).not.toContain("flushPendingDevolucoes")
