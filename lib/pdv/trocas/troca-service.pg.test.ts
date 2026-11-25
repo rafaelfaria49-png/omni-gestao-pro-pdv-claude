@@ -430,6 +430,61 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
     }, 60_000)
   })
 
+  describe("P1-002 · revisão independente (2ª rodada)", () => {
+    const H = 3_600_000
+    it("regularização com contagem posterior: não reaplica estoque (retorno nem baixa)", async () => {
+      const abertura = new Date(Date.now() - 6 * 86_400_000)
+      const vendaAt = new Date(abertura.getTime() + 2 * H)
+      const s0 = (await db.sessaoCaixa.create({ data: { storeId: LOJA, operador: "PG", status: "FECHADA", abertaEm: abertura, fechadaEm: new Date(abertura.getTime() + 8 * H) } })).id
+      await produto("ps4a", "PS4 CONTADO", 119.9, 1)
+      await produto("x360a", "X360 CONTADO", 129.9, 0) // contagem já zerou: foi entregue ao cliente
+      await vendaOriginal("VDA-PG-RAJ", [{ inventoryId: "ps4a", produtoId: "ps4a", name: "PS4 CONTADO", quantity: 1, unitPrice: 119.9, lineTotal: 119.9 }], { sessaoId: s0, at: vendaAt })
+      for (const [produtoId, nome, depois] of [["ps4a", "PS4 CONTADO", 1], ["x360a", "X360 CONTADO", 0]] as const) {
+        await db.movimentacaoEstoque.create({
+          data: { storeId: LOJA, produtoId, produtoNome: nome, tipo: "ajuste", origem: "inventario", quantidade: 0, estoqueAntes: depois, estoqueDepois: depois, createdAt: new Date(Date.now() - H) },
+        })
+      }
+      const out = await svc.registrarTroca({
+        ...base(),
+        operationId: op(),
+        pedidoIdOrigem: "VDA-PG-RAJ",
+        modo: "troca",
+        linhas: [{ lineIndex: 0, quantidade: 1 }],
+        novosItens: [{ produtoId: "x360a", quantidade: 1 }],
+        formaDiferenca: "dinheiro",
+        regularizacao: { sessaoId: s0, dataEconomica: new Date(vendaAt.getTime() + H).toISOString(), justificativa: "Troca já contada no inventário posterior." },
+      })
+      expect(out.resultado.estoqueAbsorvidoPorAjuste).toEqual([{ produtoId: "ps4a", quantidade: 1 }])
+      expect((await db.produto.findUnique({ where: { id: "ps4a" } })).stock).toBe(1)
+      expect((await db.produto.findUnique({ where: { id: "x360a" } })).stock).toBe(0)
+      const nova = await db.venda.findFirst({ where: { storeId: LOJA, pedidoId: out.resultado.novaVenda!.pedidoId } })
+      expect(nova.payload.recovery.stockAbsorbedByLaterAdjustment).toEqual([expect.objectContaining({ produtoId: "x360a", quantidade: 1 })])
+    }, 60_000)
+
+    it("título de OUTRA venda com prefixo parecido não libera devolução de venda a prazo em aberto", async () => {
+      await db.venda.create({
+        data: {
+          storeId: LOJA, pedidoId: "VDA-PG-1000", total: 60, status: "concluida", at: new Date(Date.now() - 86_400_000),
+          payload: { id: "VDA-PG-1000", total: 60, paymentBreakdown: { aPrazo: 60 }, lines: [{ inventoryId: "p2", produtoId: "p2", name: "P2", quantity: 1, unitPrice: 60, lineTotal: 60 }] },
+          itens: { create: [{ inventoryId: "p2", nome: "P2", quantidade: 1, precoUnitario: 60, lineTotal: 60 }] },
+        },
+      })
+      await db.contaReceberTitulo.create({ data: { storeId: LOJA, localKey: "pdv-aprazo-VDA-PG-1000", descricao: "1000", valor: 60, status: "pendente" } })
+      await db.contaReceberTitulo.create({ data: { storeId: LOJA, localKey: "pdv-aprazo-VDA-PG-10001", descricao: "10001", valor: 80, status: "pago" } })
+      await expect(
+        svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: "VDA-PG-1000", modo: "reembolso", formaReembolso: "dinheiro", linhas: [{ lineIndex: 0, quantidade: 1 }] }),
+      ).rejects.toMatchObject({ code: "VENDA_COM_SALDO_EM_ABERTO" })
+    })
+
+    it("reembolso Pix com sessão já fechada não é vinculado à sessão encerrada", async () => {
+      const fechada = (await db.sessaoCaixa.create({ data: { storeId: LOJA, operador: "PG", status: "FECHADA", fechadaEm: new Date() } })).id
+      await vendaOriginal("VDA-PG-PIXF", [{ inventoryId: "p2", produtoId: "p2", name: "P2", quantity: 1, unitPrice: 15, lineTotal: 15 }])
+      const r = await svc.registrarTroca({ ...base(), sessaoId: fechada, operationId: op(), pedidoIdOrigem: "VDA-PG-PIXF", modo: "reembolso", formaReembolso: "pix", linhas: [{ lineIndex: 0, quantidade: 1 }] })
+      const dev = await db.devolucaoVenda.findFirst({ where: { id: r.resultado.devolucaoId } })
+      expect(dev.sessaoId).toBeNull()
+    })
+  })
+
   describe("P1-002 · vendas a prazo e carnê", () => {
     async function vendaPrazo(pid: string, pb: Record<string, number>, titulo?: { status: string; valor: number; pago?: number }) {
       await db.venda.create({

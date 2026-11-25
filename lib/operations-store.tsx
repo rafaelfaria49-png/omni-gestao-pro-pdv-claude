@@ -3061,10 +3061,14 @@ export function OperationsProvider({
    */
   const arquivarDevolucaoLocal = useCallback<OperationsContextType["arquivarDevolucaoLocal"]>(
     (devolucaoId, motivo) => {
-      const prev = stateRef.current
+      const atual = stateRef.current.devolucoes.find((d) => d.id === devolucaoId)
+      if (!atual) return { ok: false, message: "Devolução local não encontrada neste terminal." }
+      if (atual.arquivada) return { ok: true }
+      // Atualização FUNCIONAL: não sobrescreve mudanças de estado ainda não renderizadas
+      // (ex.: um reenvio de venda em segundo plano que terminou neste meio-tempo).
+      setState((prev) => {
       const dev = prev.devolucoes.find((d) => d.id === devolucaoId)
-      if (!dev) return { ok: false, message: "Devolução local não encontrada neste terminal." }
-      if (dev.arquivada) return { ok: true }
+      if (!dev || dev.arquivada) return prev
       const k = normalizeDocDigits(dev.customerCpf || "")
       const customerCredits = { ...prev.customerCredits }
       if (k && dev.creditIssued > 0 && customerCredits[k]) {
@@ -3088,7 +3092,7 @@ export function OperationsProvider({
             return q > 0 ? { ...i, stock: Math.max(0, i.stock - q) } : i
           })
         : prev.inventory
-      setState({
+      return {
         ...prev,
         customerCredits,
         sales,
@@ -3098,6 +3102,7 @@ export function OperationsProvider({
             ? { ...d, syncPending: false, arquivada: { at: new Date().toISOString(), motivo: motivo.trim().slice(0, 300) } }
             : d,
         ),
+      }
       })
       return { ok: true }
     },

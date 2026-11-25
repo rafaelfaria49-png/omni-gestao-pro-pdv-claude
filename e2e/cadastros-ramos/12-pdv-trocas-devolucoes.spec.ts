@@ -110,7 +110,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     }
     await shot(page, "01-busca-codigo-sku-nome")
     await dialog.getByRole("button", { name: new RegExp(vTroca) }).click()
-    await expect(dialog.getByText(/vendido 1 · devolvido 0 · disponível 1/)).toBeVisible()
+    await expect(dialog.getByTestId("troca-linhas-venda").getByText(/vendido 1 · devolvido 0 · disponível 1/)).toBeVisible()
   })
 
   const ps4Antes = await estoque(PS4.id)
@@ -155,7 +155,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     const busca = dialog.getByLabel("Buscar venda por produto, código, cupom ou cliente")
     await busca.fill(vTroca)
     await busca.press("Enter")
-    await expect(dialog.getByText(/vendido 1 · devolvido 1 · disponível 0/)).toBeVisible()
+    await expect(dialog.getByTestId("troca-linhas-venda").getByText(/vendido 1 · devolvido 1 · disponível 0/)).toBeVisible()
     await expect(dialog.getByText(/Venda substituta/).first()).toBeVisible()
     await shot(page, "04-apos-reload-disponivel-zero")
     expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vTroca } })).toBe(1)
@@ -283,7 +283,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await linha.locator("td").last().locator("button").last().click()
     await page.getByRole("menuitem", { name: "Troca / Devolução" }).click()
     const dialog = page.getByRole("dialog").filter({ hasText: vTroca })
-    await expect(dialog.getByText(/vendido 1 · devolvido 1 · disponível 0/)).toBeVisible()
+    await expect(dialog.getByTestId("troca-linhas-venda").getByText(/vendido 1 · devolvido 1 · disponível 0/)).toBeVisible()
     await shot(page, "08-historico-troca-disponivel-zero")
   })
 

@@ -15,7 +15,7 @@ import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { z } from "zod"
 import { linhasComDisponibilidade, linhasDaVenda } from "@/lib/pdv/trocas/troca-disponibilidade"
-import { recebimentoDaVenda } from "@/lib/pdv/trocas/troca-recebimento"
+import { ehTituloDaVenda, recebimentoDaVenda, titulosDaVendaWhere } from "@/lib/pdv/trocas/troca-recebimento"
 import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 
 export const runtime = "nodejs"
@@ -195,6 +195,7 @@ export async function POST(req: Request) {
           select: {
             total: true,
             payload: true,
+            contaReceberTituloId: true,
             itens: { select: { inventoryId: true, nome: true, quantidade: true, precoUnitario: true, lineTotal: true }, orderBy: { id: "asc" } },
           },
         })
@@ -223,10 +224,12 @@ export async function POST(req: Request) {
           }
           // OMNI-PDV-TROCAS-…-P1-002: só devolve dinheiro/crédito do que foi RECEBIDO.
           if (data.tipo !== "somente_estoque") {
-            const titulos = await tx.contaReceberTitulo.findMany({
-              where: { storeId: lojaId, localKey: { startsWith: `pdv-aprazo-${data.vendaLocalId}` } },
-              select: { status: true, valor: true, payload: true },
-            })
+            const titulos = (
+              await tx.contaReceberTitulo.findMany({
+                where: titulosDaVendaWhere(lojaId, data.vendaLocalId, vendaOrigem.contaReceberTituloId),
+                select: { id: true, localKey: true, status: true, valor: true, payload: true },
+              })
+            ).filter((t) => ehTituloDaVenda(t, data.vendaLocalId, vendaOrigem.contaReceberTituloId))
             const rec = recebimentoDaVenda(
               vendaOrigem.total,
               (vendaOrigem.payload as { paymentBreakdown?: unknown } | null)?.paymentBreakdown,

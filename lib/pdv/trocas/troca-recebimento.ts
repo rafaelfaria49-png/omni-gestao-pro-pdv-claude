@@ -52,3 +52,27 @@ export function recebimentoDaVenda(total: number, paymentBreakdown: unknown, tit
   const recebido = arredonda2(aVista + aPrazoRecebido)
   return { total: t, aVista, aPrazo, aPrazoRecebido, carne, recebido, saldoAberto: arredonda2(Math.max(0, t - recebido)) }
 }
+
+/**
+ * Títulos a receber DESTA venda: FK `Venda.contaReceberTituloId` ou `localKey`
+ * `pdv-aprazo-{pedidoId}` / `pdv-aprazo-{pedidoId}-{n}` (mesma regra de `lib/relatorios/geral.ts`).
+ * Um `startsWith` puro casaria `VDA-2026-1000` com os títulos de `VDA-2026-10001`.
+ */
+export function titulosDaVendaWhere(storeId: string, pedidoId: string, contaReceberTituloId: string | null | undefined) {
+  const base = `pdv-aprazo-${pedidoId}`
+  return {
+    storeId,
+    OR: [
+      ...(contaReceberTituloId ? [{ id: contaReceberTituloId }] : []),
+      { localKey: base },
+      { localKey: { startsWith: `${base}-` } },
+    ],
+  }
+}
+
+export function ehTituloDaVenda(t: { id: string; localKey: string | null }, pedidoId: string, contaReceberTituloId: string | null | undefined): boolean {
+  if (contaReceberTituloId && t.id === contaReceberTituloId) return true
+  const base = `pdv-aprazo-${pedidoId}`
+  const k = t.localKey ?? ""
+  return k === base || (k.startsWith(`${base}-`) && /^[0-9]+$/.test(k.slice(base.length + 1)))
+}

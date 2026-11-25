@@ -765,7 +765,7 @@ export function TrocasDevolucao({
           )}
 
           {/* Itens */}
-          <div className="min-w-0 space-y-2">
+          <div className="min-w-0 space-y-2" data-testid="troca-linhas-venda">
             <h3 className="text-xs font-bold text-foreground">Quantidade a devolver</h3>
             {venda.linhas.map((l) => {
               const q = qtyByLine[l.lineIndex] ?? 0

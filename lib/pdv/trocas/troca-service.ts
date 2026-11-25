@@ -37,7 +37,7 @@ import { allocateSaleNumberForWriter } from "@/lib/vendas/sale-writer-v2"
 import { isRetryableSaleNumberingTransactionError } from "@/lib/vendas/server-sale-numbering"
 import { parseClientSaleId } from "@/lib/vendas/sale-identity-contracts"
 import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
-import { recebimentoDaVenda } from "@/lib/pdv/trocas/troca-recebimento"
+import { ehTituloDaVenda, recebimentoDaVenda, titulosDaVendaWhere } from "@/lib/pdv/trocas/troca-recebimento"
 import {
   TROCA_PAYLOAD_SCHEMA,
   arredonda2,
@@ -130,6 +130,8 @@ export type ResultadoTroca = {
   reembolso: { valor: number; forma: FormaReembolso; execucaoExterna: "pendente_manual" | null } | null
   itensDevolvidos: ItemDevolvidoResultado[]
   itensNovos: Array<{ produtoId: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
+  /** Regularização: retornos ao estoque já refletidos por contagem posterior (não reaplicados). */
+  estoqueAbsorvidoPorAjuste?: Array<{ produtoId: string; quantidade: number }>
   clienteNome: string
   clienteDoc: string
   operador: string
@@ -236,6 +238,7 @@ async function registrarNaTransacao(
       at: true,
       payload: true,
       clienteNome: true,
+      contaReceberTituloId: true,
       itens: { select: { inventoryId: true, nome: true, quantidade: true, precoUnitario: true, lineTotal: true }, orderBy: { id: "asc" } },
     },
   })
@@ -264,10 +267,12 @@ async function registrarNaTransacao(
 
   // Devolução financeira só devolve o que a loja RECEBEU (a prazo/carnê em aberto bloqueia).
   if (input.modo !== "somente_estoque") {
-    const titulos = await tx.contaReceberTitulo.findMany({
-      where: { storeId, localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
-      select: { status: true, valor: true, payload: true },
-    })
+    const titulos = (
+      await tx.contaReceberTitulo.findMany({
+        where: titulosDaVendaWhere(storeId, pedidoId, venda.contaReceberTituloId),
+        select: { id: true, localKey: true, status: true, valor: true, payload: true },
+      })
+    ).filter((t) => ehTituloDaVenda(t, pedidoId, venda.contaReceberTituloId))
     const pbOrigem = (venda.payload as { paymentBreakdown?: unknown } | null)?.paymentBreakdown
     const rec = recebimentoDaVenda(
       venda.total,
@@ -277,7 +282,9 @@ async function registrarNaTransacao(
     if (rec.saldoAberto > 0.009) {
       throw new TrocaError(
         "VENDA_COM_SALDO_EM_ABERTO",
-        `Esta venda ainda tem ${rec.saldoAberto.toFixed(2).replace(".", ",")} a receber (a prazo/carnê). Reembolso, vale e troca ficam bloqueados até a quitação; use "Apenas estoque" ou trate o título no Financeiro.`,
+        rec.carne > 0
+          ? `Esta venda tem ${rec.carne.toFixed(2).replace(".", ",")} em carnê, sem controle de recebimento no sistema: reembolso, vale e troca não são liberados automaticamente. Use "Apenas estoque" e trate o valor com o Financeiro.`
+          : `Esta venda ainda tem ${rec.saldoAberto.toFixed(2).replace(".", ",")} a receber (a prazo). Reembolso, vale e troca ficam bloqueados até a quitação do título; use "Apenas estoque" ou trate o título no Financeiro.`,
         409,
         { recebido: rec.recebido, saldoAberto: rec.saldoAberto },
       )
@@ -304,7 +311,7 @@ async function registrarNaTransacao(
   // Sessão de caixa: obrigatória e ABERTA quando há dinheiro/nova venda; senão opcional.
   // Na regularização, é a sessão ORIGINAL (fechada) que recebeu o dinheiro na época.
   const reg = input.regularizacao ?? null
-  const sessaoId = (reg ? reg.sessaoId : input.sessaoId)?.trim() || null
+  let sessaoId = (reg ? reg.sessaoId : input.sessaoId)?.trim() || null
   const exigeCaixa =
     input.modo === "troca" || (input.modo === "reembolso" && input.formaReembolso === "dinheiro")
   let dataEconomica: Date | null = null
@@ -341,6 +348,9 @@ async function registrarNaTransacao(
     if (exigeCaixa && sessao.status !== "ABERTA") {
       throw new TrocaError("CAIXA_FECHADO", "O caixa está fechado. Abra o caixa para concluir a operação.")
     }
+    // Sem dinheiro na gaveta (vale, Pix, estorno, estoque) e caixa já fechado: não vincula a uma
+    // sessão encerrada — senão a operação apareceria no fechamento de um dia que já foi conferido.
+    if (sessao.status !== "ABERTA") sessaoId = null
   } else if (exigeCaixa) {
     throw new TrocaError("CAIXA_FECHADO", "Abra o caixa para concluir a operação.")
   }
@@ -483,7 +493,21 @@ async function registrarNaTransacao(
   if (input.modo === "somente_estoque" && entradaPorProduto.size === 0) {
     throw new TrocaError("SEM_VINCULO_ESTOQUE", "Nenhum item selecionado tem produto no cadastro para voltar ao estoque.")
   }
+  // Regularização: uma CONTAGEM (ajuste absoluto) feita depois da data econômica já refletiu o
+  // retorno físico — devolver de novo contaria duas vezes (mesma regra do motor em
+  // `historicalRecovery`). Reconciliação estrutural (`estoque-reconcile`) não é contagem.
+  const estoqueAbsorvidoPorAjuste: Array<{ produtoId: string; quantidade: number }> = []
   for (const [produtoId, quantidade] of entradaPorProduto) {
+    if (regularizacaoTrilha) {
+      const ajustePosterior = await tx.movimentacaoEstoque.findFirst({
+        where: { storeId, produtoId, tipo: "ajuste", origem: { not: "estoque-reconcile" }, createdAt: { gt: at } },
+        select: { id: true },
+      })
+      if (ajustePosterior) {
+        estoqueAbsorvidoPorAjuste.push({ produtoId, quantidade })
+        continue
+      }
+    }
     const r = await applyStockMutationTx(
       tx as unknown as StockLedgerTx,
       { storeId, principal: null, source: "ops-troca", operatorLabel: input.operadorLabel || null },
@@ -552,7 +576,8 @@ async function registrarNaTransacao(
       enforceStock: true,
       requireCaixaSession: true,
       // Regularização: grava na sessão original fechada (contrato retroativo do motor, auditado).
-      ...(regularizacaoTrilha ? { allowClosedOriginalSession: true } : { finalizacaoAoVivo: true }),
+      // + `historicalRecovery`: a baixa do item novo é pulada se uma contagem posterior já a refletiu.
+      ...(regularizacaoTrilha ? { allowClosedOriginalSession: true, historicalRecovery: true } : { finalizacaoAoVivo: true }),
       ...(creditoId && plano.creditoAplicado > 0 ? { creditoValeCreditoId: creditoId } : {}),
       v2: { clientSaleId: clientSaleId.clientSaleId, allocate: (t) => allocateSaleNumberForWriter(t, storeId) },
     })
@@ -600,6 +625,7 @@ async function registrarNaTransacao(
         : null,
     itensDevolvidos,
     itensNovos: novos,
+    ...(estoqueAbsorvidoPorAjuste.length > 0 ? { estoqueAbsorvidoPorAjuste } : {}),
     clienteNome: nome,
     clienteDoc: doc,
     operador: input.operadorLabel,
@@ -646,6 +672,17 @@ async function registrarNaTransacao(
 
 const TX_OPTS = { maxWait: 15_000, timeout: 25_000 } as const
 
+/**
+ * Deadlock/serialização transitórios entre trocas concorrentes (estoque de um produto × alocação
+ * de número × estoque de outro). Vindo de SQL cru o Prisma devolve P2010 com o SQLSTATE na
+ * mensagem, não P2034 — a transação inteira foi revertida, então repetir é seguro.
+ */
+function isTransientLockError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  const msg = error instanceof Error ? error.message : String(error)
+  return code === "P2034" || /40P01|40001|deadlock detected|could not serialize access/i.test(msg)
+}
+
 export async function registrarTroca(input: RegistrarTrocaInput): Promise<RegistrarTrocaSaida> {
   if (!OPERATION_ID_RE.test(input.operationId)) {
     throw new TrocaError("OPERACAO_INVALIDA", "Identificador da operação inválido.", 400)
@@ -681,7 +718,7 @@ export async function registrarTroca(input: RegistrarTrocaInput): Promise<Regist
         if (replay) return { replayed: true, resultado: replay }
         throw error
       }
-      if (!isRetryableSaleNumberingTransactionError(error)) throw error
+      if (!isRetryableSaleNumberingTransactionError(error) && !isTransientLockError(error)) throw error
     }
   }
   throw lastError

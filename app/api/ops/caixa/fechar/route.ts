@@ -168,7 +168,8 @@ export async function POST(req: Request) {
         select: { id: true, fechadaEm: true, status: true },
       })
       return { sessao }
-    })
+      // A troca segura a mesma linha por até 25 s: o fechamento ESPERA em vez de falhar.
+    }, { maxWait: 15_000, timeout: 35_000 })
     if ("erro" in resultado) {
       if (resultado.erro === "fechada") {
         return NextResponse.json({ error: "Sessão não encontrada ou já fechada." }, { status: 404 })
