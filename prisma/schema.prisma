@@ -104,6 +104,7 @@ model Store {
   garantiasOrdemServico  GarantiaOrdemServico[]
   adminUserStores        AdminUserStore[]
   financeiroPerfil       FinanceiroPerfil?
+  categoriasGastos       CategoriaGasto[]
   omniAgentCommands      OmniAgentCommand[]
   omniAgentAutomations   OmniAgentAutomation[]
   omniAgentConfig        OmniAgentConfig?
@@ -1314,8 +1315,21 @@ model MarcaCadastro {
  */
 model ContaPagarTitulo {
   id              String      @id @default(cuid())
-  storeId         String      @default("loja-1") @map("storeId")
-  store           Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId         String?     @map("storeId")
+  store           Store?      @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId        String?
+  perfil          FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  identidadePessoal String?
+  ativo           Boolean     @default(true)
+  carteiraId      String?
+  carteira        CarteiraFinanceira? @relation("PagarCarteiraEscopo", fields: [carteiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  categoriaId     String?
+  categoria       CategoriaGasto? @relation(fields: [categoriaId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  valorCentavos   Decimal? @db.Decimal(20, 0)
+  valorOriginalLegado Float?
+  precisaoStatus  String?
+  vencimentoEm    DateTime? @db.Date
+  movimentacoes   MovimentacaoFinanceira[] @relation("MovPagarEscopo")
   /**
    * Opcional: vínculo com cadastro de fornecedor da mesma loja.
    */
@@ -1341,6 +1355,8 @@ model ContaPagarTitulo {
   updatedAt       DateTime    @updatedAt @map("updatedAt")
 
   @@unique([storeId, localKey])
+  @@unique([id, perfilId])
+  @@unique([perfilId, identidadePessoal])
   @@index([storeId])
   @@index([fornecedorId])
   @@index([status])
@@ -1354,8 +1370,21 @@ model ContaPagarTitulo {
  */
 model ContaReceberTitulo {
   id         String   @id @default(cuid())
-  storeId    String   @default("loja-1") @map("storeId")
-  store      Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId    String?  @map("storeId")
+  store      Store?   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId   String?
+  perfil     FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  identidadePessoal String?
+  ativo      Boolean @default(true)
+  carteiraId String?
+  carteira   CarteiraFinanceira? @relation("ReceberCarteiraEscopo", fields: [carteiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  categoriaId String?
+  categoria  CategoriaGasto? @relation(fields: [categoriaId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  valorCentavos Decimal? @db.Decimal(20, 0)
+  valorOriginalLegado Float?
+  precisaoStatus String?
+  vencimentoEm DateTime? @db.Date
+  movimentacoes MovimentacaoFinanceira[] @relation("MovReceberEscopo")
   /**
    * Id estável do título no navegador (localStorage) — upsert idempotente por unidade.
    */
@@ -1375,6 +1404,8 @@ model ContaReceberTitulo {
   vendas Venda[]
 
   @@unique([storeId, localKey])
+  @@unique([id, perfilId])
+  @@unique([perfilId, identidadePessoal])
   @@index([storeId])
   @@index([cliente])
   @@map("contas_receber_titulos")
@@ -1386,8 +1417,15 @@ model ContaReceberTitulo {
  */
 model CarteiraFinanceira {
   id           String   @id @default(cuid())
-  storeId      String   @default("loja-1") @map("storeId")
-  store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId      String?  @map("storeId")
+  store        Store?   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId     String?
+  perfil       FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  identificadorInstrumento String?
+  instituicao  String?
+  saldoInicialCentavos Decimal? @db.Decimal(20, 0)
+  saldoAtualCentavos Decimal? @db.Decimal(20, 0)
+  precisaoStatus String?
   nome         String   @map("nome")
   /**
    * "caixa" | "banco" | "pix" | "dinheiro" | "credito" | "debito" | "investimento"
@@ -1407,18 +1445,35 @@ model CarteiraFinanceira {
   createdAt    DateTime @default(now()) @map("createdAt")
   updatedAt    DateTime @updatedAt @map("updatedAt")
 
-  movimentacoes MovimentacaoFinanceira[]
+  movimentacoes MovimentacaoFinanceira[] @relation("MovCarteiraHistorica")
+  movimentacoesEscopo MovimentacaoFinanceira[] @relation("MovCarteiraEscopo")
+  titulosPagar ContaPagarTitulo[] @relation("PagarCarteiraEscopo")
+  titulosReceber ContaReceberTitulo[] @relation("ReceberCarteiraEscopo")
   conciliacoes  ConciliacaoFinanceira[]
 
   @@index([storeId])
   @@index([storeId, ativo])
+  @@unique([id, perfilId])
   @@map("carteiras_financeiras")
 }
 
 model MovimentacaoFinanceira {
   id           String              @id @default(cuid())
-  storeId      String              @default("loja-1") @map("storeId")
-  store        Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId      String?             @map("storeId")
+  store        Store?              @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId     String?
+  perfil       FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  categoriaId  String?
+  categoria    CategoriaGasto? @relation(fields: [categoriaId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  pagarTituloId String?
+  pagarTitulo ContaPagarTitulo? @relation("MovPagarEscopo", fields: [pagarTituloId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  receberTituloId String?
+  receberTitulo ContaReceberTitulo? @relation("MovReceberEscopo", fields: [receberTituloId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  formaPagamento String?
+  ocorridoEm   DateTime?
+  valorCentavos Decimal? @db.Decimal(20, 0)
+  valorOriginalLegado Float?
+  precisaoStatus String?
   /**
    * "entrada" | "saida"
    */
@@ -1437,7 +1492,8 @@ model MovimentacaoFinanceira {
    * Carteira que recebe ou debita esta movimentação (opcional).
    */
   carteiraId   String?             @map("carteiraId")
-  carteira     CarteiraFinanceira? @relation(fields: [carteiraId], references: [id], onDelete: SetNull)
+  carteira     CarteiraFinanceira? @relation("MovCarteiraHistorica", fields: [carteiraId], references: [id], onDelete: SetNull)
+  carteiraEscopo CarteiraFinanceira? @relation("MovCarteiraEscopo", fields: [carteiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
   createdAt    DateTime            @default(now()) @map("createdAt")
 
   @@index([storeId])
@@ -1446,6 +1502,7 @@ model MovimentacaoFinanceira {
   @@index([referenciaId])
   @@index([carteiraId])
   @@index([createdAt])
+  @@unique([id, perfilId])
   @@map("movimentacoes_financeiras")
 }
 
@@ -2326,9 +2383,35 @@ model FinanceiroPerfil {
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   membros          PerfilMembro[]
+  contas           CarteiraFinanceira[]
+  categorias       CategoriaGasto[]
+  titulosPagar     ContaPagarTitulo[]
+  titulosReceber   ContaReceberTitulo[]
+  movimentacoes    MovimentacaoFinanceira[]
 
   @@unique([id, storeId])
   @@map("financeiro_perfis")
+}
+
+model CategoriaGasto {
+  id              String @id @default(cuid())
+  perfilId        String
+  perfil          FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId         String?
+  store           Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome            String
+  nomeNormalizado String
+  natureza        String
+  ativo           Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  titulosPagar    ContaPagarTitulo[]
+  titulosReceber  ContaReceberTitulo[]
+  movimentacoes  MovimentacaoFinanceira[]
+
+  @@unique([id, perfilId])
+  @@unique([perfilId, nomeNormalizado, natureza])
+  @@map("categorias_gastos")
 }
 
 // Apenas EMPRESA: storeId não nulo não pode referenciar um perfil PESSOAL.

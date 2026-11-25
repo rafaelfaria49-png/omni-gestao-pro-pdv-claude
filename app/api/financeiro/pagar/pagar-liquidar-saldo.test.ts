@@ -58,8 +58,10 @@ const h = vi.hoisted(() => {
     // `SELECT … FOR UPDATE` do título: em memória, só confirma a existência.
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join("?")
-      if (!sql.includes("contas_pagar_titulos") || !sql.includes("FOR UPDATE")) throw new Error(`query raw não simulada: ${sql}`)
-      const porId = sql.includes('"id" = ?')
+      // G002: travas consultivas da ponte de escopo (sem efeito no fake) e FOR NO KEY UPDATE.
+      if (sql.includes("pg_advisory_xact_lock")) return [{ lock: "" }]
+      if (!sql.includes("contas_pagar_titulos") || !/FOR (?:NO KEY )?UPDATE/.test(sql)) throw new Error(`query raw não simulada: ${sql}`)
+      const porId = /id"? = ?/.test(sql)
       const r = porId ? byId.get(String(values[0])) : titulos.get(ck(String(values[0]), String(values[1])))
       if (!r || (porId && r.storeId !== values[1])) return []
       return [{ id: r.id }]
@@ -140,7 +142,12 @@ const h = vi.hoisted(() => {
 
 const STORE = "loja-2"
 
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
+// G002: infraestrutura do fake (perfil EMPRESA); asserções de negócio preservadas.
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }
+})
 // `requireModuleApi` (guard real, desde 2026-10-22) lê a loja por estas funções e exige sessão
 // com a loja liberada e o módulo `finance` (RELATORIOS-FASE-A-001 · A9).
 vi.mock("@/lib/store-id-from-request", () => ({
@@ -345,7 +352,8 @@ describe("idempotência da saída de caixa (não duplica em retry)", () => {
     const { createMovimentacaoSaidaFromPagar } = await vi.importActual<
       typeof import("@/lib/financeiro/services/movimentacoes-service")
     >("@/lib/financeiro/services/movimentacoes-service")
-    const titulo = { id: "cp-x", storeId: STORE, descricao: "Duplicata" }
+    // G002: o vínculo agora é validado — a fixture deve existir no modelo canônico fake.
+    const titulo = await upsertContaPagar({ storeId: STORE, localKey: "mov-retry", valor: 365.01, descricao: "Duplicata" })
 
     const r1 = await createMovimentacaoSaidaFromPagar(titulo, 200, { parcial: true, carteiraId: null })
     expect(r1.ok && r1.action).toBe("created")

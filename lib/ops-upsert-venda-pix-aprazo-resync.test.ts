@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * GOAL: PDV-VENDA-PENDENTE-A-PRAZO-SYNC-FIX-001
  *
@@ -21,7 +22,7 @@
  * chamada anterior — simulando exatamente um reenvio da mesma venda.
  */
 import { describe, expect, it } from "vitest"
-import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { upsertVendaInTransaction as upsertVendaBase, type SalePayload } from "./ops-upsert-venda"
 import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 const STORE = "loja-1"
@@ -236,3 +237,9 @@ describe("upsertVendaInTransaction — Pix + À Prazo (regressão VDA-2026-0448)
     expect(db.titulos.size).toBe(0)
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

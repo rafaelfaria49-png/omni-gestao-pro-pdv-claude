@@ -15,6 +15,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
+import { registroFinanceiroDaEmpresa } from "@/lib/gastos/financeiro-scope";
 import {
   estornarRecebimentoOSV3,
   lancarOSAPrazoV3,
@@ -158,7 +159,7 @@ function guard(storeId: string, osId: string, s: Awaited<ReturnType<typeof estad
     payload: s.payload as never,
     prismaValorTotal: s.os.valorTotal,
     titulo: s.titulo
-      ? { id: s.titulo.id, storeId: s.titulo.storeId, localKey: s.titulo.localKey, valor: s.titulo.valor, status: s.titulo.status, payload: s.titulo.payload }
+      ? registroFinanceiroDaEmpresa({ id: s.titulo.id, storeId: s.titulo.storeId, localKey: s.titulo.localKey, valor: s.titulo.valor, status: s.titulo.status, payload: s.titulo.payload }, storeId)
       : null,
   });
 }

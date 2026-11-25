@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * FRACTIONAL-SALE-HARD-BLOCK-005 — venda server-side com quantidade fracionada.
  *
@@ -13,7 +14,7 @@
 import { describe, expect, it } from "vitest"
 import {
   FractionalQuantityError,
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   type SalePayload,
 } from "./ops-upsert-venda"
 import { FRACTIONAL_QUANTITY_CODE } from "./vendas/sale-quantity-contract"
@@ -279,3 +280,9 @@ describe("upsertVendaInTransaction — inteiros e ruído preservados", () => {
     expect(db.financeiro).toHaveLength(1)
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

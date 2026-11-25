@@ -84,11 +84,12 @@ const h = vi.hoisted(() => {
   function matchTitulo(r: Row, where: Record<string, unknown>): boolean {
     if (where.id && r.id !== where.id) return false
     if (where.storeId && r.storeId !== where.storeId) return false
+    if (where.ativo !== undefined && (r.ativo ?? true) !== where.ativo) return false
     return true
   }
 
   function applyScalars(row: Row, data: Row): Row {
-    for (const k of ["descricao", "cliente", "valor", "vencimento", "status", "payload"]) {
+    for (const k of ["descricao", "cliente", "valor", "vencimento", "status", "payload", "ativo", "perfilId", "carteiraId", "valorCentavos", "valorOriginalLegado", "precisaoStatus"]) {
       if (data[k] !== undefined) row[k] = data[k]
     }
     row.updatedAt = tick()
@@ -106,6 +107,7 @@ const h = vi.hoisted(() => {
 
   type Ctx = {
     releases: Array<() => void>
+    heldKeys: Set<string>
     /**
      * Re-tira o snapshot de rollback. Uma transação que ESPERA no advisory lock começou
      * antes da concorrente commitar; sem refazer o snapshot aqui, um rollback dela
@@ -117,13 +119,20 @@ const h = vi.hoisted(() => {
   /** Delegates sobre o store. `guard` recusa uso do cliente global em transação. */
   function makeClient(guard: () => void, ctx: Ctx | null) {
     return {
+      // Perfil empresarial já provisionado neste harness; criação/RLS são provas PG.
+      financeiroPerfil: { findUnique: async ({ where }: { where: { storeId: string } }) => {
+        guard(); return { id: `unit-empresa:${where.storeId}`, storeId: where.storeId, tipo: "EMPRESA", ativo: true }
+      } },
       $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
         guard()
         const sql = strings.join("?")
         if (sql.includes("pg_advisory_xact_lock")) {
           const key = String(values[0])
+          // pg_advisory_xact_lock é reentrante na MESMA transação.
+          if (ctx?.heldKeys.has(key)) return [{ lock: "" }]
           ordem.push(`lock:${key}`)
           const liberar = await adquirirLock(key)
+          ctx?.heldKeys.add(key)
           ctx?.releases.push(liberar)
           // O lock do lote é sempre a primeira operação e pode ter esperado outra
           // transação commitar. Locks posteriores (carteira) não podem redefinir o
@@ -138,9 +147,17 @@ const h = vi.hoisted(() => {
           const s = db.sessoes.find((x) => x.id === sessaoId && x.storeId === storeId)
           return s ? [{ id: s.id, storeId: s.storeId, status: s.status }] : []
         }
-        if (sql.includes("contas_receber_titulos") && sql.includes("FOR UPDATE")) {
+        if (sql.includes("contas_receber_titulos") && /FOR (?:NO KEY )?UPDATE/.test(sql)) {
           // Trava do título (upsert/cancelamento travados): em memória, só confirma a existência.
-          const porId = sql.includes('"id" = ?')
+          if (sql.includes('"localKey" IN')) {
+            const lista = values[1]
+            const keys = lista && typeof lista === "object" && "values" in lista && Array.isArray(lista.values)
+              ? lista.values : []
+            return db.titulos.filter(t => t.storeId === values[0] && keys.includes(t.localKey))
+              .sort((a, b) => String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0)
+              .map(t => ({ id: t.id }))
+          }
+          const porId = sql.includes('"id" = ?') || /\bid = \?/.test(sql)
           const r = db.titulos.find((t) =>
             porId ? t.id === values[0] && t.storeId === values[1] : t.storeId === values[0] && t.localKey === values[1],
           )
@@ -180,9 +197,12 @@ const h = vi.hoisted(() => {
           guard()
           const lk = where?.localKey as { in?: string[] } | string | undefined
           const alvos = lk && typeof lk === "object" && Array.isArray(lk.in) ? new Set(lk.in) : null
+          const id = where?.id
+          const ids = id && typeof id === "object" && "in" in id && Array.isArray(id.in) ? new Set(id.in) : null
           const lidos = db.titulos
             .filter((r) => {
               if (where?.storeId && r.storeId !== where.storeId) return false
+              if (ids && !ids.has(r.id)) return false
               if (alvos && !alvos.has(String(r.localKey))) return false
               if (typeof lk === "string" && r.localKey !== lk) return false
               return true
@@ -253,6 +273,8 @@ const h = vi.hoisted(() => {
               vencimento: d.vencimento ?? "",
               status: d.status ?? "pendente",
               payload: d.payload ?? {},
+              ativo: d.ativo ?? true, perfilId: d.perfilId ?? null, carteiraId: d.carteiraId ?? null,
+              valorCentavos: d.valorCentavos ?? null, valorOriginalLegado: d.valorOriginalLegado ?? null, precisaoStatus: d.precisaoStatus ?? null,
               createdAt: new Date(),
               updatedAt: tick(),
             })
@@ -283,6 +305,8 @@ const h = vi.hoisted(() => {
             vencimento: create.vencimento ?? "",
             status: create.status ?? "pendente",
             payload: create.payload ?? {},
+            ativo: create.ativo ?? true, perfilId: create.perfilId ?? null, carteiraId: create.carteiraId ?? null,
+            valorCentavos: create.valorCentavos ?? null, valorOriginalLegado: create.valorOriginalLegado ?? null, precisaoStatus: create.precisaoStatus ?? null,
             createdAt: new Date(),
             updatedAt: tick(),
           }
@@ -414,7 +438,7 @@ const h = vi.hoisted(() => {
           guard()
           const c = db.carteiras.find((x) => x.id === where.id)
           if (!c) throw new Error("Carteira não encontrada")
-          ordem.push("carteira_recalculo")
+          if (data.saldoAtual !== undefined) ordem.push("carteira_recalculo")
           Object.assign(c, data)
           return c
         },
@@ -446,6 +470,7 @@ const h = vi.hoisted(() => {
       let snap = structuredClone(db)
       const ctx: Ctx = {
         releases: [],
+        heldKeys: new Set(),
         resnapshot: () => {
           snap = structuredClone(db)
         },
@@ -1407,6 +1432,8 @@ describe("G2 — carteira e transação", () => {
       })
     }
 
+    // Medir o ACT, sem os locks usados pela preparação dos títulos no G002.
+    h.ordem.length = 0
     const [loteA, loteB] = await Promise.all([
       POST(post({
         sessaoId: SESSAO,
@@ -1461,6 +1488,8 @@ describe("G2 — carteira e transação", () => {
       })
     }
 
+    // Medir o ACT; preservar a asserção original da ordem global de carteiras.
+    h.ordem.length = 0
     const res = await POST(post({ itens: itensDe(["ordem-z", "ordem-a"]) }))
     expect(res.status).toBe(200)
 

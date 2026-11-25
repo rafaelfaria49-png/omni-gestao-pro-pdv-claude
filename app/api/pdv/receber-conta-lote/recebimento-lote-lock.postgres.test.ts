@@ -107,6 +107,8 @@ async function limparCarteiraFixture(prisma: PrismaClient, storeId: string): Pro
   await prisma.contaReceberTitulo.deleteMany({ where: { storeId } })
   await prisma.carteiraFinanceira.deleteMany({ where: { storeId } })
   await prisma.sessaoCaixa.deleteMany({ where: { storeId } })
+  // Somente o perfil criado para esta Store UUID de teste; nenhuma concessão automática.
+  await prisma.financeiroPerfil.deleteMany({ where: { storeId } })
   await prisma.store.deleteMany({ where: { id: storeId } })
 }
 

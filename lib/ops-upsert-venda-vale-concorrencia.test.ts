@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * GOAL PDV-TROCAS-VALE-HARDENING-PRE-PUBLISH-002 — débito de crédito/vale FAIL-CLOSED.
  *
@@ -17,7 +18,7 @@
  */
 import { describe, expect, it, vi, afterEach } from "vitest"
 import {
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   CreditoValeInsuficienteError,
   type SalePayload,
 } from "./ops-upsert-venda"
@@ -431,3 +432,9 @@ describe("upsertVendaInTransaction — crédito/vale FAIL-CLOSED (GOAL PDV-TROCA
     expect(db.creditos[0]!.saldoAtual).toBeCloseTo(100, 2) // intocado
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

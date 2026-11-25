@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * GOAL_FATURAMENTO_VALE_ALINHAMENTO — tratamento de `creditoVale` no motor de venda.
  *
@@ -11,7 +12,7 @@
  * (mesmo padrão de ops-upsert-venda*.test.ts) — não toca o banco.
  */
 import { describe, expect, it } from "vitest"
-import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { upsertVendaInTransaction as upsertVendaBase, type SalePayload } from "./ops-upsert-venda"
 
 const STORE = "loja-1"
 const CPF = "12345678900"
@@ -174,3 +175,9 @@ describe("upsertVendaInTransaction — creditoVale na entrada à vista", () => {
     expect(financeiro).toHaveLength(0) // guard de duplicidade pula a criação
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

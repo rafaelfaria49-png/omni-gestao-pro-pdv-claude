@@ -149,7 +149,12 @@ vi.mock("@/auth", async () => {
   const { storeSession } = await import("@/test/fixtures/store-session")
   return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["finance"] })) }
 })
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
+// G002: infraestrutura do fake (perfil EMPRESA); asserções de negócio preservadas.
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }
+})
 vi.mock("@/lib/ops-api-gate", () => ({
   opsLojaIdFromRequest: vi.fn(() => STORE),
   opsLojaIdFromRequestForWrite: vi.fn(() => STORE),

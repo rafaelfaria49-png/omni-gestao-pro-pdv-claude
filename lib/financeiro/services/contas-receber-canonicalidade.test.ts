@@ -153,7 +153,11 @@ const h = vi.hoisted(() => {
   }
 })
 
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma }
+})
 
 import {
   upsertContaReceber,

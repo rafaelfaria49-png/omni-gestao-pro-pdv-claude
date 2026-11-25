@@ -4,6 +4,7 @@ import { prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { upsertContaPagar } from "@/lib/financeiro/services"
+import { persistirSnapshotFinanceiro } from "@/lib/gastos/financeiro-scope"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -94,8 +95,8 @@ export async function POST(req: Request) {
 
   try {
     await prismaEnsureConnected()
-    let applied = 0
     const warnings: string[] = []
+    const itens: Array<{ chave: string; item: ContaPagarIncomingRow }> = []
 
     for (const raw of slice) {
       if (!raw || typeof raw !== "object") continue
@@ -107,8 +108,12 @@ export async function POST(req: Request) {
         continue
       }
 
-      const scal = rowToScalar(r)
+      itens.push({ chave: localKey, item: r })
+    }
 
+    const applied = await persistirSnapshotFinanceiro(itens, async r => {
+      const localKey = pickLocalKey(r)
+      const scal = rowToScalar(r)
       await upsertContaPagar({
         storeId,
         localKey,
@@ -121,9 +126,11 @@ export async function POST(req: Request) {
         numeroDocumento: scal.numeroDocumento,
         payloadPatch: r as unknown as Record<string, unknown>,
         replacePayload: true,
+        onWarning: ({ campo, motivo }) => {
+          if (warnings.length < 24) warnings.push(`row_${campo}_${motivo}: vínculo opcional ignorado`)
+        },
       })
-      applied += 1
-    }
+    })
 
     return NextResponse.json({
       ok: true,

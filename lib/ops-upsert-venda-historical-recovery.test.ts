@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * GOAL: vendas antigas preservadas no PDV (conflito de identificação) viram vendas reais
  * na data e na sessão de caixa ORIGINAIS — efeitos no motor de venda.
@@ -13,7 +14,7 @@
  * Fake de TransactionClient com estado, no padrão de `ops-upsert-venda-caixa-original-fechado.test.ts`.
  */
 import { describe, expect, it } from "vitest"
-import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { upsertVendaInTransaction as upsertVendaBase, type SalePayload } from "./ops-upsert-venda"
 import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 import {
   historicalRecoveryPersistOptions,
@@ -322,3 +323,9 @@ describe("recuperação histórica — financeiro e replay", () => {
     expect(db.financeiros).toHaveLength(1)
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

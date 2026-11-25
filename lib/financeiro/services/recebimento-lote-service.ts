@@ -24,7 +24,8 @@
  *    existe "mais antigos primeiro" aqui — esse cálculo é da UI (G3).
  */
 import { createHash } from "node:crypto"
-import type { Prisma } from "@/generated/prisma"
+import { Prisma } from "@/generated/prisma"
+import { FINANCEIRO_CONTA_LOCK_PREFIX, resolverPerfilEmpresa } from "@/lib/gastos/financeiro-scope"
 import { PAY_EPS, safeMoney } from "@/lib/financeiro/contracts/valores"
 import { RECEBER_STATUS, normalizeReceberStatus } from "@/lib/financeiro/contracts/status"
 import {
@@ -494,8 +495,16 @@ export async function executarRecebimentoLote(
 
   // 4. Carga de TODOS os títulos numa leitura, já escopada pela loja.
   const localKeys = itens.map((i) => i.localKey)
+  // Todos os títulos antes das carteiras. Releitura limitada aos IDs travados:
+  // uma chave criada em paralelo exige revalidação em novo retry.
+  const travados = localKeys.length ? await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "contas_receber_titulos"
+    WHERE "storeId" = ${storeId} AND "localKey" IN (${Prisma.join(localKeys)})
+    ORDER BY "id" COLLATE "C"
+    FOR NO KEY UPDATE
+  ` : []
   const titulos = await tx.contaReceberTitulo.findMany({
-    where: { storeId, localKey: { in: localKeys } },
+    where: { storeId, id: { in: travados.map(t => t.id) }, localKey: { in: localKeys } },
   })
   const porLocalKey = new Map(titulos.map((t) => [t.localKey ?? "", t]))
 
@@ -576,6 +585,10 @@ export async function executarRecebimentoLote(
     )
   }
 
+  // Operação nova validada: títulos -> perfil -> todas as contas.
+  // Replay/recusas acima não provisionam; falha posterior reverte a criação.
+  await resolverPerfilEmpresa(tx, storeId)
+
   // 6. Preparação da escrita. O total NÃO é somado aqui: sai do que for de fato
   // aplicado (passo 9), para que o valor da CaixaOperacao seja igual à soma dos
   // lançamentos por construção, e não por argumento de arredondamento.
@@ -590,6 +603,15 @@ export async function executarRecebimentoLote(
   const carteirasValidadas = new Map<string, string | null>()
   const carteirasAfetadas = new Set<string>()
   const resultados: RecebimentoLoteItemResultado[] = []
+  // Preservar a ordem global de carteiras também entre sessões distintas.
+  // A ponte pode usar a conta original e a conta escolhida no payload.
+  const contasDoLote = [...new Set(plano.flatMap(({ titulo }) => [
+    titulo.carteiraId, carteiraIdDoPayload(titulo.payload),
+  ]).filter((id): id is string => typeof id === "string" && id.length > 0))].sort()
+  for (const carteiraId of contasDoLote) {
+    const lock = `${FINANCEIRO_CONTA_LOCK_PREFIX}:${storeId}:${carteiraId}`
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lock}))::text AS lock`
+  }
 
   for (const passo of plano) {
     const { titulo, item, saldoReal, quitaTitulo } = passo

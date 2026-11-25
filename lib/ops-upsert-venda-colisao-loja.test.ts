@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 ﻿/**
  * GOAL: PDV-PEDIDO-ID-COLISAO-MULTILOJA-FIX-001
  *
@@ -17,7 +18,7 @@
  */
 import { describe, expect, it } from "vitest"
 import {
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   PedidoIdDeOutraLojaError,
   CaixaOriginalFechadoError,
   type SalePayload,
@@ -376,3 +377,9 @@ describe("upsertVendaInTransaction — campos client-only fora de Venda.payload"
     expect(typeof payload.syncedAt).toBe("string")
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

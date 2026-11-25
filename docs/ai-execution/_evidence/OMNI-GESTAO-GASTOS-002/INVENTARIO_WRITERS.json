@@ -1,0 +1,415 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-002",
+  "base": "55bab9a7a93218433912761d6ce2f07b8b3fdfad",
+  "originMainVerified": "13700862405a89da3c7d16702318735a88348133",
+  "directWriterRows": [
+    {
+      "file": "app/api/vendas/[id]/corrigir-titulo/route.ts",
+      "line": 146,
+      "excerpt": "await tx.contaReceberTitulo.update({",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "line": 179,
+      "excerpt": "if (!conta.perfilId) await db.carteiraFinanceira.update({ where: { id: conta.id }, data: { perfilId } })",
+      "classification": "PONTE_INTERNA_EMPRESA_APOS_GUARD_OPERACIONAL"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "line": 183,
+      "excerpt": "if (row.kind === \"pagar\") await db.contaPagarTitulo.update({ where: { id: row.id }, data: { perfilId } })",
+      "classification": "PONTE_INTERNA_EMPRESA_APOS_GUARD_OPERACIONAL"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "line": 184,
+      "excerpt": "else await db.contaReceberTitulo.update({ where: { id: row.id }, data: { perfilId } })",
+      "classification": "PONTE_INTERNA_EMPRESA_APOS_GUARD_OPERACIONAL"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "line": 258,
+      "excerpt": "if (!conta.perfilId) await db.carteiraFinanceira.update({ where: { id: conta.id }, data: { perfilId: ctx.perfilId } })",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "line": 313,
+      "excerpt": "await tx.contaPagarTitulo.createMany({ data: [{ ...data, fornecedorId: p.fornecedorId ?? null }], skipDuplicates: true })",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "line": 320,
+      "excerpt": "await tx.contaReceberTitulo.createMany({ data: [data], skipDuplicates: true })",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "lib/gastos/financeiro-scope.ts",
+      "line": 346,
+      "excerpt": "return tx.movimentacaoFinanceira.create({ data: {",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "lib/gastos/contas.ts",
+      "line": 19,
+      "excerpt": "return comContextoFinanceiro(contexto, (tx, ctx) => tx.carteiraFinanceira.create({ data: {",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "lib/gastos/contas.ts",
+      "line": 34,
+      "excerpt": "return tx.carteiraFinanceira.update({ where: { id: parsed.data.id }, data: { ativo: parsed.data.ativo } })",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "lib/gastos/categorias.ts",
+      "line": 15,
+      "excerpt": "const row = await tx.categoriaGasto.upsert({",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "lib/gastos/categorias.ts",
+      "line": 31,
+      "excerpt": "return tx.categoriaGasto.update({ where: { id: parsed.data.id }, data: { ativo: parsed.data.ativo } })",
+      "classification": "NOVO_INTERNO_CONTEXTO_OPACO"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir-itens/route.ts",
+      "line": 297,
+      "excerpt": "await tx.movimentacaoFinanceira.update({ where: { id: entrada.id }, data: {",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir-itens/route.ts",
+      "line": 302,
+      "excerpt": "await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir-itens/route.ts",
+      "line": 308,
+      "excerpt": "await tx.movimentacaoFinanceira.delete({ where: { id: entrada.id } })",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir/route.ts",
+      "line": 375,
+      "excerpt": "await tx.movimentacaoFinanceira.update({",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir/route.ts",
+      "line": 381,
+      "excerpt": "await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir/route.ts",
+      "line": 398,
+      "excerpt": "await tx.movimentacaoFinanceira.delete({ where: { id: existingEntrada.id } })",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "app/api/vendas/[id]/corrigir/route.ts",
+      "line": 606,
+      "excerpt": "await tx.contaReceberTitulo.update({",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "app/api/vendas/[id]/cancelar/route.ts",
+      "line": 422,
+      "excerpt": "await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 226,
+      "excerpt": "? await tx.contaPagarTitulo.update({ where: { id: titulo.id, storeId }, data: { payload } })",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 227,
+      "excerpt": ": await tx.contaReceberTitulo.update({ where: { id: titulo.id, storeId }, data: { payload } })",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 337,
+      "excerpt": "const row = await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 382,
+      "excerpt": "await prisma.movimentacaoFinanceira.delete({ where: { id: tid } })",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 484,
+      "excerpt": "const movimentacao = await client.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 525,
+      "excerpt": "const movimentacao = await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 589,
+      "excerpt": "const row = await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 628,
+      "excerpt": "const movimentacao = await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/movimentacoes-service.ts",
+      "line": 677,
+      "excerpt": "const movimentacao = await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-service.ts",
+      "line": 316,
+      "excerpt": "const row = await tx.contaReceberTitulo.update({ where: { id: existente.id }, data: scopedData })",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-service.ts",
+      "line": 319,
+      "excerpt": "const r = await tx.contaReceberTitulo.createMany({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-service.ts",
+      "line": 485,
+      "excerpt": "const updated = await tx.contaReceberTitulo.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-service.ts",
+      "line": 525,
+      "excerpt": "const res = await tx.contaReceberTitulo.updateMany({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-receber-service.ts",
+      "line": 532,
+      "excerpt": "await tx.contaReceberTitulo.update({ where: { id: row.id }, data: await dadosFinanceirosEmpresa(tx, storeId, row.valor, { carteiraHistoricaId: row.carteiraId }) })",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "line": 227,
+      "excerpt": "if (existing) return tx.contaPagarTitulo.update({ where: { id: existing.id }, data })",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "line": 228,
+      "excerpt": "const created = await tx.contaPagarTitulo.createMany({ data: [data], skipDuplicates: true })",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "line": 267,
+      "excerpt": "const updated = await tx.contaPagarTitulo.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "line": 302,
+      "excerpt": "const updated = await tx.contaPagarTitulo.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "line": 349,
+      "excerpt": "const updated = await tx.contaPagarTitulo.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "line": 390,
+      "excerpt": "const updated = await tx.contaPagarTitulo.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/contas-pagar-service.ts",
+      "line": 426,
+      "excerpt": "const updated = await tx.contaPagarTitulo.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/carteiras-service.ts",
+      "line": 141,
+      "excerpt": "const row = await tx.carteiraFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/carteiras-service.ts",
+      "line": 187,
+      "excerpt": "const row = await tx.carteiraFinanceira.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/carteiras-service.ts",
+      "line": 241,
+      "excerpt": "const updated = await client.carteiraFinanceira.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/carteiras-service.ts",
+      "line": 317,
+      "excerpt": "const saida = await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/services/carteiras-service.ts",
+      "line": 328,
+      "excerpt": "const entrada = await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/financeiro/adapters/os-faturamento.ts",
+      "line": 271,
+      "excerpt": "await tx.contaReceberTitulo.update({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    },
+    {
+      "file": "lib/operacoes-v3/recebimento-misto-service.ts",
+      "line": 246,
+      "excerpt": "await tx.contaReceberTitulo.createMany({",
+      "classification": "ADAPTADO_EMPRESA_AMPLIACAO_HUMANA_REV3"
+    },
+    {
+      "file": "lib/ops-upsert-venda.ts",
+      "line": 1158,
+      "excerpt": "await tx.movimentacaoFinanceira.create({",
+      "classification": "ADAPTADO_CANONICO_EMPRESA"
+    }
+  ],
+  "delegated": [
+    {
+      "file": "app/api/ops/contas-pagar-persist/route.ts",
+      "target": "upsertContaPagar",
+      "proof": "rota real testada; perfil/owner JSON nao sao autoridade"
+    },
+    {
+      "file": "app/api/ops/contas-receber-persist/route.ts",
+      "target": "upsertContaReceber",
+      "proof": "rota real testada; guarda empresarial preservada"
+    },
+    {
+      "file": "lib/importador-avancado/persistidor.ts",
+      "target": "upsertContaPagar/upsertContaReceber",
+      "proof": "persistidor real reimportado apos pagamento no PostgreSQL; chaves preservadas"
+    },
+    {
+      "file": "app/api/financeiro/pagar/route.ts",
+      "target": "consultarPagamentoLegado/aplicarPagamentoLegado",
+      "proof": "M1 handler real/PG: duas parciais iguais, replay, conflito, contenção e rollback SQL"
+    },
+    {
+      "file": "app/api/financeiro/receber/route.ts",
+      "target": "consultarPagamentoLegado/aplicarPagamentoLegado",
+      "proof": "M1 handler real/PG: duas parciais iguais, replay, conflito, contenção e rollback SQL"
+    },
+    {
+      "file": "app/api/pdv/receber-conta/route.ts",
+      "target": "aplicarPagamentoLegado + CaixaOperacao na mesma transação",
+      "proof": "M1 PG: sessão original após resposta perdida, duas parciais, concorrência, falhas SQL de saldo/caixa e recibos legados"
+    },
+    {
+      "file": "lib/financeiro/services/recebimento-lote-service.ts",
+      "caller": "app/api/pdv/receber-conta-lote/route.ts",
+      "target": "serviços canônicos + todos os títulos e contas pré-travados em ordem binária",
+      "proof": "N10/N11 PostgreSQL com contenção controlada; W2 original + 50 outros testes unitários; seis PG nativos do PDV"
+    },
+    {
+      "file": "lib/operacoes-v3/entrega-actions.ts",
+      "target": "registroFinanceiroDaEmpresa após consulta pela mesma loja",
+      "proof": "compatibilidade nullable sem cast/fallback; regressões V3"
+    },
+    {
+      "file": "lib/operacoes-v4/financial-projection-actions.ts",
+      "target": "registroFinanceiroDaEmpresa após consulta pela mesma loja",
+      "proof": "compatibilidade nullable sem cast/fallback; regressões V4"
+    }
+  ],
+  "pendingExplicitHumanAuthorization": [],
+  "manualScripts": "Scripts de manutenção continuam legados e não foram adaptados nem usados em dados reais. O runner oficial de OS V3 executou o seed legado somente nos bancos QA sintéticos próprios, com URL conferida e ambiente mínimo. Sem backfill real; perfil NULL histórico continua empresarial por Store, sem wildcard.",
+  "personalExposure": "Sem consumidores operacionais dos writers pessoais; ausencia de chamadas em app/components confirmada por rg. G003 ainda obrigatorio.",
+  "scope": "Somente G002; modelos FinancialTransaction/FinancialAttachment paralelos nao utilizados.",
+  "revision": 8,
+  "humanExpansion": {
+    "revision3": {
+      "answer": "Autorizar os cinco writers e testes correspondentes",
+      "paths": [
+        "app/api/vendas/[id]/cancelar/route.ts",
+        "app/api/vendas/[id]/corrigir/route.ts",
+        "app/api/vendas/[id]/corrigir-itens/route.ts",
+        "app/api/vendas/[id]/corrigir-titulo/route.ts",
+        "lib/operacoes-v3/recebimento-misto-service.ts"
+      ],
+      "allowlist": "GOAL.md revisão 3, registrada antes de editar"
+    },
+    "revision4": {
+      "paths": [
+        "lib/operacoes-v3/entrega-actions.ts",
+        "lib/operacoes-v4/financial-projection-actions.ts",
+        "lib/financeiro/services/recebimento-lote-service.ts"
+      ],
+      "scope": "Contratos/tipos/escopo e correção dos deadlocks, expressamente autorizados antes da edição"
+    },
+    "revision5": {
+      "paths": [
+        "app/api/financeiro/pagar/route.ts",
+        "app/api/financeiro/receber/route.ts",
+        "app/api/pdv/receber-conta/route.ts",
+        "components/financeiro/lovable/context/FinanceiroRealContext.tsx",
+        "components/dashboard/vendas/pdv-recebimento-modal.tsx",
+        "lib/financeiro/pagamento-operacao-client.ts"
+      ],
+      "answer": "Autorizar os seis caminhos somente para M1 e seus testes já autorizados"
+    }
+  },
+  "directWriterFileCount": 14,
+  "unresolvedWriters": [],
+  "limits": "DELETE de compensação mantém semântica e filtros empresariais atuais; não provisiona perfil quando não há nova escrita financeira. Provisionamento ocorre na transação da atribuição/criação/alteração. Recorte app/lib, não todos os scripts de manutenção. Scripts manuais não foram adaptados nem executados em dados reais; o runner OS V3 executou o seed oficial somente nas fixtures QA isoladas, com URL conferida e ambiente mínimo. A contagem regex não substitui o mapa de consumidores delegados nem prova todos os scripts manuais. Novos writers pessoais continuam internos/dormentes; G003–G010 não são declarados concluídos.",
+  "indirectWriterBlockers": [],
+  "currentValidation": "final-r4-delta-validation-summary.json:855cases=854regularPASS+1preexistingExpectedFail,50files,103currentPG+133retainedEarlierPG;full typecheck0/build0/MIGRATION_SKIPPED;LINT_GLOBAL=BASELINE_FAIL/LINT_DELTA=PASS;R5 real APPROVED/LOCAL_CLOSURE_APPROVED;D1-D4/O1 accepted,current hashes and lint exception expressly accepted",
+  "clientIdentity": {
+    "files": [
+      "components/financeiro/lovable/context/FinanceiroRealContext.tsx",
+      "components/dashboard/vendas/pdv-recebimento-modal.tsx",
+      "lib/financeiro/pagamento-operacao-client.ts"
+    ],
+    "scope": "Somente identidade pendente M1: UUID/hashes/sessão original. Persistência financeira servidor. Sem mudança visual, autorização pessoal ou redesign."
+  },
+  "provisionLockOrder": "All titles (if any) -> company profile creation -> all wallets, stable order. Materialization validates existing profile only; legacy NULL remains strict Store context, no provisioning/adoption. Transfer refusal rolls back newly created profile before ok:false.",
+  "originMainPreparationVerified": "13700862405a89da3c7d16702318735a88348133",
+  "originMainFinalReadOnly": "a874342f5366427f8f7cfebc96a9c14c8efe39ad",
+  "m1Recovery": {
+    "policy": "Explicit matching-key4xx no-effect rejection clears pending intent; unknown/committed replay retains it",
+    "unavailableAccount": "Strict rejection, no NULL downgrade, three endpoints ×four states",
+    "evidence": "validation-r4-delta2-final.json"
+  },
+  "finalReview": {
+    "round": 5,
+    "model": [
+      "claude-sonnet-5-5"
+    ],
+    "session": "01c84800-0acc-4843-aa1f-dac3ed72b0e8",
+    "localOnly": true
+  }
+}

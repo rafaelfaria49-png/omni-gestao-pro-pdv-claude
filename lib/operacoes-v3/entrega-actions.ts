@@ -20,6 +20,7 @@ import type { Session } from "next-auth";
 import type { Prisma } from "@/generated/prisma";
 import type { EventoTimeline, OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
+import { registroFinanceiroDaEmpresa } from "@/lib/gastos/financeiro-scope";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
@@ -233,12 +234,13 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     // Título lido NA transação (sob a trava, os writers de pagamento esperam: ele
     // não muda até o commit; e nunca disputa uma 2ª conexão do pool). Se a leitura
     // falhar, a guarda bloqueia e nenhuma outra consulta roda na transação.
-    let titulo: Awaited<ReturnType<typeof prisma.contaReceberTitulo.findUnique>> = null;
+    let titulo: (NonNullable<Awaited<ReturnType<typeof prisma.contaReceberTitulo.findUnique>>> & { storeId: string }) | null = null;
     let falhaLeituraTitulo = false;
     try {
-      titulo = await tx.contaReceberTitulo.findUnique({
+      const tituloLido = await tx.contaReceberTitulo.findUnique({
         where: { storeId_localKey: { storeId: sid, localKey: localKeyContaReceberOSV3(sid, id) } },
       });
+      titulo = tituloLido ? registroFinanceiroDaEmpresa(tituloLido, sid) : null;
     } catch {
       falhaLeituraTitulo = true;
     }

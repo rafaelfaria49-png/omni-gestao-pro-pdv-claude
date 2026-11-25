@@ -16,6 +16,7 @@ import { buildContaPagarLocalKey } from "@/lib/financeiro/contracts/local-key"
 import { appendFinanceiroHistorico, buildContaPagarPayload } from "@/lib/financeiro/contracts/payload"
 import { FINANCEIRO_ORIGEM } from "@/lib/financeiro/contracts/origem"
 import { localDateKey } from "./warranty"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 
 export const FORMAS_PAGAMENTO_AQUISICAO = ["dinheiro", "pix", "transferencia", "outro"] as const
 export const FORMAS_PAGAMENTO_NAO_INTEGRADAS = ["credito_loja", "abatimento_venda"] as const
@@ -90,7 +91,7 @@ export async function registrarObrigacaoAquisicaoTx(
     { tipo: "criacao", userLabel: args.operador, observacao: `Compra de aparelho aprovada (${aq.protocolo})` },
   )
   // createMany + skipDuplicates: nunca sobrescreve um título que o Financeiro já movimentou.
-  await tx.contaPagarTitulo.createMany({
+  const criado = await tx.contaPagarTitulo.createMany({
     data: [{
       storeId,
       localKey,
@@ -105,5 +106,8 @@ export async function registrarObrigacaoAquisicaoTx(
     skipDuplicates: true,
   })
   const titulo = await tx.contaPagarTitulo.findUniqueOrThrow({ where: { storeId_localKey: { storeId, localKey } }, select: { id: true } })
+  // Reconciliação G002: título NOVO entra no perfil EMPRESA da loja na mesma transação.
+  // Título preexistente (skipDuplicates) não é tocado aqui — já pertence ao Financeiro.
+  if (criado.count === 1) await dadosFinanceirosEmpresa(tx, storeId, undefined, { pagarTituloId: titulo.id })
   return { localKey, tituloId: titulo.id }
 }

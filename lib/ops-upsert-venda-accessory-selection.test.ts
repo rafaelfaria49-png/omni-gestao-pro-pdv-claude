@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * PDV-ACESSORIOS-SELECAO-PERSISTENCIA-SERVER-004B
  *
@@ -15,7 +16,7 @@
  * (vitest roda em `node`; nenhuma dependência de `@/lib/prisma`/`@/generated/prisma`).
  */
 import { describe, expect, it, vi } from "vitest"
-import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { upsertVendaInTransaction as upsertVendaBase, type SalePayload } from "./ops-upsert-venda"
 import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
 
 type FakeProduct = {
@@ -439,3 +440,8 @@ describe("upsertVendaInTransaction — cor padrão desativada pela loja", () => 
     expect(byId.get("prod-1")!.stock).toBe(4)
   })
 })
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

@@ -5,6 +5,7 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { prisma } from "@/lib/prisma";
+import { registroFinanceiroDaEmpresa } from "@/lib/gastos/financeiro-scope";
 import type { OrdemServico } from "@/types/os";
 import {
   projectFinancialOSV4,
@@ -57,10 +58,10 @@ async function loadFinancialProjections(
     payload: unknown;
   }> = [];
   try {
-    titles = await prisma.contaReceberTitulo.findMany({
+    titles = (await prisma.contaReceberTitulo.findMany({
       where: { storeId: sid, localKey: { in: localKeys } },
       select: { id: true, storeId: true, localKey: true, valor: true, status: true, payload: true },
-    });
+    })).map((title) => registroFinanceiroDaEmpresa(title, sid));
   } catch {
     titleReadFailed = true;
   }

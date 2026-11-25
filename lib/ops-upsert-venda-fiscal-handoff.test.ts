@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * GOAL 075 — o motor central persiste `fiscalPaymentHandoff` na Venda.
  *
@@ -7,7 +8,7 @@
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { upsertVendaInTransaction, type SalePayload } from "./ops-upsert-venda"
+import { upsertVendaInTransaction as upsertVendaBase, type SalePayload } from "./ops-upsert-venda"
 import { FISCAL_PAYMENT_HANDOFF_VERSION } from "./vendas/fiscal-payment-handoff"
 
 const STORE = "loja-1"
@@ -568,3 +569,9 @@ describe("PDVs ativos não produzem o handoff — só o motor central", () => {
     expect(modal.indexOf("sumCashTendered(payments)")).toBeLessThan(modal.indexOf("normalizePaymentsToMatchTotal(payments, total)"))
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

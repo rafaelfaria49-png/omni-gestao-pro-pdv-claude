@@ -147,7 +147,11 @@ const h = vi.hoisted(() => {
   }
 })
 
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma }
+})
 
 import {
   upsertContaReceber,
@@ -374,7 +378,8 @@ describe("GOAL_FIX — idempotência da movimentação de caixa (não duplica em
     }
 
     const { createMovimentacaoEntradaFromReceber } = await import("./movimentacoes-service")
-    const titulo = { id: "cr-x", storeId: STORE, descricao: "Título", cliente: "Cliente" }
+    // G002 valida o vínculo real do título: a fixture deve existir no fake canônico.
+    const titulo = await upsertContaReceber({ storeId: STORE, localKey: "mov-retry", valor: 365.01, descricao: "Título", cliente: "Cliente" })
 
     const r1 = await createMovimentacaoEntradaFromReceber(titulo, 200, { parcial: true, carteiraId: null })
     expect(r1.ok && r1.action).toBe("created")

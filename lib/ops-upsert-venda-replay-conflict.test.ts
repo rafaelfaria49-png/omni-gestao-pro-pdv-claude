@@ -1,10 +1,11 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 import { describe, expect, it } from "vitest"
 import {
   CaixaOriginalFechadoError,
   PedidoIdConflitoMesmaLojaError,
   PedidoIdDeOutraLojaError,
   VendaCreateUniqueConflictError,
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   type SalePayload,
 } from "./ops-upsert-venda"
 import { attachStockLedgerBoundaryToFakeTx } from "./estoque/stock-ledger-test-fake"
@@ -441,3 +442,9 @@ describe("upsertVendaInTransaction — replay e conflito fail-closed", () => {
     })
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

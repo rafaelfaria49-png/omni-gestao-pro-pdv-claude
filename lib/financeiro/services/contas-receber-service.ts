@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { dadosFinanceirosEmpresa, emTransacaoFinanceira, limparOwnershipSnapshot, manterReferenciaSnapshot, referenciaSnapshotEmpresa, registroFinanceiroDaEmpresa, type SnapshotVinculoAviso } from "@/lib/gastos/financeiro-scope"
 import type { Prisma } from "@/generated/prisma"
 import type { ContaReceberTitulo } from "@/generated/prisma"
 import { mergeFinanceiroPayload, appendFinanceiroHistorico } from "@/lib/financeiro/contracts/payload"
@@ -153,6 +154,7 @@ export type UpsertContaReceberInput = {
   /** Quando true, substitui o `payload` em vez de fazer merge profundo. Útil para caminhos legados (PDV/import). */
   replacePayload?: boolean
   db?: ContaReceberDbClient
+  onWarning?: (aviso: SnapshotVinculoAviso) => void
 }
 
 export type ContaReceberSummary = {
@@ -177,26 +179,28 @@ export async function getContaReceberById(
   storeId: string,
   id: string,
   db?: ContaReceberDbClient,
-): Promise<ContaReceberTitulo | null> {
+): Promise<(ContaReceberTitulo & { storeId: string }) | null> {
   const sid = safeStr(storeId).trim()
   const tid = safeStr(id).trim()
   if (!sid || !tid) return null
-  return dbOf(db).contaReceberTitulo.findFirst({
+  const row = await dbOf(db).contaReceberTitulo.findFirst({
     where: { id: tid, storeId: sid },
   })
+  return row ? registroFinanceiroDaEmpresa(row, sid) : null
 }
 
 export async function getContaReceberByLocalKey(
   storeId: string,
   localKey: string,
   db?: ContaReceberDbClient,
-): Promise<ContaReceberTitulo | null> {
+): Promise<(ContaReceberTitulo & { storeId: string }) | null> {
   const sid = safeStr(storeId).trim()
   const lk = safeStr(localKey).trim()
   if (!sid || !lk) return null
-  return dbOf(db).contaReceberTitulo.findUnique({
+  const row = await dbOf(db).contaReceberTitulo.findUnique({
     where: { storeId_localKey: { storeId: sid, localKey: lk } },
   })
+  return row ? registroFinanceiroDaEmpresa(row, sid) : null
 }
 
 async function findTitulo(
@@ -292,7 +296,7 @@ export function naTransacaoDoTituloContaReceber<T>(
   db: ContaReceberDbClient | undefined,
   fn: (tx: ContaReceberDbClient) => Promise<T>,
 ): Promise<T> {
-  return db ? fn(db) : prisma.$transaction(fn, TX_TITULO_CONTA_RECEBER)
+  return db && db !== prisma ? fn(db) : prisma.$transaction(fn, TX_TITULO_CONTA_RECEBER)
 }
 
 /** `SELECT … FOR UPDATE` do título desta loja (por id OU localKey). `false` = não existe. */
@@ -330,6 +334,7 @@ export async function gravarTituloContaReceberTravado(p: {
   localKey: string
   db?: ContaReceberDbClient
   montar: (existente: ContaReceberTitulo | null) => DadosTituloContaReceber
+  onWarning?: (aviso: SnapshotVinculoAviso) => void
 }): Promise<{ row: ContaReceberTitulo; criado: boolean }> {
   return naTransacaoDoTituloContaReceber(p.db, async (tx) => {
     for (let tentativa = 0; tentativa < MAX_TENTATIVAS_TITULO; tentativa++) {
@@ -338,13 +343,23 @@ export async function gravarTituloContaReceberTravado(p: {
       // INSERT sem sobrescrita, que não grava nada, e a próxima volta trava e relê a linha.
       const travado = await travarTituloContaReceber(tx, p.storeId, { localKey: p.localKey })
       const existente = travado ? await getContaReceberByLocalKey(p.storeId, p.localKey, tx) : null
+      if (existente?.ativo === false) throw new Error("contas-receber-service: título indisponível")
       const data = p.montar(existente)
+      const base = asPayloadRecord(existente?.payload)
+      const payload = limparOwnershipSnapshot(data.payload as Record<string, unknown>, base)
+      const preservar = temLedgerDoServidor(base)
+      const carteiraId = await referenciaSnapshotEmpresa(tx, p.storeId, "carteiraId", payload.carteiraId,
+        existente?.carteiraId ?? null, preservar, p.onWarning)
+      manterReferenciaSnapshot(payload, "carteiraId", carteiraId, base, preservar)
+      const scopedData = { ...data, payload: payload as Prisma.InputJsonValue, carteiraId,
+        ...await dadosFinanceirosEmpresa(tx, p.storeId, data.valor,
+          carteiraId === existente?.carteiraId ? { carteiraHistoricaId: carteiraId } : { carteiraId }) }
       if (existente) {
-        const row = await tx.contaReceberTitulo.update({ where: { id: existente.id }, data })
+        const row = await tx.contaReceberTitulo.update({ where: { id: existente.id }, data: scopedData })
         return { row, criado: false }
       }
       const r = await tx.contaReceberTitulo.createMany({
-        data: [{ storeId: p.storeId, localKey: p.localKey, ...data }],
+        data: [{ ...scopedData, storeId: p.storeId, localKey: p.localKey }],
         skipDuplicates: true,
       })
       if (r.count === 1) {
@@ -375,6 +390,7 @@ export async function upsertContaReceber(input: UpsertContaReceberInput): Promis
     storeId,
     localKey,
     db: input.db,
+    onWarning: input.onWarning,
     montar: (existing) => montarUpsertContaReceber(input, existing),
   })
   return row
@@ -383,6 +399,7 @@ export async function upsertContaReceber(input: UpsertContaReceberInput): Promis
 function montarUpsertContaReceber(input: UpsertContaReceberInput, existing: ContaReceberTitulo | null): DadosTituloContaReceber {
   let nextPayload: Record<string, unknown>
   const basePayload = existing?.payload as Record<string, unknown> | undefined
+  const patch = limparOwnershipSnapshot(input.payloadPatch)
   // O chamador só é autoridade sobre o livro-razão se (a) enviar `historico` e (b) o
   // servidor ainda não tiver gravado lançamento nenhum nesse título. Re-importação de
   // planilha continua reescrevendo o histórico que ela mesma criou — mas nunca apaga um
@@ -392,7 +409,7 @@ function montarUpsertContaReceber(input: UpsertContaReceberInput, existing: Cont
     !temLedgerDoServidor(basePayload)
   if (input.replacePayload && isRecord(input.payloadPatch)) {
     // Compatibilidade com APIs legadas que sempre enviam snapshot completo.
-    nextPayload = { ...input.payloadPatch }
+    nextPayload = { ...patch }
     // Canonicalidade: o snapshot do cliente não apaga o que o servidor gravou.
     for (const k of CONTA_RECEBER_SERVER_OWNED_PAYLOAD_KEYS) {
       const cedeAoChamador = k === "historico" ? ledgerDoChamador : k in input.payloadPatch
@@ -401,8 +418,15 @@ function montarUpsertContaReceber(input: UpsertContaReceberInput, existing: Cont
       if (prev !== undefined) nextPayload[k] = prev
     }
   } else {
-    nextPayload = mergeFinanceiroPayload(basePayload, input.payloadPatch)
+    nextPayload = mergeFinanceiroPayload(basePayload, patch)
   }
+  if (temLedgerDoServidor(basePayload)) {
+    for (const key of CONTA_RECEBER_SERVER_OWNED_PAYLOAD_KEYS) {
+      const prev = basePayload?.[key]
+      if (prev !== undefined) nextPayload[key] = prev
+    }
+  }
+  nextPayload = limparOwnershipSnapshot(nextPayload, basePayload)
   if (input.historicoEntrada && Object.keys(input.historicoEntrada).length > 0) {
     nextPayload = appendFinanceiroHistorico(nextPayload, input.historicoEntrada)
   }
@@ -410,9 +434,9 @@ function montarUpsertContaReceber(input: UpsertContaReceberInput, existing: Cont
   // Título da OS (`os-faturamento:*`): o valor é derivado da OS — só o adapter o regrava, sob
   // a trava OS → título. Um snapshot legado inteiro (tela/sync) pode trazer a linha de antes
   // do faturamento vigente; ele não troca esse valor. Títulos manuais/legados seguem o snapshot.
-  const valorDaOS = !!(input.replacePayload && existing && ehTituloDaOS(existing.localKey))
+  const valorDaOS = !!(input.replacePayload && existing && (ehTituloDaOS(existing.localKey) || temLedgerDoServidor(basePayload)))
   const valor =
-    input.valor !== undefined && !valorDaOS ? safeMoney(input.valor) : safeMoney(existing?.valor ?? 0)
+    input.valor !== undefined && !valorDaOS ? input.valor : (existing?.valor ?? 0)
   const descricao = input.descricao !== undefined ? safeStr(input.descricao) : (existing?.descricao ?? "")
   const cliente = input.cliente !== undefined ? safeStr(input.cliente) : (existing?.cliente ?? "")
   const vencimento = input.vencimento !== undefined ? safeStr(input.vencimento) : (existing?.vencimento ?? "")
@@ -471,7 +495,7 @@ export async function cancelContaReceber(params: {
 async function cancelarTituloTravado(
   tx: ContaReceberDbClient,
   row: ContaReceberTitulo,
-  params: { motivo?: string; userLabel?: string; exigirSemRecebimento?: boolean },
+  params: { storeId: string; motivo?: string; userLabel?: string; exigirSemRecebimento?: boolean },
 ): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
   const cur = normalizeReceberStatus(row.status)
   // Já cancelado (ex.: pelo Financeiro, que cancela sem a flag e conserva o ledger): o
@@ -503,6 +527,7 @@ async function cancelarTituloTravado(
   const updated = await tx.contaReceberTitulo.update({
     where: { id: row.id },
     data: {
+      ...await dadosFinanceirosEmpresa(tx, params.storeId, row.valor, { carteiraHistoricaId: row.carteiraId }),
       status: RECEBER_STATUS.CANCELADO,
       payload: withHist as unknown as Prisma.InputJsonValue,
     },
@@ -531,22 +556,29 @@ async function gravarBaixaNoTitulo(
   row: ContaReceberTitulo,
   next: { status: ReceberStatusCanon; payload: Record<string, unknown> },
 ): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
+  if (!row.storeId || row.ativo === false) return { ok: false, reason: "not_found" }
+  const storeId = row.storeId
+  return emTransacaoFinanceira<ContaReceberServiceResult<ContaReceberTitulo>>(db === prisma ? undefined : db, async (tx) => {
   const data = {
     status: next.status,
     payload: next.payload as unknown as Prisma.InputJsonValue,
   }
 
-  const res = await db.contaReceberTitulo.updateMany({
+  const res = await tx.contaReceberTitulo.updateMany({
     where: { id: row.id, storeId: row.storeId, updatedAt: row.updatedAt },
     data,
   })
   if (res.count !== 1) return { ok: false, reason: "titulo_alterado" }
 
-  const updated = await db.contaReceberTitulo.findFirst({
+  // Provisionar somente após o CAS bem-sucedido, na mesma transação.
+  await tx.contaReceberTitulo.update({ where: { id: row.id }, data: await dadosFinanceirosEmpresa(tx, storeId, row.valor, { carteiraHistoricaId: row.carteiraId }) })
+
+  const updated = await tx.contaReceberTitulo.findFirst({
     where: { id: row.id, storeId: row.storeId },
   })
   if (!updated) return { ok: false, reason: "titulo_alterado" }
   return { ok: true, data: updated }
+  })
 }
 
 function saldoAberto(row: ContaReceberTitulo): number {
@@ -765,6 +797,7 @@ export type ContaReceberAuditItem = {
 export function buildContaReceberAuditTrail(titulos: ContaReceberTitulo[]): ContaReceberAuditItem[] {
   const out: ContaReceberAuditItem[] = []
   for (const row of titulos) {
+    if (!row.storeId) throw new Error("Contrato empresarial de auditoria exige loja.")
     const statusCanon = normalizeReceberStatus(row.status)
     const aberto = saldoAberto(row)
     const vencido =

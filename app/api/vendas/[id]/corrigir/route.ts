@@ -47,6 +47,7 @@ import { cancelContaReceber, upsertContaReceber } from "@/lib/financeiro/service
 import { RECEBER_STATUS, normalizeReceberStatus } from "@/lib/financeiro/contracts/status"
 import { aPrazoExigeCliente, podeLimparCliente, tituloEditavel, parseVencimentoBr } from "@/lib/vendas/correcao-cliente-titulo-plan"
 import { authenticateSupervisorPin } from "@/lib/auth/verify-supervisor-pin"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -381,11 +382,13 @@ export async function POST(
           if (existingEntrada) {
             await tx.movimentacaoFinanceira.update({
               where: { id: existingEntrada.id },
-              data: { valor: plan.cashTarget, descricao: descEntrada },
+              data: { ...await dadosFinanceirosEmpresa(tx, storeId, plan.cashTarget, { carteiraHistoricaId: existingEntrada.carteiraId }),
+                valor: plan.cashTarget, descricao: descEntrada },
             })
           } else {
             await tx.movimentacaoFinanceira.create({
               data: {
+                ...await dadosFinanceirosEmpresa(tx, storeId, plan.cashTarget),
                 storeId,
                 tipo: "entrada",
                 valor: plan.cashTarget,
@@ -604,11 +607,20 @@ export async function POST(
 
       // Propaga o novo cliente para os títulos à prazo ABERTOS (campo `cliente`).
       if (temAPrazoAberto && nomeClienteFinal) {
-        const upd = await prisma.contaReceberTitulo.updateMany({
-          where: { id: { in: titulosAbertos.map((t) => t.id) } },
-          data: { cliente: nomeClienteFinal },
+        titulosClienteAtualizados = await prisma.$transaction(async (tx) => {
+          const atuais = await tx.contaReceberTitulo.findMany({
+            where: { storeId, id: { in: titulosAbertos.map((t) => t.id) } },
+          })
+          for (const titulo of atuais) {
+            await tx.contaReceberTitulo.update({
+              where: { id: titulo.id },
+              data: { ...await dadosFinanceirosEmpresa(tx, storeId, undefined, {
+                receberTituloId: titulo.id, carteiraHistoricaId: titulo.carteiraId,
+              }), cliente: nomeClienteFinal },
+            })
+          }
+          return atuais.length
         })
-        titulosClienteAtualizados = upd.count
       }
       correcao.titulosClienteAtualizados = titulosClienteAtualizados
     }

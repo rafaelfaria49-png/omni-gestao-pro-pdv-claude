@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * DT-B — Anti-Negativo no PDV.
  *
@@ -14,7 +15,7 @@
  */
 import { describe, expect, it } from "vitest"
 import {
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   InsufficientStockError,
   type SalePayload,
 } from "./ops-upsert-venda"
@@ -240,3 +241,9 @@ describe("upsertVendaInTransaction — anti-negativo (DT-B)", () => {
     expect(ledger).toHaveLength(0)
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

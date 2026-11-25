@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * OPS-SALE-SAFETY-P1-001 — Endurecimento da venda persistida.
  *
@@ -18,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest"
 import {
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   UnresolvedProductError,
   CaixaSessaoInvalidaError,
   CaixaOriginalFechadoError,
@@ -487,3 +488,9 @@ describe("upsertVendaInTransaction — serviço real do PDV Assistência", () =>
     expect(persistedLines[0]).toMatchObject({ itemType: "avulso", isAvulso: true })
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

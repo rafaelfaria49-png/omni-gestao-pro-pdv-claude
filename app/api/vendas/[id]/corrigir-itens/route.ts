@@ -40,6 +40,7 @@ import { composeCorrectedSalePayloadLines } from "@/lib/vendas/preserve-sale-lin
 import { buildIdempotencyKey } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { assertProductCommercialSaleSupported, ProductCommercialInvalidError, ProductWeightNotOperationalError } from "@/lib/cadastros/product-commercial-contract"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -308,10 +309,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       })
       if (plan.cashEntryTarget > 0.005) {
         if (entrada) {
-          await tx.movimentacaoFinanceira.update({ where: { id: entrada.id }, data: { valor: plan.cashEntryTarget, descricao: descEntrada } })
+          await tx.movimentacaoFinanceira.update({ where: { id: entrada.id }, data: {
+            ...await dadosFinanceirosEmpresa(tx, storeId, plan.cashEntryTarget, { carteiraHistoricaId: entrada.carteiraId }),
+            valor: plan.cashEntryTarget, descricao: descEntrada,
+          } })
         } else {
           await tx.movimentacaoFinanceira.create({
-            data: { storeId, tipo: "entrada", valor: plan.cashEntryTarget, descricao: descEntrada, origem: "venda", referenciaId: pedidoId, createdAt: venda.at },
+            data: { ...await dadosFinanceirosEmpresa(tx, storeId, plan.cashEntryTarget),
+              storeId, tipo: "entrada", valor: plan.cashEntryTarget, descricao: descEntrada, origem: "venda", referenciaId: pedidoId, createdAt: venda.at },
           })
         }
       } else if (entrada) {

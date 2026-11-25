@@ -5,6 +5,7 @@ import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
 import { upsertContaReceber } from "@/lib/financeiro/services"
+import { persistirSnapshotFinanceiro } from "@/lib/gastos/financeiro-scope"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -57,13 +58,18 @@ export async function POST(req: Request) {
 
   try {
     await prismaEnsureConnected()
-    let applied = 0
+    const warnings: string[] = []
+    const itens: Array<{ chave: string; item: ContaReceberRow }> = []
     for (const raw of slice) {
       if (!raw || typeof raw !== "object") continue
       const r = raw as ContaReceberRow
       const localKey = String(r.id ?? "").trim()
       if (!localKey) continue
+      itens.push({ chave: localKey, item: r })
+    }
 
+    const applied = await persistirSnapshotFinanceiro(itens, async r => {
+      const localKey = String(r.id ?? "").trim()
       const scal = rowToScalar(r)
 
       await upsertContaReceber({
@@ -76,11 +82,13 @@ export async function POST(req: Request) {
         status: scal.status,
         payloadPatch: r as unknown as Record<string, unknown>,
         replacePayload: true,
+        onWarning: ({ campo, motivo }) => {
+          if (warnings.length < 24) warnings.push(`row_${campo}_${motivo}: vínculo opcional ignorado`)
+        },
       })
-      applied += 1
-    }
+    })
 
-    return NextResponse.json({ ok: true, count: applied })
+    return NextResponse.json({ ok: true, count: applied, ...(warnings.length ? { warnings } : {}) })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[ops/contas-receber-persist]", msg)

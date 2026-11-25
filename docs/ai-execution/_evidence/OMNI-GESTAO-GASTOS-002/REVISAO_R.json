@@ -1,0 +1,271 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-002",
+  "executor": "codex",
+  "familia_executor": "openai",
+  "executor_model": "gpt-6.1-sol",
+  "executor_effort_observed": "max",
+  "reviewer": "claude-code",
+  "familia_revisor": "anthropic",
+  "model": [
+    "claude-sonnet-5-5"
+  ],
+  "cliVersion": "2.1.288",
+  "protocol": "docs/ai-execution/TASK_LEVELS.md",
+  "c4_human_override": "Explicit ESCOPO C4 AUTORIZADO in human G002 command; executors.json class list is consultative, not a simulated C4 registry entry",
+  "status": "APPROVED",
+  "satisfied": true,
+  "commit_allowed": true,
+  "human_egress_authorization": "Explicit human G002 command authorizes Claude Code/Anthropic technical review without client credentials/data",
+  "data_sent": true,
+  "latest_sent_round": 5,
+  "scope_sent": "Actual R5 packet;161 technical/synthetic files;seven changed sources and49 unchanged against accepted R4; current56 source hashes approved",
+  "mode": "Official Claude Code --safe-mode --restricted --permission-mode plan --tools Read,Glob,Grep --strict-mcp-config with empty MCP --no-session-persistence; confined to isolated packet directory",
+  "reviews": [
+    {
+      "round": 1,
+      "technical_verdict": "CHANGES_REQUESTED",
+      "closure_verdict": "BLOCKED",
+      "session_id": "4536386c-c13c-4f93-be18-b9e12cca9d57",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "num_turns": 67,
+      "permission_denials": 0,
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r1-submission/result.json",
+      "raw_sha256": "A4BFF8BA290AE540FAB5F17FFAE1E02DEA143990BFC9337F4184C94AD8270081",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r1-submission/input-manifest.json",
+      "input_manifest_sha256": "03B82CA9592438EBA254EC0EC792B8A67E858A3F3BBA1BEF23A80BAA8309BB34",
+      "prompt_sha256": "6624ECE2579B309BF52CED48A47157330301114EDC4E0933E5C21DCBFF946FFE",
+      "findings": [
+        {
+          "id": "A1",
+          "status": "OPEN",
+          "summary": "Obsolete optional snapshot references abort the batch and can overwrite ledger account binding"
+        },
+        {
+          "id": "A2",
+          "status": "OPEN",
+          "summary": "Inactive historical account prevents reversals/cancellation/metadata updates"
+        },
+        {
+          "id": "A3",
+          "status": "EXTERNAL_PRE_DEPLOY_GATE",
+          "summary": "Runtime identity/RLS compatibility must be proven before any application outside synthetic test; no production access authorized"
+        },
+        {
+          "id": "M1",
+          "status": "HUMAN_SCOPE_CLARIFICATION_REQUIRED",
+          "summary": "Equal partial facts are preserved through snapshots and caller-controlled identity; old endpoints still have amount/sum retry heuristic"
+        },
+        {
+          "id": "M2",
+          "status": "OPEN_TEST",
+          "summary": "Real PG sale credit re-sync after partial payment, same and changed total"
+        },
+        {
+          "id": "M3",
+          "status": "OPEN_EVIDENCE",
+          "summary": "Read-only pre-migration audit SQL and violating synthetic legacy rows"
+        },
+        {
+          "id": "M4",
+          "status": "OPEN_MEASUREMENT",
+          "summary": "Measure large snapshot synchronization round trips/time"
+        },
+        {
+          "id": "M5",
+          "status": "OPEN_EVIDENCE",
+          "summary": "Attach baseline/migration logs, drift proof, named expected failure, source/check hashes; actual V3 suite has since run 109 PG cases"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "technical_verdict": "APPROVED_WITH_CONDITIONS",
+      "closure_verdict": "BLOCKED",
+      "satisfied": false,
+      "commit_allowed": false,
+      "session_id": "37781511-52cb-42e7-ba01-5d9ed9b89a72",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "num_turns": 76,
+      "permission_denials": 0,
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r2-submission/result.json",
+      "raw_sha256": "D11DF8717465DEFF364B1AD7165F58AA8265FDB0CD6F011091D2D4013019B4D0",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r2-submission/input-manifest.json",
+      "input_manifest_sha256": "66DD95DF56F5661E19A0783E33FC8F21CBF3FAA8E094CBF0DBF1EED019532F7D",
+      "prompt_sha256": "8E6F62A5C39B164FE0768254874A582F1D0C9324CDDB4DAA011B70D6E40BCB1B",
+      "confirmed_closed": [
+        "A1",
+        "A2 implementation",
+        "M2",
+        "M3",
+        "M4 mitigation",
+        "M5",
+        "L2",
+        "L4",
+        "L5"
+      ],
+      "technical_conditions": [
+        "N1/T1 deterministic PostgreSQL concurrency and consistent title-before-wallet lock order if reproduced",
+        "N2/T2 negative/positive reversal exception tests and documented raw-SQL duplication boundary",
+        "N3-N9/T3 document operational/legacy limits, fix or justify explicit global Prisma transaction guard",
+        "Repeat tests and independent R after these corrections"
+      ]
+    },
+    {
+      "round": 3,
+      "technical_verdict": "APPROVED_WITH_CONDITIONS",
+      "closure_verdict": "BLOCKED",
+      "satisfied": false,
+      "commit_allowed": false,
+      "session_id": "8886507b-5bfa-470d-b280-bbb679d00685",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "num_turns": 36,
+      "permission_denials": 0,
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r3-submission/result.json",
+      "raw_sha256": "DD4B0EB264C17C03E8B20C94E51054F7BC36960CD91BC22E98F15A289909F132",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r3-submission/input-manifest.json",
+      "input_manifest_sha256": "01558B9DA6CCBB8126D6D1E0ECEF643ED7EDFA422536A56D8C53834B066CB46D",
+      "prompt_sha256": "1876CF1DFED27DAA1610E93DD1778842CA0F2905C17823EEEEF0BAA8E8155CEF",
+      "conditions_verified": [
+        "T1 single-title lock scenario corrected and reproduced before/after",
+        "T2 reversal trigger positive/negative proofs",
+        "T3 N3-N9 addressed/documented"
+      ],
+      "new_condition": "N10 multi-title receipt batch versus snapshot must be tested and fixed if confirmed; source outside allowlist"
+    },
+    {
+      "round": 4,
+      "technical_verdict": "APPROVED_WITH_CONDITIONS",
+      "closure_verdict": "BLOCKED",
+      "satisfied": false,
+      "commit_allowed": false,
+      "session_id": "f4e6221b-e5a0-4e35-be00-438cf03665c9",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "num_turns": 117,
+      "permission_denials": 0,
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r4-submission/result.json",
+      "raw_sha256": "CBED97BFEABAA871418921A03E5E48B9745AD0CC1052EED253C8D9C86D2D4BD8",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r4-submission/input-manifest.json",
+      "input_manifest_sha256": "6E648BED317DE61709E580FBDD47C89E8233DA83365A586315FC2F2A0E05F7F6",
+      "prompt_sha256": "71DE04A28AD49CB6F2447F193E84D1922B8FE8F4E4D2C528787824D6652789E3",
+      "lint_exception": "EXPLICITLY_ACCEPTED_FOR_EXACT_R4_HASHES;LINT_GLOBAL=BASELINE_FAIL;LINT_DELTA=PASS",
+      "conditions": [
+        "D1 classify definite no-effect rejection and allow browser recovery; preserve uncertain keys",
+        "D2 document/test strict unavailable-account policy for M1 endpoints",
+        "D3 explicit closed-period status and fresh-key negative control",
+        "D4 supply preserved raw N10/N11 FAIL logs",
+        "O1 document legacy last-payment reversal versus full-reference compensation limitation",
+        "Revalidate affected tests/typecheck/lint and obtain short real R on final delta"
+      ]
+    },
+    {
+      "round": 5,
+      "technical_verdict": "APPROVED",
+      "closure_verdict": "LOCAL_CLOSURE_APPROVED",
+      "satisfied": true,
+      "commit_allowed": true,
+      "session_id": "01c84800-0acc-4843-aa1f-dac3ed72b0e8",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "num_turns": 54,
+      "permission_denials": 0,
+      "cli": "2.1.288 (Claude Code)",
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r5-submission/result.json",
+      "raw_sha256": "C7640190121F0ED319571452C3D5F1BE15759709752461808F1CD503295E2C28",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r5-submission/input-manifest.json",
+      "input_manifest_sha256": "B64CFBCC0F7E60C4A489FCF2A7004234B7080311577EED84A69CF09E0066DB82",
+      "prompt_sha256": "37C13C9C378F8B159C49DBE6D8B76D6FCAF0007F9D24B960873ADE9C81D4F406",
+      "lint_exception_current_hashes": "ACCEPTED",
+      "closed_conditions": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "O1 documentation"
+      ],
+      "observations_nonblocking": [
+        {
+          "id": "R5_O1",
+          "summary": "Strict active-account policy also applies to the canonical title account; explicit canonical-column scenario reserved to G004."
+        },
+        {
+          "id": "R5_O2",
+          "summary": "Generic account-unavailable wording also covers title/profile mismatch; no effect or foreign-ID disclosure."
+        },
+        {
+          "id": "R5_O3",
+          "summary": "Storage removal failure can mask rejection text but preserves the pending key; no monetary risk."
+        }
+      ],
+      "external_gates_unchanged": true
+    }
+  ],
+  "pending_human_authorizations": [],
+  "conditions": [],
+  "current_findings": {
+    "A1": "CLOSED_BY_R2",
+    "A2": "ACCEPTED_BY_R2_R3",
+    "N1": "ACCEPTED_BY_R3_R4",
+    "N2": "ACCEPTED_BY_R3",
+    "N6": "ACCEPTED_BY_R3",
+    "M1": "ACCEPTED_BY_REAL_R5_WITH_D1_D2_RECOVERY",
+    "N10": "CORRECTED_REAL_PG_BEFORE_AFTER;ACCEPTED_BY_R4;ORIGINAL_RAW_LOGS_SUPPLIED_D4",
+    "N11": "CORRECTED_REAL_PG_BEFORE_AFTER;ACCEPTED_BY_R4;ORIGINAL_RAW_LOGS_SUPPLIED_D4",
+    "W2": "ORIGINAL_ASSERTION_PRESERVED_PASS_ACCEPTED_R4",
+    "N12": "ALL6NATIVE_PG_PASS;read-only existing-profile validation,no provisioning/adoption",
+    "N13_N15_N17": "REAL40P01_BEFORE_AFTER_ACCEPTED_R4",
+    "N14": "MATERIALIZATION_DOES_NOT_PROVISION_OR_WAIT_ON_PROFILE_CREATION",
+    "N16_N18": "GLOBAL_DB_TRANSACTION_AND_TRANSFER_ROLLBACK_PROOFS_PASS",
+    "TYPECHECK": "FULL npm run typecheck EXIT0;accepted R5",
+    "LINT": "LINT_GLOBAL=BASELINE_FAIL;LINT_DELTA=PASS;EXPLICITLY_ACCEPTED_BY_REAL_R5_FOR_CURRENT_HASHES",
+    "D1": "CLOSED_BY_R5",
+    "D2": "STRICT_POLICY_AND_12PG_RECOVERY_CASES_ACCEPTED_R5",
+    "D3": "CLOSED_PERIOD_FRESH_KEY409_REPLAY200_ACCEPTED_R5",
+    "D4": "ORIGINAL_RAW40P01_LOGS_ACCEPTED_R5",
+    "O1": "DOCUMENTED_LIMIT_ACCEPTED_R5;COMPENSATION_BY_OPERATION_RESERVED_G004_NOT_IMPLEMENTED"
+  },
+  "external_pre_use_gates": [
+    "Actual runtime identity/privileges and RLS",
+    "Zero-blocking audit or explicit decision per row",
+    "DDL locks/volume/window",
+    "Pool/RTT/timeout and browser support for pending-intent storage"
+  ],
+  "current_validation_qualification": "855cases=854regularPASS+1preexistingExpectedFail;103currentrealPG+133retainedearlierPG acceptedR4;fulltypecheck0/build0;lintglobalBASELINE_FAIL/deltaPASS expresslyaccepted R5;localclosure approved",
+  "latest_executor_evidence": {
+    "coldBefore": "perfil-inicial-reproduction-2.json",
+    "transferBefore": "transferencia-perfil-reproduction.json",
+    "nativeRegression": "validation-g002-closure-final.json",
+    "focusedAfter": "perfil-materializacao-transferencia-corrected.json",
+    "independentReviewOfTheseLaterChanges": true,
+    "currentSummary": "final-r4-delta-validation-summary.json",
+    "finalRegression": "validation-r4-delta2-final.json",
+    "currentDeltaIndependentlyReviewed": true,
+    "deltaFocused": "r4-delta-focused.json",
+    "r4OriginalLogs": "r4-d4-original-deadlocks-proof.json",
+    "actualFinalReview": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G002-execution/review-r5-submission/parecer.md"
+  },
+  "latest_run_state": {
+    "round": 5,
+    "startedAt": "2026-10-21T01:51:24.3663909-03:00",
+    "cli": "2.1.288 (Claude Code)",
+    "modelRequested": "sonnet",
+    "effort": "high",
+    "family": "anthropic",
+    "actualModel": [
+      "claude-sonnet-5-5"
+    ],
+    "manifestSHA256": "B64CFBCC0F7E60C4A489FCF2A7004234B7080311577EED84A69CF09E0066DB82",
+    "promptSHA256": "37C13C9C378F8B159C49DBE6D8B76D6FCAF0007F9D24B960873ADE9C81D4F406",
+    "status": "TERMINAL",
+    "finishedAt": "2026-10-21T01:54:33.5590777-03:00",
+    "exitCode": 0
+  }
+}
