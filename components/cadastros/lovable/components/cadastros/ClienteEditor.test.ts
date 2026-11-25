@@ -14,7 +14,18 @@ vi.mock("@/app/actions/cliente-texto-livre", () => ({ interpretarClienteTextoLiv
 import { interpretarTextoCliente } from "@/lib/cadastros/natural-text/cliente"
 import { ClienteEditor, ClienteEditorDialog } from "./ClienteEditor"
 import { createFakeLocalSpeech } from "@/lib/cadastros/voice-capture/__fixtures__/fake-local-speech"
+import { CLIENT_VOICE_POLICY } from "@/lib/cadastros/voice-capture/cliente"
 
+/** Resolve no próprio commit em que o elemento surge, antes do flush assíncrono dos efeitos passivos:
+ * reproduz de forma determinística o clique humano que chega logo após o carregamento. */
+function atCommit<T extends Element>(find: () => T | null): Promise<T> {
+  const now = find()
+  if (now) return Promise.resolve(now)
+  return new Promise((resolve) => {
+    const mo = new MutationObserver(() => { const el = find(); if (el) { mo.disconnect(); resolve(el) } })
+    mo.observe(document.body, { subtree: true, childList: true, attributes: true })
+  })
+}
 const props = () => ({ storeId: "loja-a", editing: null, onClose: vi.fn(), onSaved: vi.fn() })
 const edit = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
 const click = (name: string) => fireEvent.click(screen.getByRole("button", { name }))
@@ -270,6 +281,20 @@ describe("HUB real client editor: local voice dictation", () => {
     expect(screen.getByText(/Ditado cancelado/)).toBeTruthy()
     expect(h.interpret).not.toHaveBeenCalled()
   })
+  it("dictation started right as local support is confirmed can still be cancelled", async () => {
+    const fake = useEngine()
+    render(React.createElement(ClienteEditor, props()))
+    edit("Descreva o novo cliente", "Nome: Manual de Teste")
+    fireEvent.click(await atCommit(() => screen.queryByRole("button", { name: "Ditar por voz" })))
+    const rec = fake.last()
+    act(() => rec.result("SYNTHETIC-RACE", true))
+    expect(label().readOnly).toBe(true)
+    click("Cancelar ditado")
+    expect(rec.aborted).toBe(true)
+    expect(label().readOnly).toBe(false)
+    expect(label().value).toBe("Nome: Manual de Teste")
+    expect(screen.getByText(/Ditado cancelado/)).toBeTruthy()
+  })
   it.each([["not-allowed", /Microfone bloqueado/], ["service-not-allowed", /recusou o reconhecimento local/], ["audio-capture", /Microfone indisponível/], ["no-speech", /Nenhuma fala detectada/]] as const)(
     "browser %s keeps text capture and discards the partial transcript", async (code, message) => {
       const fake = useEngine()
@@ -292,7 +317,13 @@ describe("HUB real client editor: local voice dictation", () => {
     ["never", /Não foi possível verificar/],
   ] as const)("pt-BR local %s: no start, no engine, text preserved", async (availability, message) => {
     const fake = useEngine({ availability })
+    // "never" depende só do timeout da consulta: relógio falso evita que a latência do runner o atrase.
+    if (availability === "never") vi.useFakeTimers()
     render(React.createElement(ClienteEditor, props()))
+    if (availability === "never") {
+      await act(async () => { await vi.advanceTimersByTimeAsync(CLIENT_VOICE_POLICY.availabilityTimeoutMs) })
+      vi.useRealTimers()
+    }
     expect(await screen.findByText(message, undefined, { timeout: 7000 })).toBeTruthy()
     click("Voz indisponível")
     expect(fake.instances).toHaveLength(0)
@@ -356,6 +387,32 @@ describe("HUB real client editor: local voice dictation", () => {
     await screen.findByLabelText("Sugestão: Nome")
     expect(h.interpret).toHaveBeenCalledWith("loja-b", "Nome: Loja B", "text")
   })
+  it.each(["close", "store", "hide", "restart"] as const)(
+    "an errored session still waiting for the engine's end is aborted on %s, never left running", async (action) => {
+      const fake = useEngine()
+      const p = props(); const view = render(React.createElement(ClienteEditorDialog, { ...p, open: true }))
+      await screen.findByRole("button", { name: "Ditar por voz" })
+      const rec = await dictate(fake, ["SYNTHETIC-ERRORED"])
+      act(() => rec.error("network"))
+      // Grace interval: error reported, engine has not ended yet.
+      expect(rec.aborted).toBe(false)
+      if (action === "close") view.rerender(React.createElement(ClienteEditorDialog, { ...p, open: false }))
+      if (action === "store") view.rerender(React.createElement(ClienteEditorDialog, { ...p, storeId: "loja-b", open: true }))
+      if (action === "hide") act(() => { window.dispatchEvent(new Event("pagehide")) })
+      if (action === "restart") click("Ditar por voz")
+      expect(rec.aborted).toBe(true)
+      act(() => { rec.result("SYNTHETIC-LATE", true); rec.end() })
+      expect(screen.queryByText(/SYNTHETIC-/)).toBeNull()
+      if (action === "restart") {
+        const next = fake.last()
+        expect(next).not.toBe(rec)
+        expect(next.configAtStart).toMatchObject({ processLocally: true })
+        expect(label().readOnly).toBe(true)
+        click("Cancelar ditado")
+        expect(next.aborted).toBe(true)
+      }
+      expect(fake.instances.every((r) => r.configAtStart === null || r.configAtStart.processLocally)).toBe(true)
+    })
   it("hiding the tab or leaving the page cancels an active capture", async () => {
     const fake = useEngine()
     render(React.createElement(ClienteEditor, props()))
