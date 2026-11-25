@@ -526,10 +526,14 @@ function nextDevolucaoId(list: DevolucaoRecord[]): string {
   const year = new Date().getFullYear()
   let max = 0
   for (const d of list) {
-    const m = d.id.match(/^DEV-(\d{4})-(\d+)$/)
+    const m = d.id.match(/^DEV-(\d{4})-(\d+)(?:-[a-z0-9]+)?$/)
     if (m && parseInt(m[1], 10) === year) max = Math.max(max, parseInt(m[2], 10))
   }
-  return `DEV-${year}-${String(max + 1).padStart(4, "0")}`
+  // O contador é POR NAVEGADOR: o sufixo aleatório impede que dois terminais gerem a
+  // mesma chave de idempotência (`DevolucaoVenda.localId`) e uma devolução seja
+  // descartada no servidor como "replay" de outra (OMNI-PDV-TROCAS-…-P1-001).
+  const sufixo = Math.random().toString(36).slice(2, 8)
+  return `DEV-${year}-${String(max + 1).padStart(4, "0")}-${sufixo}`
 }
 
 type OpsState = {
@@ -698,6 +702,8 @@ interface OperationsContextType {
    * caixa/fechamento. Best-effort: erro de rede não altera o estado.
    */
   refreshSalesFromServer: () => Promise<void>
+  /** Recarrega o catálogo/estoque do servidor (ex.: após troca confirmada no servidor). */
+  refreshCatalogFromServer: () => Promise<void>
   /** Versão do catálogo carregado (PDV-CADASTROS-SYNC-AUTOMATICO-001); `null` antes da 1ª carga. */
   catalogVersion: string | null
   /** Pergunta a versão do catálogo da loja e baixa o snapshot se mudou; `force` baixa direto. */
@@ -3899,6 +3905,7 @@ export function OperationsProvider({
       registrarDevolucao,
       registrarOperacaoCaixa,
       refreshSalesFromServer,
+      refreshCatalogFromServer: refreshInventoryFromServer,
       retrySyncSale,
       retrySyncSaleRetroactive,
       recoverQuarantinedSale,
@@ -3948,6 +3955,7 @@ export function OperationsProvider({
       quarantineReviewKeys,
       catalogVersion,
       checkCatalog,
+      refreshInventoryFromServer,
       watchCatalogSync,
       syncConnectivity,
       saleSyncPhases,

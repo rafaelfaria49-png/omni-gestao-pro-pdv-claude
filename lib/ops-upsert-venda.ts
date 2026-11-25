@@ -329,6 +329,14 @@ export type UpsertVendaOptions = {
    */
   finalizacaoAoVivo?: boolean
   /**
+   * OMNI-PDV-TROCAS-DEVOLUCOES-INTEGRIDADE-HISTORICO-P1-001 — troca imediata atômica.
+   * Quando presente, o `creditoVale` da venda é debitado SOMENTE deste `ClienteCredito`
+   * (o crédito que a própria troca acabou de gerar, na mesma transação), em vez do FIFO
+   * pelos vales do titular. Dispensa o CPF do titular (troca sem vale residual não precisa
+   * de conta de crédito do cliente) e mantém o débito atômico e fail-closed.
+   */
+  creditoValeCreditoId?: string
+  /**
    * Quando `true`, a baixa de estoque bloqueia qualquer decremento que deixaria o saldo
    * negativo, falhando com `InsufficientStockError`. Usado no fluxo PDV ao vivo
    * (`/api/ops/venda-persist`). O replay legado (`/api/ops/sync-legacy-vendas`) mantém
@@ -1268,7 +1276,44 @@ export async function upsertVendaInTransaction(
   // crédito não debitado nem saldo negativo.
   const creditoValeUsado = arredonda2(pb?.creditoVale ?? 0)
   const cpfNorm = typeof sale.customerCpf === "string" ? sale.customerCpf.replace(/\D/g, "") : ""
-  if (creditoValeUsado > 0) {
+  const creditoAlvoId = options?.creditoValeCreditoId?.trim() || ""
+  if (creditoValeUsado > 0 && creditoAlvoId) {
+    // Troca imediata: débito exclusivo do crédito gerado pela própria troca (mesma tx).
+    const alvo = await tx.clienteCredito.findFirst({
+      where: { id: creditoAlvoId, storeId: lojaId, status: "ativo" },
+      select: { id: true, clienteDoc: true },
+    })
+    const upd = alvo
+      ? await tx.clienteCredito.updateMany({
+          where: { id: alvo.id, storeId: lojaId, status: "ativo", saldoAtual: { gte: creditoValeUsado } },
+          data: { saldoAtual: { decrement: creditoValeUsado } },
+        })
+      : { count: 0 }
+    if (!alvo || upd.count === 0) {
+      throw new CreditoValeInsuficienteError({
+        pedidoId,
+        clienteDoc: alvo?.clienteDoc ?? cpfNorm,
+        solicitado: creditoValeUsado,
+        faltante: creditoValeUsado,
+      })
+    }
+    const atual = await tx.clienteCredito.findUnique({ where: { id: alvo.id }, select: { saldoAtual: true } })
+    const saldoDepois = arredonda2(atual?.saldoAtual ?? 0)
+    if (saldoDepois <= 0.001) {
+      await tx.clienteCredito.update({ where: { id: alvo.id }, data: { status: "zerado" } })
+    }
+    await tx.usoCreditoCliente.create({
+      data: {
+        creditoId: alvo.id,
+        storeId: lojaId,
+        vendaId: pedidoId,
+        valor: creditoValeUsado,
+        saldoAntes: arredonda2(saldoDepois + creditoValeUsado),
+        saldoDepois,
+        operador: operadorLabel ?? "",
+      },
+    })
+  } else if (creditoValeUsado > 0) {
     if (!cpfNorm) {
       // Sem titular não há a quem debitar — concluir seria contabilizar crédito inexistente.
       throw new CreditoValeInsuficienteError({
