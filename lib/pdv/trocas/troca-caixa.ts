@@ -75,11 +75,12 @@ export type RegularizacaoSessaoItem = {
  * são exibidos à parte, com o total recalculado e a diferença.
  */
 export function regularizacoesDaSessao(
-  vendas: Array<{ pedidoId: string; payload: unknown }>,
+  vendas: Array<{ pedidoId: string; payload: unknown; status?: string | null }>,
   devolucoes: Array<{ id: string; localId: string; payload: unknown }>,
 ): { itens: RegularizacaoSessaoItem[]; dinheiroLiquido: number } {
   const itens: RegularizacaoSessaoItem[] = []
   for (const v of vendas) {
+    if (v.status === "cancelada") continue // venda substituta cancelada depois não conta
     const p = asRecord(v.payload)
     const reg = asRecord(p?.regularizacaoTroca)
     if (!reg) continue

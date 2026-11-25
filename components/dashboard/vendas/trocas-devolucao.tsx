@@ -93,7 +93,8 @@ function formatBrl(n: number) {
 function parseValor(raw: string): number {
   const t = raw.trim().replace(/\s|R\$/g, "")
   if (!t) return Number.NaN
-  const norm = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t
+  // "1.299,90" / "129,90" (vírgula decimal); "1.299" sem vírgula = milhar (pt-BR); "129.90" = decimal.
+  const norm = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "") : t
   const n = Number(norm)
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : Number.NaN
 }

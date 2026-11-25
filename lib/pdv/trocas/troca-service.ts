@@ -511,14 +511,22 @@ async function registrarNaTransacao(
     const pesos = novos.map((nv) => Math.round(nv.valorTotal * 100))
     const somaPesos = pesos.reduce((a, b) => a + b, 0)
     const alvo = Math.round(conf * 100)
-    const base = pesos.map((p) => Math.floor((p * alvo) / somaPesos))
+    // Por unidade: cada linha fecha em (centavos por unidade) × quantidade; a sobra é dada em
+    // múltiplos da quantidade, das linhas de menor quantidade para as maiores. Só recusa se não fechar.
+    const base = novos.map((nv, i) => Math.floor((pesos[i]! * alvo) / somaPesos / nv.quantidade) * nv.quantidade)
     let resto = alvo - base.reduce((a, b) => a + b, 0)
-    for (let i = 0; resto > 0; i = (i + 1) % base.length, resto -= 1) base[i]! += 1
+    const ordem = novos.map((nv, i) => ({ i, q: nv.quantidade })).sort((x, y) => x.q - y.q || x.i - y.i)
+    for (const { i, q } of ordem) {
+      if (resto <= 0) break
+      const unidades = Math.floor(resto / q)
+      base[i]! += unidades * q
+      resto -= unidades * q
+    }
+    if (resto !== 0) {
+      throw new TrocaError("REGULARIZACAO_VALOR_NAO_DIVISIVEL", "O valor confirmado não se divide exatamente pelas unidades da nova compra. Revise os itens.", 422)
+    }
     novos.forEach((nv, i) => {
       const totalCent = base[i]!
-      if (totalCent % nv.quantidade !== 0) {
-        throw new TrocaError("REGULARIZACAO_VALOR_NAO_DIVISIVEL", "O valor confirmado não se divide exatamente pelas unidades da nova compra. Revise os itens.", 422)
-      }
       nv.valorUnitario = totalCent / nv.quantidade / 100
       nv.valorTotal = totalCent / 100
     })

@@ -598,13 +598,46 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
               { kind: "ajuste", produtoId: c.ps4, novoSaldo: 1, origem: "manual", motivo: "contagem física", idempotencyKey: `inventario:inv-race-${i}:${c.ps4}` },
             ),
           )
-        const [reg, cont] = await Promise.allSettled([svc.registrarTroca(c.body()), contar()])
-        expect(reg.status).toBe("fulfilled")
+        // Contagem também do item NOVO (entregue ao cliente: físico 0) — baixa pelo motor.
+        const contarNovo = () =>
+          db.$transaction((tx: unknown) =>
+            applyStockMutationTx(
+              tx as never,
+              { storeId: LOJA, principal: null, source: "inventario-pg" },
+              { kind: "ajuste", produtoId: c.x360, novoSaldo: 0, origem: "manual", motivo: "contagem física", idempotencyKey: `inventario:inv-race-${i}:${c.x360}` },
+            ),
+          )
+        const [reg, cont, contNovo] = await Promise.allSettled([svc.registrarTroca(c.body()), contar(), contarNovo()])
         expect(cont.status).toBe("fulfilled")
-        // A contagem fixa o físico (1). Se veio antes, a regularização a reconhece; se veio depois, a sobrescreve.
+        expect(contNovo.status).toBe("fulfilled")
+        if (reg.status === "rejected") {
+          // Aceitável só a recusa explícita (nada gravado) — nunca saldo errado.
+          expect((reg.reason as { code?: string }).code ?? String(reg.reason)).toMatch(/INSUFFICIENT_STOCK|ESTOQUE|Estoque/i)
+          expect((await contagens(c.pid)).devs).toHaveLength(0)
+        }
+        // A contagem fixa o físico. Antes: a regularização a reconhece; depois: a sobrescreve.
         expect(await stock(c.ps4)).toBe(1)
+        expect(await stock(c.x360)).toBe(0)
       }
     }, 120_000)
+
+    it("valor confirmado com várias linhas fecha por unidade (39,99 em 1 + 3 unidades)", async () => {
+      const c = await cenario(0, 2)
+      await produto(`pel3-${c.pid}`, "PELICULA 3UN", 10, 5)
+      const out = await svc.registrarTroca(
+        c.body({
+          novosItens: [{ produtoId: c.x360, quantidade: 1 }, { produtoId: `pel3-${c.pid}`, quantidade: 3 }],
+          destinoExcedente: "dinheiro",
+          regularizacao: {
+            ...c.body().regularizacao,
+            valoresConfirmados: { totalNovaCompra: 139.99, diferencaRecebida: 20.09 },
+          },
+        }),
+      )
+      const linhas = out.resultado.itensNovos
+      expect(Math.round(linhas.reduce((s, l) => s + l.valorTotal, 0) * 100)).toBe(13999)
+      for (const l of linhas) expect(Math.round(l.valorUnitario * l.quantidade * 100)).toBe(Math.round(l.valorTotal * 100))
+    }, 60_000)
   })
 
   describe("P1-002 · vendas a prazo e carnê", () => {

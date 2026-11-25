@@ -1164,6 +1164,11 @@ export async function upsertVendaInTransaction(
     // Venda histórica: um AJUSTE absoluto de saldo (contagem/inventário) DEPOIS da venda
     // já refletiu esta saída física — baixar agora seria a segunda baixa da mesma venda.
     if (historicalRecovery) {
+      if (options?.historicalAbsorcaoSomenteInventario === true) {
+        // Trava o produto antes de procurar a contagem: uma contagem de inventário que comite
+        // entre a busca e a baixa seria ignorada e a baixa somaria por cima dela (P1-003).
+        await tx.$queryRaw`SELECT "id" FROM "estoque_produtos" WHERE "id" = ${produtoId} AND "storeId" = ${lojaId} FOR UPDATE`
+      }
       const ajustePosterior = await tx.movimentacaoEstoque.findFirst({
         where: {
           storeId: lojaId,

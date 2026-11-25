@@ -135,6 +135,8 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await expect(cupom.getByText(/Diferença paga \(Dinheiro\)/)).toBeVisible()
     await shot(page, "03-comprovante-troca")
     await cupom.getByRole("button", { name: "Fechar" }).click()
+    // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
+    await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
   })
 
   await test.step("Estoque, caixa e financeiro após a troca (servidor)", async () => {
@@ -191,6 +193,8 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     const cupom = page.getByRole("dialog", { name: /Comprovante — VALE-TROCA/ })
     await expect(cupom).toBeVisible()
     await cupom.getByRole("button", { name: "Fechar" }).click()
+    // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
+    await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
     expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vVale } })).toBe(1)
     expect(await db.clienteCredito.count({ where: { storeId: B, vendaOrigemId: vVale } })).toBe(1)
     await page.keyboard.press("Escape")
@@ -208,6 +212,8 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await expect(page.getByRole("dialog", { name: /Comprovante — DEVOLUÇÃO \/ REEMBOLSO/ })).toBeVisible()
     await shot(page, "06-reembolso-dinheiro")
     await page.getByRole("dialog", { name: /Comprovante/ }).getByRole("button", { name: "Fechar" }).click()
+    // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
+    await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
     await page.keyboard.press("Escape")
     const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
     expect(det.totais.devolucoesCaixa).toMatchObject({ reembolsosDinheiro: 119.9 })
@@ -225,6 +231,8 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await dialog.getByRole("button", { name: "Confirmar devolução" }).click()
     await expect(page.getByRole("dialog", { name: /Comprovante — DEVOLUÇÃO \/ REEMBOLSO/ })).toBeVisible()
     await page.getByRole("dialog", { name: /Comprovante/ }).getByRole("button", { name: "Fechar" }).click()
+    // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
+    await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
     // Mesmo diálogo, sem recarregar: o foco volta à busca e a próxima venda é aberta normalmente.
     await expect(busca).toBeFocused()
     await busca.fill(vPrazo)
@@ -370,6 +378,8 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     const cupom = page.getByRole("dialog", { name: /Comprovante — TROCA IMEDIATA/ })
     await expect(cupom).toBeVisible()
     await cupom.getByRole("button", { name: "Fechar" }).click()
+    // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
+    await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
     await page.keyboard.press("Escape")
 
     const nova = await db.venda.findFirstOrThrow({ where: { storeId: B, payload: { path: ["trocaOrigem", "vendaOrigem"], equals: vReg } } })
