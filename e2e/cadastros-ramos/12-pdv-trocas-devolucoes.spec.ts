@@ -421,8 +421,14 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await page.getByText(fechada.operador || "Caixa E2E trocas").first().click()
     const bloco = page.getByTestId("caixa-regularizacoes-posteriores")
     await expect(bloco).toBeVisible({ timeout: 60_000 })
-    await expect(bloco).toContainText("Recalculado (não substitui o original)")
+    await expect(bloco).toContainText("Dinheiro recalculado (não substitui o original)")
     await expect(bloco).toContainText("horário aproximado")
+    // Fechamento via API sem `saldoDinheiroEsperado`: o original em dinheiro não é comprovável —
+    // aparece "indisponível", nunca o saldo final de todas as formas como dinheiro da gaveta.
+    await expect(bloco.getByTestId("regularizacao-esperado-original")).toContainText("indisponível")
+    await expect(bloco.getByTestId("regularizacao-recalculado")).toContainText("indisponível")
+    await expect(bloco.getByTestId("regularizacao-esperado-indisponivel")).toBeVisible()
+    await expect(bloco).toContainText(/Regularizado depois \(dinheiro\):\s*R\$\s*5,00/)
     await shot(page, "10-fechamento-original-e-regularizacao")
   })
 

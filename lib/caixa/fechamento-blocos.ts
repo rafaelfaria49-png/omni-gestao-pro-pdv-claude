@@ -84,6 +84,45 @@ function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0
 }
 
+function ehObjeto(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v)
+}
+
+/**
+ * Snapshot `payload.resumoFechamento` como veio do banco → resumo utilizável, ou `null` quando
+ * não dá para montar os blocos (sem `porOrigem`/`porPagamento`). Snapshot parcial nunca derruba
+ * a tela nem a impressão: itens de origem inválidos são descartados e os campos do 003A só
+ * valem se os três vierem como objeto (senão, recalcula pelo caminho legado).
+ */
+export function normalizarResumoFechamento(raw: unknown): ResumoFechamentoPersistido | null {
+  if (!ehObjeto(raw)) return null
+  if (!Array.isArray(raw.porOrigem) || !ehObjeto(raw.porPagamento)) return null
+  const porOrigem = raw.porOrigem.filter(ehObjeto)
+  const completo003A = ehObjeto(raw.recebidoPorOrigem) && ehObjeto(raw.recebidoPorForma) && ehObjeto(raw.gavetaDinheiro)
+  const r: Record<string, unknown> = { ...raw, porOrigem }
+  if (!completo003A) {
+    delete r.recebidoPorOrigem
+    delete r.recebidoPorForma
+    delete r.gavetaDinheiro
+  }
+  return r as ResumoFechamentoPersistido
+}
+
+/**
+ * Dinheiro esperado na gaveta gravado no fechamento original. `null` quando a sessão (antiga)
+ * não gravou esse valor — nunca usar `saldoFinal` (soma de todas as formas) no lugar.
+ */
+export function dinheiroEsperadoGravado(
+  payload: Record<string, unknown> | null | undefined,
+  resumo: ResumoFechamentoPersistido | null,
+): number | null {
+  const doPayload = payload?.saldoDinheiroEsperado
+  if (typeof doPayload === "number" && Number.isFinite(doPayload)) return doPayload
+  const doResumo = resumo?.saldoDinheiroEsperado
+  if (typeof doResumo === "number" && Number.isFinite(doResumo)) return doResumo
+  return null
+}
+
 function fmtBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
     Number.isFinite(v) ? v : 0,

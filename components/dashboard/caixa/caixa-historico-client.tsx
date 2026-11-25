@@ -38,26 +38,16 @@ import {
   htmlBlocoFechamento,
   htmlBlocosFechamento,
   montarBlocosFechamento,
+  dinheiroEsperadoGravado,
+  normalizarResumoFechamento,
   ORIGEM_VENDA_LABEL,
   type LinhaBloco,
-  type ResumoFechamentoPersistido,
 } from "@/lib/caixa/fechamento-blocos"
 import { aggregateRecebimentosSessao, classificarRecebimentoCaixa } from "@/lib/caixa/recebimentos-sessao"
 import type { RegularizacaoSessaoItem } from "@/lib/pdv/trocas/troca-caixa"
 import { periodoCaixaParaConsulta } from "@/lib/caixa/historico-periodo"
 
 const CAIXA_HISTORICO_PAGE_SIZE = 50
-
-/**
- * Snapshot de fechamento só é usado se estiver COMPLETO (gerado pelo modal de fechamento).
- * Snapshot parcial/antigo cai no caminho legado em vez de derrubar a página inteira.
- */
-function resumoFechamentoCompleto(raw: unknown): ResumoFechamentoPersistido | null {
-  if (!raw || typeof raw !== "object") return null
-  const r = raw as Partial<ResumoFechamentoPersistido> & Record<string, unknown>
-  if (!Array.isArray(r.porOrigem) || !r.porPagamento || typeof r.porPagamento !== "object") return null
-  return r as ResumoFechamentoPersistido
-}
 
 /** Soma das vendas por forma no ledger legado (sessões sem resumoFechamento premium). */
 const LEDGER_VENDAS_KEYS = [
@@ -329,7 +319,7 @@ export function CaixaHistoricoClient() {
     // Recebido por origem × Recebido por forma × Gaveta (GOAL 003A). Snapshot antigo
     // recalcula contas × O.S. pelas operações da sessão. Sem resumo (sessão legada):
     // ledger de vendas + recebimentos lidos das operações.
-    const resumo = resumoFechamentoCompleto(payload?.resumoFechamento)
+    const resumo = normalizarResumoFechamento(payload?.resumoFechamento)
     const ledger = payload?.ledger as Record<string, number> | null
 
     let secaoVendas = ""
@@ -605,28 +595,43 @@ export function CaixaHistoricoClient() {
 function RegularizacoesPosteriores({
   regularizacoes,
   esperadoOriginal,
+  saldoFinalOriginal,
   fechadaEm,
 }: {
   regularizacoes: { itens: RegularizacaoSessaoItem[]; dinheiroLiquido: number }
+  /** Dinheiro esperado GRAVADO no fechamento; `null` em sessão antiga que não o gravou. */
   esperadoOriginal: number | null
+  saldoFinalOriginal: number | null
   fechadaEm: string | Date | null
 }) {
   const recalculado = esperadoOriginal != null ? Math.round((esperadoOriginal + regularizacoes.dinheiroLiquido) * 100) / 100 : null
   return (
     <div className="min-w-0 space-y-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs" data-testid="caixa-regularizacoes-posteriores">
       <p className="font-semibold text-foreground">Regularizações registradas depois do fechamento</p>
-      <div className="grid min-w-0 gap-1 sm:grid-cols-3">
-        <p className="text-muted-foreground">
-          Dinheiro esperado no fechamento original: <span className="font-semibold text-foreground">{esperadoOriginal != null ? fmt(esperadoOriginal) : "—"}</span>
+      <div className="grid min-w-0 gap-1 sm:grid-cols-2">
+        <p className="text-muted-foreground" data-testid="regularizacao-esperado-original">
+          Dinheiro esperado na gaveta no fechamento original:{" "}
+          <span className="font-semibold text-foreground">{esperadoOriginal != null ? fmt(esperadoOriginal) : "indisponível"}</span>
           {fechadaEm ? ` (fechado em ${new Date(fechadaEm).toLocaleString("pt-BR")})` : ""}
         </p>
         <p className="text-muted-foreground">
-          Regularizado depois: <span className="font-semibold text-foreground">{fmt(regularizacoes.dinheiroLiquido)}</span>
+          Saldo final original (todas as formas, não é dinheiro na gaveta):{" "}
+          <span className="font-semibold text-foreground">{saldoFinalOriginal != null ? fmt(saldoFinalOriginal) : "—"}</span>
         </p>
         <p className="text-muted-foreground">
-          Recalculado (não substitui o original): <span className="font-semibold text-foreground">{recalculado != null ? fmt(recalculado) : "—"}</span>
+          Regularizado depois (dinheiro): <span className="font-semibold text-foreground">{fmt(regularizacoes.dinheiroLiquido)}</span>
+        </p>
+        <p className="text-muted-foreground" data-testid="regularizacao-recalculado">
+          Dinheiro recalculado (não substitui o original):{" "}
+          <span className="font-semibold text-foreground">{recalculado != null ? fmt(recalculado) : "indisponível"}</span>
         </p>
       </div>
+      {esperadoOriginal == null && (
+        <p className="text-muted-foreground" data-testid="regularizacao-esperado-indisponivel">
+          Esta sessão foi fechada sem gravar o dinheiro esperado na gaveta, então não dá para comprovar o valor original em
+          dinheiro nem recalculá-lo. O saldo final original e o valor da regularização ficam preservados como foram registrados.
+        </p>
+      )}
       <ul className="divide-y divide-border/60">
         {regularizacoes.itens.map((r) => (
           <li key={`${r.tipo}-${r.referencia}`} className="min-w-0 py-1.5 text-muted-foreground">
@@ -661,7 +666,8 @@ function SessaoDetalheView({
   const totalDev = sessao.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
   const payload = sessao.payload as Record<string, unknown> | null
   const ledger = payload?.ledger as Record<string, number> | null
-  const resumo = resumoFechamentoCompleto(payload?.resumoFechamento)
+  const resumo = normalizarResumoFechamento(payload?.resumoFechamento)
+  const esperadoDinheiroOriginal = dinheiroEsperadoGravado(payload, resumo)
 
   // Contas × O.S. × estornos lidos das operações (GOAL 003A). Com resumo: blocos do
   // fechamento; sem resumo (sessão legada): vendas do ledger + recebimentos das operações.
@@ -689,7 +695,8 @@ function SessaoDetalheView({
       {regularizacoes && regularizacoes.itens.length > 0 && (
         <RegularizacoesPosteriores
           regularizacoes={regularizacoes}
-          esperadoOriginal={typeof esperadoGaveta === "number" ? esperadoGaveta : null}
+          esperadoOriginal={esperadoDinheiroOriginal}
+          saldoFinalOriginal={sessao.saldoFinal ?? null}
           fechadaEm={sessao.fechadaEm ?? null}
         />
       )}
@@ -809,12 +816,12 @@ function SessaoDetalheView({
             Vendas por origem
           </p>
           <div className="grid grid-cols-2 gap-1.5 text-sm sm:grid-cols-3">
-            {resumo.porOrigem.map((o) => (
-              <div key={o.key} className="rounded-lg border border-border bg-secondary/50 px-2 py-1.5 text-center">
+            {resumo.porOrigem.map((o, i) => (
+              <div key={o.key ?? i} className="rounded-lg border border-border bg-secondary/50 px-2 py-1.5 text-center">
                 <p className="text-[10px] text-muted-foreground">
-                  {(ORIGEM_VENDA_LABEL as Record<string, string>)[o.key] ?? o.label} ({o.qtdItens})
+                  {(ORIGEM_VENDA_LABEL as Record<string, string>)[o.key] ?? o.label ?? "—"} ({Number(o.qtdItens) || 0})
                 </p>
-                <p className="font-semibold">{fmt(o.valorBruto)}</p>
+                <p className="font-semibold">{fmt(Number(o.valorBruto) || 0)}</p>
               </div>
             ))}
           </div>
