@@ -417,6 +417,7 @@ describe("Piloto Omni Premium — Aba Geral (dirty state, descarte, falha parcia
     expect(screen.getAllByText("Nenhuma unidade ativa").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: "Selecionar em Lojas" })).toBeTruthy();
     expect(screen.queryByText(/Não foi possível carregar os dados da unidade/)).toBeNull();
+    expect(screen.queryByText("Preferências regionais")).toBeNull();
   });
 
   it("revalidação em segundo plano da mesma loja preserva rascunho de Ramo e recursos (B2) e reversão de ramo limpa override redundante (M4)", async () => {

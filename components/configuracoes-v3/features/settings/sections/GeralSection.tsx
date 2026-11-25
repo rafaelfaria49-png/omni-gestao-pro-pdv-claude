@@ -650,7 +650,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
       ) : null}
 
       {/* ── 4. PREFERÊNCIAS REGIONAIS (compacto e honestamente somente leitura) ─ */}
-      {clientMode === false ? (
+      {!noLoja && clientMode === false ? (
         <SettingsReadonlySummary
           icon={<Globe className="h-4 w-4" />}
           title="Preferências regionais"
