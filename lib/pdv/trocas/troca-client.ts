@@ -25,6 +25,8 @@ export type TrocaRequestBody = {
   motivo?: string
   sessaoId?: string | null
   terminalId?: string | null
+  /** Regularização de troca já feita: sessão original (fechada) + data econômica real. */
+  regularizacao?: { sessaoId: string; dataEconomica: string; justificativa: string }
 }
 
 export function novoOperationId(): string {

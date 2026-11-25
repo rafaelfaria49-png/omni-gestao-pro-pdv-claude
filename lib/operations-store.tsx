@@ -704,6 +704,12 @@ interface OperationsContextType {
   refreshSalesFromServer: () => Promise<void>
   /** Recarrega o catálogo/estoque do servidor (ex.: após troca confirmada no servidor). */
   refreshCatalogFromServer: () => Promise<void>
+  /** Reenvio MANUAL de uma devolução da fila antiga (P1-002) — nunca automático. */
+  reenviarDevolucaoLocal: (
+    devolucaoId: string,
+  ) => Promise<{ ok: true; idempotente?: boolean } | { ok: false; code: string; message: string }>
+  /** Arquiva uma devolução local ausente no servidor, desfazendo só os efeitos locais dela. */
+  arquivarDevolucaoLocal: (devolucaoId: string, motivo: string) => { ok: true } | { ok: false; message: string }
   /** Versão do catálogo carregado (PDV-CADASTROS-SYNC-AUTOMATICO-001); `null` antes da 1ª carga. */
   catalogVersion: string | null
   /** Pergunta a versão do catálogo da loja e baixa o snapshot se mudou; `force` baixa direto. */
@@ -2982,64 +2988,121 @@ export function OperationsProvider({
     }
   }, [storageKey])
 
-  const flushPendingDevolucoes = useCallback(() => {
-    if (!lojaResolvida) return
-    const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true)
-    if (pending.length === 0) return
-    const lj = opsLojaIdFromStorageKey(storageKey)
-    for (const dev of pending) {
+  /**
+   * OMNI-PDV-TROCAS-DEVOLUCOES-FINAL-RECOVERY-P1-002 — devoluções da fila ANTIGA (gravadas
+   * só neste navegador pelo fluxo local-first, antes do `POST /api/ops/trocas`).
+   *
+   * Não há mais reenvio AUTOMÁTICO: uma devolução antiga reenviada sozinha dias depois pode
+   * duplicar efeitos (estoque/crédito) de uma troca já regularizada por outro caminho, ou
+   * colidir com o número `DEV-AAAA-NNNN` de outro terminal. O reenvio é uma ação explícita,
+   * por devolução, e o servidor recusa colisão, quantidade acima do disponível e venda com
+   * saldo a receber.
+   */
+  const reenviarDevolucaoLocal = useCallback<OperationsContextType["reenviarDevolucaoLocal"]>(
+    async (devolucaoId) => {
+      if (!lojaResolvida) return { ok: false, code: "LOJA_NAO_RESOLVIDA", message: LOJA_NAO_RESOLVIDA_MOTIVO }
+      const dev = stateRef.current.devolucoes.find((d) => d.id === devolucaoId)
+      if (!dev) return { ok: false, code: "NAO_ENCONTRADA", message: "Devolução local não encontrada neste terminal." }
+      if (dev.arquivada) return { ok: false, code: "ARQUIVADA", message: "Esta devolução local já foi arquivada." }
+      const lj = opsLojaIdFromStorageKey(storageKey)
+      const sale = stateRef.current.sales.find((s) => s.id === dev.saleId)
       const itensServidor = dev.lines.map((it) => {
-        const sale = stateRef.current.sales.find((s) => s.id === dev.saleId)
         const saleLine = sale?.lines.find((l) => l.inventoryId === it.inventoryId)
-        const valorUnitario = saleLine ? (saleLine.lineTotal / saleLine.quantity) : 0
         return {
           inventoryId: it.inventoryId,
           nome: it.name,
           quantidade: it.quantity,
-          valorUnitario,
+          valorUnitario: saleLine && saleLine.quantity > 0 ? saleLine.lineTotal / saleLine.quantity : 0,
           valorTotal: it.valor,
         }
       })
+      try {
+        const res = await fetch("/api/ops/devolucao", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", "x-assistec-loja-id": lj },
+          body: JSON.stringify({
+            localId: dev.id,
+            vendaLocalId: dev.saleId,
+            sessaoId: dev.sessaoId || undefined,
+            tipo: dev.tipo || dev.mode,
+            valorTotal: dev.lines.reduce((sum, l) => sum + l.valor, 0),
+            creditoEmitido: dev.creditIssued,
+            clienteNome: dev.customerName,
+            clienteDoc: dev.customerCpf,
+            operador: "",
+            motivo: dev.motivo || "",
+            observacao: dev.observacao || "",
+            itens: itensServidor,
+            payload: dev.payload || { saleId: dev.saleId, modo: dev.tipo || dev.mode, motivo: dev.motivo || "" },
+          }),
+        })
+        const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string; idempotente?: boolean }
+        if (res.ok) {
+          setState((prev) => ({
+            ...prev,
+            devolucoes: prev.devolucoes.map((d) => (d.id === dev.id ? { ...d, syncPending: false } : d)),
+          }))
+          return { ok: true, idempotente: body.idempotente === true }
+        }
+        return { ok: false, code: body.code ?? `HTTP_${res.status}`, message: body.error ?? `Servidor recusou (HTTP ${res.status}).` }
+      } catch {
+        return { ok: false, code: "REDE", message: "Sem resposta do servidor. Nada foi alterado neste terminal." }
+      }
+    },
+    [storageKey, lojaResolvida],
+  )
 
-      fetch("/api/ops/devolucao", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "x-assistec-loja-id": lj,
-        },
-        body: JSON.stringify({
-          localId: dev.id,
-          vendaLocalId: dev.saleId,
-          sessaoId: dev.sessaoId || undefined,
-          tipo: dev.tipo || dev.mode,
-          valorTotal: dev.lines.reduce((sum, l) => sum + l.valor, 0),
-          creditoEmitido: dev.creditIssued,
-          clienteNome: dev.customerName,
-          clienteDoc: dev.customerCpf,
-          operador: "",
-          motivo: dev.motivo || "",
-          observacao: dev.observacao || "",
-          itens: itensServidor,
-          payload: dev.payload || { saleId: dev.saleId, linhas: dev.lines.map(l => ({ inventoryId: l.inventoryId, quantity: l.quantity })), modo: dev.tipo || dev.mode, motivo: dev.motivo || "" },
-        }),
+  /**
+   * Arquiva UMA devolução local que o servidor confirmou não ter (registro mantido, marcado
+   * `arquivada`). Desfaz só os efeitos LOCAIS dela neste navegador: vale local, quantidade
+   * devolvida local e estoque local otimista. Nunca toca o servidor nem outras devoluções.
+   * O chamador registra antes a trilha de auditoria no servidor.
+   */
+  const arquivarDevolucaoLocal = useCallback<OperationsContextType["arquivarDevolucaoLocal"]>(
+    (devolucaoId, motivo) => {
+      const prev = stateRef.current
+      const dev = prev.devolucoes.find((d) => d.id === devolucaoId)
+      if (!dev) return { ok: false, message: "Devolução local não encontrada neste terminal." }
+      if (dev.arquivada) return { ok: true }
+      const k = normalizeDocDigits(dev.customerCpf || "")
+      const customerCredits = { ...prev.customerCredits }
+      if (k && dev.creditIssued > 0 && customerCredits[k]) {
+        const saldo = Math.max(0, Math.round((customerCredits[k]!.saldo - dev.creditIssued) * 100) / 100)
+        customerCredits[k] = { ...customerCredits[k]!, saldo }
+      }
+      const sales = prev.sales.map((s) =>
+        s.id !== dev.saleId
+          ? s
+          : {
+              ...s,
+              lines: s.lines.map((l) => {
+                const q = dev.lines.filter((x) => x.inventoryId === l.inventoryId).reduce((a, x) => a + x.quantity, 0)
+                return q > 0 ? { ...l, qtyReturned: Math.max(0, (l.qtyReturned ?? 0) - q) } : l
+              }),
+            },
+      )
+      const inventory = dev.syncPending
+        ? prev.inventory.map((i) => {
+            const q = dev.lines.filter((x) => x.inventoryId === i.id).reduce((a, x) => a + x.quantity, 0)
+            return q > 0 ? { ...i, stock: Math.max(0, i.stock - q) } : i
+          })
+        : prev.inventory
+      setState({
+        ...prev,
+        customerCredits,
+        sales,
+        inventory,
+        devolucoes: prev.devolucoes.map((d) =>
+          d.id === devolucaoId
+            ? { ...d, syncPending: false, arquivada: { at: new Date().toISOString(), motivo: motivo.trim().slice(0, 300) } }
+            : d,
+        ),
       })
-        .then(async (res) => {
-          if (res.ok) {
-            setState((prev) => ({
-              ...prev,
-              devolucoes: prev.devolucoes.map((d) => (d.id === dev.id ? { ...d, syncPending: false } : d)),
-            }))
-          } else {
-            const body = await res.text().catch(() => "")
-            console.warn("[devolucao-persist] re-sync HTTP", res.status, dev.id, "lojaId:", lj, "body:", body)
-          }
-        })
-        .catch((err: unknown) => {
-          console.warn("[devolucao-persist] re-sync rede", dev.id, "lojaId:", lj, err)
-        })
-    }
-  }, [storageKey, lojaResolvida])
+      return { ok: true }
+    },
+    [],
+  )
 
   const flushPendingCaixaOperations = useCallback(() => {
     if (!lojaResolvida) return
@@ -3099,10 +3162,9 @@ export function OperationsProvider({
   useEffect(() => {
     if (!opsDbReady) return
     flushPendingSales()
-    flushPendingDevolucoes()
     flushPendingCaixaOperations()
     void autoReconcileQuarantinedSales()
-  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations, autoReconcileQuarantinedSales])
+  }, [opsDbReady, flushPendingSales, flushPendingCaixaOperations, autoReconcileQuarantinedSales])
 
   // Rede de segurança em sessão: re-tenta pendências quando a conexão volta,
   // quando a aba reganha foco e periodicamente.
@@ -3112,7 +3174,6 @@ export function OperationsProvider({
       if (typeof navigator !== "undefined" && navigator.onLine === false) return
       // Rede de volta: tenta já, sem esperar o backoff das falhas de quando estava fora.
       flushPendingSales({ resetBackoff: event?.type === "online" })
-      flushPendingDevolucoes()
       flushPendingCaixaOperations()
       void autoReconcileQuarantinedSales()
       // Reconcilia status autoritativo das vendas (ex.: cancelamento feito na tela
@@ -3133,7 +3194,6 @@ export function OperationsProvider({
   }, [
     opsDbReady,
     flushPendingSales,
-    flushPendingDevolucoes,
     flushPendingCaixaOperations,
     refreshSalesFromServer,
     autoReconcileQuarantinedSales,
@@ -3906,6 +3966,8 @@ export function OperationsProvider({
       registrarOperacaoCaixa,
       refreshSalesFromServer,
       refreshCatalogFromServer: refreshInventoryFromServer,
+      reenviarDevolucaoLocal,
+      arquivarDevolucaoLocal,
       retrySyncSale,
       retrySyncSaleRetroactive,
       recoverQuarantinedSale,
@@ -3956,6 +4018,8 @@ export function OperationsProvider({
       catalogVersion,
       checkCatalog,
       refreshInventoryFromServer,
+      reenviarDevolucaoLocal,
+      arquivarDevolucaoLocal,
       watchCatalogSync,
       syncConnectivity,
       saleSyncPhases,

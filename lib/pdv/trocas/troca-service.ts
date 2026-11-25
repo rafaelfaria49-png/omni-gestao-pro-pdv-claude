@@ -36,6 +36,8 @@ import { upsertVendaInTransaction, isPrismaUniqueConstraintError, type SalePaylo
 import { allocateSaleNumberForWriter } from "@/lib/vendas/sale-writer-v2"
 import { isRetryableSaleNumberingTransactionError } from "@/lib/vendas/server-sale-numbering"
 import { parseClientSaleId } from "@/lib/vendas/sale-identity-contracts"
+import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
+import { recebimentoDaVenda } from "@/lib/pdv/trocas/troca-recebimento"
 import {
   TROCA_PAYLOAD_SCHEMA,
   arredonda2,
@@ -93,8 +95,13 @@ export type RegistrarTrocaInput = {
   terminalId?: string | null
   /** Rótulo do operador derivado da SESSÃO (nunca do corpo da requisição). */
   operadorLabel: string
-  /** Writer V2 (numeração servidor) ativo — exigido pela troca imediata. */
-  numeracaoServidor: boolean
+  /**
+   * Regularização de troca/devolução JÁ REALIZADA no balcão e não registrada a tempo
+   * (P1-002). Reusa o contrato retroativo do motor (`allowClosedOriginalSession`): grava na
+   * sessão de caixa ORIGINAL (fechada) e na data econômica real, com trilha de auditoria —
+   * sem dinheiro novo na gaveta atual e sem sangria. Exige permissão de gerente (rota).
+   */
+  regularizacao?: { sessaoId: string; dataEconomica: string; justificativa: string } | null
 }
 
 export type ItemDevolvidoResultado = {
@@ -128,6 +135,8 @@ export type ResultadoTroca = {
   operador: string
   motivo: string
   at: string
+  /** Presente quando a operação regularizou uma troca já feita (data econômica ≠ registro). */
+  regularizacao?: { dataEconomica: string; registradaEm: string; sessaoOriginal: string | null; justificativa: string; operador: string } | null
 }
 
 export type RegistrarTrocaSaida = {
@@ -146,6 +155,7 @@ function hashPedido(input: RegistrarTrocaInput): string {
     linhas: [...input.linhas].sort((a, b) => a.lineIndex - b.lineIndex).map((l) => [l.lineIndex, l.quantidade]),
     novos: [...(input.novosItens ?? [])].sort((a, b) => a.produtoId.localeCompare(b.produtoId)).map((n) => [n.produtoId, n.quantidade]),
     fd: input.formaDiferenca ?? null,
+    reg: input.regularizacao ? [input.regularizacao.sessaoId, input.regularizacao.dataEconomica] : null,
     ex: input.destinoExcedente ?? null,
     fr: input.formaReembolso ?? null,
     doc: normalizeDocDigits(input.clienteDoc ?? ""),
@@ -223,6 +233,7 @@ async function registrarNaTransacao(
       pedidoId: true,
       status: true,
       total: true,
+      at: true,
       payload: true,
       clienteNome: true,
       itens: { select: { inventoryId: true, nome: true, quantidade: true, precoUnitario: true, lineTotal: true }, orderBy: { id: "asc" } },
@@ -233,7 +244,7 @@ async function registrarNaTransacao(
 
   const devolucoesExistentes: DevolucaoPersistida[] = await tx.devolucaoVenda.findMany({
     where: { storeId, vendaLocalId: pedidoId },
-    select: { id: true, localId: true, tipo: true, at: true, payload: true, itens: { select: { inventoryId: true, nome: true, quantidade: true } } },
+    select: { id: true, localId: true, tipo: true, at: true, payload: true, valorTotal: true, itens: { select: { inventoryId: true, nome: true, quantidade: true } } },
   })
   const linhasOriginais = linhasDaVenda(venda.payload, venda.itens)
   const { linhas: disponiveis } = linhasComDisponibilidade(linhasOriginais, devolucoesExistentes)
@@ -251,6 +262,37 @@ async function registrarNaTransacao(
     throw new TrocaError(APARELHO_REVERSAO_NAO_INTEGRADA.code, APARELHO_REVERSAO_NAO_INTEGRADA.message)
   }
 
+  // Devolução financeira só devolve o que a loja RECEBEU (a prazo/carnê em aberto bloqueia).
+  if (input.modo !== "somente_estoque") {
+    const titulos = await tx.contaReceberTitulo.findMany({
+      where: { storeId, localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
+      select: { status: true, valor: true, payload: true },
+    })
+    const pbOrigem = (venda.payload as { paymentBreakdown?: unknown } | null)?.paymentBreakdown
+    const rec = recebimentoDaVenda(
+      venda.total,
+      pbOrigem,
+      titulos.map((t) => ({ status: t.status, valor: t.valor, pago: sumPagamentosHistorico(t.payload) })),
+    )
+    if (rec.saldoAberto > 0.009) {
+      throw new TrocaError(
+        "VENDA_COM_SALDO_EM_ABERTO",
+        `Esta venda ainda tem ${rec.saldoAberto.toFixed(2).replace(".", ",")} a receber (a prazo/carnê). Reembolso, vale e troca ficam bloqueados até a quitação; use "Apenas estoque" ou trate o título no Financeiro.`,
+        409,
+        { recebido: rec.recebido, saldoAberto: rec.saldoAberto },
+      )
+    }
+    const jaDevolvidoFinanceiro = devolucoesExistentes
+      .filter((d) => d.tipo !== "somente_estoque")
+      .reduce((s, d) => s + (Number(d.valorTotal) || 0), 0)
+    if (jaDevolvidoFinanceiro + validacao.valorTotal > rec.recebido + 0.009) {
+      throw new TrocaError("DEVOLUCAO_ACIMA_DO_RECEBIDO", "O valor a devolver passa do que foi efetivamente recebido nesta venda.", 409, {
+        recebido: rec.recebido,
+        jaDevolvido: arredonda2(jaDevolvidoFinanceiro),
+      })
+    }
+  }
+
   const doc = normalizeDocDigits(input.clienteDoc ?? "")
   if (doc && doc.length !== 11 && doc.length !== 14) {
     throw new TrocaError("DOCUMENTO_INVALIDO", "CPF/CNPJ inválido: informe 11 ou 14 dígitos (ou deixe em branco).", 422)
@@ -260,11 +302,41 @@ async function registrarNaTransacao(
   const valorDevolvido = validacao.valorTotal
 
   // Sessão de caixa: obrigatória e ABERTA quando há dinheiro/nova venda; senão opcional.
-  const sessaoId = input.sessaoId?.trim() || null
+  // Na regularização, é a sessão ORIGINAL (fechada) que recebeu o dinheiro na época.
+  const reg = input.regularizacao ?? null
+  const sessaoId = (reg ? reg.sessaoId : input.sessaoId)?.trim() || null
   const exigeCaixa =
     input.modo === "troca" || (input.modo === "reembolso" && input.formaReembolso === "dinheiro")
-  if (sessaoId) {
-    const sessao = await tx.sessaoCaixa.findFirst({ where: { id: sessaoId, storeId }, select: { status: true } })
+  let dataEconomica: Date | null = null
+  if (reg) {
+    dataEconomica = new Date(reg.dataEconomica)
+    if (!sessaoId || Number.isNaN(dataEconomica.getTime()) || dataEconomica.getTime() > Date.now()) {
+      throw new TrocaError("REGULARIZACAO_INVALIDA", "Informe a data/hora real da troca (no passado) e a sessão de caixa da época.", 422)
+    }
+    if ((reg.justificativa ?? "").trim().length < 10) {
+      throw new TrocaError("REGULARIZACAO_INVALIDA", "Descreva a justificativa da regularização (mínimo 10 caracteres).", 422)
+    }
+    const s = await tx.$queryRaw<Array<{ status: string; abertaEm: Date; fechadaEm: Date | null }>>`
+      SELECT "status"::text AS status, "abertaEm", "fechadaEm" FROM "sessoes_caixa"
+      WHERE "id" = ${sessaoId} AND "storeId" = ${storeId} FOR UPDATE`
+    const sessaoOrig = s[0]
+    if (!sessaoOrig) throw new TrocaError("CAIXA_SESSAO_INVALIDA", "Sessão de caixa não encontrada nesta loja.", 404)
+    if (sessaoOrig.status !== "FECHADA" || !sessaoOrig.fechadaEm) {
+      throw new TrocaError("REGULARIZACAO_SESSAO_ABERTA", "A sessão escolhida ainda está aberta: registre a troca normalmente, sem regularização.")
+    }
+    const t = dataEconomica.getTime()
+    if (t < new Date(sessaoOrig.abertaEm).getTime() || t > new Date(sessaoOrig.fechadaEm).getTime()) {
+      throw new TrocaError("REGULARIZACAO_FORA_DA_SESSAO", "A data informada está fora do horário da sessão de caixa escolhida.", 422)
+    }
+    if (t < new Date(venda.at).getTime()) {
+      throw new TrocaError("REGULARIZACAO_ANTES_DA_VENDA", "A data da troca não pode ser anterior à venda original.", 422)
+    }
+  } else if (sessaoId) {
+    // Trava a linha da sessão (mesma trava do fechamento de caixa): um reembolso não entra
+    // numa sessão que está sendo fechada, e o fechamento recalcula com este reembolso incluído.
+    const travada = await tx.$queryRaw<Array<{ status: string }>>`
+      SELECT "status"::text AS status FROM "sessoes_caixa" WHERE "id" = ${sessaoId} AND "storeId" = ${storeId} FOR UPDATE`
+    const sessao = travada[0] ?? null
     if (!sessao) throw new TrocaError("CAIXA_SESSAO_INVALIDA", "Sessão de caixa não encontrada nesta loja.", 404)
     if (exigeCaixa && sessao.status !== "ABERTA") {
       throw new TrocaError("CAIXA_FECHADO", "O caixa está fechado. Abra o caixa para concluir a operação.")
@@ -294,12 +366,9 @@ async function registrarNaTransacao(
   type NovoItem = { produtoId: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }
   const novos: NovoItem[] = []
   if (input.modo === "troca") {
-    if (!input.numeracaoServidor) {
-      throw new TrocaError(
-        "TROCA_REQUER_NUMERACAO_SERVIDOR",
-        "A troca imediata exige a numeração de vendas no servidor, que não está ativa neste ambiente.",
-      )
-    }
+    // A nova venda SEMPRE recebe o número do alocador canônico do servidor (série da loja),
+    // nunca um número gerado no navegador — independe do gate que escolhe o writer do PDV.
+    // Loja sem código de numeração → erro explícito do alocador (SALE_NUMBERING_NOT_CONFIGURED).
     const agregados = new Map<string, number>()
     for (const n of input.novosItens ?? []) {
       const id = (n.produtoId ?? "").trim()
@@ -349,7 +418,10 @@ async function registrarNaTransacao(
   const formaReembolso: FormaReembolso | null =
     input.modo === "reembolso" ? input.formaReembolso! : destinoExcedente === "dinheiro" ? "dinheiro" : null
 
-  const at = new Date()
+  const at = dataEconomica ?? new Date()
+  const regularizacaoTrilha = reg
+    ? { dataEconomica: at.toISOString(), registradaEm: new Date().toISOString(), sessaoOriginal: sessaoId, justificativa: reg.justificativa.trim().slice(0, 500), operador: input.operadorLabel }
+    : null
   const tipo = TIPO_PERSISTIDO[input.modo]
 
   // ── 1. Documento de devolução (linhas exatas por lineIndex) ──────────────────────
@@ -422,6 +494,7 @@ async function registrarNaTransacao(
         origem: "devolucao",
         documento: input.operationId,
         motivo: motivo || `Devolução da venda ${pedidoId}`,
+        ...(regularizacaoTrilha ? { observacao: `Regularização da troca de ${regularizacaoTrilha.dataEconomica} (registrada em ${regularizacaoTrilha.registradaEm})` } : {}),
         idempotencyKey: StockIdempotency.devolucao(input.operationId, produtoId),
       },
     )
@@ -470,12 +543,16 @@ async function registrarNaTransacao(
         lineTotal: n.valorTotal,
         itemType: "produto",
       })),
-      ...({ trocaOrigem: { vendaOrigem: pedidoId, devolucaoId: dev.id, operationId: input.operationId } } as Record<string, unknown>),
+      ...({
+        trocaOrigem: { vendaOrigem: pedidoId, devolucaoId: dev.id, operationId: input.operationId },
+        ...(regularizacaoTrilha ? { regularizacaoTroca: regularizacaoTrilha } : {}),
+      } as Record<string, unknown>),
     } as SalePayload
     const r = await upsertVendaInTransaction(tx, storeId, sale, input.operadorLabel || undefined, {
       enforceStock: true,
       requireCaixaSession: true,
-      finalizacaoAoVivo: true,
+      // Regularização: grava na sessão original fechada (contrato retroativo do motor, auditado).
+      ...(regularizacaoTrilha ? { allowClosedOriginalSession: true } : { finalizacaoAoVivo: true }),
       ...(creditoId && plano.creditoAplicado > 0 ? { creditoValeCreditoId: creditoId } : {}),
       v2: { clientSaleId: clientSaleId.clientSaleId, allocate: (t) => allocateSaleNumberForWriter(t, storeId) },
     })
@@ -528,6 +605,7 @@ async function registrarNaTransacao(
     operador: input.operadorLabel,
     motivo,
     at: at.toISOString(),
+    ...(regularizacaoTrilha ? { regularizacao: regularizacaoTrilha } : {}),
   }
   await tx.devolucaoVenda.update({
     where: { id: dev.id },
@@ -578,6 +656,16 @@ export async function registrarTroca(input: RegistrarTrocaInput): Promise<Regist
   const lock = await verificarPeriodoFechado(input.storeId, new Date())
   if (lock.fechado) {
     throw new TrocaError("PERIODO_FECHADO", "Período financeiro fechado. Reabra o fechamento para registrar devoluções.")
+  }
+  if (input.regularizacao) {
+    // A data econômica cai num período que também não pode estar fechado no Financeiro.
+    const d = new Date(input.regularizacao.dataEconomica)
+    if (!Number.isNaN(d.getTime())) {
+      const lockEco = await verificarPeriodoFechado(input.storeId, d)
+      if (lockEco.fechado) {
+        throw new TrocaError("PERIODO_FECHADO", "O período financeiro da data da troca está fechado. Reabra-o no Financeiro para regularizar.")
+      }
+    }
   }
 
   let lastError: unknown

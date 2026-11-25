@@ -27,8 +27,6 @@ import {
   ClientSaleIdReusedError,
 } from "@/lib/ops-upsert-venda"
 import { isSaleNumberingError } from "@/lib/vendas/server-sale-numbering"
-import { resolveSaleNumberingWriter } from "@/lib/vendas/sale-numbering-runtime-gate"
-import { SALE_WRITER_FLOW } from "@/lib/vendas/sale-identity-contracts"
 import { handleEvent } from "@/lib/automation/automation-engine"
 import { dispatchSaleAutomationIfCreated } from "@/lib/vendas/sale-automation-dispatch"
 import { registrarTroca, TrocaError } from "@/lib/pdv/trocas/troca-service"
@@ -51,6 +49,10 @@ const schema = z.object({
   motivo: z.string().max(500).optional(),
   sessaoId: z.string().max(120).nullish(),
   terminalId: z.string().max(60).nullish(),
+  /** Regularização de troca já realizada (sessão original fechada + data econômica). */
+  regularizacao: z
+    .object({ sessaoId: z.string().min(1).max(120), dataEconomica: z.string().min(10).max(40), justificativa: z.string().min(10).max(500) })
+    .nullish(),
 })
 
 const ENGINE_409 = [
@@ -86,7 +88,9 @@ export async function POST(req: Request) {
 
   const denied = await apiGuardEnterpriseOrOps(
     lojaId,
-    (p) => p.pdv.devolucao && (data.modo !== "troca" || p.hubs.vendas),
+    // Regularização grava em sessão de caixa fechada: exige permissão de gerente (a mesma do
+    // cancelamento de venda), além da de devolução.
+    (p) => p.pdv.devolucao && (data.modo !== "troca" || p.hubs.vendas) && (!data.regularizacao || p.pdv.cancelarVenda),
     "Sem permissão para registrar trocas e devoluções.",
   )
   if (denied) return denied
@@ -112,7 +116,7 @@ export async function POST(req: Request) {
       sessaoId: data.sessaoId ?? null,
       terminalId: data.terminalId ?? null,
       operadorLabel,
-      numeracaoServidor: resolveSaleNumberingWriter().writer === SALE_WRITER_FLOW.V2,
+      regularizacao: data.regularizacao ?? null,
     })
 
     if (out.vendaCriada) {
@@ -136,7 +140,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: err.message, code: err.code ?? "TROCA_RECUSADA" }, { status: 409 })
     }
     if (isSaleNumberingError(e)) {
-      return NextResponse.json({ error: "Numeração de vendas indisponível. Tente novamente.", code: (e as { code?: string }).code }, { status: 503 })
+      const code = (e as { code?: string }).code
+      if (code === "SALE_NUMBERING_NOT_CONFIGURED") {
+        return NextResponse.json(
+          { error: "A loja não tem código de numeração de vendas configurado; a troca imediata precisa dele para numerar a nova venda.", code },
+          { status: 409 },
+        )
+      }
+      return NextResponse.json({ error: "Numeração de vendas indisponível. Tente novamente.", code }, { status: 503 })
     }
     console.error("[ops/trocas]", e instanceof Error ? e.message : String(e))
     return NextResponse.json({ error: "Falha ao registrar a troca. Nada foi gravado.", code: "TROCA_FALHOU" }, { status: 500 })

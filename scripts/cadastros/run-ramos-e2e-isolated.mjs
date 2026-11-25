@@ -63,7 +63,16 @@ try {
       stock: 3, warrantyDays: 90, category: "Sintéticos", metadata: legacyMetadata("modelo-sintetico-y") },
     { id: "e2e-d-legado", storeId: "e2e-d-acessorios", name: "Película sintética legado D", sku: "E2E-D-LEG", price: 20, precoCusto: 5,
       stock: 0, warrantyDays: 30, category: "Sintéticos", metadata: { atributos: { modeloCompativel: "Modelo Sintético Z" }, fiscal: { ncm: "39199090" } } },
+    // OMNI-PDV-TROCAS-…-P1-002 (spec 12): troca 119,90 → 129,90 sintética, códigos com zeros à esquerda.
+    { id: "e2e-b-ps4", storeId: "e2e-b-variedades", name: "CONTROLE SINTÉTICO PS4 WIRELESS", sku: "E2E-PS4", barcode: "0789000000017",
+      price: 119.9, precoCusto: 60, stock: 4, category: "Sintéticos troca" },
+    { id: "e2e-b-x360", storeId: "e2e-b-variedades", name: "CONTROLE SINTÉTICO X-360 SEM FIO", sku: "E2E-X360", barcode: "7890000000024",
+      price: 129.9, precoCusto: 65, stock: 6, category: "Sintéticos troca" },
+    { id: "e2e-b-pelicula", storeId: "e2e-b-variedades", name: "PELÍCULA SINTÉTICA 3D", sku: "E2E-PEL", price: 30, precoCusto: 5,
+      stock: 6, category: "Sintéticos troca" },
   ] })
+  // A troca imediata numera a nova venda pelo alocador canônico do servidor: série da loja B.
+  await db.store.update({ where: { id: "e2e-b-variedades" }, data: { codigoNumeracaoVenda: "E2EB" } })
   const user = async (email, name, password, role, lojaId) => db.adminUser.create({ data: {
     email, name, role, lojaId, accessScope: role === "ADMIN" ? "PLATFORM" : "STORE", password: await bcrypt.hash(password, 10),
     ...(lojaId ? { adminUserStores: { create: { storeId: lojaId } } } : {}),

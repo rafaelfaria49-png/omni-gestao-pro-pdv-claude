@@ -31,6 +31,7 @@ vi.mock("@/lib/auth/module-access", () => ({ requireModuleApi: async () => null 
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({ apiGuardEnterpriseOrOps: async () => null }))
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: async () => ({ ok: true }) }))
 vi.mock("@/lib/vendas/guard-estorno-venda", () => ({ requireEstornoStepUp: async () => ({ ok: true }) }))
+vi.mock("@/lib/auth/store-admin-cash-guard", () => ({ storeAdminCashApprovalDenied: async () => null }))
 vi.mock("@/lib/ops-api-gate", async (orig) => ({ ...(await orig<Record<string, unknown>>()), opsLojaIdFromRequest: (req: Request) => req.headers.get("x-assistec-loja-id") }))
 
 type Db = any
@@ -41,6 +42,7 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
   let consulta: typeof import("./troca-consulta")
   let legacyPOST: (req: Request) => Promise<Response>
   let cancelarPOST: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>
+  let fecharPOST: (req: Request) => Promise<Response>
   let sessaoAberta = ""
   let sessaoFechada = ""
   let opSeq = 0
@@ -74,7 +76,7 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
     })
   }
 
-  const base = () => ({ storeId: LOJA, operadorLabel: "Operador PG", numeracaoServidor: true, sessaoId: sessaoAberta })
+  const base = () => ({ storeId: LOJA, operadorLabel: "Operador PG", sessaoId: sessaoAberta })
 
   async function contagens(pedidoId: string) {
     const devs = await db.devolucaoVenda.findMany({ where: { storeId: LOJA, vendaLocalId: pedidoId } })
@@ -98,6 +100,7 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
     consulta = await import("./troca-consulta")
     ;({ POST: legacyPOST } = await import("@/app/api/ops/devolucao/route"))
     ;({ POST: cancelarPOST } = (await import("@/app/api/vendas/[id]/cancelar/route")) as unknown as { POST: typeof cancelarPOST })
+    ;({ POST: fecharPOST } = await import("@/app/api/ops/caixa/fechar/route"))
 
     await db.store.create({ data: { id: LOJA, name: "Troca PG A", codigoNumeracaoVenda: `T${SUF.slice(0, 3).toUpperCase()}` } })
     await db.store.create({ data: { id: LOJA_B, name: "Troca PG B", codigoNumeracaoVenda: `U${SUF.slice(0, 3).toUpperCase()}` } })
@@ -126,6 +129,7 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
       await db.venda.deleteMany({ where: { storeId } })
       await db.serieVenda.deleteMany({ where: { storeId } })
       await db.produtoDeposito?.deleteMany?.({ where: { storeId } }).catch(() => undefined)
+      await db.contaReceberTitulo.deleteMany({ where: { storeId } })
       await db.produto.deleteMany({ where: { storeId } })
       await db.sessaoCaixa.deleteMany({ where: { storeId } })
     }
@@ -355,6 +359,178 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
       expect((await res.json()).code).toBe("VENDA_DE_TROCA")
       expect((await db.venda.findFirst({ where: { id: nova.id } })).status).not.toBe("cancelada")
     })
+  })
+
+  describe("P1-002 · regularização de troca já realizada (cenário 000760)", () => {
+    const H = 3_600_000
+    let sessaoOrig = ""
+    let vendaAt = new Date()
+    beforeAll(async () => {
+      const abertura = new Date(Date.now() - 5 * 86_400_000)
+      vendaAt = new Date(abertura.getTime() + 4 * H)
+      sessaoOrig = (
+        await db.sessaoCaixa.create({ data: { storeId: LOJA, operador: "PG", status: "FECHADA", abertaEm: abertura, fechadaEm: new Date(abertura.getTime() + 7 * H) } })
+      ).id
+      await produto("ps4r", "CONTROLE DE VIDEO GAME PS4 WIRELESS", 119.9, 0, { sku: "SKU-PS4R", barcode: "0789000000999" })
+      await produto("x360r", "CONTROLE DE VIDEO GAME X-360 PC PS3 SEM FIO", 129.9, 1)
+      // Formato real da 000760: inventoryId = SKU, produtoId = id técnico, cartão de crédito, sem cliente.
+      await vendaOriginal(
+        "VDA-PG-R760",
+        [{ inventoryId: "SKU-PS4R", produtoId: "ps4r", name: "CONTROLE DE VIDEO GAME PS4 WIRELESS", quantity: 1, unitPrice: 119.9, lineTotal: 119.9, itemType: "produto" }],
+        { sessaoId: sessaoOrig, at: vendaAt },
+      )
+    })
+    const regBody = (over: Record<string, unknown> = {}) => ({
+      ...base(),
+      operationId: op(),
+      pedidoIdOrigem: "VDA-PG-R760",
+      modo: "troca" as const,
+      linhas: [{ lineIndex: 0, quantidade: 1 }],
+      novosItens: [{ produtoId: "x360r", quantidade: 1 }],
+      formaDiferenca: "dinheiro" as const,
+      motivo: "nao deu certo",
+      regularizacao: { sessaoId: sessaoOrig, dataEconomica: new Date(vendaAt.getTime() + H).toISOString(), justificativa: "Troca feita no balcão em 21/11; o sistema não concluiu." },
+      ...over,
+    })
+    const regCom = (sessaoId: string, deltaH: number, justificativa = "justificativa longa o bastante") => ({
+      regularizacao: { sessaoId, dataEconomica: new Date(vendaAt.getTime() + deltaH * H).toISOString(), justificativa },
+    })
+
+    it("validações: sessão aberta, fora da janela, antes da venda e justificativa curta", async () => {
+      await expect(svc.registrarTroca(regBody({ regularizacao: { sessaoId: sessaoAberta, dataEconomica: new Date(Date.now() - H).toISOString(), justificativa: "justificativa longa o bastante" } }))).rejects.toMatchObject({ code: "REGULARIZACAO_SESSAO_ABERTA" })
+      await expect(svc.registrarTroca(regBody(regCom(sessaoOrig, 10)))).rejects.toMatchObject({ code: "REGULARIZACAO_FORA_DA_SESSAO" })
+      await expect(svc.registrarTroca(regBody(regCom(sessaoOrig, -1)))).rejects.toMatchObject({ code: "REGULARIZACAO_ANTES_DA_VENDA" })
+      await expect(svc.registrarTroca(regBody(regCom(sessaoOrig, 1, "curta")))).rejects.toMatchObject({ code: "REGULARIZACAO_INVALIDA" })
+      expect((await contagens("VDA-PG-R760")).devs).toHaveLength(0)
+    })
+
+    it("grava na sessão ORIGINAL fechada e na data econômica: R$ 10,00 como recebido na época, nada na gaveta atual", async () => {
+      const recentes = () => db.movimentacaoFinanceira.count({ where: { storeId: LOJA, createdAt: { gte: new Date(Date.now() - 120_000) } } })
+      const antes = await recentes()
+      const out = await svc.registrarTroca(regBody())
+      const eco = new Date(vendaAt.getTime() + H)
+      expect(out.resultado.regularizacao).toMatchObject({ dataEconomica: eco.toISOString(), sessaoOriginal: sessaoOrig })
+      const c = await contagens("VDA-PG-R760")
+      expect(c.devs).toHaveLength(1)
+      expect(c.devs[0].sessaoId).toBe(sessaoOrig)
+      expect(new Date(c.devs[0].at).toISOString()).toBe(eco.toISOString())
+      expect(c.novas).toHaveLength(1)
+      const nova = c.novas[0]
+      expect(new Date(nova.at).toISOString()).toBe(eco.toISOString())
+      expect(nova.payload).toMatchObject({ sessaoId: sessaoOrig, retroactiveSync: true, originalSessionClosed: true, regularizacaoTroca: { sessaoOriginal: sessaoOrig } })
+      expect(c.entradas).toHaveLength(1)
+      expect(c.entradas[0].valor).toBe(10)
+      expect(new Date(c.entradas[0].createdAt).toISOString()).toBe(eco.toISOString())
+      expect(c.saidas).toHaveLength(0) // nenhuma sangria nem saída fictícia
+      expect(c.creditos[0]).toMatchObject({ valorOriginal: 119.9, saldoAtual: 0, status: "zerado" })
+      expect((await db.produto.findUnique({ where: { id: "ps4r" } })).stock).toBe(1)
+      expect((await db.produto.findUnique({ where: { id: "x360r" } })).stock).toBe(0)
+      expect(await recentes()).toBe(antes) // nada lançado com data de hoje
+      expect((await db.sessaoCaixa.findUnique({ where: { id: sessaoOrig } })).status).toBe("FECHADA")
+    }, 60_000)
+  })
+
+  describe("P1-002 · vendas a prazo e carnê", () => {
+    async function vendaPrazo(pid: string, pb: Record<string, number>, titulo?: { status: string; valor: number; pago?: number }) {
+      await db.venda.create({
+        data: {
+          storeId: LOJA,
+          pedidoId: pid,
+          total: 100,
+          status: "concluida",
+          at: new Date(Date.now() - 86_400_000),
+          payload: { id: pid, total: 100, paymentBreakdown: pb, lines: [{ inventoryId: "p2", produtoId: "p2", name: "P2", quantity: 2, unitPrice: 50, lineTotal: 100 }] },
+          itens: { create: [{ inventoryId: "p2", nome: "P2", quantidade: 2, precoUnitario: 50, lineTotal: 100 }] },
+        },
+      })
+      if (titulo) {
+        await db.contaReceberTitulo.create({
+          data: {
+            storeId: LOJA,
+            localKey: `pdv-aprazo-${pid}`,
+            descricao: pid,
+            valor: titulo.valor,
+            status: titulo.status,
+            payload: titulo.pago ? { historico: [{ tipo: "pagamento", valor: titulo.pago }] } : {},
+          },
+        })
+      }
+    }
+    const reemb = (pid: string) =>
+      svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: pid, modo: "reembolso", formaReembolso: "pix", linhas: [{ lineIndex: 0, quantidade: 1 }] })
+
+    it("em aberto, parcialmente recebida, carnê e misto em aberto → financeira bloqueada; estoque permitido", async () => {
+      await vendaPrazo("VDA-PG-AP1", { aPrazo: 100 }, { status: "pendente", valor: 100 })
+      await vendaPrazo("VDA-PG-AP2", { aPrazo: 100 }, { status: "parcial", valor: 100, pago: 40 })
+      await vendaPrazo("VDA-PG-AP3", { dinheiro: 70, carne: 30 })
+      await vendaPrazo("VDA-PG-AP4", { dinheiro: 50, aPrazo: 50 }, { status: "pendente", valor: 50 })
+      for (const pid of ["VDA-PG-AP1", "VDA-PG-AP2", "VDA-PG-AP3", "VDA-PG-AP4"]) {
+        await expect(reemb(pid)).rejects.toMatchObject({ code: "VENDA_COM_SALDO_EM_ABERTO" })
+        await expect(
+          svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: pid, modo: "vale_credito", clienteDoc: "12345678909", clienteNome: "C", linhas: [{ lineIndex: 0, quantidade: 1 }] }),
+        ).rejects.toMatchObject({ code: "VENDA_COM_SALDO_EM_ABERTO" })
+        await expect(
+          svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: pid, modo: "troca", linhas: [{ lineIndex: 0, quantidade: 1 }], novosItens: [{ produtoId: "x360", quantidade: 1 }] }),
+        ).rejects.toMatchObject({ code: "VENDA_COM_SALDO_EM_ABERTO" })
+      }
+      expect((await contagens("VDA-PG-AP1")).creditos).toHaveLength(0)
+      const e = await svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: "VDA-PG-AP1", modo: "somente_estoque", linhas: [{ lineIndex: 0, quantidade: 1 }] })
+      expect(e.resultado.valorDevolvido).toBe(0)
+    }, 60_000)
+
+    it("quitada (a prazo pago e misto pago): reembolso, troca mais cara e mais barata liberados", async () => {
+      await vendaPrazo("VDA-PG-AP5", { aPrazo: 100 }, { status: "pago", valor: 100 })
+      await vendaPrazo("VDA-PG-AP6", { dinheiro: 50, aPrazo: 50 }, { status: "parcial", valor: 50, pago: 50 })
+      expect((await reemb("VDA-PG-AP5")).resultado.reembolso).toMatchObject({ valor: 50, forma: "pix" })
+      const caro = await svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: "VDA-PG-AP6", modo: "troca", linhas: [{ lineIndex: 0, quantidade: 1 }], novosItens: [{ produtoId: "x360", quantidade: 1 }], formaDiferenca: "pix" })
+      expect(caro.resultado).toMatchObject({ creditoAplicado: 50, diferenca: { valor: 79.9 } })
+      const barato = await svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: "VDA-PG-AP6", modo: "troca", linhas: [{ lineIndex: 0, quantidade: 1 }], novosItens: [{ produtoId: "barato", quantidade: 1 }], destinoExcedente: "dinheiro" })
+      expect(barato.resultado).toMatchObject({ creditoAplicado: 30, excedente: { valor: 20, destino: "dinheiro" } })
+    }, 60_000)
+  })
+
+  describe("P1-002 · fechamento de caixa considera reembolso em dinheiro", () => {
+    const fechar = (sessaoId: string, considerado: number) =>
+      fecharPOST(
+        new Request("http://local/api/ops/caixa/fechar", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-assistec-loja-id": LOJA },
+          body: JSON.stringify({ sessaoId, saldoFinal: 0, observacao: "", payload: { resumoFechamento: { reembolsosDinheiro: considerado } } }),
+        }),
+      )
+
+    it("resumo que ignora o reembolso em dinheiro é recusado; o correto fecha e grava o valor do servidor", async () => {
+      const sid = (await db.sessaoCaixa.create({ data: { storeId: LOJA, operador: "PG", status: "ABERTA" } })).id
+      await vendaOriginal("VDA-PG-FX1", [{ inventoryId: "p2", produtoId: "p2", name: "P2", quantity: 2, unitPrice: 15, lineTotal: 30 }])
+      await svc.registrarTroca({ ...base(), sessaoId: sid, operationId: op(), pedidoIdOrigem: "VDA-PG-FX1", modo: "reembolso", formaReembolso: "dinheiro", linhas: [{ lineIndex: 0, quantidade: 1 }] })
+      await svc.registrarTroca({ ...base(), sessaoId: sid, operationId: op(), pedidoIdOrigem: "VDA-PG-FX1", modo: "reembolso", formaReembolso: "pix", linhas: [{ lineIndex: 0, quantidade: 1 }] })
+      const r409 = await fechar(sid, 0)
+      expect(r409.status).toBe(409)
+      expect(await r409.json()).toMatchObject({ code: "RESUMO_DESATUALIZADO_DEVOLUCAO", reembolsosDinheiro: 15 })
+      expect((await db.sessaoCaixa.findUnique({ where: { id: sid } })).status).toBe("ABERTA")
+      const ok = await fechar(sid, 15)
+      expect(ok.status).toBe(200)
+      const s = await db.sessaoCaixa.findUnique({ where: { id: sid } })
+      expect(s.status).toBe("FECHADA")
+      expect(s.payload.devolucoesCaixaServer).toMatchObject({ reembolsosDinheiro: 15, reembolsosPix: 15, qtd: 2 })
+    }, 60_000)
+
+    it("corrida real devolução × fechamento: nunca fecha com esperado que ignora o dinheiro que saiu", async () => {
+      for (let i = 0; i < 5; i++) {
+        const sid = (await db.sessaoCaixa.create({ data: { storeId: LOJA, operador: "PG", status: "ABERTA" } })).id
+        const pid = `VDA-PG-RACE${i}`
+        await vendaOriginal(pid, [{ inventoryId: "p2", produtoId: "p2", name: "P2", quantity: 1, unitPrice: 15, lineTotal: 15 }])
+        const [t, fch] = await Promise.allSettled([
+          svc.registrarTroca({ ...base(), sessaoId: sid, operationId: op(), pedidoIdOrigem: pid, modo: "reembolso", formaReembolso: "dinheiro", linhas: [{ lineIndex: 0, quantidade: 1 }] }),
+          fechar(sid, 0),
+        ])
+        const fechouOk = fch.status === "fulfilled" && fch.value.status === 200
+        const trocaOk = t.status === "fulfilled"
+        expect(fechouOk && trocaOk).toBe(false)
+        expect(fechouOk || trocaOk).toBe(true)
+        if (!trocaOk) expect((t as PromiseRejectedResult).reason).toMatchObject({ code: "CAIXA_FECHADO" })
+      }
+    }, 120_000)
   })
 
   describe("rota legada /api/ops/devolucao (fila antiga)", () => {

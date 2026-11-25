@@ -150,6 +150,8 @@ export type DevolucaoPersistida = {
   tipo: string
   at: Date | string
   payload: unknown
+  /** Valor devolvido gravado no documento (financeiro), quando disponível. */
+  valorTotal?: number
   itens: Array<{ inventoryId: string | null; nome: string; quantidade: number }>
 }
 

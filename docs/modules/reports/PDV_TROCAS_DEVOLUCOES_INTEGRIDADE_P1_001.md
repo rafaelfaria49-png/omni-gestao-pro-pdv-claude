@@ -1,4 +1,4 @@
-# PDV · Trocas e devoluções — integridade e histórico (P1-001)
+# PDV · Trocas e devoluções — integridade e histórico (P1-001 + P1-002)
 
 GOAL `OMNI-PDV-TROCAS-DEVOLUCOES-INTEGRIDADE-HISTORICO-P1-001` · branch `fix/pdv-trocas-devolucoes-integridade-001` · base `origin/main e609ef0`.
 
@@ -56,21 +56,49 @@ Sem migration. Sem alteração em `prisma/schema.prisma`.
 | Rateio do desconto global podia somar 1 centavo acima do pago | P3 | **Corrigido**: rateio em centavos pelo maior resto (`liquidosPorLinha`). |
 | Reembolso/vale de venda a prazo/carnê ainda em aberto | P3 | **Não corrigido** (comportamento herdado da rota antiga) — residual abaixo. |
 
-## 5. Riscos residuais
+## 5. P1-002 — recuperação, caixa, a prazo/carnê e terminais
 
-- **P1 · Gaveta não conta reembolso em dinheiro**: `computeFechamentoResumo` não tem ramo de devolução (lacuna pré-existente, documentada em `lib/caixa/conferencia-acoes.ts`). O reembolso/sobra em dinheiro entra no financeiro, não no "esperado na gaveta". Corrigir mexe no fechamento de caixa — gate próprio.
-- **P2 · Snapshot de códigos para vendas futuras** não foi adicionado ao motor de venda; o detalhe mostra o cadastro atual rotulado como tal.
-- **P2 · Devolução legada sem linha** (`naoAlocado`) é exibida como inconsistência; não é corrigida automaticamente.
-- **P2 · Devolução de venda a prazo/carnê não quitada** pode virar reembolso ou vale sem conferir o recebido (herdado). Proposta: limitar ao valor efetivamente recebido.
-- **P2 · Troca imediata exige numeração V2** (`TROCA_REQUER_NUMERACAO_SERVIDOR` onde o writer V1 estiver ativo).
+### 5.1 Regularização de troca já realizada (contrato reutilizável, sem migration)
+`POST /api/ops/trocas` aceita `regularizacao: { sessaoId, dataEconomica, justificativa }` (permissão de devolução **e** de gerente — `pdv.cancelarVenda`). Reusa o contrato retroativo que o motor já tinha (`allowClosedOriginalSession`):
+- a devolução e a venda substituta gravam com a **data econômica real** e na **sessão de caixa original (fechada)**; a entrada da diferença cai na janela daquela sessão;
+- trilha: `regularizacao { dataEconomica, registradaEm, sessaoOriginal, justificativa, operador }` no resultado/payload, `retroactiveSync/originalSessionClosed/syncedAt` na venda, observação no movimento de estoque;
+- nada na gaveta atual, **nenhuma sangria**, nenhuma cobrança nova; o fechamento gravado da sessão antiga (`saldoFinal`) não é reescrito;
+- recusas: sessão ainda aberta, data fora da janela da sessão, data antes da venda, justificativa curta, período financeiro fechado na data econômica;
+- `GET /api/ops/trocas/sessoes?dia=` lista as sessões fechadas do dia para escolha.
 
-## 6. Proposta de recuperação da venda 000760 (aguarda autorização do proprietário)
+### 5.2 Fechamento de caixa
+`resumoDevolucoesCaixa` (regra única): reembolso e sobra de troca **em dinheiro** deduzem a gaveta; Pix deduz só o saldo movimentado; vale, crédito consumido, estorno de cartão e "apenas estoque" não deduzem; reembolso legado sem forma não é presumido (fica em `legadoSemForma`). A sessão é a da própria devolução. `sessao-detalhe` devolve o resumo (sem expor o payload com CPF); `computeFechamentoResumo` e a composição da gaveta deduzem o valor. **Corrida devolução × fechamento**: a troca trava a linha da sessão (`FOR UPDATE`) e o fechamento também; o fechamento recalcula no servidor e recusa (`RESUMO_DESATUALIZADO_DEVOLUCAO`) um resumo que ignore dinheiro que saiu. Provado em PG (5 rodadas concorrentes).
 
-Nada foi executado. Depois do deploy desta PR, **no terminal que fez a troca**:
+### 5.3 Vendas a prazo e carnê
+`recebimentoDaVenda` separa recebido (à vista + pagamentos dos títulos `pdv-aprazo-*` pelo histórico canônico do Contas a Receber) e saldo a receber (a prazo não pago + carnê — o motor não gera título para carnê, então não é presumido pago). Com saldo em aberto, **reembolso, vale e troca ficam bloqueados** (`VENDA_COM_SALDO_EM_ABERTO`) nas duas rotas; "Apenas estoque" segue permitido. Teto: nunca devolver acima do recebido. O ajuste da obrigação (abater o título) fica para contrato próprio do Financeiro.
 
-1. Abrir Troca/Devolução, buscar o EAN do PS4 ou "VDA-L01-2026-000760". O modal deve mostrar **Disponível 1** (servidor) e o aviso de devolução que só existe naquele terminal.
-2. Registrar a troca: linha PS4 → X-360, diferença R$ 10,00 em **dinheiro**, motivo "nao deu certo". Isso faz, numa transação: PS4 +1, X-360 −1, devolução + nova venda vinculadas, crédito 119,90 consumido, entrada de R$ 10,00.
-3. **Os R$ 10,00:** o fluxo lança a entrada na sessão de caixa **aberta no momento** (o sistema não grava em sessão fechada). Como o dinheiro entrou em 21/11 e não foi registrado, a sessão de 21/11 ficou com R$ 10,00 a mais na gaveta do que o sistema esperava. Registrar agora coloca esses R$ 10,00 no esperado da sessão atual — a gaveta de hoje **não** recebe dinheiro novo. Escolhas do proprietário:
-   registrar normalmente e, na mesma sessão, fazer uma sangria de R$ 10,00 com motivo "ajuste troca 000760 — recebido em 21/11", para a gaveta atual fechar. Não usar outra forma de pagamento (a forma real foi dinheiro) e não cobrar o cliente de novo.
-4. No mesmo terminal, conferir Vendas → pendências: se houver venda pendente/quarentenada do X-360, **descartar** (não reenviar) depois da troca confirmada.
-5. Conferir os outros terminais da loja: o aviso "devolução que não existe no servidor" indica outras devoluções perdidas.
+### 5.4 Devoluções antigas só no terminal
+A fila antiga **não é mais reenviada automaticamente**. No modal, cada devolução local ausente no servidor (inclusive as "marcadas como enviadas" pela colisão) tem: **Enviar ao servidor** (o servidor recusa colisão, quantidade e saldo em aberto) ou **Arquivar neste terminal** (motivo obrigatório; trilha append-only em `AuditoriaFinanceira`, entidade `devolucao_pdv_pendencia_local`, recusada se a devolução existir no servidor; desfaz só o vale local, a quantidade devolvida local e o estoque otimista dela; registro mantido como `arquivada`). Venda pendente com vale próxima no tempo é apontada para tratamento em Vendas → pendências.
+
+### 5.5 Numeração da troca
+A nova venda da troca usa **sempre** o alocador canônico do servidor (série da loja), sem depender do gate que escolhe o writer do PDV. Loja sem código de numeração → `SALE_NUMBERING_NOT_CONFIGURED` (409).
+
+### 5.6 Histórico
+Mantidos: código histórico da linha (`inventoryId` operacional), códigos do cadastro atual rotulados, vendido/devolvido/disponível, histórico de trocas, venda substituta, diferença e motivo. **Snapshot de identificadores em vendas futuras: não implementado** — exige mexer na sanitização de linhas do motor de venda (core). Proposta: gravar `sku`/`barcode` resolvidos no servidor em `payload.lines[]` no momento da venda, sem alterar `ItemVenda`. Aguarda decisão.
+
+## 6. Riscos residuais
+
+- **P2 · Ajuste da obrigação a prazo/carnê** (abater o título na devolução) não existe: a devolução financeira fica bloqueada até a quitação.
+- **P2 · Snapshot de códigos para vendas futuras** (5.6) não implementado.
+- **P2 · Devolução legada sem linha** (`naoAlocado`) é exibida, não corrigida.
+- **P2 · Reembolso legado sem forma** não entra na gaveta automaticamente (aparece como `legadoSemForma`).
+- **P2 · Conflito com as drafts #331/#336** (mesmos arquivos de troca e caixa): precisam ser reconciliadas ou fechadas antes do merge de qualquer uma.
+
+## 7. Proposta de recuperação da venda 000760 (aguarda autorização do proprietário)
+
+Nada foi executado. Depois do deploy desta PR, por um usuário **gerente**, **no terminal que fez a troca**:
+
+1. Abrir Troca/Devolução e buscar o EAN do PS4 ou `VDA-L01-2026-000760`: o modal mostra **Disponível 1** (servidor) e o aviso da devolução que só existe no terminal.
+2. Selecionar PS4 (1) → X-360 (1), forma da diferença **Dinheiro**, motivo "nao deu certo".
+3. Marcar **Regularizar operação já feita no balcão**: data/hora real da troca em 21/11/2026, sessão `cmwqhfve…` (21/11, 11:07–18:10), justificativa (ex.: "Troca feita no balcão em 21/11; sistema não concluiu; R$ 10,00 recebidos em dinheiro").
+4. Resultado: devolução e venda substituta datadas de 21/11 na sessão de 21/11; entrada de R$ 10,00 na janela daquela sessão (o dinheiro que ficou a mais na gaveta daquele dia); PS4 +1 e X-360 −1 agora; crédito 119,90 criado e consumido; **nada** na gaveta de hoje, **nenhuma sangria**, cliente não cobrado de novo. O `saldoFinal` gravado de 21/11 (636,89) permanece; o relatório recalculado da sessão passa a mostrar os R$ 10,00, com a trilha da regularização.
+5. No mesmo terminal: a devolução local antiga aparece como "ausente no servidor" → **Arquivar neste terminal** com motivo "regularizada pela operação …".
+6. Conferir Vendas → pendências: venda pendente do X-360, se houver, **descartar** (não reenviar).
+7. Conferir os outros terminais da loja pelo mesmo aviso.
+
+Se o horário exato da troca for desconhecido, usar um horário dentro da sessão de 21/11 e registrar isso na justificativa.

@@ -109,7 +109,8 @@ export function TrocasDevolucao({
 } = {}) {
   const { config } = useConfigEmpresa()
   const { toast } = useToast()
-  const { inventory, devolucoes, refreshSalesFromServer, refreshCatalogFromServer } = useOperationsStore()
+  const { inventory, devolucoes, sales, refreshSalesFromServer, refreshCatalogFromServer, reenviarDevolucaoLocal, arquivarDevolucaoLocal } =
+    useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
   const { sessaoId } = useCaixa()
   const searchParams = useSearchParams()
@@ -147,6 +148,20 @@ export function TrocasDevolucao({
   const [pendentes, setPendentes] = useState<TrocaPendente[]>([])
   const [cupom, setCupom] = useState<ResultadoTroca | null>(null)
 
+  // ── Regularização de troca já feita (P1-002) ────────────────────────────────
+  const [regularizar, setRegularizar] = useState(false)
+  const [regData, setRegData] = useState("")
+  const [regSessoes, setRegSessoes] = useState<Array<{ id: string; abertaEm: string; fechadaEm: string | null; operador: string }>>([])
+  const [regSessaoId, setRegSessaoId] = useState("")
+  const [regJustificativa, setRegJustificativa] = useState("")
+  const [regErro, setRegErro] = useState("")
+
+  // ── Devoluções antigas só deste terminal (P1-002) ───────────────────────────
+  const [acaoLocal, setAcaoLocal] = useState<{ id: string; tipo: "arquivar" } | null>(null)
+  const [motivoArquivo, setMotivoArquivo] = useState("")
+  const [msgLocal, setMsgLocal] = useState<Record<string, string>>({})
+  const [processandoLocal, setProcessandoLocal] = useState("")
+
   const lojaId = lojaAtivaId ?? ""
 
   useEffect(() => {
@@ -161,6 +176,12 @@ export function TrocasDevolucao({
     setExcessHandling(null)
     setFormaReembolso(null)
     setErroEnvio("")
+    setRegularizar(false)
+    setRegData("")
+    setRegSessaoId("")
+    setRegJustificativa("")
+    setAcaoLocal(null)
+    setMotivoArquivo("")
     setCpf("")
     setNome(v?.clienteNome ?? "")
     setMostrarHistorico(Boolean(v && v.linhas.some((l) => l.disponivel === 0 && l.devolvido > 0)))
@@ -252,7 +273,10 @@ export function TrocasDevolucao({
     () =>
       venda
         ? devolucoes.filter(
-            (d) => d.saleId === venda.pedidoId && (d.syncPending === true || !venda.devolucoes.some((s) => s.localId === d.id)),
+            (d) =>
+              d.saleId === venda.pedidoId &&
+              !d.arquivada &&
+              (d.syncPending === true || !venda.devolucoes.some((s) => s.localId === d.id)),
           )
         : [],
     [devolucoes, venda],
@@ -301,6 +325,8 @@ export function TrocasDevolucao({
     if (mode === "somente_estoque" && !selecionadas.some((l) => l.destino === "retorna_estoque"))
       return "Os itens selecionados não têm vínculo com o estoque."
     if (exigeTitular && (!docDigits || !nome.trim())) return "Informe CPF/CNPJ e nome do titular do vale."
+    if (regularizar && (!regData || !regSessaoId || regJustificativa.trim().length < 10))
+      return "Na regularização, informe a data/hora real, a sessão de caixa da época e a justificativa."
     if (docDigits && docDigits.length !== 11 && docDigits.length !== 14) return "CPF/CNPJ deve ter 11 ou 14 dígitos."
     return ""
   })()
@@ -383,8 +409,84 @@ export function TrocasDevolucao({
           }
         : {}),
       ...(mode === "reembolso" && formaReembolso ? { formaReembolso } : {}),
+      ...(regularizar && regData && regSessaoId
+        ? { regularizacao: { sessaoId: regSessaoId, dataEconomica: new Date(regData).toISOString(), justificativa: regJustificativa.trim() } }
+        : {}),
     }
     void enviar(body)
+  }
+
+  // ── Regularização: sessões fechadas do dia escolhido ─────────────────────────
+  useEffect(() => {
+    if (!regularizar || !regData || !lojaId) {
+      setRegSessoes([])
+      return
+    }
+    const dia = regData.slice(0, 10)
+    const ctrl = new AbortController()
+    setRegErro("")
+    fetch(`/api/ops/trocas/sessoes?dia=${encodeURIComponent(dia)}`, { headers: { "x-assistec-loja-id": lojaId }, credentials: "include", cache: "no-store", signal: ctrl.signal })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as { sessoes?: typeof regSessoes; error?: string }
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+        const lista = j.sessoes ?? []
+        setRegSessoes(lista)
+        const t = new Date(regData).getTime()
+        const cobre = lista.filter((s) => new Date(s.abertaEm).getTime() <= t && (!s.fechadaEm || new Date(s.fechadaEm).getTime() >= t))
+        setRegSessaoId(cobre.length === 1 ? cobre[0]!.id : "")
+        if (lista.length === 0) setRegErro("Nenhuma sessão de caixa fechada nesse dia.")
+      })
+      .catch((e) => {
+        if (!ctrl.signal.aborted) setRegErro(e instanceof Error ? e.message : String(e))
+      })
+    return () => ctrl.abort()
+  }, [regularizar, regData, lojaId])
+
+  // ── Devolução antiga só deste terminal: enviar ou arquivar (com trilha) ──────
+  const enviarLocal = async (id: string) => {
+    setProcessandoLocal(id)
+    const r = await reenviarDevolucaoLocal(id)
+    setProcessandoLocal("")
+    setMsgLocal((m) => ({ ...m, [id]: r.ok ? "Enviada e confirmada pelo servidor." : r.message }))
+    if (r.ok && venda) void abrirVenda(venda.pedidoId)
+  }
+
+  const arquivarLocal = async (id: string) => {
+    const dev = devolucoes.find((d) => d.id === id)
+    if (!dev || !venda || motivoArquivo.trim().length < 10) return
+    setProcessandoLocal(id)
+    try {
+      const res = await fetch("/api/ops/trocas/pendencia-local", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaId },
+        body: JSON.stringify({
+          localId: dev.id,
+          pedidoId: venda.pedidoId,
+          motivo: motivoArquivo.trim(),
+          declarado: {
+            at: dev.at,
+            tipo: dev.tipo || dev.mode,
+            creditoLocal: dev.creditIssued,
+            itens: dev.lines.map((l) => ({ nome: l.name, quantidade: l.quantity, valor: l.valor })),
+            estavaComoSincronizada: dev.syncPending !== true,
+          },
+        }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        setMsgLocal((m) => ({ ...m, [id]: j.error || `Servidor recusou (HTTP ${res.status}).` }))
+        return
+      }
+      const a = arquivarDevolucaoLocal(id, motivoArquivo)
+      setMsgLocal((m) => ({ ...m, [id]: a.ok ? "Arquivada neste terminal; trilha registrada no servidor." : a.message }))
+      setAcaoLocal(null)
+      setMotivoArquivo("")
+    } catch {
+      setMsgLocal((m) => ({ ...m, [id]: "Sem resposta do servidor. Nada foi alterado." }))
+    } finally {
+      setProcessandoLocal("")
+    }
   }
 
   const descartarPendente = (operationId: string) => {
@@ -599,9 +701,66 @@ export function TrocasDevolucao({
                 <AlertTriangle className="h-4 w-4 text-destructive" /> Este terminal tem devolução que não existe no servidor
               </p>
               <p className="mt-1 text-muted-foreground">
-                {devolucoesLocaisNaoConfirmadas.map((d) => d.id).join(", ")} — não conta como devolvida. Se ela chegar ao servidor
-                depois, será recusada caso a quantidade já tenha sido devolvida aqui.
+                Ela não conta como devolvida e não é reenviada sozinha. Trate uma a uma: envie ao servidor (ele recusa número repetido,
+                quantidade já devolvida e venda com saldo a receber) ou arquive se a troca já foi regularizada ou não aconteceu.
               </p>
+              {devolucoesLocaisNaoConfirmadas.map((d) => {
+                const vinculada = sales.find(
+                  (s) =>
+                    s.syncPending === true &&
+                    (s.paymentBreakdown?.creditoVale ?? 0) > 0 &&
+                    Math.abs(new Date(s.at).getTime() - new Date(d.at).getTime()) < 6 * 3_600_000,
+                )
+                return (
+                  <div key={d.id} className="mt-2 min-w-0 space-y-1.5 rounded-md border border-border bg-background p-2">
+                    <p className="font-mono font-semibold">
+                      {d.id} · {dataHora(d.at)} · {d.syncPending ? "pendente" : "marcada como enviada, ausente no servidor"}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {d.lines.map((l) => `${l.quantity}× ${l.name}`).join(", ")}
+                      {d.creditIssued > 0 ? ` · vale local ${formatBrl(d.creditIssued)}` : ""}
+                    </p>
+                    {vinculada && (
+                      <p className="text-destructive">
+                        Venda pendente possivelmente vinculada: {vinculada.id} (usa vale). Resolva-a em Vendas → pendências; não reenvie às cegas.
+                      </p>
+                    )}
+                    {acaoLocal?.id === d.id ? (
+                      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row">
+                        <Input
+                          value={motivoArquivo}
+                          onChange={(e) => setMotivoArquivo(e.target.value)}
+                          placeholder="Motivo (ex.: troca regularizada em 25/11)"
+                          className="h-8 min-w-0 flex-1 text-xs"
+                          aria-label="Motivo do arquivamento"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={motivoArquivo.trim().length < 10 || processandoLocal === d.id}
+                          onClick={() => void arquivarLocal(d.id)}
+                        >
+                          Confirmar arquivamento
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setAcaoLocal(null)}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button type="button" size="sm" variant="outline" disabled={processandoLocal === d.id} onClick={() => void enviarLocal(d.id)}>
+                          {processandoLocal === d.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null} Enviar ao servidor
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setAcaoLocal({ id: d.id, tipo: "arquivar" })}>
+                          Arquivar neste terminal…
+                        </Button>
+                      </div>
+                    )}
+                    {msgLocal[d.id] && <p className="text-muted-foreground">{msgLocal[d.id]}</p>}
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -814,6 +973,54 @@ export function TrocasDevolucao({
               </div>
               {formaReembolso === "estorno_cartao" && (
                 <p className="text-[11px] text-muted-foreground">O estorno na maquininha/adquirente é feito fora do sistema; aqui ele fica registrado como pendente de execução manual.</p>
+              )}
+            </div>
+          )}
+
+          {/* Regularização de operação já feita no balcão (P1-002) */}
+          {(mode === "troca" || mode === "reembolso") && (
+            <div className="min-w-0 space-y-2 rounded-lg border border-border p-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                <input type="checkbox" checked={regularizar} onChange={(e) => setRegularizar(e.target.checked)} className="h-4 w-4 accent-primary" />
+                Regularizar operação já feita no balcão (data passada)
+              </label>
+              {regularizar && (
+                <div className="min-w-0 space-y-2 text-xs">
+                  <p className="text-muted-foreground">
+                    Grava na sessão de caixa da época, com a data real e trilha de auditoria. O dinheiro já recebido não entra na gaveta de hoje
+                    e nada é cobrado de novo. Exige permissão de gerente.
+                  </p>
+                  <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="min-w-0 space-y-1">
+                      <Label className="text-[10px] font-semibold text-muted-foreground">Data e hora reais</Label>
+                      <Input type="datetime-local" value={regData} onChange={(e) => setRegData(e.target.value)} className="h-9 text-sm" aria-label="Data e hora reais da operação" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <Label className="text-[10px] font-semibold text-muted-foreground">Sessão de caixa da época</Label>
+                      <select
+                        aria-label="Sessão de caixa da época"
+                        value={regSessaoId}
+                        onChange={(e) => setRegSessaoId(e.target.value)}
+                        className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                      >
+                        <option value="">Selecione…</option>
+                        {regSessoes.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {dataHora(s.abertaEm)} → {s.fechadaEm ? dataHora(s.fechadaEm) : "—"} · {s.operador || "operador"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <Input
+                    value={regJustificativa}
+                    onChange={(e) => setRegJustificativa(e.target.value)}
+                    placeholder="Justificativa (obrigatória)"
+                    className="h-9 text-sm"
+                    aria-label="Justificativa da regularização"
+                  />
+                  {regErro && <p className="text-destructive">{regErro}</p>}
+                </div>
               )}
             </div>
           )}

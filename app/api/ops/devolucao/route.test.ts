@@ -69,6 +69,8 @@ const h = vi.hoisted(() => {
   const tx = {
     // Lock por venda (pg_advisory_xact_lock) — no fake, serialização é trivial.
     $executeRaw: async () => 0,
+    // Venda à vista nos cenários deste arquivo: nenhum título a prazo (P1-002).
+    contaReceberTitulo: { findMany: async () => [] },
     devolucaoVenda: {
       findUnique: async ({ where }: { where: { storeId_localId: { storeId: string; localId: string } } }) =>
         db.devolucoes.find(

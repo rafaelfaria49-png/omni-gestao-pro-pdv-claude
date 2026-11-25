@@ -332,6 +332,14 @@ export function montarBlocosFechamento(
       tipo: "deducao",
     })
   }
+  if ((gv.reembolsosDinheiro ?? 0) > EPS) {
+    linhasGaveta.push({
+      id: "gaveta.reembolsos-dinheiro",
+      rotulo: "Reembolsos de devolução em dinheiro",
+      valor: gv.reembolsosDinheiro ?? 0,
+      tipo: "deducao",
+    })
+  }
   linhasGaveta.push(
     { id: "gaveta.suprimentos", rotulo: "Suprimentos", valor: gv.suprimentos, tipo: "item", soma: true },
     { id: "gaveta.sangrias", rotulo: "Sangrias", valor: gv.sangrias, tipo: "deducao" },

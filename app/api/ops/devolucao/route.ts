@@ -15,6 +15,8 @@ import { StockIdempotency } from "@/lib/estoque/stock-ledger-contract"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { z } from "zod"
 import { linhasComDisponibilidade, linhasDaVenda } from "@/lib/pdv/trocas/troca-disponibilidade"
+import { recebimentoDaVenda } from "@/lib/pdv/trocas/troca-recebimento"
+import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -22,6 +24,14 @@ export const revalidate = 0
 
 function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+}
+
+class VendaComSaldoEmAbertoError extends Error {
+  readonly code = "VENDA_COM_SALDO_EM_ABERTO"
+  constructor(saldo: number) {
+    super(`Venda com ${saldo.toFixed(2)} ainda a receber (a prazo/carnê): devolução financeira bloqueada até a quitação.`)
+    this.name = "VendaComSaldoEmAbertoError"
+  }
 }
 
 class DevolucaoAcimaDoDisponivelError extends Error {
@@ -211,6 +221,19 @@ export async function POST(req: Request) {
             }
             if (livre !== undefined) livrePorChave.set(k, livre - it.quantidade)
           }
+          // OMNI-PDV-TROCAS-…-P1-002: só devolve dinheiro/crédito do que foi RECEBIDO.
+          if (data.tipo !== "somente_estoque") {
+            const titulos = await tx.contaReceberTitulo.findMany({
+              where: { storeId: lojaId, localKey: { startsWith: `pdv-aprazo-${data.vendaLocalId}` } },
+              select: { status: true, valor: true, payload: true },
+            })
+            const rec = recebimentoDaVenda(
+              vendaOrigem.total,
+              (vendaOrigem.payload as { paymentBreakdown?: unknown } | null)?.paymentBreakdown,
+              titulos.map((t) => ({ status: t.status, valor: t.valor, pago: sumPagamentosHistorico(t.payload) })),
+            )
+            if (rec.saldoAberto > 0.009) throw new VendaComSaldoEmAbertoError(rec.saldoAberto)
+          }
           let totalCalc = 0
           let todasResolvidas = true
           for (const it of data.itens) {
@@ -398,7 +421,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, devolucaoId: devolucao.id, devolucao })
   } catch (e) {
-    if (e instanceof AparelhoDevolucaoBloqueadaError || e instanceof DevolucaoAcimaDoDisponivelError) {
+    if (e instanceof AparelhoDevolucaoBloqueadaError || e instanceof DevolucaoAcimaDoDisponivelError || e instanceof VendaComSaldoEmAbertoError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
     }
     const msg = e instanceof Error ? e.message : String(e)
