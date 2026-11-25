@@ -134,7 +134,6 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     return () => { document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", onHide) }
   }, [])
   useEffect(() => {
-    if (voice.status !== "listening" && voice.status !== "transcribing") voiceSession.current = null
     if (voice.status !== "listening") return
     const timer = setInterval(() => setElapsedMs(Date.now() - voiceStartedAt.current), 250)
     return () => clearInterval(timer)
@@ -179,6 +178,9 @@ export function ClienteEditor({ storeId, editing, onClose, onSaved }: Props) {
     const emit = (event: VoiceCaptureEvent) => {
       if (!current()) return
       setVoice((v) => reduceClientVoiceCapture(v, event))
+      // The session is released by its own terminal event, never by a status effect: a pending
+      // effect from the render before the click would otherwise drop the session just started.
+      if (event.type === "end" || event.type === "cancel" || event.type === "error") voiceSession.current = null
       // A missing local pack surfaces as one of these errors: re-check, never go remote.
       if (event.type === "error" && (event.code === "language-not-supported" || event.code === "service-not-allowed")) refreshSupport()
     }

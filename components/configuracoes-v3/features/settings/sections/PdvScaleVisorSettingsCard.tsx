@@ -23,8 +23,10 @@ export function PdvScaleVisorSettingsCard() {
 }
 
 function ScaleVisorEditor({ business }: { business: ReturnType<typeof useStoreBusiness> }) {
-  const [savedValue, setSavedValue] = useState(business.pdvScaleVisorVisible)
-  const [draft, setDraft] = useState(business.pdvScaleVisorVisible)
+  // Salvo e rascunho num só estado: a sincronização com o servidor decide sobre o estado mais recente,
+  // nunca sobre o fechamento de uma renderização anterior ao clique do usuário.
+  const [{ savedValue, draft }, setValues] = useState(() => ({ savedValue: business.pdvScaleVisorVisible, draft: business.pdvScaleVisorVisible }))
+  const setDraft = (next: boolean) => setValues((v) => ({ ...v, draft: next }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -32,10 +34,9 @@ function ScaleVisorEditor({ business }: { business: ReturnType<typeof useStoreBu
   const dirty = draft !== savedValue
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   useEffect(() => {
-    if (!dirty && !saving) {
-      setSavedValue(business.pdvScaleVisorVisible)
-      setDraft(business.pdvScaleVisorVisible)
-    }
+    if (saving) return
+    const server = business.pdvScaleVisorVisible
+    setValues((v) => v.draft !== v.savedValue || (v.savedValue === server && v.draft === server) ? v : { savedValue: server, draft: server })
   }, [business.pdvScaleVisorVisible, dirty, saving])
 
   const save = async () => {
@@ -55,7 +56,7 @@ function ScaleVisorEditor({ business }: { business: ReturnType<typeof useStoreBu
         throw new Error("Não foi possível confirmar o salvamento do visor. Tente novamente.")
       }
       if (!alive.current) return
-      setSavedValue(draft)
+      setValues((v) => ({ ...v, savedValue: draft }))
       setSaved(true)
       await business.refresh()
     } catch {
