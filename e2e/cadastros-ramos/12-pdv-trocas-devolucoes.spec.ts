@@ -40,6 +40,20 @@ async function abrirPdvComCaixa(page: Page) {
   }
 }
 
+/**
+ * Fecha o diálogo de troca como o operador: Escape até fechar. O toast de confirmação do Radix
+ * é uma camada dispensável por cima do diálogo — o primeiro Escape fecha o toast, o seguinte o
+ * diálogo (comportamento padrão; sem isso o atalho CTRL seguinte era ignorado com a troca aberta).
+ */
+async function fecharTroca(page: Page) {
+  const troca = page.getByRole("dialog", { name: "Troca / Devolução" })
+  for (let i = 0; i < 3 && (await troca.count()) > 0; i += 1) {
+    await page.keyboard.press("Escape")
+    await troca.waitFor({ state: "detached", timeout: 2_000 }).catch(() => {})
+  }
+  await expect(troca).toHaveCount(0)
+}
+
 async function abrirTrocaNoPdv(page: Page) {
   await page.keyboard.press("Control")
   const avancado = page.getByRole("dialog", { name: "Funções avançadas (CTRL)" })
@@ -165,7 +179,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await expect(dialog.getByText(/Venda substituta/).first()).toBeVisible()
     await shot(page, "04-apos-reload-disponivel-zero")
     expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vTroca } })).toBe(1)
-    await page.keyboard.press("Escape")
+    await fecharTroca(page)
   })
 
   await test.step("Perda de resposta e reenvio da MESMA operação (vale-troca com CPF)", async () => {
@@ -197,7 +211,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
     expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vVale } })).toBe(1)
     expect(await db.clienteCredito.count({ where: { storeId: B, vendaOrigemId: vVale } })).toBe(1)
-    await page.keyboard.press("Escape")
+    await fecharTroca(page)
   })
 
   await test.step("Reembolso em dinheiro: entra no esperado da gaveta da sessão", async () => {
@@ -214,7 +228,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await page.getByRole("dialog", { name: /Comprovante/ }).getByRole("button", { name: "Fechar" }).click()
     // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
     await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
-    await page.keyboard.press("Escape")
+    await fecharTroca(page)
     const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
     expect(det.totais.devolucoesCaixa).toMatchObject({ reembolsosDinheiro: 119.9 })
     expect(JSON.stringify(det.sessao.devolucoes)).not.toContain("52998224725") // sem CPF na resposta
@@ -244,15 +258,14 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await expect(dialog.getByRole("alert")).toContainText("a receber")
     await shot(page, "06b-prazo-em-aberto-bloqueado")
     expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vPrazo } })).toBe(0)
-    await page.keyboard.press("Escape")
-    await expect(dialog).toHaveCount(0)
+    await fecharTroca(page)
     const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
     expect(det.totais.devolucoesCaixa).toMatchObject({ reembolsosDinheiro: 119.9, reembolsosPix: 119.9 })
     // O atalho do PDV segue funcionando depois de dois comprovantes e um Escape.
     dialog = await abrirTrocaNoPdv(page)
     busca = dialog.getByLabel("Buscar venda por produto, código, cupom ou cliente")
     await expect(busca).toBeVisible()
-    await page.keyboard.press("Escape")
+    await fecharTroca(page)
   })
 
   // ── Rota autoritativa (mesma que a tela usa) ─────────────────────────────────────────
@@ -380,7 +393,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await cupom.getByRole("button", { name: "Fechar" }).click()
     // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
     await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
-    await page.keyboard.press("Escape")
+    await fecharTroca(page)
 
     const nova = await db.venda.findFirstOrThrow({ where: { storeId: B, payload: { path: ["trocaOrigem", "vendaOrigem"], equals: vReg } } })
     const np = nova.payload as Record<string, unknown> & { regularizacaoTroca?: { precos?: Record<string, unknown> } }
