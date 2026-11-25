@@ -1,3 +1,9 @@
+BEGIN;
+-- Implantação com PDV/Financeiro ativos: nunca esperar trava por mais de 500 ms (abaixo do
+-- deadlock_timeout de 1 s). Se uma transação do runtime segurar a tabela, a MIGRATION desiste
+-- inteira e atômica (nunca a venda) e é reaplicada depois (prisma migrate resolve --rolled-back).
+SET LOCAL lock_timeout = '500ms';
+
 -- CreateEnum
 CREATE TYPE "FinanceiroPerfilTipo" AS ENUM ('EMPRESA', 'PESSOAL');
 
@@ -79,3 +85,43 @@ FOR EACH ROW EXECUTE FUNCTION financeiro_perfis_preservar_escopo();
 -- Sem acesso direto via papéis públicos/API. O servidor usa seu papel interno.
 ALTER TABLE "financeiro_perfis" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "financeiro_perfil_membros" ENABLE ROW LEVEL SECURITY;
+
+-- Contrato de RLS compatível com runtime restrito (OMNI-GESTOR-MONEY-FOUNDATION-HARDENING-P0-002).
+-- Criado na MESMA transação que liga o RLS, para não haver janela em que um runtime não dono
+-- perca acesso às tabelas. EMPRESA ("storeId" NOT NULL) visível ao runtime, como antes;
+-- PESSOAL ("storeId" NULL) só na transação que declara o dono em app.gm_owner_user
+-- (set_config local, feito pelo servidor após revalidar o contexto opaco G001). Papéis do
+-- worker G006 ficam fora (mantêm só as policies por papel do G006). Sem BYPASSRLS/FORCE/GRANT/DML.
+CREATE OR REPLACE FUNCTION gm_contexto_owner() RETURNS text
+LANGUAGE sql STABLE PARALLEL SAFE AS $$
+  SELECT nullif(current_setting('app.gm_owner_user', true), '')
+$$;
+
+CREATE OR REPLACE FUNCTION gm_papel_g006() RETURNS boolean
+LANGUAGE sql STABLE PARALLEL SAFE AS $$
+  SELECT current_user IN ('omni_gastos_ingress', 'omni_gastos_worker', 'omni_gastos_operator')
+$$;
+
+-- SECURITY DEFINER: o runtime restrito não precisa de GRANT em financeiro_perfis para que a policy
+-- seja avaliada; devolve no máximo o perfil PESSOAL do dono já declarado na própria transação.
+-- Sem contexto, nem lê a tabela.
+CREATE OR REPLACE FUNCTION gm_perfil_pessoal_contexto() RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT CASE WHEN gm_contexto_owner() IS NULL THEN NULL ELSE (
+    SELECT p."id" FROM "financeiro_perfis" p
+    WHERE p."tipo" = 'PESSOAL' AND p."storeId" IS NULL AND p."ownerAdminUserId" = gm_contexto_owner()
+  ) END
+$$;
+
+CREATE POLICY gm_runtime_perfis ON "financeiro_perfis" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("ownerAdminUserId" IS NOT NULL AND "ownerAdminUserId" = gm_contexto_owner())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("ownerAdminUserId" IS NOT NULL AND "ownerAdminUserId" = gm_contexto_owner())));
+CREATE POLICY gm_runtime_escopo ON "financeiro_perfil_membros" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+
+COMMIT;

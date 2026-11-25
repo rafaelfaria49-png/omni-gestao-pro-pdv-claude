@@ -1,3 +1,9 @@
+BEGIN;
+-- Implantação com PDV/Financeiro ativos: nunca esperar trava por mais de 500 ms (abaixo do
+-- deadlock_timeout de 1 s). Se uma transação do runtime segurar a tabela, a MIGRATION desiste
+-- inteira e atômica (nunca a venda) e é reaplicada depois (prisma migrate resolve --rolled-back).
+SET LOCAL lock_timeout = '500ms';
+
 -- CreateEnum
 CREATE TYPE "DocumentoGastoEstado" AS ENUM ('DISPONIVEL', 'QUARENTENA', 'RETIDO');
 
@@ -204,3 +210,17 @@ FOR EACH ROW EXECUTE FUNCTION gastos_documento_vinculo_validar();
 -- Padrão fechado G001/G002. Não owner sem política não lê/escreve; owner tem semântica distinta.
 ALTER TABLE "documentos_gastos" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "documentos_vinculos" ENABLE ROW LEVEL SECURITY;
+
+-- Contrato de RLS (runtime restrito) na mesma transação do ENABLE.
+CREATE POLICY gm_runtime_escopo ON "documentos_gastos" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+CREATE POLICY gm_runtime_escopo ON "documentos_vinculos" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+
+COMMIT;

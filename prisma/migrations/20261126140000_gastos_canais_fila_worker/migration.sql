@@ -1,5 +1,9 @@
 -- G006 aditivo: nenhum fato financeiro G001-G005 alterado.
 BEGIN;
+-- Implantação com PDV/Financeiro ativos: nunca esperar trava por mais de 500 ms (abaixo do
+-- deadlock_timeout de 1 s). Se uma transação do runtime segurar a tabela, a MIGRATION desiste
+-- inteira e atômica (nunca a venda) e é reaplicada depois (prisma migrate resolve --rolled-back).
+SET LOCAL lock_timeout = '500ms';
 -- CreateTable
 CREATE TABLE "whatsapp_canais" (
     "canalId" TEXT NOT NULL,

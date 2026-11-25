@@ -1,5 +1,9 @@
 -- G004: aditivo. Nenhum dado/migration G001-G003 removido ou reescrito.
 BEGIN;
+-- Implantação com PDV/Financeiro ativos: nunca esperar trava por mais de 500 ms (abaixo do
+-- deadlock_timeout de 1 s). Se uma transação do runtime segurar a tabela, a MIGRATION desiste
+-- inteira e atômica (nunca a venda) e é reaplicada depois (prisma migrate resolve --rolled-back).
+SET LOCAL lock_timeout = '500ms';
 -- AlterTable
 ALTER TABLE "contas_pagar_titulos" ADD COLUMN     "cartaoCicloId" TEXT,
 ADD COLUMN     "gastoId" TEXT,
@@ -517,6 +521,10 @@ DO $$ DECLARE t text; BEGIN
     'cartoes_instrumentos','cartoes_ciclos','financeiro_operacao_eventos','gastos_outbox'] LOOP
     EXECUTE format('CREATE TRIGGER g004_escopo BEFORE INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION g004_validar_escopo()',t);
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY',t);
+    -- Contrato de RLS (runtime restrito) na mesma transação do ENABLE.
+    EXECUTE format($p$CREATE POLICY gm_runtime_escopo ON %I FOR ALL
+      USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+      WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))$p$, t);
     EXECUTE format('REVOKE ALL ON %I FROM PUBLIC',t);
   END LOOP;
 END $$;

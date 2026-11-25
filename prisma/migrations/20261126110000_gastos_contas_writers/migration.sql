@@ -1,3 +1,9 @@
+BEGIN;
+-- Implantação com PDV/Financeiro ativos: nunca esperar trava por mais de 500 ms (abaixo do
+-- deadlock_timeout de 1 s). Se uma transação do runtime segurar a tabela, a MIGRATION desiste
+-- inteira e atômica (nunca a venda) e é reaplicada depois (prisma migrate resolve --rolled-back).
+SET LOCAL lock_timeout = '500ms';
+
 -- AlterTable
 ALTER TABLE "contas_pagar_titulos" ADD COLUMN     "ativo" BOOLEAN NOT NULL DEFAULT true,
 ADD COLUMN     "carteiraId" TEXT,
@@ -317,3 +323,32 @@ ALTER TABLE "carteiras_financeiras" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "contas_pagar_titulos" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "contas_receber_titulos" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "movimentacoes_financeiras" ENABLE ROW LEVEL SECURITY;
+
+-- Contrato de RLS (runtime restrito) na mesma transação do ENABLE.
+CREATE POLICY gm_runtime_escopo ON "categorias_gastos" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+CREATE POLICY gm_runtime_escopo ON "carteiras_financeiras" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+CREATE POLICY gm_runtime_escopo ON "contas_pagar_titulos" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+CREATE POLICY gm_runtime_escopo ON "contas_receber_titulos" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+CREATE POLICY gm_runtime_escopo ON "movimentacoes_financeiras" FOR ALL
+  USING (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())))
+  WITH CHECK (NOT gm_papel_g006() AND ("storeId" IS NOT NULL
+    OR ("perfilId" IS NOT NULL AND "perfilId" = gm_perfil_pessoal_contexto())));
+
+COMMIT;
