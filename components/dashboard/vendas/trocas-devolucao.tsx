@@ -74,6 +74,7 @@ const SITUACAO_LABEL: Record<LinhaView["situacaoCadastro"], string | null> = {
   avulso: "Item avulso, sem vínculo de estoque — devolução só financeira.",
   servico: "Serviço — não retorna ao estoque físico.",
   aparelho_imei: "Aparelho por IMEI — devolução ainda não integrada.",
+  venda_por_peso: "Vendido por peso (KG) — troca/devolução fracionada ainda não suportada aqui.",
 }
 
 const FORMA_LABEL: Record<string, string> = {
@@ -86,6 +87,15 @@ const FORMA_LABEL: Record<string, string> = {
 
 function formatBrl(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
+}
+
+/** "129,90" / "129.90" / "1.299,90" → número. Vazio ou inválido → NaN. */
+function parseValor(raw: string): number {
+  const t = raw.trim().replace(/\s|R\$/g, "")
+  if (!t) return Number.NaN
+  const norm = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t
+  const n = Number(norm)
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : Number.NaN
 }
 
 function dataHora(iso: string) {
@@ -147,6 +157,13 @@ export function TrocasDevolucao({
   const [erroEnvio, setErroEnvio] = useState("")
   const [pendentes, setPendentes] = useState<TrocaPendente[]>([])
   const [cupom, setCupom] = useState<ResultadoTroca | null>(null)
+  /**
+   * Abertura do comprovante SEPARADA dos dados: o diálogo aninhado fecha pelo Radix (camada,
+   * foco e Escape devolvidos ao diálogo de troca) e só depois os dados são limpos. Desmontar um
+   * Dialog aberto deixava a pilha de camadas inconsistente: Escape e atalhos do PDV (CTRL)
+   * paravam de responder depois do comprovante (E2E P1-003).
+   */
+  const [cupomAberto, setCupomAberto] = useState(false)
 
   // ── Regularização de troca já feita (P1-002) ────────────────────────────────
   const [regularizar, setRegularizar] = useState(false)
@@ -155,6 +172,14 @@ export function TrocasDevolucao({
   const [regSessaoId, setRegSessaoId] = useState("")
   const [regJustificativa, setRegJustificativa] = useState("")
   const [regErro, setRegErro] = useState("")
+  const [regHorarioAproximado, setRegHorarioAproximado] = useState(false)
+  const [regTotalConfirmado, setRegTotalConfirmado] = useState("")
+  const [regDiferencaRecebida, setRegDiferencaRecebida] = useState("")
+  /** Efeitos conferidos (simulação no servidor) + a assinatura do pedido simulado. */
+  const [simulacao, setSimulacao] = useState<{ chave: string; resultado: ResultadoTroca } | null>(null)
+  const [simulando, setSimulando] = useState(false)
+  // ── Item com defeito: não volta ao estoque vendável (P1-003) ─────────────────
+  const [avariaByLine, setAvariaByLine] = useState<Record<number, boolean>>({})
 
   // ── Devoluções antigas só deste terminal (P1-002) ───────────────────────────
   const [acaoLocal, setAcaoLocal] = useState<{ id: string; tipo: "arquivar" } | null>(null)
@@ -180,6 +205,11 @@ export function TrocasDevolucao({
     setRegData("")
     setRegSessaoId("")
     setRegJustificativa("")
+    setRegHorarioAproximado(false)
+    setRegTotalConfirmado("")
+    setRegDiferencaRecebida("")
+    setSimulacao(null)
+    setAvariaByLine({})
     setAcaoLocal(null)
     setMotivoArquivo("")
     setCpf("")
@@ -327,6 +357,10 @@ export function TrocasDevolucao({
     if (exigeTitular && (!docDigits || !nome.trim())) return "Informe CPF/CNPJ e nome do titular do vale."
     if (regularizar && (!regData || !regSessaoId || regJustificativa.trim().length < 10))
       return "Na regularização, informe a data/hora real, a sessão de caixa da época e a justificativa."
+    if (regularizar && mode === "troca" && (!(parseValor(regTotalConfirmado) > 0) || regDiferencaRecebida.trim() === ""))
+      return "Confirme o valor cobrado pela nova compra na ocasião e a diferença efetivamente recebida."
+    if (selecionadas.some((l) => avariaByLine[l.lineIndex]) && motivo.trim().length < 5)
+      return "Descreva no motivo o defeito do item que não volta ao estoque."
     if (docDigits && docDigits.length !== 11 && docDigits.length !== 14) return "CPF/CNPJ deve ter 11 ou 14 dígitos."
     return ""
   })()
@@ -336,6 +370,7 @@ export function TrocasDevolucao({
       removerTrocaPendente(lojaId, r.operationId)
       setPendentes(lerTrocasPendentes(lojaId))
       setCupom(r)
+      setCupomAberto(true)
       void refreshSalesFromServer()
       void refreshCatalogFromServer()
       if (venda) void abrirVenda(venda.pedidoId)
@@ -389,13 +424,18 @@ export function TrocasDevolucao({
     [lojaId, enviando, concluir, venda, abrirVenda],
   )
 
-  const finalizar = () => {
-    if (!venda || motivoBloqueio) return
-    const body: TrocaRequestBody = {
-      operationId: novoOperationId(),
+  /** Monta o pedido (mesmo corpo para simular e confirmar). */
+  const montarBody = (operationId: string): TrocaRequestBody | null => {
+    if (!venda) return null
+    return {
+      operationId,
       pedidoIdOrigem: venda.pedidoId,
       modo: mode,
-      linhas: selecionadas.map((l) => ({ lineIndex: l.lineIndex, quantidade: qtyByLine[l.lineIndex] ?? 0 })),
+      linhas: selecionadas.map((l) => ({
+        lineIndex: l.lineIndex,
+        quantidade: qtyByLine[l.lineIndex] ?? 0,
+        ...(avariaByLine[l.lineIndex] ? { naoRevendavel: true } : {}),
+      })),
       clienteDoc: docDigits || undefined,
       clienteNome: nome.trim() || undefined,
       motivo: motivo.trim() || undefined,
@@ -410,10 +450,48 @@ export function TrocasDevolucao({
         : {}),
       ...(mode === "reembolso" && formaReembolso ? { formaReembolso } : {}),
       ...(regularizar && regData && regSessaoId
-        ? { regularizacao: { sessaoId: regSessaoId, dataEconomica: new Date(regData).toISOString(), justificativa: regJustificativa.trim() } }
+        ? {
+            regularizacao: {
+              sessaoId: regSessaoId,
+              dataEconomica: new Date(regData).toISOString(),
+              justificativa: regJustificativa.trim(),
+              horarioAproximado: regHorarioAproximado,
+              ...(mode === "troca"
+                ? { valoresConfirmados: { totalNovaCompra: parseValor(regTotalConfirmado), diferencaRecebida: parseValor(regDiferencaRecebida) } }
+                : {}),
+            },
+          }
         : {}),
     }
-    void enviar(body)
+  }
+
+  /** Assinatura do pedido sem a chave da operação: a simulação vale só para ESTE pedido. */
+  const chaveSimulacao = (() => {
+    const b = montarBody("sim")
+    return b ? JSON.stringify({ ...b, operationId: undefined, terminalId: undefined }) : ""
+  })()
+  const simulacaoValida = simulacao !== null && simulacao.chave === chaveSimulacao
+
+  const conferirEfeitos = async () => {
+    const body = montarBody(novoOperationId())
+    if (!body || !lojaId || motivoBloqueio) return
+    setSimulando(true)
+    setErroEnvio("")
+    const r = await enviarTroca(lojaId, { ...body, simular: true })
+    setSimulando(false)
+    if (r.status === "confirmada") setSimulacao({ chave: chaveSimulacao, resultado: r.resultado })
+    else {
+      setSimulacao(null)
+      setErroEnvio(r.status === "recusada" ? r.message : `${r.message} Nada foi gravado.`)
+    }
+  }
+
+  const finalizar = () => {
+    if (!venda || motivoBloqueio) return
+    // Regularização só depois de conferir os efeitos simulados para EXATAMENTE este pedido.
+    if (regularizar && !simulacaoValida) return
+    const body = montarBody(novoOperationId())
+    if (body) void enviar(body)
   }
 
   // ── Regularização: sessões fechadas do dia escolhido ─────────────────────────
@@ -515,7 +593,7 @@ export function TrocasDevolucao({
   }
 
   const fecharCupom = () => {
-    setCupom(null)
+    setCupomAberto(false)
     onRegistered?.()
   }
 
@@ -796,7 +874,7 @@ export function TrocasDevolucao({
                         variant="ghost"
                         className="h-8 w-8"
                         aria-label={`Aumentar ${l.name}`}
-                        disabled={q >= l.disponivel || l.destino === "aparelho_imei"}
+                        disabled={q >= l.disponivel || l.destino === "aparelho_imei" || l.destino === "venda_por_peso"}
                         onClick={() => setQty(l, q + 1)}
                       >
                         <Plus className="h-3.5 w-3.5" />
@@ -812,6 +890,17 @@ export function TrocasDevolucao({
                     </p>
                   )}
                   {aviso && <p className="mt-1 text-[11px] text-muted-foreground">{aviso}</p>}
+                  {q > 0 && l.destino === "retorna_estoque" && (
+                    <label className="mt-1 flex items-center gap-1.5 text-[11px] text-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-primary"
+                        checked={avariaByLine[l.lineIndex] === true}
+                        onChange={(e) => setAvariaByLine((prev) => ({ ...prev, [l.lineIndex]: e.target.checked }))}
+                      />
+                      Com defeito — não volta ao estoque vendável (descreva no motivo)
+                    </label>
+                  )}
                 </div>
               )
             })}
@@ -1019,6 +1108,41 @@ export function TrocasDevolucao({
                     className="h-9 text-sm"
                     aria-label="Justificativa da regularização"
                   />
+                  <label className="flex items-center gap-2 text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={regHorarioAproximado}
+                      onChange={(e) => setRegHorarioAproximado(e.target.checked)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    Horário exato desconhecido (o horário informado é aproximado — explique na justificativa)
+                  </label>
+                  {mode === "troca" && (
+                    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="min-w-0 space-y-1">
+                        <Label className="text-[10px] font-semibold text-muted-foreground">Valor cobrado pela nova compra na ocasião</Label>
+                        <Input
+                          inputMode="decimal"
+                          value={regTotalConfirmado}
+                          onChange={(e) => setRegTotalConfirmado(e.target.value)}
+                          placeholder={totalNovaCompra > 0 ? `Preço atual: ${formatBrl(totalNovaCompra)}` : "0,00"}
+                          className="h-9 text-sm"
+                          aria-label="Valor cobrado pela nova compra na ocasião"
+                        />
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <Label className="text-[10px] font-semibold text-muted-foreground">Diferença efetivamente recebida</Label>
+                        <Input
+                          inputMode="decimal"
+                          value={regDiferencaRecebida}
+                          onChange={(e) => setRegDiferencaRecebida(e.target.value)}
+                          placeholder="0,00"
+                          className="h-9 text-sm"
+                          aria-label="Diferença efetivamente recebida"
+                        />
+                      </div>
+                    </div>
+                  )}
                   {regErro && <p className="text-destructive">{regErro}</p>}
                 </div>
               )}
@@ -1068,7 +1192,30 @@ export function TrocasDevolucao({
                 {erroEnvio}
               </p>
             )}
-            <Button type="button" className="h-11 w-full font-bold" disabled={Boolean(motivoBloqueio) || enviando} onClick={finalizar}>
+            {regularizar && (
+              <div className="min-w-0 space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-full"
+                  disabled={Boolean(motivoBloqueio) || simulando || enviando}
+                  onClick={() => void conferirEfeitos()}
+                >
+                  {simulando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Conferir efeitos (simulação no servidor, nada é gravado)
+                </Button>
+                {simulacaoValida && simulacao && <EfeitosSimulados r={simulacao.resultado} />}
+                {simulacao && !simulacaoValida && (
+                  <p className="text-[11px] text-muted-foreground">Os dados mudaram depois da conferência: confira os efeitos de novo.</p>
+                )}
+              </div>
+            )}
+            <Button
+              type="button"
+              className="h-11 w-full font-bold"
+              disabled={Boolean(motivoBloqueio) || enviando || (regularizar && !simulacaoValida)}
+              onClick={finalizar}
+            >
               {enviando ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando no servidor…
@@ -1084,7 +1231,62 @@ export function TrocasDevolucao({
         </section>
       )}
 
-      {cupom && <CupomTroca data={cupom} nomeLoja={nomeLoja} onClose={fecharCupom} onImprimirVale={() => void imprimirVale(cupom)} />}
+      {cupom && (
+        <CupomTroca
+          open={cupomAberto}
+          data={cupom}
+          nomeLoja={nomeLoja}
+          onClose={fecharCupom}
+          onCloseAutoFocus={() => buscaRef.current?.focus()}
+          onImprimirVale={() => void imprimirVale(cupom)}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Efeitos que a operação PRODUZIRIA (simulação desfeita no servidor) — para conferir antes. */
+function EfeitosSimulados({ r }: { r: ResultadoTroca }) {
+  const DESTINO: Record<string, string> = {
+    retorna_estoque: "volta ao estoque",
+    nao_revendavel: "não volta (defeito)",
+    sem_vinculo_estoque: "sem vínculo de estoque",
+    servico: "serviço (sem estoque)",
+  }
+  const absorvidos = new Set((r.estoqueAbsorvidoPorAjuste ?? []).map((a) => a.produtoId))
+  const reg = r.regularizacao
+  return (
+    <div className="min-w-0 space-y-1 rounded-lg border border-primary/40 bg-primary/5 p-2.5 text-[11px] text-foreground" data-testid="troca-efeitos-simulados">
+      <p className="font-semibold">Efeitos conferidos (ainda não gravados)</p>
+      {reg && (
+        <p className="text-muted-foreground">
+          Data econômica {dataHora(reg.dataEconomica)}
+          {reg.horarioAproximado ? " (horário aproximado)" : ""} · sessão de caixa da época · registrado agora por {reg.operador || "operador"}
+        </p>
+      )}
+      {r.itensDevolvidos.map((i) => (
+        <p key={i.lineIndex}>
+          ↩ {i.quantidade}× {i.nome}: {i.produtoId && absorvidos.has(i.produtoId) ? "já refletido por contagem de inventário posterior (estoque não muda)" : DESTINO[i.destino] ?? i.destino}
+        </p>
+      ))}
+      {r.itensNovos.map((i) => (
+        <p key={i.produtoId}>
+          ＋ {i.quantidade}× {i.nome}: {formatBrl(i.valorTotal)}
+        </p>
+      ))}
+      {reg?.precos && (
+        <p className={reg.precos.divergente ? "text-destructive" : "text-muted-foreground"}>
+          Valor praticado {formatBrl(reg.precos.precoConfirmado)} × preço atual {formatBrl(reg.precos.precoAtual)}
+          {reg.precos.divergente ? " — divergente: confirme pela justificativa" : ""}
+        </p>
+      )}
+      {r.diferenca.valor > 0 && (
+        <p>
+          Diferença recebida: {formatBrl(r.diferenca.valor)} ({FORMA_LABEL[r.diferenca.forma ?? ""] ?? "—"}){reg ? " — na sessão da época, não na gaveta de hoje" : ""}
+        </p>
+      )}
+      {r.reembolso && <p>Reembolso: {formatBrl(r.reembolso.valor)} ({FORMA_LABEL[r.reembolso.forma]})</p>}
+      {r.valeEmitido > 0 && <p>Vale emitido: {formatBrl(r.valeEmitido)}</p>}
     </div>
   )
 }
@@ -1124,7 +1326,21 @@ function HistoricoDevolucoes({ devolucoes }: { devolucoes: VendaTrocaView["devol
 }
 
 // ─── Comprovante (somente após confirmação do servidor) ─────────────────────
-function CupomTroca({ data, nomeLoja, onClose, onImprimirVale }: { data: ResultadoTroca; nomeLoja: string; onClose: () => void; onImprimirVale: () => void }) {
+function CupomTroca({
+  open,
+  data,
+  nomeLoja,
+  onClose,
+  onCloseAutoFocus,
+  onImprimirVale,
+}: {
+  open: boolean
+  data: ResultadoTroca
+  nomeLoja: string
+  onClose: () => void
+  onCloseAutoFocus: () => void
+  onImprimirVale: () => void
+}) {
   const tipoLabel =
     data.modo === "troca" ? "TROCA IMEDIATA" : data.modo === "vale_credito" ? "VALE-TROCA" : data.modo === "somente_estoque" ? "DEVOLUÇÃO AO ESTOQUE" : "DEVOLUÇÃO / REEMBOLSO"
   const quando = dataHora(data.at)
@@ -1171,8 +1387,16 @@ function CupomTroca({ data, nomeLoja, onClose, onImprimirVale }: { data: Resulta
     </div>
   )
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md p-0">
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        className="max-w-md p-0"
+        onCloseAutoFocus={(e) => {
+          // Foco volta para DENTRO do diálogo de troca (campo de busca), não para um botão que
+          // já saiu da tela (ex.: "Verificar / reenviar") — Escape e teclado seguem funcionando.
+          e.preventDefault()
+          onCloseAutoFocus()
+        }}
+      >
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
             <RotateCcw className="h-4 w-4 text-primary" /> Comprovante — {tipoLabel}

@@ -372,6 +372,12 @@ export type UpsertVendaOptions = {
    */
   historicalRecovery?: boolean
   /**
+   * Com `historicalRecovery`: só uma CONTAGEM FÍSICA de inventário (`idempotencyKey`
+   * `inventario:…`) posterior absorve a baixa — não ajustes administrativos/estruturais.
+   * Usado pela regularização de troca (P1-003). Ausente = regra histórica (qualquer ajuste).
+   */
+  historicalAbsorcaoSomenteInventario?: boolean
+  /**
    * Fluxo V2: o caller traz `clientSaleId` e um callback que aloca o número
    * comercial DENTRO desta transação. Este módulo NÃO importa o allocator.
    */
@@ -1159,7 +1165,13 @@ export async function upsertVendaInTransaction(
     // já refletiu esta saída física — baixar agora seria a segunda baixa da mesma venda.
     if (historicalRecovery) {
       const ajustePosterior = await tx.movimentacaoEstoque.findFirst({
-        where: { storeId: lojaId, produtoId, tipo: "ajuste", createdAt: { gt: at } },
+        where: {
+          storeId: lojaId,
+          produtoId,
+          tipo: "ajuste",
+          createdAt: { gt: at },
+          ...(options?.historicalAbsorcaoSomenteInventario === true ? { idempotencyKey: { startsWith: "inventario:" } } : {}),
+        },
         select: { id: true },
       })
       if (ajustePosterior) {

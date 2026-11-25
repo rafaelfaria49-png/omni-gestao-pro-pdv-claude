@@ -12,7 +12,7 @@ import {
 } from "@/lib/caixa/sessao-vendas-escopo"
 import { avaliarRecebiveisParaEstorno } from "@/lib/vendas/estorno-recebivel-guard"
 import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
-import { resumoDevolucoesCaixa } from "@/lib/pdv/trocas/troca-caixa"
+import { regularizacoesDaSessao, resumoDevolucoesCaixa } from "@/lib/pdv/trocas/troca-caixa"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -198,6 +198,8 @@ export async function GET(req: Request) {
       select: vendaSelect,
       orderBy: { at: "asc" },
     })
+    // P1-003: operações regularizadas DEPOIS do fechamento (exibidas à parte do original).
+    const regularizacoes = regularizacoesDaSessao(vendasPorSessaoId, sessao.devolucoes)
     const { vendas: vendaRows, modo: escopoVendasModo } = escolherEscopoVendas(
       vendasPorSessaoId,
       vendasPorSessaoId.length > 0
@@ -294,6 +296,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       sessao: { ...sessao, devolucoes: sessao.devolucoes.map(({ payload: _payload, ...d }) => d) },
+      regularizacoes,
       terminal,
       vendas,
       totais: {

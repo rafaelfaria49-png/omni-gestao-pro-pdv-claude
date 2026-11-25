@@ -1,4 +1,4 @@
-# PDV · Trocas e devoluções — integridade e histórico (P1-001 + P1-002)
+# PDV · Trocas e devoluções — integridade e histórico (P1-001 + P1-002 + P1-003)
 
 GOAL `OMNI-PDV-TROCAS-DEVOLUCOES-INTEGRIDADE-HISTORICO-P1-001` · branch `fix/pdv-trocas-devolucoes-integridade-001` · base `origin/main e609ef0`.
 
@@ -95,10 +95,45 @@ Nada foi executado. Depois do deploy desta PR, por um usuário **gerente**, **no
 
 1. Abrir Troca/Devolução e buscar o EAN do PS4 ou `VDA-L01-2026-000760`: o modal mostra **Disponível 1** (servidor) e o aviso da devolução que só existe no terminal.
 2. Selecionar PS4 (1) → X-360 (1), forma da diferença **Dinheiro**, motivo "nao deu certo".
-3. Marcar **Regularizar operação já feita no balcão**: data/hora real da troca em 21/11/2026, sessão `cmwqhfve…` (21/11, 11:07–18:10), justificativa (ex.: "Troca feita no balcão em 21/11; sistema não concluiu; R$ 10,00 recebidos em dinheiro").
+3. Marcar **Regularizar operação já feita no balcão**: data/hora da troca em 21/11/2026 (se o horário exato for desconhecido, marcar **Horário exato desconhecido** e explicar), sessão `cmwqhfve…` (21/11, 11:07–18:10), justificativa, **valor cobrado pelo X-360 na ocasião = 129,90** e **diferença recebida = 10,00** (o servidor confere a coerência com os 119,90 devolvidos, mesmo que o preço atual seja outro). Clicar **Conferir efeitos** e revisar estoque (contagem de inventário posterior aparece como "já refletido"), valores e sessão antes de finalizar.
 4. Resultado: devolução e venda substituta datadas de 21/11 na sessão de 21/11; entrada de R$ 10,00 na janela daquela sessão (o dinheiro que ficou a mais na gaveta daquele dia); PS4 +1 e X-360 −1 agora; crédito 119,90 criado e consumido; **nada** na gaveta de hoje, **nenhuma sangria**, cliente não cobrado de novo. O `saldoFinal` gravado de 21/11 (636,89) permanece; o relatório recalculado da sessão passa a mostrar os R$ 10,00, com a trilha da regularização.
 5. No mesmo terminal: a devolução local antiga aparece como "ausente no servidor" → **Arquivar neste terminal** com motivo "regularizada pela operação …".
 6. Conferir Vendas → pendências: venda pendente do X-360, se houver, **descartar** (não reenviar).
 7. Conferir os outros terminais da loja pelo mesmo aviso.
 
 Se o horário exato da troca for desconhecido, usar um horário dentro da sessão de 21/11 e registrar isso na justificativa.
+
+## 8. P1-003 — aceite final
+
+### 8.1 Reabertura do modal / teclado (causa real)
+O E2E falhou ao reabrir a troca depois do vale: o comprovante era um `Dialog` aninhado **desmontado ainda aberto** (`setCupom(null)`), o que deixava a pilha de camadas/foco do Radix inconsistente — Escape não fechava o diálogo de troca e o atalho CTRL do PDV ficava bloqueado. Correção: estado `open` separado dos dados (o Radix fecha a camada e devolve o foco), `onCloseAutoFocus` devolvendo o foco ao campo de busca. Prova no E2E: dois comprovantes seguidos no mesmo diálogo, busca focada, Escape fecha, CTRL reabre.
+
+### 8.2 Valor histórico na regularização
+Troca regularizada exige `valoresConfirmados { totalNovaCompra, diferencaRecebida }` (gerente + justificativa). O servidor confere `diferença = max(0, total confirmado − valor devolvido)`; incoerente → `REGULARIZACAO_VALORES_INCONSISTENTES`; ausente → `REGULARIZACAO_VALOR_HISTORICO_OBRIGATORIO`. O valor é rateado em centavos entre os itens novos (tem de fechar em unitário × quantidade). Trilha: `precos { precoAtual, precoConfirmado, diferencaRecebida, divergente }`. Troca normal não aceita valor confirmado (`VALOR_CONFIRMADO_SO_REGULARIZACAO`). Horário desconhecido → `horarioAproximado: true` registrado. Cenário provado: 119,90 → 129,90 na ocasião, preço atual 149,90 → registra 129,90 e diferença 10,00, nunca 30,00.
+
+### 8.3 Estoque na regularização
+- Só **contagem física de inventário** absorve o movimento: movimento `ajuste` com chave de ledger `inventario:<sessão>:<produto>` (gravada por `app/actions/inventario.ts`) depois da data econômica. Ajuste administrativo (`origem manual` sem chave de inventário), correção de cadastro, ajuste relativo e reconciliação estrutural **não** absorvem. O motor recebeu a opção opt-in `historicalAbsorcaoSomenteInventario` (padrão inalterado para os outros chamadores).
+- Corrida contagem × regularização encontrada e corrigida: o produto é travado (`FOR UPDATE`) antes de procurar a contagem; provado em PG (4 rodadas, saldo final = contado).
+- **Item com defeito**: marcação explícita por linha (`naoRevendavel`) → não volta ao estoque vendável; motivo obrigatório.
+- **Conferência antes de confirmar**: `simular: true` executa a operação inteira com as mesmas travas e desfaz no fim; a tela exige a simulação do mesmo pedido antes de liberar "Finalizar" numa regularização.
+
+### 8.4 Fechamento histórico
+O fechamento gravado (`saldoFinal`, resumo persistido) não muda. `sessao-detalhe` devolve `regularizacoes { itens, dinheiroLiquido }` e o histórico do caixa mostra, à parte: esperado no fechamento original, regularizado depois, total recalculado ("não substitui o original"), data econômica, data de registro, operador, justificativa e horário aproximado. Bloqueio de período financeiro fechado mantido (data atual e data econômica).
+
+### 8.5 Identificadores históricos
+- **Venda substituta da troca**: SKU/EAN resolvidos no servidor gravados em `payload.lines[]` (provado em PG).
+- **Todas as vendas novas: não implementado — GOAL separado proposto** (`OMNI-VENDAS-SNAPSHOT-IDENTIFICADORES-001`). Motivo: no motor a resolução do produto acontece intercalada à criação dos itens, depois de `Venda.create`; gravar o snapshot exige mover a resolução para antes do create ou um `UPDATE` extra do payload em toda venda do PDV, e revisar `corrigir-itens` (que reconstrói linhas). Desenho: resolver `{ sku, barcode }` junto do `findFirst` já existente, gravar em `payload.lines[i].sku/barcode` só quando a linha foi resolvida pelo servidor (nunca o valor do cliente), preservar `deviceSale`/`accessorySelection`/garantia, e fazer `corrigir-itens` copiar os campos das linhas mantidas.
+
+### 8.6 Pilha Padaria KG e PRs antigas (#331, #336, #335, #315, #337)
+| PR | Estado | Coberto pela #401 | Exclusivo da PR (não substituído) |
+|---|---|---|---|
+| #331 F8 troca imediata (draft, 05/11) | aberta | busca no servidor por venda/EAN/SKU/cliente; escritor transacional com teto por item e idempotência; vale pelo valor pago; sem saída fictícia; troca com motor canônico; cancelamento serializado e netting do vale; pendências legadas com trilha | **atalho F8** e item na barra do PDV Clássico; fila offline com estados (`AGUARDANDO_VENDA_ORIGEM`, bloqueio persistente); encaminhamento de pendência ao **Financeiro** com valor recalculado (rota `pendencias`); bloqueio de avulso/serviço (a #401 permite reembolso financeiro de avulso por decisão do GOAL 001) |
+| #336 F8 × KG (draft, empilhada) | aberta | — | **devolução fracionada KG** com migration (`quantidadeKg`), política por loja, condição da mercadoria (apto/não apto/descarte), triggers no banco |
+| #335 venda KG / #315 estoque KG / #337 readiness | abertas | — | toda a venda/estoque por peso, migrations KG e plano de rollout |
+
+Compatibilidade nesta PR: linha vendida por peso (`vendaPorPeso` / quantidade fracionária / `ItemVenda.quantidade` nulo) **não é arredondada**: é reconhecida e recusada (`DEVOLUCAO_POR_PESO_NAO_SUPORTADA`), sem efeito. Venda KG não foi habilitada.
+
+**Estratégia de reconciliação (não executada):** (1) mergear a #401 primeiro (escritor e busca canônicos, sem migration); (2) rebasear a #331 sobre ela e manter só o exclusivo (atalho F8, estados da fila offline já sem reenvio automático, encaminhamento ao Financeiro reaproveitando `AuditoriaFinanceira`), descartando o escritor e a busca duplicados; (3) rebasear #315→#335→#336→#337 e portar a devolução fracionada da #336 para dentro de `registrarTroca` (quantidade em gramas, política por loja, condição da mercadoria → `naoRevendavel`), substituindo o bloqueio `DEVOLUCAO_POR_PESO_NAO_SUPORTADA` só quando a migration KG estiver aplicada. Nenhuma dessas PRs deve ser fechada antes dessa portabilidade comprovada.
+
+### 8.7 Pendências de CI fora do escopo
+`08-cadastro-manual.spec.ts › logoutViaSeguranca` falha de forma intermitente (corrida do logout #342; correção proposta na #345, aberta) — passou neste mesmo branch no commit `42cb7e5`.

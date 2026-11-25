@@ -40,7 +40,7 @@ export type LinhaTrocaView = LinhaComDisponibilidade & {
   valorLiquido: number
   /** Códigos do CADASTRO ATUAL (não necessariamente os da data da venda). */
   cadastroAtual: { produtoId: string; sku: string | null; barcode: string | null; situacao: "ativo" | "inativo" } | null
-  situacaoCadastro: "cadastrado" | "inativo" | "removido" | "avulso" | "servico" | "aparelho_imei"
+  situacaoCadastro: "cadastrado" | "inativo" | "removido" | "avulso" | "servico" | "aparelho_imei" | "venda_por_peso"
   corresponde?: boolean
 }
 
@@ -116,7 +116,9 @@ function montarView(
       const prod = l.destino === "retorna_estoque" || l.destino === "aparelho_imei" ? acha(l) : undefined
       const inativo = prod ? prod.active === false || /inativ/i.test(prod.status) : false
       const situacaoCadastro: LinhaTrocaView["situacaoCadastro"] =
-        l.destino === "aparelho_imei"
+        l.destino === "venda_por_peso"
+          ? "venda_por_peso"
+          : l.destino === "aparelho_imei"
           ? "aparelho_imei"
           : l.destino === "servico"
             ? "servico"

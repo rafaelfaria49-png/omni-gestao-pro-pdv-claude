@@ -39,7 +39,10 @@ const schema = z.object({
   operationId: z.string().min(12).max(120),
   pedidoIdOrigem: z.string().min(1).max(80),
   modo: z.enum(["troca", "vale_credito", "reembolso", "somente_estoque"]),
-  linhas: z.array(z.object({ lineIndex: z.number().int().min(0), quantidade: z.number().int().min(1) })).min(1).max(100),
+  linhas: z
+    .array(z.object({ lineIndex: z.number().int().min(0), quantidade: z.number().int().min(1), naoRevendavel: z.boolean().optional() }))
+    .min(1)
+    .max(100),
   novosItens: z.array(z.object({ produtoId: z.string().min(1).max(120), quantidade: z.number().int().min(1).max(999) })).max(50).optional(),
   formaDiferenca: z.enum(["dinheiro", "pix", "debito", "credito"]).optional(),
   destinoExcedente: z.enum(["vale", "dinheiro"]).optional(),
@@ -51,8 +54,18 @@ const schema = z.object({
   terminalId: z.string().max(60).nullish(),
   /** Regularização de troca já realizada (sessão original fechada + data econômica). */
   regularizacao: z
-    .object({ sessaoId: z.string().min(1).max(120), dataEconomica: z.string().min(10).max(40), justificativa: z.string().min(10).max(500) })
+    .object({
+      sessaoId: z.string().min(1).max(120),
+      dataEconomica: z.string().min(10).max(40),
+      justificativa: z.string().min(10).max(500),
+      horarioAproximado: z.boolean().optional(),
+      valoresConfirmados: z
+        .object({ totalNovaCompra: z.number().min(0).max(1_000_000), diferencaRecebida: z.number().min(0).max(1_000_000) })
+        .nullish(),
+    })
     .nullish(),
+  /** Executa e desfaz: devolve os efeitos para conferência (nada gravado). */
+  simular: z.boolean().optional(),
 })
 
 const ENGINE_409 = [
@@ -117,9 +130,10 @@ export async function POST(req: Request) {
       terminalId: data.terminalId ?? null,
       operadorLabel,
       regularizacao: data.regularizacao ?? null,
+      simular: data.simular === true,
     })
 
-    if (out.vendaCriada) {
+    if (out.vendaCriada && !out.simulado) {
       try {
         await dispatchSaleAutomationIfCreated(
           { replayed: false, storeId: lojaId, venda: out.vendaCriada.venda, sale: out.vendaCriada.sale },
@@ -130,7 +144,7 @@ export async function POST(req: Request) {
         console.error("[ops/trocas] automacao-pos-commit-falhou", err instanceof Error ? err.message : String(err))
       }
     }
-    return NextResponse.json({ ok: true, replayed: out.replayed, resultado: out.resultado })
+    return NextResponse.json({ ok: true, replayed: out.replayed, simulado: out.simulado === true, resultado: out.resultado })
   } catch (e) {
     if (e instanceof TrocaError) {
       return NextResponse.json({ error: e.message, code: e.code, ...(e.detail ? { detail: e.detail } : {}) }, { status: e.status })

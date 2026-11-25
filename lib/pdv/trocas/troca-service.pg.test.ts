@@ -158,6 +158,8 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
     expect(c.novas).toHaveLength(1)
     expect(c.novas[0].pedidoId).toBe(out.resultado.novaVenda!.pedidoId)
     expect(c.novas[0].total).toBe(129.9)
+    // Snapshot do código resolvido no servidor na linha da venda substituta (P1-003).
+    expect(c.novas[0].payload.lines[0]).toMatchObject({ barcode: "7890000000024" })
     // Crédito da troca: nasce e é consumido na MESMA transação — nenhum vale residual.
     expect(c.creditos).toHaveLength(1)
     expect(c.creditos[0]).toMatchObject({ valorOriginal: 119.9, saldoAtual: 0, status: "zerado", clienteDoc: "" })
@@ -372,7 +374,8 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
         await db.sessaoCaixa.create({ data: { storeId: LOJA, operador: "PG", status: "FECHADA", abertaEm: abertura, fechadaEm: new Date(abertura.getTime() + 7 * H) } })
       ).id
       await produto("ps4r", "CONTROLE DE VIDEO GAME PS4 WIRELESS", 119.9, 0, { sku: "SKU-PS4R", barcode: "0789000000999" })
-      await produto("x360r", "CONTROLE DE VIDEO GAME X-360 PC PS3 SEM FIO", 129.9, 1)
+      // Preço ATUAL subiu para 149,90 depois da troca; na ocasião foi 129,90 (diferença de 10,00).
+      await produto("x360r", "CONTROLE DE VIDEO GAME X-360 PC PS3 SEM FIO", 149.9, 1)
       // Formato real da 000760: inventoryId = SKU, produtoId = id técnico, cartão de crédito, sem cliente.
       await vendaOriginal(
         "VDA-PG-R760",
@@ -389,15 +392,28 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
       novosItens: [{ produtoId: "x360r", quantidade: 1 }],
       formaDiferenca: "dinheiro" as const,
       motivo: "nao deu certo",
-      regularizacao: { sessaoId: sessaoOrig, dataEconomica: new Date(vendaAt.getTime() + H).toISOString(), justificativa: "Troca feita no balcão em 21/11; o sistema não concluiu." },
+      regularizacao: {
+        sessaoId: sessaoOrig,
+        dataEconomica: new Date(vendaAt.getTime() + H).toISOString(),
+        justificativa: "Troca feita no balcão em 21/11; o sistema não concluiu.",
+        horarioAproximado: true,
+        valoresConfirmados: { totalNovaCompra: 129.9, diferencaRecebida: 10 },
+      },
       ...over,
     })
     const regCom = (sessaoId: string, deltaH: number, justificativa = "justificativa longa o bastante") => ({
-      regularizacao: { sessaoId, dataEconomica: new Date(vendaAt.getTime() + deltaH * H).toISOString(), justificativa },
+      regularizacao: { sessaoId, dataEconomica: new Date(vendaAt.getTime() + deltaH * H).toISOString(), justificativa, valoresConfirmados: { totalNovaCompra: 129.9, diferencaRecebida: 10 } },
     })
 
     it("validações: sessão aberta, fora da janela, antes da venda e justificativa curta", async () => {
       await expect(svc.registrarTroca(regBody({ regularizacao: { sessaoId: sessaoAberta, dataEconomica: new Date(Date.now() - H).toISOString(), justificativa: "justificativa longa o bastante" } }))).rejects.toMatchObject({ code: "REGULARIZACAO_SESSAO_ABERTA" })
+      // Preço histórico: sem valores confirmados bloqueia; incoerente bloqueia; troca normal não aceita valor confirmado.
+      const semValor = regBody()
+      ;(semValor.regularizacao as Record<string, unknown>).valoresConfirmados = null
+      await expect(svc.registrarTroca(semValor)).rejects.toMatchObject({ code: "REGULARIZACAO_VALOR_HISTORICO_OBRIGATORIO" })
+      const incoerente = regBody()
+      ;(incoerente.regularizacao as Record<string, unknown>).valoresConfirmados = { totalNovaCompra: 129.9, diferencaRecebida: 30 }
+      await expect(svc.registrarTroca(incoerente)).rejects.toMatchObject({ code: "REGULARIZACAO_VALORES_INCONSISTENTES" })
       await expect(svc.registrarTroca(regBody(regCom(sessaoOrig, 10)))).rejects.toMatchObject({ code: "REGULARIZACAO_FORA_DA_SESSAO" })
       await expect(svc.registrarTroca(regBody(regCom(sessaoOrig, -1)))).rejects.toMatchObject({ code: "REGULARIZACAO_ANTES_DA_VENDA" })
       await expect(svc.registrarTroca(regBody(regCom(sessaoOrig, 1, "curta")))).rejects.toMatchObject({ code: "REGULARIZACAO_INVALIDA" })
@@ -409,7 +425,13 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
       const antes = await recentes()
       const out = await svc.registrarTroca(regBody())
       const eco = new Date(vendaAt.getTime() + H)
-      expect(out.resultado.regularizacao).toMatchObject({ dataEconomica: eco.toISOString(), sessaoOriginal: sessaoOrig })
+      expect(out.resultado.regularizacao).toMatchObject({
+        dataEconomica: eco.toISOString(),
+        sessaoOriginal: sessaoOrig,
+        horarioAproximado: true,
+        precos: { precoAtual: 149.9, precoConfirmado: 129.9, diferencaRecebida: 10, divergente: true },
+      })
+      expect(out.resultado.totalNovaCompra).toBe(129.9) // nunca 30,00 de diferença pelo preço atual
       const c = await contagens("VDA-PG-R760")
       expect(c.devs).toHaveLength(1)
       expect(c.devs[0].sessaoId).toBe(sessaoOrig)
@@ -427,6 +449,14 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
       expect((await db.produto.findUnique({ where: { id: "x360r" } })).stock).toBe(0)
       expect(await recentes()).toBe(antes) // nada lançado com data de hoje
       expect((await db.sessaoCaixa.findUnique({ where: { id: sessaoOrig } })).status).toBe("FECHADA")
+      // Fechamento histórico: o original fica; a regularização aparece à parte (+R$ 10,00 em dinheiro).
+      const { regularizacoesDaSessao } = await import("./troca-caixa")
+      const vendasSessao = await db.venda.findMany({ where: { storeId: LOJA, payload: { path: ["sessaoId"], equals: sessaoOrig } }, select: { pedidoId: true, payload: true } })
+      const devsSessao = await db.devolucaoVenda.findMany({ where: { storeId: LOJA, sessaoId: sessaoOrig }, select: { id: true, localId: true, payload: true } })
+      const regs = regularizacoesDaSessao(vendasSessao, devsSessao)
+      expect(regs.dinheiroLiquido).toBe(10)
+      expect(regs.itens.map((i) => i.tipo).sort()).toEqual(["devolucao", "venda_substituta"])
+      expect(regs.itens.every((i) => i.horarioAproximado && i.justificativa.length > 0)).toBe(true)
     }, 60_000)
   })
 
@@ -441,7 +471,10 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
       await vendaOriginal("VDA-PG-RAJ", [{ inventoryId: "ps4a", produtoId: "ps4a", name: "PS4 CONTADO", quantity: 1, unitPrice: 119.9, lineTotal: 119.9 }], { sessaoId: s0, at: vendaAt })
       for (const [produtoId, nome, depois] of [["ps4a", "PS4 CONTADO", 1], ["x360a", "X360 CONTADO", 0]] as const) {
         await db.movimentacaoEstoque.create({
-          data: { storeId: LOJA, produtoId, produtoNome: nome, tipo: "ajuste", origem: "inventario", quantidade: 0, estoqueAntes: depois, estoqueDepois: depois, createdAt: new Date(Date.now() - H) },
+          data: {
+            storeId: LOJA, produtoId, produtoNome: nome, tipo: "ajuste", origem: "manual", quantidade: 0, estoqueAntes: depois, estoqueDepois: depois,
+            idempotencyKey: `inventario:inv-pg-1:${produtoId}`, createdAt: new Date(Date.now() - H),
+          },
         })
       }
       const out = await svc.registrarTroca({
@@ -452,9 +485,14 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
         linhas: [{ lineIndex: 0, quantidade: 1 }],
         novosItens: [{ produtoId: "x360a", quantidade: 1 }],
         formaDiferenca: "dinheiro",
-        regularizacao: { sessaoId: s0, dataEconomica: new Date(vendaAt.getTime() + H).toISOString(), justificativa: "Troca já contada no inventário posterior." },
+        regularizacao: {
+          sessaoId: s0,
+          dataEconomica: new Date(vendaAt.getTime() + H).toISOString(),
+          justificativa: "Troca já contada no inventário posterior.",
+          valoresConfirmados: { totalNovaCompra: 129.9, diferencaRecebida: 10 },
+        },
       })
-      expect(out.resultado.estoqueAbsorvidoPorAjuste).toEqual([{ produtoId: "ps4a", quantidade: 1 }])
+      expect(out.resultado.estoqueAbsorvidoPorAjuste).toEqual([{ produtoId: "ps4a", quantidade: 1, inventario: "inventario:inv-pg-1:ps4a" }])
       expect((await db.produto.findUnique({ where: { id: "ps4a" } })).stock).toBe(1)
       expect((await db.produto.findUnique({ where: { id: "x360a" } })).stock).toBe(0)
       const nova = await db.venda.findFirst({ where: { storeId: LOJA, pedidoId: out.resultado.novaVenda!.pedidoId } })
@@ -483,6 +521,90 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
       const dev = await db.devolucaoVenda.findFirst({ where: { id: r.resultado.devolucaoId } })
       expect(dev.sessaoId).toBeNull()
     })
+  })
+
+  describe("P1-003 · estoque e simulação na regularização", () => {
+    const H = 3_600_000
+    let n = 0
+    async function cenario(estoquePs4: number, estoqueX360: number) {
+      n += 1
+      const abertura = new Date(Date.now() - (8 + n) * 86_400_000)
+      const vendaAt = new Date(abertura.getTime() + H)
+      const sid = (await db.sessaoCaixa.create({ data: { storeId: LOJA, operador: "PG", status: "FECHADA", abertaEm: abertura, fechadaEm: new Date(abertura.getTime() + 9 * H) } })).id
+      const ps4 = `ps4c${n}`
+      const x360 = `x360c${n}`
+      await produto(ps4, `PS4 C${n}`, 119.9, estoquePs4)
+      await produto(x360, `X360 C${n}`, 129.9, estoqueX360)
+      const pid = `VDA-PG-C${n}`
+      await vendaOriginal(pid, [{ inventoryId: ps4, produtoId: ps4, name: `PS4 C${n}`, quantity: 1, unitPrice: 119.9, lineTotal: 119.9 }], { sessaoId: sid, at: vendaAt })
+      const body = (over: Record<string, unknown> = {}) => ({
+        ...base(),
+        operationId: op(),
+        pedidoIdOrigem: pid,
+        modo: "troca" as const,
+        linhas: [{ lineIndex: 0, quantidade: 1 }],
+        novosItens: [{ produtoId: x360, quantidade: 1 }],
+        formaDiferenca: "dinheiro" as const,
+        motivo: "regularização de teste",
+        regularizacao: {
+          sessaoId: sid,
+          dataEconomica: new Date(vendaAt.getTime() + H).toISOString(),
+          justificativa: "Regularização sintética de teste.",
+          valoresConfirmados: { totalNovaCompra: 129.9, diferencaRecebida: 10 },
+        },
+        ...over,
+      })
+      return { ps4, x360, pid, body }
+    }
+    const stock = async (id: string) => (await db.produto.findUnique({ where: { id } })).stock
+
+    it("ajuste ADMINISTRATIVO posterior (não inventário) não absorve: estoque é movimentado", async () => {
+      const c = await cenario(0, 1)
+      await db.movimentacaoEstoque.create({
+        data: { storeId: LOJA, produtoId: c.ps4, produtoNome: "PS4", tipo: "ajuste", origem: "manual", quantidade: 0, estoqueAntes: 0, estoqueDepois: 0, createdAt: new Date(Date.now() - H) },
+      })
+      const out = await svc.registrarTroca(c.body())
+      expect(out.resultado.estoqueAbsorvidoPorAjuste ?? []).toEqual([])
+      expect(await stock(c.ps4)).toBe(1)
+      expect(await stock(c.x360)).toBe(0)
+    }, 60_000)
+
+    it("simulação devolve os efeitos e não grava nada; item com defeito não volta ao estoque", async () => {
+      const c = await cenario(0, 1)
+      const antes = await contagens(c.pid)
+      const sim = await svc.registrarTroca(c.body({ simular: true, linhas: [{ lineIndex: 0, quantidade: 1, naoRevendavel: true }], motivo: "tela quebrada" }))
+      expect(sim.simulado).toBe(true)
+      expect(sim.resultado.itensDevolvidos[0]!.destino).toBe("nao_revendavel")
+      expect(sim.resultado.regularizacao?.precos).toMatchObject({ precoConfirmado: 129.9, divergente: false })
+      const depois = await contagens(c.pid)
+      expect([depois.devs.length, depois.novas.length, depois.creditos.length]).toEqual([antes.devs.length, antes.novas.length, antes.creditos.length])
+      expect([await stock(c.ps4), await stock(c.x360)]).toEqual([0, 1])
+      // Defeito exige motivo; com motivo, grava sem devolver ao estoque vendável.
+      await expect(svc.registrarTroca(c.body({ linhas: [{ lineIndex: 0, quantidade: 1, naoRevendavel: true }], motivo: "" }))).rejects.toMatchObject({ code: "MOTIVO_AVARIA_OBRIGATORIO" })
+      const real = await svc.registrarTroca(c.body({ linhas: [{ lineIndex: 0, quantidade: 1, naoRevendavel: true }], motivo: "tela quebrada" }))
+      expect(real.resultado.itensDevolvidos[0]!.destino).toBe("nao_revendavel")
+      expect([await stock(c.ps4), await stock(c.x360)]).toEqual([0, 0])
+    }, 60_000)
+
+    it("concorrência real contagem de inventário × regularização: saldo final = contado, sem dupla contagem", async () => {
+      const { applyStockMutationTx } = await import("@/lib/estoque/stock-ledger-service")
+      for (let i = 0; i < 4; i++) {
+        const c = await cenario(0, 1)
+        const contar = () =>
+          db.$transaction((tx: unknown) =>
+            applyStockMutationTx(
+              tx as never,
+              { storeId: LOJA, principal: null, source: "inventario-pg" },
+              { kind: "ajuste", produtoId: c.ps4, novoSaldo: 1, origem: "manual", motivo: "contagem física", idempotencyKey: `inventario:inv-race-${i}:${c.ps4}` },
+            ),
+          )
+        const [reg, cont] = await Promise.allSettled([svc.registrarTroca(c.body()), contar()])
+        expect(reg.status).toBe("fulfilled")
+        expect(cont.status).toBe("fulfilled")
+        // A contagem fixa o físico (1). Se veio antes, a regularização a reconhece; se veio depois, a sobrescreve.
+        expect(await stock(c.ps4)).toBe(1)
+      }
+    }, 120_000)
   })
 
   describe("P1-002 · vendas a prazo e carnê", () => {

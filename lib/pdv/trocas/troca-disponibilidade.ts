@@ -58,12 +58,19 @@ export type LinhaVendaOriginal = {
    * campo próprio de código, mas o PDV gravava aqui o código bipado/selecionado.
    */
   codigoNaVenda: string
+  /**
+   * Linha vendida POR PESO (KG, quantidade fracionária — pilha Padaria #315/#335). Não é
+   * arredondada nem tratada como unidade: o fluxo de troca a recusa explicitamente até o
+   * contrato de devolução fracionada (#336) existir.
+   */
+  porPeso: boolean
 }
 
 export type ItemVendaRow = {
   inventoryId: string | null
   nome: string
-  quantidade: number
+  /** Nulo em linha vendida por peso (pilha KG grava o peso em outra coluna). */
+  quantidade: number | null
   precoUnitario: number
   lineTotal: number
 }
@@ -95,7 +102,9 @@ export function linhasDaVenda(payload: unknown, itens: ItemVendaRow[]): LinhaVen
     return raw.map((rawLine, lineIndex) => {
       const l = asRecord(rawLine) ?? {}
       const inventoryId = str(l.inventoryId)
-      const quantity = Math.max(0, Math.round(num(l.quantity)))
+      const rawQty = num(l.quantity)
+      const porPeso = l.vendaPorPeso === true || !Number.isInteger(rawQty)
+      const quantity = porPeso ? Math.max(0, rawQty) : Math.max(0, Math.round(rawQty))
       const unitPrice = num(l.unitPrice)
       const lineTotal = l.lineTotal !== undefined ? num(l.lineTotal) : arredonda2(unitPrice * quantity)
       const itemType = resolveSaleLineItemType({
@@ -118,6 +127,7 @@ export function linhasDaVenda(payload: unknown, itens: ItemVendaRow[]): LinhaVen
         snapshotSku: str(l.sku),
         snapshotBarcode: str(l.barcode) || str(l.codigoBarras),
         codigoNaVenda: itemType === "produto" ? codigoOperacional(inventoryId, str(l.produtoId)) : "",
+        porPeso,
       }
     })
   }
@@ -129,7 +139,7 @@ export function linhasDaVenda(payload: unknown, itens: ItemVendaRow[]): LinhaVen
       inventoryId,
       produtoId: "",
       name: it.nome || "Item",
-      quantity: Math.max(0, Math.round(it.quantidade)),
+      quantity: it.quantidade == null ? 0 : Math.max(0, Math.round(it.quantidade)),
       unitPrice: it.precoUnitario,
       lineTotal: it.lineTotal,
       itemType,
@@ -139,6 +149,8 @@ export function linhasDaVenda(payload: unknown, itens: ItemVendaRow[]): LinhaVen
       snapshotSku: "",
       snapshotBarcode: "",
       codigoNaVenda: "",
+      // ItemVenda sem quantidade inteira (KG grava o peso em outra coluna) = venda por peso.
+      porPeso: it.quantidade == null || !Number.isInteger(it.quantidade),
     }
   })
 }
@@ -266,10 +278,11 @@ export function valorDevolucaoLinha(linha: LinhaVendaOriginal, liquidoLinha: num
   return arredonda2(acumulado(jaDevolvido + qtd) - acumulado(jaDevolvido))
 }
 
-export type DestinoFisico = "retorna_estoque" | "servico" | "sem_vinculo_estoque" | "aparelho_imei"
+export type DestinoFisico = "retorna_estoque" | "servico" | "sem_vinculo_estoque" | "aparelho_imei" | "nao_revendavel" | "venda_por_peso"
 
 /** Destino físico pela identidade da LINHA histórica (não pelo cadastro atual). */
 export function destinoFisicoDaLinha(l: LinhaVendaOriginal): DestinoFisico {
+  if (l.porPeso) return "venda_por_peso"
   if (l.isDevice) return "aparelho_imei"
   if (l.itemType === "servico" || l.itemType === "ordem_servico") return "servico"
   if (l.itemType === "avulso" || !l.inventoryId || isVirtualSaleLine(l.inventoryId)) return "sem_vinculo_estoque"
@@ -303,10 +316,14 @@ export function linhasComDisponibilidade(
   }
 }
 
-export type PedidoLinhaDevolucao = { lineIndex: number; quantidade: number }
+/**
+ * `naoRevendavel`: o item voltou com defeito/sem condição de venda — NÃO retorna ao estoque
+ * comercializável (P1-003). Tratamento explícito do operador, nunca inferido.
+ */
+export type PedidoLinhaDevolucao = { lineIndex: number; quantidade: number; naoRevendavel?: boolean }
 
 export type ValidacaoLinhas =
-  | { ok: true; linhas: Array<{ linha: LinhaComDisponibilidade; quantidade: number; valor: number }>; valorTotal: number }
+  | { ok: true; linhas: Array<{ linha: LinhaComDisponibilidade; quantidade: number; valor: number; naoRevendavel: boolean }>; valorTotal: number }
   | { ok: false; code: string; message: string }
 
 /**
@@ -322,7 +339,7 @@ export function validarLinhasDevolucao(
     return { ok: false, code: "SEM_LINHAS", message: "Selecione ao menos um item e a quantidade a devolver." }
   }
   const vistos = new Set<number>()
-  const out: Array<{ linha: LinhaComDisponibilidade; quantidade: number; valor: number }> = []
+  const out: Array<{ linha: LinhaComDisponibilidade; quantidade: number; valor: number; naoRevendavel: boolean }> = []
   for (const p of pedido) {
     if (!Number.isInteger(p.lineIndex) || vistos.has(p.lineIndex)) {
       return { ok: false, code: "LINHA_INVALIDA", message: "Linha da venda inválida ou repetida." }
@@ -332,6 +349,13 @@ export function validarLinhasDevolucao(
     if (!linha) return { ok: false, code: "LINHA_INEXISTENTE", message: "O item não consta nesta venda." }
     if (!Number.isInteger(p.quantidade) || p.quantidade <= 0) {
       return { ok: false, code: "QUANTIDADE_INVALIDA", message: `Quantidade inválida para ${linha.name}.` }
+    }
+    if (linha.destino === "venda_por_peso") {
+      return {
+        ok: false,
+        code: "DEVOLUCAO_POR_PESO_NAO_SUPORTADA",
+        message: `${linha.name} foi vendido por peso: troca/devolução fracionada ainda não é suportada neste fluxo.`,
+      }
     }
     if (linha.destino === "aparelho_imei") {
       return { ok: false, code: "APARELHO_REVERSAO_NAO_INTEGRADA", message: "Devolução de aparelho por IMEI ainda não é integrada." }
@@ -343,7 +367,7 @@ export function validarLinhasDevolucao(
         message: `${linha.name}: vendido ${linha.quantity}, já devolvido ${linha.devolvido}, disponível ${linha.disponivel}.`,
       }
     }
-    out.push({ linha, quantidade: p.quantidade, valor: valorDevolucaoLinha(linha, liquidos[linha.lineIndex] ?? 0, linha.devolvido, p.quantidade) })
+    out.push({ linha, quantidade: p.quantidade, valor: valorDevolucaoLinha(linha, liquidos[linha.lineIndex] ?? 0, linha.devolvido, p.quantidade), naoRevendavel: p.naoRevendavel === true })
   }
   return { ok: true, linhas: out, valorTotal: arredonda2(out.reduce((s, l) => s + l.valor, 0)) }
 }

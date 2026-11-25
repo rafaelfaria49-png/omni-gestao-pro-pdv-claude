@@ -101,7 +101,20 @@ export type RegistrarTrocaInput = {
    * sessão de caixa ORIGINAL (fechada) e na data econômica real, com trilha de auditoria —
    * sem dinheiro novo na gaveta atual e sem sangria. Exige permissão de gerente (rota).
    */
-  regularizacao?: { sessaoId: string; dataEconomica: string; justificativa: string } | null
+  regularizacao?: {
+    sessaoId: string
+    dataEconomica: string
+    justificativa: string
+    /** Horário exato desconhecido: a data/hora informada é aproximada (registrado na trilha). */
+    horarioAproximado?: boolean
+    /**
+     * Valores PRATICADOS na ocasião (P1-003), obrigatórios na troca regularizada: o preço do
+     * cadastro pode ter mudado desde então. O servidor confere a coerência com o valor devolvido.
+     */
+    valoresConfirmados?: { totalNovaCompra: number; diferencaRecebida: number } | null
+  } | null
+  /** Executa tudo e DESFAZ no fim: devolve os efeitos para o operador conferir antes de confirmar. */
+  simular?: boolean
 }
 
 export type ItemDevolvidoResultado = {
@@ -130,19 +143,29 @@ export type ResultadoTroca = {
   reembolso: { valor: number; forma: FormaReembolso; execucaoExterna: "pendente_manual" | null } | null
   itensDevolvidos: ItemDevolvidoResultado[]
   itensNovos: Array<{ produtoId: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }>
-  /** Regularização: retornos ao estoque já refletidos por contagem posterior (não reaplicados). */
-  estoqueAbsorvidoPorAjuste?: Array<{ produtoId: string; quantidade: number }>
+  /** Regularização: retornos ao estoque já refletidos por contagem física posterior (não reaplicados). */
+  estoqueAbsorvidoPorAjuste?: Array<{ produtoId: string; quantidade: number; inventario: string }>
   clienteNome: string
   clienteDoc: string
   operador: string
   motivo: string
   at: string
   /** Presente quando a operação regularizou uma troca já feita (data econômica ≠ registro). */
-  regularizacao?: { dataEconomica: string; registradaEm: string; sessaoOriginal: string | null; justificativa: string; operador: string } | null
+  regularizacao?: {
+    dataEconomica: string
+    registradaEm: string
+    sessaoOriginal: string | null
+    justificativa: string
+    operador: string
+    horarioAproximado: boolean
+    precos?: { precoAtual: number; precoConfirmado: number; diferencaRecebida: number; divergente: boolean }
+  } | null
 }
 
 export type RegistrarTrocaSaida = {
   replayed: boolean
+  /** Resultado de simulação (transação desfeita — nada gravado). */
+  simulado?: boolean
   resultado: ResultadoTroca
   /** Nova venda criada nesta chamada (para automação pós-commit). Ausente em replay. */
   vendaCriada?: { venda: UpsertVendaResult["venda"]; sale: SalePayload }
@@ -154,10 +177,19 @@ function hashPedido(input: RegistrarTrocaInput): string {
   const canon = {
     pedido: input.pedidoIdOrigem.trim(),
     modo: input.modo,
-    linhas: [...input.linhas].sort((a, b) => a.lineIndex - b.lineIndex).map((l) => [l.lineIndex, l.quantidade]),
+    linhas: [...input.linhas].sort((a, b) => a.lineIndex - b.lineIndex).map((l) => [l.lineIndex, l.quantidade, l.naoRevendavel === true]),
     novos: [...(input.novosItens ?? [])].sort((a, b) => a.produtoId.localeCompare(b.produtoId)).map((n) => [n.produtoId, n.quantidade]),
     fd: input.formaDiferenca ?? null,
-    reg: input.regularizacao ? [input.regularizacao.sessaoId, input.regularizacao.dataEconomica] : null,
+    reg: input.regularizacao
+      ? [
+          input.regularizacao.sessaoId,
+          input.regularizacao.dataEconomica,
+          input.regularizacao.horarioAproximado === true,
+          input.regularizacao.valoresConfirmados
+            ? [arredonda2(input.regularizacao.valoresConfirmados.totalNovaCompra), arredonda2(input.regularizacao.valoresConfirmados.diferencaRecebida)]
+            : null,
+        ]
+      : null,
     ex: input.destinoExcedente ?? null,
     fr: input.formaReembolso ?? null,
     doc: normalizeDocDigits(input.clienteDoc ?? ""),
@@ -209,6 +241,27 @@ async function resolverProdutoDaLinha(
     where: { storeId, OR: [{ sku: { in: chaves } }, { barcode: { in: chaves } }] },
     select: { id: true, metadata: true },
   })
+}
+
+/** Movimento de CONTAGEM FÍSICA de inventário do produto depois de `desde` (chave do ledger). */
+async function contagemFisicaPosterior(
+  tx: Prisma.TransactionClient,
+  storeId: string,
+  produtoId: string,
+  desde: Date,
+): Promise<string | null> {
+  const m = await tx.movimentacaoEstoque.findFirst({
+    where: { storeId, produtoId, tipo: "ajuste", idempotencyKey: { startsWith: "inventario:" }, createdAt: { gt: desde } },
+    select: { idempotencyKey: true },
+    orderBy: { createdAt: "asc" },
+  })
+  return m?.idempotencyKey ?? null
+}
+
+class SimulacaoDesfeita extends Error {
+  constructor(readonly saida: RegistrarTrocaSaida) {
+    super("simulacao")
+  }
 }
 
 async function registrarNaTransacao(
@@ -373,7 +426,16 @@ async function registrarNaTransacao(
   }
 
   // ── Nova compra (troca imediata): preço do cadastro, nunca do cliente ──────────────
-  type NovoItem = { produtoId: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number }
+  type NovoItem = {
+    produtoId: string
+    nome: string
+    quantidade: number
+    valorUnitario: number
+    valorTotal: number
+    /** Códigos resolvidos NO SERVIDOR no momento da troca (snapshot histórico da linha). */
+    sku?: string
+    barcode?: string
+  }
   const novos: NovoItem[] = []
   if (input.modo === "troca") {
     // A nova venda SEMPRE recebe o número do alocador canônico do servidor (série da loja),
@@ -391,7 +453,7 @@ async function registrarNaTransacao(
     for (const [ref, quantidade] of agregados) {
       const prod = await tx.produto.findFirst({
         where: { storeId, OR: [{ id: ref }, { sku: ref }, { barcode: ref }] },
-        select: { id: true, name: true, price: true, active: true, status: true, metadata: true, vestuarioGrade: { select: { id: true } } },
+        select: { id: true, name: true, sku: true, barcode: true, price: true, active: true, status: true, metadata: true, vestuarioGrade: { select: { id: true } } },
       })
       if (!prod) throw new TrocaError("NOVO_ITEM_NAO_ENCONTRADO", "Produto da nova compra não encontrado nesta loja.", 404, { ref })
       if (prod.active === false || /inativ/i.test(prod.status ?? "")) {
@@ -405,10 +467,69 @@ async function registrarNaTransacao(
       }
       const valorUnitario = arredonda2(prod.price)
       if (!(valorUnitario > 0)) throw new TrocaError("NOVO_ITEM_SEM_PRECO", `${prod.name} está sem preço de venda no cadastro.`)
-      novos.push({ produtoId: prod.id, nome: prod.name, quantidade, valorUnitario, valorTotal: arredonda2(valorUnitario * quantidade) })
+      novos.push({
+        produtoId: prod.id,
+        nome: prod.name,
+        quantidade,
+        valorUnitario,
+        valorTotal: arredonda2(valorUnitario * quantidade),
+        ...(prod.sku ? { sku: prod.sku } : {}),
+        ...(prod.barcode ? { barcode: prod.barcode } : {}),
+      })
     }
   }
-  const totalNovaCompra = arredonda2(novos.reduce((s, n) => s + n.valorTotal, 0))
+  const precoAtualNovaCompra = arredonda2(novos.reduce((s, n) => s + n.valorTotal, 0))
+  let totalNovaCompra = precoAtualNovaCompra
+  // ── Valor histórico confirmado (só regularização de troca) ──────────────────────────
+  const vc = reg?.valoresConfirmados ?? null
+  if (vc && (!reg || input.modo !== "troca")) {
+    throw new TrocaError("VALOR_CONFIRMADO_SO_REGULARIZACAO", "Valor confirmado só é aceito na regularização de troca.", 422)
+  }
+  let precosTrilha: { precoAtual: number; precoConfirmado: number; diferencaRecebida: number; divergente: boolean } | null = null
+  if (reg && input.modo === "troca") {
+    if (!vc) {
+      throw new TrocaError(
+        "REGULARIZACAO_VALOR_HISTORICO_OBRIGATORIO",
+        "Na regularização, confirme o valor cobrado pela nova compra na ocasião e a diferença efetivamente recebida.",
+        422,
+        { precoAtual: precoAtualNovaCompra },
+      )
+    }
+    const conf = arredonda2(vc.totalNovaCompra)
+    if (!(conf > 0)) throw new TrocaError("REGULARIZACAO_VALORES_INCONSISTENTES", "Valor confirmado da nova compra inválido.", 422)
+    const diferencaEsperada = arredonda2(Math.max(0, conf - valorDevolvido))
+    if (Math.abs(arredonda2(vc.diferencaRecebida) - diferencaEsperada) > 0.009) {
+      throw new TrocaError(
+        "REGULARIZACAO_VALORES_INCONSISTENTES",
+        `Os valores não fecham: devolvido ${valorDevolvido.toFixed(2)} e nova compra ${conf.toFixed(2)} resultam em diferença de ${diferencaEsperada.toFixed(2)}, não ${arredonda2(vc.diferencaRecebida).toFixed(2)}. Revise antes de regularizar.`,
+        422,
+        { diferencaEsperada, valorDevolvido },
+      )
+    }
+    // Rateio determinístico do valor confirmado entre os itens novos (proporcional ao preço atual,
+    // em centavos); cada linha precisa fechar exatamente em unitário × quantidade.
+    const pesos = novos.map((nv) => Math.round(nv.valorTotal * 100))
+    const somaPesos = pesos.reduce((a, b) => a + b, 0)
+    const alvo = Math.round(conf * 100)
+    const base = pesos.map((p) => Math.floor((p * alvo) / somaPesos))
+    let resto = alvo - base.reduce((a, b) => a + b, 0)
+    for (let i = 0; resto > 0; i = (i + 1) % base.length, resto -= 1) base[i]! += 1
+    novos.forEach((nv, i) => {
+      const totalCent = base[i]!
+      if (totalCent % nv.quantidade !== 0) {
+        throw new TrocaError("REGULARIZACAO_VALOR_NAO_DIVISIVEL", "O valor confirmado não se divide exatamente pelas unidades da nova compra. Revise os itens.", 422)
+      }
+      nv.valorUnitario = totalCent / nv.quantidade / 100
+      nv.valorTotal = totalCent / 100
+    })
+    totalNovaCompra = conf
+    precosTrilha = {
+      precoAtual: precoAtualNovaCompra,
+      precoConfirmado: conf,
+      diferencaRecebida: diferencaEsperada,
+      divergente: Math.abs(conf - precoAtualNovaCompra) > 0.009,
+    }
+  }
   const plano = planoTroca(valorDevolvido, totalNovaCompra)
   const formaDiferenca: FormaDiferenca = input.formaDiferenca ?? "dinheiro"
   const destinoExcedente = input.modo === "troca" && plano.excedente > 0 ? input.destinoExcedente ?? null : null
@@ -430,7 +551,15 @@ async function registrarNaTransacao(
 
   const at = dataEconomica ?? new Date()
   const regularizacaoTrilha = reg
-    ? { dataEconomica: at.toISOString(), registradaEm: new Date().toISOString(), sessaoOriginal: sessaoId, justificativa: reg.justificativa.trim().slice(0, 500), operador: input.operadorLabel }
+    ? {
+        dataEconomica: at.toISOString(),
+        registradaEm: new Date().toISOString(),
+        sessaoOriginal: sessaoId,
+        justificativa: reg.justificativa.trim().slice(0, 500),
+        operador: input.operadorLabel,
+        horarioAproximado: reg.horarioAproximado === true,
+        ...(precosTrilha ? { precos: precosTrilha } : {}),
+      }
     : null
   const tipo = TIPO_PERSISTIDO[input.modo]
 
@@ -476,6 +605,10 @@ async function registrarNaTransacao(
   for (const s of selecionadas) {
     let destino = s.linha.destino
     let produtoId: string | null = null
+    if (destino === "retorna_estoque" && s.naoRevendavel) {
+      // Defeito / sem condição de venda: não volta ao estoque vendável (tratamento explícito).
+      destino = "nao_revendavel"
+    }
     if (destino === "retorna_estoque") {
       const prod = await resolverProdutoDaLinha(tx, storeId, s.linha.produtoId, s.linha.inventoryId)
       if (!prod) {
@@ -493,18 +626,21 @@ async function registrarNaTransacao(
   if (input.modo === "somente_estoque" && entradaPorProduto.size === 0) {
     throw new TrocaError("SEM_VINCULO_ESTOQUE", "Nenhum item selecionado tem produto no cadastro para voltar ao estoque.")
   }
-  // Regularização: uma CONTAGEM (ajuste absoluto) feita depois da data econômica já refletiu o
-  // retorno físico — devolver de novo contaria duas vezes (mesma regra do motor em
-  // `historicalRecovery`). Reconciliação estrutural (`estoque-reconcile`) não é contagem.
-  const estoqueAbsorvidoPorAjuste: Array<{ produtoId: string; quantidade: number }> = []
+  if (selecionadas.some((s) => s.naoRevendavel) && motivo.length < 5) {
+    throw new TrocaError("MOTIVO_AVARIA_OBRIGATORIO", "Descreva o defeito do item que não volta ao estoque vendável.", 422)
+  }
+  // Regularização: só uma CONTAGEM FÍSICA de inventário (ledger `inventario:<sessão>:<produto>`)
+  // feita depois da data econômica absorve o movimento — ela fixou o saldo físico real.
+  // Ajuste administrativo, correção de cadastro, ajuste relativo e reconciliação estrutural NÃO.
+  const estoqueAbsorvidoPorAjuste: Array<{ produtoId: string; quantidade: number; inventario: string }> = []
   for (const [produtoId, quantidade] of entradaPorProduto) {
     if (regularizacaoTrilha) {
-      const ajustePosterior = await tx.movimentacaoEstoque.findFirst({
-        where: { storeId, produtoId, tipo: "ajuste", origem: { not: "estoque-reconcile" }, createdAt: { gt: at } },
-        select: { id: true },
-      })
-      if (ajustePosterior) {
-        estoqueAbsorvidoPorAjuste.push({ produtoId, quantidade })
+      // Trava o produto ANTES de procurar a contagem: uma contagem concorrente que comite nesse
+      // intervalo seria ignorada e o retorno somaria por cima dela (dupla contagem, provado em PG).
+      await tx.$queryRaw`SELECT "id" FROM "estoque_produtos" WHERE "id" = ${produtoId} AND "storeId" = ${storeId} FOR UPDATE`
+      const contagem = await contagemFisicaPosterior(tx, storeId, produtoId, at)
+      if (contagem) {
+        estoqueAbsorvidoPorAjuste.push({ produtoId, quantidade, inventario: contagem })
         continue
       }
     }
@@ -566,6 +702,8 @@ async function registrarNaTransacao(
         unitPrice: n.valorUnitario,
         lineTotal: n.valorTotal,
         itemType: "produto",
+        ...(n.sku ? { sku: n.sku } : {}),
+        ...(n.barcode ? { barcode: n.barcode } : {}),
       })),
       ...({
         trocaOrigem: { vendaOrigem: pedidoId, devolucaoId: dev.id, operationId: input.operationId },
@@ -577,7 +715,9 @@ async function registrarNaTransacao(
       requireCaixaSession: true,
       // Regularização: grava na sessão original fechada (contrato retroativo do motor, auditado).
       // + `historicalRecovery`: a baixa do item novo é pulada se uma contagem posterior já a refletiu.
-      ...(regularizacaoTrilha ? { allowClosedOriginalSession: true, historicalRecovery: true } : { finalizacaoAoVivo: true }),
+      ...(regularizacaoTrilha
+        ? { allowClosedOriginalSession: true, historicalRecovery: true, historicalAbsorcaoSomenteInventario: true }
+        : { finalizacaoAoVivo: true }),
       ...(creditoId && plano.creditoAplicado > 0 ? { creditoValeCreditoId: creditoId } : {}),
       v2: { clientSaleId: clientSaleId.clientSaleId, allocate: (t) => allocateSaleNumberForWriter(t, storeId) },
     })
@@ -708,9 +848,15 @@ export async function registrarTroca(input: RegistrarTrocaInput): Promise<Regist
   let lastError: unknown
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await prisma.$transaction((tx) => registrarNaTransacao(tx, input, requestHash), TX_OPTS)
+      return await prisma.$transaction(async (tx) => {
+        const out = await registrarNaTransacao(tx, input, requestHash)
+        // Simulação: tudo foi executado de verdade (mesmas regras/travas); o throw desfaz a transação.
+        if (input.simular && !out.replayed) throw new SimulacaoDesfeita(out)
+        return out
+      }, TX_OPTS)
     } catch (error) {
       lastError = error
+      if (error instanceof SimulacaoDesfeita) return { replayed: false, simulado: true, resultado: error.saida.resultado }
       if (error instanceof TrocaError) throw error
       if (isPrismaUniqueConstraintError(error)) {
         // Corrida da MESMA operação (duas abas/clique duplo): a vencedora já gravou.

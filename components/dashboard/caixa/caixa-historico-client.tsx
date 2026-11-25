@@ -43,6 +43,7 @@ import {
   type ResumoFechamentoPersistido,
 } from "@/lib/caixa/fechamento-blocos"
 import { aggregateRecebimentosSessao, classificarRecebimentoCaixa } from "@/lib/caixa/recebimentos-sessao"
+import type { RegularizacaoSessaoItem } from "@/lib/pdv/trocas/troca-caixa"
 import { periodoCaixaParaConsulta } from "@/lib/caixa/historico-periodo"
 
 const CAIXA_HISTORICO_PAGE_SIZE = 50
@@ -143,6 +144,7 @@ export function CaixaHistoricoClient() {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detalhe, setDetalhe] = useState<SessaoDetalhe | null>(null)
+  const [detalheRegularizacoes, setDetalheRegularizacoes] = useState<{ itens: RegularizacaoSessaoItem[]; dinheiroLiquido: number } | null>(null)
   const [detalheTerminal, setDetalheTerminal] = useState<TerminalInfo | null>(null)
   const [detalheTotaisTerminal, setDetalheTotaisTerminal] = useState<{
     total: number | null
@@ -279,8 +281,10 @@ export function CaixaHistoricoClient() {
             sessao: SessaoDetalhe
             terminal?: TerminalInfo | null
             totais?: { totalVendasTerminal?: number | null; totalVendasCountTerminal?: number | null }
+            regularizacoes?: { itens: RegularizacaoSessaoItem[]; dinheiroLiquido: number }
           }
           setDetalhe(data.sessao ?? null)
+          setDetalheRegularizacoes(data.regularizacoes ?? null)
           setDetalheTerminal(data.terminal ?? null)
           setDetalheTotaisTerminal(
             data.totais
@@ -550,6 +554,7 @@ export function CaixaHistoricoClient() {
                       sessao={detalhe}
                       terminal={detalheTerminal}
                       totaisTerminal={detalheTotaisTerminal}
+                      regularizacoes={detalheRegularizacoes}
                       onImprimir={handleImprimir}
                     />
                   ) : null}
@@ -582,15 +587,60 @@ export function CaixaHistoricoClient() {
   )
 }
 
+/**
+ * P1-003 — o fechamento ORIGINAL (valores gravados) fica como está; as regularizações feitas
+ * depois aparecem à parte, com o total recalculado e a diferença. Nunca substitui o original.
+ */
+function RegularizacoesPosteriores({
+  regularizacoes,
+  esperadoOriginal,
+  fechadaEm,
+}: {
+  regularizacoes: { itens: RegularizacaoSessaoItem[]; dinheiroLiquido: number }
+  esperadoOriginal: number | null
+  fechadaEm: string | Date | null
+}) {
+  const recalculado = esperadoOriginal != null ? Math.round((esperadoOriginal + regularizacoes.dinheiroLiquido) * 100) / 100 : null
+  return (
+    <div className="min-w-0 space-y-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs" data-testid="caixa-regularizacoes-posteriores">
+      <p className="font-semibold text-foreground">Regularizações registradas depois do fechamento</p>
+      <div className="grid min-w-0 gap-1 sm:grid-cols-3">
+        <p className="text-muted-foreground">
+          Dinheiro esperado no fechamento original: <span className="font-semibold text-foreground">{esperadoOriginal != null ? fmt(esperadoOriginal) : "—"}</span>
+          {fechadaEm ? ` (fechado em ${new Date(fechadaEm).toLocaleString("pt-BR")})` : ""}
+        </p>
+        <p className="text-muted-foreground">
+          Regularizado depois: <span className="font-semibold text-foreground">{fmt(regularizacoes.dinheiroLiquido)}</span>
+        </p>
+        <p className="text-muted-foreground">
+          Recalculado (não substitui o original): <span className="font-semibold text-foreground">{recalculado != null ? fmt(recalculado) : "—"}</span>
+        </p>
+      </div>
+      <ul className="divide-y divide-border/60">
+        {regularizacoes.itens.map((r) => (
+          <li key={`${r.tipo}-${r.referencia}`} className="min-w-0 py-1.5 text-muted-foreground">
+            <span className="font-mono text-foreground">{r.referencia}</span> · {r.tipo === "venda_substituta" ? "venda substituta" : "devolução"} ·
+            dinheiro {fmt(r.dinheiro)} · data econômica {r.dataEconomica ? new Date(r.dataEconomica).toLocaleString("pt-BR") : "—"}
+            {r.horarioAproximado ? " (horário aproximado)" : ""} · registrada em {r.registradaEm ? new Date(r.registradaEm).toLocaleString("pt-BR") : "—"} por{" "}
+            {r.operador || "—"} · {r.justificativa}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function SessaoDetalheView({
   sessao,
   terminal,
   totaisTerminal,
+  regularizacoes,
   onImprimir,
 }: {
   sessao: SessaoDetalhe
   terminal: TerminalInfo | null
   totaisTerminal: { total: number | null; count: number | null } | null
+  regularizacoes?: { itens: RegularizacaoSessaoItem[]; dinheiroLiquido: number } | null
   onImprimir: (s: SessaoDetalhe) => void
 }) {
   const sangrias = sessao.operacoes.filter((o) => o.tipo === "sangria")
@@ -625,6 +675,13 @@ function SessaoDetalheView({
 
   return (
     <div className="space-y-4">
+      {regularizacoes && regularizacoes.itens.length > 0 && (
+        <RegularizacoesPosteriores
+          regularizacoes={regularizacoes}
+          esperadoOriginal={typeof esperadoGaveta === "number" ? esperadoGaveta : null}
+          fechadaEm={sessao.fechadaEm ?? null}
+        />
+      )}
       {/* Terminal vinculado (ou aviso de sessão legada sem terminal) */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Monitor className="h-3.5 w-3.5 text-muted-foreground" />

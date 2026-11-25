@@ -15,7 +15,7 @@ export type TrocaRequestBody = {
   operationId: string
   pedidoIdOrigem: string
   modo: "troca" | "vale_credito" | "reembolso" | "somente_estoque"
-  linhas: Array<{ lineIndex: number; quantidade: number }>
+  linhas: Array<{ lineIndex: number; quantidade: number; naoRevendavel?: boolean }>
   novosItens?: Array<{ produtoId: string; quantidade: number }>
   formaDiferenca?: "dinheiro" | "pix" | "debito" | "credito"
   destinoExcedente?: "vale" | "dinheiro"
@@ -26,7 +26,15 @@ export type TrocaRequestBody = {
   sessaoId?: string | null
   terminalId?: string | null
   /** Regularização de troca já feita: sessão original (fechada) + data econômica real. */
-  regularizacao?: { sessaoId: string; dataEconomica: string; justificativa: string }
+  regularizacao?: {
+    sessaoId: string
+    dataEconomica: string
+    justificativa: string
+    horarioAproximado?: boolean
+    valoresConfirmados?: { totalNovaCompra: number; diferencaRecebida: number }
+  }
+  /** Executa e desfaz no servidor: só para conferir os efeitos. */
+  simular?: boolean
 }
 
 export function novoOperationId(): string {

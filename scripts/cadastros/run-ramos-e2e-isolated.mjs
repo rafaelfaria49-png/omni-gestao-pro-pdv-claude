@@ -65,7 +65,7 @@ try {
       stock: 0, warrantyDays: 30, category: "Sintéticos", metadata: { atributos: { modeloCompativel: "Modelo Sintético Z" }, fiscal: { ncm: "39199090" } } },
     // OMNI-PDV-TROCAS-…-P1-002 (spec 12): troca 119,90 → 129,90 sintética, códigos com zeros à esquerda.
     { id: "e2e-b-ps4", storeId: "e2e-b-variedades", name: "CONTROLE SINTÉTICO PS4 WIRELESS", sku: "E2E-PS4", barcode: "0789000000017",
-      price: 119.9, precoCusto: 60, stock: 4, category: "Sintéticos troca" },
+      price: 119.9, precoCusto: 60, stock: 8, category: "Sintéticos troca" },
     { id: "e2e-b-x360", storeId: "e2e-b-variedades", name: "CONTROLE SINTÉTICO X-360 SEM FIO", sku: "E2E-X360", barcode: "7890000000024",
       price: 129.9, precoCusto: 65, stock: 6, category: "Sintéticos troca" },
     { id: "e2e-b-pelicula", storeId: "e2e-b-variedades", name: "PELÍCULA SINTÉTICA 3D", sku: "E2E-PEL", price: 30, precoCusto: 5,

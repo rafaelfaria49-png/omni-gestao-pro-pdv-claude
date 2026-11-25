@@ -59,6 +59,17 @@ describe("linhasDaVenda", () => {
     expect(l.map((x) => x.codigoNaVenda)).toEqual(["KD-327A", "", ""])
   })
 
+  it("linha vendida por peso (KG) não é arredondada e é recusada explicitamente", () => {
+    const { linhas } = linhasComDisponibilidade(
+      linhasDaVenda({ lines: [{ inventoryId: "queijo", name: "QUEIJO", quantity: 0.35, unitPrice: 20, lineTotal: 7, vendaPorPeso: true }] }, []),
+      [],
+    )
+    expect(linhas[0]).toMatchObject({ quantity: 0.35, porPeso: true, destino: "venda_por_peso" })
+    expect(validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 1 }], [7])).toMatchObject({ ok: false, code: "DEVOLUCAO_POR_PESO_NAO_SUPORTADA" })
+    const legado = linhasDaVenda(null, [{ inventoryId: "queijo", nome: "QUEIJO", quantidade: null, precoUnitario: 20, lineTotal: 7 }])
+    expect(legado[0]).toMatchObject({ porPeso: true })
+  })
+
   it("nunca preenche código do snapshot a partir de outra fonte", () => {
     const [l] = linhasDaVenda(vendaPs4, [])
     expect(l!.snapshotSku).toBe("")

@@ -64,7 +64,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
 
   // Vendas de origem pela rota REAL do PDV (writer V1 do ambiente), sem cliente e sem cupom.
   let seq = 9100
-  async function vender(linhas: Linha[], pb: "dinheiro" | "cartaoCredito" = "cartaoCredito") {
+  async function vender(linhas: Linha[], pb: "dinheiro" | "cartaoCredito" | "aPrazo" = "cartaoCredito") {
     const id = `VDA-2026-${++seq}`
     const total = Math.round(linhas.reduce((s, l) => s + l.price * (l.qtd ?? 1), 0) * 100) / 100
     const res = await page.request.post("/api/ops/venda-persist", {
@@ -97,6 +97,10 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
   const vSobra = await vender([X360])
   const vAvulso = await vender([{ id: "e2e-item", name: "ITEM AVULSO SINTÉTICO", price: 25, avulso: true }])
   const vConc = await vender([PEL])
+  const vPix = await vender([PS4])
+  const vPrazo = await vender([PS4], "aPrazo")
+  const vReg = await vender([PS4])
+  const vRegAt = (await db.venda.findFirstOrThrow({ where: { storeId: B, pedidoId: vReg } })).at
   const estoque = async (id: string) => (await db.produto.findUniqueOrThrow({ where: { id } })).stock
 
   await test.step("PDV Clássico → busca por nome sem acento, código de barras e SKU, sem cupom e sem CPF", async () => {
@@ -210,6 +214,39 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     expect(JSON.stringify(det.sessao.devolucoes)).not.toContain("52998224725") // sem CPF na resposta
   })
 
+  await test.step("Reembolso Pix (fora da gaveta) e venda a prazo em aberto bloqueada, pela interface", async () => {
+    let dialog = await abrirTrocaNoPdv(page)
+    let busca = dialog.getByLabel("Buscar venda por produto, código, cupom ou cliente")
+    await busca.fill(vPix)
+    await busca.press("Enter")
+    await dialog.getByRole("button", { name: `Aumentar ${PS4.name}` }).click()
+    await dialog.getByRole("radio", { name: /Reembolso/ }).click()
+    await dialog.getByRole("button", { name: "Pix", exact: true }).click()
+    await dialog.getByRole("button", { name: "Confirmar devolução" }).click()
+    await expect(page.getByRole("dialog", { name: /Comprovante — DEVOLUÇÃO \/ REEMBOLSO/ })).toBeVisible()
+    await page.getByRole("dialog", { name: /Comprovante/ }).getByRole("button", { name: "Fechar" }).click()
+    // Mesmo diálogo, sem recarregar: o foco volta à busca e a próxima venda é aberta normalmente.
+    await expect(busca).toBeFocused()
+    await busca.fill(vPrazo)
+    await busca.press("Enter")
+    await dialog.getByRole("button", { name: `Aumentar ${PS4.name}` }).click()
+    await dialog.getByRole("radio", { name: /Reembolso/ }).click()
+    await dialog.getByRole("button", { name: "Dinheiro", exact: true }).click()
+    await dialog.getByRole("button", { name: "Confirmar devolução" }).click()
+    await expect(dialog.getByRole("alert")).toContainText("a receber")
+    await shot(page, "06b-prazo-em-aberto-bloqueado")
+    expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vPrazo } })).toBe(0)
+    await page.keyboard.press("Escape")
+    await expect(dialog).toHaveCount(0)
+    const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
+    expect(det.totais.devolucoesCaixa).toMatchObject({ reembolsosDinheiro: 119.9, reembolsosPix: 119.9 })
+    // O atalho do PDV segue funcionando depois de dois comprovantes e um Escape.
+    dialog = await abrirTrocaNoPdv(page)
+    busca = dialog.getByLabel("Buscar venda por produto, código, cupom ou cliente")
+    await expect(busca).toBeVisible()
+    await page.keyboard.press("Escape")
+  })
+
   // ── Rota autoritativa (mesma que a tela usa) ─────────────────────────────────────────
   const troca = (body: Record<string, unknown>, headers = H) => page.request.post("/api/ops/trocas", { headers, data: { sessaoId: sessao.id, ...body } })
   const opId = () => `trc_e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
@@ -285,6 +322,77 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     const dialog = page.getByRole("dialog").filter({ hasText: vTroca })
     await expect(dialog.getByTestId("troca-linhas-venda").getByText(/vendido 1 · devolvido 1 · disponível 0/)).toBeVisible()
     await shot(page, "08-historico-troca-disponivel-zero")
+  })
+
+  await test.step("Regularização retroativa: valor histórico ≠ preço atual, simulação, sessão original e fechamento preservado", async () => {
+    // A troca "aconteceu" 2 min depois da venda, dentro desta sessão — que agora é fechada.
+    const espera = vRegAt.getTime() + 150_000 - Date.now()
+    if (espera > 0) await page.waitForTimeout(espera)
+    const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
+    const fechar = await page.request.post("/api/ops/caixa/fechar", {
+      headers: H,
+      data: { sessaoId: sessao.id, saldoFinal: 0, observacao: "E2E trocas", payload: { resumoFechamento: { reembolsosDinheiro: det.totais.devolucoesCaixa.reembolsosDinheiro } } },
+    })
+    expect(fechar.status(), await fechar.text()).toBe(200)
+    const fechada = await db.sessaoCaixa.findUniqueOrThrow({ where: { id: sessao.id } })
+    expect(fechada.status).toBe("FECHADA")
+
+    await abrirPdvComCaixa(page)
+    const dialog = await abrirTrocaNoPdv(page)
+    const busca = dialog.getByLabel("Buscar venda por produto, código, cupom ou cliente")
+    await busca.fill(vReg)
+    await busca.press("Enter")
+    await dialog.getByRole("button", { name: `Aumentar ${PS4.name}` }).click()
+    const novo = dialog.getByLabel("Buscar novo produto")
+    await novo.fill("E2E-X360")
+    await novo.press("Enter")
+    await dialog.getByText("Regularizar operação já feita no balcão (data passada)").click()
+    const local = await page.evaluate((iso) => {
+      const d = new Date(new Date(iso).getTime() + 120_000)
+      const p = (n: number) => String(n).padStart(2, "0")
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+    }, vRegAt.toISOString())
+    await dialog.getByLabel("Data e hora reais da operação").fill(local)
+    await expect(dialog.getByLabel("Sessão de caixa da época")).toHaveValue(sessao.id)
+    await dialog.getByText(/Horário exato desconhecido/).click()
+    await dialog.getByLabel("Justificativa da regularização").fill("Troca feita no balcão; sistema não concluiu; horário aproximado.")
+    // Preço atual 129,90; na ocasião foram cobrados 124,90 (diferença recebida 5,00).
+    await dialog.getByLabel("Valor cobrado pela nova compra na ocasião").fill("124,90")
+    await dialog.getByLabel("Diferença efetivamente recebida").fill("5,00")
+    await expect(dialog.getByRole("button", { name: "Finalizar troca" })).toBeDisabled() // só depois de conferir
+    await dialog.getByRole("button", { name: /Conferir efeitos/ }).click()
+    const efeitos = dialog.getByTestId("troca-efeitos-simulados")
+    await expect(efeitos).toContainText("divergente")
+    await expect(efeitos).toContainText("na sessão da época")
+    await shot(page, "09-regularizacao-efeitos-conferidos")
+    expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vReg } })).toBe(0) // simulação não grava
+    await dialog.getByRole("button", { name: "Finalizar troca" }).click()
+    const cupom = page.getByRole("dialog", { name: /Comprovante — TROCA IMEDIATA/ })
+    await expect(cupom).toBeVisible()
+    await cupom.getByRole("button", { name: "Fechar" }).click()
+    await page.keyboard.press("Escape")
+
+    const nova = await db.venda.findFirstOrThrow({ where: { storeId: B, payload: { path: ["trocaOrigem", "vendaOrigem"], equals: vReg } } })
+    const np = nova.payload as Record<string, unknown> & { regularizacaoTroca?: { precos?: Record<string, unknown> } }
+    expect(np.sessaoId).toBe(sessao.id)
+    expect(np.retroactiveSync).toBe(true)
+    expect(nova.total).toBe(124.9)
+    expect(np.regularizacaoTroca?.precos).toMatchObject({ precoConfirmado: 124.9, precoAtual: 129.9, divergente: true })
+    const entradas = await db.movimentacaoFinanceira.findMany({ where: { storeId: B, referenciaId: nova.pedidoId, origem: "venda" } })
+    expect(entradas.map((m) => m.valor)).toEqual([5])
+    expect(entradas[0]!.createdAt.getTime()).toBeLessThanOrEqual(fechada.fechadaEm!.getTime())
+    expect(entradas[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(fechada.abertaEm.getTime()) // dentro da sessão da época
+    // Fechamento original intocado; a regularização aparece à parte com o total recalculado.
+    expect((await db.sessaoCaixa.findUniqueOrThrow({ where: { id: sessao.id } })).saldoFinal).toBe(fechada.saldoFinal)
+    const detFechada = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
+    expect(detFechada.regularizacoes).toMatchObject({ dinheiroLiquido: 5 })
+    await page.goto("/dashboard/caixa/historico")
+    await page.getByText(fechada.operador || "Caixa E2E trocas").first().click()
+    const bloco = page.getByTestId("caixa-regularizacoes-posteriores")
+    await expect(bloco).toBeVisible({ timeout: 60_000 })
+    await expect(bloco).toContainText("Recalculado (não substitui o original)")
+    await expect(bloco).toContainText("horário aproximado")
+    await shot(page, "10-fechamento-original-e-regularizacao")
   })
 
   await ctx.close()

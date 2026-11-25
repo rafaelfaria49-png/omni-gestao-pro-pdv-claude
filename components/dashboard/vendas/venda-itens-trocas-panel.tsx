@@ -22,6 +22,7 @@ const ORIGEM: Record<string, string> = {
   avulso: "Lançamento avulso",
   servico: "Serviço",
   aparelho_imei: "Aparelho (IMEI)",
+  venda_por_peso: "Vendido por peso (KG)",
 }
 
 function brl(n: number) {
