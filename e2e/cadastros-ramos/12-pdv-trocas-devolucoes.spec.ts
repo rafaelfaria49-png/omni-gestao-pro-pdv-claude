@@ -229,7 +229,11 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     // Espera o comprovante sair de vez (animação de saída) antes do próximo atalho/Escape.
     await expect(page.getByRole("dialog", { name: /Comprovante/ })).toHaveCount(0)
     await fecharTroca(page)
-    const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
+    // Sessão REAL da operação (a da tela/terminal; pode haver mais de uma sessão aberta na loja).
+    const devCaixa = await db.devolucaoVenda.findFirstOrThrow({ where: { storeId: B, vendaLocalId: vReemb } })
+    expect(devCaixa.sessaoId).toBeTruthy()
+    expect((await db.sessaoCaixa.findUniqueOrThrow({ where: { id: devCaixa.sessaoId! } })).status).toBe("ABERTA")
+    const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${devCaixa.sessaoId}`, { headers: H })).json()
     expect(det.totais.devolucoesCaixa).toMatchObject({ reembolsosDinheiro: 119.9 })
     expect(JSON.stringify(det.sessao.devolucoes)).not.toContain("52998224725") // sem CPF na resposta
   })
@@ -259,7 +263,11 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await shot(page, "06b-prazo-em-aberto-bloqueado")
     expect(await db.devolucaoVenda.count({ where: { storeId: B, vendaLocalId: vPrazo } })).toBe(0)
     await fecharTroca(page)
-    const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${sessao.id}`, { headers: H })).json()
+    // Sessão REAL da operação (a da tela/terminal; pode haver mais de uma sessão aberta na loja).
+    const devCaixa = await db.devolucaoVenda.findFirstOrThrow({ where: { storeId: B, vendaLocalId: vPix } })
+    expect(devCaixa.sessaoId).toBeTruthy()
+    expect((await db.sessaoCaixa.findUniqueOrThrow({ where: { id: devCaixa.sessaoId! } })).status).toBe("ABERTA")
+    const det = await (await page.request.get(`/api/ops/caixa/sessao-detalhe?sessaoId=${devCaixa.sessaoId}`, { headers: H })).json()
     expect(det.totais.devolucoesCaixa).toMatchObject({ reembolsosDinheiro: 119.9, reembolsosPix: 119.9 })
     // O atalho do PDV segue funcionando depois de dois comprovantes e um Escape.
     dialog = await abrirTrocaNoPdv(page)
