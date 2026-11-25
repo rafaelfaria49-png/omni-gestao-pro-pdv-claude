@@ -150,8 +150,16 @@ export async function dadosFinanceirosEmpresa(
     // Gestor Money desligado: comportamento exato do legado (perfilId NULL = empresarial pela
     // Store obrigatória), sem criar/adotar perfil e sem travas novas — mesmo que exista um perfil
     // de uma ativação anterior, inclusive DESATIVADO: o Financeiro existente nunca congela por ele.
-    void db
-    return (valor === undefined ? {} : precisaoLegada(valor)) as { perfilId?: string } & Partial<ReturnType<typeof precisaoLegada>>
+    // Rollback de uma ativação: o título referenciado pode já ter perfil (adotado). O trigger exige o
+    // MESMO perfil no fato novo ligado a ele — repete o perfil gravado, sem criar, adotar ou validar
+    // (perfil inativo inclusive). Só o título: nunca adota carteira/título por tabela.
+    const precisao = (valor === undefined ? {} : precisaoLegada(valor)) as { perfilId?: string } & Partial<ReturnType<typeof precisaoLegada>>
+    const titulo = refs.pagarTituloId
+      ? await db.contaPagarTitulo.findFirst({ where: { id: refs.pagarTituloId, storeId }, select: { perfilId: true } })
+      : refs.receberTituloId
+        ? await db.contaReceberTitulo.findFirst({ where: { id: refs.receberTituloId, storeId }, select: { perfilId: true } })
+        : null
+    return titulo?.perfilId ? { ...precisao, perfilId: titulo.perfilId } : precisao
   }
   const titulos: Array<{ kind: "pagar" | "receber"; id: string; perfilId: string | null; carteiraId: string | null }> = []
   for (const kind of ["pagar", "receber"] as const) {

@@ -1,4 +1,6 @@
 "use server"
+import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
@@ -45,13 +47,13 @@ function assertStoreId(storeId: string): string {
 async function logExec(storeId: string, commandId: string, ok: boolean, detail: string) {
   const sid = storeId.trim()
   if (!sid) return
-  void detail
   try {
     await prisma.logsAuditoria.create({
       data: {
         action: ok ? "OMNI_AGENT_EXEC_OK" : "OMNI_AGENT_EXEC_ERRO",
         userLabel: "Omni Agent HUB",
-        detail: ok ? "Comando concluído." : "Comando recusado ou indisponível.",
+        // Desligado: trilha detalhada da main. Ligado: minimização do G003 (sem conteúdo privado).
+        detail: gestorMoneyAtivo() ? (ok ? "Comando concluído." : "Comando recusado ou indisponível.") : detail.slice(0, 4000),
         metadata: omniAgentAuditMetadata(sid, { commandId }),
         source: "omni_agent",
       },
@@ -602,6 +604,8 @@ export async function listOmniAgentAutomations(storeId: string): Promise<OmniAge
   if (!g.ok) throw new Error(g.error)
 
   await requireLeituraOperacionalEmpresa(sid, p => p.workspace.omniAgent)
+  // Desligado: como na main, a lista garante as automações padrão da loja.
+  if (!gestorMoneyAtivo()) await ensureDefaultOmniAgentAutomations(sid)
 
   const rows = await prisma.omniAgentAutomation.findMany({
     where: { storeId: sid },

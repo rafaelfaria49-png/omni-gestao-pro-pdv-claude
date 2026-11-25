@@ -44,8 +44,9 @@ describe.skipIf(!RUNTIME || !OWNER)("RLS do Gestor Money com runtime restrito (P
         rolbypassrls AS bypass, rolsuper AS superuser FROM pg_roles WHERE rolname = current_user`
     expect(id).toMatchObject({ dono: false, bypass: false, superuser: false })
     // Idempotente: limpa a massa sintética de execuções anteriores (como dono, fora do RLS).
-    await owner.movimentacaoFinanceira.deleteMany({ where: { id: { startsWith: "rls-" } } })
+    await owner.movimentacaoFinanceira.deleteMany({ where: { OR: [{ id: { startsWith: "rls-" } }, { referenciaId: { startsWith: "rls-" } }] } })
     await owner.contaPagarTitulo.deleteMany({ where: { id: { startsWith: "rls-" } } })
+    await owner.contaReceberTitulo.deleteMany({ where: { id: { startsWith: "rls-" } } })
     await owner.carteiraFinanceira.deleteMany({ where: { OR: [{ id: { startsWith: "rls-" } }, { perfilId: { in: [P1, P2] } }] } })
     await owner.store.createMany({ data: [{ id: L1, name: "RLS L1" }, { id: L2, name: "RLS L2" }], skipDuplicates: true })
     await owner.adminUser.createMany({ data: [U1, U2].map((u) => ({ id: u, email: `${u}@example.invalid`, password: "synthetic-only", role: "ADMIN", lojaId: L1 })), skipDuplicates: true })
@@ -142,6 +143,53 @@ describe.skipIf(!RUNTIME || !OWNER)("RLS do Gestor Money com runtime restrito (P
     await owner.movimentacaoFinanceira.deleteMany({ where: { referenciaId: "rls-tp" } })
     await owner.contaPagarTitulo.delete({ where: { id: "rls-tp" } })
     await owner.carteiraFinanceira.deleteMany({ where: { id: { in: ["rls-cA", "rls-cB"] } } })
+  })
+
+
+  it("estorno por referência nunca estorna mais que o líquido global (revisão P1-1)", async () => {
+    await owner.carteiraFinanceira.create({ data: { id: "rls-cB2", storeId: L1, nome: "Conta B2", tipo: "banco" } })
+    await owner.contaReceberTitulo.create({ data: { id: "rls-tr", storeId: L1, localKey: "rls-tr", descricao: "Venda a prazo", valor: 100, status: "parcial", payload: {} } })
+    await owner.movimentacaoFinanceira.createMany({ data: [
+      { id: "rls-r1", storeId: L1, tipo: "entrada", valor: 60, origem: "receber_parcial", referenciaId: "rls-tr", carteiraId: null, createdAt: new Date("2026-11-01T10:00:00Z") },
+      { id: "rls-r2", storeId: L1, tipo: "entrada", valor: 40, origem: "receber_parcial", referenciaId: "rls-tr", carteiraId: "rls-cB2", createdAt: new Date("2026-11-02T10:00:00Z") },
+      // estorno anterior do 1º pagamento lançado (fallback antigo) na conta do mais recente
+      { id: "rls-r3", storeId: L1, tipo: "saida", valor: 60, origem: "estorno_receber", referenciaId: "rls-tr", carteiraId: "rls-cB2", createdAt: new Date("2026-11-03T10:00:00Z") },
+    ] })
+    const { estornarMovimentacaoPorReferencia } = await import("@/lib/financeiro/services/movimentacoes-service")
+    expect(await estornarMovimentacaoPorReferencia(L1, "rls-tr", "receber")).toMatchObject({ ok: true, action: "created" })
+    const estornos = await owner.movimentacaoFinanceira.aggregate({ where: { referenciaId: "rls-tr", origem: "estorno_receber" }, _sum: { valor: true } })
+    expect(estornos._sum.valor).toBe(100) // 60 anterior + 40 agora — nunca 120
+    expect(await estornarMovimentacaoPorReferencia(L1, "rls-tr", "receber")).toMatchObject({ ok: true, action: "skipped_idempotent" })
+    await owner.movimentacaoFinanceira.deleteMany({ where: { referenciaId: "rls-tr" } })
+    await owner.contaReceberTitulo.delete({ where: { id: "rls-tr" } })
+    await owner.carteiraFinanceira.delete({ where: { id: "rls-cB2" } })
+  })
+
+
+  it("rollback de ativação: flag desligada não congela título adotado nem perfil EMPRESA desativado (revisão P1-2)", async () => {
+    const { upsertContaReceber } = await import("@/lib/financeiro/services/contas-receber-service")
+    const { createMovimentacaoEntradaFromReceber } = await import("@/lib/financeiro/services/movimentacoes-service")
+    vi.stubEnv("GESTOR_MONEY_ENABLED", "true")
+    const adotado = await upsertContaReceber({ storeId: L1, localKey: "rls-rb", descricao: "Adotado na ativação", valor: 50 })
+    expect(adotado.perfilId).toBe(E1)
+    vi.stubEnv("GESTOR_MONEY_ENABLED", "")
+    try {
+      const r1 = await createMovimentacaoEntradaFromReceber({ id: adotado.id, storeId: L1, descricao: adotado.descricao, cliente: adotado.cliente }, 10, { parcial: true, carteiraId: null, idempotenciaDoChamador: true })
+      expect(r1).toMatchObject({ ok: true, action: "created" })
+      await owner.financeiroPerfil.update({ where: { id: E1 }, data: { ativo: false } })
+      const atualizado = await upsertContaReceber({ storeId: L1, localKey: "rls-rb", descricao: "Atualizado com perfil desativado", valor: 50 })
+      expect(atualizado.descricao).toBe("Atualizado com perfil desativado")
+      const r2 = await createMovimentacaoEntradaFromReceber({ id: adotado.id, storeId: L1, descricao: adotado.descricao, cliente: adotado.cliente }, 15, { parcial: true, carteiraId: null, idempotenciaDoChamador: true })
+      expect(r2).toMatchObject({ ok: true, action: "created" })
+      const movs = await owner.movimentacaoFinanceira.findMany({ where: { referenciaId: adotado.id }, select: { perfilId: true, valor: true } })
+      expect(movs.map(m => [m.valor, m.perfilId]).sort()).toEqual([[10, E1], [15, E1]])
+    } finally {
+      await owner.financeiroPerfil.update({ where: { id: E1 }, data: { ativo: true } })
+      vi.unstubAllEnvs()
+      vi.stubEnv("GESTOR_MONEY_ENABLED", "true")
+      await owner.movimentacaoFinanceira.deleteMany({ where: { referenciaId: adotado.id } })
+      await owner.contaReceberTitulo.delete({ where: { id: adotado.id } })
+    }
   })
 
 })

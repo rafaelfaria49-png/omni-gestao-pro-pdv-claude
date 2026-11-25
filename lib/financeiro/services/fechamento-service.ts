@@ -211,6 +211,9 @@ export async function fecharMes(
   opts: { observacao?: string; fechadoPor?: string; saldoInformado?: number } = {},
 ): Promise<FechamentoPublico> {
   const dataReferencia = primeiroDiaMes(mes, ano)
+  // Desligado: o DRE legado (cliente global, como na main) é calculado ANTES da transação — dentro
+  // dela disputaria a conexão com a transação interativa e seguraria a trava da competência.
+  const snapshotForaDaTransacao = gestorMoneyAtivo() ? undefined : await getDREMensal(storeId, mes, ano).catch(() => null)
 
   return prisma.$transaction(async tx => {
     await travarCompetenciaFinanceira(tx, storeId, dataReferencia.slice(0, 7))
@@ -229,11 +232,13 @@ export async function fecharMes(
 
   // Snapshot do DRE do mês
   // Como na main, o snapshot do DRE é opcional: uma falha nele não impede o fechamento.
-  let snapshotDRE: unknown = null
-  try {
-    snapshotDRE = await getDREMensal(storeId, mes, ano, tx)
-  } catch {
-    // DRE snapshot é opcional
+  let snapshotDRE: unknown = snapshotForaDaTransacao ?? null
+  if (snapshotForaDaTransacao === undefined) {
+    try {
+      snapshotDRE = await getDREMensal(storeId, mes, ano, tx)
+    } catch {
+      // DRE snapshot é opcional
+    }
   }
 
   const row = await tx.fechamentoFinanceiro.upsert({

@@ -617,8 +617,21 @@ export async function estornarMovimentacaoPorReferencia(
       grupos.set(carteiraId, (grupos.get(carteiraId) ?? 0) + (original.valor ?? 0))
     }
     for (const estorno of estornosAnteriores) {
+      // Estorno anterior em conta sem original também abate (grupo negativo) — nunca é ignorado.
       const carteiraId = estorno.carteiraId ?? null
-      if (grupos.has(carteiraId)) grupos.set(carteiraId, grupos.get(carteiraId)! - (estorno.valor ?? 0))
+      grupos.set(carteiraId, (grupos.get(carteiraId) ?? 0) - (estorno.valor ?? 0))
+    }
+    // Teto absoluto: nunca estornar mais que o líquido GLOBAL do título (regra da main).
+    // Atenção: safeMoney devolve módulo — o sinal é decidido sobre o valor bruto.
+    const somaGlobal = [...grupos.values()].reduce((s, v) => s + v, 0)
+    if (!(somaGlobal > 0.009)) return { ok: true, action: "skipped_idempotent" }
+    const liquidoGlobal = safeMoney(somaGlobal)
+    // Por conta só quando nenhuma conta ficou negativa (soma por conta = líquido global). Com
+    // qualquer grupo negativo (ex.: estorno anterior lançado em outra conta), volta à regra da main:
+    // o líquido global numa única conta (a do original mais recente com conta).
+    if ([...grupos.values()].some(v => v < -0.009)) {
+      grupos.clear()
+      grupos.set(originais.find(m => m.carteiraId)?.carteiraId ?? null, liquidoGlobal)
     }
     const descricao = `Estorno de ${origemOriginal === "receber" ? "recebimento" : "pagamento"}`
     let primeira: MovimentacaoFinanceira | undefined
@@ -626,8 +639,8 @@ export async function estornarMovimentacaoPorReferencia(
       const left = a ?? "", right = b ?? ""
       return left < right ? -1 : left > right ? 1 : 0
     })) {
+      if (!(liquido > 0.009)) continue
       const valorOriginal = safeMoney(liquido)
-      if (!(valorOriginal > 0.009)) continue
       const scope = await dadosFinanceirosEmpresa(tx, sid, valorOriginal, { carteiraHistoricaId: carteiraId })
       const row = await tx.movimentacaoFinanceira.create({
         data: { ...scope, storeId: sid, tipo: tipoEstorno, valor: valorOriginal, descricao, origem: origemEstorno, referenciaId: rid, carteiraId },

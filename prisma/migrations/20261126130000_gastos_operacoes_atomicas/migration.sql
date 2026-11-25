@@ -724,7 +724,9 @@ BEGIN
   END IF;
   IF NEW."perfilId" IS NOT NULL THEN
     SELECT * INTO p FROM "financeiro_perfis" WHERE "id" = NEW."perfilId";
-    IF NOT FOUND OR NOT p."ativo" OR p."storeId" IS DISTINCT FROM NEW."storeId" THEN
+    -- Perfil EMPRESA desativado NÃO congela o legado no banco (loja continua obrigatória e igual);
+    -- quem recusa EMPRESA inativo é a aplicação com o Gestor Money ligado. PESSOAL inativo: recusado.
+    IF NOT FOUND OR (NOT p."ativo" AND p."tipo" = 'PESSOAL') OR p."storeId" IS DISTINCT FROM NEW."storeId" THEN
       RAISE EXCEPTION 'Escopo financeiro invalido' USING ERRCODE = '23514';
     END IF;
   ELSIF NEW."storeId" IS NULL THEN

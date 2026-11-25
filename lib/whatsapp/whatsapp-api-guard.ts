@@ -1,3 +1,4 @@
+import { isPlatformSession } from "@/lib/auth/access-policy"
 import { NextResponse } from "next/server"
 import { requireEnterpriseSession, type AuthenticatedSession } from "@/lib/auth/guard-enterprise"
 import { canAccessStore, getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
@@ -58,7 +59,8 @@ export async function requireWhatsAppApiSession(): Promise<
     }
     return {
       ok: true, userId, session: base.session,
-      globalAdmin: user.role === "ADMIN" || user.role === "SUPER_ADMIN",
+      // Autoridade global = plataforma (modelo atual da main) ou papel administrativo.
+      globalAdmin: isPlatformSession(base.session) || user.role === "ADMIN" || user.role === "SUPER_ADMIN",
     }
   } catch {
     return { ok: false, response: jsonError("Não foi possível validar o acesso ao WhatsApp HUB.", 503) }

@@ -1,4 +1,5 @@
 "use server"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
@@ -65,12 +66,12 @@ async function logMemoryAudit(
   extra: Record<string, unknown>,
 ) {
   try {
-    void detail
     await prisma.logsAuditoria.create({
       data: {
         action,
         userLabel: "Omni Agent HUB",
-        detail: "Metadados da memória operacional atualizados.",
+        // Desligado: trilha detalhada da main. Ligado: minimização do G003.
+        detail: gestorMoneyAtivo() ? "Metadados da memória operacional atualizados." : detail.slice(0, 4000),
         metadata: omniAgentAuditMetadata(storeId, extra),
         source: "omni_agent",
       },

@@ -291,7 +291,8 @@ export async function upsertContaPagar(input: UpsertContaPagarInput): Promise<Co
         valor, vencimento: input.vencimento !== undefined ? safeStr(input.vencimento) : existing?.vencimento ?? "",
         numeroDocumento: input.numeroDocumento !== undefined ? safeStr(input.numeroDocumento) : existing?.numeroDocumento ?? "",
         status, payload: limparOwnershipSnapshot(nextPayload, base) as Prisma.InputJsonValue }
-      if (existing) return tx.contaPagarTitulo.update({ where: { id: existing.id }, data })
+      // Snapshot/persist também avança versaoFinanceira: o CAS do motor G004 nunca aceita token anterior.
+      if (existing) return tx.contaPagarTitulo.update({ where: { id: existing.id }, data: { ...data, versaoFinanceira: { increment: 1 } } })
       const created = await tx.contaPagarTitulo.createMany({ data: [data], skipDuplicates: true })
       if (created.count) {
         const row = await getContaPagarByLocalKey(storeId, localKey, tx)

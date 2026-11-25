@@ -110,7 +110,9 @@ export async function requireLeituraContadorEmpresa(scope: Readonly<{ storeId: s
   try {
     if (!scope?.storeId?.trim() || !scope.userId?.trim()) throw new FinanceiroReadError()
     if (!("papel" in scope)) {
-      const atual = await requireLeituraFinanceiraEmpresa(scope.storeId, p => p.hubs.contador)
+      const atual = await gestorMoneyLigado()
+        ? await requireLeituraFinanceiraEmpresa(scope.storeId, p => p.hubs.contador)
+        : await requireLeituraOperacionalEmpresa(scope.storeId, p => p.hubs.contador)
       if (atual.userId !== scope.userId) throw new FinanceiroReadError()
       return
     }
@@ -141,6 +143,8 @@ export async function requireLeituraContadorEmpresa(scope: Readonly<{ storeId: s
   }
 }
 
+async function gestorMoneyLigado() { return (await import("./ativacao")).gestorMoneyAtivo() }
+
 function validarSeletoresEmpresa(req: Request | undefined, storeId: string) {
   if (req) {
       const url = new URL(req.url)
@@ -159,7 +163,8 @@ export async function apiGuardLeituraFinanceira(
   req?: Request,
 ): Promise<NextResponse | null> {
   try {
-    validarSeletoresEmpresa(req, storeId)
+    // Desligado: como na main (requireModuleApi já exige que TODOS os seletores sejam autorizados).
+    if (await gestorMoneyLigado()) validarSeletoresEmpresa(req, storeId)
     await requireLeituraFinanceiraEmpresa(storeId, check)
     return null
   } catch (e) {
@@ -174,7 +179,7 @@ export async function apiGuardLeituraOperacional(
   req?: Request,
 ): Promise<NextResponse | null> {
   try {
-    validarSeletoresEmpresa(req, storeId)
+    if (await gestorMoneyLigado()) validarSeletoresEmpresa(req, storeId)
     await requireLeituraOperacionalEmpresa(storeId, check)
     return null
   } catch (e) {
