@@ -1,0 +1,84 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-001",
+  "executor": "codex",
+  "familia_executor": "openai",
+  "reviewer": "claude-code",
+  "familia_revisor": "anthropic",
+  "model": [
+    "claude-sonnet-5-5"
+  ],
+  "protocol": "docs/ai-execution/TASK_LEVELS.md",
+  "status": "PASS_CONDITIONS_SATISFIED",
+  "satisfied": true,
+  "human_egress_authorization": "Autorizar Claude Code/Anthropic",
+  "data_sent": true,
+  "scope_sent": "Pacote técnico isolado: diff, 12 arquivos da allowlist, contexto mínimo de auth/guards/permissões e evidências sintéticas; sem .env/credenciais/dados de clientes",
+  "mode": "Somente Read/Grep/Glob; MCP desabilitado; sem edição/comandos/banco",
+  "initial_automatic_approval": "rejected_then_human_explicitly_authorized",
+  "commit_allowed": true,
+  "reviews": [
+    {
+      "round": 1,
+      "technical_verdict": "PASS",
+      "condition": "Atualizar REVISAO_R.json, RELATORIO.md e hashes antes do commit",
+      "review_session": "04acf3a1-de75-4897-ae2a-3077e6d04d04",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G001-execution/review-r1/result.json",
+      "raw_sha256": "09C913FC6B2FBC99B74DE05A58E707F8889BD4B2CCA3B697C43C8565ACE3E3A8",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G001-execution/review-r1/input-manifest.json",
+      "input_manifest_sha256": "AF0B649A925A796E1EA535507BD1AD01B3394A47B5FBC99DC1B2A5B32306369D",
+      "code_findings_blocking": 0
+    },
+    {
+      "round": 2,
+      "technical_verdict": "PASS",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "review_session": "43fed208-c441-4aa3-b71a-43c0369b15bf",
+      "condition": "Typecheck pós-reforço exit 0; registro R2, hashes e allowlist conferidos antes do commit local",
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G001-execution/review-r2/result.json",
+      "raw_sha256": "80870AC8F9AC30D51C3C9452A09FCC27A6433754C96FD4008D5FAB1C06207C99",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G001-execution/review-r2/input-manifest.json",
+      "input_manifest_sha256": "7D34902BBB0C3C8BE83DF7280AA66F1EA0EC2EDF44BF1656421A11716344AFDB",
+      "code_findings_blocking": 0
+    },
+    {
+      "round": 3,
+      "technical_verdict": "PASS",
+      "scope": "Somente normalização de CR/LF finais de migration e precisão documental; preserva PASS técnico R2",
+      "review_session": "dd9984e9-f996-41b3-865d-8c81f605d479",
+      "model": [
+        "claude-sonnet-5-5"
+      ],
+      "condition": "Mesmas condições R2: typecheck completo exit 0, registros/hashes/allowlist antes do commit local",
+      "raw_result": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G001-execution/review-r3/result.json",
+      "raw_sha256": "53D22E8C36ABFD4B2D031325EC719BECE4897DC9A422D5528735FAEA3598C196",
+      "input_manifest": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G001-execution/review-r3/input-manifest.json",
+      "input_manifest_sha256": "19110894E1463F7F11C07EB9881C62DD48F2B0EA93EAC810DD444C7B043C7A14",
+      "code_findings_blocking": 0
+    }
+  ],
+  "followup": [
+    "R2 e condições reais registradas",
+    "50 focados PASS (24 PostgreSQL); reforço de ADMIN/SUPER_ADMIN e papel efetivo RLS resolvido",
+    "Notas G002/G003 registradas sem iniciar as etapas",
+    "Typecheck completo pós-reforço PASS exit 0: npm run typecheck padrão, 4096MB; tsconfig e escopo inalterados",
+    "Histórico preservado: primeira execução própria de 4GB interrompida sob pressão; tentativas 2GB e 3GB excederam heap, sem diagnóstico TypeScript; execução serializada padrão terminou com sucesso",
+    "Nenhum compilador de outro trabalho pausado ou encerrado; autorização humana posterior não precisou ser usada",
+    "Fontes/testes/decisão/GOAL iguais a R2; migration final igual à revisada em R3; apenas metadados de encerramento atualizados",
+    "Manifesto final de hashes em VALIDACAO_FINAL.json; somente os 12 caminhos da allowlist; commit apenas local"
+  ],
+  "full_typecheck": {
+    "command": "npm run typecheck",
+    "exit_code": 0,
+    "full_project": true,
+    "config_changed": false,
+    "receipt": "C:/Users/rafae/.codex/visualizations/2026/10/19/01a1556c-83ac-77e2-a447-7e0f152c7c8e/G001-execution/typecheck-serialized-result.json",
+    "receipt_sha256": "71089BB5819DC6457DEC796B5271ABFEC3AB63C7E88165AD67FC4987DF5DBEFB",
+    "tsconfig_sha256": "4D7CB1579335E24EA50BEF5739CB0139F705FBFB2AFB557CA60EA2F474528B2E"
+  },
+  "migrationFinalSHA256": "75E1CC7B623E010E25A11DFA19134D695D04DF129B12C38C8C7D3BBE473B0863"
+}

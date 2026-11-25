@@ -103,6 +103,7 @@ model Store {
   devolucoes             DevolucaoVenda[]
   garantiasOrdemServico  GarantiaOrdemServico[]
   adminUserStores        AdminUserStore[]
+  financeiroPerfil       FinanceiroPerfil?
   omniAgentCommands      OmniAgentCommand[]
   omniAgentAutomations   OmniAgentAutomation[]
   omniAgentConfig        OmniAgentConfig?
@@ -2232,6 +2233,7 @@ model AdminUserStore {
   storeId     String    @map("storeId")
   store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now()) @map("createdAt")
+  perfisFinanceiros PerfilMembro[]
 
   @@unique([adminUserId, storeId])
   @@index([storeId])
@@ -2260,6 +2262,7 @@ model AdminUser {
   adminUserStores AdminUserStore[]
   /** Sessões de login (revogação por sessão no servidor). */
   adminSessions AdminSession[]
+  perfilFinanceiroPessoal FinanceiroPerfil? @relation("FinanceiroPerfilOwner")
   dpAcessos DpAcesso[]
   dpPessoas DpPessoaUsuario[]
   dpAuditorias DpAuditoria[]
@@ -2304,6 +2307,45 @@ model AdminSession {
   @@index([userId])
   @@index([expiresAt])
   @@map("admin_sessions")
+}
+
+// Gastos G001: fundação dormente. CHECKs e imutabilidade de escopo na migration.
+enum FinanceiroPerfilTipo {
+  EMPRESA
+  PESSOAL
+}
+
+model FinanceiroPerfil {
+  id               String               @id @default(cuid())
+  tipo             FinanceiroPerfilTipo
+  storeId          String?              @unique
+  store            Store?               @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerAdminUserId String?              @unique
+  owner            AdminUser?           @relation("FinanceiroPerfilOwner", fields: [ownerAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ativo            Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  membros          PerfilMembro[]
+
+  @@unique([id, storeId])
+  @@map("financeiro_perfis")
+}
+
+// Apenas EMPRESA: storeId não nulo não pode referenciar um perfil PESSOAL.
+model PerfilMembro {
+  id             String           @id @default(cuid())
+  perfilId       String
+  storeId        String
+  adminUserId    String
+  perfil         FinanceiroPerfil @relation(fields: [perfilId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  vinculoLoja    AdminUserStore   @relation(fields: [adminUserId, storeId], references: [adminUserId, storeId], onDelete: Cascade, onUpdate: Restrict)
+  revogadoEm     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([perfilId, adminUserId])
+  @@index([adminUserId, storeId])
+  @@map("financeiro_perfil_membros")
 }
 
 // =================================================================================

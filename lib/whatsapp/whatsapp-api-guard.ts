@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/auth"
+import { requireEnterpriseSession, type AuthenticatedSession } from "@/lib/auth/guard-enterprise"
+import { canAccessStore, getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { prisma } from "@/lib/prisma"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { resolveActiveStoreId } from "@/lib/operacoes/assert-active-store"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 
 export type WhatsAppApiGuardFail = { ok: false; response: NextResponse }
-export type WhatsAppApiGuardOk = { ok: true; storeId: string; userId: string | null }
+export type WhatsAppApiGuardOk = { ok: true; storeId: string; userId: string }
 export type WhatsAppApiGuardResult = WhatsAppApiGuardFail | WhatsAppApiGuardOk
 
 function jsonError(error: string, status: number) {
@@ -40,26 +42,49 @@ export function storeIdFromWhatsAppApiRead(req: Request): string | null {
 }
 
 export async function requireWhatsAppApiSession(): Promise<
-  { ok: true; userId: string | null } | { ok: false; response: NextResponse }
+  | { ok: true; userId: string; session: AuthenticatedSession; globalAdmin: boolean }
+  | WhatsAppApiGuardFail
 > {
   try {
-    const session = await auth()
-    if (session?.user) {
-      const userId =
-        typeof session.user.id === "string" && session.user.id.trim()
-          ? session.user.id.trim()
-          : null
-      return { ok: true, userId }
+    const base = await requireEnterpriseSession()
+    if (!base.ok) return { ok: false, response: jsonError(base.error, base.status) }
+    const userId = base.session.user.id.trim()
+    if (!userId) return { ok: false, response: jsonError("Autenticação obrigatória.", 401) }
+    const user = await prisma.adminUser.findUnique({
+      where: { id: userId }, select: { active: true, role: true },
+    })
+    if (!user?.active || !getEnterprisePermissions(user.role).hubs.whatsapp) {
+      return { ok: false, response: jsonError("Sem permissão para o WhatsApp HUB.", 403) }
+    }
+    return {
+      ok: true, userId, session: base.session,
+      globalAdmin: user.role === "ADMIN" || user.role === "SUPER_ADMIN",
     }
   } catch {
-    /* fall through */
+    return { ok: false, response: jsonError("Não foi possível validar o acesso ao WhatsApp HUB.", 503) }
   }
-  return {
-    ok: false,
-    response: jsonError(
-      "Autenticação obrigatória. Faça login para usar o WhatsApp HUB.",
-      401
-    ),
+}
+
+async function authorizeStore(
+  storeId: string,
+  session: Extract<Awaited<ReturnType<typeof requireWhatsAppApiSession>>, { ok: true }>,
+): Promise<WhatsAppApiGuardResult> {
+  if (!canAccessStore(session.session, storeId)) {
+    return { ok: false, response: jsonError("Sem permissão para esta unidade.", 403) }
+  }
+  try {
+    // ADMIN global preserva a política enterprise; demais papéis exigem vínculo atual.
+    // Não usar lojaId primária como fallback após revogar AdminUserStore.
+    const authorized = session.globalAdmin
+      ? await prisma.store.findUnique({ where: { id: storeId }, select: { id: true } })
+      : await prisma.adminUserStore.findUnique({
+          where: { adminUserId_storeId: { adminUserId: session.userId, storeId } },
+          select: { id: true },
+        })
+    if (!authorized) return { ok: false, response: jsonError("Sem permissão para esta unidade.", 403) }
+    return { ok: true, storeId, userId: session.userId }
+  } catch {
+    return { ok: false, response: jsonError("Não foi possível validar a unidade.", 503) }
   }
 }
 
@@ -78,7 +103,7 @@ export async function guardWhatsAppApiRead(req: Request): Promise<WhatsAppApiGua
     }
   }
 
-  return { ok: true, storeId, userId: session.userId }
+  return authorizeStore(storeId, session)
 }
 
 export async function guardWhatsAppApiWrite(req: Request): Promise<WhatsAppApiGuardResult> {
@@ -96,5 +121,5 @@ export async function guardWhatsAppApiWrite(req: Request): Promise<WhatsAppApiGu
     }
   }
 
-  return { ok: true, storeId, userId: session.userId }
+  return authorizeStore(storeId, session)
 }
