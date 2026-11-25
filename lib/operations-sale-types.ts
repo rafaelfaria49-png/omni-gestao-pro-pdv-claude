@@ -188,6 +188,12 @@ export interface DevolucaoRecord {
   motivo?: string
   observacao?: string
   payload?: any
+  /**
+   * OMNI-PDV-TROCAS-…-P1-002 — devolução antiga que o servidor confirmou NÃO ter e que o
+   * operador arquivou neste terminal (registro mantido; efeitos locais desfeitos). A trilha
+   * fica no servidor (`AuditoriaFinanceira`, entidade `devolucao_pdv_pendencia_local`).
+   */
+  arquivada?: { at: string; motivo: string }
 }
 
 export interface CaixaOperacaoRecord {

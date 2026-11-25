@@ -67,6 +67,10 @@ const h = vi.hoisted(() => {
   }
 
   const tx = {
+    // Lock por venda (pg_advisory_xact_lock) — no fake, serialização é trivial.
+    $executeRaw: async () => 0,
+    // Venda à vista nos cenários deste arquivo: nenhum título a prazo (P1-002).
+    contaReceberTitulo: { findMany: async () => [] },
     devolucaoVenda: {
       findUnique: async ({ where }: { where: { storeId_localId: { storeId: string; localId: string } } }) =>
         db.devolucoes.find(
@@ -79,7 +83,7 @@ const h = vi.hoisted(() => {
         const dev = {
           id: `dev-${++seq}`,
           ...data,
-          itens: itensAninhados.map((it) => ({ quantidade: it.quantidade })),
+          itens: itensAninhados.map((it) => ({ inventoryId: it.inventoryId ?? null, nome: it.nome, quantidade: it.quantidade })),
         }
         db.devolucoes.push(dev)
         return dev
@@ -319,8 +323,8 @@ describe("POST /api/ops/devolucao — vale-troca real", () => {
     expect(h.db.creditos).toHaveLength(1)
     expect(h.db.devolucoes).toHaveLength(1)
     expect(h.db.estoqueAtual.get("p1")).toBe(estoqueAposPrimeira)
-    // A saída financeira da devolução real também não duplica.
-    expect(h.saidas).toHaveLength(1)
+    // Vale-troca não é saída de caixa (OMNI-PDV-TROCAS-…-P1-001) e o replay não cria nenhuma.
+    expect(h.saidas).toHaveLength(0)
   })
 
   it("devolução parcial: valor e crédito recalculados da venda original (proporcional)", async () => {
@@ -356,12 +360,34 @@ describe("POST /api/ops/devolucao — vale-troca real", () => {
     expect(h.db.estoqueAtual.get("p1")).toBe(13)
   })
 
-  it("Vale-Troca NÃO é dinheiro novo: nada entra no caixa (só saída da devolução real)", async () => {
+  it("Vale-Troca NÃO movimenta caixa: crédito é passivo, não saída de dinheiro", async () => {
     await POST(postReq(h.devolucaoBody()))
-    // Nenhuma MovimentacaoFinanceira é criada dentro da tx (o fake não recebe
-    // chamadas de entrada); a única Integração é a SAÍDA da devolução real.
+    // OMNI-PDV-TROCAS-…-P1-001: antes a rota lançava saída `devolucao_pdv` também para
+    // vale/troca — o financeiro registrava dinheiro saindo que nunca saiu.
+    expect(h.saidas).toHaveLength(0)
+    expect(h.db.creditos).toHaveLength(1)
+  })
+
+  it("reembolso (tipo devolucao) é a única saída financeira real", async () => {
+    await POST(postReq(h.devolucaoBody({ tipo: "devolucao", creditoEmitido: 0 })))
     expect(h.saidas).toHaveLength(1)
     expect(h.saidas[0]).toMatchObject({ origem: "devolucao_pdv", valor: 30 })
+  })
+
+  it("quantidade acima do disponível no servidor → 409, sem efeito", async () => {
+    await POST(postReq(h.devolucaoBody()))
+    const res = await POST(postReq(h.devolucaoBody({ localId: "DEV-2026-0051-zz" })))
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe("DEVOLUCAO_ACIMA_DO_DISPONIVEL")
+    expect(h.db.devolucoes).toHaveLength(1)
+  })
+
+  it("mesmo localId de OUTRO terminal (outra venda) → 409 de colisão, nunca ok silencioso", async () => {
+    await POST(postReq(h.devolucaoBody()))
+    h.addVenda("VDA-2026-0200")
+    const res = await POST(postReq(h.devolucaoBody({ vendaLocalId: "VDA-2026-0200" })))
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe("DEVOLUCAO_LOCAL_ID_COLISAO")
   })
 
   it("estoque volta com ledger auditável dedupe por documento (origem devolução)", async () => {

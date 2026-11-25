@@ -104,6 +104,13 @@ export interface FechamentoResumo {
   receitaTotalDia: number
   /** Devoluções/estornos da sessão (informativo). */
   totalDevolucoes: number
+  /**
+   * OMNI-PDV-TROCAS-…-P1-002 — reembolsos/sobras de troca pagos em dinheiro na sessão
+   * (deduzidos de `saldoDinheiroEsperado`). Ausente quando zero.
+   */
+  reembolsosDinheiro?: number
+  /** Reembolsos Pix da sessão (deduzidos só do saldo movimentado). Ausente quando zero. */
+  reembolsosPix?: number
   saldoInicial: number
   /** Caixa físico esperado: abertura + dinheiro(vendas) + suprimentos + CR(dinheiro) − sangrias. */
   saldoDinheiroEsperado: number
@@ -241,6 +248,10 @@ export function computeFechamentoResumo(input: {
    * Ausente (chamador legado): deriva dos totais acima, sem separar contas × O.S.
    */
   recebimentos?: RecebimentosSessao
+  /** Devoluções da sessão pagas em dinheiro (`resumoDevolucoesCaixa`). Deduz a gaveta. */
+  reembolsosDinheiro?: number
+  /** Devoluções da sessão pagas em Pix. Deduz só o saldo movimentado (não a gaveta). */
+  reembolsosPix?: number
 }): FechamentoResumo {
   const {
     sales,
@@ -253,6 +264,8 @@ export function computeFechamentoResumo(input: {
     qtdRecebimentosContas = 0,
     recebimentos,
   } = input
+  const reembDin = round2(Math.max(0, input.reembolsosDinheiro ?? 0))
+  const reembPix = round2(Math.max(0, input.reembolsosPix ?? 0))
 
   // Exclui vendas canceladas de TODOS os cálculos financeiros.
   // Vendas canceladas permanecem no array para auditoria/histórico, mas não entram no fechamento.
@@ -342,10 +355,10 @@ export function computeFechamentoResumo(input: {
   const outrosRecebimentos = 0
   const receitaTotalDia = round2(totalLiquido + recCr + outrosRecebimentos)
   const saldoDinheiroEsperado = round2(
-    saldoInicial + pg.dinheiro + suprimentos + recCrDin - sangrias,
+    saldoInicial + pg.dinheiro + suprimentos + recCrDin - sangrias - reembDin,
   )
   const saldoMovimentadoEsperado = round2(
-    saldoInicial + totalRecebido + suprimentos + recCr - sangrias,
+    saldoInicial + totalRecebido + suprimentos + recCr - sangrias - reembDin - reembPix,
   )
 
   // GOAL 003A — recebido por origem/forma e composição da gaveta. Sem `recebimentos`
@@ -364,6 +377,7 @@ export function computeFechamentoResumo(input: {
     suprimentos,
     sangrias,
     dinheiroEsperado: saldoDinheiroEsperado,
+    reembolsosDinheiro: reembDin,
   })
 
   const porOrigem: ResumoOrigemLinha[] = (Object.keys(origemAcc) as OrigemVendaKey[])
@@ -391,6 +405,8 @@ export function computeFechamentoResumo(input: {
     outrosRecebimentos,
     receitaTotalDia,
     totalDevolucoes: round2(totalDevolucoes),
+    ...(reembDin > 0 ? { reembolsosDinheiro: reembDin } : {}),
+    ...(reembPix > 0 ? { reembolsosPix: reembPix } : {}),
     saldoInicial: round2(saldoInicial),
     saldoDinheiroEsperado,
     saldoMovimentadoEsperado,

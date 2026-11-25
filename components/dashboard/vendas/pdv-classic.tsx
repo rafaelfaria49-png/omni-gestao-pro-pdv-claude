@@ -1709,13 +1709,18 @@ export function PdvClassic({
     [cart, blockWeightSale, getCartStockProduct, focusShellBipe, garantirSessao, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow, customerSearchEnabled, heldSalesEnabled]
   )
 
+  /**
+   * CTRL sozinho abre as funções avançadas no keyup. O estado "Control pressionado" vive num ref:
+   * como variável local do efeito, ele zerava sempre que o efeito re-registrava os listeners
+   * (qualquer render entre keydown e keyup) e o atalho falhava em silêncio (E2E P1-003).
+   */
+  const ctrlDownRef = useRef(false)
   useEffect(() => {
     const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F12", "End"])
-    let ctrlDown = false
     const down = (e: globalThis.KeyboardEvent) => {
       if (isPdvRepeatedOrHandled(e) || hasPdvShortcutOverlay(shellModalBlocking || showCustomerDropdown || bipeSuggestions.length > 0)) return
-      if (e.key === "Control") { ctrlDown = true; return }
-      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) { ctrlDown = false; return }
+      if (e.key === "Control") { ctrlDownRef.current = true; return }
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) { ctrlDownRef.current = false; return }
       if (e.key === "Delete" && cart.length > 0) {
         if (!isPdvTyping(e)) {
           consumePdvShortcut(e)
@@ -1750,7 +1755,7 @@ export function PdvClassic({
         focusShellBipe()
         return
       }
-      ctrlDown = false
+      ctrlDownRef.current = false
       // INSERT — Item Avulso (venda de balcão sem cadastro). Antes só existia no
       // handler `default` (desativado no shell omni-smart) → era "feature fantasma".
       // Agora vive no keymap operacional do Clássico, igual a Assistência/Supermercado.
@@ -1771,12 +1776,12 @@ export function PdvClassic({
       openShellShortcut(e.key)
     }
     const up = (e: globalThis.KeyboardEvent) => {
-      if (hasPdvShortcutOverlay(shellModalBlocking) || isPdvRepeatedOrHandled(e)) { ctrlDown = false; return }
-      if (e.key === "Control" && ctrlDown) {
+      if (hasPdvShortcutOverlay(shellModalBlocking) || isPdvRepeatedOrHandled(e)) { ctrlDownRef.current = false; return }
+      if (e.key === "Control" && ctrlDownRef.current) {
         e.preventDefault()
         openShellShortcut("CTRL")
       }
-      ctrlDown = false
+      ctrlDownRef.current = false
     }
     window.addEventListener("keydown", down)
     window.addEventListener("keyup", up)
