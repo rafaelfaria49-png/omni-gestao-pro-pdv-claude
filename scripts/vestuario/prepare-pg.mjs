@@ -24,8 +24,11 @@ import { join } from "node:path"
 import { assertFreshDisposableDatabase } from "../cadastros/disposable-db-preflight.mjs"
 
 const url = (process.env.VESTUARIO_P02_TEST_DATABASE_URL ?? "").trim()
-localFixtureDatasource(url)
-if (!url) throw new Error("BLOQUEIO_EXPLICITO_PG: defina VESTUARIO_P02_TEST_DATABASE_URL (PostgreSQL descartável).")
+try {
+  localFixtureDatasource(url)
+} catch {
+  throw new Error("BLOQUEIO_EXPLICITO_PG: VESTUARIO_P02_TEST_DATABASE_URL deve identificar um banco descartável local.")
+}
 let target
 try { target = new URL(url) } catch { throw new Error("BLOQUEIO_EXPLICITO_PG: URL de QA inválida.") }
 if (!["postgresql:", "postgres:"].includes(target.protocol)

@@ -22,8 +22,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 const url = (process.env.APARELHOS_TEST_DATABASE_URL ?? "").trim()
-localFixtureDatasource(url)
-if (!url) throw new Error("BLOQUEIO_EXPLICITO_PG: defina APARELHOS_TEST_DATABASE_URL (PostgreSQL descartável).")
+try {
+  localFixtureDatasource(url)
+} catch {
+  throw new Error("BLOQUEIO_EXPLICITO_PG: APARELHOS_TEST_DATABASE_URL deve identificar um banco descartável local.")
+}
 const host = new URL(url).hostname.toLowerCase()
 if (!["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("BLOQUEIO_EXPLICITO_PG: somente loopback.")
 

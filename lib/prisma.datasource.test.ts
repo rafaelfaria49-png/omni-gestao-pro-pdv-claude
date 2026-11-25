@@ -63,6 +63,7 @@ describe("Prisma datasource boundary", () => {
   })
 
   it("keeps the existing constructor options on Vercel Production", async () => {
+    vi.stubEnv("NODE_ENV", "production")
     vi.stubEnv("VERCEL", "1")
     vi.stubEnv("VERCEL_ENV", "production")
     vi.stubEnv("VERCEL_PROJECT_ID", "prj_wjkHKw2jFQfY8regMYtkYXwgavuz")

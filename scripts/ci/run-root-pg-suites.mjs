@@ -24,6 +24,7 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 
 const FLUXO = "OPS_V4_FLUXO_CURTO_TEST_DATABASE_URL"
 const FRG = "OPS_V4_FRG_TEST_DATABASE_URL"
@@ -56,14 +57,13 @@ export const MANIFESTO = [
   { db: "aparelhos_pg_ci", envs: ["APARELHOS_TEST_DATABASE_URL"], preparo: "aparelhos", arquivos: ["test/aparelhos/aparelhos.pg.test.ts"] },
 ]
 
-const LOOPBACK = ["127.0.0.1", "localhost", "::1", "[::1]"]
 const npx = process.platform === "win32" ? "npx.cmd" : "npx"
 
 function exigirAdminLocal() {
   const raw = (process.env.PG_ADMIN_URL ?? "").trim()
   if (!raw) throw new Error("BLOQUEIO_EXPLICITO_PG: defina PG_ADMIN_URL (PostgreSQL descartável, banco de manutenção).")
-  const url = new URL(raw)
-  if (!LOOPBACK.includes(url.hostname.toLowerCase())) throw new Error(`BLOQUEIO_EXPLICITO_PG: somente loopback (recebido: ${url.hostname}).`)
+  const url = new URL(localFixtureDatasource(raw))
+  if (url.hostname === "localhost") url.hostname = "127.0.0.1"
   return url
 }
 
@@ -83,9 +83,26 @@ function urlDoBanco(admin, db) {
   return u.href
 }
 
-function sql(adminHref, comando) {
+function sql(admin, comando) {
+  // libpq environment defaults and psql startup files can otherwise replace
+  // the validated destination or execute an additional connection command.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^PG/i.test(key)))
+  const host = admin.hostname.replace(/^\[|\]$/g, "")
+  Object.assign(env, {
+    PGHOST: host,
+    PGHOSTADDR: host,
+    PGPORT: admin.port || "5432",
+    PGUSER: decodeURIComponent(admin.username),
+    PGPASSWORD: decodeURIComponent(admin.password),
+    PGDATABASE: decodeURIComponent(admin.pathname.slice(1)),
+    PGSSLMODE: admin.searchParams.get("sslmode") ?? "prefer",
+    PGCONNECT_TIMEOUT: admin.searchParams.get("connect_timeout") ?? "10",
+  })
   // CREATE/DROP DATABASE não rodam em transação: um comando por execução.
-  const r = spawnSync(process.env.PSQL || "psql", [adminHref, "-v", "ON_ERROR_STOP=1", "-qAtc", comando], { stdio: ["ignore", "inherit", "inherit"] })
+  const r = spawnSync(process.env.PSQL || "psql", ["-X", "-w", "-v", "ON_ERROR_STOP=1", "-qAtc", comando], {
+    env,
+    stdio: ["ignore", "inherit", "inherit"],
+  })
   if (r.status !== 0) throw new Error(`psql falhou: ${comando}`)
 }
 
@@ -110,13 +127,13 @@ function main() {
     for (const grupo of MANIFESTO) {
       const url = urlDoBanco(admin, grupo.db)
       console.log(`\n=== ${grupo.db} (${grupo.arquivos.length} arquivo(s))`)
-      sql(admin.href, `DROP DATABASE IF EXISTS ${grupo.db} WITH (FORCE)`)
-      sql(admin.href, `CREATE DATABASE ${grupo.db}`)
+      sql(admin, `DROP DATABASE IF EXISTS ${grupo.db} WITH (FORCE)`)
+      sql(admin, `CREATE DATABASE ${grupo.db}`)
       const env = { DATABASE_URL: url, DIRECT_URL: url, ...Object.fromEntries(grupo.envs.map((k) => [k, url])) }
       if (grupo.preparo === "aparelhos") {
         execFileSync(process.execPath, ["scripts/aparelhos/prepare-pg.mjs"], { env: { ...process.env, ...env }, stdio: ["ignore", "inherit", "inherit"] })
       } else {
-        prisma(["db", "execute", "--url", url, "--file", datamodel], env)
+        prisma(["db", "execute", "--schema", "prisma/schema.prisma", "--file", datamodel], env)
       }
       const r = spawnSync(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...grupo.arquivos, "--maxWorkers=1", "--testTimeout=120000", "--hookTimeout=120000"], {
         env: { ...process.env, ...env },

@@ -8,8 +8,8 @@ O contrato do GOAL 007 parte de `origin/main` em `3dcd40956b06ac0f7854497d406ce8
 | --- | --- |
 | Aplicação Next.js | `lib/prisma.ts` adia a criação do cliente compartilhado até o primeiro acesso. Valida os dois bindings e fixa a URL validada no cliente para evitar nova resolução de dotenv. |
 | Build Vercel | Importar módulos pode ocorrer sem banco. Qualquer acesso real ao cliente passa pelo mesmo guard. `prisma generate` e o runner de build conservam o contrato existente. |
-| Runtime Vercel Production | O conjunto de metadados da Vercel exige alvo Production, projeto canônico ou legado conhecido, marcador Vercel e ID de deployment. Nesse contexto, mantém as opções e a resolução de datasource anteriores. Uma flag isolada e `NODE_ENV=production` não conferem acesso. |
-| Vitest e Playwright | Preflight dos bindings de integração declarados. Testes sem configuração de banco podem iniciar. Ao acessar o Prisma da aplicação, o guard de runtime continua obrigatório. |
+| Runtime Vercel Production | O contrato exige Node em modo Production e metadados da Vercel com alvo Production, projeto canônico ou legado conhecido, marcador Vercel e ID de deployment. Nesse contexto, mantém as opções e a resolução de datasource anteriores. Uma flag isolada e `NODE_ENV=production` não conferem acesso. |
+| Vitest e Playwright | Preflight dos bindings de integração declarados. O Vitest valida ao carregar a configuração, preservando a independência do worker fiscal. Testes sem configuração de banco podem iniciar. Ao acessar o Prisma da aplicação, o guard de runtime continua obrigatório. |
 | Bancadas descartáveis | Validam loopback, identidade e opções de conexão antes de criar cliente ou provisionar o fixture. Os checks existentes de banco novo, role e schema continuam aplicáveis. |
 | Scripts de aplicação | Os comandos comuns validam o contexto não produtivo. As variáveis explícitas prevalecem sobre o fallback em memória do `.env` da worktree. |
 | `npm run db:push` e `npm run db:migrate` | Entrypoint local com datasources fixados no processo filho e schema versionado. Aceita o papel administrativo registrado do Development na conexão direta ou PostgreSQL local isolado. O papel de runtime do Neon permanece separado. |
@@ -31,7 +31,7 @@ Os metadados Vercel separam contextos operacionais do aplicativo. Este controle 
 
 1. Executar a CI da PR draft, o teste de leitura no PostgreSQL descartável e os checks Vercel Preview. Conferir `MIGRATION_SKIPPED` e os testes existentes de autoridade antes de qualquer promoção.
 2. Confirmar a matriz de ambientes ativos com os responsáveis. Para cada override, conferir ambas as variáveis com valores protegidos e atestar a tupla por catálogo read-only no cluster autorizado.
-3. Validar login sintético nas origens QA aprovadas e as integrações Windows/Print em suas bancadas próprias. Manter a autoridade de migrations e os fluxos Production na configuração atualmente aprovada.
+3. Validar login sintético nas origens QA aprovadas e as integrações Windows/Print em suas bancadas próprias. Verificar a exposição das variáveis de sistema nos dois projetos Vercel e a presença de `VERCEL_PROJECT_ID` e `VERCEL_DEPLOYMENT_ID` nas Functions antes de promover. Manter a autoridade de migrations e os fluxos Production na configuração aprovada.
 4. Se um ambiente aprovado falhar, corrigir a tupla mediante nova evidência ou manter a homologação afetada pausada. O rollback de software é uma revisão isolada ou um Preview comprovadamente seguro. A credencial antiga da raiz fica fora de qualquer caminho de retorno.
 
 Referências [Variáveis de sistema da Vercel](https://vercel.com/docs/environment-variables/system-environment-variables) e [Prisma Client v6](https://www.prisma.io/docs/orm/v6/reference/prisma-client-reference).
