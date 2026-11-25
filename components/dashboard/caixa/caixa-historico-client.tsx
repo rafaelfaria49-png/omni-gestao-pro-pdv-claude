@@ -48,6 +48,17 @@ import { periodoCaixaParaConsulta } from "@/lib/caixa/historico-periodo"
 
 const CAIXA_HISTORICO_PAGE_SIZE = 50
 
+/**
+ * Snapshot de fechamento só é usado se estiver COMPLETO (gerado pelo modal de fechamento).
+ * Snapshot parcial/antigo cai no caminho legado em vez de derrubar a página inteira.
+ */
+function resumoFechamentoCompleto(raw: unknown): ResumoFechamentoPersistido | null {
+  if (!raw || typeof raw !== "object") return null
+  const r = raw as Partial<ResumoFechamentoPersistido> & Record<string, unknown>
+  if (!Array.isArray(r.porOrigem) || !r.porPagamento || typeof r.porPagamento !== "object") return null
+  return r as ResumoFechamentoPersistido
+}
+
 /** Soma das vendas por forma no ledger legado (sessões sem resumoFechamento premium). */
 const LEDGER_VENDAS_KEYS = [
   "vendasDinheiro",
@@ -318,7 +329,7 @@ export function CaixaHistoricoClient() {
     // Recebido por origem × Recebido por forma × Gaveta (GOAL 003A). Snapshot antigo
     // recalcula contas × O.S. pelas operações da sessão. Sem resumo (sessão legada):
     // ledger de vendas + recebimentos lidos das operações.
-    const resumo = (payload?.resumoFechamento ?? null) as ResumoFechamentoPersistido | null
+    const resumo = resumoFechamentoCompleto(payload?.resumoFechamento)
     const ledger = payload?.ledger as Record<string, number> | null
 
     let secaoVendas = ""
@@ -650,7 +661,7 @@ function SessaoDetalheView({
   const totalDev = sessao.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
   const payload = sessao.payload as Record<string, unknown> | null
   const ledger = payload?.ledger as Record<string, number> | null
-  const resumo = (payload?.resumoFechamento ?? null) as ResumoFechamentoPersistido | null
+  const resumo = resumoFechamentoCompleto(payload?.resumoFechamento)
 
   // Contas × O.S. × estornos lidos das operações (GOAL 003A). Com resumo: blocos do
   // fechamento; sem resumo (sessão legada): vendas do ledger + recebimentos das operações.
