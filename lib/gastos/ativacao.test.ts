@@ -36,6 +36,18 @@ describe("Gestor Money desligado — writers canônicos não criam perfil", () =
     vi.unstubAllEnvs()
   })
 
+  it("desligado com perfil EMPRESA DESATIVADO de uma ativação anterior: o Financeiro não congela", async () => {
+    vi.stubEnv("GESTOR_MONEY_ENABLED", "")
+    vi.resetModules()
+    vi.doMock("@/lib/prisma", () => ({ prisma: {} }))
+    const { dadosFinanceirosEmpresa } = await import("./financeiro-scope")
+    const findUnique = vi.fn(async () => ({ id: "P-old", tipo: "EMPRESA", storeId: "L1", ativo: false }))
+    const db = { financeiroPerfil: { findUnique, createMany: vi.fn() }, $queryRaw: vi.fn() }
+    await expect(dadosFinanceirosEmpresa(db as never, "L1", 10)).resolves.toEqual({ valorCentavos: "1000", valorOriginalLegado: null, precisaoStatus: "CENTAVOS" })
+    expect(findUnique).not.toHaveBeenCalled()
+    vi.unstubAllEnvs()
+  })
+
   it("ligado: o mesmo writer provisiona o perfil EMPRESA (contrato G002 preservado)", async () => {
     vi.stubEnv("GESTOR_MONEY_ENABLED", "true")
     vi.resetModules()

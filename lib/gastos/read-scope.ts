@@ -90,6 +90,10 @@ export async function requireLeituraFinanceiraEmpresa(
   const base = await requireLeituraOperacionalEmpresa(storeId, p => p.financeiro.view && check(p))
   const { prisma } = await import("@/lib/prisma")
   const { userId } = base
+  const { gestorMoneyAtivo } = await import("./ativacao")
+  // Desligado: a leitura empresarial segue a autoridade da main — perfil desativado ou sem grant
+  // (de uma ativação anterior) não bloqueia o Financeiro existente.
+  if (!gestorMoneyAtivo()) return { ...base, perfilId: null }
   const perfil = await prisma.financeiroPerfil.findUnique({
     where: { storeId },
     select: { id: true, tipo: true, ativo: true,
@@ -126,9 +130,10 @@ export async function requireLeituraContadorEmpresa(scope: Readonly<{ storeId: s
     })
     if (!atual.ok || atual.usuario.id !== scope.userId || atual.papel !== scope.papel) throw new FinanceiroReadError()
     const { prisma } = await import("@/lib/prisma")
-    const perfil = await prisma.financeiroPerfil.findUnique({
+    const { gestorMoneyAtivo } = await import("./ativacao")
+    const perfil = gestorMoneyAtivo() ? await prisma.financeiroPerfil.findUnique({
       where: { storeId: scope.storeId }, select: { tipo: true, ativo: true, ownerAdminUserId: true },
-    })
+    }) : null
     if (perfil && (perfil.tipo !== "EMPRESA" || !perfil.ativo || perfil.ownerAdminUserId !== null)) throw new FinanceiroReadError()
   } catch (e) {
     if (e instanceof FinanceiroReadError) throw e

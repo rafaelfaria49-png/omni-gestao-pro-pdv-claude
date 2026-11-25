@@ -1,3 +1,5 @@
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import { GET as getLegadoMain } from "@/lib/financeiro/legado-main/rotas/carteiras"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { erroConsultaFinanceira } from "@/lib/gastos/query"
 import { consultarFinanceiroEmpresa, reaisConsulta, diaNoFusoConsulta } from "@/lib/gastos/query"
@@ -22,6 +24,8 @@ function err(msg: string, code: string, status = 400) {
 // ─── GET /api/financeiro/carteiras ───────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  // Ativação controlada: desligado, a rota é a da main (consulta limitada ao período, tolerante ao legado).
+  if (!gestorMoneyAtivo()) return respostaFinanceiraPrivada(await getLegadoMain(req as never))
   const moduleDenied = await requireModuleApi(req, "finance")
   if (moduleDenied) return moduleDenied
 

@@ -1,4 +1,6 @@
 /** Fluxo físico, posição atual dos títulos e saldo pelo ledger canônico G005. */
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import * as legado from "@/lib/financeiro/legado-main/fluxo-caixa"
 import { type ConsultaFinanceiraDTO, consultarFinanceiroEmpresa, reaisConsulta } from "@/lib/gastos/query"
 import { centavosConsulta, dataCivilConsulta, diaNoFusoConsulta, deslocarDiaConsulta } from "@/lib/gastos/query-calculo"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
@@ -26,7 +28,8 @@ export type AlertaFinanceiro = {
 }
 
 export type FluxoCaixaResumo = {
-  apuracao: { base: "FLUXO_FISICO"; resultado: "CAIXA_REALIZADO"; asOf: string; versaoCalculo: string; semCarteira: { quantidade:number; entradasCentavos:string; saidasCentavos:string }; criterios: ConsultaFinanceiraDTO["criterios"] }
+  /** Só no cálculo G005 (Gestor Money ligado). */
+  apuracao?: { base: "FLUXO_FISICO"; resultado: "CAIXA_REALIZADO"; asOf: string; versaoCalculo: string; semCarteira: { quantidade:number; entradasCentavos:string; saidasCentavos:string }; criterios: ConsultaFinanceiraDTO["criterios"] }
   saldoAtual: number
   entradasHoje: number
   saidasHoje: number
@@ -46,7 +49,7 @@ export type FluxoCaixaResumo = {
 }
 
 
-export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaResumo> {
+export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaResumo> { if (!gestorMoneyAtivo()) return legado.getFluxoCaixaResumo(storeId);
   const hoje = diaNoFusoConsulta(new Date()), mes = hoje.slice(0,7), from = deslocarDiaConsulta(hoje,-29)
   const q = await consultarFinanceiroEmpresa(storeId,{dataInicio:from < mes+"-01" ? from : mes+"-01",dataFim:hoje})
   const saldoAtual = reaisConsulta(q.saldoCentavos)

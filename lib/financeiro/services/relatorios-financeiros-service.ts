@@ -1,4 +1,6 @@
 /** Projeções de compatibilidade do HUB; autoridade monetária única em gastos/query. */
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import * as legado from "@/lib/financeiro/legado-main/relatorios-financeiros"
 import { consultarFinanceiroEmpresa, reaisConsulta, filtroConsultaFinanceira, type ConsultaFinanceiraDTO } from "@/lib/gastos/query"
 import { diaNoFusoConsulta, deslocarDiaConsulta, dataCivilConsulta, ConsultaFinanceiraError } from "@/lib/gastos/query-calculo"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
@@ -158,13 +160,13 @@ export function projetarRankingConsulta(q: ConsultaFinanceiraDTO, tipo: "receita
   const total = reaisConsulta(tipo === "receitaCentavos" ? q.receitaRealizadaCentavos : q.despesaRealizadaCentavos)
   return q.eventos.filter(e => BigInt(e[tipo]) !== BigInt(0)).map(e => ({ label: e.descricao, valor: reaisConsulta(e[tipo]), percentual: pct(reaisConsulta(e[tipo]), Math.abs(total)), tipo: tipo === "receitaCentavos" ? "entrada" as const : "saida" as const })).sort((a,b) => b.valor-a.valor).slice(0,take)
 }
-export async function getIndicadoresExecutivos(storeId: string, filtro: PeriodoFiltro = {}) { return projetarIndicadoresConsulta(await consultarFinanceiroEmpresa(storeId, filtro)) }
-export async function getResultadoPorCategoria(storeId: string, filtro: PeriodoFiltro = {}) {
+export async function getIndicadoresExecutivos(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getIndicadoresExecutivos(storeId, filtro); return projetarIndicadoresConsulta(await consultarFinanceiroEmpresa(storeId, filtro)) }
+export async function getResultadoPorCategoria(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getResultadoPorCategoria(storeId, filtro);
   const q = await consultarFinanceiroEmpresa(storeId, filtro)
   return { receitas: categorias(q, "receitaCentavos"), despesas: categorias(q, "despesaCentavos") }
 }
-export async function getTopReceitas(storeId: string, filtro: PeriodoFiltro = {}, take = 10) { return projetarRankingConsulta(await consultarFinanceiroEmpresa(storeId, filtro), "receitaCentavos", take) }
-export async function getTopDespesas(storeId: string, filtro: PeriodoFiltro = {}, take = 10) { return projetarRankingConsulta(await consultarFinanceiroEmpresa(storeId, filtro), "despesaCentavos", take) }
+export async function getTopReceitas(storeId: string, filtro: PeriodoFiltro = {}, take = 10) { if (!gestorMoneyAtivo()) return legado.getTopReceitas(storeId, filtro, take); return projetarRankingConsulta(await consultarFinanceiroEmpresa(storeId, filtro), "receitaCentavos", take) }
+export async function getTopDespesas(storeId: string, filtro: PeriodoFiltro = {}, take = 10) { if (!gestorMoneyAtivo()) return legado.getTopDespesas(storeId, filtro, take); return projetarRankingConsulta(await consultarFinanceiroEmpresa(storeId, filtro), "despesaCentavos", take) }
 export function projetarFluxoConsulta(q: ConsultaFinanceiraDTO, agrupamento: "dia" | "semana" | "mes" = "dia"): FluxoPeriodo[] {
   const buckets = new Map<string, { entrada: bigint; saida: bigint }>()
   for (const e of q.eventos) {
@@ -182,14 +184,14 @@ export function projetarFluxoConsulta(q: ConsultaFinanceiraDTO, agrupamento: "di
     return { periodo, label: periodo, entrada: reaisConsulta(b.entrada), saida: reaisConsulta(b.saida), saldo: reaisConsulta(saldo), acumulado: reaisConsulta(acumulado) }
   })
 }
-export async function getFluxoPorPeriodo(storeId: string, filtro: PeriodoFiltro = {}, agrupamento: "dia" | "semana" | "mes" = "dia") { return projetarFluxoConsulta(await consultarFinanceiroEmpresa(storeId, filtro), agrupamento) }
+export async function getFluxoPorPeriodo(storeId: string, filtro: PeriodoFiltro = {}, agrupamento: "dia" | "semana" | "mes" = "dia") { if (!gestorMoneyAtivo()) return legado.getFluxoPorPeriodo(storeId, filtro, agrupamento); return projetarFluxoConsulta(await consultarFinanceiroEmpresa(storeId, filtro), agrupamento) }
 export function apuracaoConsulta(q: ConsultaFinanceiraDTO) {
   return { base:q.base, timezone:q.timezone, moeda:q.moeda, asOf:q.asOf, versaoCalculo:q.versaoCalculo, criterios:q.criterios, semCarteira:q.semCarteira }
 }
 export function projetarAnaliseCarteirasConsulta(q: ConsultaFinanceiraDTO): AnaliseCarteira[] {
   return q.contas.filter(c => c.ativo).map(c => ({ id: c.id, nome: c.nome, tipo: c.tipo, saldoAtual: reaisConsulta(c.saldoCentavos), saldoInicial: reaisConsulta(c.saldoInicialCentavos), totalEntradas: reaisConsulta(c.entradasCentavos), totalSaidas: reaisConsulta(c.saidasCentavos), qtdMovimentacoes: c.quantidadeMovimentos, participacao: c.tipo === "credito" ? 0 : pct(reaisConsulta(c.saldoCentavos), reaisConsulta(q.saldoCentavos)) })).sort((a,b) => b.saldoAtual-a.saldoAtual)
 }
-export async function getAnaliseCarteiras(storeId: string, filtro: PeriodoFiltro = {}) { return projetarAnaliseCarteirasConsulta(await consultarFinanceiroEmpresa(storeId,filtro)) }
+export async function getAnaliseCarteiras(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getAnaliseCarteiras(storeId, filtro); return projetarAnaliseCarteirasConsulta(await consultarFinanceiroEmpresa(storeId,filtro)) }
 export function projetarComparativoMensalConsulta(q: ConsultaFinanceiraDTO, meses=12): ComparativoMensal[] {
   if(!Number.isInteger(meses)||meses<1||meses>24) throw new ConsultaFinanceiraError("periodo_invalido",422)
   const hoje=diaNoFusoConsulta(new Date(q.asOf)),date=new Date(hoje+"T12:00:00Z");date.setUTCDate(1);date.setUTCMonth(date.getUTCMonth()-meses+1)
@@ -204,12 +206,12 @@ export function projetarComparativoAnualConsulta(q: ConsultaFinanceiraDTO, anos=
     result.push({asOf:q.asOf,ano,entrada,saida,lucro:safeMoney(entrada-saida),margem:pct(entrada-saida,entrada),crescimento:prev?.entrada?pct(entrada-prev.entrada,prev.entrada):0}) }
   return result
 }
-export async function getComparativoMensal(storeId:string,meses=12){return projetarComparativoMensalConsulta(await consultarFinanceiroEmpresa(storeId),meses)}
-export async function getComparativoAnual(storeId:string,anos=3){return projetarComparativoAnualConsulta(await consultarFinanceiroEmpresa(storeId),anos)}
+export async function getComparativoMensal(storeId:string,meses=12){ if (!gestorMoneyAtivo()) return legado.getComparativoMensal(storeId, meses);return projetarComparativoMensalConsulta(await consultarFinanceiroEmpresa(storeId),meses)}
+export async function getComparativoAnual(storeId:string,anos=3){ if (!gestorMoneyAtivo()) return legado.getComparativoAnual(storeId, anos);return projetarComparativoAnualConsulta(await consultarFinanceiroEmpresa(storeId),anos)}
 export function projetarResumoConsulta(q: ConsultaFinanceiraDTO): ResumoExecutivo {
   return { periodo:{dataInicio:q.periodo.dataInicio,dataFim:q.periodo.dataFim,dias:Math.round((Date.parse(q.periodo.dataFim)-Date.parse(q.periodo.dataInicio))/86400000)+1}, indicadores:projetarIndicadoresConsulta(q), receitasPorCategoria:categorias(q,"receitaCentavos"),despesasPorCategoria:categorias(q,"despesaCentavos"),topReceitas:projetarRankingConsulta(q,"receitaCentavos",5),topDespesas:projetarRankingConsulta(q,"despesaCentavos",5), apuracao:apuracaoConsulta(q) }
 }
-export async function getResumoExecutivo(storeId: string, filtro: PeriodoFiltro = {}) { return projetarResumoConsulta(await consultarFinanceiroEmpresa(storeId,filtro)) }
+export async function getResumoExecutivo(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getResumoExecutivo(storeId, filtro); return projetarResumoConsulta(await consultarFinanceiroEmpresa(storeId,filtro)) }
 export function buildFiltroPreset(preset: string): PeriodoFiltro {
   const hoje=diaNoFusoConsulta(new Date())
   if(preset==="hoje") return {dataInicio:hoje,dataFim:hoje}

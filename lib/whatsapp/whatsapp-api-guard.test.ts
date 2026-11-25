@@ -50,6 +50,17 @@ describe("E24 — autorização WhatsApp HUB", () => {
     expect(result.response.status).toBe(401)
   })
 
+  it("igual à main: só loja principal e NENHUM vínculo → permitido; com outros vínculos → negado", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "u1", role: "GERENTE", lojaId: "L1", storeAccess: "restricted", allowedStoreIds: ["L1"] } } as never)
+    vi.mocked(prisma.adminUserStore.findUnique).mockResolvedValue(null)
+    vi.mocked(prisma.adminUser.findUnique).mockImplementation((async (args: { select?: Record<string, unknown> }) =>
+      args.select && "lojaId" in args.select ? { lojaId: "L1", _count: { adminUserStores: 0 } } : { active: true, role: "GERENTE" }) as never)
+    expect((await guardWhatsAppApiRead(request("header", "L1"))).ok).toBe(true)
+    vi.mocked(prisma.adminUser.findUnique).mockImplementation((async (args: { select?: Record<string, unknown> }) =>
+      args.select && "lojaId" in args.select ? { lojaId: "L1", _count: { adminUserStores: 2 } } : { active: true, role: "GERENTE" }) as never)
+    expect((await guardWhatsAppApiRead(request("header", "L1"))).ok).toBe(false)
+  })
+
   it("nega membership revogada mesmo com JWT irrestrito e lojaId primária", async () => {
     vi.mocked(auth).mockResolvedValue({ user: { id: "u1", role: "GERENTE", lojaId: "L1", storeAccess: "all" } } as never)
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ active: true, role: "GERENTE" } as never)

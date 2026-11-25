@@ -403,7 +403,7 @@ export async function PATCH(req: Request) {
             const valorEstornado = Math.round(Math.max(0, pagoAntes - pagoDepois) * 100) / 100
             const mov =
               valorEstornado > 0.009
-                ? await estornarMovimentacaoDePagamentoPagar(tx, { storeId, tituloId, valor: valorEstornado, pagoRestante: pagoDepois })
+                ? await estornarMovimentacaoDePagamentoPagar(tx, { storeId, tituloId, valor: valorEstornado, pagoRestante: pagoDepois, historico: (res.data.payload as { historico?: unknown } | null)?.historico })
                 : { valor: 0, divergente: false, movimentacaoId: null }
             return { titulo: res.data, valor: valorEstornado, movimentacao: mov, carteiraId: null as string | null }
           }

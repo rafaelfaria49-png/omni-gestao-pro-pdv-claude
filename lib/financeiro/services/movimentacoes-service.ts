@@ -652,7 +652,7 @@ export async function estornarMovimentacaoPorReferencia(
  */
 export async function estornarMovimentacaoDePagamentoReceber(
   db: MovimentacoesDbClient,
-  input: { storeId: string; tituloId: string; valor: number; recebidoRestante: number },
+  input: { storeId: string; tituloId: string; valor: number; recebidoRestante: number; historico?: unknown },
 ): Promise<{ valor: number; divergente: boolean; movimentacaoId: string | null }> {
   return estornarMovimentacaoDePagamento(db, "receber", { ...input, restante: input.recebidoRestante })
 }
@@ -665,15 +665,53 @@ export async function estornarMovimentacaoDePagamentoReceber(
  */
 export async function estornarMovimentacaoDePagamentoPagar(
   db: MovimentacoesDbClient,
-  input: { storeId: string; tituloId: string; valor: number; pagoRestante: number },
+  input: { storeId: string; tituloId: string; valor: number; pagoRestante: number; historico?: unknown },
 ): Promise<{ valor: number; divergente: boolean; movimentacaoId: string | null }> {
   return estornarMovimentacaoDePagamento(db, "pagar", { ...input, restante: input.pagoRestante })
+}
+
+/**
+ * Conta financeira do pagamento revertido pelo último `estorno_pagamento` do ledger. Cada pagamento
+ * (`pagamento`/`liquidacao` com valor > 0) gera exatamente um movimento original, na mesma ordem:
+ * o k-ésimo pagamento do histórico ↔ o k-ésimo movimento original (createdAt, id). Devolve
+ * `undefined` (= manter a regra anterior) quando a correspondência não é comprovável: contagens
+ * diferentes (legado com movimento ausente), valor que não confere ou alvo não identificado.
+ */
+export function carteiraDoPagamentoEstornado(
+  historico: unknown,
+  originais: ReadonlyArray<{ carteiraId: string | null; valor: number | null }>,
+  valorEstornado: number,
+): string | null | undefined {
+  const arr = Array.isArray(historico) ? historico : []
+  const rec = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
+  let alvo: number | undefined
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const e = arr[i]
+    if (rec(e) && String(e.tipo ?? "").toLowerCase() === "estorno_pagamento") {
+      alvo = typeof e.refHistoricoIndex === "number" ? e.refHistoricoIndex : undefined
+      break
+    }
+  }
+  if (alvo === undefined) return undefined
+  const pagamentos: number[] = []
+  arr.forEach((e, index) => {
+    if (!rec(e)) return
+    const t = String(e.tipo ?? "").toLowerCase()
+    if ((t === "pagamento" || t === "liquidacao") && safeMoney(Number(e.valor ?? 0)) > 0.009) pagamentos.push(index)
+  })
+  const ordem = pagamentos.indexOf(alvo)
+  if (ordem < 0 || pagamentos.length !== originais.length) return undefined
+  const original = originais[ordem]!
+  const valorPagamento = safeMoney(Number((arr[alvo] as Record<string, unknown>).valor ?? 0))
+  if (Math.abs(safeMoney(original.valor ?? 0) - valorPagamento) > 0.009) return undefined
+  if (Math.abs(valorPagamento - safeMoney(valorEstornado)) > 0.009) return undefined
+  return original.carteiraId ?? null
 }
 
 async function estornarMovimentacaoDePagamento(
   db: MovimentacoesDbClient,
   lado: "receber" | "pagar",
-  input: { storeId: string; tituloId: string; valor: number; restante: number },
+  input: { storeId: string; tituloId: string; valor: number; restante: number; historico?: unknown },
 ): Promise<{ valor: number; divergente: boolean; movimentacaoId: string | null }> {
   const storeId = assertStoreId(input.storeId)
   const tituloId = safeStr(input.tituloId)
@@ -705,7 +743,19 @@ async function estornarMovimentacaoDePagamento(
   const divergente = Math.abs(saida - valor) > 0.009
   if (!(saida > 0.009)) return { valor: 0, divergente, movimentacaoId: null }
 
-  const carteiraId = comCarteira?.carteiraId ?? null
+  // Conta do PAGAMENTO estornado (identidade #397: refHistoricoIndex do último estorno_pagamento),
+  // não a do pagamento mais recente. Só quando o ledger é consistente com os movimentos; senão,
+  // o comportamento anterior (conta mais recente) é preservado.
+  const carteiraDoPagamento = input.historico === undefined ? undefined : carteiraDoPagamentoEstornado(
+    input.historico,
+    await db.movimentacaoFinanceira.findMany({
+      where: { storeId, referenciaId: tituloId, tipo: tipoOriginal, origem: { startsWith: lado } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { carteiraId: true, valor: true },
+    }),
+    valor,
+  )
+  const carteiraId = carteiraDoPagamento !== undefined ? carteiraDoPagamento : comCarteira?.carteiraId ?? null
   // Reconciliação G002: o fato novo entra no escopo EMPRESA da loja (perfil adotado na mesma
   // transação). A conta é referência histórica — pode ter sido desativada depois do pagamento.
   const scope = await dadosFinanceirosEmpresa(db, storeId, saida, { carteiraHistoricaId: carteiraId })

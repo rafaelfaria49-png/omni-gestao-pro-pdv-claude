@@ -820,7 +820,7 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
     // Movimentação financeira: saída com o valor exato, reconciliada com a entrada do
     // recebimento (antes o estorno da OS deixava a entrada inteira no fluxo de caixa).
     if (estornado > 0.009) {
-      await estornarMovimentacaoDePagamentoReceber(tx, { storeId: sid, tituloId: res.data.id, valor: estornado, recebidoRestante: recebidoDepois });
+      await estornarMovimentacaoDePagamentoReceber(tx, { storeId: sid, tituloId: res.data.id, valor: estornado, recebidoRestante: recebidoDepois, historico: (res.data.payload as { historico?: unknown } | null)?.historico });
     }
 
     // Caixa: a devolução sai da gaveta ATUAL (sessão aberta; sessão fechada nunca é editada),

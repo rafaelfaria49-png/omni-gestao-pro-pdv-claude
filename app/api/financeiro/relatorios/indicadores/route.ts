@@ -1,3 +1,5 @@
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import { GET as getLegadoMain } from "@/lib/financeiro/legado-main/rotas/indicadores"
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { erroConsultaFinanceira } from "@/lib/gastos/query"
 /**
@@ -17,6 +19,8 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  // Ativação controlada: desligado, a rota é a da main (consulta limitada ao período, tolerante ao legado).
+  if (!gestorMoneyAtivo()) return respostaFinanceiraPrivada(await getLegadoMain(req as never))
   // Reconciliação main × G003: módulo finance por loja (main) + guard de leitura privada (G003).
   const moduleDenied = await requireModuleApi(req, "finance")
   if (moduleDenied) return respostaFinanceiraPrivada(moduleDenied)

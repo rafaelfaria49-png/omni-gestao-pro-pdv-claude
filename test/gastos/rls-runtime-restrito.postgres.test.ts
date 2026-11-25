@@ -45,6 +45,7 @@ describe.skipIf(!RUNTIME || !OWNER)("RLS do Gestor Money com runtime restrito (P
     expect(id).toMatchObject({ dono: false, bypass: false, superuser: false })
     // Idempotente: limpa a massa sintética de execuções anteriores (como dono, fora do RLS).
     await owner.movimentacaoFinanceira.deleteMany({ where: { id: { startsWith: "rls-" } } })
+    await owner.contaPagarTitulo.deleteMany({ where: { id: { startsWith: "rls-" } } })
     await owner.carteiraFinanceira.deleteMany({ where: { OR: [{ id: { startsWith: "rls-" } }, { perfilId: { in: [P1, P2] } }] } })
     await owner.store.createMany({ data: [{ id: L1, name: "RLS L1" }, { id: L2, name: "RLS L2" }], skipDuplicates: true })
     await owner.adminUser.createMany({ data: [U1, U2].map((u) => ({ id: u, email: `${u}@example.invalid`, password: "synthetic-only", role: "ADMIN", lojaId: L1 })), skipDuplicates: true })
@@ -122,4 +123,25 @@ describe.skipIf(!RUNTIME || !OWNER)("RLS do Gestor Money com runtime restrito (P
     })).rejects.toThrow()
     expect(await owner.carteiraFinanceira.count({ where: { perfilId: P2, nome: "invasão" } })).toBe(0)
   })
+
+  it("estorno por identidade (#397): a entrada volta na conta do PAGAMENTO estornado, mesmo desativada", async () => {
+    await owner.carteiraFinanceira.createMany({ data: [
+      { id: "rls-cA", storeId: L1, nome: "Conta A", tipo: "banco" }, { id: "rls-cB", storeId: L1, nome: "Conta B", tipo: "banco" },
+    ] })
+    await owner.contaPagarTitulo.create({ data: { id: "rls-tp", storeId: L1, localKey: "rls-tp", descricao: "Fornecedor", valor: 300, status: "parcial", payload: {} } })
+    await owner.movimentacaoFinanceira.create({ data: { id: "rls-m1", storeId: L1, tipo: "saida", valor: 100, origem: "pagar_parcial", referenciaId: "rls-tp", carteiraId: "rls-cA", createdAt: new Date("2026-11-01T10:00:00Z") } })
+    await owner.movimentacaoFinanceira.create({ data: { id: "rls-m2", storeId: L1, tipo: "saida", valor: 50, origem: "pagar_parcial", referenciaId: "rls-tp", carteiraId: "rls-cB", createdAt: new Date("2026-11-02T10:00:00Z") } })
+    await owner.carteiraFinanceira.update({ where: { id: "rls-cA" }, data: { ativo: false } })
+    const historico = [{ tipo: "criacao" }, { tipo: "pagamento", valor: 100 }, { tipo: "pagamento", valor: 50 },
+      { tipo: "estorno_pagamento", valor: 100, refHistoricoIndex: 1 }]
+    const { estornarMovimentacaoDePagamentoPagar } = await import("@/lib/financeiro/services/movimentacoes-service")
+    const r = await prisma.$transaction((tx) => estornarMovimentacaoDePagamentoPagar(tx, { storeId: L1, tituloId: "rls-tp", valor: 100, pagoRestante: 50, historico }))
+    expect(r).toMatchObject({ valor: 100, divergente: false })
+    const mov = await owner.movimentacaoFinanceira.findUniqueOrThrow({ where: { id: r.movimentacaoId! } })
+    expect(mov).toMatchObject({ tipo: "entrada", origem: "estorno_pagar", valor: 100, carteiraId: "rls-cA" })
+    await owner.movimentacaoFinanceira.deleteMany({ where: { referenciaId: "rls-tp" } })
+    await owner.contaPagarTitulo.delete({ where: { id: "rls-tp" } })
+    await owner.carteiraFinanceira.deleteMany({ where: { id: { in: ["rls-cA", "rls-cB"] } } })
+  })
+
 })

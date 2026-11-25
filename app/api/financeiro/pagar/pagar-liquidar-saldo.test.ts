@@ -307,7 +307,8 @@ describe("PATCH /api/financeiro/pagar — liquidação usa saldo restante real",
     // a entrada de estorno tem o valor do pagamento (identidade = índice no histórico),
     // na mesma transação, e nunca deixa o líquido abaixo do que o ledger ainda diz pago
     expect(h.estornoSpy).toHaveBeenCalledTimes(1)
-    expect(h.estornoSpy.mock.calls.at(-1)?.[1]).toEqual({ storeId: STORE, tituloId: expect.any(String), valor: 365.01, pagoRestante: 0 })
+    // + o ledger pós-estorno, para escolher a conta do PAGAMENTO estornado (não a mais recente)
+    expect(h.estornoSpy.mock.calls.at(-1)?.[1]).toEqual({ storeId: STORE, tituloId: expect.any(String), valor: 365.01, pagoRestante: 0, historico: expect.any(Array) })
 
     // título reaberto, saldo de volta ao total
     const t = await getContaPagarByLocalKey(STORE, LOCAL_KEY)

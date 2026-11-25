@@ -8,6 +8,7 @@
  *  - verificarPeriodoFechado: retorna true se a data está dentro de um período fechado
  */
 
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
@@ -69,7 +70,9 @@ function toPublico(f: FechamentoFinanceiro): FechamentoPublico {
 }
 
 function dateToDataRef(d: Date): string {
-  return diaSaoPaulo(d.toISOString())
+  // Ativação controlada: desligado, a chave do dia é a da main (UTC), para não mudar a chave de
+  // fechamentos já gravados perto da meia-noite; ligado, o dia civil de São Paulo (G004/G005).
+  return gestorMoneyAtivo() ? diaSaoPaulo(d.toISOString()) : d.toISOString().slice(0, 10)
 }
 
 function primeiroDiaMes(mes: number, ano: number): string {
@@ -190,7 +193,8 @@ export async function fecharDia(
     entidade: "fechamento",
     entidadeId: row.id,
     acao: "fechar",
-    depois: { tipo: "diario", saldoSistema, diferenca },
+    // Detalhes do fechamento não são dados pessoais: a trilha da main é preservada.
+    depois: { tipo: "diario", dataReferencia: d, saldoSistema, diferenca },
     usuarioNome: opts.fechadoPor,
   } })
 
@@ -224,7 +228,13 @@ export async function fecharMes(
   const diferenca = saldoInformado !== null ? safeMoney(saldoInformado - saldoSistema) : 0
 
   // Snapshot do DRE do mês
-  const snapshotDRE = await getDREMensal(storeId, mes, ano, tx)
+  // Como na main, o snapshot do DRE é opcional: uma falha nele não impede o fechamento.
+  let snapshotDRE: unknown = null
+  try {
+    snapshotDRE = await getDREMensal(storeId, mes, ano, tx)
+  } catch {
+    // DRE snapshot é opcional
+  }
 
   const row = await tx.fechamentoFinanceiro.upsert({
     where: { fechamento_store_tipo_data: { storeId, tipo: "mensal", dataReferencia } },
@@ -251,7 +261,7 @@ export async function fecharMes(
     entidade: "fechamento",
     entidadeId: row.id,
     acao: "fechar",
-    depois: { tipo: "mensal", saldoSistema, diferenca },
+    depois: { tipo: "mensal", mes, ano, saldoSistema, diferenca },
     usuarioNome: opts.fechadoPor,
   } })
 
@@ -299,7 +309,7 @@ export async function reabrirFechamento(
     entidadeId: id,
     acao: "reabrir",
     antes: { status: "fechado" },
-    depois: { status: "reaberto" },
+    depois: { status: "reaberto", motivo },
     usuarioNome: reabertoPor,
   } })
 

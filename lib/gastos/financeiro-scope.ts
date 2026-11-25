@@ -147,11 +147,11 @@ export async function dadosFinanceirosEmpresa(
   refs: { carteiraId?: string | null; carteiraHistoricaId?: string | null; pagarTituloId?: string; receberTituloId?: string } = {},
 ) {
   if (!gestorMoneyAtivo()) {
-    // Gestor Money desligado: nunca cria perfil. Loja sem perfil segue exatamente o legado
-    // (perfilId NULL = empresarial pela Store obrigatória), sem travas nem adoção novas.
-    // Loja que já tem perfil (ativação anterior) continua no caminho escopado abaixo.
-    const existente = await db.financeiroPerfil.findUnique({ where: { storeId }, select: { id: true } })
-    if (!existente) return (valor === undefined ? {} : precisaoLegada(valor)) as { perfilId?: string } & Partial<ReturnType<typeof precisaoLegada>>
+    // Gestor Money desligado: comportamento exato do legado (perfilId NULL = empresarial pela
+    // Store obrigatória), sem criar/adotar perfil e sem travas novas — mesmo que exista um perfil
+    // de uma ativação anterior, inclusive DESATIVADO: o Financeiro existente nunca congela por ele.
+    void db
+    return (valor === undefined ? {} : precisaoLegada(valor)) as { perfilId?: string } & Partial<ReturnType<typeof precisaoLegada>>
   }
   const titulos: Array<{ kind: "pagar" | "receber"; id: string; perfilId: string | null; carteiraId: string | null }> = []
   for (const kind of ["pagar", "receber"] as const) {

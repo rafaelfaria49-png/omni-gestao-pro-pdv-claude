@@ -72,7 +72,8 @@ async function revalidarEmpresa(db: Prisma.TransactionClient, storeId: string, u
     id: true, tipo: true, ativo: true, ownerAdminUserId: true,
     membros: { where: { adminUserId: userId, storeId, revogadoEm: null }, select: { id: true } },
   } })
-  if (p && (p.tipo !== "EMPRESA" || !p.ativo || p.ownerAdminUserId !== null || !p.membros.length)) throw new FinanceiroReadError()
+  // Desligado: perfil desativado/sem grant não bloqueia; linhas já adotadas continuam no escopo da loja.
+  if (gestorMoneyAtivo() && p && (p.tipo !== "EMPRESA" || !p.ativo || p.ownerAdminUserId !== null || !p.membros.length)) throw new FinanceiroReadError()
   return { tipo: "EMPRESA", storeId, perfilId: p?.id ?? null }
 }
 

@@ -11,6 +11,7 @@
 import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { dadosFinanceirosEmpresa, emTransacaoFinanceira, FinanceiroScopeError, FINANCEIRO_CONTA_LOCK_PREFIX, precisaoLegada } from "@/lib/gastos/financeiro-scope"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import type { CarteiraFinanceira, Prisma } from "@/generated/prisma"
 import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
 import { storeDoContexto, type FinanceiroDb, LIMITE_CENTAVOS } from "@/lib/gastos/financeiro-scope"
@@ -261,9 +262,12 @@ async function recalcularSaldoCarteiraTransacional(
 
   // Materialização não provisiona/adota. Legado NULL continua exclusivamente
   // empresarial pela loja exata; perfil já atribuído precisa existir e conferir.
-  const perfil = await client.financeiroPerfil.findUnique({ where: { storeId } })
-  if (perfil && (!perfil.ativo || perfil.tipo !== "EMPRESA" || perfil.storeId !== storeId)) throw new FinanceiroScopeError()
-  if (carteira.perfilId != null && (!perfil || carteira.perfilId !== perfil.id)) throw new FinanceiroScopeError()
+  // Ativação controlada: desligado, a materialização do saldo nunca congela por perfil (legado).
+  if (gestorMoneyAtivo()) {
+    const perfil = await client.financeiroPerfil.findUnique({ where: { storeId } })
+    if (perfil && (!perfil.ativo || perfil.tipo !== "EMPRESA" || perfil.storeId !== storeId)) throw new FinanceiroScopeError()
+    if (carteira.perfilId != null && (!perfil || carteira.perfilId !== perfil.id)) throw new FinanceiroScopeError()
+  }
   // Materializar saldo não muda ownership de uma carteira legada. Alterar aqui a
   // chave (id, perfilId) pede lock incompatível com referências já inseridas por
   // outra transação que espera este advisory lock. A adoção fica nos writers

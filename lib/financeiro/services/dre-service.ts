@@ -1,3 +1,5 @@
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import * as legado from "@/lib/financeiro/legado-main/dre"
 import { consultarEventosFinanceirosEmpresaNaTransacao, reaisConsulta } from "@/lib/gastos/query"
 import { diaNoFusoConsulta, intervaloConsulta } from "@/lib/gastos/query-calculo"
 /**
@@ -82,7 +84,8 @@ export type AlertaDRE = {
 }
 
 export type DREMensal = {
-  baseApuracao: "CAIXA_COM_CLASSIFICACAO_DRE"
+  /** Só no cálculo G005 (Gestor Money ligado); o DRE legado da main não o informa. */
+  baseApuracao?: "CAIXA_COM_CLASSIFICACAO_DRE"
   periodo: { mes: number; ano: number; label: string }
 
   // Receitas
@@ -337,7 +340,7 @@ export async function getDREMensal(
   mes?: number,
   ano?: number,
   db: FinanceiroDb = prisma,
-): Promise<DREMensal> {
+): Promise<DREMensal> { if (!gestorMoneyAtivo()) return legado.getDREMensal(storeId, mes, ano);
   if(db===prisma){
     return prisma.$transaction(async tx=>{
       await tx.$executeRaw`SET TRANSACTION READ ONLY`

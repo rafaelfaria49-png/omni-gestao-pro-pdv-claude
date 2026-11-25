@@ -429,6 +429,8 @@ async function executarEstorno(input: EstornoRecebimentoInput): Promise<EstornoR
             tituloId: titulo.id,
             valor: valorEstornado,
             recebidoRestante,
+            // Conta do pagamento estornado (só em estorno de UM pagamento; título completo usa o agregado).
+            ...(input.modo === "ultimo_pagamento" ? { historico: (res.data.payload as { historico?: unknown } | null)?.historico } : {}),
           })
         : { valor: 0, divergente: false }
 

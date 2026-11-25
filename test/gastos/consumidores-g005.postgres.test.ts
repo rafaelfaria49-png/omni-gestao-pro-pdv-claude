@@ -59,7 +59,7 @@ describe("G005 correções da R1 com PostgreSQL real", () => {
     expect(q.semCarteira).toEqual({quantidade:1,entradasCentavos:"1000",saidasCentavos:"0"})
     expect(q.criterios.saldoContas).toBe("SOMENTE_MOVIMENTOS_COM_CARTEIRA")
     const c=await (await carteiras(request(f.L1,"carteiras"))).json(),r=await (await resumo(request(f.L1,`relatorios/resumo?${qs}`))).json(),fl=await getFluxoCaixaResumo(f.L1)
-    expect(c.apuracao.semCarteira).toEqual(q.semCarteira);expect(r.indicadores.apuracao.semCarteira).toEqual(q.semCarteira);expect(fl.apuracao.semCarteira).toEqual(q.semCarteira)
+    expect(c.apuracao.semCarteira).toEqual(q.semCarteira);expect(r.indicadores.apuracao.semCarteira).toEqual(q.semCarteira);expect(fl.apuracao!.semCarteira).toEqual(q.semCarteira)
     const a=await (await analytics(request(f.L1,`analytics?${qs}`))).json();expect(a.resultadoLoja[0].loja).toBe("Loja sintética G005")
     provaG005("saldo-sem-carteira",{saldo:q.saldoCentavos,receita:q.receitaRealizadaCentavos,residuo:q.semCarteira,criterios:q.criterios})
   })

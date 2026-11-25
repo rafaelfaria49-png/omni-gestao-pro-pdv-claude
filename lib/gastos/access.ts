@@ -42,7 +42,7 @@ export async function requireFinanceiroPerfilAccess(
     // Reconciliação main: EMPRESA também exige o módulo finance contratado para a loja (access-policy).
     if (seletor.tipo === "EMPRESA" && (!canAccessStore(base.session, seletor.storeId)
       || !canUseModule(base.session, "finance", seletor.storeId))) return negado()
-    const consultaPerfil = {
+    const buscarPerfil = (db: Pick<typeof prisma, "financeiroPerfil">) => db.financeiroPerfil.findFirst({
       where: seletor.tipo === "PESSOAL"
         ? { id: seletor.perfilId, tipo: "PESSOAL", ativo: true, ownerAdminUserId: userId }
         : {
@@ -50,15 +50,15 @@ export async function requireFinanceiroPerfilAccess(
             membros: { some: { adminUserId: userId, storeId: seletor.storeId, revogadoEm: null } },
           },
       select: { id: true, tipo: true, storeId: true, ownerAdminUserId: true },
-    } as const
+    })
     // RLS (contrato 20261126150000): o perfil PESSOAL só é visível na transação que declara o dono
     // — o próprio usuário da sessão, nunca um id vindo do cliente.
     const perfil = seletor.tipo === "PESSOAL"
       ? await prisma.$transaction(async (tx) => {
           await declararDonoPessoalRls(tx, userId)
-          return tx.financeiroPerfil.findFirst(consultaPerfil)
+          return buscarPerfil(tx)
         })
-      : await prisma.financeiroPerfil.findFirst(consultaPerfil)
+      : await buscarPerfil(prisma)
     if (!perfil) return negado()
     // A FK composta do membro exige AdminUserStore atual; sua exclusão revoga o grant.
     const escopo = perfil.tipo === "PESSOAL"

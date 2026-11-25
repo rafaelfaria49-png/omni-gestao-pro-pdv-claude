@@ -65,6 +65,17 @@ export async function requireWhatsAppApiSession(): Promise<
   }
 }
 
+/**
+ * Mesma regra do callback JWT da main: a loja principal (`lojaId`) só vale para quem NÃO tem
+ * nenhum vínculo AdminUserStore. Revogar um vínculo de quem tem outros continua negando o acesso.
+ */
+async function lojaPrincipalSemVinculos(userId: string, storeId: string): Promise<{ id: string } | null> {
+  const user = await prisma.adminUser.findUnique({
+    where: { id: userId }, select: { lojaId: true, _count: { select: { adminUserStores: true } } },
+  })
+  return user && user._count.adminUserStores === 0 && user.lojaId === storeId ? { id: storeId } : null
+}
+
 async function authorizeStore(
   storeId: string,
   session: Extract<Awaited<ReturnType<typeof requireWhatsAppApiSession>>, { ok: true }>,
@@ -77,10 +88,10 @@ async function authorizeStore(
     // Não usar lojaId primária como fallback após revogar AdminUserStore.
     const authorized = session.globalAdmin
       ? await prisma.store.findUnique({ where: { id: storeId }, select: { id: true } })
-      : await prisma.adminUserStore.findUnique({
+      : (await prisma.adminUserStore.findUnique({
           where: { adminUserId_storeId: { adminUserId: session.userId, storeId } },
           select: { id: true },
-        })
+        })) ?? await lojaPrincipalSemVinculos(session.userId, storeId)
     if (!authorized) return { ok: false, response: jsonError("Sem permissão para esta unidade.", 403) }
     return { ok: true, storeId, userId: session.userId }
   } catch {

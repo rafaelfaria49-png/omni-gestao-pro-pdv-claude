@@ -4,7 +4,8 @@ import { projetarResumoConsulta } from "@/lib/financeiro/services/relatorios-fin
 import { prisma } from "@/lib/prisma"
 import { createOS } from "@/app/actions/operacoes"
 import { listClientes, listProdutos } from "@/app/actions/cadastros"
-import { buildFiltroPreset, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { buildFiltroPreset, getResumoExecutivo, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { requireLeituraFinanceiraEmpresa } from "@/lib/gastos/read-scope"
 import {
   createMovimentacaoEntradaFromOmniAgent,
@@ -170,6 +171,25 @@ export async function executeOmniAgentIntent(
           mensagem: aberta
             ? `Caixa aberto desde ${aberta.abertaEm.toISOString()}; saldo inicial R$ ${Number(aberta.saldoInicial).toFixed(2)}; ${aberta._count.operacoes} operações registradas.`
             : "Nenhuma sessão de caixa aberta para esta unidade.",
+        },
+      }
+    }
+
+    if (intent === "FINANCE_SUMMARY" && !gestorMoneyAtivo()) {
+      // Ativação controlada: desligado, o resumo é exatamente o da main (getResumoExecutivo, que
+      // despacha para a implementação legada), após a mesma checagem de leitura financeira.
+      await requireLeituraFinanceiraEmpresa(storeId)
+      const preset = (fields.preset ?? "hoje").trim() || "hoje"
+      const filtro = buildFiltroPreset(preset)
+      const resumo = await getResumoExecutivo(storeId, filtro)
+      return {
+        ok: true,
+        actionLabel: interp.action,
+        payload: {
+          periodo: resumo.periodo,
+          indicadores: resumo.indicadores,
+          topReceitas: resumo.topReceitas.slice(0, 5),
+          topDespesas: resumo.topDespesas.slice(0, 5),
         },
       }
     }
