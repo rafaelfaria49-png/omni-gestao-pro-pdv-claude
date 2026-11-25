@@ -70,7 +70,8 @@ export type EnvioTroca =
   /** Sem resposta conclusiva (rede/timeout/5xx): pode ou não ter gravado — verificar com a MESMA chave. */
   | { status: "indefinida"; message: string }
 
-export async function enviarTroca(lojaId: string, body: TrocaRequestBody, timeoutMs = 30_000): Promise<EnvioTroca> {
+/** Acima da janela máxima do servidor (maxWait 15 s + timeout 25 s), para não abandonar um commit em curso. */
+export async function enviarTroca(lojaId: string, body: TrocaRequestBody, timeoutMs = 45_000): Promise<EnvioTroca> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {

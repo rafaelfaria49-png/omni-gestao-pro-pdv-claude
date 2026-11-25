@@ -47,14 +47,26 @@ Classificação esperada: **(2) devolução apenas local, pendente ou descartada
 
 Sem migration. Sem alteração em `prisma/schema.prisma`.
 
-## 4. Riscos residuais
+## 4. Revisão independente (somente leitura) — achados e tratamento
+
+| Achado | Sev. | Tratamento |
+|--------|------|-----------|
+| Cancelar a venda original depois de vale/troca estornava em dinheiro o que já tinha virado crédito (o netting do cancelamento só descontava saídas `devolucao_pdv`, que vale/troca não geram mais) | P1 | **Corrigido** em `app/api/vendas/[id]/cancelar/route.ts`: o valor de devoluções `troca`/`vale_credito` sem saída própria entra no netting. Provado em PG (venda à vista → vale integral → cancelar = R$ 0 de estorno). |
+| Cancelamento lia as devoluções fora do lock | P2 | **Corrigido**: o cancelamento toma o mesmo `pg_advisory_xact_lock` e relê devoluções/status; mudou → 409 `VENDA_ALTERADA_DURANTE_CANCELAMENTO`. |
+| Após envio sem resposta, "Finalizar" criava nova chave → 2ª troca possível em devolução parcial | P2 | **Corrigido**: novo envio bloqueado enquanto houver operação sem confirmação da venda; timeout do cliente 45 s (> janela do servidor). |
+| Cancelar a venda substituta reativava crédito sem titular (troca sem CPF) | P2 | **Corrigido**: venda nascida de troca recusa cancelamento (409 `VENDA_DE_TROCA`); a reversão é por Troca/Devolução nela. |
+| Rateio do desconto global podia somar 1 centavo acima do pago | P3 | **Corrigido**: rateio em centavos pelo maior resto (`liquidosPorLinha`). |
+| Reembolso/vale de venda a prazo/carnê ainda em aberto | P3 | **Não corrigido** (comportamento herdado da rota antiga) — residual abaixo. |
+
+## 5. Riscos residuais
 
 - **P1 · Gaveta não conta reembolso em dinheiro**: `computeFechamentoResumo` não tem ramo de devolução (lacuna pré-existente, documentada em `lib/caixa/conferencia-acoes.ts`). O reembolso/sobra em dinheiro entra no financeiro, não no "esperado na gaveta". Corrigir mexe no fechamento de caixa — gate próprio.
 - **P2 · Snapshot de códigos para vendas futuras** não foi adicionado ao motor de venda; o detalhe mostra o cadastro atual rotulado como tal.
 - **P2 · Devolução legada sem linha** (`naoAlocado`) é exibida como inconsistência; não é corrigida automaticamente.
+- **P2 · Devolução de venda a prazo/carnê não quitada** pode virar reembolso ou vale sem conferir o recebido (herdado). Proposta: limitar ao valor efetivamente recebido.
 - **P2 · Troca imediata exige numeração V2** (`TROCA_REQUER_NUMERACAO_SERVIDOR` onde o writer V1 estiver ativo).
 
-## 5. Proposta de recuperação da venda 000760 (aguarda autorização)
+## 6. Proposta de recuperação da venda 000760 (aguarda autorização)
 
 Nada é executado sem ordem do proprietário. Após rodar o script (seção 2):
 

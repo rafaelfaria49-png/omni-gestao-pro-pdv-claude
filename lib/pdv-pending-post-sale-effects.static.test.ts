@@ -164,21 +164,8 @@ const SURFACES: Surface[] = [
     requiredInPending: ["PENDING_SALE_TITLE"],
     requiredInConfirmed: ["setCupomOpen(true)", "sale_finalized"],
   },
-  {
-    // 5. PENDING Troca não abre cupom nem conclui callback.
-    file: TROCAS,
-    guard: "if (novaVenda.pending) {",
-    failedCheck: "!novaVenda.ok",
-    forbiddenInGapAndPending: [
-      "setCupomOpen",
-      "setCupomData",
-      "onRegistered",
-      "setLastDevolucao",
-      "setTrocaCart([])",
-    ],
-    requiredInPending: ["PENDING_SALE_TITLE"],
-    requiredInConfirmed: ["setCupomOpen(true)", "onRegistered?.()", "setLastDevolucao(", "Troca finalizada"],
-  },
+  // 5. Troca/devolução saiu desta lista (OMNI-PDV-TROCAS-…-P1-001): não usa mais o motor
+  // local `finalizeSaleTransaction`; o contrato equivalente está no teste dedicado abaixo.
 ]
 
 describe("CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos", () => {
@@ -219,6 +206,23 @@ describe("CORREÇÃO-01 — PENDING sai antes dos efeitos definitivos", () => {
       if (surface.auditStore) expectConfirmedAuditObserver(source, gap, surface.auditStore)
     })
   }
+
+  it(`${TROCAS}: só o servidor conclui — sem motor local, cupom e callback só após "confirmada"`, () => {
+    const src = read(TROCAS)
+    expect(src).not.toContain("finalizeSaleTransaction")
+    const conta = (marker: string) => src.split(marker).length - 1
+    expect(conta("registrarDevolucao(")).toBe(0)
+    // Cupom e callback nascem apenas em `concluir`, chamado só no ramo confirmado.
+    expect(conta("setCupom(r)")).toBe(1)
+    const ramoConfirmado = src.indexOf(`if (r.status === "confirmada") {`)
+    expect(ramoConfirmado).toBeGreaterThan(0)
+    expect(src.indexOf("concluir(r.resultado, r.replayed)", ramoConfirmado)).toBeGreaterThan(ramoConfirmado)
+    expect(conta("concluir(")).toBe(1) // única chamada, dentro do ramo confirmado
+    const naoConfirmado = src.slice(src.indexOf(`if (r.status === "recusada") {`), src.indexOf("} finally {", ramoConfirmado))
+    expect(naoConfirmado).not.toContain("setCupom")
+    expect(naoConfirmado).not.toContain("onRegistered")
+    expect(conta("onRegistered?.()")).toBe(1) // só ao fechar o comprovante
+  })
 
   it("Black/Next continua correto: pending antes do cupom definitivo", () => {
     const source = read(BLACK)

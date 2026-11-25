@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   TROCA_PAYLOAD_SCHEMA,
   alocarDevolucoes,
-  fatorLiquidoVenda,
+  liquidosPorLinha,
   linhasComDisponibilidade,
   linhasDaVenda,
   paymentBreakdownDaTroca,
@@ -106,19 +106,26 @@ describe("alocarDevolucoes", () => {
 describe("valores", () => {
   it("devolução parcial fecha exatamente no total da linha (sem centavo a mais)", () => {
     const [l] = linhasDaVenda({ lines: [{ inventoryId: "p", name: "X", quantity: 3, unitPrice: 33.33, lineTotal: 100 }] }, [])
-    const v1 = valorDevolucaoLinha(l!, 1, 0, 1)
-    const v2 = valorDevolucaoLinha(l!, 1, 1, 1)
-    const v3 = valorDevolucaoLinha(l!, 1, 2, 1)
+    const v1 = valorDevolucaoLinha(l!, 100, 0, 1)
+    const v2 = valorDevolucaoLinha(l!, 100, 1, 1)
+    const v3 = valorDevolucaoLinha(l!, 100, 2, 1)
     expect([v1, v2, v3]).toEqual([33.33, 33.34, 33.33])
     expect(Math.round((v1 + v2 + v3) * 100) / 100).toBe(100)
   })
 
   it("rateia desconto global da venda e nunca devolve mais que o pago", () => {
     const linhas = linhasDaVenda({ lines: [{ inventoryId: "a", name: "A", quantity: 1, unitPrice: 60, lineTotal: 60 }, { inventoryId: "b", name: "B", quantity: 1, unitPrice: 40, lineTotal: 40 }] }, [])
-    const fator = fatorLiquidoVenda(90, linhas)
-    expect(fator).toBeCloseTo(0.9)
-    expect(valorDevolucaoLinha(linhas[0]!, fator, 0, 1)).toBe(54)
-    expect(fatorLiquidoVenda(120, linhas)).toBe(1)
+    const liq = liquidosPorLinha(90, linhas)
+    expect(liq).toEqual([54, 36])
+    expect(valorDevolucaoLinha(linhas[0]!, liq[0]!, 0, 1)).toBe(54)
+    expect(liquidosPorLinha(120, linhas)).toEqual([60, 40]) // acréscimo não aumenta a devolução
+  })
+
+  it("rateio em centavos fecha exatamente no total pago (20,00 em 3 × 10,00 → nunca 20,01)", () => {
+    const linhas = linhasDaVenda({ lines: [0, 1, 2].map((i) => ({ inventoryId: `x${i}`, name: "X", quantity: 1, unitPrice: 10, lineTotal: 10 })) }, [])
+    const liq = liquidosPorLinha(20, linhas)
+    expect(Math.round(liq.reduce((a, b) => a + b, 0) * 100)).toBe(2000)
+    expect(liq.slice().sort()).toEqual([6.66, 6.67, 6.67])
   })
 })
 
@@ -126,20 +133,20 @@ describe("validarLinhasDevolucao", () => {
   const { linhas } = linhasComDisponibilidade(linhasDaVenda(vendaPs4, []), [])
 
   it("aceita o cenário 119,90", () => {
-    const r = validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 1 }], 1)
+    const r = validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 1 }], [119.9])
     expect(r).toMatchObject({ ok: true, valorTotal: 119.9 })
   })
 
   it("recusa acima do disponível, linha repetida, quantidade fracionada", () => {
-    expect(validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 2 }], 1)).toMatchObject({ ok: false, code: "DEVOLUCAO_ACIMA_DO_DISPONIVEL" })
-    expect(validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 1 }, { lineIndex: 0, quantidade: 1 }], 1)).toMatchObject({ ok: false, code: "LINHA_INVALIDA" })
-    expect(validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 0.5 }], 1)).toMatchObject({ ok: false, code: "QUANTIDADE_INVALIDA" })
-    expect(validarLinhasDevolucao(linhas, [], 1)).toMatchObject({ ok: false, code: "SEM_LINHAS" })
+    expect(validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 2 }], [119.9])).toMatchObject({ ok: false, code: "DEVOLUCAO_ACIMA_DO_DISPONIVEL" })
+    expect(validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 1 }, { lineIndex: 0, quantidade: 1 }], [119.9])).toMatchObject({ ok: false, code: "LINHA_INVALIDA" })
+    expect(validarLinhasDevolucao(linhas, [{ lineIndex: 0, quantidade: 0.5 }], [119.9])).toMatchObject({ ok: false, code: "QUANTIDADE_INVALIDA" })
+    expect(validarLinhasDevolucao(linhas, [], [119.9])).toMatchObject({ ok: false, code: "SEM_LINHAS" })
   })
 
   it("aparelho IMEI segue bloqueado", () => {
     const d = linhasComDisponibilidade(linhasDaVenda({ lines: [{ inventoryId: "m", name: "iPhone", quantity: 1, unitPrice: 1000, lineTotal: 1000, deviceSale: { imei: "x" } }] }, []), []).linhas
-    expect(validarLinhasDevolucao(d, [{ lineIndex: 0, quantidade: 1 }], 1)).toMatchObject({ ok: false, code: "APARELHO_REVERSAO_NAO_INTEGRADA" })
+    expect(validarLinhasDevolucao(d, [{ lineIndex: 0, quantidade: 1 }], [119.9])).toMatchObject({ ok: false, code: "APARELHO_REVERSAO_NAO_INTEGRADA" })
   })
 })
 

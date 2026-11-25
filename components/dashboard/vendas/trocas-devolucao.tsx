@@ -30,7 +30,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
-import { fatorLiquidoVenda, planoTroca, valorDevolucaoLinha } from "@/lib/pdv/trocas/troca-disponibilidade"
+import { planoTroca, valorDevolucaoLinha } from "@/lib/pdv/trocas/troca-disponibilidade"
 import { normalizarTermoBusca } from "@/lib/pdv/trocas/troca-busca-termo"
 import {
   buscarVendasTroca,
@@ -230,7 +230,7 @@ export function TrocasDevolucao({
   }
 
   // ── Cálculos (mesma regra pura do servidor; o servidor recalcula e é o que vale) ──
-  const fator = useMemo(() => (venda ? fatorLiquidoVenda(venda.total, venda.linhas) : 1), [venda])
+  // Mesmo rateio do servidor (já vem pronto em `valorLiquido` por linha).
   const selecionadas = useMemo(
     () => (venda ? venda.linhas.filter((l) => (qtyByLine[l.lineIndex] ?? 0) > 0) : []),
     [venda, qtyByLine],
@@ -238,9 +238,9 @@ export function TrocasDevolucao({
   const valorDevolvido = useMemo(
     () =>
       Math.round(
-        selecionadas.reduce((s, l) => s + valorDevolucaoLinha(l, fator, l.devolvido, qtyByLine[l.lineIndex] ?? 0), 0) * 100,
+        selecionadas.reduce((s, l) => s + valorDevolucaoLinha(l, l.valorLiquido, l.devolvido, qtyByLine[l.lineIndex] ?? 0), 0) * 100,
       ) / 100,
-    [selecionadas, fator, qtyByLine],
+    [selecionadas, qtyByLine],
   )
   const totalNovaCompra = useMemo(() => Math.round(trocaCart.reduce((s, l) => s + l.unitPrice * l.quantity, 0) * 100) / 100, [trocaCart])
   const plano = useMemo(() => planoTroca(valorDevolvido, totalNovaCompra), [valorDevolvido, totalNovaCompra])
@@ -285,6 +285,8 @@ export function TrocasDevolucao({
   const exigeTitular = mode === "vale_credito" || (mode === "troca" && plano.excedente > 0 && excessHandling === "vale")
   const motivoBloqueio = (() => {
     if (!venda) return "Selecione a venda."
+    // Uma operação sem resposta pode ter sido gravada: nova chave aqui criaria uma 2ª troca.
+    if (pendentesDaVenda.length > 0) return "Verifique a operação enviada sem confirmação antes de registrar outra."
     if (selecionadas.length === 0) return "Selecione a quantidade a devolver."
     if (mode === "troca" && trocaCart.length === 0) return "Adicione o produto que o cliente vai levar."
     if (mode === "troca" && plano.excedente > 0 && !excessHandling) return "Escolha o destino da sobra."

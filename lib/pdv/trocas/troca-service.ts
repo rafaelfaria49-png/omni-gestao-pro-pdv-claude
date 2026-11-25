@@ -39,7 +39,7 @@ import { parseClientSaleId } from "@/lib/vendas/sale-identity-contracts"
 import {
   TROCA_PAYLOAD_SCHEMA,
   arredonda2,
-  fatorLiquidoVenda,
+  liquidosPorLinha,
   linhasComDisponibilidade,
   linhasDaVenda,
   paymentBreakdownDaTroca,
@@ -237,8 +237,8 @@ async function registrarNaTransacao(
   })
   const linhasOriginais = linhasDaVenda(venda.payload, venda.itens)
   const { linhas: disponiveis } = linhasComDisponibilidade(linhasOriginais, devolucoesExistentes)
-  const fator = fatorLiquidoVenda(venda.total, linhasOriginais)
-  const validacao = validarLinhasDevolucao(disponiveis, input.linhas, fator)
+  const liquidos = liquidosPorLinha(venda.total, linhasOriginais)
+  const validacao = validarLinhasDevolucao(disponiveis, input.linhas, liquidos)
   if (!validacao.ok) throw new TrocaError(validacao.code, validacao.message)
 
   const selecionadas = validacao.linhas

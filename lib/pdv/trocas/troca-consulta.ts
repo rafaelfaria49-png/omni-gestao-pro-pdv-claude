@@ -15,7 +15,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { normalizeDocDigits } from "@/lib/cpf"
 import {
-  fatorLiquidoVenda,
+  liquidosPorLinha,
   linhasComDisponibilidade,
   linhasDaVenda,
   type LinhaComDisponibilidade,
@@ -99,7 +99,7 @@ function montarView(
 ): VendaTrocaView {
   const originais = linhasDaVenda(venda.payload, venda.itens)
   const { linhas, naoAlocado } = linhasComDisponibilidade(originais, devolucoes)
-  const fator = fatorLiquidoVenda(venda.total, originais)
+  const liquidos = liquidosPorLinha(venda.total, originais)
   const acha = (l: LinhaComDisponibilidade) =>
     produtos.find((p) => p.id === l.produtoId) ??
     produtos.find((p) => p.id === l.inventoryId || (p.sku && p.sku === l.inventoryId) || (p.barcode && p.barcode === l.inventoryId))
@@ -129,7 +129,7 @@ function montarView(
                   : "cadastrado"
       return {
         ...l,
-        valorLiquido: Math.round(Math.max(0, l.lineTotal) * fator * 100) / 100,
+        valorLiquido: liquidos[l.lineIndex] ?? 0,
         cadastroAtual: prod ? { produtoId: prod.id, sku: prod.sku, barcode: prod.barcode, situacao: inativo ? "inativo" : "ativo" } : null,
         situacaoCadastro,
       }

@@ -215,13 +215,26 @@ export function alocarDevolucoes(
 }
 
 /**
- * Fator de rateio do desconto global: total líquido / soma das linhas. Venda sem desconto
- * global (ou acréscimo) → 1. Nunca > 1: a devolução não paga mais que a linha.
+ * Valor líquido de cada linha (indexado por `lineIndex`) com o desconto global rateado em
+ * CENTAVOS pelo maior resto: a soma fecha exatamente em min(total da venda, soma das
+ * linhas). Acréscimo nunca aumenta a devolução; rateio proporcional linha a linha podia
+ * somar 1 centavo acima do pago (ex.: 20,00 em três linhas de 10,00 → 6,67 × 3 = 20,01).
  */
-export function fatorLiquidoVenda(totalVenda: number, linhas: LinhaVendaOriginal[]): number {
-  const soma = linhas.reduce((s, l) => s + Math.max(0, l.lineTotal), 0)
-  if (!(soma > 0) || !(totalVenda >= 0)) return 1
-  return Math.min(1, totalVenda / soma)
+export function liquidosPorLinha(totalVenda: number, linhas: LinhaVendaOriginal[]): number[] {
+  const brutos = linhas.map((l) => Math.max(0, Math.round(l.lineTotal * 100)))
+  const soma = brutos.reduce((s, c) => s + c, 0)
+  const alvo = Math.min(soma, Math.max(0, Math.round((Number.isFinite(totalVenda) ? totalVenda : soma / 100) * 100)))
+  if (soma === 0 || alvo === soma) return brutos.map((c) => c / 100)
+  const exatos = brutos.map((c) => (c * alvo) / soma)
+  const base = exatos.map((x) => Math.floor(x))
+  let resto = alvo - base.reduce((s, c) => s + c, 0)
+  const ordem = exatos.map((x, i) => ({ i, f: x - Math.floor(x) })).sort((a, b) => b.f - a.f || a.i - b.i)
+  for (const { i } of ordem) {
+    if (resto <= 0) break
+    base[i]! += 1
+    resto -= 1
+  }
+  return base.map((c) => c / 100)
 }
 
 /**
@@ -229,9 +242,9 @@ export function fatorLiquidoVenda(totalVenda: number, linhas: LinhaVendaOriginal
  * Calculado como diferença de acumulados arredondados → a soma das devoluções parciais
  * fecha EXATAMENTE no valor líquido da linha (sem centavo a mais ou a menos).
  */
-export function valorDevolucaoLinha(linha: LinhaVendaOriginal, fator: number, jaDevolvido: number, qtd: number): number {
+export function valorDevolucaoLinha(linha: LinhaVendaOriginal, liquidoLinha: number, jaDevolvido: number, qtd: number): number {
   if (linha.quantity <= 0 || qtd <= 0) return 0
-  const liquido = arredonda2(Math.max(0, linha.lineTotal) * fator)
+  const liquido = arredonda2(Math.max(0, liquidoLinha))
   const acumulado = (q: number) => arredonda2((liquido * Math.min(q, linha.quantity)) / linha.quantity)
   return arredonda2(acumulado(jaDevolvido + qtd) - acumulado(jaDevolvido))
 }
@@ -286,7 +299,7 @@ export type ValidacaoLinhas =
 export function validarLinhasDevolucao(
   disponiveis: LinhaComDisponibilidade[],
   pedido: PedidoLinhaDevolucao[],
-  fator: number,
+  liquidos: number[],
 ): ValidacaoLinhas {
   if (!Array.isArray(pedido) || pedido.length === 0) {
     return { ok: false, code: "SEM_LINHAS", message: "Selecione ao menos um item e a quantidade a devolver." }
@@ -313,7 +326,7 @@ export function validarLinhasDevolucao(
         message: `${linha.name}: vendido ${linha.quantity}, já devolvido ${linha.devolvido}, disponível ${linha.disponivel}.`,
       }
     }
-    out.push({ linha, quantidade: p.quantidade, valor: valorDevolucaoLinha(linha, fator, linha.devolvido, p.quantidade) })
+    out.push({ linha, quantidade: p.quantidade, valor: valorDevolucaoLinha(linha, liquidos[linha.lineIndex] ?? 0, linha.devolvido, p.quantidade) })
   }
   return { ok: true, linhas: out, valorTotal: arredonda2(out.reduce((s, l) => s + l.valor, 0)) }
 }

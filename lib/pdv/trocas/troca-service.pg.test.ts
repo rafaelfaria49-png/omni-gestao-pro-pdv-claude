@@ -29,6 +29,9 @@ const authState = vi.hoisted(() => ({ session: null as unknown }))
 vi.mock("@/auth", () => ({ auth: async () => authState.session }))
 vi.mock("@/lib/auth/module-access", () => ({ requireModuleApi: async () => null }))
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({ apiGuardEnterpriseOrOps: async () => null }))
+vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: async () => ({ ok: true }) }))
+vi.mock("@/lib/vendas/guard-estorno-venda", () => ({ requireEstornoStepUp: async () => ({ ok: true }) }))
+vi.mock("@/lib/ops-api-gate", async (orig) => ({ ...(await orig<Record<string, unknown>>()), opsLojaIdFromRequest: (req: Request) => req.headers.get("x-assistec-loja-id") }))
 
 type Db = any
 
@@ -37,6 +40,7 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
   let svc: typeof import("./troca-service")
   let consulta: typeof import("./troca-consulta")
   let legacyPOST: (req: Request) => Promise<Response>
+  let cancelarPOST: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>
   let sessaoAberta = ""
   let sessaoFechada = ""
   let opSeq = 0
@@ -93,6 +97,7 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
     svc = await import("./troca-service")
     consulta = await import("./troca-consulta")
     ;({ POST: legacyPOST } = await import("@/app/api/ops/devolucao/route"))
+    ;({ POST: cancelarPOST } = (await import("@/app/api/vendas/[id]/cancelar/route")) as unknown as { POST: typeof cancelarPOST })
 
     await db.store.create({ data: { id: LOJA, name: "Troca PG A", codigoNumeracaoVenda: `T${SUF.slice(0, 3).toUpperCase()}` } })
     await db.store.create({ data: { id: LOJA_B, name: "Troca PG B", codigoNumeracaoVenda: `U${SUF.slice(0, 3).toUpperCase()}` } })
@@ -318,6 +323,38 @@ describe.skipIf(!RUN)("trocas/devoluções — PostgreSQL descartável real", ()
     await expect(
       svc.registrarTroca({ ...base(), storeId: LOJA_B, sessaoId: null, operationId: op(), pedidoIdOrigem: "VDA-PG-000767", modo: "somente_estoque", linhas: [{ lineIndex: 0, quantidade: 1 }] }),
     ).rejects.toMatchObject({ code: "VENDA_NAO_ENCONTRADA" })
+  })
+
+  describe("cancelamento depois de troca/vale (revisão independente P1)", () => {
+    const cancelar = (pedidoId: string) =>
+      cancelarPOST(
+        new Request(`http://local/api/vendas/${pedidoId}/cancelar`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-assistec-loja-id": LOJA },
+          body: JSON.stringify({ motivo: "teste pg", forcar: true }),
+        }),
+        { params: Promise.resolve({ id: pedidoId }) },
+      )
+
+    it("venda à vista virou vale integral: cancelar NÃO estorna em dinheiro o que já virou crédito", async () => {
+      await vendaOriginal("VDA-PG-CANC1", [{ inventoryId: "p2", produtoId: "p2", name: "P2", quantity: 1, unitPrice: 15, lineTotal: 15 }])
+      await db.movimentacaoFinanceira.create({ data: { storeId: LOJA, tipo: "entrada", valor: 15, descricao: "Venda PDV VDA-PG-CANC1", origem: "venda", referenciaId: "VDA-PG-CANC1" } })
+      await svc.registrarTroca({ ...base(), operationId: op(), pedidoIdOrigem: "VDA-PG-CANC1", modo: "vale_credito", clienteDoc: "12345678909", clienteNome: "Cliente PG", linhas: [{ lineIndex: 0, quantidade: 1 }] })
+      const res = await cancelar("VDA-PG-CANC1")
+      const corpo = await res.json()
+      expect(res.status, JSON.stringify(corpo)).toBe(200)
+      expect((await db.venda.findFirst({ where: { storeId: LOJA, pedidoId: "VDA-PG-CANC1" } })).status).toBe("cancelada")
+      const estornos = await db.movimentacaoFinanceira.findMany({ where: { storeId: LOJA, referenciaId: "VDA-PG-CANC1", origem: "cancelamento_pdv" } })
+      expect(estornos.reduce((s: number, m: { valor: number }) => s + m.valor, 0)).toBe(0)
+    }, 60_000)
+
+    it("venda substituta de troca não é cancelada pela rota de cancelamento", async () => {
+      const nova = (await contagens("VDA-PG-000760")).novas[0]
+      const res = await cancelar(nova.pedidoId)
+      expect(res.status).toBe(409)
+      expect((await res.json()).code).toBe("VENDA_DE_TROCA")
+      expect((await db.venda.findFirst({ where: { id: nova.id } })).status).not.toBe("cancelada")
+    })
   })
 
   describe("rota legada /api/ops/devolucao (fila antiga)", () => {
