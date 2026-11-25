@@ -224,6 +224,15 @@ describe("createCliente / updateCliente", () => {
 })
 
 describe("deleteProduto / upsertProduto", () => {
+  it("FK permanente P03 retorna orientação de inativação sem consultar tabelas novas", async () => {
+    sessionAtiva({ role: "VENDEDOR", storeAccess: "restricted", allowedStoreIds: ["loja-a"] })
+    h.produtoFindFirst.mockResolvedValue({ id: "simples-p03", name: "Simples com código", metadata: {} })
+    h.produtoDelete.mockRejectedValueOnce(Object.assign(new Error("Foreign key constraint"), { code: "P2003" }))
+    expect(await deleteProduto("loja-a", "simples-p03")).toMatchObject({ ok: false, reason: expect.stringContaining("Inativar") })
+    expect(h.produtoDelete).toHaveBeenCalledWith({ where: { id: "simples-p03" } })
+    h.produtoDelete.mockRejectedValueOnce(new Error("P03_RESERVA_PERMANENTE: a chave ainda está reservada."))
+    expect(await deleteProduto("loja-a", "simples-p03")).toMatchObject({ ok: false, reason: expect.stringContaining("Inativar") })
+  })
   it.each([
     null,
     { vestuario: "camiseta" },

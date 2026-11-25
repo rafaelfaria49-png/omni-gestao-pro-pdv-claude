@@ -196,6 +196,8 @@ const privateNoStoreHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Isola tracing na própria árvore (inclusive worktrees), sem incluir o checkout pai.
+  outputFileTracingRoot: process.cwd(),
   /** Next.js 16 — HMR/webpack dev a partir de 127.0.0.1 (ex.: Playwright com IPv4). */
   allowedDevOrigins: ["127.0.0.1"],
   /** Next.js 16 usa Turbopack por padrão; o plugin PWA injeta webpack — config vazia evita erro de build. */
@@ -220,6 +222,7 @@ const nextConfig = {
     "/api/fiscal/**": ["./lib/fiscal/provider/sefaz/trust/icp-brasil-v10.pem"],
     "/api/internal/fiscal/**": ["./lib/fiscal/provider/sefaz/trust/icp-brasil-v10.pem"],
     "/api/vendas/**": ["./lib/fiscal/provider/sefaz/trust/icp-brasil-v10.pem"],
+    "/api/identificacao/etiquetas/**": ["./lib/identificacao/assets/NotoSans-Regular.ttf"],
   },
   typescript: {
     ignoreBuildErrors: true,

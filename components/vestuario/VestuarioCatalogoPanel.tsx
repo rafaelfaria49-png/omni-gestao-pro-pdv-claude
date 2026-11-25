@@ -79,8 +79,8 @@ export function VestuarioCatalogoPanel({ storeId, openNewProduct, onNewProductCo
           <div className="min-w-0 text-sm">
             <p className="font-semibold text-foreground">Cadastro de grades e variações (cor × tamanho)</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Esta etapa registra o catálogo. Estoque, venda e etiquetas por cor e tamanho ainda não estão disponíveis:
-              produtos com grade não entram no PDV nem recebem entrada de estoque até as próximas fases.
+              Esta área registra o catálogo. Produtos com grade não entram no PDV nem recebem entrada de estoque
+              até as próximas fases. As etiquetas ficam na aba Etiquetas, quando disponível para a loja.
             </p>
           </div>
         </div>
@@ -436,7 +436,7 @@ function ProdutoGradeEditor({ storeId, grades, cores, produtoId, onClose, onSave
   const canSave = !busy && base.nome.trim() && (produto ? true : gradeId && combos.length > 0);
   const activeGrades = grades.filter((g) => g.ativo);
   return (
-    <Modal open onClose={onClose} accessible size="xl" title={produto ? produto.nome : "Novo produto com grade"} subtitle="Cadastro de catálogo — sem estoque, venda ou etiqueta nesta fase.">
+    <Modal open onClose={onClose} accessible size="xl" title={produto ? produto.nome : "Novo produto com grade"} subtitle="Cadastro de catálogo — sem estoque ou venda por variação.">
       <div className="min-w-0 space-y-5">
         <datalist id="vest-cat">{lookups.categorias.map((c) => <option key={c} value={c} />)}</datalist>
         <datalist id="vest-marca">{lookups.marcas.map((c) => <option key={c} value={c} />)}</datalist>

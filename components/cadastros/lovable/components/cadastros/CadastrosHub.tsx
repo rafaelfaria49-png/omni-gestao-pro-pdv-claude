@@ -19,6 +19,8 @@ import { AparelhosPanel } from "@/components/aparelhos/AparelhosPanel";
 import { VestuarioCatalogoPanel } from "@/components/vestuario/VestuarioCatalogoPanel";
 import { CoresPanel } from "@/components/dashboard/compat/ajustes-panels";
 import { getVestuarioCatalogoStatus } from "@/app/actions/vestuario-catalogo";
+import dynamic from "next/dynamic";
+import { getIdentificacaoStatus } from "@/app/actions/identificacao-etiquetas";
 import { Shirt, TabletSmartphone } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useStoreBusiness } from "@/lib/use-store-business";
@@ -82,12 +84,14 @@ import {
 const ICONS: Record<string, any> = {
   Users, Package, Wrench, Truck, HardHat, Smartphone, AlertTriangle, RefreshCw,
 };
+const IdentificacaoEtiquetasPanel = dynamic(() => import("@/components/vestuario/IdentificacaoEtiquetasPanel").then(m => m.IdentificacaoEtiquetasPanel));
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "produtos", label: "Produtos", icon: Package },
   { id: "grades", label: "Grades e variações", icon: Shirt },
+  { id: "etiquetas", label: "Etiquetas", icon: Barcode },
   { id: "servicos", label: "Serviços", icon: Wrench },
   { id: "fornecedores", label: "Fornecedores", icon: Truck },
   { id: "tecnicos", label: "Técnicos", icon: HardHat },
@@ -145,7 +149,15 @@ export function CadastrosHub() {
     getVestuarioCatalogoStatus(storeId).then((r) => { if (alive) setVestuarioEnabled(r.enabled); }, () => {});
     return () => { alive = false; };
   }, [storeId]);
-  const visibleTab = (id: string) => (id === "grades" ? vestuarioEnabled && !!storeId : baseVisibleTab(id));
+  const [etiquetasEnabled, setEtiquetasEnabled] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setEtiquetasEnabled(false);
+    if (!storeId) return;
+    getIdentificacaoStatus(storeId).then(r => { if (alive) setEtiquetasEnabled(r.enabled); }, () => {});
+    return () => { alive = false; };
+  }, [storeId]);
+  const visibleTab = (id: string) => id === "etiquetas" ? etiquetasEnabled && !!storeId : id === "grades" ? vestuarioEnabled && !!storeId : baseVisibleTab(id);
   const selectedTab = visibleTab(tab) ? tab : "dashboard";
   return (
     <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
@@ -253,6 +265,7 @@ export function CadastrosHub() {
             onNewProductConsumed={() => setAutoOpenNew(null)}
           />
         )}
+        {selectedTab === "etiquetas" && etiquetasEnabled && storeId && <IdentificacaoEtiquetasPanel key={storeId} storeId={storeId}/>}
         {selectedTab === "servicos" && (
           <ServicosPanel
             storeId={storeId}

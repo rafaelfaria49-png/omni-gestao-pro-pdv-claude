@@ -22,7 +22,8 @@ if (!["127.0.0.1", "localhost", "::1"].includes(url.hostname) || !url.pathname.i
 }
 const PORT = process.env.VESTUARIO_P02_E2E_PORT || "3117"
 const ORIGIN = `http://localhost:${PORT}`
-const evidence = path.join(process.cwd(), "test-results/vestuario-p02-e2e")
+const phase = process.env.VESTUARIO_E2E_PHASE === "p03" ? "p03" : "p02"
+const evidence = path.join(process.cwd(), `test-results/vestuario-${phase}-e2e`)
 
 function run(cmd, args, env = process.env) {
   const r = spawnSync(cmd, args, { env, stdio: "inherit" })
@@ -57,6 +58,10 @@ try {
   } })
   await user("dono@e2e-vestuario.invalid", "Dono Sintético", passwords.dono, "ADMIN", [STORE_A, STORE_B, STORE_OFF])
   await user("gerente-b@e2e-vestuario.invalid", "Gerente Loja B", passwords.lojaB, "GERENTE", [STORE_B])
+  if (phase === "p03") {
+    const { seedP03E2E } = await import("./p03-e2e-fixture.mjs")
+    await seedP03E2E(db, STORE_A, STORE_B)
+  }
 } finally { await db.$disconnect() }
 
 // 3. App real com o catálogo habilitado só para A e B (QA). Estoque/venda solicitados para provar que seguem off.
@@ -67,6 +72,8 @@ const appEnv = {
   VERCEL_ENV: "development", MIGRATION_AUTHORITY_ENABLED: "false",
   VESTUARIO_CATALOG_ENABLED: "1", VESTUARIO_STOCK_ENABLED: "1", VESTUARIO_SALE_ENABLED: "1",
   VESTUARIO_STORE_ALLOWLIST: `${STORE_A},${STORE_B}`,
+  VESTUARIO_P03_ENABLED: phase === "p03" ? "1" : "0",
+  VESTUARIO_P03_STORE_ALLOWLIST: phase === "p03" ? `${STORE_A},${STORE_B}` : "",
 }
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "localhost", "-p", PORT], { env: appEnv, stdio: ["ignore", "inherit", "inherit"] })
 let status = "FAIL"
@@ -77,7 +84,7 @@ try {
     if (Date.now() > deadline || server.exitCode !== null) throw new Error("VESTUARIO_E2E_SERVER_NOT_READY")
     await new Promise((r) => setTimeout(r, 1000))
   }
-  run(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--config", "e2e/vestuario-p02.playwright.config.ts", ...process.argv.slice(2)], {
+  run(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--config", `e2e/vestuario-${phase}.playwright.config.ts`, ...process.argv.slice(2)], {
     ...process.env, VESTUARIO_P02_E2E_BASE_URL: ORIGIN, VESTUARIO_P02_E2E_DATABASE_URL: database,
     VESTUARIO_P02_E2E_PW_DONO: passwords.dono, VESTUARIO_P02_E2E_PW_LOJA_B: passwords.lojaB,
   })
@@ -98,6 +105,6 @@ try {
     database: "PostgreSQL descartável loopback (baseline main + migration P02 + drift zero)",
     auth: "NextAuth Credentials real; usuários sintéticos com senha aleatória por execução",
     flags: { catalogAllowlist: [STORE_A, STORE_B], stockAndSaleRequestedButForcedOff: true },
-    productionWrites: 0,
+    phase, productionWrites: 0, physicalHomologation: "NOT_EXECUTED",
   }, null, 2) + "\n")
 }
