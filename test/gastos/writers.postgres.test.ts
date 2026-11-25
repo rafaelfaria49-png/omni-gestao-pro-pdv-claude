@@ -58,10 +58,10 @@ const titulo = (ctx: unknown, extra: Record<string, unknown> = {}) => gravarTitu
 // Reconciliação main: os snapshots legados exigem autoridade de plataforma (requireModuleApi "platform").
 // Só a chamada da rota recebe essa flag na MESMA sessão sintética; as asserções de escopo não mudam.
 async function comoPlataforma<T>(fn: () => Promise<T>): Promise<T> {
-  const anterior = vi.mocked(auth).getMockImplementation()
+  const anterior = vi.mocked(auth).getMockImplementation() as unknown as (() => Promise<unknown>) | undefined
   const sessao = (await anterior?.()) as { user: Record<string, unknown> } | null
   vi.mocked(auth).mockResolvedValue({ ...sessao, user: { ...sessao?.user, platformAuthority: true } } as never)
-  try { return await fn() } finally { if (anterior) vi.mocked(auth).mockImplementation(anterior) }
+  try { return await fn() } finally { if (anterior) vi.mocked(auth).mockImplementation(anterior as never) }
 }
 const pagarPersist = (req: Request) => comoPlataforma(() => pagarPersistRoute(req))
 const receberPersist = (req: Request) => comoPlataforma(() => receberPersistRoute(req))
