@@ -37,6 +37,24 @@ describe("normalizarResumoFechamento", () => {
     expect(html).not.toMatch(/NaN|undefined/)
   })
 
+  it("blocos 003A vazios ({}) caem no recálculo e origem sem key/label não imprime 'undefined'", () => {
+    const r = normalizarResumoFechamento({
+      porOrigem: [{ valorBruto: 10, qtdItens: 1 }],
+      porPagamento: { dinheiro: 10 },
+      recebidoPorOrigem: {},
+      recebidoPorForma: {},
+      gavetaDinheiro: {},
+    })!
+    expect(r.recebidoPorOrigem).toBeUndefined()
+    const blocos = montarBlocosFechamento(r, { operacoes: [] })
+    expect(blocos.legado).toBe(true)
+    expect(Number.isFinite(blocos.totais.recebidoSessao)).toBe(true)
+    expect(Number.isFinite(blocos.totais.dinheiroEsperado)).toBe(true)
+    const html = htmlBlocosFechamento(blocos)
+    expect(html).toContain("Origem não identificada")
+    expect(html).not.toMatch(/NaN|undefined/)
+  })
+
   it("snapshot mínimo (só porOrigem vazio e porPagamento vazio) monta tela e impressão sem NaN", () => {
     const r = normalizarResumoFechamento({ porOrigem: [], porPagamento: {} })!
     const html = htmlBlocosFechamento(montarBlocosFechamento(r, { operacoes: [] }))

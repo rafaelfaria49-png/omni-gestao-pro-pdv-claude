@@ -98,7 +98,10 @@ export function normalizarResumoFechamento(raw: unknown): ResumoFechamentoPersis
   if (!ehObjeto(raw)) return null
   if (!Array.isArray(raw.porOrigem) || !ehObjeto(raw.porPagamento)) return null
   const porOrigem = raw.porOrigem.filter(ehObjeto)
-  const completo003A = ehObjeto(raw.recebidoPorOrigem) && ehObjeto(raw.recebidoPorForma) && ehObjeto(raw.gavetaDinheiro)
+  const temTotal = (v: unknown, campo: string) => ehObjeto(v) && typeof v[campo] === "number" && Number.isFinite(v[campo])
+  // Blocos 003A só valem com os totais numéricos; objeto vazio/malformado → recálculo legado (sem "R$ NaN").
+  const completo003A =
+    temTotal(raw.recebidoPorOrigem, "total") && temTotal(raw.recebidoPorForma, "total") && temTotal(raw.gavetaDinheiro, "esperado")
   const r: Record<string, unknown> = { ...raw, porOrigem }
   if (!completo003A) {
     delete r.recebidoPorOrigem
@@ -237,7 +240,7 @@ export function montarBlocosFechamento(
     if (!(Math.abs(valor) > EPS) && !(qtd > 0)) continue
     linhasVendas.push({
       id: `vendas.${o.key}`,
-      rotulo: (ORIGEM_VENDA_LABEL as Record<string, string>)[o.key] ?? o.label,
+      rotulo: (ORIGEM_VENDA_LABEL as Record<string, string>)[o.key] ?? o.label ?? "Origem não identificada",
       valor,
       tipo: "item",
       qtd,
