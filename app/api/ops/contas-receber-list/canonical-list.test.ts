@@ -30,6 +30,8 @@ const h = vi.hoisted(() => {
     return {
       id: `cr-${++seq}`,
       storeId: data.storeId,
+      perfilId: data.perfilId ?? null,
+      ativo: data.ativo ?? true,
       localKey: data.localKey,
       descricao: data.descricao ?? "",
       cliente: data.cliente ?? "",
@@ -53,6 +55,12 @@ const h = vi.hoisted(() => {
   }
 
   const prisma = {
+    adminUser: { findUnique: async () => ({ active: true, role: "ADMIN" }) },
+    adminUserStore: { findUnique: async ({ where }: { where: { adminUserId_storeId: { storeId: string } } }) =>
+      where.adminUserId_storeId.storeId === STORE ? { storeId: STORE } : null },
+    financeiroPerfil: { findUnique: async ({ where }: { where: { storeId: string } }) => ({
+      id: `perfil-${where.storeId}`, storeId: where.storeId, tipo: "EMPRESA", ativo: true, membros: [{ id: "unit-grant" }],
+    }) },
     // `SELECT … FOR UPDATE` do título (em memória não há concorrência): devolve a linha, se existir.
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join("?")
@@ -161,6 +169,10 @@ vi.mock("@/lib/ops-api-gate", () => ({
 }))
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({
   apiGuardFinanceiroViewOrOps: vi.fn(async () => null),
+}))
+vi.mock("@/lib/auth/guard-enterprise", () => ({
+  requireEnterpriseSession: async () => ({ ok: true, session: { user: { id: "unit-operator", role: "ADMIN",
+    storeAccess: "restricted", allowedStoreIds: [STORE] } } }),
 }))
 
 import { GET } from "./route"

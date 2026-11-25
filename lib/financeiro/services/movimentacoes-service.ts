@@ -8,6 +8,7 @@
  *  - Idempotência via (storeId, referenciaId, tipo, origem) para ops derivadas
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { createHash } from "node:crypto"
 import { prisma } from "@/lib/prisma"
 import { dadosFinanceirosEmpresa, emTransacaoFinanceira, FinanceiroScopeError, precisaoLegada, registroFinanceiroDaEmpresa, resolverPerfilEmpresa } from "@/lib/gastos/financeiro-scope"
@@ -314,7 +315,7 @@ export async function listMovimentacoes(
   }
 
   return prisma.movimentacaoFinanceira.findMany({
-    where,
+    where: leituraEmpresaWhere(sid, where),
     orderBy: { createdAt: "desc" },
     take: typeof filters.take === "number" ? Math.min(filters.take, 1000) : 200,
     skip: typeof filters.skip === "number" ? Math.max(0, filters.skip) : 0,
@@ -399,9 +400,9 @@ export async function getResumoMovimentacoes(
   }
 
   const [entradas, saidas, count] = await prisma.$transaction([
-    prisma.movimentacaoFinanceira.aggregate({ where: { ...baseWhere, tipo: "entrada" }, _sum: { valor: true } }),
-    prisma.movimentacaoFinanceira.aggregate({ where: { ...baseWhere, tipo: "saida" }, _sum: { valor: true } }),
-    prisma.movimentacaoFinanceira.count({ where: baseWhere }),
+    prisma.movimentacaoFinanceira.aggregate({ where: leituraEmpresaWhere(sid, { ...baseWhere, tipo: "entrada" }), _sum: { valor: true } }),
+    prisma.movimentacaoFinanceira.aggregate({ where: leituraEmpresaWhere(sid, { ...baseWhere, tipo: "saida" }), _sum: { valor: true } }),
+    prisma.movimentacaoFinanceira.count({ where: leituraEmpresaWhere(sid, baseWhere) }),
   ])
 
   const totalEntradas = Math.round((entradas._sum.valor ?? 0) * 100) / 100

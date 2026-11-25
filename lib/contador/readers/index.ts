@@ -1,4 +1,5 @@
 /** Agregador read-only do Contador HUB, sempre escopado por `ContadorScopeInterno`. */
+import { leituraEmpresaWhere, requireLeituraContadorEmpresa } from "@/lib/gastos/read-scope"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import {
   resolvePeriodoUtc,
@@ -292,15 +293,15 @@ export async function carregarFontesComCliente(
       select: { valorTotal: true },
     }),
     cliente.movimentacaoFinanceira.findMany({
-      where: { storeId: scope.storeId, createdAt: noPeriodo },
+      where: leituraEmpresaWhere(scope.storeId, { storeId: scope.storeId, createdAt: noPeriodo }),
       select: { tipo: true, origem: true, valor: true },
     }),
     cliente.contaReceberTitulo.findMany({
-      where: { storeId: scope.storeId },
+      where: leituraEmpresaWhere(scope.storeId, { storeId: scope.storeId }),
       select: { valor: true, status: true, vencimento: true },
     }),
     cliente.contaPagarTitulo.findMany({
-      where: { storeId: scope.storeId },
+      where: leituraEmpresaWhere(scope.storeId, { storeId: scope.storeId }),
       select: { valor: true, status: true, vencimento: true },
     }),
     cliente.sessaoCaixa.findMany({
@@ -343,6 +344,7 @@ export async function carregarFontes(
   scope: ContadorScopeInterno,
   competencia: Competencia,
 ): Promise<FontesContador> {
+  await requireLeituraContadorEmpresa(scope)
   await prismaEnsureConnected()
   return carregarFontesComCliente(
     scope,

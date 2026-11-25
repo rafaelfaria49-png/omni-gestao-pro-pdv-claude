@@ -1,8 +1,10 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
 import { buildContaReceberAuditTrail, buildContaReceberSummary } from "@/lib/financeiro/services"
 import { mapearNomesAmbiguos, resumirClientesComAberto, type ClienteComAberto } from "@/lib/contas-receber-cliente-match"
@@ -78,14 +80,17 @@ export async function GET(req: Request) {
   if (moduleDenied) return moduleDenied
 
   const lojaId = opsLojaIdFromRequest(req)
-  if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
+  if (!lojaId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  // Reconciliação #341/#397 × G003: este leitor serve o F9 do PDV (operador de caixa sem
+  // permissão financeira) — mantém o guard operacional da main; G003 contribui o filtro de
+  // escopo EMPRESA e a resposta privada (no-store). Sem PESSOAL.
   const denied = await apiGuardFinanceiroViewOrOps(lojaId, { pdvShared: true })
-  if (denied) return denied
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   try {
     await prismaEnsureConnected()
     const titulos = await prisma.contaReceberTitulo.findMany({
-      where: { storeId: lojaId },
+      where: leituraEmpresaWhere(lojaId, { storeId: lojaId }),
       orderBy: { updatedAt: "desc" },
     })
 
@@ -130,7 +135,7 @@ export async function GET(req: Request) {
 
     const generatedAt = new Date().toISOString()
 
-    return NextResponse.json({
+    return respostaFinanceiraPrivada(NextResponse.json({
       ok: true,
       rows: out,
       summary,
@@ -142,14 +147,8 @@ export async function GET(req: Request) {
         storeId: lojaId,
         generatedAt,
       },
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[ops/contas-receber-list]", msg)
-    const dev = process.env.NODE_ENV === "development"
-    return NextResponse.json(
-      { error: "Falha ao listar títulos", rows: [], ...(dev ? { detail: msg } : {}) },
-      { status: 503 }
-    )
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }

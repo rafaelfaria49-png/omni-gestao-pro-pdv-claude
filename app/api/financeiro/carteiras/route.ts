@@ -1,4 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
@@ -7,7 +8,7 @@ import {
   criarCarteira,
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
-import { apiGuardEnterpriseOrOps, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { opsLojaIdFromRequest, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { auth } from "@/auth"
 import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
@@ -23,9 +24,9 @@ export async function GET(req: NextRequest) {
   if (moduleDenied) return moduleDenied
 
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
-  const denied = await apiGuardFinanceiroViewOrOps(storeId)
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(err("Loja não identificada.", "STORE_REQUIRED", 400))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   const apenasAtivas = req.nextUrl.searchParams.get("ativas") === "1"
 
   try {
@@ -34,10 +35,9 @@ export async function GET(req: NextRequest) {
       .filter((c) => c.ativo)
       .reduce((acc, c) => acc + c.saldoAtual, 0)
 
-    return NextResponse.json({ ok: true, carteiras, saldoTotal })
-  } catch (e) {
-    console.error("[GET /api/financeiro/carteiras]", e)
-    return err("Erro ao listar carteiras.", "INTERNAL_ERROR", 500)
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, carteiras, saldoTotal }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }
 

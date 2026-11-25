@@ -1,7 +1,7 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextRequest, NextResponse } from "next/server"
 import { getDREMensal } from "@/lib/financeiro/services/dre-service"
-import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 
 function err(msg: string, code: string, status = 400) {
@@ -15,9 +15,9 @@ export async function GET(req: NextRequest) {
   if (moduleDenied) return moduleDenied
 
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
-  const denied = await apiGuardFinanceiroViewOrOps(storeId)
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(err("Loja não identificada.", "STORE_REQUIRED", 400))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   const params = req.nextUrl.searchParams
 
   const mesRaw = params.get("mes")
@@ -27,17 +27,16 @@ export async function GET(req: NextRequest) {
   const ano = anoRaw ? parseInt(anoRaw, 10) : undefined
 
   if (mes !== undefined && (isNaN(mes) || mes < 1 || mes > 12)) {
-    return err("Parâmetro 'mes' inválido (1-12).", "INVALID_MES")
+    return respostaFinanceiraPrivada(err("Parâmetro 'mes' inválido (1-12).", "INVALID_MES"))
   }
   if (ano !== undefined && (isNaN(ano) || ano < 2000 || ano > 2100)) {
-    return err("Parâmetro 'ano' inválido.", "INVALID_ANO")
+    return respostaFinanceiraPrivada(err("Parâmetro 'ano' inválido.", "INVALID_ANO"))
   }
 
   try {
     const dre = await getDREMensal(storeId, mes, ano)
-    return NextResponse.json({ ok: true, dre })
-  } catch (e) {
-    console.error("[GET /api/financeiro/dre]", e)
-    return err("Erro ao calcular DRE.", "INTERNAL_ERROR", 500)
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, dre }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }

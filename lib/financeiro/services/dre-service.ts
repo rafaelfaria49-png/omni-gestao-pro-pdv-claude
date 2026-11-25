@@ -17,6 +17,7 @@
  *  - Lookup O(1) via Map para categorias
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import {
   isOrigemDevolucaoPdv,
@@ -193,10 +194,10 @@ async function getDREPeriodo(
   // Busca movimentações + títulos pagos no período — em paralelo, sem N+1
   const [movs, crPagos, cpPagos] = await Promise.all([
     prisma.movimentacaoFinanceira.findMany({
-      where: {
+      where: leituraEmpresaWhere(storeId, {
         storeId,
         createdAt: { gte: inicio, lte: fim },
-      },
+      }),
       select: {
         id: true,
         tipo: true,
@@ -209,21 +210,21 @@ async function getDREPeriodo(
 
     // Títulos a receber pagos/parciais no período para ticket médio
     prisma.contaReceberTitulo.findMany({
-      where: {
+      where: leituraEmpresaWhere(storeId, {
         storeId,
         status: { in: ["pago", "parcial"] },
         updatedAt: { gte: inicio, lte: fim },
-      },
+      }),
       select: { id: true, valor: true },
     }),
 
     // Títulos a pagar pagos no período para classificação de categoria
     prisma.contaPagarTitulo.findMany({
-      where: {
+      where: leituraEmpresaWhere(storeId, {
         storeId,
         status: "pago",
         updatedAt: { gte: inicio, lte: fim },
-      },
+      }),
       select: { id: true, payload: true },
     }),
   ])

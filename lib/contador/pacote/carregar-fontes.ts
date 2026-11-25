@@ -15,6 +15,7 @@
  * Prisma. O limite por fonte é aplicado às linhas CRUAS (antes de qualquer filtragem): `paginarFonte`
  * lança `PacoteLimiteExcedidoError` ao detectar a linha MAX+1 — uma linha filtrável não burla o teto.
  */
+import { leituraEmpresaWhere, requireLeituraContadorEmpresa } from "@/lib/gastos/read-scope"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { resolvePeriodoUtc, type Competencia, type PeriodoUtc } from "@/lib/contador/competencia"
 import type { ContadorScopeInterno } from "@/lib/contador/scope-core"
@@ -441,7 +442,7 @@ export async function carregarFontesPacoteComCliente(
       buscarPagina: (cursor, tamanho) =>
         contarQuery(() =>
           cliente.movimentacaoFinanceira.findMany({
-            where: { storeId, createdAt: noPeriodo },
+            where: leituraEmpresaWhere(storeId, { storeId, createdAt: noPeriodo }),
             select: { id: true, tipo: true, origem: true, valor: true, createdAt: true },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             take: tamanho,
@@ -456,7 +457,7 @@ export async function carregarFontesPacoteComCliente(
       buscarPagina: (cursor, tamanho) =>
         contarQuery(() =>
           cliente.contaReceberTitulo.findMany({
-            where: { storeId },
+            where: leituraEmpresaWhere(storeId, { storeId }),
             select: { id: true, valor: true, status: true, vencimento: true },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             take: tamanho,
@@ -471,7 +472,7 @@ export async function carregarFontesPacoteComCliente(
       buscarPagina: (cursor, tamanho) =>
         contarQuery(() =>
           cliente.contaPagarTitulo.findMany({
-            where: { storeId },
+            where: leituraEmpresaWhere(storeId, { storeId }),
             select: { id: true, valor: true, status: true, vencimento: true },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             take: tamanho,
@@ -864,6 +865,7 @@ export async function carregarFontesPacote(input: {
   scope: ContadorScopeInterno
   competencia: Competencia
 }): Promise<FontesDetalhadasPacote> {
+  await requireLeituraContadorEmpresa(input.scope)
   await prismaEnsureConnected()
   return carregarFontesPacoteComCliente(
     input.scope,

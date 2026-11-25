@@ -8,6 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
 import type { Prisma } from "@/generated/prisma"
 import { registrarAuditoriaFinanceira } from "./auditoria-financeira-service"
@@ -104,7 +105,8 @@ export async function listarConciliacoes(
   storeId: string,
   status?: StatusConciliacao,
 ): Promise<ConciliacaoPublica[]> {
-  const where: Prisma.ConciliacaoFinanceiraWhereInput = { storeId }
+  const where: Prisma.ConciliacaoFinanceiraWhereInput = { storeId,
+    carteira: { is: leituraEmpresaWhere(storeId, {}) } }
   if (status) where.status = status
 
   const rows = await prisma.conciliacaoFinanceira.findMany({
@@ -202,14 +204,15 @@ export async function marcarDivergente(
 // ─── getResumoConciliacao ─────────────────────────────────────────────────────
 
 export async function getResumoConciliacao(storeId: string): Promise<ResumoConciliacao> {
+  const scope = { storeId, carteira: { is: leituraEmpresaWhere(storeId, {}) } }
   const [total, conciliadas, divergentes] = await Promise.all([
-    prisma.conciliacaoFinanceira.count({ where: { storeId } }),
-    prisma.conciliacaoFinanceira.count({ where: { storeId, status: "conciliado" } }),
-    prisma.conciliacaoFinanceira.count({ where: { storeId, status: "divergente" } }),
+    prisma.conciliacaoFinanceira.count({ where: scope }),
+    prisma.conciliacaoFinanceira.count({ where: { ...scope, status: "conciliado" } }),
+    prisma.conciliacaoFinanceira.count({ where: { ...scope, status: "divergente" } }),
   ])
 
   const divAgg = await prisma.conciliacaoFinanceira.aggregate({
-    where: { storeId, status: "divergente" },
+    where: { ...scope, status: "divergente" },
     _sum: { diferenca: true },
   })
 

@@ -5,6 +5,7 @@
  * Prioriza aggregates/groupBy do Prisma para evitar N+1.
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
 import type { Prisma } from "@/generated/prisma"
@@ -195,14 +196,14 @@ export async function getIndicadoresExecutivos(
 
   const [movRows, receberAgg, pagarAgg, carteiras, maiorDespesaRow] = await Promise.all([
     prisma.movimentacaoFinanceira.findMany({
-      where,
+      where: leituraEmpresaWhere(storeId, where),
       select: { tipo: true, origem: true, valor: true, descricao: true },
     }),
-    prisma.contaReceberTitulo.aggregate({ where: { storeId, status: { in: ["pendente", "parcial", "atrasado"] } }, _sum: { valor: true } }),
-    prisma.contaPagarTitulo.aggregate({ where: { storeId, status: { in: ["pendente", "atrasado"] } }, _sum: { valor: true } }),
-    prisma.carteiraFinanceira.findMany({ where: { storeId, ativo: true }, select: { id: true, nome: true, saldoAtual: true }, orderBy: { saldoAtual: "desc" }, take: 1 }),
+    prisma.contaReceberTitulo.aggregate({ where: leituraEmpresaWhere(storeId, { storeId, status: { in: ["pendente", "parcial", "atrasado"] } }), _sum: { valor: true } }),
+    prisma.contaPagarTitulo.aggregate({ where: leituraEmpresaWhere(storeId, { storeId, status: { in: ["pendente", "atrasado"] } }), _sum: { valor: true } }),
+    prisma.carteiraFinanceira.findMany({ where: leituraEmpresaWhere(storeId, { storeId, ativo: true }), select: { id: true, nome: true, saldoAtual: true }, orderBy: { saldoAtual: "desc" }, take: 1 }),
     prisma.movimentacaoFinanceira.findFirst({
-      where: {
+      where: leituraEmpresaWhere(storeId, {
         ...where,
         tipo: "saida",
         NOT: {
@@ -213,7 +214,7 @@ export async function getIndicadoresExecutivos(
             { origem: "transferência" },
           ],
         },
-      },
+      }),
       orderBy: { valor: "desc" },
       select: { descricao: true, valor: true },
     }),
@@ -225,7 +226,7 @@ export async function getIndicadoresExecutivos(
   const ticketMedio = qtdEntradasBrutas > 0 ? safeMoney(receitaTotal / qtdEntradasBrutas) : 0
 
   // Saldo consolidado = soma de todas as carteiras ativas
-  const saldoAgg = await prisma.carteiraFinanceira.aggregate({ where: { storeId, ativo: true }, _sum: { saldoAtual: true } })
+  const saldoAgg = await prisma.carteiraFinanceira.aggregate({ where: leituraEmpresaWhere(storeId, { storeId, ativo: true }), _sum: { saldoAtual: true } })
   const saldoConsolidado = safeMoney(saldoAgg._sum.saldoAtual ?? 0)
 
   // Crescimento mensal — comparar mês atual vs anterior (líquido)
@@ -238,11 +239,11 @@ export async function getIndicadoresExecutivos(
 
   const [curRows, prevRows] = await Promise.all([
     prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, mesAtual),
+      where: leituraEmpresaWhere(storeId, buildMovWhere(storeId, mesAtual)),
       select: { tipo: true, origem: true, valor: true },
     }),
     prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, { dataInicio: prevFirst, dataFim: prevLast }),
+      where: leituraEmpresaWhere(storeId, buildMovWhere(storeId, { dataInicio: prevFirst, dataFim: prevLast })),
       select: { tipo: true, origem: true, valor: true },
     }),
   ])
@@ -254,11 +255,11 @@ export async function getIndicadoresExecutivos(
   const anoAtual = now.getFullYear()
   const [curYearRows, prevYearRows] = await Promise.all([
     prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, { dataInicio: `${anoAtual}-01-01`, dataFim: `${anoAtual}-12-31` }),
+      where: leituraEmpresaWhere(storeId, buildMovWhere(storeId, { dataInicio: `${anoAtual}-01-01`, dataFim: `${anoAtual}-12-31` })),
       select: { tipo: true, origem: true, valor: true },
     }),
     prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, { dataInicio: `${anoAtual - 1}-01-01`, dataFim: `${anoAtual - 1}-12-31` }),
+      where: leituraEmpresaWhere(storeId, buildMovWhere(storeId, { dataInicio: `${anoAtual - 1}-01-01`, dataFim: `${anoAtual - 1}-12-31` })),
       select: { tipo: true, origem: true, valor: true },
     }),
   ])
@@ -269,7 +270,7 @@ export async function getIndicadoresExecutivos(
   // Inadimplência = vencidos / (pago + aberto + vencido)
   const receberStats = await prisma.contaReceberTitulo.groupBy({
     by: ["status"],
-    where: { storeId },
+    where: leituraEmpresaWhere(storeId, { storeId }),
     _sum: { valor: true },
   })
   let totalPagoR = 0, totalAbertoR = 0, totalVencidoR = 0
@@ -324,7 +325,7 @@ export async function getFluxoPorPeriodo(
   const range = toDateRange(filtro)
 
   const movs = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) },
+    where: leituraEmpresaWhere(storeId, { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) }),
     select: { tipo: true, valor: true, origem: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   })
@@ -391,7 +392,7 @@ export async function getResultadoPorCategoria(
   const baseWhere = { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) }
 
   const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: baseWhere,
+    where: leituraEmpresaWhere(storeId, baseWhere),
     select: { tipo: true, origem: true, valor: true },
   })
 
@@ -471,19 +472,19 @@ const whereSemTransferencia: Prisma.MovimentacaoFinanceiraWhereInput = {
 export async function getTopReceitas(storeId: string, filtro: PeriodoFiltro = {}, take = 10): Promise<RankingItem[]> {
   const range = toDateRange(filtro)
   const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: {
+    where: leituraEmpresaWhere(storeId, {
       storeId,
       tipo: "entrada",
       createdAt: range,
       ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}),
       AND: [whereSemTransferencia, { NOT: { origem: { startsWith: "estorno_pagar" } } }],
-    },
+    }),
     select: { descricao: true, valor: true },
     orderBy: { valor: "desc" },
     take,
   })
   const movRows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) },
+    where: leituraEmpresaWhere(storeId, { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) }),
     select: { tipo: true, origem: true, valor: true },
   })
   const total = Math.max(reduceNetResultadoMovs(movRows).receita, 1e-6)
@@ -498,7 +499,7 @@ export async function getTopReceitas(storeId: string, filtro: PeriodoFiltro = {}
 export async function getTopDespesas(storeId: string, filtro: PeriodoFiltro = {}, take = 10): Promise<RankingItem[]> {
   const range = toDateRange(filtro)
   const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: {
+    where: leituraEmpresaWhere(storeId, {
       storeId,
       tipo: "saida",
       createdAt: range,
@@ -515,13 +516,13 @@ export async function getTopDespesas(storeId: string, filtro: PeriodoFiltro = {}
           },
         },
       ],
-    },
+    }),
     select: { descricao: true, valor: true },
     orderBy: { valor: "desc" },
     take,
   })
   const movRows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) },
+    where: leituraEmpresaWhere(storeId, { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) }),
     select: { tipo: true, origem: true, valor: true },
   })
   const total = Math.max(reduceNetResultadoMovs(movRows).despesa, 1e-6)
@@ -538,7 +539,7 @@ export async function getTopDespesas(storeId: string, filtro: PeriodoFiltro = {}
 export async function getAnaliseCarteiras(storeId: string, filtro: PeriodoFiltro = {}): Promise<AnaliseCarteira[]> {
   const range = toDateRange(filtro)
   const carteiras = await prisma.carteiraFinanceira.findMany({
-    where: { storeId, ativo: true },
+    where: leituraEmpresaWhere(storeId, { storeId, ativo: true }),
     select: { id: true, nome: true, tipo: true, saldoAtual: true, saldoInicial: true },
   })
 
@@ -546,9 +547,9 @@ export async function getAnaliseCarteiras(storeId: string, filtro: PeriodoFiltro
 
   const results = await Promise.all(carteiras.map(async (c) => {
     const [entAgg, saiAgg, cnt] = await Promise.all([
-      prisma.movimentacaoFinanceira.aggregate({ where: { storeId, carteiraId: c.id, tipo: "entrada", createdAt: range }, _sum: { valor: true } }),
-      prisma.movimentacaoFinanceira.aggregate({ where: { storeId, carteiraId: c.id, tipo: "saida", createdAt: range }, _sum: { valor: true } }),
-      prisma.movimentacaoFinanceira.count({ where: { storeId, carteiraId: c.id, createdAt: range } }),
+      prisma.movimentacaoFinanceira.aggregate({ where: leituraEmpresaWhere(storeId, { storeId, carteiraId: c.id, tipo: "entrada", createdAt: range }), _sum: { valor: true } }),
+      prisma.movimentacaoFinanceira.aggregate({ where: leituraEmpresaWhere(storeId, { storeId, carteiraId: c.id, tipo: "saida", createdAt: range }), _sum: { valor: true } }),
+      prisma.movimentacaoFinanceira.count({ where: leituraEmpresaWhere(storeId, { storeId, carteiraId: c.id, createdAt: range }) }),
     ])
     return {
       id: c.id,
@@ -573,7 +574,7 @@ export async function getComparativoMensal(storeId: string, meses = 12): Promise
   const first = new Date(now.getFullYear(), now.getMonth() - (meses - 1), 1, 0, 0, 0, 0)
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
   const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: { gte: first, lte: last } },
+    where: leituraEmpresaWhere(storeId, { storeId, createdAt: { gte: first, lte: last } }),
     select: { tipo: true, origem: true, valor: true, createdAt: true },
   })
   const byMes = new Map<string, MovLin[]>()
@@ -613,13 +614,13 @@ export async function getComparativoAnual(storeId: string, anos = 3): Promise<Co
   const anoAtual = new Date().getFullYear()
   const firstYear = anoAtual - (anos - 1)
   const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: {
+    where: leituraEmpresaWhere(storeId, {
       storeId,
       createdAt: {
         gte: new Date(`${firstYear}-01-01T00:00:00.000Z`),
         lte: new Date(`${anoAtual}-12-31T23:59:59.999Z`),
       },
-    },
+    }),
     select: { tipo: true, origem: true, valor: true, createdAt: true },
   })
   const byAno = new Map<number, MovLin[]>()

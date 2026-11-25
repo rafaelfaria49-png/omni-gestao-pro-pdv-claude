@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { createOS } from "@/app/actions/operacoes"
 import { listClientes, listProdutos } from "@/app/actions/cadastros"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { requireLeituraFinanceiraEmpresa } from "@/lib/gastos/read-scope"
 import {
   createMovimentacaoEntradaFromOmniAgent,
   createMovimentacaoSaidaFromOmniAgent,
@@ -171,6 +172,7 @@ export async function executeOmniAgentIntent(
     }
 
     if (intent === "FINANCE_SUMMARY") {
+      await requireLeituraFinanceiraEmpresa(storeId)
       const preset = (fields.preset ?? "hoje").trim() || "hoje"
       const filtro = buildFiltroPreset(preset)
       const resumo = await getResumoExecutivo(storeId, filtro)
@@ -413,8 +415,7 @@ export async function executeOmniAgentIntent(
     }
 
     return { ok: false, actionLabel: interp.action, error: "Intenção não suportada nesta fase." }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return { ok: false, actionLabel: interp.action, error: msg }
+  } catch {
+    return { ok: false, actionLabel: interp.action, error: "Não foi possível executar este comando." }
   }
 }

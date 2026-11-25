@@ -1,3 +1,4 @@
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { dadosFinanceirosEmpresa, emTransacaoFinanceira, limparOwnershipSnapshot, manterReferenciaSnapshot, referenciaSnapshotEmpresa, type FinanceiroDb, type SnapshotVinculoAviso } from "@/lib/gastos/financeiro-scope"
 import type { Prisma, ContaPagarTitulo } from "@/generated/prisma"
@@ -104,7 +105,7 @@ export async function listContasPagarByStore(storeId: string): Promise<ContaPaga
   const sid = safeStr(storeId).trim()
   if (!sid) return []
   return prisma.contaPagarTitulo.findMany({
-    where: { storeId: sid },
+    where: leituraEmpresaWhere(sid, { storeId: sid }),
     orderBy: { updatedAt: "desc" },
   })
 }
@@ -113,7 +114,7 @@ export async function getContaPagarById(storeId: string, id: string, db: Finance
   const sid = safeStr(storeId).trim()
   const tid = safeStr(id).trim()
   if (!sid || !tid) return null
-  return db.contaPagarTitulo.findFirst({ where: { id: tid, storeId: sid } })
+  return db.contaPagarTitulo.findFirst({ where: leituraEmpresaWhere(sid, { id: tid, storeId: sid }) })
 }
 
 export async function getContaPagarByLocalKey(storeId: string, localKey: string, db: FinanceiroDb = prisma): Promise<ContaPagarTitulo | null> {
@@ -121,7 +122,7 @@ export async function getContaPagarByLocalKey(storeId: string, localKey: string,
   const lk = safeStr(localKey).trim()
   if (!sid || !lk) return null
   return db.contaPagarTitulo.findUnique({
-    where: { storeId_localKey: { storeId: sid, localKey: lk } },
+    where: { ...leituraEmpresaWhere(sid, {}), storeId_localKey: { storeId: sid, localKey: lk } },
   })
 }
 

@@ -3,33 +3,36 @@
  * O painel continua usando localStorage por padrão; use estas funções em APIs ou jobs de sync.
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 
-const tituloComVendasInclude = {
+const tituloComVendasInclude = (storeId: string) => ({
   vendas: {
+    where: { storeId },
     include: { itens: true },
     orderBy: { at: "desc" as const },
   },
-} satisfies Prisma.ContaReceberTituloInclude
+} satisfies Prisma.ContaReceberTituloInclude)
 
 export type ContaReceberTituloComVendas = Prisma.ContaReceberTituloGetPayload<{
-  include: typeof tituloComVendasInclude
+  include: ReturnType<typeof tituloComVendasInclude>
 }>
 
-export async function listarContasReceberComVendas(storeId?: string): Promise<ContaReceberTituloComVendas[]> {
+export async function listarContasReceberComVendas(storeId: string): Promise<ContaReceberTituloComVendas[]> {
   return prisma.contaReceberTitulo.findMany({
-    where: storeId ? { storeId } : undefined,
-    include: tituloComVendasInclude,
+    where: leituraEmpresaWhere(storeId, { storeId }),
+    include: tituloComVendasInclude(storeId),
     orderBy: { updatedAt: "desc" },
   })
 }
 
 export async function buscarContaReceberPorIdComVendas(
-  id: string
+  id: string,
+  storeId: string,
 ): Promise<ContaReceberTituloComVendas | null> {
   return prisma.contaReceberTitulo.findUnique({
-    where: { id },
-    include: tituloComVendasInclude,
+    where: leituraEmpresaWhere(storeId, { id }),
+    include: tituloComVendasInclude(storeId),
   })
 }

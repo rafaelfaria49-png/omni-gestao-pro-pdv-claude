@@ -4,9 +4,9 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  *
  * Retorna indicadores executivos + comparativos mensais e anuais.
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import {
   getIndicadoresExecutivos,
@@ -21,14 +21,13 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  // Reconciliação main × G003: módulo finance por loja (main) + guard de leitura privada (G003).
   const moduleDenied = await requireModuleApi(req, "finance")
-  if (moduleDenied) return moduleDenied
-
-  await prismaEnsureConnected()
+  if (moduleDenied) return respostaFinanceiraPrivada(moduleDenied)
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  const denied = await apiGuardFinanceiroViewOrOps(storeId)
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   const url = new URL(req.url)
 
   const preset = url.searchParams.get("preset")
@@ -39,14 +38,14 @@ export async function GET(req: Request) {
   const meses = parseInt(url.searchParams.get("meses") ?? "12", 10)
 
   try {
+    await prismaEnsureConnected()
     const [indicadores, comparativoMensal, comparativoAnual] = await Promise.all([
       getIndicadoresExecutivos(storeId, filtro),
       getComparativoMensal(storeId, Math.min(meses, 24)),
       getComparativoAnual(storeId, 3),
     ])
-    return NextResponse.json({ ok: true, indicadores, comparativoMensal, comparativoAnual })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg }, { status: 503 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, indicadores, comparativoMensal, comparativoAnual }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }

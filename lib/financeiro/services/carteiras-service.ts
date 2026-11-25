@@ -8,6 +8,7 @@
  *  - Tipos aceitos: caixa | banco | pix | dinheiro | credito | debito | investimento
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { dadosFinanceirosEmpresa, emTransacaoFinanceira, FinanceiroScopeError, FINANCEIRO_CONTA_LOCK_PREFIX, precisaoLegada } from "@/lib/gastos/financeiro-scope"
 import type { CarteiraFinanceira, Prisma } from "@/generated/prisma"
@@ -122,7 +123,7 @@ export async function listarCarteiras(
   if (apenasAtivas) where.ativo = true
 
   const rows = await prisma.carteiraFinanceira.findMany({
-    where,
+    where: leituraEmpresaWhere(storeId, where),
     orderBy: [{ ativo: "desc" }, { nome: "asc" }],
   })
 

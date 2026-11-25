@@ -7,6 +7,7 @@
  *  - ContaPagarTitulo       → pagar aberto, vencido, próximos
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { parseDateStringSafe, isOverdueDateString, safeMoney } from "@/lib/financeiro/contracts/valores"
 import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify"
@@ -121,20 +122,20 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
     todasCarteiras,
   ] = await Promise.all([
     prisma.movimentacaoFinanceira.findMany({
-      where: { storeId: sid },
+      where: leituraEmpresaWhere(storeId, { storeId: sid }),
       select: { id: true, tipo: true, valor: true, descricao: true, origem: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.contaReceberTitulo.findMany({
-      where: { storeId: sid },
+      where: leituraEmpresaWhere(storeId, { storeId: sid }),
       select: { id: true, cliente: true, descricao: true, valor: true, vencimento: true, status: true },
     }),
     prisma.contaPagarTitulo.findMany({
-      where: { storeId: sid },
+      where: leituraEmpresaWhere(storeId, { storeId: sid }),
       select: { id: true, descricao: true, valor: true, vencimento: true, status: true, payload: true },
     }),
     prisma.carteiraFinanceira.findMany({
-      where: { storeId: sid, ativo: true },
+      where: leituraEmpresaWhere(storeId, { storeId: sid, ativo: true }),
       select: { id: true, nome: true, tipo: true, saldoAtual: true },
     }),
   ])

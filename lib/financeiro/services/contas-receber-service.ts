@@ -1,3 +1,4 @@
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { dadosFinanceirosEmpresa, emTransacaoFinanceira, limparOwnershipSnapshot, manterReferenciaSnapshot, referenciaSnapshotEmpresa, registroFinanceiroDaEmpresa, type SnapshotVinculoAviso } from "@/lib/gastos/financeiro-scope"
 import type { Prisma } from "@/generated/prisma"
@@ -170,7 +171,7 @@ export async function listContasReceberByStore(storeId: string): Promise<ContaRe
   const sid = safeStr(storeId).trim()
   if (!sid) return []
   return prisma.contaReceberTitulo.findMany({
-    where: { storeId: sid },
+    where: leituraEmpresaWhere(sid, { storeId: sid }),
     orderBy: { updatedAt: "desc" },
   })
 }
@@ -184,7 +185,7 @@ export async function getContaReceberById(
   const tid = safeStr(id).trim()
   if (!sid || !tid) return null
   const row = await dbOf(db).contaReceberTitulo.findFirst({
-    where: { id: tid, storeId: sid },
+    where: leituraEmpresaWhere(sid, { id: tid, storeId: sid }),
   })
   return row ? registroFinanceiroDaEmpresa(row, sid) : null
 }
@@ -198,7 +199,7 @@ export async function getContaReceberByLocalKey(
   const lk = safeStr(localKey).trim()
   if (!sid || !lk) return null
   const row = await dbOf(db).contaReceberTitulo.findUnique({
-    where: { storeId_localKey: { storeId: sid, localKey: lk } },
+    where: { ...leituraEmpresaWhere(sid, {}), storeId_localKey: { storeId: sid, localKey: lk } },
   })
   return row ? registroFinanceiroDaEmpresa(row, sid) : null
 }

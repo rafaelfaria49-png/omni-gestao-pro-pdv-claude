@@ -1,8 +1,9 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import { parseDateStringSafe, safeMoney } from "@/lib/financeiro/contracts/valores"
 import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify"
 
@@ -41,9 +42,9 @@ export async function GET(req: Request) {
   if (moduleDenied) return moduleDenied
 
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   try {
     await prismaEnsureConnected()
@@ -53,25 +54,25 @@ export async function GET(req: Request) {
 
     const [receber, pagar, stores, movsFluxo, movsRecent] = await Promise.all([
       prisma.contaReceberTitulo.findMany({
-        where: { storeId },
+        where: leituraEmpresaWhere(storeId, { storeId }),
         select: { id: true, cliente: true, descricao: true, valor: true, vencimento: true, localKey: true, storeId: true, status: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 500,
       }),
       prisma.contaPagarTitulo.findMany({
-        where: { storeId },
+        where: leituraEmpresaWhere(storeId, { storeId }),
         select: { id: true, descricao: true, valor: true, vencimento: true, payload: true, storeId: true, status: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 500,
       }),
       prisma.store.findMany({ where: { id: storeId }, select: { id: true, name: true } }),
       prisma.movimentacaoFinanceira.findMany({
-        where: { storeId, createdAt: { gte: fluxoDesde } },
+        where: leituraEmpresaWhere(storeId, { storeId, createdAt: { gte: fluxoDesde } }),
         select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
         orderBy: { createdAt: "asc" },
       }),
       prisma.movimentacaoFinanceira.findMany({
-        where: { storeId },
+        where: leituraEmpresaWhere(storeId, { storeId }),
         select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: 40,
@@ -191,10 +192,10 @@ export async function GET(req: Request) {
     const lojaGroups = await withPrismaSafe<GroupResult>(
       async (db) => {
         const [a, b, c, d] = await Promise.all([
-          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { storeId, status: "pago" }, _sum: { valor: true } }),
-          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { storeId, status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
-          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { storeId, status: "pago" }, _sum: { valor: true } }),
-          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { storeId, status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
+          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: leituraEmpresaWhere(storeId, { status: "pago" }), _sum: { valor: true } }),
+          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: leituraEmpresaWhere(storeId, { status: { notIn: ["pago", "cancelado"] } }), _sum: { valor: true } }),
+          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: leituraEmpresaWhere(storeId, { status: "pago" }), _sum: { valor: true } }),
+          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: leituraEmpresaWhere(storeId, { status: { notIn: ["pago", "cancelado"] } }), _sum: { valor: true } }),
         ])
         return [a as GroupByRow[], b as GroupByRow[], c as GroupByRow[], d as GroupByRow[]]
       },
@@ -233,9 +234,8 @@ export async function GET(req: Request) {
       })
       .sort((a, b) => b.receita - a.receita)
 
-    return NextResponse.json({ ok: true, fluxoMensal, movimentacoes, receitasOrigem, despesasCategoria, resultadoLoja })
-  } catch (e) {
-    console.error("[financeiro/analytics] operation_failed")
-    return NextResponse.json({ ok: false, error: "Falha ao consultar o financeiro." }, { status: 503 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, fluxoMensal, movimentacoes, receitasOrigem, despesasCategoria, resultadoLoja }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }

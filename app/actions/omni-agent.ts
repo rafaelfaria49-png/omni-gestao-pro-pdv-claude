@@ -2,6 +2,7 @@
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
+import { leituraComandosOmniEmpresaWhere, requireLeituraFinanceiraEmpresa, requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
 import type { OmniAgentInterpretacao } from "@/lib/omni-agent/types"
 import { INTENT_MODULE } from "@/lib/omni-agent/types"
 import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret"
@@ -9,7 +10,6 @@ import { executeOmniAgentIntent } from "@/lib/omni-agent/executor"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { resolveStoreWhatsAppCredentials } from "@/lib/whatsapp/store-credentials"
-import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import { normalizeOmniAgentCanal } from "@/lib/omni-agent/canal"
 import { isOmniAgentAutomationTriggerKey, type OmniAgentAutomationTriggerKey } from "@/lib/omni-agent/omni-automation-triggers"
@@ -44,12 +44,13 @@ function assertStoreId(storeId: string): string {
 async function logExec(storeId: string, commandId: string, ok: boolean, detail: string) {
   const sid = storeId.trim()
   if (!sid) return
+  void detail
   try {
     await prisma.logsAuditoria.create({
       data: {
         action: ok ? "OMNI_AGENT_EXEC_OK" : "OMNI_AGENT_EXEC_ERRO",
         userLabel: "Omni Agent HUB",
-        detail: detail.slice(0, 4000),
+        detail: ok ? "Comando concluído." : "Comando recusado ou indisponível.",
         metadata: omniAgentAuditMetadata(sid, { commandId }),
         source: "omni_agent",
       },
@@ -234,7 +235,7 @@ export async function listOmniAgentCommands(storeId: string, take = 80): Promise
   if (!g.ok) throw new Error(g.error)
 
   const rows = await prisma.omniAgentCommand.findMany({
-    where: { storeId: sid },
+    where: await leituraComandosOmniEmpresaWhere(sid),
     orderBy: { createdAt: "desc" },
     take: Math.min(take, 200),
   })
@@ -263,7 +264,7 @@ export async function getOmniAgentHubStats(storeId: string): Promise<OmniAgentHu
   const start = new Date()
   start.setHours(0, 0, 0, 0)
 
-  const base = { storeId: sid }
+  const base = await leituraComandosOmniEmpresaWhere(sid)
   const [todayCount, pending, awaitingConfirmation, executed, error, total] = await Promise.all([
     prisma.omniAgentCommand.count({ where: { ...base, createdAt: { gte: start } } }),
     prisma.omniAgentCommand.count({ where: { ...base, status: "PENDENTE" } }),
@@ -506,7 +507,7 @@ export async function getOmniAgentReportsSnapshot(storeId: string): Promise<Omni
   const [stats, rows] = await Promise.all([
     getOmniAgentHubStats(sid),
     prisma.omniAgentCommand.findMany({
-      where: { storeId: sid },
+      where: await leituraComandosOmniEmpresaWhere(sid),
       orderBy: { createdAt: "desc" },
       take: 400,
       select: { interpretacao: true },
@@ -525,13 +526,15 @@ export async function getOmniAgentReportsSnapshot(storeId: string): Promise<Omni
 
   let financeiroHoje: Awaited<ReturnType<typeof getResumoExecutivo>> | null = null
   const financeGate = INTENT_MODULE.FINANCE_SUMMARY
-  const financeiroSemPermissao = !financeGate?.(g.permissions)
+  let financeiroSemPermissao = !financeGate?.(g.permissions)
 
   if (financeGate?.(g.permissions)) {
     try {
+      await requireLeituraFinanceiraEmpresa(sid)
       financeiroHoje = await getResumoExecutivo(sid, buildFiltroPreset("hoje"))
     } catch {
       financeiroHoje = null
+      financeiroSemPermissao = true
     }
   }
 
@@ -594,7 +597,7 @@ export async function listOmniAgentAutomations(storeId: string): Promise<OmniAge
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
-  await ensureDefaultOmniAgentAutomations(sid)
+  await requireLeituraOperacionalEmpresa(sid, p => p.workspace.omniAgent)
 
   const rows = await prisma.omniAgentAutomation.findMany({
     where: { storeId: sid },

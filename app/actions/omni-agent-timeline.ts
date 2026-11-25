@@ -2,6 +2,7 @@
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
+import { leituraComandosOmniEmpresaWhere, requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { isOmniAgentMemoryType } from "@/lib/omni-agent/memory"
 import {
@@ -61,6 +62,7 @@ export async function getOmniAgentTimeline(
   const sid = assertStoreId(storeId)
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
+  await requireLeituraOperacionalEmpresa(sid, p => p.workspace.omniAgent)
 
   const clienteId = input.clienteId?.trim() || null
   const wantedOrigins = input.origens && input.origens.length > 0 ? input.origens : OMNI_TIMELINE_ORIGINS
@@ -96,7 +98,7 @@ export async function getOmniAgentTimeline(
 
   if (wants("comando")) {
     const rows = await prisma.omniAgentCommand.findMany({
-      where: { storeId: sid },
+      where: await leituraComandosOmniEmpresaWhere(sid),
       orderBy: { createdAt: "desc" },
       take: SOURCE_TAKE,
     })

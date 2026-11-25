@@ -168,6 +168,7 @@ model Store {
 
   @@index([profile])
   @@map("stores")
+  documentosGastos DocumentoGasto[]
 }
 
 enum MarketplaceProvider {
@@ -1361,6 +1362,7 @@ model ContaPagarTitulo {
   @@index([fornecedorId])
   @@index([status])
   @@map("contas_pagar_titulos")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoPagar")
 }
 
 // --- Contas a receber + vendas (servidor; opcional — o painel ainda usa localStorage por padrão)
@@ -1409,6 +1411,7 @@ model ContaReceberTitulo {
   @@index([storeId])
   @@index([cliente])
   @@map("contas_receber_titulos")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoReceber")
 }
 
 /**
@@ -1455,6 +1458,7 @@ model CarteiraFinanceira {
   @@index([storeId, ativo])
   @@unique([id, perfilId])
   @@map("carteiras_financeiras")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoConta")
 }
 
 model MovimentacaoFinanceira {
@@ -1504,6 +1508,7 @@ model MovimentacaoFinanceira {
   @@index([createdAt])
   @@unique([id, perfilId])
   @@map("movimentacoes_financeiras")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoMovimento")
 }
 
 /**
@@ -2345,6 +2350,8 @@ model AdminUser {
   currentPeriodEnd     DateTime?
 
   @@map("admin_users")
+  documentosGastosPessoais DocumentoGasto[] @relation("DocumentoGastoOwner")
+  documentosGastosCriados DocumentoGasto[] @relation("DocumentoGastoCriador")
 }
 
 /**
@@ -2391,6 +2398,8 @@ model FinanceiroPerfil {
 
   @@unique([id, storeId])
   @@map("financeiro_perfis")
+  documentos DocumentoGasto[]
+  documentosVinculos DocumentoVinculo[]
 }
 
 model CategoriaGasto {
@@ -4495,4 +4504,71 @@ model IdentificacaoSolicitacao {
   createdAt   DateTime @default(now())
   @@unique([storeId, operacao, chave], name: "storeId_operacao_chave")
   @@map("identificacao_solicitacoes")
+}
+
+// G003 — documentos privados, sem ativar storage/canal ou o motor de G004.
+enum DocumentoGastoEstado {
+  DISPONIVEL
+  QUARENTENA
+  RETIDO
+}
+
+model DocumentoGasto {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerAdminUserId String?
+  owner AdminUser? @relation("DocumentoGastoOwner", fields: [ownerAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  criadoPorAdminUserId String
+  criadoPor AdminUser @relation("DocumentoGastoCriador", fields: [criadoPorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nomeArquivo String
+  mime String
+  bytes Int
+  sha256 String
+  storageRef String @unique
+  proveniencia String
+  estado DocumentoGastoEstado @default(DISPONIVEL)
+  versao Int @default(1)
+  historico Json @db.JsonB
+  retencaoRevisarEm DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  vinculos DocumentoVinculo[]
+
+  @@unique([id, perfilId])
+  @@unique([perfilId, sha256])
+  @@index([perfilId, estado, createdAt])
+  @@index([perfilId, retencaoRevisarEm])
+  @@map("documentos_gastos")
+}
+
+model DocumentoVinculo {
+  id String @id @default(cuid())
+  documentoId String
+  perfilId String
+  documento DocumentoGasto @relation(fields: [documentoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  pagarTituloId String?
+  pagarTitulo ContaPagarTitulo? @relation("DocumentoPagar", fields: [pagarTituloId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  receberTituloId String?
+  receberTitulo ContaReceberTitulo? @relation("DocumentoReceber", fields: [receberTituloId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  carteiraId String?
+  carteira CarteiraFinanceira? @relation("DocumentoConta", fields: [carteiraId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  movimentacaoId String?
+  movimentacao MovimentacaoFinanceira? @relation("DocumentoMovimento", fields: [movimentacaoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([documentoId, pagarTituloId])
+  @@unique([documentoId, receberTituloId])
+  @@unique([documentoId, carteiraId])
+  @@unique([documentoId, movimentacaoId])
+  @@index([perfilId, createdAt])
+  @@index([pagarTituloId])
+  @@index([receberTituloId])
+  @@index([carteiraId])
+  @@index([movimentacaoId])
+  @@map("documentos_vinculos")
 }

@@ -28,6 +28,9 @@ const h = vi.hoisted(() => {
   }
 
   const prisma = {
+    adminUser: { findUnique: async () => ({ active: true, role: "ADMIN" }) },
+    adminUserStore: { findUnique: async ({ where }: { where: { adminUserId_storeId: { storeId: string } } }) =>
+      where.adminUserId_storeId.storeId === STORE ? { storeId: STORE } : null },
     sessaoCaixa: {
       findFirst: async ({ where }: { where: { id?: string; storeId?: string } }) => {
         const s = sessoes.find((r) => {
@@ -196,6 +199,10 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/ops-api-gate", () => ({ opsLojaIdFromRequest: vi.fn(() => STORE) }))
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({
   apiGuardEnterpriseOrOps: vi.fn(async () => null),
+}))
+vi.mock("@/lib/auth/guard-enterprise", () => ({
+  requireEnterpriseSession: async () => ({ ok: true, session: { user: { id: "unit-operator", role: "ADMIN",
+    storeAccess: "restricted", allowedStoreIds: [STORE] } } }),
 }))
 
 import { GET } from "./route"

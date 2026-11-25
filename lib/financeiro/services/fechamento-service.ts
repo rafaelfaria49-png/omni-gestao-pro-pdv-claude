@@ -8,6 +8,7 @@
  *  - verificarPeriodoFechado: retorna true se a data está dentro de um período fechado
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
 import type { FechamentoFinanceiro, Prisma } from "@/generated/prisma"
@@ -75,16 +76,16 @@ function primeiroDiaMes(mes: number, ano: number): string {
 
 async function getSaldoAtualStore(storeId: string): Promise<number> {
   const agg = await prisma.movimentacaoFinanceira.aggregate({
-    where: { storeId },
+    where: leituraEmpresaWhere(storeId, { storeId }),
     _sum: { valor: true },
   })
   // Não temos tipo aqui — recalcular manualmente
   const entradas = await prisma.movimentacaoFinanceira.aggregate({
-    where: { storeId, tipo: "entrada" },
+    where: leituraEmpresaWhere(storeId, { storeId, tipo: "entrada" }),
     _sum: { valor: true },
   })
   const saidas = await prisma.movimentacaoFinanceira.aggregate({
-    where: { storeId, tipo: "saida" },
+    where: leituraEmpresaWhere(storeId, { storeId, tipo: "saida" }),
     _sum: { valor: true },
   })
   void agg

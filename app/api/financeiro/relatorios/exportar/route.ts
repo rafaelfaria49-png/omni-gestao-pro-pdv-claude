@@ -12,12 +12,14 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  *   dataFim    — yyyy-mm-dd
  *   preset     — hoje | 7dias | 30dias | estemes | mespassado
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
 import { buildFiltroPreset, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { listarAuditoriaFinanceiraParaExportacao } from "@/lib/financeiro/services/auditoria-financeira-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -62,7 +64,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "movimentacoes") {
     const rows = await prisma.movimentacaoFinanceira.findMany({
-      where: { storeId, createdAt: range },
+      where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
       select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 5000,
@@ -79,7 +81,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "receber") {
     const rows = await prisma.contaReceberTitulo.findMany({
-      where: { storeId, createdAt: range },
+      where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
       select: { id: true, localKey: true, cliente: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 5000,
@@ -96,7 +98,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "pagar") {
     const rows = await prisma.contaPagarTitulo.findMany({
-      where: { storeId, createdAt: range },
+      where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
       select: { id: true, localKey: true, fornecedor: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 5000,
@@ -114,7 +116,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "conciliacoes") {
     const rows = await prisma.conciliacaoFinanceira.findMany({
-      where: { storeId, createdAt: range },
+      where: { storeId, createdAt: range, carteira: { is: leituraEmpresaWhere(storeId, {}) } },
       include: { carteira: { select: { nome: true } } },
       orderBy: { createdAt: "desc" },
       take: 5000,
@@ -132,18 +134,14 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
   }
 
   if (tipo === "auditoria") {
-    const rows = await prisma.auditoriaFinanceira.findMany({
-      where: { storeId, createdAt: range },
-      select: { id: true, entidade: true, entidadeId: true, acao: true, usuarioNome: true, ip: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
+    const rows = await listarAuditoriaFinanceiraParaExportacao(storeId,
+      range.gte.toISOString().slice(0, 10), range.lte.toISOString().slice(0, 10))
     return {
       filename: "auditoria",
       rows: rows.map((r) => ({
         id: r.id, entidade: r.entidade, entidadeId: r.entidadeId ?? "",
         acao: r.acao, usuarioNome: r.usuarioNome ?? "sistema",
-        ip: r.ip ?? "", data: r.createdAt.toISOString().slice(0, 16),
+        ip: r.ip ?? "", data: r.createdAt.slice(0, 16),
       })),
     }
   }
@@ -258,7 +256,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "cobrancas_os") {
     const rows = await prisma.contaReceberTitulo.findMany({
-      where: { storeId, localKey: { startsWith: "os-faturamento:" }, createdAt: range },
+      where: leituraEmpresaWhere(storeId, { storeId, localKey: { startsWith: "os-faturamento:" }, createdAt: range }),
       select: {
         id: true, localKey: true, cliente: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true,
       },
@@ -282,7 +280,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   // fluxo = movimentações simplificadas (padrão fallback)
   const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range },
+    where: leituraEmpresaWhere(storeId, { storeId, createdAt: range }),
     select: { tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
     orderBy: { createdAt: "asc" },
     take: 5000,
@@ -300,16 +298,15 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 }
 
 export async function GET(req: Request) {
+  // Reconciliação main × G003: módulo finance por loja (main) + guard de leitura privada (G003).
   const moduleDenied = await requireModuleApi(req, "finance")
-  if (moduleDenied) return moduleDenied
-
-  await prismaEnsureConnected()
+  if (moduleDenied) return respostaFinanceiraPrivada(moduleDenied)
   // F-02-anchor (SPRINT_MULTI_LOJA-S-002): a chamada via anchor-tag (`<a href>`) não envia
   // `x-assistec-loja-id`, mas o cliente passa `storeId` na query — resolvido por
   // `storeIdFromAssistecRequestForRead`. Sem fallback `loja-1`: ausência → 400 explícito.
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) {
-    return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 }))
   }
   const url = new URL(req.url)
 
@@ -319,13 +316,8 @@ export async function GET(req: Request) {
     if (tipo === "conciliacoes") return p.financeiro.conciliacao
     return p.financeiro.edit
   }
-  const denied = await apiGuardEnterpriseOrOps(
-    storeId,
-    exportCheck,
-    "Sem permissão para exportar estes dados.",
-    { errorBody: "okFalse" },
-  )
-  if (denied) return denied
+  const denied = await apiGuardLeituraFinanceira(storeId, exportCheck, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   const formato = (url.searchParams.get("formato") ?? "csv").toLowerCase()
   const preset = url.searchParams.get("preset")
@@ -335,30 +327,30 @@ export async function GET(req: Request) {
   if (url.searchParams.get("dataFim")) filtro.dataFim = url.searchParams.get("dataFim")!
 
   try {
+    await prismaEnsureConnected()
     const { rows, filename } = await fetchRows(storeId, tipo, filtro)
 
     if (formato === "xlsx") {
       const buffer = await toXLSX(rows, filename)
-      return new NextResponse(buffer, {
+      return respostaFinanceiraPrivada(new NextResponse(buffer, {
         status: 200,
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": `attachment; filename="${filename}_${new Date().toISOString().slice(0, 10)}.xlsx"`,
         },
-      })
+      }))
     }
 
     // Default: CSV
     const csv = toCSV(rows)
-    return new NextResponse(csv, {
+    return respostaFinanceiraPrivada(new NextResponse(csv, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}_${new Date().toISOString().slice(0, 10)}.csv"`,
       },
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg }, { status: 503 })
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }

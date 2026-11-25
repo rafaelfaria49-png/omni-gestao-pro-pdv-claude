@@ -1,4 +1,5 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { leituraEmpresaWhere, apiGuardLeituraOperacional, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
@@ -75,10 +76,12 @@ export async function GET(req: Request) {
   if (moduleDenied) return moduleDenied
 
   const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+  if (!session?.user) return respostaFinanceiraPrivada(NextResponse.json({ error: "Não autenticado" }, { status: 401 }))
   const storeId = storeIdFromAssistecRequestForRead(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  if (!canAccessStore(session, storeId)) return NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 })
+  if (!storeId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  if (!canAccessStore(session, storeId)) return respostaFinanceiraPrivada(NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 }))
+  const denied = await apiGuardLeituraOperacional(storeId, () => true, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   try {
     const now = new Date()
     const todayStart = startOfDayLocal(now)
@@ -113,7 +116,7 @@ export async function GET(req: Request) {
         where: { storeId, stock: 0 },
       }),
       prisma.contaReceberTitulo.aggregate({
-        where: { storeId, status: "pendente", vencimento: todayIso },
+        where: leituraEmpresaWhere(storeId, { storeId, status: "pendente", vencimento: todayIso }),
         _sum: { valor: true },
       }),
       prisma.venda.findMany({
@@ -225,7 +228,7 @@ export async function GET(req: Request) {
         at: new Date(m.at).toISOString(),
       }))
 
-    return NextResponse.json({
+    return respostaFinanceiraPrivada(NextResponse.json({
       ok: true,
       storeId,
       todayIso,
@@ -243,18 +246,9 @@ export async function GET(req: Request) {
         stock: p.stock,
       })),
       vendasPorCategoria,
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[api/dashboard/elite]", msg)
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Falha ao carregar dashboard",
-        ...(process.env.NODE_ENV === "development" ? { detail: msg } : {}),
-      },
-      { status: 503 }
-    )
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados." }, { status: 503 }))
   }
 }
 

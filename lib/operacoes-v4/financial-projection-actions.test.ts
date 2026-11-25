@@ -11,12 +11,18 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    adminUser: { findUnique: async () => ({ active: true, role: "ADMIN" }) },
+    adminUserStore: { findUnique: async ({ where }: { where: { adminUserId_storeId: { storeId: string } } }) =>
+      ["store-a", "store-b"].includes(where.adminUserId_storeId.storeId) ? { storeId: where.adminUserId_storeId.storeId } : null },
     ordemServico: { findMany: mocks.osFindMany },
     contaReceberTitulo: { findMany: mocks.titleFindMany },
   },
 }));
 vi.mock("@/auth", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: mocks.requireEnterpriseWith }));
+vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: mocks.requireEnterpriseWith,
+  requireEnterpriseSession: async () => ({ ok: true, session: { user: { id: "user-1", role: "ADMIN",
+    storeAccess: "restricted", allowedStoreIds: ["store-a", "store-b"] } } }),
+}));
 vi.mock("@/lib/operacoes/assert-active-store", () => ({ assertActiveStoreId: mocks.assertActiveStoreId }));
 
 import { lerProjecaoFinanceiraOSV4, lerProjecoesFinanceirasOSV4 } from "./financial-projection-actions";
@@ -69,7 +75,9 @@ describe("financial-projection-actions — reader autenticado e scoped", () => {
     expect(mocks.assertActiveStoreId).toHaveBeenCalledWith(storeId, "Operações V4");
     expect(mocks.osFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { storeId, id: { in: [osId] } } }));
     expect(mocks.titleFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { storeId, localKey: { in: [localKeyContaReceberOSV3(storeId, osId)] } },
+      where: expect.objectContaining({ storeId, localKey: { in: [localKeyContaReceberOSV3(storeId, osId)] },
+        AND: expect.arrayContaining([{ OR: [{ perfilId: null }, { perfil: { is: { tipo: "EMPRESA", storeId } } }] }]),
+      }),
     }));
     expect(result).toMatchObject({ storeId, osId, financialStatus: "PAID", receivedTotal: 300, balance: 0 });
     expect(result).not.toHaveProperty("payload");

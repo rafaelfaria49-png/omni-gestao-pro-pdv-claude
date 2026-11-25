@@ -158,8 +158,11 @@ describe("carregarFontesComCliente (fronteiras Prisma)", () => {
       expect(chamada.where[campo]).toEqual({ gte: periodo.inicio, lt: periodo.fimExclusivo })
       expect(chamada.where[campo]).not.toHaveProperty("lte")
     }
-    expect(primeiraChamada(db.contaReceberTitulo.findMany).where).toEqual({ storeId: "loja-a" })
-    expect(primeiraChamada(db.contaPagarTitulo.findMany).where).toEqual({ storeId: "loja-a" })
+    const perfilEmpresarial = { OR: [{ perfilId: null }, { perfil: { is: { tipo: "EMPRESA", storeId: "loja-a" } } }] }
+    const whereEmpresarial = { storeId: "loja-a", AND: [{ storeId: "loja-a" }, perfilEmpresarial] }
+    expect(primeiraChamada(db.contaReceberTitulo.findMany).where).toEqual(whereEmpresarial)
+    expect(primeiraChamada(db.contaPagarTitulo.findMany).where).toEqual(whereEmpresarial)
+    expect(primeiraChamada(db.movimentacaoFinanceira.findMany).where.AND).toContainEqual(perfilEmpresarial)
   })
 
   it("dados A/B com scope A consultam e retornam somente a loja A", async () => {

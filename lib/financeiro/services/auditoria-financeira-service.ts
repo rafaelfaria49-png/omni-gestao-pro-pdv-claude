@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma"
-import type { Prisma } from "@/generated/prisma"
+import { Prisma } from "@/generated/prisma"
 
 // ─── tipos públicos ───────────────────────────────────────────────────────────
 
@@ -73,6 +73,23 @@ export type ListarAuditoriaFilters = {
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+/** Auditoria comum contém metadados técnicos; anexos, texto livre e payload privado ficam na origem.
+ * O financeiro pessoal e seus documentos usam somente trilha privada no próprio domínio.
+ */
+function snapshotTecnico(value: unknown): Prisma.InputJsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  if (record.ownerAdminUserId || record.tipo === "PESSOAL" || record.tipoPerfil === "PESSOAL") return undefined
+  const result: Prisma.InputJsonObject = Object.fromEntries(
+    ["status", "tipo", "origem", "valor", "saldoInicial", "saldoAtual", "saldoSistema", "saldoInformado", "diferenca", "acao"]
+      .flatMap(key => {
+        const v = record[key]
+        return typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v)) ? [[key, v]] : []
+      }),
+  )
+  return result
+}
+
 function toPublica(row: {
   id: string
   storeId: string
@@ -92,8 +109,8 @@ function toPublica(row: {
     entidade: row.entidade,
     entidadeId: row.entidadeId,
     acao: row.acao,
-    antes: row.antes,
-    depois: row.depois,
+    antes: snapshotTecnico(row.antes) ?? null,
+    depois: snapshotTecnico(row.depois) ?? null,
     usuarioId: row.usuarioId,
     usuarioNome: row.usuarioNome,
     ip: row.ip,
@@ -115,55 +132,96 @@ export async function registrarAuditoriaFinanceira(
         entidade: input.entidade,
         entidadeId: input.entidadeId ?? null,
         acao: input.acao,
-        antes: (input.antes !== undefined ? input.antes : undefined) as Prisma.InputJsonValue | undefined,
-        depois: (input.depois !== undefined ? input.depois : undefined) as Prisma.InputJsonValue | undefined,
+        antes: snapshotTecnico(input.antes),
+        depois: snapshotTecnico(input.depois),
         usuarioId: input.usuarioId ?? null,
         usuarioNome: input.usuarioNome ?? null,
         ip: input.ip ?? null,
         userAgent: input.userAgent ?? null,
       },
     })
-  } catch (e) {
-    console.warn("[auditoria] Falha ao registrar auditoria (silenciosa):", e)
+  } catch {
+    console.warn("[auditoria] Falha técnica ao registrar evento financeiro.")
   }
 }
 
 // ─── listarAuditoriaFinanceira ────────────────────────────────────────────────
 
+/** Aliases fixos do SQL interno; nunca recebem nomes/SQL do request. */
+function empresaAuditada(alias: "e" | "c", storeId: string): Prisma.Sql {
+  const tabela = Prisma.raw(`"${alias}"`)
+  return Prisma.sql`COALESCE((${tabela}."storeId" = ${storeId} AND
+    (${tabela}."perfilId" IS NULL OR EXISTS (
+      SELECT 1 FROM financeiro_perfis fp WHERE fp.id=${tabela}."perfilId"
+        AND fp.tipo='EMPRESA' AND fp."storeId"=${storeId}
+    ))), FALSE)`
+}
+
+/** Auditoria é polimórfica e seu FK histórico não garante o scope da entidade.
+ * O join fica no banco: nenhum ID ou valor estrangeiro é carregado para filtrar no JS.
+ * Eventos de entidades já excluídas preservam metadados, sem referência/snapshot.
+ */
+async function consultarAuditoriaEmpresa(
+  storeId: string, filters: ListarAuditoriaFilters, limite: number,
+): Promise<{ items: AuditoriaPublica[]; total: number }> {
+  if (!storeId.trim()) throw new Error("Loja obrigatória")
+  const take = Math.min(filters.take ?? 50, limite), skip = filters.skip ?? 0
+  if (!Number.isInteger(take) || take < 0 || !Number.isInteger(skip) || skip < 0) throw new Error("Paginação inválida")
+  const fonte = Prisma.sql`
+    SELECT TRUE AS existe, ${empresaAuditada("e", storeId)} AS empresa
+      FROM contas_pagar_titulos e WHERE a.entidade='pagar' AND e.id=a."entidadeId"
+    UNION ALL SELECT TRUE, ${empresaAuditada("e", storeId)}
+      FROM contas_receber_titulos e WHERE a.entidade='receber' AND e.id=a."entidadeId"
+    UNION ALL SELECT TRUE, ${empresaAuditada("e", storeId)}
+      FROM movimentacoes_financeiras e WHERE a.entidade='movimentacao' AND e.id=a."entidadeId"
+    UNION ALL SELECT TRUE, ${empresaAuditada("e", storeId)}
+      FROM carteiras_financeiras e WHERE a.entidade='carteira' AND e.id=a."entidadeId"
+    UNION ALL SELECT TRUE, (e."storeId"=${storeId} AND ${empresaAuditada("c", storeId)})
+      FROM conciliacoes_financeiras e JOIN carteiras_financeiras c ON c.id=e."carteiraId"
+      WHERE a.entidade='conciliacao' AND e.id=a."entidadeId"
+    UNION ALL SELECT TRUE, e."storeId"=${storeId}
+      FROM fechamentos_financeiros e WHERE a.entidade='fechamento' AND e.id=a."entidadeId"
+    UNION ALL SELECT TRUE, e."storeId"=${storeId}
+      FROM ordens_servico e WHERE a.entidade='os' AND e.id=a."entidadeId"`
+  const from = Prisma.sql`FROM auditorias_financeiras a LEFT JOIN LATERAL (${fonte}) ref ON TRUE`
+  const mostrarOrigem = Prisma.sql`ref.existe IS TRUE`
+  const predicates: Prisma.Sql[] = [Prisma.sql`a."storeId"=${storeId}`, Prisma.sql`COALESCE(ref.empresa, TRUE)`,
+    Prisma.sql`COALESCE(a.antes->>'ownerAdminUserId','')='' AND COALESCE(a.depois->>'ownerAdminUserId','')=''`,
+    Prisma.sql`COALESCE(a.antes->>'tipo','')<>'PESSOAL' AND COALESCE(a.depois->>'tipo','')<>'PESSOAL'`,
+    Prisma.sql`COALESCE(a.antes->>'tipoPerfil','')<>'PESSOAL' AND COALESCE(a.depois->>'tipoPerfil','')<>'PESSOAL'`,
+    Prisma.sql`NOT EXISTS (SELECT 1 FROM financeiro_perfis pf
+      WHERE pf.id IN (a.antes->>'perfilId', a.depois->>'perfilId')
+        AND (pf.tipo<>'EMPRESA' OR pf."storeId" IS DISTINCT FROM ${storeId}))`,
+  ]
+  if (filters.entidade) predicates.push(Prisma.sql`a.entidade=${filters.entidade}`)
+  if (filters.entidadeId) predicates.push(Prisma.sql`a."entidadeId"=${filters.entidadeId} AND ${mostrarOrigem}`)
+  if (filters.acao) predicates.push(Prisma.sql`a.acao=${filters.acao}`)
+  if (filters.dataInicial) predicates.push(Prisma.sql`a."createdAt">=${new Date(filters.dataInicial)}`)
+  if (filters.dataFinal) predicates.push(Prisma.sql`a."createdAt"<=${new Date(filters.dataFinal + "T23:59:59.999Z")}`)
+  const where = Prisma.sql`WHERE ${Prisma.join(predicates, " AND ")}`
+  const [rows, counts] = await Promise.all([
+    prisma.$queryRaw<Array<Parameters<typeof toPublica>[0]>>(Prisma.sql`
+      SELECT a.id, a."storeId", a.entidade, a.acao,
+        CASE WHEN ${mostrarOrigem} THEN a."entidadeId" ELSE NULL END AS "entidadeId",
+        CASE WHEN ${mostrarOrigem} THEN a.antes ELSE NULL END AS antes,
+        CASE WHEN ${mostrarOrigem} THEN a.depois ELSE NULL END AS depois,
+        a."usuarioId", a."usuarioNome", a.ip, a."createdAt"
+      ${from} ${where} ORDER BY a."createdAt" DESC, a.id DESC LIMIT ${take} OFFSET ${skip}`),
+    prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`SELECT count(*)::int AS total ${from} ${where}`),
+  ])
+  return { items: rows.map(toPublica), total: counts[0]?.total ?? 0 }
+}
+
 export async function listarAuditoriaFinanceira(
   storeId: string,
   filters: ListarAuditoriaFilters = {},
 ): Promise<{ items: AuditoriaPublica[]; total: number }> {
-  const where: Prisma.AuditoriaFinanceiraWhereInput = { storeId }
+  return consultarAuditoriaEmpresa(storeId, filters, 200)
+}
 
-  if (filters.entidade) where.entidade = filters.entidade
-  if (filters.entidadeId) where.entidadeId = filters.entidadeId
-  if (filters.acao) where.acao = filters.acao
-  if (filters.dataInicial || filters.dataFinal) {
-    where.createdAt = {}
-    if (filters.dataInicial) where.createdAt.gte = new Date(filters.dataInicial)
-    if (filters.dataFinal) where.createdAt.lte = new Date(filters.dataFinal + "T23:59:59.999Z")
-  }
-
-  const take = Math.min(filters.take ?? 50, 200)
-  const skip = filters.skip ?? 0
-
-  const [items, total] = await Promise.all([
-    prisma.auditoriaFinanceira.findMany({
-      where,
-      select: {
-        id: true, storeId: true, entidade: true, entidadeId: true,
-        acao: true, antes: true, depois: true, usuarioId: true,
-        usuarioNome: true, ip: true, createdAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take,
-      skip,
-    }),
-    prisma.auditoriaFinanceira.count({ where }),
-  ])
-
-  return { items: items.map(toPublica), total }
+/** Mesmo predicado da lista/detalhe, com o teto de exportação já existente. */
+export async function listarAuditoriaFinanceiraParaExportacao(storeId: string, dataInicial: string, dataFinal: string) {
+  return (await consultarAuditoriaEmpresa(storeId, { dataInicial, dataFinal, take: 5000 }, 5000)).items
 }
 
 // ─── getAuditoriaPorEntidade ──────────────────────────────────────────────────
@@ -173,15 +231,5 @@ export async function getAuditoriaPorEntidade(
   entidade: EntidadeAuditoria,
   entidadeId: string,
 ): Promise<AuditoriaPublica[]> {
-  const rows = await prisma.auditoriaFinanceira.findMany({
-    where: { storeId, entidade, entidadeId },
-    select: {
-      id: true, storeId: true, entidade: true, entidadeId: true,
-      acao: true, antes: true, depois: true, usuarioId: true,
-      usuarioNome: true, ip: true, createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  })
-  return rows.map(toPublica)
+  return (await consultarAuditoriaEmpresa(storeId, { entidade, entidadeId, take: 100 }, 100)).items
 }
