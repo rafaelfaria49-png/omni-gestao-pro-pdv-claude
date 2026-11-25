@@ -66,7 +66,9 @@ export function VendaItensTrocasPanel({ storeId, pedidoId }: { storeId: string; 
       </header>
       <div className="divide-y divide-border/60 px-4">
         {view.linhas.map((l) => {
-          const snapshot = [l.snapshotSku && `SKU ${l.snapshotSku}`, l.snapshotBarcode && `EAN ${l.snapshotBarcode}`].filter(Boolean).join(" · ")
+          const snapshot = [l.snapshotSku && `SKU ${l.snapshotSku}`, l.snapshotBarcode && `EAN ${l.snapshotBarcode}`, l.codigoNaVenda && `código ${l.codigoNaVenda}`]
+            .filter(Boolean)
+            .join(" · ")
           const atual = l.cadastroAtual
             ? [l.cadastroAtual.sku && `SKU ${l.cadastroAtual.sku}`, l.cadastroAtual.barcode && `EAN ${l.cadastroAtual.barcode}`, `ID ${l.cadastroAtual.produtoId}`]
                 .filter(Boolean)

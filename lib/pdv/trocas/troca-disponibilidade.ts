@@ -52,6 +52,12 @@ export type LinhaVendaOriginal = {
   /** Códigos gravados NA VENDA (snapshot histórico). Nunca preenchido a partir do cadastro atual. */
   snapshotSku: string
   snapshotBarcode: string
+  /**
+   * Código operacional gravado na linha no momento da venda (`inventoryId` quando ele é
+   * SKU/EAN e não o id técnico do produto). É dado histórico real — vendas antigas não têm
+   * campo próprio de código, mas o PDV gravava aqui o código bipado/selecionado.
+   */
+  codigoNaVenda: string
 }
 
 export type ItemVendaRow = {
@@ -60,6 +66,13 @@ export type ItemVendaRow = {
   quantidade: number
   precoUnitario: number
   lineTotal: number
+}
+
+/** `inventoryId` que é código de balcão (SKU/EAN), não id técnico (cuid) nem linha virtual. */
+function codigoOperacional(inventoryId: string, produtoId: string): string {
+  if (!inventoryId || inventoryId === produtoId || isVirtualSaleLine(inventoryId)) return ""
+  if (/^c[a-z0-9]{20,}$/.test(inventoryId)) return ""
+  return inventoryId
 }
 
 function accessoryLabelFrom(sel: unknown): string {
@@ -104,6 +117,7 @@ export function linhasDaVenda(payload: unknown, itens: ItemVendaRow[]): LinhaVen
         accessoryLabel: accessoryLabelFrom(l.accessorySelection),
         snapshotSku: str(l.sku),
         snapshotBarcode: str(l.barcode) || str(l.codigoBarras),
+        codigoNaVenda: itemType === "produto" ? codigoOperacional(inventoryId, str(l.produtoId)) : "",
       }
     })
   }
@@ -124,6 +138,7 @@ export function linhasDaVenda(payload: unknown, itens: ItemVendaRow[]): LinhaVen
       accessoryLabel: "",
       snapshotSku: "",
       snapshotBarcode: "",
+      codigoNaVenda: "",
     }
   })
 }

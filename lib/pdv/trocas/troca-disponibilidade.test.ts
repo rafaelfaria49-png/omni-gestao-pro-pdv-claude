@@ -45,6 +45,20 @@ describe("linhasDaVenda", () => {
     expect(l[0]).toMatchObject({ lineIndex: 0, inventoryId: "p9", quantity: 3, lineTotal: 30 })
   })
 
+  it("formato real da VDA-L01-2026-000767: inventoryId da linha é o código usado na venda", () => {
+    const l = linhasDaVenda(
+      {
+        lines: [
+          { inventoryId: "KD-327A", produtoId: "cmvse0p4d000bl808rjja2lih", name: "CABO LIGHTNING", quantity: 1, unitPrice: 29.99, lineTotal: 29.99 },
+          { inventoryId: "cmpevc3i40073l8048fpvibws", produtoId: "cmpevc3i40073l8048fpvibws", name: "PS4", quantity: 1, unitPrice: 119.9, lineTotal: 119.9 },
+          { inventoryId: "avulso-1", name: "Avulso", quantity: 1, unitPrice: 5, lineTotal: 5, itemType: "avulso" },
+        ],
+      },
+      [],
+    )
+    expect(l.map((x) => x.codigoNaVenda)).toEqual(["KD-327A", "", ""])
+  })
+
   it("nunca preenche código do snapshot a partir de outra fonte", () => {
     const [l] = linhasDaVenda(vendaPs4, [])
     expect(l!.snapshotSku).toBe("")

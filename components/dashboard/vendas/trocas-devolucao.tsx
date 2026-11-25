@@ -93,7 +93,7 @@ function dataHora(iso: string) {
 }
 
 function codigoDaLinha(l: LinhaView): string {
-  return l.snapshotBarcode || l.snapshotSku || l.cadastroAtual?.barcode || l.cadastroAtual?.sku || ""
+  return l.snapshotBarcode || l.snapshotSku || l.codigoNaVenda || l.cadastroAtual?.barcode || l.cadastroAtual?.sku || ""
 }
 
 export function TrocasDevolucao({
@@ -247,7 +247,14 @@ export function TrocasDevolucao({
 
   const pendentesDaVenda = useMemo(() => (venda ? pendentes.filter((p) => p.body.pedidoIdOrigem === venda.pedidoId) : []), [pendentes, venda])
   const devolucoesLocaisNaoConfirmadas = useMemo(
-    () => (venda ? devolucoes.filter((d) => d.saleId === venda.pedidoId && d.syncPending === true) : []),
+    // Inclui a devolução que o terminal dá como sincronizada mas que NÃO existe no servidor
+    // (o servidor antigo respondia "ok" a um número DEV-AAAA-NNNN já usado por outra venda).
+    () =>
+      venda
+        ? devolucoes.filter(
+            (d) => d.saleId === venda.pedidoId && (d.syncPending === true || !venda.devolucoes.some((s) => s.localId === d.id)),
+          )
+        : [],
     [devolucoes, venda],
   )
 
@@ -589,7 +596,7 @@ export function TrocasDevolucao({
           {devolucoesLocaisNaoConfirmadas.length > 0 && (
             <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-foreground">
               <p className="flex items-center gap-1.5 font-semibold">
-                <AlertTriangle className="h-4 w-4 text-destructive" /> Este terminal tem devolução local não confirmada pelo servidor
+                <AlertTriangle className="h-4 w-4 text-destructive" /> Este terminal tem devolução que não existe no servidor
               </p>
               <p className="mt-1 text-muted-foreground">
                 {devolucoesLocaisNaoConfirmadas.map((d) => d.id).join(", ")} — não conta como devolvida. Se ela chegar ao servidor
