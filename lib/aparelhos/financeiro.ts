@@ -16,7 +16,6 @@ import { buildContaPagarLocalKey } from "@/lib/financeiro/contracts/local-key"
 import { appendFinanceiroHistorico, buildContaPagarPayload } from "@/lib/financeiro/contracts/payload"
 import { FINANCEIRO_ORIGEM } from "@/lib/financeiro/contracts/origem"
 import { localDateKey } from "./warranty"
-import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 
 export const FORMAS_PAGAMENTO_AQUISICAO = ["dinheiro", "pix", "transferencia", "outro"] as const
 export const FORMAS_PAGAMENTO_NAO_INTEGRADAS = ["credito_loja", "abatimento_venda"] as const
@@ -70,7 +69,7 @@ export async function registrarObrigacaoAquisicaoTx(
     aquisicao: { id: string; protocolo: string; tipo: string; valorTotal: number; formaPagamento: string; vendedorNome: string; fornecedorId: string | null }
     operador: string
   },
-): Promise<{ localKey: string; tituloId: string } | null> {
+): Promise<{ localKey: string; tituloId: string; criado: boolean } | null> {
   const { storeId, aquisicao: aq } = args
   if (!(aq.valorTotal > 0)) return null
   const localKey = contaPagarLocalKeyDaAquisicao(storeId, aq.id)
@@ -106,8 +105,7 @@ export async function registrarObrigacaoAquisicaoTx(
     skipDuplicates: true,
   })
   const titulo = await tx.contaPagarTitulo.findUniqueOrThrow({ where: { storeId_localKey: { storeId, localKey } }, select: { id: true } })
-  // Reconciliação G002: título NOVO entra no perfil EMPRESA da loja na mesma transação.
-  // Título preexistente (skipDuplicates) não é tocado aqui — já pertence ao Financeiro.
-  if (criado.count === 1) await dadosFinanceirosEmpresa(tx, storeId, undefined, { pagarTituloId: titulo.id })
-  return { localKey, tituloId: titulo.id }
+  // `criado`: o chamador (servidor) adota o título NOVO no escopo financeiro. Este módulo fica
+  // puro — é importado também por componentes de cliente (rótulos/tipos).
+  return { localKey, tituloId: titulo.id, criado: criado.count === 1 }
 }
