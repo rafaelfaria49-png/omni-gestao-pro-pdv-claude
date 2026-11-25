@@ -25,7 +25,7 @@ CREATE TABLE "gastos_revisoes" (
     "correcaoDeId" TEXT,
     "expiraEm" TIMESTAMP(3) NOT NULL,
     "decididaEm" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT timezone('UTC'::text, clock_timestamp()),
 
     CONSTRAINT "gastos_revisoes_pkey" PRIMARY KEY ("id")
 );
@@ -43,7 +43,7 @@ CREATE TABLE "financeiro_operacoes" (
     "revisaoId" TEXT NOT NULL,
     "estado" TEXT NOT NULL DEFAULT 'RESERVADA',
     "resultado" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT timezone('UTC'::text, clock_timestamp()),
     "concluidaEm" TIMESTAMP(3),
 
     CONSTRAINT "financeiro_operacoes_pkey" PRIMARY KEY ("id")
@@ -160,7 +160,7 @@ CREATE TABLE "gastos_outbox" (
     "tipo" TEXT NOT NULL,
     "estado" TEXT NOT NULL DEFAULT 'PENDENTE',
     "payload" JSONB NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT timezone('UTC'::text, clock_timestamp()),
 
     CONSTRAINT "gastos_outbox_pkey" PRIMARY KEY ("id")
 );

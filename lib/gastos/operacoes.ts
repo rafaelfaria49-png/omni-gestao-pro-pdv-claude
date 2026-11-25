@@ -59,9 +59,17 @@ const alterarSchema = z.object({ revisaoId: identificadorOperacao, versaoEsperad
   proposta: z.unknown(), expiraEm: instante.optional() }).strict()
 const decidirSchema = z.object({ revisaoId: identificadorOperacao, versaoEsperada: z.number().int().positive() }).strict()
 
-function expiracao(input?: string) {
-  const agora = Date.now(), expira = input ? new Date(input) : new Date(agora + 30 * 60_000)
-  if (expira.getTime() <= agora || expira.getTime() > agora + 86_400_000) throw new OperacaoGastoError("expiracao_invalida")
+/** Autoridade temporal única: relógio do PostgreSQL lido na própria transação (G006 · clock skew).
+ * Web e worker podem rodar em hosts com relógios diferentes; prazo e expiração nunca usam Date.now(). */
+export async function agoraDoBanco(tx: FinanceiroDb): Promise<Date> {
+  const [row] = await tx.$queryRaw<Array<{ agora: Date }>>`SELECT clock_timestamp() AS agora`
+  if (!(row?.agora instanceof Date)) throw new OperacaoGastoError("relogio_indisponivel", 503)
+  return row.agora
+}
+
+function expiracao(agora: Date, input?: string) {
+  const t = agora.getTime(), expira = input ? new Date(input) : new Date(t + 30 * 60_000)
+  if (expira.getTime() <= t || expira.getTime() > t + 86_400_000) throw new OperacaoGastoError("expiracao_invalida")
   return expira
 }
 
@@ -79,7 +87,7 @@ export async function prepararRevisaoGasto(contexto: unknown, input: unknown) {
     }
     return tx.gastoRevisao.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), criadoPorAdminUserId: ctx.userId,
       grupoChave, versao: 1, tipo: proposta.tipo, proposta: proposta as Prisma.InputJsonObject,
-      payloadHash, expiraEm: expiracao(parsed.data.expiraEm) } })
+      payloadHash, expiraEm: expiracao(await agoraDoBanco(tx), parsed.data.expiraEm) } })
   })
 }
 
@@ -91,9 +99,9 @@ export async function travarRevisaoGasto(tx: FinanceiroDb, ctx: FinanceiroContex
   return tx.gastoRevisao.findFirstOrThrow({ where: { id, perfilId: ctx.perfilId } })
 }
 
-export function exigirRevisaoPronta(row: { versao: number; estado: string; expiraEm: Date }, versao: number) {
+export function exigirRevisaoPronta(row: { versao: number; estado: string; expiraEm: Date }, versao: number, agora: Date) {
   if (row.versao !== versao || row.estado !== "PRONTA") throw new OperacaoGastoError("revisao_desatualizada", 409)
-  if (row.expiraEm.getTime() <= Date.now()) throw new OperacaoGastoError("revisao_expirada", 409)
+  if (row.expiraEm.getTime() <= agora.getTime()) throw new OperacaoGastoError("revisao_expirada", 409)
 }
 
 export async function corrigirRevisaoGasto(contexto: unknown, input: unknown) {
@@ -103,13 +111,14 @@ export async function corrigirRevisaoGasto(contexto: unknown, input: unknown) {
   return emTransacaoGasto(contexto, async (tx, ctx) => {
     const atual = await travarRevisaoGasto(tx, ctx, p.revisaoId)
     await autorizarOperacaoNaTransacao(tx, ctx)
-    exigirRevisaoPronta(atual, p.versaoEsperada)
+    const agora = await agoraDoBanco(tx)
+    exigirRevisaoPronta(atual, p.versaoEsperada, agora)
     const cas = await tx.gastoRevisao.updateMany({ where: { id: atual.id, perfilId: ctx.perfilId, versao: p.versaoEsperada, estado: "PRONTA" },
-      data: { estado: "SUBSTITUIDA", decididaEm: new Date() } })
+      data: { estado: "SUBSTITUIDA", decididaEm: agora } })
     if (cas.count !== 1) throw new OperacaoGastoError("revisao_desatualizada", 409)
     return tx.gastoRevisao.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), criadoPorAdminUserId: ctx.userId,
       grupoChave: atual.grupoChave, versao: atual.versao + 1, correcaoDeId: atual.id, tipo: proposta.tipo,
-      proposta: proposta as Prisma.InputJsonObject, payloadHash: hashOperacaoGasto(proposta), expiraEm: expiracao(p.expiraEm) } })
+      proposta: proposta as Prisma.InputJsonObject, payloadHash: hashOperacaoGasto(proposta), expiraEm: expiracao(agora, p.expiraEm) } })
   })
 }
 
@@ -120,9 +129,10 @@ async function decidirRevisao(contexto: unknown, input: unknown, estado: "CANCEL
   return emTransacaoGasto(contexto, async (tx, ctx) => {
     const row = await travarRevisaoGasto(tx, ctx, p.revisaoId)
     await autorizarOperacaoNaTransacao(tx, ctx)
+    const agora = await agoraDoBanco(tx)
     if (row.versao !== p.versaoEsperada || row.estado !== "PRONTA"
-      || (estado === "EXPIRADA" && row.expiraEm.getTime() > Date.now())) throw new OperacaoGastoError("revisao_desatualizada", 409)
-    return tx.gastoRevisao.update({ where: { id: row.id }, data: { estado, decididaEm: new Date() } })
+      || (estado === "EXPIRADA" && row.expiraEm.getTime() > agora.getTime())) throw new OperacaoGastoError("revisao_desatualizada", 409)
+    return tx.gastoRevisao.update({ where: { id: row.id }, data: { estado, decididaEm: agora } })
   })
 }
 

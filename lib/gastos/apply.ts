@@ -7,7 +7,7 @@ import { saldoCarteiraGasto, travarCarteirasGasto } from "@/lib/financeiro/servi
 import { criarMovimentoOperacaoGasto } from "@/lib/financeiro/services/movimentacoes-service"
 import { storeDoContexto, type FinanceiroDb } from "./financeiro-scope"
 import type { FinanceiroContextoAutorizado } from "./types"
-import { autorizarOperacaoNaTransacao, emTransacaoGasto, exigirRevisaoPronta, lockGasto, travarRevisaoGasto } from "./operacoes"
+import { agoraDoBanco, autorizarOperacaoNaTransacao, emTransacaoGasto, exigirRevisaoPronta, lockGasto, travarRevisaoGasto } from "./operacoes"
 import { chaveOperacao, identificadorOperacao, hashOperacaoGasto, normalizarPropostaGasto, OperacaoGastoError,
   type PropostaGasto, type ResultadoOperacaoGasto, valorPropostaGasto, ordemBinaria, meioCompensacaoGasto } from "./operacao-schema"
 import { centavosLegadosExatos, saldoTituloGasto, travarTitulosGasto, type AlocacaoPlanejada } from "./pagamentos"
@@ -72,7 +72,8 @@ export async function aplicarOperacaoGasto(contexto: unknown, input: unknown): P
       }
       return existente.resultado as unknown as ResultadoOperacaoGasto
     }
-    exigirRevisaoPronta(revisao, command.versaoEsperada)
+    const agora = await agoraDoBanco(tx)
+    exigirRevisaoPronta(revisao, command.versaoEsperada, agora)
     const datas = datasDaProposta(p)
     await travarPeriodosGasto(tx, ctx, datas)
     const documentoId = "documentoId" in p ? p.documentoId : undefined
@@ -207,9 +208,9 @@ export async function aplicarOperacaoGasto(contexto: unknown, input: unknown): P
     await tx.gastoOutbox.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), operacaoId: op.id,
       tipo: "OPERACAO_APLICADA", payload: resultado } })
     const cas = await tx.gastoRevisao.updateMany({ where: { id: revisao.id, versao: command.versaoEsperada, estado: "PRONTA" },
-      data: { estado: "APLICADA", decididaEm: new Date() } })
+      data: { estado: "APLICADA", decididaEm: agora } })
     if (cas.count !== 1) throw new OperacaoGastoError("revisao_desatualizada", 409)
-    await tx.financeiroOperacao.update({ where: { id: op.id }, data: { estado: "APLICADA", resultado, concluidaEm: new Date() } })
+    await tx.financeiroOperacao.update({ where: { id: op.id }, data: { estado: "APLICADA", resultado, concluidaEm: agora } })
     return resultado
   })
 }
@@ -270,7 +271,7 @@ export async function estornarPagamentoHub(contexto: unknown, input: unknown) {
     }
     return tx.gastoRevisao.create({ data: { perfilId: ctx.perfilId, storeId: ctx.storeId, criadoPorAdminUserId: ctx.userId,
       grupoChave, versao: 1, tipo: proposta.tipo, proposta: proposta as Prisma.InputJsonObject, payloadHash: hashOperacaoGasto(proposta),
-      expiraEm: new Date(Date.now() + 30 * 60_000) } })
+      expiraEm: new Date((await agoraDoBanco(tx)).getTime() + 30 * 60_000) } })
   })
   return aplicarOperacaoGasto(contexto, { revisaoId: revisao.id, versaoEsperada: revisao.versao, chave: pedido.chave })
 }

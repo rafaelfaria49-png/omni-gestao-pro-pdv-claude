@@ -31,6 +31,8 @@ enum MarketingMediaJobKind {
 }
 
 model Store {
+  gastosCanais WhatsAppCanal[]
+  gastosOrigensCanal GastoOrigemCanal[]
   /**
    * Use ids estáveis: loja-1, loja-2, ...
    */
@@ -2331,6 +2333,7 @@ model AdminUserStore {
  * Usuários de acesso ao painel OmniGestão (email + senha). Separado do User PIN-based.
  */
 model AdminUser {
+  gastosOrigensCanal GastoOrigemCanal[]
   id        String   @id @default(cuid())
   name      String   @default("")
   email     String   @unique
@@ -2407,6 +2410,7 @@ enum FinanceiroPerfilTipo {
 }
 
 model FinanceiroPerfil {
+  origensCanal GastoOrigemCanal[]
   id               String               @id @default(cuid())
   tipo             FinanceiroPerfilTipo
   storeId          String?              @unique
@@ -4631,7 +4635,8 @@ model GastoRevisao {
   sucessora GastoRevisao? @relation("GastoRevisaoAnterior")
   expiraEm DateTime
   decididaEm DateTime?
-  createdAt DateTime @default(now())
+  /// G006 · clock skew: instante gerado pelo PostgreSQL (UTC), nunca pelo host do Prisma.
+  createdAt DateTime @default(dbgenerated("timezone('UTC'::text, clock_timestamp())"))
   operacao FinanceiroOperacao?
   gasto Gasto?
 
@@ -4659,7 +4664,8 @@ model FinanceiroOperacao {
   revisao GastoRevisao @relation(fields: [revisaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
   estado String @default("RESERVADA")
   resultado Json? @db.JsonB
-  createdAt DateTime @default(now())
+  /// G006 · clock skew: instante gerado pelo PostgreSQL (UTC), nunca pelo host do Prisma.
+  createdAt DateTime @default(dbgenerated("timezone('UTC'::text, clock_timestamp())"))
   concluidaEm DateTime?
   gasto Gasto?
   pagamento PagamentoFinanceiro?
@@ -4838,6 +4844,7 @@ model FinanceiroOperacaoEvento {
 
 /** Apenas persistência do resultado; claim/envio/retry pertencem ao G006. */
 model GastoOutbox {
+  jobEntrega GastoJob?
   id String @id @default(cuid())
   perfilId String
   perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -4848,10 +4855,138 @@ model GastoOutbox {
   tipo String
   estado String @default("PENDENTE")
   payload Json @db.JsonB
-  createdAt DateTime @default(now())
+  /// G006 · clock skew: instante gerado pelo PostgreSQL (UTC), nunca pelo host do Prisma.
+  createdAt DateTime @default(dbgenerated("timezone('UTC'::text, clock_timestamp())"))
 
   @@unique([id, perfilId])
   @@unique([operacaoId, tipo])
   @@index([perfilId, estado, createdAt])
   @@map("gastos_outbox")
+}
+
+/** GESTAO é da plataforma; ATENDIMENTO conserva a loja. Sem segredo em banco. */
+model WhatsAppCanal {
+  canalId String @id @default(uuid())
+  phoneNumberId String @unique
+  wabaId String
+  appId String
+  telefoneE164 String @unique
+  papel String
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  credencialRef String
+  ativo Boolean @default(false)
+  versao Int @default(1)
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  mensagens WhatsAppGestaoInbox[]
+
+  @@map("whatsapp_canais")
+}
+
+/** Staging técnico privado: nenhum storeId, perfil ou usuário presumido. */
+model WhatsAppGestaoInbox {
+  id String @id @default(uuid())
+  provedor String
+  canalId String
+  canal WhatsAppCanal @relation(fields: [canalId], references: [canalId], onDelete: Restrict, onUpdate: Restrict)
+  canalVersao Int
+  phoneNumberId String
+  externalMessageId String
+  remetenteE164 String
+  correlacaoId String
+  respondidoA String?
+  mediaId String?
+  ocorridoEm DateTime @db.Timestamptz(3)
+  recebidoEm DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  proveniencia String
+  conteudo Json @db.JsonB
+  conteudoHash String @db.Char(64)
+  estado String @default("RECEBIDO")
+  job GastoJob?
+  origens GastoOrigemCanal[]
+
+  @@unique([provedor, phoneNumberId, externalMessageId])
+  @@index([canalId, recebidoEm])
+  @@map("whatsapp_gestao_inbox")
+}
+
+/** Identidade de origem imutável; não é operação nem outbox financeira. */
+model GastoOrigemCanal {
+  id String @id @default(uuid())
+  inboxId String
+  inbox WhatsAppGestaoInbox @relation(fields: [inboxId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autorAdminUserId String
+  autor AdminUser @relation(fields: [autorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  grupoChave String
+  bindingRef String
+  bindingVersao Int
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  jobs GastoJob[]
+
+  @@unique([perfilId, grupoChave])
+  @@map("gastos_origens_canal")
+}
+
+/** Jobs técnicos; nenhum tipo aplica dinheiro. Entrega referencia a outbox G004. */
+model GastoJob {
+  id String @id @default(uuid())
+  chave String @unique
+  tipo String
+  inboxId String? @unique
+  inbox WhatsAppGestaoInbox? @relation(fields: [inboxId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  outboxId String? @unique
+  outbox GastoOutbox? @relation(fields: [outboxId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  origemId String?
+  origem GastoOrigemCanal? @relation(fields: [origemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  estado String @default("PRONTO")
+  tentativas Int @default(0)
+  tentativasCiclo Int @default(0)
+  limiteTentativas Int @default(5)
+  runAfter DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  prazoEm DateTime @default(dbgenerated("(clock_timestamp() + '24 hours'::interval)")) @db.Timestamptz(3)
+  leaseOwner String?
+  leaseToken String?
+  leaseUntil DateTime? @db.Timestamptz(3)
+  envioEstado String @default("NAO_INICIADO")
+  externalMessageId String?
+  reconciliacaoRef String?
+  resultado Json? @db.JsonB
+  falhaCodigo String?
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  updatedAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  eventos GastoJobEvento[]
+
+  @@index([estado, runAfter, createdAt, id])
+  @@index([estado, leaseUntil])
+  @@map("gastos_jobs")
+}
+
+/** Auditoria técnica append-only, sem payload, telefone, token ou valores. */
+model GastoJobEvento {
+  id String @id @default(uuid())
+  jobId String
+  job GastoJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tipo String
+  codigo String
+  atorSql String @default(dbgenerated("CURRENT_USER"))
+  tentativa Int
+  evidenciaRef String?
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+
+  @@index([jobId, createdAt])
+  @@map("gastos_job_eventos")
+}
+
+model GastoWorkerPulso {
+  id String @id
+  versao String
+  estado String
+  ultimoPulso DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  iniciadoEm DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+
+  @@map("gastos_worker_pulsos")
 }

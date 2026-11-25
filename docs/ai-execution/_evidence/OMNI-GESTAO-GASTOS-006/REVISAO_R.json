@@ -1,0 +1,152 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-006",
+  "status": "APPROVED",
+  "executorFamily": "openai",
+  "reviewerFamily": "anthropic",
+  "actualModel": [
+    "claude-sonnet-5-5"
+  ],
+  "cli": "2.1.288 (Claude Code)",
+  "sessionId": "b2bc0680-adb5-464b-90dc-ae81f36ca734",
+  "packetDirectory": "review-r4-submission",
+  "packetManifestSha256": "a06545a8f134925d33b6481a1c111c0d2153330150be3574a7f04a0c56ebe21c",
+  "promptSha256": "e88f501872357af9347df3aa24194ab9d6a047a1808068b63dda543b518dd205",
+  "resultSha256": "b1b195045460e5de4fd0885f16e0811f90241600d39cfff7d9900b01b2884113",
+  "eventsSha256": "501bb3370687c0f9426a00a4b5052010d075f0e0fa6f93d238fb63b803cf1696",
+  "readTools": 48,
+  "approvedForLocalCommit": true,
+  "codeOnly": true,
+  "cloudRuntimeProof": "BLOCKED_EXTERNAL",
+  "goalComplete": false,
+  "productionApproval": false,
+  "actualVerdict": {
+    "verdict": "APPROVED",
+    "approvedForLocalCommit": true,
+    "codeOnly": true,
+    "cloudRuntimeProof": "BLOCKED_EXTERNAL",
+    "goalComplete": false,
+    "productionApproval": false,
+    "priorFindingsResolved": true,
+    "resolutionAudit": [
+      {
+        "id": "F-01",
+        "status": "RESOLVED",
+        "proof": "whatsapp-regression-r4.receipt.json: exitCode 0, sourceUnchanged true, 18:10:48Z–18:10:53Z. O vitest.json tem 115 testes passados, 0 falhas, 0 pendentes e 0 todo, o que bate com 114 PASS + 1 xfail F14 (expectedFailure=1 em quality-summary.json). Os sourceBefore e sourceAfter são idênticos. Os hashes de schema (2fe7f19e…), SQL (7467e718…) e dos 7 TS e 6 testes coincidem com source-audit.json. Os 17 hashes de código/teste/ARQUITETURA/RUNBOOK também coincidem com input-manifest.json, gerado no empacotamento. GOAL, RELATORIO e REVISAO_R nos recibos diferem dos atuais, como esperado: são os 3 metadados a finalizar."
+      },
+      {
+        "id": "F-02",
+        "status": "RESOLVED",
+        "proof": "worker.ts:28-37. Na homologação, só passam sslmode, sslaccept=strict, schema=public e connection_limit/pool_timeout em 1..60. Qualquer outra chave, duplicata (getAll≠1) ou chave codificada em %XX é recusada, porque URLSearchParams decodifica antes. O sslmode=require continua exigido em worker.ts:40. mensageria.unit.test.ts:69-72 cobre 5 casos (sslaccept inseguro, host=, schema=private, sslmode duplicado, options=). Cada caso parte de uma URL de homologação que o teste positivo (linhas 61-62) mostra ser válida, então a recusa vem do parâmetro. Os 5 passam em focused-g006-r8."
+      },
+      {
+        "id": "F-03",
+        "status": "RESOLVED",
+        "proof": "channels.ts:100-103 mapeia 'G006 ingresso sem canal' para CANAL_ALTERADO, antes da classificação permanente de 23514. O teste channels.postgres.test.ts:234-259 usa um trigger BEFORE INSERT g000_qa_ingresso, que dispara antes de g006_identidade, com advisory lock real em outra conexão. A barreira é confirmada por pg_locks (granted=false). O canal é rotacionado entre o SELECT e o INSERT, o resultado é CANAL_ALTERADO, e o retry do mesmo envelope devolve ackDuravel. O teste está em focused-g006-r8 (99/99)."
+      },
+      {
+        "id": "F-04",
+        "status": "RESOLVED",
+        "proof": "schema.prisma e migration.sql usam clock_timestamp() de forma consistente em todos os defaults G006 de createdAt, updatedAt, runAfter, recebidoEm, ultimoPulso, iniciadoEm e prazoEm. channels.ts, queue.ts, outbox.ts e worker.ts não gravam timestamp no cliente. relogio-db-ingresso.json mostra os INSERTs reais do Prisma com apenas colunas não temporais, exceto ocorridoEm, que vem da mensagem. O teste channels.postgres.test.ts:261-278 também compara com leituras de clock_timestamp antes e depois. A hipótese anterior sobre o now() do engine não é afirmada como fato, o que está correto."
+      },
+      {
+        "id": "F-05",
+        "status": "RESOLVED",
+        "proof": "qa-grants-r4.sql:11 dá ao operador UPDATE em 9 colunas, sem leaseOwner, leaseToken nem leaseUntil. migration.sql:275-278 nega reduzir tentativasCiclo ou estender prazoEm fora de ESTACIONADO→PRONTO por session_user operador. migration.sql:322-334 audita mudança de runAfter, prazoEm e tentativasCiclo. queue.postgres.test.ts:289-302 nega lease, ciclo e prazo ao operador. O teste também prova o evento do runAfter com atorSql=omni_gastos_operator e a recuperação válida via reprocessarJob. Os fluxos legítimos do worker (claim, renovação, falharJob) não reduzem o ciclo nem estendem o prazo, e a suíte passa."
+      },
+      {
+        "id": "F-06",
+        "status": "RESOLVED",
+        "proof": "worker.ts:55-59 acrescenta CREATE em public e no banco, e EXECUTE em funções não-trigger de public fora dos 2 helpers G006 e do validador G004. O teste mensageria-migration.postgres.test.ts:330-344 concede CREATE em schema e banco e EXECUTE numa função de sonda, e o health recusa cada um. O health volta a passar depois de cada revogação. O mesmo teste prova que a cadeia G001-G006 não tem outra função não-trigger executável pelo worker. Decisão G004 conferida em migration G004:562-570: g004_compensacao_individual_valida(jsonb) é LANGUAGE sql STABLE, SECURITY INVOKER, e o predicado de exceção fixa prosecdef=false e provolatile='s'. Funções RETURNS trigger não são chamáveis diretamente. Não revogar PUBLIC de funções G004 preserva o contrato financeiro. Ressalva em P3-A: a função não é 'pura', pois lê movimentacoes_financeiras com os direitos do chamador. Isso é seguro porque o worker não tem SELECT nessa tabela e o health varre SELECT."
+      },
+      {
+        "id": "F-07",
+        "status": "RESOLVED",
+        "proof": "GOAL.md agora rotula a1288… como 'no preflight' (diff, linhas ~354-355). O RELATORIO mantém 745fb55 como última referência fetched. Os metadados GOAL, RELATORIO e REVISAO_R continuam como finalização pendente, conforme declarado. O RELATORIO e a REVISAO_R registram CODE_VALIDATED=PENDING_R4, CLOUD_RUNTIME_PROOF=BLOCKED_EXTERNAL e G006_COMPLETE=false."
+      }
+    ],
+    "findings": [
+      {
+        "priority": "P3",
+        "file": "docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-006/RUNBOOK.md",
+        "line": 39,
+        "proof": "Defeito de documentação, confirmado por leitura estática. A tabela de papéis ainda diz que o operador tem 'SELECT/UPDATE jobs', e o RUNBOOK:41 chama de 'script QA efetivamente aplicado' o qa-grants.sql original. Só o parágrafo final (linha 97) descreve o grant correto, por 9 colunas e sem lease. O script r4 mora em E/, fora do repositório. A proteção de lease do operador depende só do grant: o trigger migration.sql:269-271 exclui as colunas de lease da imutabilidade. Com UPDATE de tabela inteira, um operador poderia anular o lease de um job PROCESSANDO, que a transição PROCESSANDO→CONCLUIDO permite a qualquer papel. Poderia também marcar INICIADO→ACEITO com um externalMessageId arbitrário, o que seria falso sucesso. Cenário derivado do trigger e dos CHECKs, não executado. Só ocorreria se um DBA seguisse a linha 39 literalmente.",
+        "fix": "Antes do commit ou como pendência de G007/cloud: alinhar RUNBOOK:39 e :41-43 ao grant por colunas do r4. Se o RUNBOOK mudar, registrar o novo hash em source-audit.json (docs-only, sem rerodar gates). Opcional: negar no trigger, quando session_user for o operador, a mudança de leaseOwner, leaseToken e leaseUntil, para não depender só do grant."
+      },
+      {
+        "priority": "P3",
+        "file": "docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-006/RUNBOOK.md",
+        "line": 97,
+        "proof": "RUNBOOK:97, RELATORIO e r4-corrections.json chamam g004_compensacao_individual_valida de 'validador JSON puro'. No SQL G004 (562-570) ela faz SELECT EXISTS em movimentacoes_financeiras com os direitos do chamador. Não é função pura, mas é STABLE e SECURITY INVOKER. Como o worker não tem SELECT nessa tabela, uma chamada falha por permissão e nada vaza. A exceção do health continua correta, e a justificativa deve citar isso.",
+        "fix": "Trocar 'puro' por 'somente leitura, SECURITY INVOKER; sem efeito para o worker por falta de SELECT em movimentacoes_financeiras'. Texto apenas."
+      },
+      {
+        "priority": "P3",
+        "file": "prisma/migrations/20261025120000_gastos_canais_fila_worker/migration.sql",
+        "line": 304,
+        "proof": "INCERTEZA, não defeito comprovado. A regra origem.createdAt <= operação.createdAt compara o createdAt da origem, agora clock_timestamp() do banco, com o createdAt legado de financeiro_operacoes. Esse legado é @default(now()) sem timestamptz, e eu não consegui confirmar se o valor sai do banco ou do engine Prisma. Se for do app e houver skew de relógio entre hosts maior que a distância entre registrar a origem e criar a operação, o resultado seria uma negação fail-closed legítima, sem perda de dinheiro. Antes da mudança, a origem usava CURRENT_TIMESTAMP, então o efeito novo é no máximo a duração da transação.",
+        "fix": "Para confirmar: no teste G004 com o log de queries do Prisma, verificar se o INSERT em financeiro_operacoes vincula createdAt. Se vincular, tratar no G008 (usar o relógio do banco na operação) ou documentar a tolerância de skew."
+      }
+    ],
+    "lintExceptionAccepted": true,
+    "lintEvidenceHashes": {
+      "baseline": "277dc20fac8aab6be971a47939fca34838325035b76357f666ea782dbcce9f3c",
+      "current": "26fea79f955e1cb6fd8d5ce745a4d64fd07403295e300abf4c4df63d48856366",
+      "differential": "c72de7b1b1fc25c043319ddceb05dd89cff3b09a104c02379d4ef4b9e338a689"
+    },
+    "lintNotes": "Aceite expresso SOMENTE para estes três hashes, sem herdar R2 nem R3. O input-manifest.json, gerado no empacotamento, mapeia 277dc20f… para evidence/lint-global-g005.json, 26fea79f… para evidence/lint-global-g006.json e c72de7b1… para evidence/lint-differential.json. Os dois primeiros também aparecem em lint-differential.json (linhas 40 e 48) e em quality-summary.json, e o terceiro em quality-summary.json e REVISAO_R. Lados baseline e current: 105 erros e 113 avisos, fatal 0, sourceUnchanged true. Mesmo eslint.config, package.json e lock, mesmo node_modules físico e Node 24. diagnostics.before/after/matched = 218/218/218, com added e removed vazios. O lint corrente rodou entre 18:18 e 18:23, depois do build-r4, sobre as fontes finais. As 46 conversões CRLF→LF (71 offsets e 3 textos de fix) têm prova de fonte idêntica salvo CRLF. LINT_GLOBAL=BASELINE_FAIL herdado, nunca PASS. LINT_DELTA=PASS. lint-focused-r3: exit 0, sourceUnchanged true, 13 TS.",
+    "allCurrentGatesBoundToSources": true,
+    "gateBindingDetail": "focused-g006-r8 (99/99: 62 PG + 37 unit), unit-regression-r3 (935/935), whatsapp-regression-r4 (115 = 114 + 1 xfail), typecheck-r4, lint-focused-r3 e build-r4 têm exitCode 0 e sourceUnchanged true. Os sourceBefore e sourceAfter são idênticos, e os hashes de schema, SQL, 7 TS e 6 testes coincidem com source-audit.json. A migration renovada (migration-r4-renewal.json, 18:06Z) tem o mesmo SQL 7467e718…. Os bancos vazio e histórico (_r5) receberam a cadeia G001-G006, com histórico preservado (365,01, 200, 800 e JSON). Ressalva: as 418 regressões PG G001-G005 foram reutilizadas, com a justificativa já aceita na R3 (5818 arquivos protegidos intactos, 161 blocos de schema preservados, protectedChanged vazio). Os hashes de GOAL, RELATORIO e REVISAO_R nos recibos são anteriores às edições finais, o que é esperado.",
+    "scope": "Revisão estática e somente leitura do delta R3→R4 e das 20 fontes atuais (schema.prisma, migration 20261025120000, 7 TS, 6 testes e 5 docs) mais as 8 dependências, em CODE_ONLY para commit LOCAL. Li a AUTHORIZATION, o REQUEST §14, o result.json da R3, o r4-corrections, o diff R3→R4 inteiro, channels.ts, queue.ts e worker.ts integrais, o SQL de guards, auditoria e RLS (migration.sql:160-400), o RUNBOOK integral e qa-grants-r4.sql. Li também os recibos, source-audit, quality-summary, lint-differential, migration-r4-renewal, migration-vazio/histórico, relogio-db-ingresso, os trechos G004 do validador e a contagem do vitest.json. Os 5 defeitos de aceite das R2/R3 não foram redescobertos, e nenhum P0, P1 ou P2 foi encontrado. Nada foi executado, editado nem transmitido. Isto não aprova G006_COMPLETE, infraestrutura, deploy, produção, WhatsApp real, binding, OTP nem G007.",
+    "evidence": {
+      "contagens": "G006: 99 = 62 PG (14 channels + 9 queue + 8 migration + 31 recovery) + 37 unit (32+5). Os totais do vitest.json conferem: 99/99, 935/935 e 115/115, com 0 falhas, 0 skip e 0 todo. PG distintos: 418 + 62 = 480. Unitários: 935 + 115 = 1050 (1049 normais + 1 xfail F14), sem contar os 37 G006 duas vezes. Aritmética conferida.",
+      "allowlist": "source-audit.json: 20 paths, 5818 protegidos verificados, protectedChanged vazio, diffCheck 0. O input-manifest lista 28 arquivos em current/ (20 + 8 dependências).",
+      "cloud": "CLOUD_RUNTIME_PROOF=BLOCKED_EXTERNAL aceito conforme o comando humano. Transporte SIMULADO, modo padrão STAGING."
+    },
+    "limitations": [
+      "Não recomputei sha256. Aceitei os hashes pela concordância entre os recibos, o source-audit.json e o input-manifest.json, gerado no empacotamento. As ferramentas desta revisão só permitem leitura.",
+      "Não executei PostgreSQL, testes, lint, build nem typecheck. Confio nos recibos e nos vitest.json, que contêm os títulos dos 5+1+1+1+1 testes novos com status passado.",
+      "Não li os resultados brutos de lint-global-g005/g006 nem lint-diagnostic-pairs.json. Conferi os totais, a contagem de pares, as listas added/removed vazias e o algoritmo parcial em run-lint-differential.cjs.",
+      "A cadeia G002/G003 não está no pacote. A ausência de outra função pública não-trigger executável pelo worker em G001-G005 está provada pelo health passando na cadeia real, não por leitura do SQL. Em um host com extensões instaladas em public (por exemplo pg_trgm), o health poderia recusar por funções não-trigger com EXECUTE PUBLIC. Seria fail-closed e verificável na prova cloud.",
+      "O health só valida o papel worker. Os papéis ingress e operator dependem dos grants do DBA, e a documentação F-05 precisa estar correta (P3-A).",
+      "Sinais SIGTERM/SIGINT, runtime Linux, retenção e deploy continuam gates externos. Binding, transporte e prova de provedor são simulados e pertencem ao G007. As 418 PG G001-G005 não foram reexecutadas sobre a migration final.",
+      "Antes do commit: conferir byte a byte os 17 paths restantes contra source-audit.json e finalizar só GOAL, RELATORIO e REVISAO_R com o veredito real, CLOUD_RUNTIME_PROOF=BLOCKED_EXTERNAL e G006_COMPLETE=false. Se o RUNBOOK for corrigido por P3-A ou P3-B, registrar o novo hash em source-audit.json. É mudança docs-only e não exige rerodar gates nem nova R."
+    ]
+  },
+  "previousReviews": [
+    {
+      "packetDirectory": "review-r2-submission",
+      "status": "APPROVED",
+      "model": "claude-sonnet-5-5",
+      "sessionId": "06d20d1c-37dc-4b25-9c7d-4bfe68bcf099",
+      "supersededForCurrentSources": true,
+      "resultSha256": "490827ffa9a1cabad561fd712774ac61e36b046229b3d9901eb6386d3b4ea6ec"
+    },
+    {
+      "packetDirectory": "review-r3-submission",
+      "status": "APPROVED",
+      "conditional": true,
+      "sessionId": "055909d6-bf7c-4253-a68b-f47e54fb5c1a",
+      "model": "claude-sonnet-5-5",
+      "sourcesSuperseded": true,
+      "resultSha256": "f06b45764b14eafcadf243b153cf82a6d0c856bc3fb84492314c589041c90c20"
+    }
+  ],
+  "correctionsEvidenceSha256": "14203d78825b77f233b4504df7edb8a4301f04fffa08d678ddf2ec4f92a3a822",
+  "finalDocumentationCorrection": {
+    "at": "2026-10-25T18:36:49.053Z",
+    "review": "review-r4-submission",
+    "actualReviewResultSha256": "b1b195045460e5de4fd0885f16e0811f90241600d39cfff7d9900b01b2884113",
+    "permission": "Antes do commit: conferir byte a byte os 17 paths restantes contra source-audit.json e finalizar só GOAL, RELATORIO e REVISAO_R com o veredito real, CLOUD_RUNTIME_PROOF=BLOCKED_EXTERNAL e G006_COMPLETE=false. Se o RUNBOOK for corrigido por P3-A ou P3-B, registrar o novo hash em source-audit.json. É mudança docs-only e não exige rerodar gates nem nova R.",
+    "file": "docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-006/RUNBOOK.md",
+    "beforeSha256": "acaa32a7765f3f6cbee17fbbc179a4fe9bb4d682d50c4b416fe3e7bb48291197",
+    "afterSha256": "fe2a95562d90637ff371f30f3f2ec34f22655879be3d2b9fa2608f7af21cf25a",
+    "docsOnly": true,
+    "findingsResolved": [
+      "P3-A operator grant documentation",
+      "P3-B read-only SECURITY INVOKER description"
+    ],
+    "uncertaintyDocumented": "Legacy G004 createdAt clock behavior; not a confirmed defect; investigate before real dispatch/G008",
+    "codeSqlSchemaTestsChanged": false,
+    "correctedHistoricalExplanationSha256": "be79050e7c71de7236c34baf3dfe2244df72d4edc657b49b79fcc71d1c552b82"
+  }
+}
