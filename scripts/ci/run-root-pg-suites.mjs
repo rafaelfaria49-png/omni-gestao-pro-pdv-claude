@@ -54,6 +54,8 @@ export const MANIFESTO = [
     ],
   },
   { db: "aparelhos_pg_ci", envs: ["APARELHOS_TEST_DATABASE_URL"], preparo: "aparelhos", arquivos: ["test/aparelhos/aparelhos.pg.test.ts"] },
+  // OMNI-SAAS-001A: baseline da base + dados legados + migration real + drift zero (scripts/saas/prepare-pg.mjs).
+  { db: "saas_pg_ci", envs: ["SAAS_TEST_DATABASE_URL"], preparo: "saas", arquivos: ["lib/saas/saas.pg.test.ts"] },
 ]
 
 const LOOPBACK = ["127.0.0.1", "localhost", "::1", "[::1]"]
@@ -115,6 +117,8 @@ function main() {
       const env = { DATABASE_URL: url, DIRECT_URL: url, ...Object.fromEntries(grupo.envs.map((k) => [k, url])) }
       if (grupo.preparo === "aparelhos") {
         execFileSync(process.execPath, ["scripts/aparelhos/prepare-pg.mjs"], { env: { ...process.env, ...env }, stdio: ["ignore", "inherit", "inherit"] })
+      } else if (grupo.preparo === "saas") {
+        execFileSync(process.execPath, ["scripts/saas/prepare-pg.mjs"], { env: { ...process.env, ...env }, stdio: ["ignore", "inherit", "inherit"] })
       } else {
         prisma(["db", "execute", "--url", url, "--file", datamodel], env)
       }

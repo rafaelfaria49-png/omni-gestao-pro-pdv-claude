@@ -42,5 +42,10 @@ declare module "next-auth/jwt" {
     /** Id opaco da sessão em `admin_sessions` (revogação no servidor). */
     sid?: string
     storeModules?: Record<string, import("@/lib/auth/access-policy").AccessModule[]>
+    /**
+     * OMNI-SAAS-001A — entitlement comercial por loja em MODO SOMBRA (observado, nunca aplicado).
+     * Ausente = não calculado. Não é exposto na Session.
+     */
+    storeEntitlements?: Record<string, import("@/lib/saas/entitlement").StoreEntitlementClaim>
   }
 }

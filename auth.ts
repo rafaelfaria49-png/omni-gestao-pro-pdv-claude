@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { isPlatformAuthority, resolveStoreModules } from "@/lib/auth/access-policy"
 import { isSessionRevocationEnabled, prismaAdminSessionStore, resolveAdminSession } from "@/lib/auth/admin-session"
+import { calcularEntitlementsSombra } from "@/lib/saas/entitlement-sombra"
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -69,6 +70,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       token.allowedStoreIdsJson = JSON.stringify(stores.map((s) => s.id))
       token.storeModules = Object.fromEntries(stores.map((s) => [s.id, resolveStoreModules(s.moduleAccess)]))
       token.mustChangePassword = current.mustChangePassword
+      // OMNI-SAAS-001A — entitlement comercial em MODO SOMBRA: só calcula e registra o que teria
+      // limitado. Não participa de nenhuma decisão de acesso e nunca derruba o login (falha =
+      // claim ausente). Enforcement só no SAAS-002, com autorização própria.
+      const storeEntitlements = platform ? undefined : await calcularEntitlementsSombra(prisma, stores.map((s) => s.id))
+      if (storeEntitlements) token.storeEntitlements = storeEntitlements
+      else delete token.storeEntitlements
       return token
     },
   },
