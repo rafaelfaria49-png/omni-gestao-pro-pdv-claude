@@ -36,6 +36,7 @@ import {
 import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/movimentacoes-service"
 import { recalcularSaldoCarteira } from "@/lib/financeiro/services/carteiras-service"
 import { operacaoEstornadaNoLedger } from "@/lib/financeiro/recibo-recebimento"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 
 /** O lote SEMPRE roda dentro da transação do chamador — nunca no singleton global. */
 export type RecebimentoLoteTx = Prisma.TransactionClient
@@ -587,7 +588,8 @@ export async function executarRecebimentoLote(
 
   // Operação nova validada: títulos -> perfil -> todas as contas.
   // Replay/recusas acima não provisionam; falha posterior reverte a criação.
-  await resolverPerfilEmpresa(tx, storeId)
+  // Ativação controlada: desligado, o lote não provisiona perfil (os writers seguem o legado).
+  if (gestorMoneyAtivo()) await resolverPerfilEmpresa(tx, storeId)
 
   // 6. Preparação da escrita. O total NÃO é somado aqui: sai do que for de fato
   // aplicado (passo 9), para que o valor da CaixaOperacao seja igual à soma dos

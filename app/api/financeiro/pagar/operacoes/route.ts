@@ -7,6 +7,7 @@ import { respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { aplicarOperacaoGasto } from "@/lib/gastos/apply"
 import { cancelarRevisaoGasto, contextoEmpresaOperacao, corrigirRevisaoGasto, prepararRevisaoGasto } from "@/lib/gastos/operacoes"
 import { identificadorOperacao, chaveOperacao, instante, normalizarPropostaGasto, OperacaoGastoError } from "@/lib/gastos/operacao-schema"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -22,6 +23,8 @@ const responder = (body: unknown, status = 200) => respostaFinanceiraPrivada(Nex
 
 /** Exclusivamente EMPRESA; o body não seleciona perfil, owner ou autoridade. */
 export async function POST(req: Request) {
+  // Ativação controlada: com o Gestor Money desligado a rota não existe para o runtime.
+  if (!gestorMoneyAtivo()) return responder({ ok: false, code: "not_found" }, 404)
   // Reconciliação main: toda rota financeira exige o módulo finance contratado para a loja.
   const moduleDenied = await requireModuleApi(req, "finance")
   if (moduleDenied) return respostaFinanceiraPrivada(moduleDenied)

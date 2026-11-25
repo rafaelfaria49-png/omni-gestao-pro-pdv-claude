@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { FinanceiroContextoAutorizado } from "./types"
+import { gestorMoneyAtivo } from "./ativacao"
 
 export type FinanceiroDb = Prisma.TransactionClient
 export const LIMITE_CENTAVOS = BigInt("9000000000000")
@@ -144,6 +145,13 @@ export async function dadosFinanceirosEmpresa(
   db: FinanceiroDb, storeId: string, valor?: number,
   refs: { carteiraId?: string | null; carteiraHistoricaId?: string | null; pagarTituloId?: string; receberTituloId?: string } = {},
 ) {
+  if (!gestorMoneyAtivo()) {
+    // Gestor Money desligado: nunca cria perfil. Loja sem perfil segue exatamente o legado
+    // (perfilId NULL = empresarial pela Store obrigatória), sem travas nem adoção novas.
+    // Loja que já tem perfil (ativação anterior) continua no caminho escopado abaixo.
+    const existente = await db.financeiroPerfil.findUnique({ where: { storeId }, select: { id: true } })
+    if (!existente) return (valor === undefined ? {} : precisaoLegada(valor)) as { perfilId?: string } & Partial<ReturnType<typeof precisaoLegada>>
+  }
   const titulos: Array<{ kind: "pagar" | "receber"; id: string; perfilId: string | null; carteiraId: string | null }> = []
   for (const kind of ["pagar", "receber"] as const) {
     const id = kind === "pagar" ? refs.pagarTituloId : refs.receberTituloId
