@@ -1,6 +1,7 @@
 "use server";
 
 import { leituraEmpresaWhere, requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
@@ -29,7 +30,8 @@ async function authorizeFinancialProjection(storeId: string): Promise<string> {
     "Sem permissão para consultar o financeiro desta OS.",
   );
   if (!guard.ok) throw new Error(guard.error);
-  await requireLeituraOperacionalEmpresa(sid, p => p.operacoes.editarOs);
+  // G003 (reforço) só com o Gestor Money ligado; desligado vale o guard da main acima.
+  if (gestorMoneyAtivo()) await requireLeituraOperacionalEmpresa(sid, p => p.operacoes.editarOs);
   return sid;
 }
 

@@ -1,6 +1,4 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
-import { erroConsultaFinanceira } from "@/lib/gastos/query"
-import { consultarFinanceiroEmpresa, reaisConsulta, resumoTitulosConsulta, diaNoFusoConsulta } from "@/lib/gastos/query"
 /**
  * /api/financeiro/pagar
  *
@@ -202,14 +200,65 @@ export async function GET(req: Request) {
   const localKeyParam = url.searchParams.get("localKey")?.trim()
 
   try {
-    const q=await consultarFinanceiroEmpresa(storeId,{dataInicio:"1900-01-01",dataFim:diaNoFusoConsulta(new Date())})
-    const titulos=q.pagar,localKey=new URL(req.url).searchParams.get("localKey")?.trim()
-    const linha=(t:typeof titulos[number])=>({id:t.localKey?.trim()||t.id,localKey:t.localKey,descricao:t.descricao,valor:reaisConsulta(t.valorCentavos),vencimento:t.vencimento,status:t.status,
-      ...t.apresentacao,pago:reaisConsulta(t.pagoCentavos),restante:reaisConsulta(t.restanteCentavos),categoriaId:t.categoriaId})
-    if(localKey){const t=titulos.find(t=>t.localKey===localKey);if(!t)return respostaFinanceiraPrivada(err("Título não encontrado","not_found",404));return respostaFinanceiraPrivada(NextResponse.json({ok:true,titulo:{...linha(t),id:t.id}}))}
-    const audit=titulos.map(t=>({id:t.id,storeId,localKey:t.localKey??t.id,status:t.status,valor:reaisConsulta(t.valorCentavos),pago:reaisConsulta(t.pagoCentavos),restante:reaisConsulta(t.restanteCentavos),saldoAberto:reaisConsulta(t.restanteCentavos),vencimento:t.vencimento,cliente:t.apresentacao.cliente,fornecedorNome:t.apresentacao.fornecedor}))
-    return respostaFinanceiraPrivada(NextResponse.json({ok:true,rows:titulos.map(linha),summary:resumoTitulosConsulta(q,"PAGAR"),audit,metadata:{source:"server",storeId,generatedAt:q.asOf,base:q.base,versaoCalculo:q.versaoCalculo,criterios:q.criterios}}))
-  }catch(e){const erro=erroConsultaFinanceira(e);return respostaFinanceiraPrivada(NextResponse.json(erro.body,{status:erro.status}))}
+    await prismaEnsureConnected()
+
+    // Detalhe de um título específico
+    if (localKeyParam) {
+      const titulo = await prisma.contaPagarTitulo.findUnique({
+        where: { ...leituraEmpresaWhere(storeId, {}), storeId_localKey: { storeId, localKey: localKeyParam } },
+      })
+      if (!titulo) return respostaFinanceiraPrivada(err("Título não encontrado", "not_found", 404))
+      return respostaFinanceiraPrivada(NextResponse.json({
+        ok: true,
+        titulo: {
+          id: titulo.id,
+          localKey: titulo.localKey,
+          descricao: titulo.descricao,
+          fornecedor: fornecedorFromPayload(titulo.payload),
+          valor: titulo.valor,
+          vencimento: titulo.vencimento,
+          status: titulo.status,
+          categoria: pickStringFromPayload(titulo.payload, "planoContas", "categoria"),
+          formaPagamento: pickStringFromPayload(titulo.payload, "formaPagamento"),
+          contaBancaria: pickStringFromPayload(titulo.payload, "contaBancaria"),
+          observacao: pickStringFromPayload(titulo.payload, "observacoes", "observacao"),
+          dataConfirmacao: pickStringFromPayload(titulo.payload, "dataConfirmacao"),
+          parcela: parcelaLabelFromPayload(titulo.payload),
+          historico: parseHistorico(titulo.payload),
+        },
+      }))
+    }
+
+    // Lista paginada
+    const titulos = await prisma.contaPagarTitulo.findMany({
+      where: leituraEmpresaWhere(storeId, { storeId }),
+      orderBy: { updatedAt: "desc" },
+    })
+
+    const rows = titulos.map((t) => ({
+      id: (t.localKey?.trim() || t.id) as string,
+      descricao: t.descricao,
+      fornecedor: fornecedorFromPayload(t.payload),
+      valor: t.valor,
+      vencimento: t.vencimento,
+      status: t.status,
+      categoria: pickStringFromPayload(t.payload, "planoContas", "categoria"),
+      formaPagamento: pickStringFromPayload(t.payload, "formaPagamento"),
+      contaBancaria: pickStringFromPayload(t.payload, "contaBancaria"),
+      observacao: pickStringFromPayload(t.payload, "observacoes", "observacao"),
+      parcela: parcelaLabelFromPayload(t.payload),
+    }))
+
+    return respostaFinanceiraPrivada(NextResponse.json({
+      ok: true,
+      rows,
+      summary: buildContaPagarSummary(titulos),
+      audit: buildContaPagarAuditTrail(titulos),
+      metadata: { source: "server", storeId, generatedAt: new Date().toISOString() },
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
+  }
 }
 
 // ─── POST ─────────────────────────────────────────────────────────────────────

@@ -202,7 +202,7 @@ vi.mock("@/lib/auth/api-enterprise-guard", () => ({
 }))
 vi.mock("@/lib/auth/guard-enterprise", () => ({
   requireEnterpriseSession: async () => ({ ok: true, session: { user: { id: "unit-operator", role: "ADMIN",
-    storeAccess: "restricted", allowedStoreIds: [STORE] } } }),
+    storeAccess: "restricted", allowedStoreIds: [STORE], storeModules: { [STORE]: ["cash"] } } } }),
 }))
 
 import { GET } from "./route"

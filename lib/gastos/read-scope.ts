@@ -55,12 +55,23 @@ export async function requireLeituraOperacionalEmpresa(
   check: (p: EnterprisePermissions) => boolean,
 ) {
   const { requireEnterpriseSession } = await import("@/lib/auth/guard-enterprise")
-  const { canAccessStore, getEnterprisePermissions } = await import("@/lib/auth/enterprise-permissions")
+  const { canAccessStore, getEnterprisePermissions, getPermissionsFromSession } = await import("@/lib/auth/enterprise-permissions")
   const { prisma } = await import("@/lib/prisma")
+  const { gestorMoneyAtivo } = await import("./ativacao")
   const session = await requireEnterpriseSession()
   if (!session.ok) throw new FinanceiroReadError(session.status === 401 ? 401 : 403)
   if (!storeId?.trim() || !canAccessStore(session.session, storeId)) throw new FinanceiroReadError()
   const userId = session.session.user.id
+  if (!gestorMoneyAtivo()) {
+    // Ativação controlada — desligado, a autoridade é exatamente a da main: sessão cujo callback
+    // JWT relê usuário ativo/sessionVersion/vínculos do banco a cada request (canAccessStore sobre
+    // allowedStoreIds; lojaId só quando não há vínculo nenhum) e permissões por loja/módulo.
+    const permissions = getPermissionsFromSession(session.session, storeId)
+    if (!check(permissions)) throw new FinanceiroReadError()
+    return { userId, storeId, permissions }
+  }
+  // Ligado: regra estrita do G003 — usuário ativo relido aqui e vínculo AdminUserStore atual,
+  // sem fallback de loja primária que restaure um vínculo revogado.
   const user = await prisma.adminUser.findUnique({ where: { id: userId }, select: { active: true, role: true } })
   if (!user?.active) throw new FinanceiroReadError()
   const permissions = getEnterprisePermissions(user.role)

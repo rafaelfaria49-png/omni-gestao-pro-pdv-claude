@@ -1,4 +1,5 @@
 /** G001: somente fixtures sintéticas no cluster local descartável explicitamente nomeado. */
+import { modulosSinteticos } from "@/test/gastos/sessao-modulos"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
@@ -33,7 +34,7 @@ const empresa = (perfilId = E1, storeId = L1) => ({ tipo: "EMPRESA", perfilId, s
 const pessoal = (perfilId = P1) => ({ tipo: "PESSOAL", perfilId })
 const login = (id = U1, stores = [L1, L2], role = "ADMIN", access: "all" | "restricted" = "restricted") => {
   vi.mocked(auth).mockResolvedValue({ user: {
-    id, role, storeAccess: access, allowedStoreIds: stores, lojaId: L1,
+    id, role, storeAccess: access, allowedStoreIds: stores, storeModules: modulosSinteticos(stores), lojaId: L1,
   } } as never)
 }
 const req = (storeId = L1, source: "header" | "query" | "cookie" = "header") => new Request(

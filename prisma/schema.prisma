@@ -4947,7 +4947,7 @@ model GastoJob {
   tentativasCiclo Int @default(0)
   limiteTentativas Int @default(5)
   runAfter DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
-  prazoEm DateTime @default(dbgenerated("(clock_timestamp() + '24 hours'::interval)")) @db.Timestamptz(3)
+  prazoEm DateTime @default(dbgenerated("(clock_timestamp() + '24:00:00'::interval)")) @db.Timestamptz(3)
   leaseOwner String?
   leaseToken String?
   leaseUntil DateTime? @db.Timestamptz(3)

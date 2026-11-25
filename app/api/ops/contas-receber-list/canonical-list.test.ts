@@ -171,8 +171,8 @@ vi.mock("@/lib/auth/api-enterprise-guard", () => ({
   apiGuardFinanceiroViewOrOps: vi.fn(async () => null),
 }))
 vi.mock("@/lib/auth/guard-enterprise", () => ({
-  requireEnterpriseSession: async () => ({ ok: true, session: { user: { id: "unit-operator", role: "ADMIN",
-    storeAccess: "restricted", allowedStoreIds: [STORE] } } }),
+  // Igual à função real: requireEnterpriseSession = auth() (+ troca de senha) — a sessão é a do mock de auth.
+  requireEnterpriseSession: async () => ({ ok: true, session: await (await import("@/auth")).auth() }),
 }))
 
 import { GET } from "./route"

@@ -20,8 +20,8 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: mocks.requireEnterpriseWith,
-  requireEnterpriseSession: async () => ({ ok: true, session: { user: { id: "user-1", role: "ADMIN",
-    storeAccess: "restricted", allowedStoreIds: ["store-a", "store-b"] } } }),
+  // Igual à função real: requireEnterpriseSession = auth() (+ troca de senha) — a sessão é a do mock de auth.
+  requireEnterpriseSession: async () => ({ ok: true, session: await (await import("@/auth")).auth() }),
 }));
 vi.mock("@/lib/operacoes/assert-active-store", () => ({ assertActiveStoreId: mocks.assertActiveStoreId }));
 

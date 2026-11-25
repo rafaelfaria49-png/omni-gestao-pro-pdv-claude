@@ -1,4 +1,5 @@
 /** PostgreSQL descartável G005. Só identidade HTTP/NextAuth é fixture; dinheiro/Prisma são reais. */
+import { modulosSinteticos } from "@/test/gastos/sessao-modulos"
 import { vi } from "vitest"
 import { randomUUID } from "node:crypto"
 import { writeFileSync } from "node:fs"
@@ -46,7 +47,7 @@ export async function fixtureG005() {
   const login = (userId = U1, allowedStoreIds = [L1, L2]) => {
     sessionState.store = allowedStoreIds[0] ?? null
     sessionState.current = { expires: "2099-01-01", user: { id: userId, role: "ADMIN", name: "Synthetic G005",
-      storeAccess: "restricted", allowedStoreIds, lojaId: allowedStoreIds[0] } }
+      storeAccess: "restricted", allowedStoreIds, storeModules: modulosSinteticos(allowedStoreIds), lojaId: allowedStoreIds[0] } }
   }
   const contexto = async (perfilId = E1) => {
     const storeId = perfilId === E1 ? L1 : perfilId === E2 ? L2 : null

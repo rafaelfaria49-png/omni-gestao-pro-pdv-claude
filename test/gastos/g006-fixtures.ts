@@ -1,6 +1,7 @@
 /** PostgreSQL G006 exclusivo. Auth de browser só nas fixtures que chamam G004 real.
  * O worker não recebe essa sessão. Binding/Meta são ports sintéticos explícitos.
  */
+import { modulosSinteticos } from "@/test/gastos/sessao-modulos"
 import { vi } from "vitest"
 import { randomUUID } from "node:crypto"
 import { writeFileSync } from "node:fs"
@@ -77,7 +78,7 @@ export async function fixtureG006(papel: "GESTAO" | "ATENDIMENTO" = "GESTAO") {
     wabaId: canal.wabaId, appId: canal.appId, externalMessageId: `wamid.${randomUUID()}`, remetenteE164, correlacaoId: randomUUID(),
     ocorridoEm: "2026-10-25T15:00:00.000Z", conteudo: { tipo: "texto", texto: "Conteudo privado sintetico G006" }, ...patch })
   const login = (userId = U1) => { sessionState.current = { expires: "2099-01-01", user: { id: userId, role: "ADMIN", name: "Fixture G006",
-    lojaId: L1, storeAccess: "restricted", allowedStoreIds: [L1, L2] } } }
+    lojaId: L1, storeAccess: "restricted", allowedStoreIds: [L1, L2], storeModules: modulosSinteticos([L1, L2]) } } }
   const contexto = async (perfilId = E1) => {
     const r = await requireFinanceiroPerfilAccess(perfilId === E1 || perfilId === E2
       ? { tipo: "EMPRESA", perfilId, storeId: perfilId === E1 ? L1 : L2 } : { tipo: "PESSOAL", perfilId }, "edit")

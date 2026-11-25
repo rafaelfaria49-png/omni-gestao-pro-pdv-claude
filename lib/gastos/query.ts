@@ -1,3 +1,4 @@
+import { gestorMoneyAtivo } from "./ativacao"
 import "server-only"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
@@ -58,10 +59,14 @@ function whereScope(scope: Scope) {
 }
 
 async function revalidarEmpresa(db: Prisma.TransactionClient, storeId: string, userId: string): Promise<Scope> {
-  const user = await db.adminUser.findUnique({ where: { id: userId }, select: { active: true, role: true } })
-  if (!user?.active || !getEnterprisePermissions(user.role).financeiro.view
-    || !await db.adminUserStore.findUnique({ where: { adminUserId_storeId: { adminUserId: userId, storeId } }, select: { storeId: true } })) {
-    throw new FinanceiroReadError()
+  // Revalidação estrita dentro do snapshot só com o Gestor Money ligado. Desligado, a autoridade
+  // já foi decidida pela sessão da main em requireLeituraFinanceiraEmpresa (mesma regra dos demais GETs).
+  if (gestorMoneyAtivo()) {
+    const user = await db.adminUser.findUnique({ where: { id: userId }, select: { active: true, role: true } })
+    if (!user?.active || !getEnterprisePermissions(user.role).financeiro.view
+      || !await db.adminUserStore.findUnique({ where: { adminUserId_storeId: { adminUserId: userId, storeId } }, select: { storeId: true } })) {
+      throw new FinanceiroReadError()
+    }
   }
   const p = await db.financeiroPerfil.findUnique({ where: { storeId }, select: {
     id: true, tipo: true, ativo: true, ownerAdminUserId: true,

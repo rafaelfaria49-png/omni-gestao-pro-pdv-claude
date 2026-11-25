@@ -1,4 +1,5 @@
 /** Massa exclusiva G003. Só a sessão NextAuth é substituída; gates/Prisma/serviços são reais. */
+import { modulosSinteticos } from "@/test/gastos/sessao-modulos"
 import type { Session } from "next-auth"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
@@ -20,7 +21,7 @@ export let sessaoAtual: Session | null = null
 export function login(userId = U1, allowedStoreIds = stores, role = "ADMIN") {
   sessaoAtual = { expires: "2099-01-01T00:00:00.000Z", user: {
     id: userId, role, name: "Synthetic G003", email: `${userId}@example.invalid`,
-    storeAccess: "restricted", allowedStoreIds, lojaId: allowedStoreIds[0] ?? null,
+    storeAccess: "restricted", allowedStoreIds, storeModules: modulosSinteticos(allowedStoreIds), lojaId: allowedStoreIds[0] ?? null,
   } }
 }
 export function logout() { sessaoAtual = null }

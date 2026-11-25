@@ -1,4 +1,5 @@
 /** Só auth() é substituído; guards, serviços, rotas e PostgreSQL são reais. */
+import { modulosSinteticos } from "@/test/gastos/sessao-modulos"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
@@ -14,8 +15,8 @@ import { upsertVendaInTransaction } from "@/lib/ops-upsert-venda"
 import { upsertContaReceberFromOS } from "@/lib/financeiro/adapters/os-faturamento"
 import { executarRecebimentoLote, validarRecebimentoLote } from "@/lib/financeiro/services/recebimento-lote-service"
 import { persistirImportacao } from "@/lib/importador-avancado/persistidor"
-import { POST as pagarPersist } from "@/app/api/ops/contas-pagar-persist/route"
-import { POST as receberPersist } from "@/app/api/ops/contas-receber-persist/route"
+import { POST as pagarPersistRoute } from "@/app/api/ops/contas-pagar-persist/route"
+import { POST as receberPersistRoute } from "@/app/api/ops/contas-receber-persist/route"
 
 const config = vi.hoisted(() => {
   const raw = process.env.GASTOS_G002_TEST_DATABASE_URL
@@ -41,7 +42,7 @@ const F1 = "g002-fixture-F1", F2 = "g002-fixture-F2"
 const stores = [L1, L2, L3], perfis = [E1, E2, P1, P2]
 const scope = { OR: [{ storeId: { in: stores } }, { perfilId: { in: perfis } }] }
 function login(id = U1, allowedStoreIds = stores) {
-  vi.mocked(auth).mockResolvedValue({ user: { id, role: "ADMIN", storeAccess: "restricted", allowedStoreIds, lojaId: L1 } } as never)
+  vi.mocked(auth).mockResolvedValue({ user: { id, role: "ADMIN", storeAccess: "restricted", allowedStoreIds, storeModules: modulosSinteticos(allowedStoreIds), lojaId: L1 } } as never)
 }
 async function context(perfilId = P1, storeId?: string) {
   const access = await requireFinanceiroPerfilAccess(storeId ? { tipo: "EMPRESA", perfilId, storeId } : { tipo: "PESSOAL", perfilId }, "edit")
@@ -54,6 +55,16 @@ const categoria = (ctx: unknown) => criarCategoriaGasto(ctx, { nome: "Alimentaç
 const titulo = (ctx: unknown, extra: Record<string, unknown> = {}) => gravarTituloFinanceiro(ctx, {
   natureza: "PAGAR", chave: "comprovante-1", descricao: "Despesa fixture", valorCentavos: "36501", vencimento: "2026-10-25", ...extra,
 })
+// Reconciliação main: os snapshots legados exigem autoridade de plataforma (requireModuleApi "platform").
+// Só a chamada da rota recebe essa flag na MESMA sessão sintética; as asserções de escopo não mudam.
+async function comoPlataforma<T>(fn: () => Promise<T>): Promise<T> {
+  const anterior = vi.mocked(auth).getMockImplementation()
+  const sessao = (await anterior?.()) as { user: Record<string, unknown> } | null
+  vi.mocked(auth).mockResolvedValue({ ...sessao, user: { ...sessao?.user, platformAuthority: true } } as never)
+  try { return await fn() } finally { if (anterior) vi.mocked(auth).mockImplementation(anterior) }
+}
+const pagarPersist = (req: Request) => comoPlataforma(() => pagarPersistRoute(req))
+const receberPersist = (req: Request) => comoPlataforma(() => receberPersistRoute(req))
 const request = (storeId: string, rows: unknown[]) => new Request("http://localhost/api/ops/contas-pagar-persist", {
   method: "POST", headers: { "content-type": "application/json", "x-assistec-loja-id": storeId }, body: JSON.stringify({ rows }),
 })
@@ -252,7 +263,8 @@ describe.skipIf(!process.env.GASTOS_G002_TEST_DATABASE_URL)("G002 writers Postgr
       expect(row.payload).not.toHaveProperty("perfilId"); expect(row.payload).not.toHaveProperty("ownerAdminUserId")
     }
     login(U2, [L1])
-    expect((await pagarPersist(request(L2, [{ id: "forjado", valor: 10 }]))).status).toBe(403)
+    // Usuário restrito (sem plataforma) nunca grava snapshot — nem da própria loja, nem de outra.
+    expect((await pagarPersistRoute(request(L2, [{ id: "forjado", valor: 10 }]))).status).toBe(403)
     expect(await prisma.contaPagarTitulo.count({ where: { localKey: "forjado" } })).toBe(0)
   })
 
@@ -930,9 +942,10 @@ describe.skipIf(!process.env.GASTOS_G002_TEST_DATABASE_URL)("G002 writers Postgr
       const input = { ref, origem: "estorno_pagar", tipo: "entrada", valor: 20, carteiraId: a.id, perfilId: E1, storeId: L1, ...p }
       await expect(inserir(`N2-negativo-${p.id}`, input.ref, input.origem, input.tipo, input.valor, input.carteiraId, input.perfilId, input.storeId)).rejects.toMatchObject({ meta: { code: "23514" } })
     }
-    // Limite explícito: SQL não é a unidade de idempotência G004. O serviço faz
-    // lock+existeMovimentacao; a constraint não impede compensação SQL repetida.
-    expect(await inserir("N2-limite-sql", ref, "estorno_pagar", "entrada", 20)).toBe(1)
+    // Reconciliação #397: o trigger agora exige estorno <= líquido ainda movimentado na conta.
+    // O limite documentado no G002 (compensação SQL repetida aceita) foi fechado: a 2ª
+    // compensação integral do mesmo fato é recusada pelo banco.
+    await expect(inserir("N2-limite-sql", ref, "estorno_pagar", "entrada", 20)).rejects.toMatchObject({ meta: { code: "23514" } })
     expect(await prisma.movimentacaoFinanceira.count({ where: { id: { startsWith: "N2-negativo-" } } })).toBe(0)
   })
 
