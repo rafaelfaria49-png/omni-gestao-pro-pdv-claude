@@ -4,7 +4,7 @@
  * Fonte única de verdade de cores e temas: sistema global (`app/globals.css` + `styles/legibility.css`).
  * Este arquivo NÃO cria um segundo motor de temas — deriva todos os tokens `--cfg-*`
  * e pontes legadas (`--sidebar-bg`, `--card-muted`, etc.) diretamente das variáveis globais
- * dos 10 temas oficiais e do modo Alta Legibilidade.
+ * dos 10 temas oficiais e do modo Alta Legibilidade, com refinamento fino por família cromática.
  * Todas as regras são estritamente escopadas a `.configuracoes-v3-root` (sem vazamento global).
  * Importar apenas em ConfiguracoesV3Page.tsx.
  */
@@ -23,56 +23,69 @@
 
 /* ── 1. Tokens locais derivados do tema global (temas claros como base) ───── */
 .configuracoes-v3-root {
-  /* Camada semântica do módulo (--cfg-*) usando sRGB para evitar desvio de matiz em misturas com neutros */
-  --cfg-canvas: color-mix(in srgb, var(--surface) 88%, var(--border) 12%);
+  /* Hierarquia de 4 degraus: L1 Global (--sidebar) → L2 Config (--cfg-subnav) → Canvas (--cfg-canvas) → Card (--cfg-surface) */
+  --cfg-canvas: color-mix(in srgb, var(--surface) 76%, var(--border) 24%);
+  --cfg-subnav: color-mix(in srgb, var(--card) 86%, var(--surface) 14%);
   --cfg-surface: var(--card);
-  --cfg-inset: color-mix(in srgb, var(--surface) 64%, var(--card) 36%);
-  --cfg-hover: color-mix(in srgb, var(--surface) 76%, var(--border) 24%);
-  --cfg-border: var(--border);
-  --cfg-border-strong: color-mix(in srgb, var(--border) 74%, var(--foreground) 26%);
+  --cfg-inset: color-mix(in srgb, var(--surface) 72%, var(--card) 28%);
+  --cfg-hover: color-mix(in srgb, var(--surface) 64%, var(--border) 36%);
+
+  /* Bordas nítidas em temas claros (evita aspecto lavado ou contornos invisíveis) */
+  --cfg-border: color-mix(in srgb, var(--border) 86%, var(--foreground) 14%);
+  --cfg-border-strong: color-mix(in srgb, var(--border) 72%, var(--foreground) 28%);
+
   --cfg-fg: var(--foreground);
   --cfg-fg-body: color-mix(in srgb, var(--foreground) 88%, var(--background) 12%);
-  --cfg-muted: var(--muted-foreground);
+  --cfg-muted: color-mix(in srgb, var(--muted-foreground) 92%, var(--foreground) 8%);
   --cfg-subtle: color-mix(in srgb, var(--muted-foreground) 84%, var(--card) 16%);
 
   --cfg-primary-soft: color-mix(in srgb, var(--primary) 10%, transparent);
   --cfg-primary-border: color-mix(in srgb, var(--primary) 28%, transparent);
-  /* Reforçado com foreground para garantir contraste AA inclusive em Neon Ice (L=0.70) e Coffee Cream (L=0.66) */
+  /* Reforçado com foreground para contraste AA inclusive em Neon Ice (L=0.70) e Coffee Cream (L=0.66) */
   --cfg-primary-text: color-mix(in srgb, var(--primary) 72%, var(--foreground) 28%);
 
-  --cfg-success-fg: color-mix(in srgb, var(--success) 76%, var(--foreground) 24%);
+  /* Estado ativo de tiles de recursos (refinado e sem aparência de erro nos temas vermelhos) */
+  --cfg-tile-active-bg: color-mix(in srgb, var(--primary) 4.5%, var(--card) 95.5%);
+  --cfg-tile-active-border: color-mix(in srgb, var(--primary) 26%, var(--cfg-border) 74%);
+  --cfg-tile-icon-bg: var(--cfg-inset);
+  --cfg-tile-icon-active-bg: var(--cfg-primary-soft);
+  --cfg-tile-icon-active-border: var(--cfg-primary-border);
+  --cfg-tile-icon-active-fg: var(--cfg-primary-text);
+
+  --cfg-success-fg: color-mix(in srgb, var(--success) 74%, var(--foreground) 26%);
   --cfg-success-dot: var(--success);
   --cfg-success-soft: color-mix(in srgb, var(--success) 11%, var(--card) 89%);
-  --cfg-success-border: color-mix(in srgb, var(--success) 34%, var(--border) 66%);
+  --cfg-success-border: color-mix(in srgb, var(--success) 34%, var(--cfg-border) 66%);
 
-  --cfg-warning-fg: color-mix(in srgb, var(--warning) 56%, var(--foreground) 44%);
+  --cfg-warning-fg: color-mix(in srgb, var(--warning) 52%, var(--foreground) 48%);
   --cfg-warning-dot: var(--warning);
-  --cfg-warning-soft: color-mix(in srgb, var(--warning) 15%, var(--card) 85%);
-  --cfg-warning-border: color-mix(in srgb, var(--warning) 48%, var(--border) 52%);
+  --cfg-warning-soft: color-mix(in srgb, var(--warning) 14%, var(--card) 86%);
+  --cfg-warning-border: color-mix(in srgb, var(--warning) 44%, var(--cfg-border) 56%);
 
   --cfg-danger-fg: color-mix(in srgb, var(--destructive) 84%, var(--foreground) 16%);
   --cfg-danger-soft: color-mix(in srgb, var(--destructive) 9%, var(--card) 91%);
-  --cfg-danger-border: color-mix(in srgb, var(--destructive) 34%, var(--border) 66%);
+  --cfg-danger-border: color-mix(in srgb, var(--destructive) 36%, var(--cfg-border) 64%);
 
-  --cfg-info-fg: color-mix(in srgb, var(--info) 78%, var(--foreground) 22%);
+  --cfg-info-fg: color-mix(in srgb, var(--info) 76%, var(--foreground) 24%);
   --cfg-info-soft: color-mix(in srgb, var(--info) 10%, var(--card) 90%);
-  --cfg-info-border: color-mix(in srgb, var(--info) 34%, var(--border) 66%);
+  --cfg-info-border: color-mix(in srgb, var(--info) 34%, var(--cfg-border) 66%);
 
   --cfg-input-bg: var(--card);
-  --cfg-switch-off: color-mix(in srgb, var(--border) 66%, var(--muted-foreground) 34%);
+  --cfg-switch-off: color-mix(in srgb, var(--border) 58%, var(--muted-foreground) 42%);
   --cfg-top-highlight: oklch(1 0 0 / 0.85);
   --cfg-radius-card: 0.75rem;
   --cfg-radius-ctrl: 0.5rem;
-  --cfg-shadow-sm: 0 1px 2px oklch(0.145 0 0 / 0.045);
+  /* Elevação arquitetural limpa (sem halo cinza pesado em torno dos cards claros) */
+  --cfg-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
   --cfg-shadow-card:
-    0 1px 2px oklch(0.145 0 0 / 0.04),
-    0 6px 18px -10px oklch(0.145 0 0 / 0.09);
+    0 1px 2px rgba(15, 23, 42, 0.045),
+    0 2px 6px -2px rgba(15, 23, 42, 0.04);
   --cfg-shadow-pop:
-    0 12px 32px -8px oklch(0.145 0 0 / 0.16),
-    0 2px 6px oklch(0.145 0 0 / 0.06);
+    0 12px 30px -8px rgba(15, 23, 42, 0.16),
+    0 2px 6px rgba(15, 23, 42, 0.06);
 
   /* Pontes de compatibilidade para as demais 13 abas da Config V3 */
-  --sidebar-bg: var(--cfg-surface);
+  --sidebar-bg: var(--cfg-subnav);
   --sidebar-active: var(--cfg-primary-soft);
   --sidebar-active-foreground: var(--cfg-fg);
   --card-muted: var(--cfg-inset);
@@ -84,57 +97,51 @@
 }
 
 /* ── 2. Ajuste de polaridade para os 5 temas escuros oficiais ─────────────── */
-html:is(
-    .midnight,
-    .black-edition,
-    .quantum-violet,
-    .coffee-gold,
-    .ruby-black,
-    [data-theme="midnight"],
-    [data-theme="black"],
-    [data-theme="quantum-violet"],
-    [data-theme="coffee-gold"],
-    [data-theme="ruby-black"]
-  )
-  .configuracoes-v3-root {
-  --cfg-canvas: var(--background);
-  --cfg-surface: color-mix(in srgb, var(--card) 93%, var(--foreground) 7%);
-  --cfg-inset: color-mix(in srgb, var(--background) 60%, var(--card) 40%);
-  --cfg-hover: color-mix(in srgb, var(--card) 86%, var(--foreground) 14%);
-  --cfg-border-strong: color-mix(in srgb, var(--border) 66%, var(--foreground) 34%);
+html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .configuracoes-v3-root {
+  --cfg-canvas: color-mix(in srgb, var(--background) 96%, black 4%);
+  --cfg-subnav: color-mix(in srgb, var(--background) 62%, var(--card) 38%);
+  --cfg-surface: color-mix(in srgb, var(--card) 92%, var(--foreground) 8%);
+  --cfg-inset: color-mix(in srgb, var(--background) 56%, var(--card) 44%);
+  --cfg-hover: color-mix(in srgb, var(--card) 82%, var(--foreground) 18%);
+  --cfg-border: color-mix(in srgb, var(--border) 86%, var(--foreground) 14%);
+  --cfg-border-strong: color-mix(in srgb, var(--border) 68%, var(--foreground) 32%);
   --cfg-fg-body: color-mix(in srgb, var(--foreground) 90%, var(--background) 10%);
+  --cfg-muted: color-mix(in srgb, var(--muted-foreground) 94%, var(--foreground) 6%);
   --cfg-subtle: color-mix(in srgb, var(--muted-foreground) 82%, var(--background) 18%);
 
-  --cfg-primary-soft: color-mix(in srgb, var(--primary) 16%, transparent);
-  --cfg-primary-border: color-mix(in srgb, var(--primary) 38%, transparent);
+  --cfg-primary-soft: color-mix(in srgb, var(--primary) 15%, transparent);
+  --cfg-primary-border: color-mix(in srgb, var(--primary) 36%, transparent);
   --cfg-primary-text: color-mix(in srgb, var(--primary) 92%, var(--foreground) 8%);
 
+  --cfg-tile-active-bg: color-mix(in srgb, var(--primary) 6.5%, var(--cfg-inset) 93.5%);
+  --cfg-tile-active-border: color-mix(in srgb, var(--primary) 32%, var(--cfg-border) 68%);
+
   --cfg-success-fg: color-mix(in srgb, var(--success) 88%, var(--foreground) 12%);
-  --cfg-success-soft: color-mix(in srgb, var(--success) 15%, var(--card) 85%);
-  --cfg-success-border: color-mix(in srgb, var(--success) 34%, var(--border) 66%);
+  --cfg-success-soft: color-mix(in srgb, var(--success) 14%, var(--cfg-surface) 86%);
+  --cfg-success-border: color-mix(in srgb, var(--success) 34%, var(--cfg-border) 66%);
 
   --cfg-warning-fg: color-mix(in srgb, var(--warning) 92%, var(--foreground) 8%);
-  --cfg-warning-soft: color-mix(in srgb, var(--warning) 16%, var(--card) 84%);
-  --cfg-warning-border: color-mix(in srgb, var(--warning) 36%, var(--border) 64%);
+  --cfg-warning-soft: color-mix(in srgb, var(--warning) 15%, var(--cfg-surface) 85%);
+  --cfg-warning-border: color-mix(in srgb, var(--warning) 36%, var(--cfg-border) 64%);
 
-  --cfg-danger-fg: color-mix(in srgb, var(--destructive) 80%, var(--foreground) 20%);
-  --cfg-danger-soft: color-mix(in srgb, var(--destructive) 16%, var(--card) 84%);
-  --cfg-danger-border: color-mix(in srgb, var(--destructive) 38%, var(--border) 62%);
+  --cfg-danger-fg: color-mix(in srgb, var(--destructive) 78%, var(--foreground) 22%);
+  --cfg-danger-soft: color-mix(in srgb, var(--destructive) 16%, var(--cfg-surface) 84%);
+  --cfg-danger-border: color-mix(in srgb, var(--destructive) 40%, var(--cfg-border) 60%);
 
   --cfg-info-fg: color-mix(in srgb, var(--info) 88%, var(--foreground) 12%);
-  --cfg-info-soft: color-mix(in srgb, var(--info) 15%, var(--card) 85%);
-  --cfg-info-border: color-mix(in srgb, var(--info) 36%, var(--border) 64%);
+  --cfg-info-soft: color-mix(in srgb, var(--info) 14%, var(--cfg-surface) 86%);
+  --cfg-info-border: color-mix(in srgb, var(--info) 36%, var(--cfg-border) 64%);
 
-  --cfg-input-bg: color-mix(in srgb, var(--background) 76%, var(--card) 24%);
-  --cfg-switch-off: color-mix(in srgb, var(--border) 68%, var(--foreground) 32%);
-  --cfg-top-highlight: oklch(1 0 0 / 0.06);
-  --cfg-shadow-sm: 0 1px 2px oklch(0 0 0 / 0.45);
+  --cfg-input-bg: color-mix(in srgb, var(--background) 74%, var(--card) 26%);
+  --cfg-switch-off: color-mix(in srgb, var(--border) 66%, var(--foreground) 34%);
+  --cfg-top-highlight: oklch(1 0 0 / 0.055);
+  --cfg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.36);
   --cfg-shadow-card:
-    0 2px 8px oklch(0 0 0 / 0.36),
-    0 12px 28px -14px oklch(0 0 0 / 0.58);
-  --cfg-shadow-pop: 0 16px 40px oklch(0 0 0 / 0.72);
+    0 1px 3px rgba(0, 0, 0, 0.34),
+    0 8px 22px -14px rgba(0, 0, 0, 0.52);
+  --cfg-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.72);
 
-  --sidebar-bg: color-mix(in srgb, var(--background) 42%, var(--card) 58%);
+  --sidebar-bg: var(--cfg-subnav);
   --sidebar-active: var(--cfg-primary-soft);
   --sidebar-active-foreground: var(--cfg-fg);
   --card-muted: var(--cfg-inset);
@@ -143,19 +150,153 @@ html:is(
   --success-foreground: oklch(0.1 0 0);
 }
 
+/* ── 2B. Refinamento dedicado por família cromática (todos os 10 temas) ──── */
+
+/* VERMELHO CLARO (Light): vermelho controlado como identidade, nunca borda de erro em tiles ativos */
+html:is(.light, [data-studio-theme="light"], [data-studio-theme="classic"]) .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.962 0.004 250);
+  --cfg-subnav: oklch(0.992 0.002 250);
+  --cfg-border: oklch(0.875 0.006 250);
+  --cfg-border-strong: oklch(0.79 0.008 250);
+  --cfg-tile-active-bg: oklch(0.985 0.004 250);
+  --cfg-tile-active-border: oklch(0.82 0.012 20);
+  --cfg-primary-soft: oklch(0.56 0.21 25 / 0.09);
+  --cfg-primary-border: oklch(0.56 0.21 25 / 0.24);
+  --cfg-danger-soft: oklch(0.96 0.032 22);
+  --cfg-danger-border: oklch(0.68 0.17 22);
+  --cfg-danger-fg: oklch(0.46 0.2 22);
+}
+
+/* AZUL CLARO (Soft Ice): aparência enterprise tecnológica com contornos definidos */
+html.soft-ice .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.956 0.009 240);
+  --cfg-subnav: oklch(0.99 0.004 240);
+  --cfg-border: oklch(0.865 0.015 240);
+  --cfg-border-strong: oklch(0.78 0.02 240);
+}
+
+/* VERDE CLARO (Neon Ice): moderno, limpo, operacional com alto contraste AA */
+html.neon-ice .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.958 0.009 150);
+  --cfg-subnav: oklch(0.992 0.004 150);
+  --cfg-border: oklch(0.868 0.018 150);
+  --cfg-border-strong: oklch(0.78 0.024 150);
+  --cfg-primary-text: oklch(0.39 0.14 148);
+  --cfg-tile-active-bg: oklch(0.98 0.014 148);
+  --cfg-tile-active-border: oklch(0.78 0.09 148);
+}
+
+/* ROXO CLARO (Violet Ice): sofisticação tecnológica sem saturação excessiva */
+html.violet-ice .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.958 0.01 295);
+  --cfg-subnav: oklch(0.992 0.004 295);
+  --cfg-border: oklch(0.872 0.02 295);
+  --cfg-border-strong: oklch(0.785 0.028 295);
+  --cfg-tile-active-bg: oklch(0.98 0.012 295);
+}
+
+/* MARROM / CREME CLARO (Coffee Cream): elegância quente, separação nítida e alerta distinto do bronze */
+html.coffee-cream .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.952 0.013 62);
+  --cfg-subnav: oklch(0.985 0.008 62);
+  --cfg-border: oklch(0.865 0.022 60);
+  --cfg-border-strong: oklch(0.775 0.028 58);
+  --cfg-primary-text: oklch(0.43 0.11 58);
+  --cfg-warning-fg: oklch(0.46 0.15 44);
+  --cfg-warning-dot: oklch(0.66 0.18 48);
+  --cfg-warning-soft: oklch(0.955 0.036 56);
+  --cfg-warning-border: oklch(0.76 0.11 50);
+}
+
+/* AZUL ESCURO (Midnight): desdobra as 4 camadas que antes empatavam em L=0.27 */
+html.midnight .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.195 0.038 265);
+  --cfg-subnav: oklch(0.218 0.04 265);
+  --cfg-surface: oklch(0.252 0.042 265);
+  --cfg-inset: oklch(0.212 0.038 265);
+  --cfg-hover: oklch(0.295 0.044 265);
+  --cfg-input-bg: oklch(0.195 0.038 265);
+  --cfg-border: oklch(0.34 0.042 265);
+  --cfg-border-strong: oklch(0.43 0.046 265);
+  --sidebar-bg: var(--cfg-subnav);
+}
+
+/* PRETO + VERDE (Black Edition): profundidade em degraus nítidos sem fundir superfícies */
+html.black-edition .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.114 0 0);
+  --cfg-subnav: oklch(0.138 0 0);
+  --cfg-surface: oklch(0.168 0 0);
+  --cfg-inset: oklch(0.136 0 0);
+  --cfg-hover: oklch(0.215 0 0);
+  --cfg-input-bg: oklch(0.126 0 0);
+  --cfg-border: oklch(0.258 0 0);
+  --cfg-border-strong: oklch(0.345 0 0);
+  --sidebar-bg: var(--cfg-subnav);
+}
+
+/* ROXO ESCURO (Quantum Violet): profundidade tecnológica com acento contido */
+html.quantum-violet .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.128 0.036 295);
+  --cfg-subnav: oklch(0.152 0.04 295);
+  --cfg-surface: oklch(0.184 0.042 295);
+  --cfg-inset: oklch(0.146 0.038 295);
+  --cfg-hover: oklch(0.23 0.046 295);
+  --cfg-input-bg: oklch(0.136 0.038 295);
+  --cfg-border: oklch(0.278 0.042 295);
+  --cfg-border-strong: oklch(0.365 0.048 295);
+  --cfg-primary-soft: color-mix(in srgb, var(--primary) 13%, transparent);
+  --cfg-tile-active-bg: color-mix(in srgb, var(--primary) 6%, var(--cfg-inset) 94%);
+  --sidebar-bg: var(--cfg-subnav);
+}
+
+/* MARROM / DOURADO ESCURO (Coffee Gold): reduz peso visual, separa superfícies e distingue ouro da marca de alerta âmbar */
+html.coffee-gold .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.128 0.017 52);
+  --cfg-subnav: oklch(0.15 0.019 52);
+  --cfg-surface: oklch(0.182 0.022 52);
+  --cfg-inset: oklch(0.146 0.018 52);
+  --cfg-hover: oklch(0.228 0.024 52);
+  --cfg-input-bg: oklch(0.136 0.018 52);
+  --cfg-border: oklch(0.272 0.024 52);
+  --cfg-border-strong: oklch(0.36 0.028 52);
+  /* Alerta deslocado para âmbar quente-alaranjado para não se confundir com o dourado primário */
+  --cfg-warning-dot: oklch(0.74 0.19 50);
+  --cfg-warning-fg: oklch(0.87 0.13 54);
+  --cfg-warning-soft: oklch(0.23 0.05 46);
+  --cfg-warning-border: oklch(0.45 0.12 48);
+  --sidebar-bg: var(--cfg-subnav);
+}
+
+/* PRETO + VERMELHO (Ruby Black): grafite profundo neutro + vermelho rubi controlado ≠ alerta/erro */
+html.ruby-black .configuracoes-v3-root {
+  --cfg-canvas: oklch(0.112 0.004 15);
+  --cfg-subnav: oklch(0.136 0.005 18);
+  --cfg-surface: oklch(0.168 0.007 20);
+  --cfg-inset: oklch(0.134 0.005 18);
+  --cfg-hover: oklch(0.215 0.009 20);
+  --cfg-input-bg: oklch(0.124 0.005 18);
+  --cfg-border: oklch(0.262 0.01 20);
+  --cfg-border-strong: oklch(0.352 0.014 20);
+  /* Tiles ativos sem borda vermelha de alerta — identidade rubi reservada ao switch e acento discreto */
+  --cfg-tile-active-bg: oklch(0.156 0.01 20);
+  --cfg-tile-active-border: oklch(0.355 0.03 20);
+  --cfg-primary-soft: oklch(0.60 0.24 25 / 0.14);
+  --cfg-primary-border: oklch(0.60 0.24 25 / 0.34);
+  --cfg-danger-fg: oklch(0.85 0.14 28);
+  --cfg-danger-soft: oklch(0.23 0.075 24);
+  --cfg-danger-border: oklch(0.56 0.22 24);
+  --sidebar-bg: var(--cfg-subnav);
+}
+
 /* Preserva contraste de botões primários/gradiente nos temas Black Edition e Coffee Gold */
-html:is(.black-edition, [data-theme="black"])
-  .configuracoes-v3-root
-  button[data-slot="button"].bg-gradient-primary,
-html:is(.coffee-gold, [data-theme="coffee-gold"])
-  .configuracoes-v3-root
-  button[data-slot="button"].bg-gradient-primary {
+html.black-edition .configuracoes-v3-root button[data-slot="button"].bg-gradient-primary,
+html.coffee-gold .configuracoes-v3-root button[data-slot="button"].bg-gradient-primary {
   background-color: var(--primary);
   background-image: var(--gradient-primary);
   color: var(--primary-foreground) !important;
 }
 
-html:is(.coffee-gold, [data-theme="coffee-gold"])
+html.coffee-gold
   .configuracoes-v3-root
   :is(.lovable-settings-section-header-actions, .lovable-settings-card, .lovable-settings-theme-tile)
   button[data-slot="button"].bg-primary {
@@ -165,7 +306,9 @@ html:is(.coffee-gold, [data-theme="coffee-gold"])
 /* ── 3. Reforço dedicado ao Modo Alta Legibilidade (Aa) ───────────────────── */
 html[data-legibility="high"] .configuracoes-v3-root {
   --cfg-subtle: var(--muted-foreground);
+  --cfg-border: var(--border);
   --cfg-border-strong: var(--border-hover, var(--muted-foreground));
+  --cfg-tile-active-border: var(--cfg-border-strong);
   --cfg-switch-off: var(--border-hover, var(--muted-foreground));
 }
 
@@ -177,6 +320,11 @@ html[data-legibility="high"] .configuracoes-v3-root .cfg-card {
 html[data-legibility="high"] .configuracoes-v3-root .settings-sidebar-group-title {
   font-size: 0.75rem;
   line-height: 1.2;
+}
+
+html[data-legibility="high"] .configuracoes-v3-root [class~="text-[11.5px]"] {
+  font-size: 0.75rem !important;
+  line-height: 1.25 !important;
 }
 
 html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible + .cfg-switch {
@@ -191,6 +339,30 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
   isolation: isolate;
   background-color: var(--cfg-canvas);
   color: var(--cfg-fg);
+}
+
+/* Container query para adaptação fluida ao espaço real disponível (sidebar expandida vs recolhida) */
+.configuracoes-v3-root .cfg-content-container {
+  container-type: inline-size;
+}
+
+/* Grade adaptativa de Canais de contato: 1 col mobile → 2 cols notebook/tablet → 4 cols quando há ≥ 980px úteis */
+.configuracoes-v3-root .cfg-contact-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.625rem 0.75rem;
+}
+
+@container (min-width: 540px) {
+  .configuracoes-v3-root .cfg-contact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 980px) {
+  .configuracoes-v3-root .cfg-contact-grid {
+    grid-template-columns: 1.15fr 0.85fr 1fr 1.05fr;
+  }
 }
 
 /* Suporta tanto descendente quanto o próprio nó raiz (Portals de Dialog e AlertDialog). */
@@ -263,7 +435,7 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
   height: 16px;
   border-radius: 9999px;
   background-color: #ffffff;
-  box-shadow: 0 1px 2px oklch(0 0 0 / 0.28);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
   transition: transform 170ms cubic-bezier(0.22, 1, 0.36, 1), background-color 170ms ease;
 }
 
@@ -320,13 +492,19 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
 }
 
 .configuracoes-v3-root .cfg-resource-tile[data-active="true"][data-stage="operational"] {
-  background-color: var(--cfg-inset);
-  border-color: var(--cfg-primary-border);
+  background-color: var(--cfg-tile-active-bg);
+  border-color: var(--cfg-tile-active-border);
+  box-shadow: var(--cfg-shadow-sm);
+}
+
+.configuracoes-v3-root .cfg-resource-tile[data-active="false"][data-stage="operational"] {
+  background-color: color-mix(in srgb, var(--cfg-surface) 80%, var(--cfg-inset) 20%);
 }
 
 .configuracoes-v3-root .cfg-resource-tile[data-stage="preparation"] {
   border-style: dashed;
   border-color: var(--cfg-border-strong);
+  background-color: color-mix(in srgb, var(--cfg-inset) 70%, var(--cfg-surface) 30%);
 }
 
 /* Chegada de âncora / foco contextual */
@@ -348,7 +526,7 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
 
 /* Sticky Dirty Dock */
 .configuracoes-v3-root .cfg-dirty-dock {
-  background-color: color-mix(in srgb, var(--cfg-surface) 92%, transparent);
+  background-color: color-mix(in srgb, var(--cfg-surface) 94%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--cfg-warning-border);
@@ -413,22 +591,24 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
   box-shadow: var(--cfg-shadow-sm);
 }
 
-/* ── 6. Sidebar interna de Configurações (estritamente escopada a .configuracoes-v3-root) ── */
+/* ── 6. Sidebar interna de Configurações (L2 contextual, escopada a .configuracoes-v3-root) ── */
 .configuracoes-v3-root .settings-sidebar-aside {
   display: flex;
   height: 100%;
   width: 100%;
   flex-direction: column;
-  background-color: var(--sidebar-bg);
+  background-color: var(--cfg-subnav);
+  border-right: 1px solid var(--cfg-border);
+  transition: width 200ms ease-out;
 }
 
 .configuracoes-v3-root .settings-sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.625rem;
+  gap: 0.5rem;
   border-bottom: 1px solid var(--cfg-border);
-  padding: 0.75rem 0.875rem;
+  padding: 0.6875rem 0.875rem;
   flex-shrink: 0;
 }
 
@@ -437,20 +617,25 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0.625rem 0.625rem 0.875rem;
+  padding: 0.625rem 0.5625rem 0.875rem;
 }
 
 .configuracoes-v3-root .settings-sidebar-list {
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
+  gap: 0.75rem;
+}
+
+.configuracoes-v3-root .settings-sidebar-group + .settings-sidebar-group {
+  border-top: 1px solid color-mix(in srgb, var(--cfg-border) 62%, transparent);
+  padding-top: 0.6875rem;
 }
 
 .configuracoes-v3-root .settings-sidebar-group-title {
   padding: 0 0.5rem 0.25rem;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--cfg-subtle);
 }
@@ -472,7 +657,7 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
   gap: 0.5rem;
   border-radius: var(--cfg-radius-ctrl);
   border: 1px solid transparent;
-  padding: 0.4375rem 0.625rem;
+  padding: 0.375rem 0.5625rem;
   text-align: left;
   font-size: 0.8125rem;
   line-height: 1.3;
@@ -484,7 +669,7 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
 
 .configuracoes-v3-root .settings-sidebar-item-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--cfg-surface), 0 0 0 4px var(--ring);
+  box-shadow: 0 0 0 2px var(--cfg-subnav), 0 0 0 4px var(--ring);
 }
 
 .configuracoes-v3-root .settings-sidebar-item-btn[data-active="true"] {
@@ -516,16 +701,19 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
 /* Compactação inteligente em notebooks 1366×768 janela / alturas reduzidas */
 @media (max-height: 760px) {
   .configuracoes-v3-root .settings-sidebar-header {
-    padding: 0.625rem 0.75rem;
+    padding: 0.5625rem 0.75rem;
   }
   .configuracoes-v3-root .settings-sidebar-nav {
     padding: 0.5rem 0.5rem 0.75rem;
   }
   .configuracoes-v3-root .settings-sidebar-list {
-    gap: 0.625rem;
+    gap: 0.5rem;
+  }
+  .configuracoes-v3-root .settings-sidebar-group + .settings-sidebar-group {
+    padding-top: 0.5rem;
   }
   .configuracoes-v3-root .settings-sidebar-item-btn {
-    padding: 0.375rem 0.5625rem;
+    padding: 0.3125rem 0.5rem;
   }
 }
 

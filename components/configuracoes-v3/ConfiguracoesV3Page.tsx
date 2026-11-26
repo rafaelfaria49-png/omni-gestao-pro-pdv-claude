@@ -37,6 +37,7 @@ import { ConfiguracoesNavProvider } from "./contexts/ConfiguracoesNavContext";
 import { Toaster } from "./components/ui/toaster";
 import { registrarGuardaTrocaLoja, useLojaAtiva } from "@/lib/loja-ativa";
 import { registerRouteExitGuard } from "@/lib/navigation/route-exit-guard";
+import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import "./configuracoes-v3.css";
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { canAccessSettingsSection } from "@/lib/auth/page-access";
@@ -81,6 +82,7 @@ export default function ConfiguracoesV3Page() {
 
   const permittedActive = canAccessSettingsSection(permissions, active) ? active : "geral";
   const { lojas, lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
+  const { collapsed: globalSidebarCollapsed } = useSidebarCollapsed();
   const storeScopeKey = lojaAtivaId?.trim() || "__sem_unidade__";
 
   const dirtySectionsRef = useRef(dirtySections);
@@ -402,9 +404,13 @@ export default function ConfiguracoesV3Page() {
         savingSections={savingSections}
       >
         <div className="configuracoes-v3-root configuracoes-v3-app flex h-full w-full text-foreground">
-          {/* Sidebar — desktop */}
+          {/* Sidebar contextual (L2) — largura proporcional à sidebar global (L1) */}
           <div className={permittedActive === "pdv" ? "hidden" : "hidden lg:flex h-full shrink-0"}>
-            <SettingsSidebar active={permittedActive} onChange={handleChange} />
+            <SettingsSidebar
+              active={permittedActive}
+              onChange={handleChange}
+              compact={!globalSidebarCollapsed}
+            />
           </div>
 
           {/* Conteúdo */}
@@ -489,8 +495,12 @@ export default function ConfiguracoesV3Page() {
             <div className="flex-1 min-h-0 overflow-y-auto scroll-elegant">
               <div
                 key={`${permittedActive}-${storeScopeKey}`}
-                className={`mx-auto w-full px-4 py-4 sm:px-6 sm:py-5 xl:px-8 xl:py-6 animate-fade-in ${
-                  permittedActive === "pdv" ? "max-w-7xl" : "max-w-[1040px]"
+                className={`cfg-content-container mx-auto w-full animate-fade-in ${
+                  permittedActive === "pdv"
+                    ? "max-w-[1400px] px-4 py-3.5 sm:px-6 xl:px-7 xl:py-5"
+                    : globalSidebarCollapsed
+                      ? "max-w-[1320px] px-4 py-3.5 sm:px-6 lg:px-7 xl:py-5"
+                      : "max-w-[1220px] px-4 py-3.5 sm:px-5 lg:px-6 xl:px-7 xl:py-5"
                 }`}
               >
                 <Active />

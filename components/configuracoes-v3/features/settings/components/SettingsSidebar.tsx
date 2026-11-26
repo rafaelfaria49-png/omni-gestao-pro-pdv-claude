@@ -16,10 +16,13 @@ import { canAccessSettingsSection } from "@/lib/auth/page-access";
 import { usesClientExperience } from "@/lib/navigation/client-experience";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
+import { cn } from "../../../lib/utils";
 
 interface SettingsSidebarProps {
   active: SectionId;
   onChange: (id: SectionId) => void;
+  /** Quando a sidebar global (L1) está expandida, reduz levemente a largura L2 para ampliar o conteúdo. */
+  compact?: boolean;
   /** Slot opcional para ação de cabeçalho no drawer mobile/tablet (ex.: SheetClose). */
   headerAction?: ReactNode;
 }
@@ -34,7 +37,7 @@ export function unitMonogram(name: string | null | undefined): string {
   return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
 }
 
-export function SettingsSidebar({ active, onChange, headerAction }: SettingsSidebarProps) {
+export function SettingsSidebar({ active, onChange, compact = false, headerAction }: SettingsSidebarProps) {
   const permissions = useEnterprisePermissions();
   const client = usesClientExperience(permissions);
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
@@ -44,7 +47,6 @@ export function SettingsSidebar({ active, onChange, headerAction }: SettingsSide
   const storeName = hasStore
     ? lojaAtivaRaw?.nomeFantasia?.trim() || "Unidade ativa"
     : "Nenhuma unidade ativa";
-  const monogram = hasStore ? unitMonogram(storeName) : "!";
 
   const allowedSections = SETTINGS_SECTIONS.filter((s) => canAccessSettingsSection(permissions, s.id));
   const groups: ReadonlyArray<{ id: string; label: string; items: SectionItem[] }> = (
@@ -60,37 +62,29 @@ export function SettingsSidebar({ active, onChange, headerAction }: SettingsSide
   return (
     <aside
       aria-label="Navegação de Configurações"
-      className="settings-sidebar-aside border-r border-border lg:w-[228px] lg:shrink-0 select-none"
+      className={cn(
+        "settings-sidebar-aside lg:shrink-0 select-none",
+        compact ? "lg:w-[200px] xl:w-[208px]" : "lg:w-[218px]",
+      )}
     >
+      {/* Cabeçalho contextual discreto (sem duplicar o monograma do Unit Identity Ribbon) */}
       <div className="settings-sidebar-header">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            aria-hidden="true"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-[11px] font-bold tracking-tight"
-            style={{
-              backgroundColor: hasStore ? "var(--cfg-primary-soft)" : "var(--cfg-warning-soft)",
-              borderColor: hasStore ? "var(--cfg-primary-border)" : "var(--cfg-warning-border)",
-              color: hasStore ? "var(--cfg-primary-text)" : "var(--cfg-warning-fg)",
-            }}
+        <div className="min-w-0 leading-tight">
+          <p className="text-[12.5px] font-semibold tracking-tight" style={{ color: "var(--cfg-fg)" }}>
+            Configurações
+          </p>
+          <p
+            className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px]"
+            style={{ color: hasStore ? "var(--cfg-muted)" : "var(--cfg-warning-fg)" }}
+            title={storeName}
           >
-            {monogram}
-          </span>
-          <div className="min-w-0 leading-tight">
-            <p className="text-[13px] font-semibold tracking-tight" style={{ color: "var(--cfg-fg)" }}>
-              Configurações
-            </p>
-            <p
-              className="mt-0.5 flex items-center gap-1.5 truncate text-[11px]"
-              style={{ color: hasStore ? "var(--cfg-muted)" : "var(--cfg-warning-fg)" }}
-            >
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: hasStore ? "var(--cfg-success-dot)" : "var(--cfg-warning-dot)" }}
-              />
-              <span className="truncate">{storeName}</span>
-            </p>
-          </div>
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: hasStore ? "var(--cfg-success-dot)" : "var(--cfg-warning-dot)" }}
+            />
+            <span className="truncate">{storeName}</span>
+          </p>
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
@@ -99,7 +93,7 @@ export function SettingsSidebar({ active, onChange, headerAction }: SettingsSide
         {/* Mantém .settings-sidebar-list com <li> exclusivos para os itens de navegação (contrato de DOM/E2E). */}
         <div className="settings-sidebar-list">
           {groups.map((group) => (
-            <div key={group.id}>
+            <div key={group.id} className="settings-sidebar-group">
               <div className="settings-sidebar-group-title">{group.label}</div>
               <ul className="settings-sidebar-group-items">
                 {group.items.map((s) => {
@@ -133,7 +127,8 @@ export function SettingsSidebar({ active, onChange, headerAction }: SettingsSide
                         >
                           <Icon
                             aria-hidden="true"
-                            className="h-4 w-4 shrink-0"
+                            className="h-[15px] w-[15px] shrink-0"
+                            strokeWidth={1.75}
                             style={{ color: "var(--cfg-muted)" }}
                           />
                           <span className="flex-1 truncate">{label}</span>
@@ -154,7 +149,8 @@ export function SettingsSidebar({ active, onChange, headerAction }: SettingsSide
                           {isActive ? <span aria-hidden="true" className="settings-sidebar-active-bar" /> : null}
                           <Icon
                             aria-hidden="true"
-                            className="h-4 w-4 shrink-0"
+                            className="h-[15px] w-[15px] shrink-0"
+                            strokeWidth={isActive ? 2 : 1.75}
                             style={{ color: isActive ? "var(--cfg-primary-text)" : "var(--cfg-muted)" }}
                           />
                           <span className="flex-1 truncate">{label}</span>

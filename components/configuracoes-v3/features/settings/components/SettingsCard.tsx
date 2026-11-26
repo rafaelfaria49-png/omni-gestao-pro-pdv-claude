@@ -32,17 +32,18 @@ export function SettingsCard({
     <div className={cn("cfg-card min-w-0 overflow-hidden", className)}>
       {(title || description || headerExtra) && (
         <div
-          className="flex flex-col gap-2.5 border-b px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+          className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
           style={{ borderColor: "var(--cfg-border)" }}
         >
           <div className="flex min-w-0 flex-1 items-start gap-2.5">
             {icon ? (
               <span
                 aria-hidden="true"
-                className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-primary"
+                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-primary"
                 style={{
-                  backgroundColor: "var(--cfg-inset)",
-                  borderColor: "var(--cfg-border)",
+                  backgroundColor: "var(--cfg-primary-soft)",
+                  borderColor: "var(--cfg-primary-border)",
+                  color: "var(--cfg-primary-text)",
                 }}
               >
                 {icon}
@@ -51,7 +52,7 @@ export function SettingsCard({
             <div className="min-w-0 flex-1">
               {title && (
                 <h3
-                  className="text-[14.5px] font-semibold leading-snug tracking-tight"
+                  className="text-[14px] font-semibold leading-snug tracking-tight"
                   style={{ color: "var(--cfg-fg)" }}
                 >
                   {title}
@@ -59,7 +60,7 @@ export function SettingsCard({
               )}
               {description && (
                 <p
-                  className="mt-0.5 text-xs font-normal leading-relaxed"
+                  className="mt-0.5 text-xs font-normal leading-snug"
                   style={{ color: "var(--cfg-muted)" }}
                 >
                   {description}
@@ -68,14 +69,14 @@ export function SettingsCard({
             </div>
           </div>
           {headerExtra ? (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">{headerExtra}</div>
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5">{headerExtra}</div>
           ) : null}
         </div>
       )}
 
-      <div className={cn("min-w-0 px-4 py-4 sm:px-5", bodyClassName)}>
+      <div className={cn("min-w-0 px-4 py-3.5 sm:px-5", bodyClassName)}>
         {children}
-        {feedback ? <div className="mt-4">{feedback}</div> : null}
+        {feedback ? <div className="mt-3.5">{feedback}</div> : null}
       </div>
 
       {footer && (
@@ -87,7 +88,7 @@ export function SettingsCard({
           }}
         >
           {footerHint ? (
-            <span className="text-xs" style={{ color: "var(--cfg-muted)" }}>
+            <span className="text-[11.5px]" style={{ color: "var(--cfg-muted)" }}>
               {footerHint}
             </span>
           ) : null}

@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Info, SlidersHorizontal } from "lucide-react";
+import {
+  ChevronDown,
+  Grid2x2,
+  Info,
+  Palette,
+  QrCode,
+  Scale,
+  SlidersHorizontal,
+  Smartphone,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { useStoreBusiness } from "@/lib/use-store-business";
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { usesClientExperience } from "@/lib/navigation/client-experience";
@@ -167,6 +178,15 @@ const OPERATIONAL_DESCRIPTIONS: Record<string, string> = {
   "pdv.accessoryModelColor": "Habilita seletor rápido de modelo e cor de acessórios no PDV.",
   "catalog.serializedDevices":
     "Desligado por padrão em todos os ramos. Ative por unidade, apenas se a loja vender aparelhos.",
+};
+
+const RESOURCE_ICONS: Partial<Record<BusinessResourceKey, LucideIcon>> = {
+  "service.technical": Wrench,
+  "catalog.deviceCompatibility": Smartphone,
+  "pdv.accessoryModelColor": Palette,
+  "catalog.serializedDevices": QrCode,
+  "catalog.weight": Scale,
+  "catalog.variants": Grid2x2,
 };
 
 export function BusinessResourcesCard({
@@ -688,24 +708,52 @@ function BusinessResourcesForm({
         }`
       : OPERATIONAL_DESCRIPTIONS[item.key] ?? "";
 
+    const ResourceIcon = RESOURCE_ICONS[item.key] ?? SlidersHorizontal;
+    const isActiveOperational = state.requested && !isPreparation;
+
     return (
       <label
         key={item.key}
         data-active={state.requested ? "true" : "false"}
         data-stage={item.stage}
         data-disabled={disabled ? "true" : "false"}
-        className="cfg-resource-tile flex cursor-pointer items-start justify-between gap-3 rounded-xl border p-3.5"
+        className="cfg-resource-tile flex cursor-pointer items-start gap-2.5 rounded-xl border p-3"
       >
+        <span
+          aria-hidden="true"
+          className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition-colors"
+          style={{
+            backgroundColor: isActiveOperational
+              ? "var(--cfg-tile-icon-active-bg)"
+              : "var(--cfg-tile-icon-bg)",
+            borderColor: isActiveOperational
+              ? "var(--cfg-tile-icon-active-border)"
+              : "var(--cfg-border)",
+            color: isActiveOperational
+              ? "var(--cfg-tile-icon-active-fg)"
+              : "var(--cfg-muted)",
+          }}
+        >
+          <ResourceIcon className="h-3.5 w-3.5" strokeWidth={1.85} />
+        </span>
+
         <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-semibold leading-snug" style={{ color: "var(--cfg-fg)" }}>
-            {item.label}
+          <span className="flex items-start gap-1.5 text-[13px] font-semibold leading-snug" style={{ color: "var(--cfg-fg)" }}>
+            <span>{item.label}</span>
+            {isActiveOperational ? (
+              <span
+                aria-hidden="true"
+                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: "var(--cfg-success-dot)" }}
+              />
+            ) : null}
           </span>
           {/* Fora do nome acessível da caixa; lido como descrição via aria-describedby. */}
           {descriptionText ? (
             <span
               id={hintId}
               aria-hidden="true"
-              className="mt-1 block text-xs leading-relaxed"
+              className="mt-0.5 block text-[11.5px] leading-snug"
               style={{ color: "var(--cfg-muted)" }}
             >
               {descriptionText}
@@ -813,20 +861,20 @@ function BusinessResourcesForm({
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {!canConfigure ? (
             <SettingsFeedbackBanner variant="readonly">
               Somente responsáveis com permissão de Configurações podem editar.
             </SettingsFeedbackBanner>
           ) : null}
 
-          {/* Seletor nativo de ramo + Cartão de Impacto do Ramo */}
-          <div className="grid grid-cols-1 items-stretch gap-3.5 md:grid-cols-12">
-            <div className="space-y-1.5 md:col-span-5">
+          {/* Seletor nativo de ramo + Painel contextual estruturado de Impacto do Ramo */}
+          <div className="grid grid-cols-1 items-stretch gap-3 md:grid-cols-12">
+            <div className="space-y-1.5 md:col-span-4">
               <label
                 htmlFor="business-branch"
                 className="block text-xs font-medium"
-                style={{ color: "var(--cfg-fg-body)" }}
+                style={{ color: "var(--cfg-fg)" }}
               >
                 Ramo principal
               </label>
@@ -836,7 +884,7 @@ function BusinessResourcesForm({
                   value={currentBranch}
                   disabled={disabled}
                   onChange={(event) => handleBranchChange(event.target.value as BusinessBranch)}
-                  className="cfg-select h-10 w-full appearance-none border px-3 pr-9 text-[13px] font-medium"
+                  className="cfg-select h-9 w-full appearance-none border px-3 pr-9 text-[13px] font-medium"
                 >
                   {Object.entries(BUSINESS_BRANCHES)
                     .filter(([value]) => branchOffered(value as BusinessBranch))
@@ -848,30 +896,49 @@ function BusinessResourcesForm({
                 </select>
                 <ChevronDown
                   aria-hidden="true"
-                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                  className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2"
                   style={{ color: "var(--cfg-muted)" }}
                 />
               </div>
+              <p className="text-[11px] leading-snug" style={{ color: "var(--cfg-subtle)" }}>
+                Define as sugestões padrão sem sobrescrever escolhas explícitas.
+              </p>
             </div>
 
             <div
-              className="flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 md:col-span-7"
+              className="rounded-xl border border-l-2 px-3.5 py-2.5 md:col-span-8"
               style={{
                 backgroundColor: "var(--cfg-inset)",
                 borderColor: "var(--cfg-border)",
+                borderLeftColor: "var(--primary)",
               }}
             >
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-              <div className="text-xs leading-relaxed" style={{ color: "var(--cfg-muted)" }}>
-                <p>
-                  <strong style={{ color: "var(--cfg-fg)" }}>Impacto do ramo:</strong>{" "}
-                  {BRANCH_IMPACT_SUMMARY[currentBranch]}
-                </p>
-                <p className="mt-0.5">
-                  Para padaria, recomendamos o PDV Clássico. Salvar o ramo preserva a escolha atual de PDV, preços,
-                  produtos e estoque.
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em]" style={{ color: "var(--cfg-fg)" }}>
+                  <Info className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                  Impacto do ramo
+                </span>
+                <span
+                  className="rounded-md border px-2 py-0.5 text-[10.5px] font-medium"
+                  style={{
+                    backgroundColor: "var(--cfg-surface)",
+                    borderColor: "var(--cfg-border)",
+                    color: "var(--cfg-fg-body)",
+                  }}
+                >
+                  {BUSINESS_BRANCHES[currentBranch]}
+                </span>
               </div>
+              <p className="mt-1.5 text-xs font-medium leading-snug" style={{ color: "var(--cfg-fg-body)" }}>
+                {BRANCH_IMPACT_SUMMARY[currentBranch]}
+              </p>
+              <p
+                className="mt-1.5 border-t pt-1.5 text-[11.5px] leading-snug"
+                style={{ borderColor: "var(--cfg-border)", color: "var(--cfg-muted)" }}
+              >
+                Para padaria, recomendamos o PDV Clássico. Salvar o ramo preserva a escolha atual de PDV, preços,
+                produtos e estoque.
+              </p>
             </div>
           </div>
 

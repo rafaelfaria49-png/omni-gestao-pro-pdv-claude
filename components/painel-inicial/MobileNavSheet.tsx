@@ -26,24 +26,36 @@ function NavLinkRow({ item, path, onNavigate }: { item: DashboardNavItem; path: 
     <Link
       href={item.to}
       onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
+        "relative flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
         active
-          ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+          ? "bg-primary/10 text-sidebar-foreground font-semibold"
+          : "text-muted-foreground font-medium hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
       )}
     >
       <span
+        aria-hidden="true"
         className={cn(
-          "grid h-7 w-7 shrink-0 place-items-center rounded-md",
-          active ? "bg-primary/20 text-primary" : "bg-muted/60 text-muted-foreground",
+          "absolute left-0 top-1.5 bottom-1.5 w-[2.5px] rounded-r-full bg-primary transition-opacity",
+          active ? "opacity-100" : "opacity-0",
         )}
-      >
-        <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+      />
+      <Icon
+        aria-hidden="true"
+        className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground/85")}
+        strokeWidth={active ? 2 : 1.75}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{item.label}</span>
+        {item.subtitle ? (
+          <span className="block truncate text-[10.5px] font-normal text-muted-foreground/80">
+            {item.subtitle}
+          </span>
+        ) : null}
       </span>
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.badge ? (
-        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 rounded border border-sidebar-border px-1.5 py-[1px] text-[9.5px] font-medium text-muted-foreground">
           {item.badge}
         </span>
       ) : null}
@@ -90,12 +102,12 @@ export function MobileNavSheet() {
       >
         <Menu className="h-4 w-4" strokeWidth={2} />
       </SheetTrigger>
-      <SheetContent side="left" className="w-[min(100vw-2rem,18rem)] p-0 flex flex-col">
-        <SheetHeader className="border-b border-border px-4 py-3 text-left">
-          <SheetTitle className="text-sm font-semibold">Navegação</SheetTitle>
+      <SheetContent side="left" className="w-[min(100vw-2rem,18rem)] p-0 flex flex-col bg-sidebar text-sidebar-foreground border-sidebar-border">
+        <SheetHeader className="border-b border-sidebar-border px-4 py-3 text-left">
+          <SheetTitle className="text-sm font-semibold text-sidebar-foreground">Navegação</SheetTitle>
           <StoreSwitcher variant="sheet" fallback={null} onSwitched={close} />
         </SheetHeader>
-        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
+        <nav className="scroll-elegant flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
           {sections.map((section) => (
             <div key={section.id} className="space-y-1">
               <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">

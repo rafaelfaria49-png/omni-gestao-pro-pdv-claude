@@ -51,14 +51,14 @@ export function SettingsCollapsible({
         aria-expanded={isOpen}
         aria-controls={isOpen ? contentId : undefined}
         onClick={toggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[var(--cfg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--cfg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-medium" style={{ color: "var(--cfg-fg)" }}>
             {title}
           </div>
           {(isOpen ? expandedSummary ?? summary : summary) ? (
-            <div className="mt-0.5 truncate text-xs" style={{ color: "var(--cfg-muted)" }}>
+            <div className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--cfg-muted)" }}>
               {isOpen ? expandedSummary ?? summary : summary}
             </div>
           ) : null}
@@ -67,7 +67,7 @@ export function SettingsCollapsible({
           className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium"
           style={{
             backgroundColor: "var(--cfg-surface)",
-            borderColor: "var(--cfg-border)",
+            borderColor: "var(--cfg-border-strong)",
             color: "var(--cfg-fg-body)",
           }}
         >

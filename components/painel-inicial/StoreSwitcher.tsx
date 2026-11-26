@@ -111,7 +111,7 @@ export function StoreSwitcher({
             "group flex w-full min-w-0 items-center gap-1 rounded-md text-left transition-colors",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70",
             variant === "sidebar"
-              ? "-mx-1 px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              ? "-mx-1 mt-0.5 px-1 py-0.5 text-[10.5px] font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
               : "border border-border bg-panel px-2.5 py-2 text-[12.5px] text-foreground hover:bg-muted/60",
           )}
         >

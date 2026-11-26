@@ -24,6 +24,7 @@ body {
 }
 
 :root {
+  color-scheme: light;
   /* ── Paleta oficial — Modo Light (Identidade Vermelha) ────────────────── */
   --background: hsl(210 20% 98%);
   --foreground: oklch(0.145 0 0);
@@ -92,13 +93,13 @@ body {
   --shadow-elegant: 0 10px 30px -12px oklch(0.47 0.26 25 / 0.2);
   --shadow-glow: 0 0 40px oklch(0.47 0.26 25 / 0.14);
 
-  --sidebar: oklch(1 0 0);
+  --sidebar: oklch(0.985 0.002 240);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.47 0.26 25);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.955 0.004 240);
   --sidebar-accent-foreground: oklch(0.21 0 0);
-  --sidebar-border: oklch(0.9 0 0);
+  --sidebar-border: oklch(0.89 0.005 240);
   --sidebar-ring: oklch(0.47 0.26 25);
 
   /* ── PDV OmniClassic — tokens HSL (usar com hsl(var(--token))) ─────────── */
@@ -121,6 +122,7 @@ body {
 }
 
 .soft-ice {
+  color-scheme: light;
   --background: oklch(0.984 0.003 240);
   --foreground: oklch(0.21 0.04 265);
   --surface: oklch(0.968 0.006 240);
@@ -157,6 +159,15 @@ body {
   --bubble-user: linear-gradient(135deg, oklch(0.55 0.18 240), oklch(0.65 0.16 220));
   --bubble-user-foreground: oklch(1 0 0);
 
+  --sidebar: oklch(0.972 0.006 240);
+  --sidebar-foreground: oklch(0.21 0.04 265);
+  --sidebar-primary: oklch(0.55 0.18 240);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.945 0.012 240);
+  --sidebar-accent-foreground: oklch(0.21 0.04 265);
+  --sidebar-border: oklch(0.89 0.012 240);
+  --sidebar-ring: oklch(0.55 0.18 240);
+
   --gradient-primary: linear-gradient(135deg, oklch(0.55 0.18 240), oklch(0.7 0.16 220));
   --shadow-card: 0 10px 34px -18px oklch(0.21 0.04 265 / 0.18), 0 1px 2px oklch(0.21 0.04 265 / 0.05);
   --shadow-elegant: 0 10px 30px -12px oklch(0.55 0.18 240 / 0.2);
@@ -164,6 +175,7 @@ body {
 }
 
 .midnight {
+  color-scheme: dark;
   --background: oklch(0.21 0.04 265);
   --foreground: oklch(0.984 0.003 240);
   --surface: oklch(0.27 0.04 265);
@@ -200,6 +212,15 @@ body {
   --bubble-user: linear-gradient(135deg, oklch(0.55 0.2 240), oklch(0.65 0.18 270));
   --bubble-user-foreground: oklch(1 0 0);
 
+  --sidebar: oklch(0.185 0.04 265);
+  --sidebar-foreground: oklch(0.984 0.003 240);
+  --sidebar-primary: oklch(0.76 0.22 235);
+  --sidebar-primary-foreground: oklch(0.15 0.04 265);
+  --sidebar-accent: oklch(0.26 0.042 265);
+  --sidebar-accent-foreground: oklch(0.984 0.003 240);
+  --sidebar-border: oklch(0.30 0.04 265);
+  --sidebar-ring: oklch(0.72 0.18 230);
+
   --gradient-primary: linear-gradient(135deg, oklch(0.76 0.22 235), oklch(0.82 0.2 225));
   --shadow-card: 0 18px 50px -28px oklch(0 0 0 / 0.75), 0 1px 2px oklch(1 0 0 / 0.05);
   --shadow-elegant: 0 12px 40px -10px oklch(0.55 0.2 240 / 0.4);
@@ -207,6 +228,7 @@ body {
 }
 
 .black-edition {
+  color-scheme: dark;
   /* Visual Premium Chumbo Tridimensional com Destaque Verde Neon */
   --background: oklch(0.13 0 0);
   --foreground: oklch(0.985 0 0);
@@ -271,6 +293,7 @@ body {
 }
 
 .quantum-violet {
+  color-scheme: dark;
   /* Tema Premium Quantum Violet (Fundo violeta escuro tridimensional com acentos magenta/pink neon) */
   --background: oklch(0.14 0.045 295);
   --foreground: oklch(0.96 0.02 295);
@@ -334,6 +357,7 @@ body {
 }
 
 .coffee-gold {
+  color-scheme: dark;
   /* Tema Premium Coffee Gold (Fundo café escuro tridimensional com acentos dourados e bronze neon) */
   --background: oklch(0.14 0.025 50);
   --foreground: oklch(0.96 0.015 50);
@@ -397,6 +421,7 @@ body {
 }
 
 .ruby-black {
+  color-scheme: dark;
   /* Tema Premium Ruby Black (Fundo preto profundo com acentos vermelho RafaCell vibrante) */
   --background: oklch(0.12 0.005 0);
   --foreground: oklch(0.97 0.01 20);
@@ -460,6 +485,7 @@ body {
 }
 
 .neon-ice {
+  color-scheme: light;
   /* Tema Premium Neon Ice (Fundo branco/gelo com acentos verde neon suave tech) */
   --background: oklch(0.985 0.006 145);
   --foreground: oklch(0.24 0.03 145);
@@ -523,6 +549,7 @@ body {
 }
 
 .violet-ice {
+  color-scheme: light;
   /* Tema Premium Violet Ice (Fundo branco/lilás gelo com acentos roxos suaves) */
   --background: oklch(0.985 0.006 295);
   --foreground: oklch(0.24 0.03 295);
@@ -586,6 +613,7 @@ body {
 }
 
 .coffee-cream {
+  color-scheme: light;
   /* Tema Premium Coffee Cream (Fundo creme claro com acentos bronze e dourado neon) */
   --background: oklch(0.98 0.01 60);
   --foreground: oklch(0.24 0.02 55);
@@ -724,6 +752,28 @@ body {
     @apply min-h-screen bg-background text-foreground antialiased;
     transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease;
   }
+  /* Scrollbar global discreto e tematizado em @layer base para preservar utilitárias Tailwind (ex.: scrollbar-width:none em OperacoesV3Nav) */
+  :is(html, body, aside, nav, main) {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 30%, transparent) transparent;
+  }
+  :is(html, body, aside, nav, main)::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  :is(html, body, aside, nav, main)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted-foreground) 26%, transparent);
+    border-radius: 999px;
+  }
+  :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted-foreground) 46%, transparent);
+  }
+  :is(html, body, aside, nav, main)::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 /* Utilitário de fonte premium (Lovable) */
@@ -731,13 +781,29 @@ body {
   font-family: var(--font-display);
 }
 
-.scroll-elegant::-webkit-scrollbar { width: 8px; }
-.scroll-elegant::-webkit-scrollbar-track { background: transparent; }
-.scroll-elegant::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 999px;
+.scroll-elegant {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 32%, transparent) transparent;
 }
-.scroll-elegant::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
+.scroll-elegant::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-elegant::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-elegant::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 26%, transparent);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-elegant::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 48%, transparent);
+}
+.scroll-elegant::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 @utility bg-gradient-primary {
   background: var(--gradient-primary);

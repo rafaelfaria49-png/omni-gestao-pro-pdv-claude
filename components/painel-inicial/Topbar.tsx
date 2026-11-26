@@ -166,7 +166,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
 
         <div className="flex-1" />
 
-        <div className="hidden sm:block w-72" onClick={() => setSearchOpen(true)}>
+        <div className="hidden sm:block w-44 md:w-52 lg:w-64 xl:w-72" onClick={() => setSearchOpen(true)}>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground transition-colors group-focus-within:text-foreground" />
             <input
@@ -190,7 +190,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
           <Link
             href="/dashboard/creditos"
             className={[
-              "hidden sm:inline-flex h-8 items-center gap-2 rounded-full border px-3 text-[12px] font-medium transition-colors",
+              "hidden sm:inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-[12px] font-medium transition-colors",
               showNone
                 ? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15"
                 : showLow
@@ -214,8 +214,8 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
 
         {novoFiltered.length > 0 ? (
           <DropdownMenu>
-            <DropdownMenuTrigger className="hidden sm:inline-flex h-8 px-3 items-center gap-1.5 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90 transition-opacity">
-              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+            <DropdownMenuTrigger className="hidden sm:inline-flex h-8 px-3 items-center gap-1.5 rounded-md bg-primary text-primary-foreground text-[12.5px] font-medium shadow-xs hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
               Novo
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -239,7 +239,12 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
           </DropdownMenu>
         ) : null}
 
-        <Link href="/conta/seguranca" className="text-xs underline">Minha conta</Link>
+        <Link
+          href="/conta/seguranca"
+          className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Minha conta
+        </Link>
         <div className="flex items-center gap-2 pl-2 ml-1 border-l border-border">
           <Avatar className="h-7 w-7">
             <AvatarFallback className="bg-muted text-foreground text-[11px] font-semibold">{initials}</AvatarFallback>

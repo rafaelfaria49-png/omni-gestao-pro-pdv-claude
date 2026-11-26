@@ -342,19 +342,19 @@ export function GoLiveChecklistRafaCell({
     <div id="checklist-prontidao">
       {/* Cabeçalho interno */}
       <div
-        className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5 sm:px-5"
+        className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 sm:px-5"
         style={{
           borderColor: "var(--cfg-border)",
           backgroundColor: "var(--cfg-surface)",
         }}
       >
         <div className="flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <ClipboardList className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
           <h3 className="text-xs font-semibold" style={{ color: "var(--cfg-fg)" }}>
             Checklist de prontidão operacional
           </h3>
         </div>
-        <p className="text-xs" style={{ color: "var(--cfg-muted)" }}>
+        <p className="text-[11.5px]" style={{ color: "var(--cfg-muted)" }}>
           Reflete apenas dados confirmados no servidor
         </p>
       </div>
@@ -387,8 +387,9 @@ export function GoLiveChecklistRafaCell({
                 )}
                 style={{
                   backgroundColor: selected ? "var(--cfg-surface)" : "transparent",
-                  borderColor: selected ? "var(--cfg-border)" : "transparent",
+                  borderColor: selected ? "var(--cfg-border-strong)" : "transparent",
                   color: selected ? "var(--cfg-fg)" : "var(--cfg-muted)",
+                  boxShadow: selected ? "var(--cfg-shadow-sm)" : undefined,
                 }}
               >
                 {tab.label}
@@ -396,14 +397,14 @@ export function GoLiveChecklistRafaCell({
             );
           })}
         </div>
-        <span className="text-xs" style={{ color: "var(--cfg-subtle)" }}>
+        <span className="text-[11.5px]" style={{ color: "var(--cfg-subtle)" }}>
           Itens em <strong style={{ color: "var(--cfg-fg-body)" }}>Revisar</strong> pedem confirmação humana
         </span>
       </div>
 
       {/* Lista de verificação */}
       {filteredItems.length === 0 ? (
-        <div className="px-4 py-6 text-center text-xs sm:px-5" style={{ color: "var(--cfg-muted)" }}>
+        <div className="px-4 py-5 text-center text-xs sm:px-5" style={{ color: "var(--cfg-muted)" }}>
           {filter === "attention"
             ? "Todos os itens verificados estão concluídos para esta unidade."
             : "Nenhum item concluído ainda para esta unidade."}
@@ -415,7 +416,7 @@ export function GoLiveChecklistRafaCell({
             return (
               <li
                 key={item.id}
-                className="flex flex-col gap-2 px-4 py-2.5 transition-colors hover:bg-[var(--cfg-inset)] sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                className="flex flex-col gap-2 px-4 py-2 transition-colors hover:bg-[var(--cfg-inset)] sm:flex-row sm:items-center sm:justify-between sm:px-5"
                 style={{ borderColor: "var(--cfg-border)" }}
               >
                 <div className="flex min-w-0 flex-1 items-start gap-2.5">

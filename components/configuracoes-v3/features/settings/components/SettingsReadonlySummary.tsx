@@ -29,12 +29,12 @@ export function SettingsReadonlySummary({
 }: SettingsReadonlySummaryProps) {
   return (
     <section className={cn("cfg-card overflow-hidden", className)} aria-label={title}>
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
           {icon ? (
             <span
               aria-hidden="true"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
               style={{
                 backgroundColor: "var(--cfg-inset)",
                 borderColor: "var(--cfg-border)",

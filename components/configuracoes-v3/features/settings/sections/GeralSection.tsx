@@ -291,14 +291,14 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
   const confirmedBranchLabel = business.ready ? BUSINESS_BRANCHES[business.branch] : null;
 
   return (
-    <div className={cn("space-y-4 sm:space-y-5", anyDirty && "pb-16")}>
+    <div className={cn("space-y-3.5 sm:space-y-4", anyDirty && "pb-16")}>
       {/* ── 1. UNIT IDENTITY & READINESS RIBBON (Assinatura Conceito C) ────── */}
       <section className="cfg-card overflow-hidden" aria-label="Identidade e prontidão da unidade">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
             <div
               aria-hidden="true"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-sm font-bold tracking-tight"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border text-[13px] font-bold tracking-tight"
               style={{
                 backgroundColor: noLoja ? "var(--cfg-warning-soft)" : "var(--cfg-primary-soft)",
                 borderColor: noLoja ? "var(--cfg-warning-border)" : "var(--cfg-primary-border)",
@@ -311,7 +311,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <h2
-                  className="text-[17px] font-semibold leading-tight tracking-tight"
+                  className="text-[16px] font-semibold leading-tight tracking-tight"
                   style={{ color: "var(--cfg-fg)" }}
                 >
                   {pageTitle}
@@ -328,28 +328,36 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
               </div>
 
               <div
-                className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs"
+                className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
                 style={{ color: "var(--cfg-muted)" }}
               >
                 {!noLoja ? (
                   <>
                     {confirmedCnpj ? (
-                      <span className="font-mono tabular-nums">{confirmedCnpj}</span>
+                      <span className="font-mono text-[11.5px] tabular-nums">{confirmedCnpj}</span>
                     ) : (
-                      <span>CNPJ pendente</span>
+                      <span className="text-[11.5px]">CNPJ pendente</span>
                     )}
                     {confirmedBranchLabel ? (
                       <>
                         <span aria-hidden="true" style={{ color: "var(--cfg-border-strong)" }}>
                           •
                         </span>
-                        <span>
-                          {confirmedBranchLabel}
-                          {confirmedActiveResources !== null
-                            ? ` (${confirmedActiveResources} ${
-                                confirmedActiveResources === 1 ? "operacional ativo" : "operacionais ativos"
-                              })`
-                            : ""}
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] font-medium"
+                          style={{
+                            backgroundColor: "var(--cfg-inset)",
+                            borderColor: "var(--cfg-border)",
+                            color: "var(--cfg-fg-body)",
+                          }}
+                        >
+                          <span>{confirmedBranchLabel}</span>
+                          {confirmedActiveResources !== null ? (
+                            <span style={{ color: "var(--cfg-muted)" }}>
+                              · {confirmedActiveResources}{" "}
+                              {confirmedActiveResources === 1 ? "recurso ativo" : "recursos ativos"}
+                            </span>
+                          ) : null}
                         </span>
                       </>
                     ) : null}
@@ -379,7 +387,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
                   </span>
                 </div>
                 <div
-                  className="h-1.5 w-28 overflow-hidden rounded-full"
+                  className="h-1.5 w-24 overflow-hidden rounded-full"
                   style={{ backgroundColor: "var(--cfg-hover)" }}
                   aria-hidden="true"
                 >
@@ -398,7 +406,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
                 aria-expanded={checklistExpanded}
                 aria-controls={checklistExpanded ? "checklist-prontidao" : undefined}
                 onClick={() => setChecklistOverride((prev) => !(prev ?? checklistExpanded))}
-                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 style={{
                   backgroundColor:
                     readiness.attentionCount > 0 ? "var(--cfg-warning-soft)" : "var(--cfg-inset)",
@@ -524,7 +532,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
               </>
             }
           >
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {readOnly ? (
                 <SettingsFeedbackBanner variant="readonly">
                   Somente responsáveis com permissão de Configurações podem editar os dados desta unidade.
@@ -533,8 +541,8 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
 
               {/* Subbloco 1: Identificação */}
               <SettingsSubSection title="Identificação">
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 sm:col-span-7">
+                <div className="grid grid-cols-12 gap-x-3 gap-y-2.5">
+                  <div className="col-span-12 sm:col-span-8">
                     <Field
                       ref={nameInputRef}
                       label="Nome da empresa"
@@ -545,7 +553,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
                       disabled={formDisabled}
                     />
                   </div>
-                  <div className="col-span-12 sm:col-span-5">
+                  <div className="col-span-12 sm:col-span-4">
                     <Field
                       label="CNPJ"
                       value={cnpj}
@@ -558,9 +566,9 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
                 </div>
               </SettingsSubSection>
 
-              {/* Subbloco 2: Canais de contato */}
+              {/* Subbloco 2: Canais de contato (adapta via container query: 1 → 2 → 4 colunas) */}
               <SettingsSubSection title="Canais de contato" divided>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="cfg-contact-grid">
                   <Field
                     label="Email"
                     type="email"
@@ -580,7 +588,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
                   <Field
                     ref={whatsappInputRef}
                     label="WhatsApp (loja)"
-                    hint="Recibos e orçamentos"
+                    hint="Recibos"
                     value={whatsapp}
                     onChange={(e) => editor.setField("contactWhatsapp", e.target.value)}
                     placeholder="(00) 00000-0000"
@@ -589,7 +597,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
                   />
                   <Field
                     label="WhatsApp (responsável)"
-                    hint="Contato gerencial"
+                    hint="Gerencial"
                     value={whatsappDono}
                     onChange={(e) => editor.setField("contactWhatsappDono", e.target.value)}
                     placeholder="(00) 00000-0000"
@@ -601,7 +609,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
 
               {/* Subbloco 3: Endereço da unidade (grid brasileiro de 12 colunas sem linhas órfãs no mobile) */}
               <SettingsSubSection title="Endereço da unidade" divided>
-                <div className="grid grid-cols-12 gap-3">
+                <div className="grid grid-cols-12 gap-x-3 gap-y-2.5">
                   <div className="col-span-12 sm:col-span-3">
                     <Field
                       label="CEP"
@@ -714,10 +722,10 @@ const Field = ({
 }: FieldProps) => {
   const id = useId();
   return (
-    <div className="space-y-1">
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="flex items-center gap-0.5">
-          <Label htmlFor={id} className="text-xs font-medium" style={{ color: "var(--cfg-fg-body)" }}>
+    <div className="min-w-0 space-y-1">
+      <div className="flex items-baseline justify-between gap-1.5">
+        <div className="flex min-w-0 items-center gap-0.5">
+          <Label htmlFor={id} className="truncate text-xs font-medium" style={{ color: "var(--cfg-fg)" }}>
             {label}
           </Label>
           {requiredIndicator ? (
@@ -727,7 +735,7 @@ const Field = ({
           ) : null}
         </div>
         {hint ? (
-          <span className="text-[11px]" style={{ color: "var(--cfg-subtle)" }}>
+          <span className="shrink-0 text-[10.5px]" style={{ color: "var(--cfg-subtle)" }}>
             {hint}
           </span>
         ) : null}
