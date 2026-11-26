@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type JSX } from "react";
+import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { SETTINGS_SECTIONS, sectionLabel, type SectionId } from "./features/settings/sections";
@@ -35,7 +35,8 @@ import { Button } from "./components/ui/button";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ConfiguracoesNavProvider } from "./contexts/ConfiguracoesNavContext";
 import { Toaster } from "./components/ui/toaster";
-import { useLojaAtiva } from "@/lib/loja-ativa";
+import { registrarGuardaTrocaLoja, useLojaAtiva } from "@/lib/loja-ativa";
+import { registerRouteExitGuard } from "@/lib/navigation/route-exit-guard";
 import "./configuracoes-v3.css";
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { canAccessSettingsSection } from "@/lib/auth/page-access";
@@ -62,7 +63,8 @@ const CONFIG_PATH = "/dashboard/configuracoes";
 
 type PendingNavigation =
   | { kind: "section"; id: SectionId }
-  | { kind: "external"; href: string; label: string };
+  | { kind: "external"; href: string; label: string }
+  | { kind: "store"; storeId: string; label: string; commit: () => void };
 
 export default function ConfiguracoesV3Page() {
   const permissions = useEnterprisePermissions();
@@ -74,33 +76,149 @@ export default function ConfiguracoesV3Page() {
   const [active, setActive] = useState<SectionId>(secFromUrl);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dirtySections, setDirtySections] = useState<ReadonlySet<SectionId>>(() => new Set());
+  const [savingSections, setSavingSections] = useState<ReadonlySet<SectionId>>(() => new Set());
   const [pendingNav, setPendingNav] = useState<PendingNavigation | null>(null);
 
   const permittedActive = canAccessSettingsSection(permissions, active) ? active : "geral";
-  const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
+  const { lojas, lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
   const storeScopeKey = lojaAtivaId?.trim() || "__sem_unidade__";
+
+  const dirtySectionsRef = useRef(dirtySections);
+  const savingSectionsRef = useRef(savingSections);
+  const permittedActiveRef = useRef(permittedActive);
+  const lojasRef = useRef(lojas);
+  dirtySectionsRef.current = dirtySections;
+  savingSectionsRef.current = savingSections;
+  permittedActiveRef.current = permittedActive;
+  lojasRef.current = lojas;
 
   useEffect(() => {
     setActive(secFromUrl);
   }, [secFromUrl]);
 
-  // Limpa flags de sujeira e diálogos pendentes ao trocar a unidade ativa (sem vazamento entre lojas).
+  // Limpa flags de sujeira/salvamento e diálogos pendentes ao trocar a unidade ativa (sem vazamento entre lojas).
   useEffect(() => {
-    setDirtySections(new Set());
+    const empty = new Set<SectionId>();
+    dirtySectionsRef.current = empty;
+    savingSectionsRef.current = empty;
+    setDirtySections(empty);
+    setSavingSections(empty);
     setPendingNav(null);
   }, [storeScopeKey]);
 
-  // Protege fechamento/recarregamento da guia do navegador quando há alterações não salvas.
-  const hasAnyDirty = dirtySections.size > 0;
+  const hasGuardActive = dirtySections.size > 0 || savingSections.size > 0;
+
+  // Protege fechamento/recarregamento da guia do navegador quando há alterações não salvas ou salvamento em andamento.
   useEffect(() => {
-    if (!hasAnyDirty) return;
+    if (!hasGuardActive) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [hasAnyDirty]);
+  }, [hasGuardActive]);
+
+  // Protege troca de unidade via seletor global (StoreSwitcher) ou qualquer consumidor de setLojaAtivaId.
+  useEffect(() => {
+    return registrarGuardaTrocaLoja({
+      temRascunhoSujo: () =>
+        dirtySectionsRef.current.has(permittedActiveRef.current) ||
+        savingSectionsRef.current.has(permittedActiveRef.current),
+      solicitarSaida: (trocar, descricao) => {
+        const targetId = descricao.replace(/^troca de loja para\s+/i, "").trim();
+        const targetStore = lojasRef.current.find((l) => l.id === targetId);
+        const label = targetStore?.nomeFantasia?.trim() || targetId || "outra unidade";
+        setMobileOpen(false);
+        setPendingNav({ kind: "store", storeId: targetId, label, commit: trocar });
+        return "bloqueada";
+      },
+    });
+  }, []);
+
+  // Protege saídas programáticas (ex.: Command Menu ⌘K da Topbar global) sem redesenhar o shell global.
+  useEffect(() => {
+    return registerRouteExitGuard({
+      shouldBlock: (href) => {
+        if (
+          !dirtySectionsRef.current.has(permittedActiveRef.current) &&
+          !savingSectionsRef.current.has(permittedActiveRef.current)
+        ) {
+          return false;
+        }
+        try {
+          const url = new URL(href, window.location.href);
+          if (
+            url.pathname === CONFIG_PATH &&
+            parseSectionFromSearchParam(url.searchParams.get("sec")) === permittedActiveRef.current
+          ) {
+            return false;
+          }
+        } catch {
+          /* segue para bloquear destino desconhecido */
+        }
+        return true;
+      },
+      requestExit: (href, label) => {
+        setMobileOpen(false);
+        setPendingNav({ kind: "external", href, label: label || "outra página" });
+        return true;
+      },
+    });
+  }, []);
+
+  // Intercepta links <a href> do shell global (Sidebar, Topbar, MobileNavSheet, Breadcrumb, Novo, Minha conta)
+  // em fase de captura antes do Next.js <Link> navegar; mantém propagation para fechar sheets móveis.
+  useEffect(() => {
+    if (!hasGuardActive) return;
+    const onDocumentClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      if (
+        !dirtySectionsRef.current.has(permittedActiveRef.current) &&
+        !savingSectionsRef.current.has(permittedActiveRef.current)
+      ) {
+        return;
+      }
+      const target = event.target as Element | null;
+      const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+      const rawHref = anchor.getAttribute("href");
+      if (!rawHref || rawHref.startsWith("#") || rawHref.startsWith("mailto:") || rawHref.startsWith("tel:")) return;
+      let url: URL;
+      try {
+        url = new URL(anchor.href, window.location.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+      if (
+        url.pathname === CONFIG_PATH &&
+        parseSectionFromSearchParam(url.searchParams.get("sec")) === permittedActiveRef.current
+      ) {
+        return;
+      }
+      event.preventDefault();
+      const nextHref = `${url.pathname}${url.search}${url.hash}`;
+      const label =
+        anchor.getAttribute("aria-label")?.trim() ||
+        anchor.textContent?.replace(/\s+/g, " ").trim().slice(0, 60) ||
+        url.pathname;
+      setMobileOpen(false);
+      setPendingNav({ kind: "external", href: nextHref, label });
+    };
+    document.addEventListener("click", onDocumentClick, true);
+    return () => document.removeEventListener("click", onDocumentClick, true);
+  }, [hasGuardActive]);
 
   const setSectionDirty = useCallback((id: SectionId, dirty: boolean) => {
     setDirtySections((prev) => {
@@ -109,6 +227,19 @@ export default function ConfiguracoesV3Page() {
       const next = new Set(prev);
       if (dirty) next.add(id);
       else next.delete(id);
+      dirtySectionsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const setSectionSaving = useCallback((id: SectionId, saving: boolean) => {
+    setSavingSections((prev) => {
+      const has = prev.has(id);
+      if (has === saving) return prev;
+      const next = new Set(prev);
+      if (saving) next.add(id);
+      else next.delete(id);
+      savingSectionsRef.current = next;
       return next;
     });
   }, []);
@@ -136,6 +267,7 @@ export default function ConfiguracoesV3Page() {
       if (!prev.has(permittedActive)) return prev;
       const next = new Set(prev);
       next.delete(permittedActive);
+      dirtySectionsRef.current = next;
       return next;
     });
   }, [permittedActive]);
@@ -153,16 +285,33 @@ export default function ConfiguracoesV3Page() {
 
   const commitPendingNavigation = useCallback(() => {
     if (!pendingNav) return;
+    // Nunca interrompe um salvamento em andamento.
+    if (savingSectionsRef.current.has(permittedActiveRef.current)) return;
+
     if (pendingNav.kind === "section") {
       commitSectionNavigation(pendingNav.id);
       return;
     }
+    if (pendingNav.kind === "store") {
+      const runSwitch = pendingNav.commit;
+      const cleared = new Set(dirtySectionsRef.current);
+      cleared.delete(permittedActiveRef.current);
+      dirtySectionsRef.current = cleared;
+      setDirtySections(cleared);
+      setPendingNav(null);
+      setMobileOpen(false);
+      runSwitch();
+      return;
+    }
     const targetHref = pendingNav.href;
-    clearCurrentDirty();
+    const cleared = new Set(dirtySectionsRef.current);
+    cleared.delete(permittedActiveRef.current);
+    dirtySectionsRef.current = cleared;
+    setDirtySections(cleared);
     setPendingNav(null);
     setMobileOpen(false);
     router.push(targetHref);
-  }, [clearCurrentDirty, commitSectionNavigation, pendingNav, router]);
+  }, [commitSectionNavigation, pendingNav, router]);
 
   const navigateToSection = useCallback(
     (id: SectionId) => {
@@ -170,24 +319,26 @@ export default function ConfiguracoesV3Page() {
         setMobileOpen(false);
         return;
       }
-      if (dirtySections.has(permittedActive)) {
+      if (dirtySectionsRef.current.has(permittedActive) || savingSectionsRef.current.has(permittedActive)) {
         setMobileOpen(false);
         setPendingNav({ kind: "section", id });
         return;
       }
       commitSectionNavigation(id);
     },
-    [commitSectionNavigation, dirtySections, permittedActive],
+    [commitSectionNavigation, permittedActive],
   );
 
   const requestExternalNavigation = useCallback(
     (href: string, label?: string): boolean => {
-      if (!dirtySections.has(permittedActive)) return false;
+      if (!dirtySectionsRef.current.has(permittedActive) && !savingSectionsRef.current.has(permittedActive)) {
+        return false;
+      }
       setMobileOpen(false);
       setPendingNav({ kind: "external", href, label: label || "outra página" });
       return true;
     },
-    [dirtySections, permittedActive],
+    [permittedActive],
   );
 
   const handleChange = useCallback(
@@ -214,6 +365,32 @@ export default function ConfiguracoesV3Page() {
   const hasStore = Boolean(lojaAtivaId?.trim());
   const storePillName = hasStore ? lojaAtivaRaw?.nomeFantasia?.trim() || "Unidade ativa" : "Sem unidade";
 
+  const activeSectionDirty = dirtySections.has(permittedActive);
+  const activeSectionSaving = savingSections.has(permittedActive);
+  const isStoreSwitchPending = pendingNav?.kind === "store";
+
+  const dialogTitle = activeSectionSaving
+    ? `Salvamento em andamento em ${currentLabel}`
+    : activeSectionDirty
+      ? `Alterações não salvas em ${currentLabel}`
+      : "Salvamento concluído";
+
+  const dialogCancelLabel = activeSectionSaving
+    ? "Aguardar conclusão"
+    : activeSectionDirty
+      ? "Continuar editando"
+      : `Permanecer em ${currentLabel}`;
+
+  const dialogActionLabel = activeSectionSaving
+    ? "Salvando…"
+    : activeSectionDirty
+      ? isStoreSwitchPending
+        ? "Descartar e trocar unidade"
+        : "Sair sem salvar"
+      : isStoreSwitchPending
+        ? `Trocar para ${pendingLabel}`
+        : `Ir para ${pendingLabel}`;
+
   return (
     <ThemeProvider>
       <ConfiguracoesNavProvider
@@ -221,6 +398,8 @@ export default function ConfiguracoesV3Page() {
         requestExternalNavigation={requestExternalNavigation}
         setSectionDirty={setSectionDirty}
         dirtySections={dirtySections}
+        setSectionSaving={setSectionSaving}
+        savingSections={savingSections}
       >
         <div className="configuracoes-v3-root configuracoes-v3-app flex h-full w-full text-foreground">
           {/* Sidebar — desktop */}
@@ -320,20 +499,53 @@ export default function ConfiguracoesV3Page() {
           </main>
         </div>
 
-        {/* Guarda segura de navegação quando há alterações não salvas (abas internas e links externos) */}
+        {/* Guarda segura de navegação e troca de unidade (alterações pendentes ou salvamento em andamento) */}
         <AlertDialog open={pendingNav !== null} onOpenChange={(open) => !open && setPendingNav(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Alterações não salvas em {currentLabel}</AlertDialogTitle>
+              <AlertDialogTitle>{dialogTitle}</AlertDialogTitle>
               <AlertDialogDescription>
-                Você editou campos nesta tela sem salvar. Se avançar para{" "}
-                <strong className="font-medium text-foreground">{pendingLabel}</strong> agora, suas alterações
-                pendentes serão descartadas.
+                {activeSectionSaving ? (
+                  isStoreSwitchPending ? (
+                    <>
+                      Aguarde a conclusão do salvamento atual antes de trocar para{" "}
+                      <strong className="font-medium text-foreground">{pendingLabel}</strong>, para evitar perda de
+                      alterações ou estado inconsistente entre unidades.
+                    </>
+                  ) : (
+                    <>
+                      Aguarde a conclusão do salvamento atual antes de avançar para{" "}
+                      <strong className="font-medium text-foreground">{pendingLabel}</strong>, para evitar interrupção
+                      do envio ou perda de confirmação.
+                    </>
+                  )
+                ) : activeSectionDirty ? (
+                  isStoreSwitchPending ? (
+                    <>
+                      Você possui alterações pendentes nesta unidade. Se trocar para{" "}
+                      <strong className="font-medium text-foreground">{pendingLabel}</strong> agora, suas edições não
+                      salvas serão descartadas.
+                    </>
+                  ) : (
+                    <>
+                      Você editou campos nesta tela sem salvar. Se avançar para{" "}
+                      <strong className="font-medium text-foreground">{pendingLabel}</strong> agora, suas alterações
+                      pendentes serão descartadas.
+                    </>
+                  )
+                ) : (
+                  <>
+                    As alterações foram confirmadas para esta unidade. Você já pode prosseguir para{" "}
+                    <strong className="font-medium text-foreground">{pendingLabel}</strong> com segurança.
+                  </>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setPendingNav(null)}>Continuar editando</AlertDialogCancel>
-              <AlertDialogAction onClick={commitPendingNavigation}>Sair sem salvar</AlertDialogAction>
+              <AlertDialogCancel onClick={() => setPendingNav(null)}>{dialogCancelLabel}</AlertDialogCancel>
+              <AlertDialogAction disabled={activeSectionSaving} onClick={commitPendingNavigation}>
+                {dialogActionLabel}
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

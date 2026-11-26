@@ -27,6 +27,7 @@ import {
 import {
   BusinessResourcesCard,
   type BusinessResourcesController,
+  type BusinessResourcesSaveOutcome,
 } from "../components/BusinessResourcesCard";
 import { parseStoreBasics } from "@/lib/store-basics";
 import { useStoreBasics, useStoreBasicsScope } from "@/lib/use-store-basics";
@@ -42,7 +43,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
   const permissions = useEnterprisePermissions();
   const clientMode = usesClientExperience(permissions);
   const { toast } = useToast();
-  const { navigateToSection, setSectionDirty } = useConfiguracoesNav();
+  const { navigateToSection, setSectionDirty, setSectionSaving } = useConfiguracoesNav();
   const { lojaAtivaRaw, refreshStoresList } = useLojaAtiva();
   const { refresh: refreshStoreSettings } = useStoreSettings();
   const business = useStoreBusiness();
@@ -50,6 +51,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
 
   const [businessDirty, setBusinessDirty] = useState(false);
   const [businessSaving, setBusinessSaving] = useState(false);
+  const [businessUnconfirmed, setBusinessUnconfirmed] = useState(false);
   const [dockSaving, setDockSaving] = useState(false);
   const [checklistOverride, setChecklistOverride] = useState<boolean | null>(null);
   const [empresaPulsing, setEmpresaPulsing] = useState(false);
@@ -132,14 +134,23 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
     }).length;
   }, [business.capabilities, business.legacyProfile, business.ready, permissions]);
 
-  // Sincroniza o estado dirty combinado com o shell (dot âmbar na sidebar + guarda de navegação).
+  // Sincroniza o estado dirty e salvamento em andamento com o shell (dot âmbar + guardas de troca/saída).
   const anyDirty = !readOnly && (editor.dirty || businessDirty);
+  const anySaving = saving || dockSaving || businessSaving;
+
   useEffect(() => {
     setSectionDirty("geral", anyDirty);
     return () => {
       setSectionDirty("geral", false);
     };
   }, [anyDirty, setSectionDirty]);
+
+  useEffect(() => {
+    setSectionSaving("geral", anySaving);
+    return () => {
+      setSectionSaving("geral", false);
+    };
+  }, [anySaving, setSectionSaving]);
 
   const dirtyList = useMemo<DirtySectionSummary[]>(() => {
     if (readOnly) return [];
@@ -148,6 +159,8 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
     if (businessDirty) list.push({ id: "ramo", label: "Ramo e recursos" });
     return list;
   }, [businessDirty, editor.dirty, readOnly]);
+
+  const pendingConfirmationOnly = !editor.dirty && businessUnconfirmed;
 
   const handleFocusEmpresa = useCallback((field: "name" | "contactWhatsapp") => {
     const card = empresaCardRef.current;
@@ -195,8 +208,6 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
     [editor, noLoja, readOnly, refreshStoreSettings, refreshStoresList, toast],
   );
 
-  const anySaving = saving || dockSaving || businessSaving;
-
   const handleDockDiscardAll = useCallback(() => {
     if (dockSavingRef.current || saving || businessSaving || businessControllerRef.current?.isSaving()) return;
     if (editor.dirty) editor.cancel();
@@ -210,7 +221,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
   /**
    * Coordena os dois formulários independentes sem criar transação artificial.
    * Adia refreshStoreSettings até ambos concluírem (evita corrida GET/PUT durante salvamento combinado).
-   * Em falha parcial, preserva as edições pendentes e nunca exibe confirmação global falsa.
+   * Em falha parcial ou releitura não confirmada, preserva os rascunhos e nunca exibe confirmação global falsa.
    */
   const handleDockSaveAll = useCallback(async () => {
     if (dockSavingRef.current || saving || businessSaving || businessControllerRef.current?.isSaving() || readOnly || noLoja) {
@@ -224,17 +235,28 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
     setDockSaving(true);
     try {
       const empOk = needEmp ? await handleSaveEmpresa({ skipRefresh: true }) : true;
-      const busOk = needBus ? await (businessControllerRef.current?.save() ?? Promise.resolve(false)) : true;
+      const busOutcome: BusinessResourcesSaveOutcome = needBus
+        ? await (businessControllerRef.current?.save() ?? Promise.resolve("failed" as const))
+        : "confirmed";
+      const busConfirmed = busOutcome === "confirmed";
 
       if (needEmp && empOk) {
         void refreshStoresList();
-        // Se Ramo e recursos não foi salvo com sucesso (que já executa refresh interno), revalida settings.
-        if (!needBus || !busOk) {
+        // Se Ramo e recursos não foi salvo nem está aguardando revalidação de releitura, revalida settings.
+        if (!needBus || busOutcome === "failed") {
           void refreshStoreSettings();
         }
       }
 
-      if (needEmp && needBus && empOk !== busOk) {
+      if (needEmp && needBus && busOutcome === "unconfirmed") {
+        toast({
+          title: empOk ? "Confirmação pendente em Ramo e recursos" : "Salvamento parcial com confirmação pendente",
+          description: empOk
+            ? "Dados da empresa foram salvos, mas a releitura de Ramo e recursos falhou. Suas seleções foram mantidas — use 'Confirmar estado salvo'."
+            : "Dados da empresa falhou e Ramo e recursos aguarda confirmação de releitura. Seus preenchimentos foram mantidos.",
+          variant: empOk ? "default" : "destructive",
+        });
+      } else if (needEmp && needBus && empOk !== busConfirmed) {
         toast({
           title: "Salvamento parcial",
           description: empOk
@@ -643,8 +665,10 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
       {/* ── 3. RAMO E RECURSOS (#ramo-recursos) ───────────────────────────── */}
       {!noLoja ? (
         <BusinessResourcesCard
+          externalBusy={dockSaving || saving}
           onDirtyChange={setBusinessDirty}
           onSavingChange={setBusinessSaving}
+          onUnconfirmedChange={setBusinessUnconfirmed}
           controllerRef={businessControllerRef}
         />
       ) : null}
@@ -666,6 +690,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
       <SettingsDirtyDock
         dirtySections={dirtyList}
         saving={anySaving}
+        pendingConfirmationOnly={pendingConfirmationOnly}
         onDiscardAll={handleDockDiscardAll}
         onSaveAll={() => void handleDockSaveAll()}
       />

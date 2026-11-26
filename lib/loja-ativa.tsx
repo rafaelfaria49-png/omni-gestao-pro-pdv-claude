@@ -55,11 +55,39 @@ export interface GuardaTrocaLojaV4 {
   solicitarSaida: (trocar: () => void, descricao: string) => "livre" | "bloqueada";
 }
 
+/** Alias semântico compartilhado para telas que protegem rascunhos/salvamento na troca de unidade. */
+export type GuardaTrocaLoja = GuardaTrocaLojaV4;
+
 let guardaTrocaLojaV4: GuardaTrocaLojaV4 | null = null;
+const guardasTrocaLoja = new Set<GuardaTrocaLoja>();
 
 /** Registra (ou remove com `null`) a guarda de rascunhos da V4. Opt-in. */
 export function registrarGuardaTrocaLojaV4(guarda: GuardaTrocaLojaV4 | null): void {
   guardaTrocaLojaV4 = guarda;
+}
+
+/**
+ * Registra uma guarda opt-in adicional de troca de unidade (sem sobrescrever a guarda da V4).
+ * Retorna função de desregistro para cleanup de efeito.
+ */
+export function registrarGuardaTrocaLoja(guarda: GuardaTrocaLoja): () => void {
+  guardasTrocaLoja.add(guarda);
+  return () => {
+    guardasTrocaLoja.delete(guarda);
+  };
+}
+
+/** Resolve a primeira guarda opt-in com estado pendente/bloqueante (V4 ou registrada). */
+export function resolverGuardaTrocaLojaAtiva(): GuardaTrocaLoja | null {
+  if (guardaTrocaLojaV4 && guardaTrocaLojaV4.temRascunhoSujo()) {
+    return guardaTrocaLojaV4;
+  }
+  for (const guarda of guardasTrocaLoja) {
+    if (guarda.temRascunhoSujo()) {
+      return guarda;
+    }
+  }
+  return null;
 }
 
 /**
@@ -353,14 +381,16 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
   const setLojaAtivaId = useCallback((id: string, opts?: { onSettled?: (ok: boolean) => void }) => {
     const next = id.trim()
     if (!next) return
-    // R04: com guarda V4 registrada e rascunho sujo, a troca passa pelo
-    // pêndulo salvar/descartar/cancelar (Cancelar impede a saída).
+    if (!canAccessStore(session, next)) return
+    if (next === (lojaAtivaIdRef.current || "").trim()) return
+    // R04 + Configurações: com guarda registrada e rascunho sujo/salvamento em andamento,
+    // a troca passa pelo diálogo de confirmação (Cancelar impede a saída e preserva a loja atual).
     aplicarTrocaLojaComGuarda({
-      guarda: guardaTrocaLojaV4,
+      guarda: resolverGuardaTrocaLojaAtiva(),
       trocar: () => executarTrocaLoja(next, opts?.onSettled),
       descricao: `troca de loja para ${next}`,
     })
-  }, [executarTrocaLoja])
+  }, [executarTrocaLoja, session])
 
   const lojaSelecionada = useMemo(() => {
     if (lojas.length === 0) return undefined

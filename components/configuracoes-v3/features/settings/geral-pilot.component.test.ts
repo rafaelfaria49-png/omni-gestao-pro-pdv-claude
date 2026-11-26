@@ -6,6 +6,7 @@ import type { Session } from "next-auth";
 import { BASIC_MODULE_ACCESS, MODULES } from "@/lib/auth/access-policy";
 import { getPermissionsFromSession, type EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1";
+import { StoreSettingsReadbackError } from "@/lib/store-settings-readback";
 import type { SectionId } from "./sections";
 
 function makePermissions(kind: "owner" | "client" | "readonly"): EnterprisePermissions {
@@ -37,11 +38,17 @@ const h = vi.hoisted(() => ({
   settingsCardFees: {} as Record<string, unknown>,
   saveBusiness: vi.fn(async (_patch: unknown) => {}),
   refreshSettings: vi.fn(async () => {}),
+  revalidateSettings: vi.fn(async () => ({
+    ok: true,
+    settings: null as { storeId: string; printerConfig?: Record<string, unknown> } | null,
+  })),
   refreshStoresList: vi.fn(async () => {}),
   toast: vi.fn(),
   navigateToSection: vi.fn(),
   setSectionDirty: vi.fn(),
+  setSectionSaving: vi.fn(),
   dirtySections: new Set<SectionId>(),
+  savingSections: new Set<SectionId>(),
   sessionUser: { id: "u-owner", sessionVersion: 1 } as { id: string; sessionVersion: number } | null,
 }));
 
@@ -79,6 +86,7 @@ vi.mock("@/lib/store-settings-provider", () => ({
         }
       : null,
     refresh: h.refreshSettings,
+    revalidate: h.revalidateSettings,
     save: h.saveBusiness,
   }),
 }));
@@ -91,6 +99,8 @@ vi.mock("@/components/configuracoes-v3/contexts/ConfiguracoesNavContext", () => 
     requestExternalNavigation: () => false,
     setSectionDirty: h.setSectionDirty,
     dirtySections: h.dirtySections,
+    setSectionSaving: h.setSectionSaving,
+    savingSections: h.savingSections,
   }),
 }));
 
@@ -214,11 +224,14 @@ beforeEach(() => {
   h.settingsCardFees = {};
   h.saveBusiness.mockReset().mockResolvedValue(undefined);
   h.refreshSettings.mockClear();
+  h.revalidateSettings.mockReset().mockResolvedValue({ ok: true, settings: null });
   h.refreshStoresList.mockClear();
   h.toast.mockClear();
   h.navigateToSection.mockClear();
   h.setSectionDirty.mockClear();
+  h.setSectionSaving.mockClear();
   h.dirtySections = new Set();
+  h.savingSections = new Set();
   h.sessionUser = { id: "u-owner", sessionVersion: 1 };
 });
 
@@ -444,5 +457,165 @@ describe("Piloto Omni Premium — Aba Geral (dirty state, descarte, falha parcia
     h.settingsLoaded = true;
     view.rerender(React.createElement(GeralSection));
     expect((screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("falha na releitura após PUT aceito em Ramo e recursos não anuncia sucesso, preserva rascunho e confirma via GET sem duplicar PUT", async () => {
+    stubStoreApi(defaultFixtures());
+    h.saveBusiness.mockRejectedValueOnce(new StoreSettingsReadbackError("loja-a", "HTTP_500"));
+    render(React.createElement(GeralSection));
+
+    const branchSelect = (await screen.findByRole("combobox", { name: "Ramo principal" })) as HTMLSelectElement;
+    fireEvent.change(branchSelect, { target: { value: "padaria" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }));
+
+    await waitFor(() => expect(screen.getByText("Envio aceito — confirmação pendente")).toBeTruthy());
+    // Não exibe sucesso definitivo e preserva o valor selecionado no formulário
+    expect(h.toast.mock.calls.some(([arg]) => arg?.title === "Ramo e recursos salvos")).toBe(false);
+    expect(branchSelect.value).toBe("padaria");
+    expect(screen.getByText("Confirmação pendente")).toBeTruthy();
+    expect(h.saveBusiness).toHaveBeenCalledTimes(1);
+
+    // Clicar em "Confirmar estado salvo" executa somente GET revalidate (ZERO novo PUT!)
+    h.revalidateSettings.mockResolvedValueOnce({
+      ok: true,
+      settings: {
+        storeId: "loja-a",
+        printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } },
+      },
+    });
+    const confirmButtons = screen.getAllByRole("button", { name: "Confirmar estado salvo" });
+    fireEvent.click(confirmButtons[0]);
+
+    await waitFor(() => expect(h.revalidateSettings).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText("Envio aceito — confirmação pendente")).toBeNull());
+    expect(h.saveBusiness).toHaveBeenCalledTimes(1);
+    expect(h.toast.mock.calls.some(([arg]) => arg?.title === "Ramo e recursos salvos" && arg?.variant === "success")).toBe(true);
+  });
+
+  it("após releitura falha, nova edição reconcilia via GET e envia apenas o patch parcial restante (sem duplicidade)", async () => {
+    stubStoreApi(defaultFixtures());
+    h.saveBusiness.mockRejectedValueOnce(new StoreSettingsReadbackError("loja-a", "fetch_failed"));
+    render(React.createElement(GeralSection));
+
+    const branchSelect = (await screen.findByRole("combobox", { name: "Ramo principal" })) as HTMLSelectElement;
+    fireEvent.change(branchSelect, { target: { value: "padaria" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }));
+    await waitFor(() => expect(screen.getByText("Envio aceito — confirmação pendente")).toBeTruthy());
+
+    // Usuário marca mais um recurso antes de confirmar: o envio pré-reconcilia via GET
+    fireEvent.click(screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ }));
+    h.revalidateSettings.mockResolvedValueOnce({
+      ok: true,
+      settings: {
+        storeId: "loja-a",
+        printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } },
+      },
+    });
+    h.saveBusiness.mockResolvedValueOnce(undefined);
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }));
+
+    await waitFor(() => expect(h.saveBusiness).toHaveBeenCalledTimes(2));
+    expect(h.revalidateSettings).toHaveBeenCalledTimes(1);
+    // O segundo PUT NÃO reenvia primaryBranch (já confirmado); envia apenas o override restante!
+    expect(h.saveBusiness.mock.calls[1]?.[0]).toEqual({
+      printerConfig: {
+        capabilities: {
+          version: 1,
+          business: {},
+          overrides: { "catalog.serializedDevices": true },
+        },
+      },
+    });
+  });
+
+  it("Dock combinado com Dados da empresa OK e releitura falha em Ramo não anuncia sucesso global falso", async () => {
+    stubStoreApi(defaultFixtures());
+    h.saveBusiness.mockRejectedValueOnce(new StoreSettingsReadbackError("loja-a", "HTTP_503"));
+    render(React.createElement(GeralSection));
+
+    const nameInput = (await screen.findByLabelText("Nome da empresa", { exact: true })) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "NovaTech Confirmada" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Ramo principal" }), { target: { value: "padaria" } });
+
+    const dock = screen.getByRole("region", { name: "Alterações pendentes" });
+    fireEvent.click(within(dock).getByRole("button", { name: "Salvar pendentes" }));
+
+    await waitFor(() => expect(screen.getByText("Envio aceito — confirmação pendente")).toBeTruthy());
+    expect(
+      h.toast.mock.calls.some(([arg]) => arg?.title === "Confirmação pendente em Ramo e recursos"),
+    ).toBe(true);
+    expect(h.toast.mock.calls.some(([arg]) => arg?.title === "Ramo e recursos salvos")).toBe(false);
+    // Dock permanece aberto em modo de confirmação pendente para Ramo e recursos
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Alterações pendentes" }).textContent).toContain(
+        "Confirmação pendente em Ramo e recursos",
+      ),
+    );
+  });
+
+  it("reverter ramo para valor pré-PUT durante confirmação pendente preserva intenção e segunda falha de releitura mantém fingerprint exato", async () => {
+    stubStoreApi(defaultFixtures());
+    h.saveBusiness.mockRejectedValueOnce(new StoreSettingsReadbackError("loja-a", "HTTP_500"));
+    render(React.createElement(GeralSection));
+
+    const branchSelect = (await screen.findByRole("combobox", { name: "Ramo principal" })) as HTMLSelectElement;
+    // 1) Muda para padaria → PUT aceito, GET falha
+    fireEvent.change(branchSelect, { target: { value: "padaria" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }));
+    await waitFor(() => expect(screen.getByText("Envio aceito — confirmação pendente")).toBeTruthy());
+
+    // 2) Volta dropdown para assistencia antes de confirmar → NÃO colapsa contra fallback pré-PUT
+    fireEvent.change(branchSelect, { target: { value: "assistencia" } });
+    const saveBtn = screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(false);
+
+    // 3) Pré-reconciliação via GET enxerga padaria no servidor; envia apenas { primaryBranch: "assistencia" }
+    //    e simula uma 2ª falha de releitura (Major 1): fingerprint salvo deve corresponder a partsToSend!
+    h.revalidateSettings.mockResolvedValueOnce({
+      ok: true,
+      settings: {
+        storeId: "loja-a",
+        printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } },
+      },
+    });
+    h.saveBusiness.mockRejectedValueOnce(new StoreSettingsReadbackError("loja-a", "HTTP_502"));
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => expect(h.saveBusiness).toHaveBeenCalledTimes(2));
+    expect(h.saveBusiness.mock.calls[1]?.[0]).toEqual({
+      printerConfig: {
+        capabilities: {
+          version: 1,
+          business: { primaryBranch: "assistencia" },
+        },
+      },
+    });
+    // Após 2ª falha de releitura sem novas edições, o Dock e o rodapé oferecem Confirmar estado salvo (GET-only)
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Alterações pendentes" }).textContent).toContain(
+        "Confirmação pendente em Ramo e recursos",
+      ),
+    );
+  });
+
+  it("Dock combinado com falha em Dados da empresa E releitura falha em Ramo exibe aviso destrutivo combinado", async () => {
+    stubStoreApi(defaultFixtures(), { failSettingsPut: true });
+    h.saveBusiness.mockRejectedValueOnce(new StoreSettingsReadbackError("loja-a", "HTTP_503"));
+    render(React.createElement(GeralSection));
+
+    const emailInput = (await screen.findByLabelText("Email", { exact: true })) as HTMLInputElement;
+    fireEvent.change(emailInput, { target: { value: "falha@novatech.invalid" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Ramo principal" }), { target: { value: "padaria" } });
+
+    const dock = screen.getByRole("region", { name: "Alterações pendentes" });
+    fireEvent.click(within(dock).getByRole("button", { name: "Salvar pendentes" }));
+
+    await waitFor(() =>
+      expect(
+        h.toast.mock.calls.some(
+          ([arg]) => arg?.title === "Salvamento parcial com confirmação pendente" && arg?.variant === "destructive",
+        ),
+      ).toBe(true),
+    );
   });
 });

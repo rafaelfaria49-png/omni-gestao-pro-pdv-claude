@@ -10,6 +10,8 @@ export interface DirtySectionSummary {
 export interface SettingsDirtyDockProps {
   dirtySections: DirtySectionSummary[];
   saving?: boolean;
+  /** Quando true, não há edições novas locais — apenas confirmação pendente após envio aceito. */
+  pendingConfirmationOnly?: boolean;
   onDiscardAll: () => void;
   onSaveAll: () => void;
 }
@@ -21,6 +23,7 @@ export interface SettingsDirtyDockProps {
 export function SettingsDirtyDock({
   dirtySections,
   saving = false,
+  pendingConfirmationOnly = false,
   onDiscardAll,
   onSaveAll,
 }: SettingsDirtyDockProps) {
@@ -28,6 +31,15 @@ export function SettingsDirtyDock({
 
   const summary = dirtySections.map((s) => s.label).join(" e ");
   const multiple = dirtySections.length > 1;
+  const actionLabel = saving
+    ? pendingConfirmationOnly
+      ? "Confirmando…"
+      : "Salvando…"
+    : pendingConfirmationOnly
+      ? "Confirmar estado salvo"
+      : multiple
+        ? "Salvar pendentes"
+        : "Salvar agora";
 
   return (
     <div
@@ -43,7 +55,8 @@ export function SettingsDirtyDock({
             style={{ backgroundColor: "var(--cfg-warning-dot)" }}
           />
           <span className="truncate">
-            Alterações pendentes em <strong className="font-semibold">{summary}</strong>
+            {pendingConfirmationOnly ? "Confirmação pendente em " : "Alterações pendentes em "}
+            <strong className="font-semibold">{summary}</strong>
           </span>
         </div>
 
@@ -63,7 +76,7 @@ export function SettingsDirtyDock({
             disabled={saving}
             onClick={onSaveAll}
           >
-            {saving ? "Salvando…" : multiple ? "Salvar pendentes" : "Salvar agora"}
+            {actionLabel}
           </Button>
         </div>
       </div>

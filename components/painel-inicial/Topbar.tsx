@@ -13,6 +13,7 @@ import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 import { canAccessPage } from "@/lib/auth/page-access";
+import { interceptRouteExit } from "@/lib/navigation/route-exit-guard";
 import { administrationNavItems, hubsNavItems, workspaceNavItems } from "@/lib/navigation/dashboard-nav-items";
 import {
   DropdownMenu,
@@ -262,7 +263,7 @@ export function Topbar({ focusMode = false }: { focusMode?: boolean }) {
                 .filter((i) => !i.visible || (perms !== null && i.visible(perms)))
                 .map((i) => ({ label: i.label, href: i.to, icon: i.icon, kbd: "" })),
             ].filter((i) => canAccessPage(perms, i.href.split("?")[0])).map((item) => (
-              <CommandItem key={item.label} onSelect={() => { setSearchOpen(false); router.push(item.href); }} className="cursor-pointer">
+              <CommandItem key={item.label} onSelect={() => { setSearchOpen(false); if (!interceptRouteExit(item.href, item.label)) router.push(item.href); }} className="cursor-pointer">
                 <item.icon className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span>{item.label}</span>{item.kbd && <CommandShortcut>{item.kbd}</CommandShortcut>}
               </CommandItem>

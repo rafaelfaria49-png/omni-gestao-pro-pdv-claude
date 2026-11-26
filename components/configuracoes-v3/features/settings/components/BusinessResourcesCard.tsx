@@ -9,11 +9,14 @@ import {
   BUSINESS_BRANCHES,
   BUSINESS_RESOURCES,
   businessPresentation,
+  configuredBusinessBranch,
+  legacyBusinessBranch,
   resolveBusinessResource,
   type BusinessBranch,
   type BusinessPresentation,
   type BusinessResourceKey,
 } from "@/lib/store-business-capabilities";
+import { isStoreSettingsReadbackError } from "@/lib/store-settings-readback";
 import type { CapabilityOverrideValue, StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsCardSkeleton } from "./SettingsCardSkeleton";
@@ -25,17 +28,126 @@ import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
 
+export type BusinessResourcesSaveOutcome = "confirmed" | "unconfirmed" | "failed" | "noop";
+
 export interface BusinessResourcesController {
-  save: () => Promise<boolean>;
+  save: () => Promise<BusinessResourcesSaveOutcome>;
+  revalidate: () => Promise<BusinessResourcesSaveOutcome>;
   discard: () => void;
   isDirty: () => boolean;
+  isUnconfirmed: () => boolean;
   isSaving: () => boolean;
 }
 
 export interface BusinessResourcesCardProps {
+  /** Desabilita controles visuais do cartão durante salvamento externo coordenado pelo Dock. */
+  externalBusy?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
+  onUnconfirmedChange?: (pendingConfirmationOnly: boolean) => void;
   controllerRef?: React.MutableRefObject<BusinessResourcesController | null>;
+}
+
+type BusinessDraftParts = {
+  selected: BusinessBranch | null;
+  overrides: Partial<Record<BusinessResourceKey, CapabilityOverrideValue>>;
+  presentation: BusinessPresentation;
+};
+
+function hasDraftParts(parts: BusinessDraftParts): boolean {
+  return (
+    parts.selected !== null ||
+    Object.keys(parts.overrides).length > 0 ||
+    Object.keys(parts.presentation).length > 0
+  );
+}
+
+function fingerprintDraft(parts: BusinessDraftParts): string {
+  const sortedOverrides = Object.keys(parts.overrides)
+    .sort()
+    .map((k) => [k, parts.overrides[k as BusinessResourceKey]]);
+  const sortedPresentation = Object.keys(parts.presentation)
+    .sort()
+    .map((k) => [k, parts.presentation[k as keyof BusinessPresentation]]);
+  return JSON.stringify({
+    selected: parts.selected,
+    overrides: sortedOverrides,
+    presentation: sortedPresentation,
+  });
+}
+
+function extractCapabilitiesFromSettings(
+  settings: { printerConfig?: unknown } | null | undefined,
+): StoreCapabilitiesV1 | null {
+  const pc = settings?.printerConfig;
+  if (!pc || typeof pc !== "object") return null;
+  const caps = (pc as Record<string, unknown>).capabilities;
+  if (!caps || typeof caps !== "object") return null;
+  return (caps as Record<string, unknown>).version === 1 ? (caps as StoreCapabilitiesV1) : null;
+}
+
+/**
+ * Reconcilia rascunho local com estado recém-confirmado pelo servidor,
+ * mantendo apenas o patch parcial restante ainda não aplicado.
+ */
+function reconcileBusinessDraft(
+  confirmedCaps: StoreCapabilitiesV1 | null,
+  confirmedBranch: BusinessBranch,
+  legacyProfile: string | null | undefined,
+  parts: BusinessDraftParts,
+): BusinessDraftParts {
+  const nextSelected =
+    parts.selected !== null && parts.selected !== confirmedBranch ? parts.selected : null;
+
+  const nextBaseCaps: StoreCapabilitiesV1 = {
+    version: 1,
+    business: {
+      ...confirmedCaps?.business,
+      ...(nextSelected !== null ? { primaryBranch: nextSelected } : {}),
+    },
+    overrides: { ...confirmedCaps?.overrides },
+  };
+
+  const nextOverrides: Partial<Record<BusinessResourceKey, CapabilityOverrideValue>> = {};
+  for (const [k, v] of Object.entries(parts.overrides) as Array<
+    [BusinessResourceKey, CapabilityOverrideValue]
+  >) {
+    const wanted = typeof v === "boolean" ? v : v.enabled;
+    const base = resolveBusinessResource(nextBaseCaps, k, legacyProfile);
+    if (base.requested !== wanted) {
+      const saved = confirmedCaps?.overrides?.[k];
+      nextOverrides[k] = typeof saved === "object" && saved !== null ? { ...saved, enabled: wanted } : wanted;
+    }
+  }
+
+  const baseExamples = businessPresentation(nextBaseCaps);
+  const nextPresentation: BusinessPresentation = {};
+  for (const [k, v] of Object.entries(parts.presentation) as Array<[keyof BusinessPresentation, string]>) {
+    if (v !== baseExamples[k]) {
+      nextPresentation[k] = v;
+    }
+  }
+
+  return {
+    selected: nextSelected,
+    overrides: nextOverrides,
+    presentation: nextPresentation,
+  };
+}
+
+function buildPartialCapabilitiesPayload(parts: BusinessDraftParts) {
+  return {
+    printerConfig: {
+      capabilities: {
+        version: 1 as const,
+        business: {
+          ...(parts.selected !== null ? { primaryBranch: parts.selected } : {}),
+          ...(Object.keys(parts.presentation).length ? { presentation: parts.presentation } : {}),
+        },
+        ...(Object.keys(parts.overrides).length ? { overrides: parts.overrides } : {}),
+      },
+    },
+  };
 }
 
 const BRANCH_IMPACT_SUMMARY: Record<BusinessBranch, string> = {
@@ -58,13 +170,15 @@ const OPERATIONAL_DESCRIPTIONS: Record<string, string> = {
 };
 
 export function BusinessResourcesCard({
+  externalBusy = false,
   onDirtyChange,
   onSavingChange,
+  onUnconfirmedChange,
   controllerRef,
 }: BusinessResourcesCardProps = {}) {
   const business = useStoreBusiness();
-  // Mantém o formulário montado durante revalidações em segundo plano (ex.: refreshStoreSettings)
-  // da MESMA loja, evitando destruir rascunhos não salvos de Ramo e recursos (B2).
+  // Mantém o formulário montado durante revalidações em segundo plano (ex.: refreshStoreSettings
+  // ou falha de releitura após PUT aceito) da MESMA loja, evitando destruir rascunhos não salvos (B2).
   // Ao trocar de storeId, volta imediatamente ao ciclo limpo de carregamento da nova loja.
   const [hydratedStoreId, setHydratedStoreId] = useState<string | null>(
     business.ready && business.storeId ? business.storeId : null,
@@ -85,13 +199,18 @@ export function BusinessResourcesCard({
   const stayMountedForSameStore = Boolean(business.storeId && hydratedStoreId === business.storeId);
   const effectiveReady = business.ready || stayMountedForSameStore;
 
+  const handleDiscardWhileUnready = useCallback(() => {
+    setHydratedStoreId(null);
+  }, []);
+
   useEffect(() => {
     if (!effectiveReady) {
       onDirtyChange?.(false);
       onSavingChange?.(false);
+      onUnconfirmedChange?.(false);
       if (controllerRef) controllerRef.current = null;
     }
-  }, [controllerRef, effectiveReady, onDirtyChange, onSavingChange]);
+  }, [controllerRef, effectiveReady, onDirtyChange, onSavingChange, onUnconfirmedChange]);
 
   if (!effectiveReady && business.hydrated) {
     return (
@@ -101,7 +220,7 @@ export function BusinessResourcesCard({
           role="alert"
           title="Não foi possível carregar ramo e recursos desta unidade."
           action={
-            <Button type="button" variant="outline" size="sm" onClick={() => void business.refresh()}>
+            <Button type="button" variant="outline" size="sm" onClick={() => void business.refresh?.()}>
               Tentar novamente
             </Button>
           }
@@ -123,32 +242,47 @@ export function BusinessResourcesCard({
   return (
     <BusinessResourcesForm
       key={business.storeId}
+      externalBusy={externalBusy}
       fallbackBranch={lastKnownBranch}
       fallbackCapabilities={lastKnownCaps}
+      onDiscardWhileUnready={handleDiscardWhileUnready}
       onDirtyChange={onDirtyChange}
       onSavingChange={onSavingChange}
+      onUnconfirmedChange={onUnconfirmedChange}
       controllerRef={controllerRef}
     />
   );
 }
 
 function BusinessResourcesForm({
+  externalBusy = false,
   fallbackBranch,
   fallbackCapabilities,
+  onDiscardWhileUnready,
   onDirtyChange,
   onSavingChange,
+  onUnconfirmedChange,
   controllerRef,
 }: BusinessResourcesCardProps & {
   fallbackBranch: BusinessBranch;
   fallbackCapabilities: StoreCapabilitiesV1 | null;
+  onDiscardWhileUnready: () => void;
 }) {
   const permissions = useEnterprisePermissions();
-  const { branch: liveBranch, capabilities: liveCapabilities, canConfigure, ready, save, legacyProfile } =
-    useStoreBusiness();
+  const {
+    branch: liveBranch,
+    capabilities: liveCapabilities,
+    canConfigure,
+    ready,
+    refresh,
+    revalidate,
+    save,
+    legacyProfile,
+  } = useStoreBusiness();
   const { toast } = useToast();
 
-  // Durante revalidação em segundo plano da mesma loja, conserva a última leitura confirmada
-  // sem piscar para fallback legado nem perder edições em andamento.
+  // Durante revalidação em segundo plano (ou releitura pendente) da mesma loja, conserva
+  // a última leitura confirmada sem piscar para fallback legado nem perder edições em andamento.
   const branch = ready ? liveBranch : fallbackBranch;
   const capabilities = ready ? liveCapabilities : fallbackCapabilities;
 
@@ -156,8 +290,13 @@ function BusinessResourcesForm({
   const [overrides, setOverrides] = useState<Partial<Record<BusinessResourceKey, CapabilityOverrideValue>>>({});
   const [presentation, setPresentation] = useState<BusinessPresentation>({});
   const [saving, setSaving] = useState(false);
+  const [revalidating, setRevalidating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const savingRef = useRef(false);
+  const [reconcileNotice, setReconcileNotice] = useState<string | null>(null);
+  const [unconfirmedSave, setUnconfirmedSave] = useState<{ submittedFingerprint: string; detail?: string } | null>(
+    null,
+  );
+  const busyRef = useRef(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -230,30 +369,48 @@ function BusinessResourcesForm({
     (item) => resolveBusinessResource(draft, item.key, legacyProfile).requested,
   ).length;
 
-  const disabled = !canConfigure || saving;
-  const dirty =
-    selected !== null ||
-    Object.keys(overrides).length > 0 ||
-    Object.keys(presentation).length > 0;
+  const isBusy = saving || revalidating;
+  const disabled = !canConfigure || isBusy || externalBusy;
+  const draftParts: BusinessDraftParts = useMemo(
+    () => ({ selected, overrides, presentation }),
+    [overrides, presentation, selected],
+  );
+  const dirty = hasDraftParts(draftParts);
+  const draftFingerprint = useMemo(() => fingerprintDraft(draftParts), [draftParts]);
+  const isUnconfirmed = unconfirmedSave !== null;
+  const matchesUnconfirmedDraft = isUnconfirmed && unconfirmedSave.submittedFingerprint === draftFingerprint;
+  const needsConfirmationOnly = isUnconfirmed && (matchesUnconfirmedDraft || !dirty);
+  const effectiveDirty = dirty || isUnconfirmed;
 
   useEffect(() => {
-    onDirtyChange?.(dirty);
+    onDirtyChange?.(effectiveDirty);
     return () => {
       onDirtyChange?.(false);
     };
-  }, [dirty, onDirtyChange]);
+  }, [effectiveDirty, onDirtyChange]);
 
   useEffect(() => {
-    onSavingChange?.(saving);
+    onSavingChange?.(isBusy);
     return () => {
       onSavingChange?.(false);
     };
-  }, [onSavingChange, saving]);
+  }, [isBusy, onSavingChange]);
+
+  useEffect(() => {
+    onUnconfirmedChange?.(needsConfirmationOnly);
+    return () => {
+      onUnconfirmedChange?.(false);
+    };
+  }, [needsConfirmationOnly, onUnconfirmedChange]);
 
   const handleBranchChange = (nextBranch: BusinessBranch) => {
     setSaveError(null);
-    const nextSelected = nextBranch === branch ? null : nextBranch;
+    setReconcileNotice(null);
+    // Enquanto a confirmação de releitura está pendente, não colapsa a escolha do operador
+    // contra o fallback pré-PUT (preserva intenção explícita até a reconciliação com o servidor).
+    const nextSelected = !isUnconfirmed && nextBranch === branch ? null : nextBranch;
     setSelected(nextSelected);
+    if (isUnconfirmed) return;
     // Remove overrides que voltaram a coincidir com o baseline do ramo escolhido (M4).
     setOverrides((current) => {
       const next: Partial<Record<BusinessResourceKey, CapabilityOverrideValue>> = {};
@@ -279,16 +436,19 @@ function BusinessResourcesForm({
   // Voltar ao estado salvo desfaz a escolha; override salvo em objeto troca só `enabled`.
   const toggle = (key: BusinessResourceKey, checked: boolean) => {
     setSaveError(null);
+    setReconcileNotice(null);
     setOverrides((current) => {
       const rest = { ...current };
       delete rest[key];
       const saved = capabilities?.overrides?.[key];
-      const untouched = resolveBusinessResource(
-        { ...draft, overrides: { ...capabilities?.overrides, ...rest } },
-        key,
-        legacyProfile,
-      );
-      if (untouched.requested === checked) return rest;
+      if (!isUnconfirmed) {
+        const untouched = resolveBusinessResource(
+          { ...draft, overrides: { ...capabilities?.overrides, ...rest } },
+          key,
+          legacyProfile,
+        );
+        if (untouched.requested === checked) return rest;
+      }
       return {
         ...rest,
         [key]: typeof saved === "object" && saved !== null ? { ...saved, enabled: checked } : checked,
@@ -298,11 +458,12 @@ function BusinessResourcesForm({
 
   const handlePresentationChange = (key: keyof BusinessPresentation, value: string) => {
     setSaveError(null);
+    setReconcileNotice(null);
     setPresentation((current) => {
       const next = { ...current };
-      // Compara com o baseline do ramo atual em edição (M4), evitando snap-back ao trocar de ramo.
+      // Compara com o baseline do ramo atual em edição (M4), exceto durante confirmação pendente.
       const baselineValue = branchBaselineExamples[key];
-      if (value === baselineValue) {
+      if (!isUnconfirmed && value === baselineValue) {
         delete next[key];
       } else {
         next[key] = value;
@@ -312,44 +473,158 @@ function BusinessResourcesForm({
   };
 
   const discard = useCallback(() => {
-    if (savingRef.current) return;
+    if (busyRef.current) return;
     setSelected(null);
     setOverrides({});
     setPresentation({});
     setSaveError(null);
-  }, []);
+    setReconcileNotice(null);
+    setUnconfirmedSave(null);
+    if (!ready) {
+      // Se o último GET falhou, libera o fallback em memória para mostrar erro/retry honesto
+      // caso o novo refresh também falhe, em vez de exibir o snapshot pré-PUT como salvo.
+      onDiscardWhileUnready();
+      void refresh?.();
+    }
+  }, [onDiscardWhileUnready, ready, refresh]);
 
-  const submit = useCallback(async (): Promise<boolean> => {
-    if (savingRef.current || !dirty || !canConfigure) return false;
-    savingRef.current = true;
+  const performReadbackReconcile = useCallback(
+    async (parts: BusinessDraftParts): Promise<{ ok: boolean; remaining: BusinessDraftParts }> => {
+      if (typeof revalidate !== "function") {
+        await refresh?.();
+        return { ok: false, remaining: parts };
+      }
+      const outcome = await revalidate();
+      if (!outcome.ok) {
+        return { ok: false, remaining: parts };
+      }
+      const confirmedCaps = extractCapabilitiesFromSettings(outcome.settings);
+      const confirmedBranch = configuredBusinessBranch(confirmedCaps) ?? legacyBusinessBranch(legacyProfile);
+      const remaining = reconcileBusinessDraft(confirmedCaps, confirmedBranch, legacyProfile, parts);
+      return { ok: true, remaining };
+    },
+    [legacyProfile, refresh, revalidate],
+  );
+
+  const revalidateUnconfirmed = useCallback(async (): Promise<BusinessResourcesSaveOutcome> => {
+    if (busyRef.current) return "noop";
+    busyRef.current = true;
+    setRevalidating(true);
+    setSaveError(null);
+    setReconcileNotice(null);
+    try {
+      const check = await performReadbackReconcile(draftParts);
+      if (!mountedRef.current) return "failed";
+      if (!check.ok) {
+        setUnconfirmedSave((prev) => ({
+          submittedFingerprint: prev?.submittedFingerprint ?? draftFingerprint,
+          detail: "A releitura ainda falhou. Suas seleções continuam preservadas — tente confirmar novamente.",
+        }));
+        toast({
+          title: "Releitura indisponível",
+          description: "Ainda não foi possível confirmar o estado no servidor. Suas seleções foram mantidas.",
+        });
+        return "unconfirmed";
+      }
+      setSelected(check.remaining.selected);
+      setOverrides(check.remaining.overrides);
+      setPresentation(check.remaining.presentation);
+      setUnconfirmedSave(null);
+      if (!hasDraftParts(check.remaining)) {
+        toast({
+          title: "Ramo e recursos salvos",
+          description: "Configuração confirmada após releitura do servidor.",
+          variant: "success",
+        });
+        return "confirmed";
+      }
+      setReconcileNotice(
+        "Estado recarregado do servidor. Apenas as alterações ainda não aplicadas permanecem pendentes — revise e salve somente o restante.",
+      );
+      return "failed";
+    } finally {
+      busyRef.current = false;
+      if (mountedRef.current) setRevalidating(false);
+    }
+  }, [draftFingerprint, draftParts, performReadbackReconcile, toast]);
+
+  const submit = useCallback(async (): Promise<BusinessResourcesSaveOutcome> => {
+    if (busyRef.current || !canConfigure) return "noop";
+    // Se não há edições novas além do envio já aceito pelo servidor, apenas revalida (GET) sem duplicar PUT.
+    if (needsConfirmationOnly) {
+      return revalidateUnconfirmed();
+    }
+    if (!dirty) return "noop";
+
+    busyRef.current = true;
     setSaving(true);
     setSaveError(null);
+    setReconcileNotice(null);
+    let partsToSend: BusinessDraftParts = draftParts;
     try {
+      // Quando já houve envio aceito sem confirmação e o usuário editou mais campos,
+      // relê primeiro para reconciliar e enviar somente o delta parcial restante (evita duplicidade).
+      if (isUnconfirmed) {
+        const preCheck = await performReadbackReconcile(draftParts);
+        if (!mountedRef.current) return "failed";
+        if (!preCheck.ok) {
+          setUnconfirmedSave((prev) => ({
+            submittedFingerprint: prev?.submittedFingerprint ?? draftFingerprint,
+            detail:
+              "Não foi possível reler o estado atual no servidor. Nenhuma nova gravação foi enviada — confirme antes de reenviar.",
+          }));
+          toast({
+            title: "Confirmação pendente",
+            description: "Nenhuma nova gravação foi enviada enquanto a releitura do servidor falhar.",
+          });
+          return "unconfirmed";
+        }
+        partsToSend = preCheck.remaining;
+        setSelected(partsToSend.selected);
+        setOverrides(partsToSend.overrides);
+        setPresentation(partsToSend.presentation);
+        setUnconfirmedSave(null);
+        if (!hasDraftParts(partsToSend)) {
+          toast({
+            title: "Ramo e recursos salvos",
+            description: "Todas as escolhas já estavam confirmadas no servidor.",
+            variant: "success",
+          });
+          return "confirmed";
+        }
+      }
+
       // Somente escolhas tocadas; nunca reenviar o snapshot inteiro da loja.
-      await save({
-        printerConfig: {
-          capabilities: {
-            version: 1,
-            business: {
-              ...(selected !== null ? { primaryBranch: selected } : {}),
-              ...(Object.keys(presentation).length ? { presentation } : {}),
-            },
-            ...(Object.keys(overrides).length ? { overrides } : {}),
-          },
-        },
-      });
-      if (!mountedRef.current) return false;
+      await save(buildPartialCapabilitiesPayload(partsToSend));
+      if (!mountedRef.current) return "failed";
       setSelected(null);
       setOverrides({});
       setPresentation({});
+      setUnconfirmedSave(null);
       toast({
         title: "Ramo e recursos salvos",
-        description: "Configuração atualizada para esta unidade.",
+        description: "Configuração atualizada e confirmada para esta unidade.",
         variant: "success",
       });
-      return true;
+      return "confirmed";
     } catch (error) {
-      if (!mountedRef.current) return false;
+      if (!mountedRef.current) return "failed";
+      if (isStoreSettingsReadbackError(error)) {
+        // Gravação aceita pelo servidor, mas releitura falhou: grava o fingerprint do
+        // payload efetivamente enviado (partsToSend), NÃO anuncia sucesso definitivo
+        // nem descarta estado de recuperação, orientando confirmação sem duplicar escrita.
+        setUnconfirmedSave({
+          submittedFingerprint: fingerprintDraft(partsToSend),
+          detail: undefined,
+        });
+        setSaveError(null);
+        toast({
+          title: "Confirmação pendente",
+          description:
+            "O envio foi aceito, mas a releitura falhou. Use 'Confirmar estado salvo' para verificar antes de reenviar.",
+        });
+        return "unconfirmed";
+      }
       const msg = error instanceof Error ? error.message : "Tente novamente.";
       setSaveError(`Não foi possível salvar ramo e recursos. ${msg}`);
       toast({
@@ -357,25 +632,38 @@ function BusinessResourcesForm({
         description: msg,
         variant: "destructive",
       });
-      return false;
+      return "failed";
     } finally {
-      savingRef.current = false;
+      busyRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [canConfigure, dirty, overrides, presentation, save, selected, toast]);
+  }, [
+    canConfigure,
+    dirty,
+    draftFingerprint,
+    draftParts,
+    isUnconfirmed,
+    needsConfirmationOnly,
+    performReadbackReconcile,
+    revalidateUnconfirmed,
+    save,
+    toast,
+  ]);
 
   useEffect(() => {
     if (!controllerRef) return;
     controllerRef.current = {
       save: submit,
+      revalidate: revalidateUnconfirmed,
       discard,
-      isDirty: () => dirty,
-      isSaving: () => savingRef.current,
+      isDirty: () => effectiveDirty,
+      isUnconfirmed: () => needsConfirmationOnly,
+      isSaving: () => busyRef.current,
     };
     return () => {
       controllerRef.current = null;
     };
-  }, [controllerRef, dirty, discard, submit]);
+  }, [controllerRef, discard, effectiveDirty, needsConfirmationOnly, revalidateUnconfirmed, submit]);
 
   const renderTile = (item: (typeof BUSINESS_RESOURCES)[number], isPreparation: boolean) => {
     const state = resolveBusinessResource(draft, item.key, legacyProfile);
@@ -458,7 +746,11 @@ function BusinessResourcesForm({
         description="Escolha o ramo uma vez e combine os recursos que sua loja utiliza. Suas escolhas têm prioridade sobre as sugestões."
         headerExtra={
           <>
-            {dirty ? (
+            {isUnconfirmed ? (
+              <SettingsStatusBadge tone="dirty" showDot>
+                Confirmação pendente
+              </SettingsStatusBadge>
+            ) : dirty ? (
               <SettingsStatusBadge tone="dirty" showDot>
                 Não salvo
               </SettingsStatusBadge>
@@ -473,17 +765,51 @@ function BusinessResourcesForm({
             <SettingsFeedbackBanner variant="error" role="alert">
               {saveError}
             </SettingsFeedbackBanner>
+          ) : isUnconfirmed ? (
+            <SettingsFeedbackBanner
+              variant="warning"
+              role="status"
+              title="Envio aceito — confirmação pendente"
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => void revalidateUnconfirmed()}
+                >
+                  {revalidating ? "Confirmando…" : "Confirmar estado salvo"}
+                </Button>
+              }
+            >
+              {unconfirmedSave?.detail ??
+                "O servidor aceitou o envio de ramo e recursos, mas a releitura de confirmação falhou. Suas seleções foram mantidas na tela para recuperação — confirme o estado salvo antes de reenviar."}
+            </SettingsFeedbackBanner>
+          ) : reconcileNotice ? (
+            <SettingsFeedbackBanner variant="warning" role="status">
+              {reconcileNotice}
+            </SettingsFeedbackBanner>
           ) : undefined
         }
-        footerHint="Envia apenas as escolhas alteradas nesta unidade."
+        footerHint={
+          needsConfirmationOnly
+            ? "Envio já aceito pelo servidor — confirme a releitura sem duplicar a gravação."
+            : "Envia apenas as escolhas alteradas nesta unidade."
+        }
         footer={
           <>
-            <Button type="button" variant="ghost" disabled={disabled || !dirty} onClick={discard}>
+            <Button type="button" variant="ghost" disabled={disabled || !effectiveDirty} onClick={discard}>
               Descartar
             </Button>
-            <Button type="button" disabled={disabled || !dirty} onClick={() => void submit()}>
-              {saving ? "Salvando…" : "Salvar ramo e recursos"}
-            </Button>
+            {needsConfirmationOnly ? (
+              <Button type="button" disabled={disabled} onClick={() => void revalidateUnconfirmed()}>
+                {revalidating ? "Confirmando…" : "Confirmar estado salvo"}
+              </Button>
+            ) : (
+              <Button type="button" disabled={disabled || !dirty} onClick={() => void submit()}>
+                {saving ? "Salvando…" : "Salvar ramo e recursos"}
+              </Button>
+            )}
           </>
         }
       >

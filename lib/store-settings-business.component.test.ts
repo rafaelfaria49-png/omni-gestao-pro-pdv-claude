@@ -7,7 +7,11 @@ const h = vi.hoisted(() => ({ store: "loja-a", renders: [] as Array<{ storeId: s
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: h.store, storesRefreshNonce: 0, lojaAtivaRaw: { storeProfile: "ASSISTENCIA" } }) }))
 vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => ({ hubs: { cadastros: true }, admin: { configuracoes: true } }) }))
 vi.mock("@/lib/pdv-mount-diagnostics", () => ({ markPdvMountStep: vi.fn() }))
-import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider"
+import {
+  isStoreSettingsReadbackError,
+  StoreSettingsProvider,
+  useStoreSettings,
+} from "@/lib/store-settings-provider"
 import { useStoreBusiness } from "@/lib/use-store-business"
 import { PerfilLojaProvider, usePerfilLoja } from "@/lib/perfil-loja-provider"
 
@@ -127,5 +131,102 @@ describe("Provider real — configuração por loja, sem cache cruzado", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recarregar" }))
     expect(await screen.findByText("loading")).toBeTruthy()
     expect(screen.queryByText("assistencia")).toBeNull()
+  })
+
+  it("save() distingue gravação aceita de releitura falha (StoreSettingsReadbackError) e revalidate() confirma recuperação", async () => {
+    h.store = "loja-a"
+    let getCount = 0
+    let putCount = 0
+    const apiRef: { current: ReturnType<typeof useStoreSettings> | null } = { current: null }
+    function SaveProbe() {
+      const ctx = useStoreSettings()
+      React.useEffect(() => {
+        apiRef.current = ctx
+      })
+      return React.createElement("output", { "data-testid": "loaded" }, String(ctx.loaded))
+    }
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          putCount += 1
+          return response("padaria")
+        }
+        getCount += 1
+        if (getCount === 1) return response("assistencia")
+        if (getCount === 2) return new Response(JSON.stringify({ error: "readback 500" }), { status: 500 })
+        return response("padaria")
+      }),
+    )
+
+    render(React.createElement(StoreSettingsProvider, null, React.createElement(SaveProbe)))
+    await act(async () => {})
+    expect(screen.getByTestId("loaded").textContent).toBe("true")
+
+    let caught: unknown = null
+    await act(async () => {
+      try {
+        await apiRef.current!.save({
+          printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } },
+        })
+      } catch (err) {
+        caught = err
+      }
+    })
+    expect(putCount).toBe(1)
+    expect(isStoreSettingsReadbackError(caught)).toBe(true)
+    expect(screen.getByTestId("loaded").textContent).toBe("false")
+
+    let revalidated: Awaited<ReturnType<ReturnType<typeof useStoreSettings>["revalidate"]>> | null = null
+    await act(async () => {
+      revalidated = await apiRef.current!.revalidate()
+    })
+    expect(putCount).toBe(1)
+    expect(revalidated?.ok).toBe(true)
+    expect(screen.getByTestId("loaded").textContent).toBe("true")
+    expect(apiRef.current!.capabilities?.business?.primaryBranch).toBe("padaria")
+  })
+
+  it("save() rejeitado pelo servidor (PUT 500) lança erro comum (não readback) e não executa GET", async () => {
+    h.store = "loja-a"
+    let getCount = 0
+    const apiRef: { current: ReturnType<typeof useStoreSettings> | null } = { current: null }
+    function SaveProbe() {
+      const ctx = useStoreSettings()
+      React.useEffect(() => {
+        apiRef.current = ctx
+      })
+      return null
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          return new Response(JSON.stringify({ error: "Recusado pelo servidor" }), { status: 500 })
+        }
+        getCount += 1
+        return response("assistencia")
+      }),
+    )
+
+    render(React.createElement(StoreSettingsProvider, null, React.createElement(SaveProbe)))
+    await act(async () => {})
+    expect(getCount).toBe(1)
+
+    let caught: unknown = null
+    await act(async () => {
+      try {
+        await apiRef.current!.save({
+          printerConfig: { capabilities: { version: 1, business: { primaryBranch: "padaria" } } },
+        })
+      } catch (err) {
+        caught = err
+      }
+    })
+    expect(caught).toBeInstanceOf(Error)
+    expect(isStoreSettingsReadbackError(caught)).toBe(false)
+    expect((caught as Error).message).toContain("Recusado pelo servidor")
+    expect(getCount).toBe(1)
   })
 })

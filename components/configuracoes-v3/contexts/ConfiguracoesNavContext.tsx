@@ -9,13 +9,15 @@ type ConfiguracoesNavContextValue = {
   requestExternalNavigation: (href: string, label?: string) => boolean;
   setSectionDirty: (id: SectionId, dirty: boolean) => void;
   dirtySections: ReadonlySet<SectionId>;
+  setSectionSaving: (id: SectionId, saving: boolean) => void;
+  savingSections: ReadonlySet<SectionId>;
 };
 
-const EMPTY_DIRTY: ReadonlySet<SectionId> = new Set();
+const EMPTY_SECTIONS: ReadonlySet<SectionId> = new Set();
 const NOOP_NAV = () => {
   /* fora do shell V3 */
 };
-const NOOP_DIRTY = () => {
+const NOOP_FLAG = () => {
   /* opcional */
 };
 const NOOP_EXTERNAL = () => false;
@@ -23,8 +25,10 @@ const NOOP_EXTERNAL = () => false;
 const FALLBACK_CONTEXT: ConfiguracoesNavContextValue = {
   navigateToSection: NOOP_NAV,
   requestExternalNavigation: NOOP_EXTERNAL,
-  setSectionDirty: NOOP_DIRTY,
-  dirtySections: EMPTY_DIRTY,
+  setSectionDirty: NOOP_FLAG,
+  dirtySections: EMPTY_SECTIONS,
+  setSectionSaving: NOOP_FLAG,
+  savingSections: EMPTY_SECTIONS,
 };
 
 const ConfiguracoesNavContext = createContext<ConfiguracoesNavContextValue | null>(null);
@@ -33,14 +37,18 @@ export function ConfiguracoesNavProvider({
   children,
   navigateToSection,
   requestExternalNavigation = NOOP_EXTERNAL,
-  setSectionDirty = NOOP_DIRTY,
-  dirtySections = EMPTY_DIRTY,
+  setSectionDirty = NOOP_FLAG,
+  dirtySections = EMPTY_SECTIONS,
+  setSectionSaving = NOOP_FLAG,
+  savingSections = EMPTY_SECTIONS,
 }: {
   children: ReactNode;
   navigateToSection: (id: SectionId) => void;
   requestExternalNavigation?: (href: string, label?: string) => boolean;
   setSectionDirty?: (id: SectionId, dirty: boolean) => void;
   dirtySections?: ReadonlySet<SectionId>;
+  setSectionSaving?: (id: SectionId, saving: boolean) => void;
+  savingSections?: ReadonlySet<SectionId>;
 }) {
   const value = useMemo<ConfiguracoesNavContextValue>(
     () => ({
@@ -48,8 +56,10 @@ export function ConfiguracoesNavProvider({
       requestExternalNavigation,
       setSectionDirty,
       dirtySections,
+      setSectionSaving,
+      savingSections,
     }),
-    [dirtySections, navigateToSection, requestExternalNavigation, setSectionDirty],
+    [dirtySections, navigateToSection, requestExternalNavigation, savingSections, setSectionDirty, setSectionSaving],
   );
 
   return <ConfiguracoesNavContext.Provider value={value}>{children}</ConfiguracoesNavContext.Provider>;

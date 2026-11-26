@@ -115,6 +115,16 @@ export function SettingsSidebar({ active, onChange, headerAction }: SettingsSide
                           href={s.href}
                           data-active="false"
                           onClick={(event) => {
+                            if (
+                              event.defaultPrevented ||
+                              event.button !== 0 ||
+                              event.metaKey ||
+                              event.ctrlKey ||
+                              event.shiftKey ||
+                              event.altKey
+                            ) {
+                              return;
+                            }
                             if (requestExternalNavigation(s.href!, label)) {
                               event.preventDefault();
                             }
