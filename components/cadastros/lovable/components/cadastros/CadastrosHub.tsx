@@ -149,15 +149,18 @@ export function CadastrosHub() {
     getVestuarioCatalogoStatus(storeId).then((r) => { if (alive) setVestuarioEnabled(r.enabled); }, () => {});
     return () => { alive = false; };
   }, [storeId]);
-  const [etiquetasEnabled, setEtiquetasEnabled] = useState(false);
+  const [etiquetasStoreId, setEtiquetasStoreId] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    setEtiquetasEnabled(false);
+    setEtiquetasStoreId(null);
     if (!storeId) return;
-    getIdentificacaoStatus(storeId).then(r => { if (alive) setEtiquetasEnabled(r.enabled); }, () => {});
+    getIdentificacaoStatus(storeId).then(r => {
+      if (alive && r.enabled) setEtiquetasStoreId(storeId);
+    }, () => {});
     return () => { alive = false; };
   }, [storeId]);
-  const visibleTab = (id: string) => id === "etiquetas" ? etiquetasEnabled && !!storeId : id === "grades" ? vestuarioEnabled && !!storeId : baseVisibleTab(id);
+  const etiquetasEnabled = !!storeId && etiquetasStoreId === storeId;
+  const visibleTab = (id: string) => id === "etiquetas" ? etiquetasEnabled : id === "grades" ? vestuarioEnabled && !!storeId : baseVisibleTab(id);
   const selectedTab = visibleTab(tab) ? tab : "dashboard";
   return (
     <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
