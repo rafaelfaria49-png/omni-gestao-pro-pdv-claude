@@ -32,18 +32,18 @@ export function SettingsCard({
     <div className={cn("cfg-card min-w-0 overflow-hidden", className)}>
       {(title || description || headerExtra) && (
         <div
-          className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+          className="flex flex-col gap-2 border-b px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5"
           style={{ borderColor: "var(--cfg-border)" }}
         >
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
             {icon ? (
               <span
                 aria-hidden="true"
-                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-primary"
+                className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border shadow-xs"
                 style={{
-                  backgroundColor: "var(--cfg-primary-soft)",
-                  borderColor: "var(--cfg-primary-border)",
-                  color: "var(--cfg-primary-text)",
+                  backgroundColor: "var(--cfg-card-icon-bg)",
+                  borderColor: "var(--cfg-card-icon-border)",
+                  color: "var(--cfg-card-icon-fg)",
                 }}
               >
                 {icon}
@@ -52,7 +52,7 @@ export function SettingsCard({
             <div className="min-w-0 flex-1">
               {title && (
                 <h3
-                  className="text-[14px] font-semibold leading-snug tracking-tight"
+                  className="text-[15px] font-semibold leading-snug tracking-tight"
                   style={{ color: "var(--cfg-fg)" }}
                 >
                   {title}
@@ -74,21 +74,21 @@ export function SettingsCard({
         </div>
       )}
 
-      <div className={cn("min-w-0 px-4 py-3.5 sm:px-5", bodyClassName)}>
+      <div className={cn("min-w-0 px-4 py-4 sm:px-5", bodyClassName)}>
         {children}
         {feedback ? <div className="mt-3.5">{feedback}</div> : null}
       </div>
 
       {footer && (
         <div
-          className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 sm:px-5"
+          className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 sm:px-5"
           style={{
             borderColor: "var(--cfg-border)",
             backgroundColor: "var(--cfg-inset)",
           }}
         >
           {footerHint ? (
-            <span className="text-[11.5px]" style={{ color: "var(--cfg-muted)" }}>
+            <span className="text-[11.5px] leading-snug" style={{ color: "var(--cfg-muted)" }}>
               {footerHint}
             </span>
           ) : null}

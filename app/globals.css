@@ -93,13 +93,13 @@ body {
   --shadow-elegant: 0 10px 30px -12px oklch(0.47 0.26 25 / 0.2);
   --shadow-glow: 0 0 40px oklch(0.47 0.26 25 / 0.14);
 
-  --sidebar: oklch(0.985 0.002 240);
+  --sidebar: oklch(0.994 0.002 240);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.47 0.26 25);
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.955 0.004 240);
   --sidebar-accent-foreground: oklch(0.21 0 0);
-  --sidebar-border: oklch(0.89 0.005 240);
+  --sidebar-border: oklch(0.895 0.005 240);
   --sidebar-ring: oklch(0.47 0.26 25);
 
   /* ── PDV OmniClassic — tokens HSL (usar com hsl(var(--token))) ─────────── */
@@ -400,13 +400,13 @@ body {
   --chart-4: oklch(0.72 0.12 235);
   --chart-5: oklch(0.68 0.18 310);
   
-  --sidebar: oklch(0.14 0.025 50);
+  --sidebar: oklch(0.125 0.02 50);
   --sidebar-foreground: oklch(0.96 0.015 50);
   --sidebar-primary: oklch(0.78 0.14 75);
   --sidebar-primary-foreground: oklch(0.08 0.01 50);
-  --sidebar-accent: oklch(0.19 0.025 50);
+  --sidebar-accent: oklch(0.185 0.024 50);
   --sidebar-accent-foreground: oklch(0.96 0.015 50);
-  --sidebar-border: oklch(0.24 0.025 50);
+  --sidebar-border: oklch(0.245 0.026 52);
   --sidebar-ring: oklch(0.78 0.14 75);
   
   --bubble-ai: oklch(0.19 0.025 50);
@@ -752,24 +752,40 @@ body {
     @apply min-h-screen bg-background text-foreground antialiased;
     transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease;
   }
-  /* Scrollbar global discreto e tematizado em @layer base para preservar utilitárias Tailwind (ex.: scrollbar-width:none em OperacoesV3Nav) */
-  :is(html, body, aside, nav, main) {
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 30%, transparent) transparent;
+  /* Scrollbar premium tematizado (8px desktop):
+     - Chromium/Edge/WebKit/App Windows usam ::-webkit-scrollbar completo (8px, cantos arredondados, trilho discreto e thumb perceptível).
+     - Firefox usa @supports not selector(::-webkit-scrollbar) com scrollbar-width/scrollbar-color para evitar que Chromium 121+ desative ::-webkit-scrollbar.
+     - Mantido em @layer base para preservar utilitárias Tailwind (ex.: [scrollbar-width:none] em OperacoesV3Nav). */
+  @supports not selector(::-webkit-scrollbar) {
+    :is(html, body, aside, nav, main) {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--foreground) 32%, transparent)
+        color-mix(in srgb, var(--foreground) 5%, transparent);
+    }
   }
   :is(html, body, aside, nav, main)::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
   :is(html, body, aside, nav, main)::-webkit-scrollbar-track {
-    background: transparent;
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    border-radius: 9999px;
   }
   :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--muted-foreground) 26%, transparent);
-    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 27%, transparent);
+    border-radius: 9999px;
+    border: 1.5px solid transparent;
+    background-clip: padding-box;
   }
   :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--muted-foreground) 46%, transparent);
+    background: color-mix(in srgb, var(--foreground) 44%, transparent);
+    border: 1.5px solid transparent;
+    background-clip: padding-box;
+  }
+  :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb:active {
+    background: color-mix(in srgb, var(--primary) 54%, var(--foreground) 46%);
+    border: 1.5px solid transparent;
+    background-clip: padding-box;
   }
   :is(html, body, aside, nav, main)::-webkit-scrollbar-corner {
     background: transparent;
@@ -781,28 +797,77 @@ body {
   font-family: var(--font-display);
 }
 
-.scroll-elegant {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 32%, transparent) transparent;
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-elegant {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--foreground) 34%, transparent)
+      color-mix(in srgb, var(--foreground) 5.5%, transparent);
+  }
 }
 .scroll-elegant::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 .scroll-elegant::-webkit-scrollbar-track {
-  background: transparent;
+  background: color-mix(in srgb, var(--foreground) 5.5%, transparent);
+  border-radius: 9999px;
+  margin-block: 4px;
 }
 .scroll-elegant::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--muted-foreground) 26%, transparent);
-  border-radius: 999px;
-  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--foreground) 29%, transparent);
+  border-radius: 9999px;
+  border: 1.5px solid transparent;
   background-clip: padding-box;
 }
 .scroll-elegant::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--muted-foreground) 48%, transparent);
+  background: color-mix(in srgb, var(--foreground) 46%, transparent);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-elegant::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--primary) 56%, var(--foreground) 44%);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 .scroll-elegant::-webkit-scrollbar-corner {
   background: transparent;
+}
+/* Contraste tonal esculpido do scrollbar em temas escuros (Ref 03 — perceptível, sem barra branca, sem glow excessivo) */
+html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--foreground) 6.5%, transparent);
+}
+html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 66%, var(--border) 34%);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--primary) 36%, var(--muted-foreground) 64%);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--primary) 58%, var(--muted-foreground) 42%);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+html.coffee-gold .scroll-elegant::-webkit-scrollbar-track {
+  background: oklch(0.2 0.024 52 / 0.65);
+}
+html.coffee-gold .scroll-elegant::-webkit-scrollbar-thumb {
+  background: oklch(0.56 0.085 68);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+html.coffee-gold .scroll-elegant::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.68 0.115 72);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+html.coffee-gold .scroll-elegant::-webkit-scrollbar-thumb:active {
+  background: oklch(0.75 0.13 76);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 
 @utility bg-gradient-primary {

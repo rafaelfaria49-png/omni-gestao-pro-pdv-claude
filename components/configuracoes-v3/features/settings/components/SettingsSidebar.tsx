@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Settings } from "lucide-react";
 import {
   SETTINGS_CLIENT_GROUPS,
   SETTINGS_PLATFORM_GROUPS,
@@ -64,32 +64,40 @@ export function SettingsSidebar({ active, onChange, compact = false, headerActio
       aria-label="Navegação de Configurações"
       className={cn(
         "settings-sidebar-aside lg:shrink-0 select-none",
-        compact ? "lg:w-[200px] xl:w-[208px]" : "lg:w-[218px]",
+        compact ? "lg:w-[204px] xl:w-[214px]" : "lg:w-[222px]",
       )}
     >
-      {/* Cabeçalho contextual discreto (sem duplicar o monograma do Unit Identity Ribbon) */}
+      {/* Cabeçalho contextual limpo com ícone sem caixa excessiva (Ref 01 & Ref 02) */}
       <div className="settings-sidebar-header">
-        <div className="min-w-0 leading-tight">
-          <p className="text-[12.5px] font-semibold tracking-tight" style={{ color: "var(--cfg-fg)" }}>
-            Configurações
-          </p>
-          <p
-            className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px]"
-            style={{ color: hasStore ? "var(--cfg-muted)" : "var(--cfg-warning-fg)" }}
-            title={storeName}
-          >
-            <span
-              aria-hidden="true"
-              className="h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: hasStore ? "var(--cfg-success-dot)" : "var(--cfg-warning-dot)" }}
-            />
-            <span className="truncate">{storeName}</span>
-          </p>
+        <div className="flex min-w-0 items-center gap-2">
+          <Settings
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0"
+            strokeWidth={1.9}
+            style={{ color: "var(--cfg-primary-text)" }}
+          />
+          <div className="min-w-0 leading-tight">
+            <p className="text-[13px] font-semibold tracking-tight" style={{ color: "var(--cfg-fg)" }}>
+              Configurações
+            </p>
+            <p
+              className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px]"
+              style={{ color: hasStore ? "var(--cfg-muted)" : "var(--cfg-warning-fg)" }}
+              title={storeName}
+            >
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: hasStore ? "var(--cfg-success-dot)" : "var(--cfg-warning-dot)" }}
+              />
+              <span className="truncate">{storeName}</span>
+            </p>
+          </div>
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
 
-      <nav className="settings-sidebar-nav scroll-elegant">
+      <nav className="settings-sidebar-nav scroll-elegant [scrollbar-gutter:stable]">
         {/* Mantém .settings-sidebar-list com <li> exclusivos para os itens de navegação (contrato de DOM/E2E). */}
         <div className="settings-sidebar-list">
           {groups.map((group) => (

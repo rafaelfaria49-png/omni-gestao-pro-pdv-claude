@@ -1,5 +1,6 @@
 "use client";
 
+import { Save } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 
 export interface DirtySectionSummary {
@@ -60,10 +61,10 @@ export function SettingsDirtyDock({
           </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             disabled={saving}
             onClick={onDiscardAll}
@@ -76,6 +77,7 @@ export function SettingsDirtyDock({
             disabled={saving}
             onClick={onSaveAll}
           >
+            <Save className="size-3.5" aria-hidden="true" />
             {actionLabel}
           </Button>
         </div>

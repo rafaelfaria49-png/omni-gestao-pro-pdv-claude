@@ -492,15 +492,15 @@ export default function ConfiguracoesV3Page() {
               </header>
             )}
 
-            <div className="flex-1 min-h-0 overflow-y-auto scroll-elegant">
+            <div className="flex-1 min-h-0 overflow-y-auto scroll-elegant [scrollbar-gutter:stable]">
               <div
                 key={`${permittedActive}-${storeScopeKey}`}
                 className={`cfg-content-container mx-auto w-full animate-fade-in ${
                   permittedActive === "pdv"
-                    ? "max-w-[1400px] px-4 py-3.5 sm:px-6 xl:px-7 xl:py-5"
+                    ? "max-w-[1440px] px-4 py-4 sm:px-6 xl:px-7 xl:py-5"
                     : globalSidebarCollapsed
-                      ? "max-w-[1320px] px-4 py-3.5 sm:px-6 lg:px-7 xl:py-5"
-                      : "max-w-[1220px] px-4 py-3.5 sm:px-5 lg:px-6 xl:px-7 xl:py-5"
+                      ? "max-w-[1520px] px-4 py-4 sm:px-6 lg:px-7 xl:py-5"
+                      : "max-w-[1440px] px-4 py-4 sm:px-5 lg:px-6 xl:px-7 xl:py-5"
                 }`}
               >
                 <Active />

@@ -54,16 +54,14 @@ export function SettingsCardSkeleton({
             </div>
           </div>
         ) : variant === "resources" ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-              <Skeleton className="h-10 md:col-span-5" />
-              <Skeleton className="h-16 md:col-span-7" />
-            </div>
-            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-              <Skeleton className="h-20 w-full rounded-xl" />
-              <Skeleton className="h-20 w-full rounded-xl" />
-              <Skeleton className="h-20 w-full rounded-xl" />
-              <Skeleton className="h-20 w-full rounded-xl" />
+          <div className="space-y-3.5">
+            <Skeleton className="h-9 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <div className="space-y-2">
+              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-14 w-full rounded-xl" />
             </div>
           </div>
         ) : (

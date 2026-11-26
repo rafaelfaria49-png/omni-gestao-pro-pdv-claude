@@ -53,11 +53,11 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
 
   const rowClasses = (active: boolean) =>
     cn(
-      "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[6px] text-[12.5px] leading-snug transition-colors duration-150",
+      "group relative flex items-center gap-2.5 rounded-lg border px-2.5 py-[6px] text-[12.5px] leading-snug transition-all duration-150",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/60 focus-visible:ring-offset-0",
       active
-        ? "bg-primary/10 text-sidebar-foreground font-semibold"
-        : "text-muted-foreground font-medium hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
+        ? "border-primary/25 bg-gradient-to-r from-primary/[0.15] via-primary/[0.09] to-primary/[0.03] text-sidebar-foreground font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        : "border-transparent text-muted-foreground font-medium hover:bg-sidebar-accent/75 hover:text-sidebar-foreground",
     );
 
   const renderRow = (params: {
@@ -80,7 +80,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
         <span
           aria-hidden="true"
           className={cn(
-            "absolute left-0 top-1.5 bottom-1.5 w-[2.5px] rounded-r-full bg-primary transition-opacity duration-150",
+            "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary transition-opacity duration-150",
             active ? "opacity-100" : "opacity-0",
           )}
         />
@@ -105,7 +105,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
         {badge ? (
           <span
             className={cn(
-              "shrink-0 rounded border px-1.5 py-[1px] text-[9.5px] font-medium leading-tight tracking-[0.02em]",
+              "shrink-0 rounded-md border px-1.5 py-[1px] text-[9.5px] font-medium leading-tight tracking-[0.02em]",
               navBadgeClasses(badge, active),
             )}
           >
@@ -165,9 +165,9 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
                 onClick={togglePinned}
                 aria-label={expanded ? (pinned ? "Desafixar menu" : "Fixar menu aberto") : "Expandir menu"}
                 aria-pressed={pinned}
-                className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg border border-primary/20 bg-primary/10"
+                className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg ring-1 ring-sidebar-border/80 shadow-xs"
               >
-                <Image src="/omni-gestao-pro-icon.svg" alt="OmniGestão" width={16} height={16} className="h-4 w-4" />
+                <Image src="/omni-gestao-pro-icon.svg" alt="OmniGestão" width={28} height={28} className="h-7 w-7" />
               </button>
               <div className={cn("ml-2.5 min-w-0 flex-1 leading-tight transition-opacity", expanded ? "opacity-100" : "opacity-0")}>
                 <div className="truncate font-display text-[13px] font-semibold tracking-tight text-sidebar-foreground">
@@ -281,12 +281,12 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
     >
       {/* Container interno com largura fixa impede quebra/reajuste de texto durante a transição expandir↔recolher */}
       <div className="flex h-full w-[228px] flex-col">
-        <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-3.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg border border-primary/20 bg-primary/10">
-            <Image src="/omni-gestao-pro-icon.svg" alt="OmniGestão Logo" width={16} height={16} className="h-4 w-4" />
+        <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-3">
+          <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg ring-1 ring-sidebar-border/80 shadow-xs">
+            <Image src="/omni-gestao-pro-icon.svg" alt="OmniGestão Logo" width={32} height={32} className="h-8 w-8" />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate font-display text-[13px] font-semibold tracking-tight text-sidebar-foreground">
+            <div className="truncate font-display text-[13.5px] font-semibold tracking-tight text-sidebar-foreground">
               OmniGestão Pro
             </div>
             <StoreSwitcher
@@ -308,7 +308,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
           </button>
         </div>
 
-        <nav className="scroll-elegant min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+        <nav className="scroll-elegant min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] pl-2.5 pr-1.5 py-2.5">
           {sectionLabel("Workspace", true)}
           <div className="space-y-0.5">{workspaceFiltered.map(renderItem)}</div>
 
@@ -323,7 +323,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
           ) : null}
         </nav>
 
-        <div className="mt-auto flex h-10 shrink-0 items-center justify-between gap-2 border-t border-sidebar-border/80 px-3.5">
+        <div className="mt-auto flex h-10 shrink-0 items-center justify-between gap-2 border-t border-sidebar-border/80 bg-sidebar-accent/25 px-3.5">
           <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden="true"
@@ -333,7 +333,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
               Servidor Conectado
             </span>
           </div>
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/65">v1.2.4</span>
+          <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70">v1.2.4</span>
         </div>
       </div>
     </aside>

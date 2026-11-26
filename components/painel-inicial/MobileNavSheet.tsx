@@ -28,16 +28,16 @@ function NavLinkRow({ item, path, onNavigate }: { item: DashboardNavItem; path: 
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
+        "relative flex min-w-0 items-center gap-2.5 rounded-lg border px-2.5 py-2 text-[13px] transition-colors",
         active
-          ? "bg-primary/10 text-sidebar-foreground font-semibold"
-          : "text-muted-foreground font-medium hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
+          ? "border-primary/25 bg-gradient-to-r from-primary/[0.15] via-primary/[0.08] to-transparent text-sidebar-foreground font-semibold"
+          : "border-transparent text-muted-foreground font-medium hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
       )}
     >
       <span
         aria-hidden="true"
         className={cn(
-          "absolute left-0 top-1.5 bottom-1.5 w-[2.5px] rounded-r-full bg-primary transition-opacity",
+          "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary transition-opacity",
           active ? "opacity-100" : "opacity-0",
         )}
       />

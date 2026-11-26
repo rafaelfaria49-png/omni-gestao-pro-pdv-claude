@@ -5,11 +5,19 @@ import {
   ChevronDown,
   Grid2x2,
   Info,
+  Layers,
   Palette,
   QrCode,
+  Save,
   Scale,
+  Shirt,
+  ShoppingBag,
+  ShoppingCart,
   SlidersHorizontal,
   Smartphone,
+  Sprout,
+  Store,
+  UtensilsCrossed,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -187,6 +195,17 @@ const RESOURCE_ICONS: Partial<Record<BusinessResourceKey, LucideIcon>> = {
   "catalog.serializedDevices": QrCode,
   "catalog.weight": Scale,
   "catalog.variants": Grid2x2,
+};
+
+const BRANCH_ICONS: Record<BusinessBranch, LucideIcon> = {
+  assistencia: Wrench,
+  acessorios: Smartphone,
+  padaria: UtensilsCrossed,
+  moda: Shirt,
+  variedades: ShoppingBag,
+  agropecuaria: Sprout,
+  supermercado: ShoppingCart,
+  comercio: Store,
 };
 
 export function BusinessResourcesCard({
@@ -717,11 +736,11 @@ function BusinessResourcesForm({
         data-active={state.requested ? "true" : "false"}
         data-stage={item.stage}
         data-disabled={disabled ? "true" : "false"}
-        className="cfg-resource-tile flex cursor-pointer items-start gap-2.5 rounded-xl border p-3"
+        className="cfg-resource-tile flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2"
       >
         <span
           aria-hidden="true"
-          className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition-colors"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition-colors"
           style={{
             backgroundColor: isActiveOperational
               ? "var(--cfg-tile-icon-active-bg)"
@@ -738,14 +757,22 @@ function BusinessResourcesForm({
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="flex items-start gap-1.5 text-[13px] font-semibold leading-snug" style={{ color: "var(--cfg-fg)" }}>
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12.5px] font-semibold leading-snug" style={{ color: "var(--cfg-fg)" }}>
             <span>{item.label}</span>
             {isActiveOperational ? (
               <span
                 aria-hidden="true"
-                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
                 style={{ backgroundColor: "var(--cfg-success-dot)" }}
               />
+            ) : null}
+            <SettingsStatusBadge tone={sourceTone} className="px-1.5 py-0 text-[10px] leading-[15px]">
+              {sourceLabel}
+            </SettingsStatusBadge>
+            {isPreparation ? (
+              <SettingsStatusBadge tone="unavailable" aria-hidden={true} className="px-1.5 py-0 text-[10px] leading-[15px]">
+                Em preparação
+              </SettingsStatusBadge>
             ) : null}
           </span>
           {/* Fora do nome acessível da caixa; lido como descrição via aria-describedby. */}
@@ -753,23 +780,15 @@ function BusinessResourcesForm({
             <span
               id={hintId}
               aria-hidden="true"
-              className="mt-0.5 block text-[11.5px] leading-snug"
+              className="mt-0.5 block text-[11.5px] leading-[1.32]"
               style={{ color: "var(--cfg-muted)" }}
             >
               {descriptionText}
             </span>
           ) : null}
-          <span className="mt-2 flex flex-wrap items-center gap-1.5">
-            <SettingsStatusBadge tone={sourceTone}>{sourceLabel}</SettingsStatusBadge>
-            {isPreparation ? (
-              <SettingsStatusBadge tone="unavailable" aria-hidden={true}>
-                Em preparação
-              </SettingsStatusBadge>
-            ) : null}
-          </span>
         </span>
 
-        <span className="relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center">
+        <span className="relative inline-flex h-[21px] w-[38px] shrink-0 items-center">
           <input
             type="checkbox"
             checked={state.requested}
@@ -785,11 +804,13 @@ function BusinessResourcesForm({
   };
 
   const presentationPreview = `${examples.productExample} · ${examples.categoryExample}`;
+  const BranchIcon = BRANCH_ICONS[currentBranch] ?? Store;
 
   return (
     <section id="ramo-recursos" className="scroll-mt-6">
       <SettingsCard
-        icon={<SlidersHorizontal className="h-4 w-4" />}
+        className="cfg-business-card"
+        icon={<Layers className="h-4 w-4" />}
         title="Ramo e recursos"
         description="Escolha o ramo uma vez e combine os recursos que sua loja utiliza. Suas escolhas têm prioridade sobre as sugestões."
         headerExtra={
@@ -846,22 +867,29 @@ function BusinessResourcesForm({
         }
         footer={
           <>
-            <Button type="button" variant="ghost" disabled={disabled || !effectiveDirty} onClick={discard}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || !effectiveDirty}
+              onClick={discard}
+            >
               Descartar
             </Button>
             {needsConfirmationOnly ? (
-              <Button type="button" disabled={disabled} onClick={() => void revalidateUnconfirmed()}>
+              <Button type="button" size="sm" disabled={disabled} onClick={() => void revalidateUnconfirmed()}>
                 {revalidating ? "Confirmando…" : "Confirmar estado salvo"}
               </Button>
             ) : (
-              <Button type="button" disabled={disabled || !dirty} onClick={() => void submit()}>
+              <Button type="button" size="sm" disabled={disabled || !dirty} onClick={() => void submit()}>
+                <Save className="size-3.5" aria-hidden="true" />
                 {saving ? "Salvando…" : "Salvar ramo e recursos"}
               </Button>
             )}
           </>
         }
       >
-        <div className="space-y-3.5">
+        <div className="space-y-3">
           {!canConfigure ? (
             <SettingsFeedbackBanner variant="readonly">
               Somente responsáveis com permissão de Configurações podem editar.
@@ -869,8 +897,8 @@ function BusinessResourcesForm({
           ) : null}
 
           {/* Seletor nativo de ramo + Painel contextual estruturado de Impacto do Ramo */}
-          <div className="grid grid-cols-1 items-stretch gap-3 md:grid-cols-12">
-            <div className="space-y-1.5 md:col-span-4">
+          <div className="cfg-ramo-top">
+            <div className="space-y-1">
               <label
                 htmlFor="business-branch"
                 className="block text-xs font-medium"
@@ -879,12 +907,19 @@ function BusinessResourcesForm({
                 Ramo principal
               </label>
               <div className="relative">
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "var(--cfg-input-icon)" }}
+                >
+                  <BranchIcon className="h-3.5 w-3.5" strokeWidth={1.9} />
+                </span>
                 <select
                   id="business-branch"
                   value={currentBranch}
                   disabled={disabled}
                   onChange={(event) => handleBranchChange(event.target.value as BusinessBranch)}
-                  className="cfg-select h-9 w-full appearance-none border px-3 pr-9 text-[13px] font-medium"
+                  className="cfg-select h-9 w-full appearance-none border pl-8 pr-9 text-[13px] font-medium"
                 >
                   {Object.entries(BUSINESS_BRANCHES)
                     .filter(([value]) => branchOffered(value as BusinessBranch))
@@ -906,16 +941,19 @@ function BusinessResourcesForm({
             </div>
 
             <div
-              className="rounded-xl border border-l-2 px-3.5 py-2.5 md:col-span-8"
+              className="rounded-xl border border-l-2 px-3 py-2"
               style={{
                 backgroundColor: "var(--cfg-inset)",
                 borderColor: "var(--cfg-border)",
-                borderLeftColor: "var(--primary)",
+                borderLeftColor: "var(--cfg-callout-accent)",
               }}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em]" style={{ color: "var(--cfg-fg)" }}>
-                  <Info className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                <span
+                  className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]"
+                  style={{ color: "var(--cfg-eyebrow)" }}
+                >
+                  <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   Impacto do ramo
                 </span>
                 <span
@@ -929,11 +967,11 @@ function BusinessResourcesForm({
                   {BUSINESS_BRANCHES[currentBranch]}
                 </span>
               </div>
-              <p className="mt-1.5 text-xs font-medium leading-snug" style={{ color: "var(--cfg-fg-body)" }}>
+              <p className="mt-1 text-xs font-medium leading-snug" style={{ color: "var(--cfg-fg-body)" }}>
                 {BRANCH_IMPACT_SUMMARY[currentBranch]}
               </p>
               <p
-                className="mt-1.5 border-t pt-1.5 text-[11.5px] leading-snug"
+                className="mt-1 border-t pt-1 text-[11px] leading-snug"
                 style={{ borderColor: "var(--cfg-border)", color: "var(--cfg-muted)" }}
               >
                 Para padaria, recomendamos o PDV Clássico. Salvar o ramo preserva a escolha atual de PDV, preços,
@@ -945,7 +983,7 @@ function BusinessResourcesForm({
           {/* Resource Tile Matrix — Recursos operacionais */}
           {operationalResources.length > 0 ? (
             <SettingsSubSection title="Recursos operacionais">
-              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+              <div className="cfg-resource-grid">
                 {operationalResources.map((item) => renderTile(item, false))}
               </div>
             </SettingsSubSection>
@@ -955,16 +993,17 @@ function BusinessResourcesForm({
           {preparationResources.length > 0 ? (
             <SettingsSubSection
               title="Preparação de cadastro"
-              description="Configuração de catálogo — venda operacional ainda indisponível"
+              description="Venda operacional ainda indisponível"
+              divided
             >
-              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+              <div className="cfg-prep-grid">
                 {preparationResources.map((item) => renderTile(item, true))}
               </div>
             </SettingsSubSection>
           ) : null}
 
           <p
-            className="flex items-start gap-2 text-xs leading-relaxed"
+            className="flex items-start gap-2 text-[11.5px] leading-relaxed"
             style={{ color: "var(--cfg-muted)" }}
           >
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -981,7 +1020,7 @@ function BusinessResourcesForm({
             summary={presentationPreview}
             expandedSummary="Personalize os exemplos exibidos nos campos do cadastro de produtos desta unidade."
           >
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+            <div className="cfg-presentation-grid">
               {(
                 [
                   ["productExample", "Exemplo de produto"],
@@ -1003,7 +1042,7 @@ function BusinessResourcesForm({
                     disabled={disabled}
                     value={examples[key]}
                     onChange={(event) => handlePresentationChange(key, event.target.value)}
-                    className="cfg-input"
+                    className="cfg-input h-9"
                   />
                 </div>
               ))}

@@ -54,12 +54,12 @@ export function ThemeSwitcher({ compact = false }: { compact?: boolean }) {
             type="button"
             aria-label={`Tema atual: ${activeOption.label}. Abrir seletor de temas`}
             title={`Tema: ${activeOption.label}`}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-panel text-primary transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/85 bg-panel/80 text-primary transition-colors hover:bg-muted/60 hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span className="h-3.5 w-3.5 rounded-full border-2 border-background bg-primary shadow-sm" />
+            <span className="h-3.5 w-3.5 rounded-full border-2 border-background bg-primary shadow-xs" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-64 p-2.5">
+        <PopoverContent align="end" className="w-72 rounded-xl border-border/90 p-2.5 shadow-lg">
           <div className="px-1 pb-2">
             <p className="text-xs font-semibold text-foreground">Tema da interface</p>
             <p className="text-[11px] text-muted-foreground">Escolha entre os 10 temas existentes.</p>

@@ -22,16 +22,16 @@ export function SettingsSubSection({
   return (
     <div
       className={cn(
-        "space-y-2",
-        divided && "border-t pt-3.5",
+        "space-y-2.5",
+        divided && "border-t pt-4",
         className,
       )}
       style={divided ? { borderColor: "var(--cfg-border)" } : undefined}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h4
-          className="text-[10.5px] font-semibold uppercase tracking-[0.08em]"
-          style={{ color: "var(--cfg-subtle)" }}
+          className="text-[10.5px] font-semibold uppercase tracking-[0.09em]"
+          style={{ color: "var(--cfg-eyebrow)" }}
         >
           {title}
         </h4>

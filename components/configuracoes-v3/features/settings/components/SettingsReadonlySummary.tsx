@@ -28,13 +28,13 @@ export function SettingsReadonlySummary({
   className,
 }: SettingsReadonlySummaryProps) {
   return (
-    <section className={cn("cfg-card overflow-hidden", className)} aria-label={title}>
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
-        <div className="flex min-w-0 items-center gap-2.5">
+    <section className={cn("cfg-card cfg-regional-card overflow-hidden", className)} aria-label={title}>
+      <div className="cfg-regional-inner px-4 py-3.5 sm:px-5">
+        <div className="flex min-w-0 items-start gap-3">
           {icon ? (
             <span
               aria-hidden="true"
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
+              className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border"
               style={{
                 backgroundColor: "var(--cfg-inset)",
                 borderColor: "var(--cfg-border)",
@@ -51,13 +51,13 @@ export function SettingsReadonlySummary({
               </h3>
               {badge ?? <SettingsSoonBadge />}
             </div>
-            <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--cfg-muted)" }}>
+            <p className="mt-0.5 text-xs leading-snug" style={{ color: "var(--cfg-muted)" }}>
               {description}
             </p>
           </div>
         </div>
 
-        <dl className="flex flex-wrap items-center gap-2 text-xs">
+        <dl className="flex shrink-0 flex-wrap items-center gap-2 text-xs">
           {items.map((item) => (
             <div
               key={item.label}

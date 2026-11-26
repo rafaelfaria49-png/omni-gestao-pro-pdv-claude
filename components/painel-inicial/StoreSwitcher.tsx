@@ -119,7 +119,7 @@ export function StoreSwitcher({
           <span className="min-w-0 flex-1 truncate">{current}</span>
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-60" strokeWidth={2} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-60">
+        <DropdownMenuContent align="start" className="w-60 rounded-xl border-border/90 p-1.5 shadow-lg">
           <DropdownMenuLabel className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             Trocar de loja
           </DropdownMenuLabel>
