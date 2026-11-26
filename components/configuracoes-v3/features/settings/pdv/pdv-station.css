@@ -1,0 +1,391 @@
+/*
+ * Configurações → PDV e impressão (“Estação de caixa”).
+ *
+ * Só deriva dos tokens do tema ativo (app/globals.css e, dentro de Configurações, a paleta de
+ * configuracoes-v3.css) por color-mix — nenhum tema próprio. Misturas entre dois tokens em OKLAB:
+ * em OKLCH o matiz é interpolado e o âmbar de pendência desviava para o verde no Midnight.
+ * Tamanhos de texto ficam em classes Tailwind no markup, para que styles/legibility.css os reforce.
+ * Exceção de domínio documentada: o papel térmico da prévia é branco em todos os temas
+ * (o HTML real do cupom usa #fff/#000 — lib/thermal-print.ts).
+ * Tudo em @layer components: utilitários Tailwind (layer utilities) continuam vencendo.
+ */
+
+@layer components {
+.cx-root {
+  --cx-raised: var(--card);
+  --cx-inset: color-mix(in oklab, var(--muted) 70%, var(--background));
+  --cx-hover: color-mix(in oklch, var(--foreground) 5%, transparent);
+  --cx-press: color-mix(in oklch, var(--foreground) 8%, transparent);
+  --cx-line: color-mix(in oklch, var(--border) 90%, transparent);
+  --cx-line-strong: color-mix(in oklab, var(--border) 70%, var(--foreground) 12%);
+  --cx-ink: var(--foreground);
+  --cx-ink-3: var(--muted-foreground);
+  --cx-accent-ink: color-mix(in oklab, var(--primary) 60%, var(--foreground));
+  /* Seleção: acento puxado para a tinta. No Light (vermelho da marca) vira bordô — nunca “erro”. */
+  --cx-select: color-mix(in oklab, var(--primary) 42%, var(--foreground));
+  --cx-select-halo: color-mix(in oklch, var(--cx-select) 14%, transparent);
+  /* Âmbar puxado para a tinta: ≥ 3:1 sobre o fundo nos temas claros e escuros. */
+  --cx-pending: color-mix(in oklab, var(--warning) 68%, var(--foreground));
+  --cx-pending-soft: color-mix(in oklch, var(--warning) 20%, transparent);
+  --cx-switch-off: color-mix(in oklab, var(--foreground) 14%, var(--background));
+  --cx-switch-edge: color-mix(in oklab, var(--foreground) 50%, var(--background));
+  --cx-shadow-float: 0 14px 36px -14px oklch(0 0 0 / 0.38), 0 2px 6px -2px oklch(0 0 0 / 0.14);
+  --cx-paper: oklch(0.993 0.002 250);
+  --cx-paper-ink: oklch(0.2 0.01 250);
+  --cx-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  /* Altura ocupada acima do conteúdo rolável (topbar global + respiro), para o painel fixo. */
+  --cx-chrome-h: 104px;
+  color: var(--cx-ink);
+  container-type: inline-size;
+  container-name: cxpdv;
+}
+
+/* ── Composição: configurações × painel da estação ──────────────────────── */
+.cx-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 36px; align-items: start; }
+.cx-aside { display: none; }
+.cx-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 172px), 1fr)); gap: 8px; }
+.cx-inline-preview { display: block; }
+@container cxpdv (min-width: 960px) {
+  .cx-layout { grid-template-columns: minmax(0, 1fr) 344px; }
+  .cx-aside { display: flex; }
+  .cx-strip { display: none; }
+  .cx-inline-preview { display: none; }
+}
+@container cxpdv (min-width: 1180px) {
+  .cx-layout { grid-template-columns: minmax(0, 1fr) 372px; gap: 48px; }
+}
+
+/* ── Seções e linhas (folha aberta, sem cartões) ────────────────────────── */
+.cx-section { scroll-margin-top: 12px; }
+.cx-section + .cx-section { margin-top: 40px; }
+.cx-rows { border-top: 1px solid var(--cx-line); }
+.cx-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px 28px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--cx-line);
+  align-items: center;
+}
+.cx-row--top { align-items: start; }
+.cx-row__control { justify-self: start; max-width: 100%; }
+.cx-row--stack .cx-row__control { justify-self: stretch; }
+@container cxpdv (min-width: 600px) {
+  .cx-row:not(.cx-row--stack) { grid-template-columns: minmax(0, 1fr) auto; }
+  .cx-row:not(.cx-row--stack) .cx-row__control { justify-self: end; }
+}
+.cx-subhead { padding: 22px 0 8px; }
+
+/* ── Cartões de fluxo (únicos “cards”: são objetos selecionáveis) ───────── */
+.cx-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 12px; }
+.cx-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--cx-line);
+  border-radius: calc(var(--radius) + 6px);
+  background: var(--cx-raised);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cx-tile:hover { border-color: var(--cx-line-strong); }
+.cx-tile[data-selected="true"] {
+  border-color: var(--cx-select);
+  box-shadow: 0 0 0 1px var(--cx-select), 0 0 0 5px var(--cx-select-halo);
+}
+.cx-tile__hit {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 10px 4px;
+  cursor: pointer;
+  border-radius: calc(var(--radius) + 6px) calc(var(--radius) + 6px) 0 0;
+  text-align: left;
+}
+.cx-tile__hit:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.cx-tile:has(.cx-tile__hit[data-disabled]) .cx-tile__hit { opacity: 0.6; cursor: not-allowed; }
+.cx-check {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  /* Mesma cor do contorno de seleção (≥ 3:1 sobre o fundo em todos os temas). Dentro de Configurações,
+     a paleta local do Midnight deixa --primary-foreground sobre --primary em 2:1. */
+  background: var(--cx-select);
+  color: var(--background);
+  box-shadow: 0 0 0 3px var(--cx-raised);
+}
+@container cxpdv (max-width: 599px) {
+  .cx-tiles { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .cx-tile__hit { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 10px 2px; }
+  .cx-tile__hit > :last-child { padding-right: 26px; }
+  .cx-check { top: 12px; right: 12px; width: 20px; height: 20px; }
+}
+
+/* Esquema da disposição do layout (honesto: não é captura) */
+.cx-glyph {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  overflow: hidden;
+  border-radius: calc(var(--radius) + 2px);
+  border: 1px solid var(--cx-line);
+  background: var(--cx-inset);
+  color: var(--cx-ink);
+}
+.cx-g { border-radius: 3px; background: color-mix(in oklch, currentColor 9%, transparent); min-width: 0; min-height: 0; }
+.cx-g--line { height: 4px; border-radius: 2px; background: color-mix(in oklch, currentColor 16%, transparent); }
+.cx-g--strong { background: color-mix(in oklch, currentColor 22%, transparent); }
+.cx-g--accent { background: color-mix(in oklch, currentColor 26%, transparent); }
+.cx-tile[data-selected="true"] .cx-g--accent,
+.cx-glyph--active .cx-g--accent { background: color-mix(in oklch, var(--primary) 80%, transparent); }
+.cx-g--ok { background: color-mix(in oklch, var(--success) 55%, transparent); }
+.cx-g--warn { background: color-mix(in oklch, var(--warning) 60%, transparent); }
+.cx-g--info { background: color-mix(in oklch, var(--info) 55%, transparent); }
+.cx-g--barcode {
+  background: repeating-linear-gradient(90deg, color-mix(in oklch, currentColor 34%, transparent) 0 1px, transparent 1px 3px);
+}
+
+/* ── Controle segmentado (Radix RadioGroup) ─────────────────────────────── */
+.cx-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  max-width: 100%;
+  border-radius: calc(var(--radius) + 3px);
+  border: 1px solid var(--cx-line);
+  background: var(--cx-inset);
+}
+.cx-seg__item {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-height: 38px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  color: var(--cx-ink-3);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.cx-seg__item:hover { color: var(--cx-ink); background: var(--cx-hover); }
+.cx-seg__item[data-state="checked"] {
+  color: var(--cx-ink);
+  background: var(--cx-raised);
+  box-shadow: 0 0 0 1px var(--cx-line-strong), 0 1px 2px oklch(0 0 0 / 0.08);
+}
+.cx-seg__item:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.cx-seg__item[data-disabled] { cursor: not-allowed; opacity: 0.55; }
+@container cxpdv (max-width: 599px) {
+  .cx-seg { display: flex; }
+  .cx-seg__item { flex: 1 1 0; min-height: 44px; }
+}
+
+/* Opções em lista (leitor) */
+.cx-choice {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 2px 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: calc(var(--radius) + 2px);
+  cursor: pointer;
+}
+.cx-choice:hover { background: var(--cx-hover); }
+.cx-choice:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.cx-choice[data-state="checked"] { background: var(--cx-hover); box-shadow: inset 0 0 0 1px var(--cx-line-strong); }
+.cx-choice[data-disabled] { cursor: not-allowed; opacity: 0.55; }
+.cx-radio {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 999px;
+  border: 1.5px solid var(--cx-line-strong);
+  display: grid;
+  place-items: center;
+  background: var(--cx-raised);
+}
+.cx-choice[data-state="checked"] .cx-radio { border-color: var(--cx-ink); }
+.cx-choice[data-state="checked"] .cx-radio::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cx-ink);
+}
+
+/* Switch neutro (tinta), nunca vermelho de alerta; contorno ≥ 3:1 quando desligado */
+.cx-switch { position: relative; }
+.cx-switch[data-state="checked"] { background: var(--cx-ink) !important; }
+.cx-switch[data-state="checked"] > span { background: var(--background) !important; }
+.cx-switch[data-state="unchecked"] {
+  background: var(--cx-switch-off) !important;
+  box-shadow: inset 0 0 0 1px var(--cx-switch-edge);
+}
+.cx-switch[data-state="unchecked"] > span { background: var(--background) !important; box-shadow: 0 0 0 1px var(--cx-switch-edge); }
+/* O ::after mede a partir da caixa de padding (dentro da borda de 2px): -12px ⇒ alvo de 44px. */
+.cx-switch::after { content: ""; position: absolute; inset: -12px -2px; }
+
+/* !important em camada vence o !important SEM camada de styles/operational-density.css
+   (que fixa [data-slot=button] em 2rem) — só abaixo de 600px, onde o toque manda. */
+@container cxpdv (max-width: 599px) {
+  .cx-root input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px !important; }
+  .cx-touch { min-height: 44px !important; min-width: 44px !important; }
+  .cx-stepper { height: 46px !important; }
+  .cx-stepper > button { width: 44px !important; }
+}
+
+/* ── Marcadores ─────────────────────────────────────────────────────────── */
+.cx-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--cx-pending);
+  box-shadow: 0 0 0 3px var(--cx-pending-soft);
+}
+.cx-accent-ink { color: var(--cx-accent-ink); }
+.cx-mono { font-family: var(--cx-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+/* ── Painel da estação (direita) ────────────────────────────────────────── */
+.cx-aside {
+  position: sticky;
+  top: 16px;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--cx-chrome-h));
+  min-height: 0;
+  border: 1px solid var(--cx-line);
+  border-radius: calc(var(--radius) + 8px);
+  background: var(--cx-raised);
+  overflow: hidden;
+}
+.cx-spec-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+.cx-spec-btn:hover { background: var(--cx-hover); }
+.cx-spec-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+/* ── Prévia do cupom (papel térmico em escala 1:1, CSS mm) ──────────────── */
+.cx-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px 22px;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--foreground) 9%, transparent) 1px, transparent 1.2px) 0 0 / 12px 12px,
+    var(--cx-inset);
+}
+.cx-dim {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 80mm;
+  height: 14px;
+  color: var(--cx-ink-3);
+  transition: width 0.26s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.cx-dim[data-bobina="58mm"] { width: 58mm; }
+.cx-dim::before,
+.cx-dim::after { content: ""; flex: 1 1 0; height: 1px; background: currentColor; opacity: 0.55; }
+.cx-dim > i { position: absolute; top: 2px; bottom: 2px; width: 1px; background: currentColor; opacity: 0.55; }
+.cx-dim > i:first-child { left: 0; }
+.cx-dim > i:last-of-type { right: 0; }
+.cx-paper-wrap {
+  position: relative;
+  filter: drop-shadow(0 1px 0.5px oklch(0 0 0 / 0.22)) drop-shadow(0 10px 14px oklch(0 0 0 / 0.14));
+}
+.cx-paper {
+  position: relative;
+  box-sizing: border-box;
+  width: 80mm;
+  padding: 2mm 4mm 7mm;
+  background: var(--cx-paper);
+  color: var(--cx-paper-ink);
+  font-family: var(--cx-mono);
+  font-size: 12px;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+  transition: width 0.26s cubic-bezier(0.2, 0.7, 0.2, 1);
+  --z: 5px;
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--z)) 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--z)) 100%;
+}
+.cx-paper[data-bobina="58mm"] { width: 58mm; padding: 2mm 3mm 7mm; }
+.cx-paper p { margin: 0; }
+.cx-paper .cx-sep { border-top: 1px dashed currentColor; margin: 6px 0; }
+.cx-paper .cx-row2 { display: flex; justify-content: space-between; gap: 8px; }
+.cx-paper .cx-row2 > span:last-child { text-align: right; }
+.cx-sheet-back {
+  position: absolute;
+  inset: 0;
+  background: var(--cx-paper);
+  opacity: 0.75;
+  --z: 5px;
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--z)) 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--z)) 100%;
+}
+.cx-logo-slot { display: grid; place-items: center; height: 40px; margin-bottom: 6px; }
+
+/* ── Barra de alterações pendentes ──────────────────────────────────────── */
+.cx-dock {
+  position: sticky;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 28px;
+  padding: 10px 10px 10px 16px;
+  border-radius: calc(var(--radius) + 8px);
+  border: 1px solid var(--cx-line-strong);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--cx-shadow-float);
+  animation: cx-rise 0.18s ease-out both;
+}
+.cx-dock[data-tone="error"] { border-color: color-mix(in oklch, var(--destructive) 55%, transparent); }
+@keyframes cx-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ── Esqueleto ──────────────────────────────────────────────────────────── */
+.cx-skel { border-radius: var(--radius); background: color-mix(in oklch, var(--foreground) 7%, transparent); }
+
+/* ── Movimento reduzido e contraste forçado ─────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .cx-root *,
+  .cx-root *::before,
+  .cx-root *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+@media (forced-colors: active) {
+  .cx-tile[data-selected="true"],
+  .cx-seg__item[data-state="checked"],
+  .cx-choice[data-state="checked"] { outline: 2px solid Highlight; }
+  .cx-dot { forced-color-adjust: none; background: Highlight; box-shadow: none; }
+  .cx-paper,
+  .cx-sheet-back { forced-color-adjust: none; }
+}
+} /* @layer components */

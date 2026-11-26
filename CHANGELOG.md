@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-26
+
+### Configurações — PDV e impressão vira a “Estação de caixa” (draft, fase 1)
+
+- A aba reúne numa tela o PDV que abre no caixa, o modo inicial do Clássico, o leitor de código de barras, a balança e a impressão. Ao lado, o que está em vigor e o que vai mudar, com a prévia do cupom em tamanho real (mesma estrutura do cupom impresso, inclusive endereço e rodapé).
+- Uma barra única salva ou descarta tudo. Cada parte é gravada separadamente: se uma falhar, a barra diz qual e as outras ficam salvas.
+- A impressora do app Windows continua gravada só no computador; a bobina do teste agora também pode ser salva sozinha.
+- Nada pode ser editado antes de as configurações da unidade carregarem, e trocar de unidade descarta o que não foi salvo daquela unidade.
+- Mesmas chaves e os mesmos salvamentos parciais de antes. A publicação depende da PR #406 (guardas de alterações pendentes) — ver `docs/design/CONFIGURACOES_PDV_ESTACAO_HANDOFF_FASE2.md`.
+
 ## 2026-11-24
 
 ### Marketplace · Mercado Livre (draft)

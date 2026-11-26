@@ -10,16 +10,21 @@ import { SCALE_PROFILE } from "@/services/scale-readonly"
 import { mergePrinterConfigServerSide } from "@/lib/pdv-settings-server-first"
 
 const h = vi.hoisted(() => ({ store: "loja-a", permitted: true }))
-vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: h.store, storesRefreshNonce: 0, lojaAtivaRaw: { storeProfile: "ASSISTENCIA" } }) }))
+vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: h.store, storesRefreshNonce: 0, lojaAtivaRaw: { storeProfile: "ASSISTENCIA", nomeFantasia: "Loja sintética" } }) }))
 vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => h.permitted ? getPermissionsFromSession({
   expires: "2099-01-01", user: { id: "synthetic-owner", role: "ADMIN", accessScope: "STORE", platformAuthority: false,
     allowedStoreIds: ["loja-a", "loja-b"], storeModules: { "loja-a": [...BASIC_MODULE_ACCESS.modules], "loja-b": [...BASIC_MODULE_ACCESS.modules] } },
 } as unknown as Session, h.store) : { admin: { configuracoes: false } } }))
 vi.mock("@/lib/pdv-mount-diagnostics", () => ({ markPdvMountStep: vi.fn() }))
+// A aba PDV abre a prévia do layout no tema atual; fora do shell não há StudioThemeProvider.
+vi.mock("@/components/theme/ThemeProvider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/theme/ThemeProvider")>()),
+  useTheme: () => ({ mode: "light", theme: "light" }),
+}))
 
 import { StoreSettingsProvider } from "@/lib/store-settings-provider"
 import { PdvStoreScaleVisor } from "@/components/dashboard/vendas/pdv-scale-visor"
-import { PdvScaleVisorSettingsCard } from "@/components/configuracoes-v3/features/settings/sections/PdvScaleVisorSettingsCard"
+import { PdvSection } from "@/components/configuracoes-v3/features/settings/sections/PdvSection"
 
 type Printer = Record<string, unknown>
 let records: Record<string, Printer>
@@ -38,9 +43,14 @@ function atCommit<T extends Element>(find: () => T | null): Promise<T> {
 }
 function tree(showSettings = false) {
   return React.createElement(StoreSettingsProvider, null,
-    showSettings ? React.createElement(PdvScaleVisorSettingsCard) : null,
+    showSettings ? React.createElement(PdvSection) : null,
     React.createElement(PdvStoreScaleVisor, { storeId: h.store }))
 }
+/** Controle do visor na aba Configurações → PDV e impressão (Switch, grava pela barra de alterações). */
+const VISOR = "Exibir visor de peso no PDV"
+const visorSwitch = () => screen.getByRole("switch", { name: VISOR })
+const isOn = (el: Element) => el.getAttribute("aria-checked") === "true"
+const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }))
 async function connect() {
   fireEvent.change(await screen.findByLabelText("Protocolo da balança"), { target: { value: SCALE_PROFILE } })
   fireEvent.click(screen.getByRole("button", { name: "Conectar balança" }))
@@ -91,13 +101,13 @@ describe("Provider e cartão reais com servidor/serial simulados", () => {
   it("STORE autorizado salva somente false, fecha leitura ativa e mantém após reload/reentrada/mudança de ramo", async () => {
     records["loja-a"].impressao = { viasCupom: 2 }
     render(tree(true))
-    const check = await screen.findByRole("checkbox", { name: "Exibir visor de peso no PDV" })
-    expect((check as HTMLInputElement).checked).toBe(true)
+    const check = await screen.findByRole("switch", { name: VISOR })
+    expect(isOn(check)).toBe(true)
     await connect()
     await act(async () => device.send("ST,+0001.234 kg\r\n"))
     expect(screen.getByLabelText("Peso recebido da balança").textContent).toBe("1,234 kg")
     fireEvent.click(check)
-    fireEvent.click(screen.getByRole("button", { name: "Salvar visor" }))
+    save()
     await screen.findByText("Preferência do visor salva nesta unidade.")
     await waitFor(() => expect(screen.queryByTestId("pdv-scale-visor")).toBeNull())
     expect(writes).toEqual([{ store: "loja-a", body: { printerConfig: { pdvScaleVisorVisible: false } } }])
@@ -107,18 +117,18 @@ describe("Provider e cartão reais com servidor/serial simulados", () => {
     records["loja-a"].capabilities = { version: 1, overrides: {}, business: { primaryBranch: "assistencia" } }
     render(tree(true))
     await screen.findByText(/Escolha manual da unidade/)
-    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false)
+    expect(isOn(visorSwitch())).toBe(false)
     expect(screen.queryByTestId("pdv-scale-visor")).toBeNull()
     expect(writes).toHaveLength(1)
   })
   it("outra loja sem override oculta; true manual persiste em nova montagem sem copiar porta", async () => {
     h.store = "loja-b"
     render(tree(true))
-    const check = await screen.findByRole("checkbox")
-    expect((check as HTMLInputElement).checked).toBe(false)
+    const check = await screen.findByRole("switch", { name: VISOR })
+    expect(isOn(check)).toBe(false)
     expect(screen.queryByTestId("pdv-scale-visor")).toBeNull()
     fireEvent.click(check)
-    fireEvent.click(screen.getByRole("button", { name: "Salvar visor" }))
+    save()
     await screen.findByTestId("pdv-scale-visor")
     cleanup()
     render(tree())
@@ -130,42 +140,43 @@ describe("Provider e cartão reais com servidor/serial simulados", () => {
   it.each(["server", "malformed"])("falha %s conserva rascunho, oferece cancelar e não finge sucesso", async (kind) => {
     failPut = kind === "server"; malformedPut = kind === "malformed"
     render(tree(true))
-    fireEvent.click(await screen.findByRole("checkbox"))
-    fireEvent.click(screen.getByRole("button", { name: "Salvar visor" }))
-    await screen.findByRole("alert")
+    fireEvent.click(await screen.findByRole("switch", { name: VISOR }))
+    save()
+    const alert = await screen.findByRole("alert")
+    expect(alert.textContent).toContain("Não foi possível salvar o visor de peso. Suas alterações continuam pendentes; tente novamente.")
     await act(async () => {})
     // O rascunho sobrevive à falha e à sincronização seguinte com o servidor.
-    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false)
+    expect(isOn(visorSwitch())).toBe(false)
     expect(screen.queryByText("Preferência do visor salva nesta unidade.")).toBeNull()
-    expect(screen.getByRole("button", { name: "Salvar visor" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeTruthy()
     expect(records["loja-a"].pdvScaleVisorVisible).toBeUndefined()
-    fireEvent.click(screen.getByRole("button", { name: "Cancelar visor" }))
-    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(screen.getByRole("button", { name: "Desfazer alterações em Balança" }))
+    expect(isOn(visorSwitch())).toBe(true)
     expect(screen.queryByRole("alert")).toBeNull()
   })
   it("primeiro clique logo após carregar não é revertido pela sincronização com o servidor", async () => {
     render(tree(true))
-    const check = await atCommit(() => screen.queryByRole("checkbox", { name: "Exibir visor de peso no PDV" }))
+    const check = await atCommit(() => screen.queryByRole("switch", { name: VISOR }))
     fireEvent.click(check)
-    expect((check as HTMLInputElement).checked).toBe(false)
-    expect(screen.getByRole("button", { name: "Salvar visor" })).toBeTruthy()
+    expect(isOn(check)).toBe(false)
+    expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeTruthy()
     await act(async () => {})
-    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false)
-    expect(screen.getByRole("button", { name: "Salvar visor" })).toBeTruthy()
+    expect(isOn(visorSwitch())).toBe(false)
+    expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeTruthy()
   })
   it("troca A/B descarta leitura, conexão e draft na primeira renderização; retorno não reconecta", async () => {
     records["loja-b"].pdvScaleVisorVisible = true
     const view = render(tree(true))
     await connect()
     await act(async () => device.send("ST,+00012.40 kg\r\n"))
-    fireEvent.click(screen.getByRole("checkbox"))
+    fireEvent.click(visorSwitch())
     h.store = "loja-b"
     view.rerender(tree(true))
     expect(screen.queryByLabelText("Peso recebido da balança")).toBeNull()
     await screen.findByTestId("pdv-scale-visor")
     expect(screen.getByLabelText("Peso recebido da balança").textContent).toBe("— kg")
-    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true)
-    expect(screen.queryByRole("button", { name: "Salvar visor" })).toBeNull()
+    expect(isOn(visorSwitch())).toBe(true)
+    expect(screen.queryByRole("button", { name: "Salvar alterações" })).toBeNull()
     await waitFor(() => expect(device.port.close).toHaveBeenCalledTimes(1))
     h.store = "loja-a"
     view.rerender(tree(true))
@@ -178,7 +189,7 @@ describe("Provider e cartão reais com servidor/serial simulados", () => {
     failGet = true
     render(tree(true))
     await screen.findByText(/Configurações indisponíveis/)
-    expect(screen.queryByRole("checkbox")).toBeNull()
+    expect(screen.queryByRole("switch", { name: VISOR })).toBeNull()
     expect(screen.queryByTestId("pdv-scale-visor")).toBeNull()
     expect(device.serial.requestPort).not.toHaveBeenCalled()
   })
@@ -186,7 +197,8 @@ describe("Provider e cartão reais com servidor/serial simulados", () => {
     h.permitted = false
     render(tree(true))
     await screen.findByTestId("pdv-scale-visor")
-    expect(screen.queryByText("Balança e visor de peso")).toBeNull()
+    expect(screen.queryByRole("heading", { name: /^Balança/ })).toBeNull()
+    expect(screen.queryByRole("switch", { name: VISOR })).toBeNull()
     expect(writes).toHaveLength(0)
   })
   it("navegador incompatível informa e desabilita conexão", async () => {
