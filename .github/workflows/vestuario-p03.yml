@@ -77,8 +77,11 @@ jobs:
           python scripts/vestuario/verify-p03-pdf.py
       - name: Preparo QA com legado sintético anterior à migration P03 e drift zero
         run: VESTUARIO_P02_BASE_REF=origin/${{ github.base_ref || 'main' }} node scripts/vestuario/prepare-pg.mjs
-      - name: PostgreSQL real - constraints, multiloja, concorrência, replay e guards P01
-        run: node node_modules/vitest/vitest.mjs run lib/identificacao/service.integration.test.ts lib/vestuario/catalog-service.integration.test.ts --maxWorkers=1 --testTimeout=60000
+      - name: PostgreSQL real - constraints, multiloja, concorrência, replay e catálogo legado
+        run: >-
+          node node_modules/vitest/vitest.mjs run lib/identificacao/service.integration.test.ts
+          lib/identificacao/release-catalog.integration.test.ts lib/vestuario/catalog-service.integration.test.ts
+          --maxWorkers=1 --testTimeout=60000
       - name: Typecheck integral
         run: npm run typecheck
       - name: Lint P03
