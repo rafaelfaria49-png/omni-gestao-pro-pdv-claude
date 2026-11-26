@@ -27,7 +27,13 @@ const h = vi.hoisted(() => ({
 }))
 vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => h.permissions }))
 vi.mock("next/link", () => ({ default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => React.createElement("a", { href, className }, children) }))
-vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-a", lojaAtivaRaw: { nomeFantasia: "Padaria Sintética", cnpj: "00.000.000/0001-00", logoUrl: "" } }) }))
+vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({
+  lojaAtivaId: "loja-a",
+  lojaAtivaRaw: { nomeFantasia: "Padaria Sintética", cnpj: "00.000.000/0001-00", logoUrl: "" },
+  // Cabeçalho do cupom (o mesmo do PDV): documentos da empresa + endereço.
+  empresaDocumentos: { nomeFantasia: "Padaria Sintética", cnpj: "00.000.000/0001-00" },
+  getEnderecoDocumentos: () => "Rua Sintética, 1",
+}) }))
 vi.mock("@/components/configuracoes-v3/hooks/use-toast", () => ({ useToast: () => ({ toast: h.toast }) }))
 // A aba PDV abre a prévia do layout no tema atual; fora do shell não há StudioThemeProvider.
 vi.mock("@/components/theme/ThemeProvider", async (importOriginal) => ({
@@ -203,6 +209,7 @@ describe("Configurações → Impressão", () => {
     fireEvent.click(screen.getByRole("button", { name: "Prévia no navegador" }))
     await waitFor(() => expect(written).toContain("PRÉVIA — sem valor fiscal"), { timeout: 5000 })
     expect(written).toContain("Padaria Sintética")
+    expect(written).toContain("Rua Sintética, 1")
     expect(calls).toHaveLength(0)
   })
 

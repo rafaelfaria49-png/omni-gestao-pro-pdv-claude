@@ -45,7 +45,7 @@ function PdvStationContent() {
   const { toast } = useToast();
   const desktop = useDesktopPrintAvailable();
   const station = useDesktopStation(desktop, toast);
-  const print = usePrintActions(s.imp);
+  const print = usePrintActions(s.imp, s.receiptStore);
   const [previewId, setPreviewId] = useState<PdvFlowId | null>(null);
   const [dataHora] = useState(() => new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }));
 

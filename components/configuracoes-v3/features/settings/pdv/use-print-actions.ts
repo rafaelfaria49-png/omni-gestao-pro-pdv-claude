@@ -2,11 +2,10 @@
 
 /**
  * Ações de impressão que NÃO gravam nada: teste pela ponte TCP (plataforma) e prévia pela impressão do navegador
- * (cliente). Mesma lógica da antiga `ImpressaoPdvSettingsCard`.
+ * (cliente). A prévia no navegador usa o MESMO cabeçalho da prévia na tela (documentos da empresa, endereço, logo).
  */
 import { useState } from "react";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
-import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useStoreSettings } from "@/lib/store-settings-provider";
 import type { PdvImpressaoConfig } from "@/lib/pdv-impressao-config";
 import { buildPdvReceiptEscPos } from "@/lib/escpos";
@@ -14,10 +13,10 @@ import { sendEscPosViaProxy } from "@/lib/thermal-print";
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime";
 import { configPadrao } from "@/lib/config-empresa";
 import { normalizeImpressao } from "./pdv-station-model";
+import type { ReceiptStore } from "./ReceiptPreview";
 
-export function usePrintActions(imp: PdvImpressaoConfig) {
+export function usePrintActions(imp: PdvImpressaoConfig, receiptStore: ReceiptStore) {
   const { toast } = useToast();
-  const { lojaAtivaRaw } = useLojaAtiva();
   const { settings } = useStoreSettings();
   const [testing, setTesting] = useState(false);
 
@@ -57,11 +56,12 @@ export function usePrintActions(imp: PdvImpressaoConfig) {
     const result = await printPdvSaleReceipt({
       config: normalizeImpressao(imp),
       receiptFooter: settings?.receiptFooter ?? null,
-      logoUrl: lojaAtivaRaw?.logoUrl ?? null,
+      logoUrl: receiptStore.logoUrl ?? null,
       forceBrowserFallback: true,
       input: {
-        nomeFantasia: lojaAtivaRaw?.nomeFantasia?.trim() || "Sua loja",
-        cnpj: lojaAtivaRaw?.cnpj?.trim() || "—",
+        nomeFantasia: receiptStore.nomeFantasia,
+        cnpj: receiptStore.cnpj,
+        enderecoLinha: receiptStore.enderecoLinha,
         itens: [{ name: "PRÉVIA — sem valor fiscal", quantity: 1, unitPrice: 0, lineTotal: 0 }],
         subtotal: 0,
         taxes: 0,
