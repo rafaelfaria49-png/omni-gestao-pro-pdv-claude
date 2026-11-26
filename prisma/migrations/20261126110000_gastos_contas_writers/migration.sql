@@ -304,10 +304,20 @@ CREATE TRIGGER gastos_receber_escopo BEFORE INSERT OR UPDATE ON "contas_receber_
 CREATE TRIGGER gastos_mov_escopo BEFORE INSERT OR UPDATE ON "movimentacoes_financeiras" FOR EACH ROW EXECUTE FUNCTION gastos_validar_escopo();
 
 -- A FK histórica da venda aponta só para id; conferir o escopo também nessa entrada.
+-- Legado (OMNI-GESTOR-MONEY-LEGACY-COMPATIBILITY-FINAL-004): vendas antigas podem guardar vínculo com
+-- título de outra loja (resíduo da colisão global de pedidoId, anterior a 2026-07-28). Um UPDATE que
+-- NÃO altera o vínculo nem a loja não cria vínculo novo e não é validado, para não congelar a venda
+-- histórica; isso não concede acesso: todo leitor/escritor da aplicação filtra títulos por storeId.
+-- INSERT, troca de vínculo ou troca de loja continuam exigindo título ativo da MESMA loja.
 CREATE FUNCTION gastos_validar_titulo_venda() RETURNS trigger LANGUAGE plpgsql
 SET search_path = public, pg_temp AS $$
 DECLARE t record;
 BEGIN
+  IF TG_OP = 'UPDATE'
+    AND NEW."contaReceberTituloId" IS NOT DISTINCT FROM OLD."contaReceberTituloId"
+    AND NEW."storeId" IS NOT DISTINCT FROM OLD."storeId" THEN
+    RETURN NEW;
+  END IF;
   IF NEW."contaReceberTituloId" IS NOT NULL THEN
     SELECT * INTO t FROM "contas_receber_titulos" WHERE "id" = NEW."contaReceberTituloId";
     IF NOT FOUND OR t."storeId" IS NULL OR t."storeId" IS DISTINCT FROM NEW."storeId" OR NOT t."ativo" THEN

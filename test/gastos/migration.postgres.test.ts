@@ -98,7 +98,12 @@ describe.skipIf(!auditRaw)("G002 auditoria de legado inconsistente no banco desc
       expect(Object.fromEntries(Object.keys(s.before_json).map(key => [key, current.row[key]]))).toEqual(s.before_json)
     }
     await expect(auditDb.$executeRaw`UPDATE contas_pagar_titulos SET descricao = 'Recusado' WHERE id = 'g002-history-CP2'`).rejects.toMatchObject({ meta: { code: "23514" } })
-    await expect(auditDb.$executeRaw`UPDATE vendas SET "contaReceberTituloId" = "contaReceberTituloId" WHERE id = 'g002-history-V1'`).rejects.toMatchObject({ meta: { code: "23514" } })
+    // FINAL-004: regravar o MESMO vínculo legado não congela a venda (não cria vínculo novo); trocar para
+    // título de outra loja continua recusado (cobertura completa em test/gastos/venda-titulo-legado.pg.test.ts).
+    await expect(auditDb.$transaction(async tx => {
+      await tx.$executeRaw`UPDATE vendas SET "contaReceberTituloId" = "contaReceberTituloId" WHERE id = 'g002-history-V1'`
+      throw new Error("G002_AUDIT_FIXTURE_ROLLBACK")
+    })).rejects.toThrow("G002_AUDIT_FIXTURE_ROLLBACK")
     await expect(auditDb.$executeRaw`UPDATE movimentacoes_financeiras SET descricao = 'Recusado' WHERE id = 'g002-history-M1'`).rejects.toMatchObject({ meta: { code: "23514" } })
     await expect(auditDb.$transaction(async tx => {
       await tx.$executeRaw`UPDATE movimentacoes_financeiras SET descricao = 'Histórico da mesma loja permitido' WHERE id = 'g002-history-M2'`
