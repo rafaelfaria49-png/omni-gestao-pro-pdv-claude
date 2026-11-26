@@ -302,7 +302,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
   const confirmedBranchLabel = business.ready ? BUSINESS_BRANCHES[business.branch] : null;
 
   return (
-    <div className={cn("space-y-3.5 sm:space-y-4", anyDirty && "pb-16")}>
+    <div className={cn("cfg-geral-root space-y-3.5 sm:space-y-4", anyDirty && "pb-16")}>
       {/* ── 0. CABEÇALHO EDITORIAL DE CONFIGURAÇÕES (Desktop; mobile já usa topbar contextual) ── */}
       <header className="hidden lg:flex items-center justify-between gap-4 pb-0.5">
         <div className="flex min-w-0 items-center gap-3">
@@ -536,6 +536,7 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
             >
               <SettingsCard
                 className="cfg-empresa-card"
+                bodyClassName="cfg-empresa-body"
                 icon={<Building2 className="h-4 w-4" />}
                 title="Dados da empresa"
                 description="Aparecem em recibos, orçamentos, notas e relatórios da unidade."

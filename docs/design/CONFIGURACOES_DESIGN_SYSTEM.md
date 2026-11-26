@@ -11,11 +11,11 @@ Documentação definitiva da fundação visual, arquitetura em duas colunas adap
   - Claros (5): `light` (Vermelho), `soft-ice` (Azul), `neon-ice` (Verde), `violet-ice` (Roxo), `coffee-cream` (Creme/Bronze).
   - Escuros (5): `midnight` (Azul Escuro), `black-edition` (Preto/Verde), `quantum-violet` (Roxo Escuro), `coffee-gold` (Marrom/Dourado), `ruby-black` (Preto/Vermelho).
 - **`color-scheme` nativo sincronizado:** cada tema define `color-scheme: light` ou `color-scheme: dark`, alinhando controles nativos (`<select>`, menus, scrollbars) à polaridade ativa.
-- **Scrollbar Premium de 8px em CSS puro (`app/globals.css`):**
-  - Compatível com Chromium 121+, Edge, app Windows e Firefox sem JavaScript: as regras `scrollbar-width: thin` e `scrollbar-color` ficam encapsuladas em `@supports not selector(::-webkit-scrollbar)` para não sobrescreverem `::-webkit-scrollbar` no Blink/Chromium.
-  - Em Chromium/Edge/Windows: trilho discreto integrado à superfície (`8px × 8px`), polegar arredondado (`border-radius: 9999px`) com `border: 1.5px solid transparent` e `background-clip: padding-box`, contraste claramente perceptível em repouso e elevado no `:hover` / `:active`.
-  - Nos temas escuros: zero barras brancas; no `coffee-gold`, polegar esculpido em bronze-dourado acetinado alinhado à paleta da marca.
-  - Prevenção de deslocamento horizontal: containers roláveis críticos (`Sidebar`, `SettingsSidebar`, `ConfiguracoesV3Page`) utilizam `[scrollbar-gutter:stable]`.
+- **Scrollbar Global Premium de 8px em CSS puro (`app/globals.css`):**
+  - Tokens semânticos globais (`--omni-scrollbar-track`, `--omni-scrollbar-thumb`, `--omni-scrollbar-thumb-hover`, `--omni-scrollbar-thumb-active`) calibrados nos 10 temas + Alta Legibilidade (`Aa`), aplicados em `@layer base` a todos os containers roláveis (`*::-webkit-scrollbar` + `::-webkit-scrollbar-button { display: none; width: 0; height: 0; }`), eliminando barras brancas/cinzas nativas e setas de extremidade em Chromium/Edge/app Windows.
+  - Compatível com Firefox via `@supports not selector(::-webkit-scrollbar)` (`scrollbar-width: thin; scrollbar-color`), sem desativar `::-webkit-scrollbar` no Chromium 121+.
+  - Sem reserva artificial de `[scrollbar-gutter:stable]`: quando não há conteúdo excedente, nenhuma barra ou faixa lateral é exibida; quando há excedente, o padrão tematizado de `8px` aparece rente à borda.
+  - **Dono único do scroll no shell compartilhado (`AppShell.tsx` + `DashboardClientLayout.tsx`):** telas de fluxo (`noPadding=false`, como Painel Inicial, Cadastros HUB, Financeiro HUB e Relatórios) rolam diretamente no `<main>` (`rightGap: 0px`) com o padding interno dentro da scrollport (`shrink-0`, preservando o espaçamento inferior ao final da rolagem) — eliminando scroll aninhado e a faixa lateral vazia de `32px`. Telas fixas (`Configurações`, `PDV`, `Operações V2`, `Operações V4`, `Vendas HUB`, `IA Mestre`, `WhatsApp`) preservam seus containers internos próprios com o mesmo acabamento global de `8px`.
 - **Tokens `--sidebar*` completos em 10/10 temas** (incluindo `.soft-ice`, `.midnight`, além da calibração sutil do rail de `:root` e `.coffee-gold`).
 
 ### 1.2 Camada local de superfícies e tokens semânticos (`components/configuracoes-v3/configuracoes-v3.css`)
@@ -32,7 +32,7 @@ Estritamente escopada a `.configuracoes-v3-root` e baseada exclusivamente na cla
   - `--cfg-nav-active-bg` / `--cfg-nav-active-border`: destaque do item ativo na sidebar contextual L2.
   - `--cfg-btn-primary-bg` / `--cfg-btn-primary-fg`: primário comercial calibrado (inclusive estado desabilitado contido sem tom rosado lavado no `light`).
   - `--cfg-input-icon`: ícones sutis internos em campos de contato/endereço.
-- **Switches acessíveis (`.cfg-switch`):** `38×21px` com polegar branco de alto contraste no estado ativo (inclusive `coffee-gold`, `black-edition`, `midnight` e `neon-ice`), foco visível e suporte a `forced-colors`.
+- **Switches acessíveis (`.cfg-switch`):** `38×21px` com polegar branco com aro sutil de contraste em `coffee-gold`, `midnight` e `neon-ice`, preservando `--primary-foreground` escuro sobre verde luminoso no `black-edition` e em Alta Legibilidade (`Aa`), foco visível e suporte a `forced-colors`.
 - **Calibração por família cromática:**
   - **Vermelhos (`light`, `ruby-black`):** vermelho reservado de forma controlada à marca, primários e switches; tiles ativos e caixas informativas usam bordas neutras refinadas, distinguindo identidade de alertas/erros (`--cfg-danger-*`).
   - **Marrons e dourados (`coffee-cream`, `coffee-gold`):** superfícies em camadas quentes sem glow excessivo e aviso semântico (`--cfg-warning-*`) separado do dourado primário.

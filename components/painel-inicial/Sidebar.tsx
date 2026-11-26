@@ -151,14 +151,14 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
       <CollapsibleHoverRail
         ariaLabel="Navegação principal"
         compactWidth={56}
-        expandedWidth={228}
+        expandedWidth={224}
         overlayId="global-nav"
         overlayGroup="workspace-left"
         priority={WORKSPACE_OVERLAY_PRIORITY["global-nav"]}
         panelClassName="!bg-sidebar"
       >
         {({ expanded, pinned, togglePinned, collapse }) => (
-          <div className="flex h-full w-[228px] flex-col text-sidebar-foreground">
+          <div className="flex h-full w-[224px] flex-col text-sidebar-foreground">
             <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-3">
               <button
                 type="button"
@@ -308,7 +308,7 @@ export function Sidebar({ focusMode = false }: { focusMode?: boolean }) {
           </button>
         </div>
 
-        <nav className="scroll-elegant min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] pl-2.5 pr-1.5 py-2.5">
+        <nav className="scroll-elegant min-h-0 flex-1 overflow-y-auto px-2.5 py-2.5">
           {sectionLabel("Workspace", true)}
           <div className="space-y-0.5">{workspaceFiltered.map(renderItem)}</div>
 

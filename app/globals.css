@@ -752,44 +752,80 @@ body {
     @apply min-h-screen bg-background text-foreground antialiased;
     transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease;
   }
-  /* Scrollbar premium tematizado (8px desktop):
-     - Chromium/Edge/WebKit/App Windows usam ::-webkit-scrollbar completo (8px, cantos arredondados, trilho discreto e thumb perceptível).
+  /* Scrollbar global premium tematizado (8px desktop, sem setas nativas):
+     - Chromium/Edge/WebKit/App Windows aplicam ::-webkit-scrollbar completo (8px, cantos arredondados, trilho discreto, sem botões/setas) a TODOS os containers roláveis (*).
      - Firefox usa @supports not selector(::-webkit-scrollbar) com scrollbar-width/scrollbar-color para evitar que Chromium 121+ desative ::-webkit-scrollbar.
-     - Mantido em @layer base para preservar utilitárias Tailwind (ex.: [scrollbar-width:none] em OperacoesV3Nav). */
+     - Sem reserva de scrollbar-gutter quando não há conteúdo excedente; mantido em @layer base para preservar utilitárias Tailwind (ex.: [scrollbar-width:none] / [&::-webkit-scrollbar]:hidden). */
   @supports not selector(::-webkit-scrollbar) {
-    :is(html, body, aside, nav, main) {
+    * {
       scrollbar-width: thin;
-      scrollbar-color: color-mix(in srgb, var(--foreground) 32%, transparent)
-        color-mix(in srgb, var(--foreground) 5%, transparent);
+      scrollbar-color: var(--omni-scrollbar-thumb) var(--omni-scrollbar-track);
     }
   }
-  :is(html, body, aside, nav, main)::-webkit-scrollbar {
+  *::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
-  :is(html, body, aside, nav, main)::-webkit-scrollbar-track {
-    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  *::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  *::-webkit-scrollbar-track {
+    background: var(--omni-scrollbar-track);
     border-radius: 9999px;
   }
-  :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--foreground) 27%, transparent);
+  *::-webkit-scrollbar-thumb {
+    background: var(--omni-scrollbar-thumb);
     border-radius: 9999px;
     border: 1.5px solid transparent;
     background-clip: padding-box;
   }
-  :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--foreground) 44%, transparent);
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--omni-scrollbar-thumb-hover);
     border: 1.5px solid transparent;
     background-clip: padding-box;
   }
-  :is(html, body, aside, nav, main)::-webkit-scrollbar-thumb:active {
-    background: color-mix(in srgb, var(--primary) 54%, var(--foreground) 46%);
+  *::-webkit-scrollbar-thumb:active {
+    background: var(--omni-scrollbar-thumb-active);
     border: 1.5px solid transparent;
     background-clip: padding-box;
   }
-  :is(html, body, aside, nav, main)::-webkit-scrollbar-corner {
+  *::-webkit-scrollbar-corner {
     background: transparent;
   }
+}
+
+/* Tokens semânticos globais de scrollbar — integrados a todos os 10 temas + Alta Legibilidade (Ref 03, sem barras brancas/cinzas nem setas nativas) */
+:root {
+  --omni-scrollbar-track: color-mix(in srgb, var(--foreground) 5.5%, transparent);
+  --omni-scrollbar-thumb: color-mix(in srgb, var(--foreground) 29%, transparent);
+  --omni-scrollbar-thumb-hover: color-mix(in srgb, var(--foreground) 46%, transparent);
+  --omni-scrollbar-thumb-active: color-mix(in srgb, var(--primary) 56%, var(--foreground) 44%);
+}
+html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) {
+  --omni-scrollbar-track: color-mix(in srgb, var(--foreground) 6.5%, transparent);
+  --omni-scrollbar-thumb: color-mix(in srgb, var(--muted-foreground) 66%, var(--border) 34%);
+  --omni-scrollbar-thumb-hover: color-mix(in srgb, var(--primary) 36%, var(--muted-foreground) 64%);
+  --omni-scrollbar-thumb-active: color-mix(in srgb, var(--primary) 58%, var(--muted-foreground) 42%);
+}
+html.coffee-gold {
+  --omni-scrollbar-track: oklch(0.2 0.024 52 / 0.65);
+  --omni-scrollbar-thumb: oklch(0.56 0.085 68);
+  --omni-scrollbar-thumb-hover: oklch(0.68 0.115 72);
+  --omni-scrollbar-thumb-active: oklch(0.75 0.13 76);
+}
+html[data-legibility="high"] {
+  --omni-scrollbar-thumb: color-mix(in srgb, var(--foreground) 48%, transparent);
+  --omni-scrollbar-thumb-hover: color-mix(in srgb, var(--foreground) 66%, transparent);
+}
+html[data-legibility="high"]:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) {
+  --omni-scrollbar-thumb: color-mix(in srgb, var(--foreground) 54%, var(--border) 46%);
+  --omni-scrollbar-thumb-hover: color-mix(in srgb, var(--primary) 48%, var(--foreground) 52%);
+}
+html[data-legibility="high"].coffee-gold {
+  --omni-scrollbar-thumb: oklch(0.66 0.105 70);
+  --omni-scrollbar-thumb-hover: oklch(0.76 0.125 74);
 }
 
 /* Utilitário de fonte premium (Lovable) */
@@ -800,74 +836,41 @@ body {
 @supports not selector(::-webkit-scrollbar) {
   .scroll-elegant {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--foreground) 34%, transparent)
-      color-mix(in srgb, var(--foreground) 5.5%, transparent);
+    scrollbar-color: var(--omni-scrollbar-thumb) var(--omni-scrollbar-track);
   }
 }
 .scroll-elegant::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
+.scroll-elegant::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
 .scroll-elegant::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--foreground) 5.5%, transparent);
+  background: var(--omni-scrollbar-track);
   border-radius: 9999px;
   margin-block: 4px;
 }
 .scroll-elegant::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--foreground) 29%, transparent);
+  background: var(--omni-scrollbar-thumb);
   border-radius: 9999px;
   border: 1.5px solid transparent;
   background-clip: padding-box;
 }
 .scroll-elegant::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--foreground) 46%, transparent);
+  background: var(--omni-scrollbar-thumb-hover);
   border: 1.5px solid transparent;
   background-clip: padding-box;
 }
 .scroll-elegant::-webkit-scrollbar-thumb:active {
-  background: color-mix(in srgb, var(--primary) 56%, var(--foreground) 44%);
+  background: var(--omni-scrollbar-thumb-active);
   border: 1.5px solid transparent;
   background-clip: padding-box;
 }
 .scroll-elegant::-webkit-scrollbar-corner {
   background: transparent;
-}
-/* Contraste tonal esculpido do scrollbar em temas escuros (Ref 03 — perceptível, sem barra branca, sem glow excessivo) */
-html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--foreground) 6.5%, transparent);
-}
-html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--muted-foreground) 66%, var(--border) 34%);
-  border: 1.5px solid transparent;
-  background-clip: padding-box;
-}
-html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--primary) 36%, var(--muted-foreground) 64%);
-  border: 1.5px solid transparent;
-  background-clip: padding-box;
-}
-html:is(.midnight, .black-edition, .quantum-violet, .coffee-gold, .ruby-black) .scroll-elegant::-webkit-scrollbar-thumb:active {
-  background: color-mix(in srgb, var(--primary) 58%, var(--muted-foreground) 42%);
-  border: 1.5px solid transparent;
-  background-clip: padding-box;
-}
-html.coffee-gold .scroll-elegant::-webkit-scrollbar-track {
-  background: oklch(0.2 0.024 52 / 0.65);
-}
-html.coffee-gold .scroll-elegant::-webkit-scrollbar-thumb {
-  background: oklch(0.56 0.085 68);
-  border: 1.5px solid transparent;
-  background-clip: padding-box;
-}
-html.coffee-gold .scroll-elegant::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.68 0.115 72);
-  border: 1.5px solid transparent;
-  background-clip: padding-box;
-}
-html.coffee-gold .scroll-elegant::-webkit-scrollbar-thumb:active {
-  background: oklch(0.75 0.13 76);
-  border: 1.5px solid transparent;
-  background-clip: padding-box;
 }
 
 @utility bg-gradient-primary {

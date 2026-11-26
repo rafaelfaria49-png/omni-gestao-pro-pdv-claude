@@ -394,8 +394,8 @@ function BusinessResourcesForm({
         item.key === "service.technical"
           ? permissions?.hubs.operacoes
           : ["catalog.deviceCompatibility", "pdv.accessoryModelColor", "catalog.serializedDevices"].includes(
-                item.key,
-              )
+            item.key,
+          )
             ? permissions?.modules?.deviceCatalog
             : true,
       ),
@@ -720,11 +720,10 @@ function BusinessResourcesForm({
           : "preset";
     const hintId = `business-resource-${item.key}-hint`;
     const descriptionText = isPreparation
-      ? `Preparação de cadastro. ${
-          item.key === "catalog.weight"
-            ? "Venda fracionada e baixa em kg/g ainda indisponíveis; produtos por peso ficam bloqueados para venda."
-            : "Estoque por combinação e venda de variações ainda indisponíveis."
-        }`
+      ? `Preparação de cadastro. ${item.key === "catalog.weight"
+        ? "Venda fracionada e baixa em kg/g ainda indisponíveis; produtos por peso ficam bloqueados para venda."
+        : "Estoque por combinação e venda de variações ainda indisponíveis."
+      }`
       : OPERATIONAL_DESCRIPTIONS[item.key] ?? "";
 
     const ResourceIcon = RESOURCE_ICONS[item.key] ?? SlidersHorizontal;
@@ -810,6 +809,7 @@ function BusinessResourcesForm({
     <section id="ramo-recursos" className="scroll-mt-6">
       <SettingsCard
         className="cfg-business-card"
+        bodyClassName="cfg-business-body"
         icon={<Layers className="h-4 w-4" />}
         title="Ramo e recursos"
         description="Escolha o ramo uma vez e combine os recursos que sua loja utiliza. Suas escolhas têm prioridade sobre as sugestões."
@@ -882,7 +882,7 @@ function BusinessResourcesForm({
               </Button>
             ) : (
               <Button type="button" size="sm" disabled={disabled || !dirty} onClick={() => void submit()}>
-                <Save className="size-3.5" aria-hidden="true" />
+                <Save className="h-3.5 w-3.5" aria-hidden="true" />
                 {saving ? "Salvando…" : "Salvar ramo e recursos"}
               </Button>
             )}

@@ -97,7 +97,7 @@ export function SettingsSidebar({ active, onChange, compact = false, headerActio
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
 
-      <nav className="settings-sidebar-nav scroll-elegant [scrollbar-gutter:stable]">
+      <nav className="settings-sidebar-nav scroll-elegant">
         {/* Mantém .settings-sidebar-list com <li> exclusivos para os itens de navegação (contrato de DOM/E2E). */}
         <div className="settings-sidebar-list">
           {groups.map((group) => (

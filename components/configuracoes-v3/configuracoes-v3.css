@@ -443,6 +443,28 @@ html[data-legibility="high"] .configuracoes-v3-root input.cfg-cb:focus-visible +
   align-items: start;
 }
 
+/* Ritmo vertical calibrado no modo empilhado (< 1000px úteis, ex.: notebook 1366×768 com L1 expandida) sem reduzir tipografia */
+@container cfg-page (max-width: 999px) {
+  .configuracoes-v3-root .cfg-geral-root > :not(:last-child) {
+    margin-block-end: 0.75rem;
+  }
+  .configuracoes-v3-root .cfg-geral-grid {
+    gap: 0.75rem;
+  }
+  .configuracoes-v3-root .cfg-empresa-card .cfg-contact-grid {
+    gap: 0.5625rem 0.875rem;
+  }
+  .configuracoes-v3-root .cfg-empresa-body {
+    padding-block: 0.875rem;
+  }
+  .configuracoes-v3-root .cfg-empresa-body > .space-y-4 > :not(:last-child) {
+    margin-block-end: 0.75rem;
+  }
+  .configuracoes-v3-root .cfg-business-body {
+    padding-block: 0.875rem;
+  }
+}
+
 @container cfg-page (min-width: 1000px) {
   .configuracoes-v3-root .cfg-geral-grid[data-has-ramo="true"] {
     grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);

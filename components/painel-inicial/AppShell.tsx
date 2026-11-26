@@ -51,14 +51,27 @@ function AppShellFrame({
         {topNotice}
         <main
           className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-            !noPadding && "px-4 sm:px-6 lg:px-8 py-[clamp(12px,2vh,24px)]",
+            "flex min-h-0 min-w-0 flex-1 flex-col",
+            noPadding
+              ? "overflow-hidden"
+              : "overflow-y-auto overflow-x-hidden scroll-elegant",
           )}
         >
-          <Suspense fallback={null}>
-            <DashboardAccessAlerts />
-          </Suspense>
-          {children}
+          {noPadding ? (
+            <>
+              <Suspense fallback={null}>
+                <DashboardAccessAlerts />
+              </Suspense>
+              {children}
+            </>
+          ) : (
+            <div className="flex min-h-full w-full min-w-0 shrink-0 flex-col px-4 sm:px-6 lg:px-8 py-[clamp(12px,2vh,24px)]">
+              <Suspense fallback={null}>
+                <DashboardAccessAlerts />
+              </Suspense>
+              {children}
+            </div>
+          )}
         </main>
       </div>
     </div>
