@@ -4,8 +4,10 @@ import { useEffect } from "react"
 import { SessionProvider as NextAuthSessionProvider, useSession } from "next-auth/react"
 import type { Session } from "next-auth"
 import {
+  isLocalSignOutInProgress,
   purgeAuthenticatedBrowserCaches,
   subscribeAuthLogout,
+  subscribeLocalSignOutStart,
 } from "@/lib/auth/pwa-cache-privacy"
 
 const REVALIDATE_SECONDS = 30
@@ -61,10 +63,20 @@ function SessionRevalidator() {
   useEffect(() => {
     if (status === "loading") return
     let cancelled = false
+    let activeController: AbortController | null = null
+    const abortInFlight = () => {
+      if (activeController) {
+        activeController.abort()
+        activeController = null
+      }
+    }
     const check = async () => {
+      if (isLocalSignOutInProgress()) return
       if (typeof navigator !== "undefined" && navigator.onLine === false) return
+      abortInFlight()
       let fetched: SessionLike
       const controller = new AbortController()
+      activeController = controller
       const timer = window.setTimeout(() => controller.abort(), REVALIDATE_TIMEOUT_MS)
       try {
         const res = await fetch("/api/auth/session", { cache: "no-store", credentials: "include", signal: controller.signal })
@@ -74,8 +86,9 @@ function SessionRevalidator() {
         return
       } finally {
         window.clearTimeout(timer)
+        if (activeController === controller) activeController = null
       }
-      if (cancelled || sessionIdentity(fetched) === current) return
+      if (cancelled || isLocalSignOutInProgress() || sessionIdentity(fetched) === current) return
       // Se o servidor confirmou fim/revogação da sessão (null), limpa caches autenticados sem tocar em localStorage/PDV.
       if (!fetched?.user) {
         void purgeAuthenticatedBrowserCaches()
@@ -95,7 +108,11 @@ function SessionRevalidator() {
       // Restauração de BFCache (botão Voltar): revalida imediatamente com o servidor.
       if (event.persisted) void check()
     }
+    const unsubscribeLocalSignOut = subscribeLocalSignOutStart(() => {
+      abortInFlight()
+    })
     const unsubscribeLogout = subscribeAuthLogout(() => {
+      abortInFlight()
       void purgeAuthenticatedBrowserCaches()
       try {
         const channel = new BroadcastChannel("next-auth")
@@ -111,6 +128,8 @@ function SessionRevalidator() {
     window.addEventListener("pageshow", onPageShow)
     return () => {
       cancelled = true
+      abortInFlight()
+      unsubscribeLocalSignOut()
       unsubscribeLogout()
       window.clearInterval(timer)
       document.removeEventListener("visibilitychange", onVisible)

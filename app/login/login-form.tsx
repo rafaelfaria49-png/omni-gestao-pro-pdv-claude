@@ -12,6 +12,7 @@ import {
   isCachePurgeRetryNeeded,
   markCachePurgeRetryNeeded,
   purgeAuthenticatedBrowserCaches,
+  setLocalSignOutInProgress,
   triggerSilentServiceWorkerUpdate,
 } from "@/lib/auth/pwa-cache-privacy"
 
@@ -38,6 +39,7 @@ export function LoginForm({ showDesktopDownload = false }: { showDesktopDownload
   // silencioso do SW, sem tocar em localStorage/IndexedDB (fila offline do PDV preservada).
   useEffect(() => {
     let active = true
+    setLocalSignOutInProgress(false)
     const hadRetryFlag = isCachePurgeRetryNeeded()
     triggerSilentServiceWorkerUpdate()
     void purgeAuthenticatedBrowserCaches().then((res) => {
