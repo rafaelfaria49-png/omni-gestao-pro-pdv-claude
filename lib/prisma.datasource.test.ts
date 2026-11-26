@@ -14,7 +14,9 @@ vi.mock("@/generated/prisma", () => ({
     }
     $connect = mocked.connect
     $queryRaw = mocked.raw
-    $transaction = mocked.transaction
+    $transaction() {
+      return mocked.transaction()
+    }
   },
 }))
 
@@ -60,6 +62,23 @@ describe("Prisma datasource boundary", () => {
     await expect(prisma.$queryRaw`SELECT 1`).resolves.toEqual(["synthetic"])
     await expect(prisma.$transaction([])).resolves.toBe("synthetic transaction")
     expect(mocked.construct).toHaveBeenCalledExactlyOnceWith({ datasourceUrl: qa, log: [] })
+  })
+
+  it("supports transaction spies without constructing a client during reflection", async () => {
+    const { prisma } = await import("./prisma")
+    expect("$transaction" in prisma).toBe(true)
+    expect("then" in prisma).toBe(false)
+    expect(mocked.construct).not.toHaveBeenCalled()
+
+    vi.stubEnv("DATABASE_URL", qa)
+    const spy = vi.spyOn(prisma, "$transaction").mockResolvedValue("mocked transaction")
+    await expect(prisma.$transaction([])).resolves.toBe("mocked transaction")
+    expect(mocked.transaction).not.toHaveBeenCalled()
+
+    spy.mockRestore()
+    await expect(prisma.$transaction([])).resolves.toBe("synthetic transaction")
+    expect(mocked.transaction).toHaveBeenCalledOnce()
+    expect(mocked.connect).not.toHaveBeenCalled()
   })
 
   it("keeps the existing constructor options on Vercel Production", async () => {

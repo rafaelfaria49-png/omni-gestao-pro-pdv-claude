@@ -32,6 +32,11 @@ function getPrismaClient(): PrismaClient {
 // A build may import auth and route modules without a datasource. Creating a
 // client is deferred to the first access, including explicit $connect and raw SQL.
 export const prisma = new Proxy({} as PrismaClient, {
+  has(target, key) {
+    if (Reflect.has(target, key)) return true
+    if (typeof key === "symbol" || key === "then") return false
+    return Reflect.has(globalForPrisma.omniRuntimePrisma ?? PrismaClient.prototype, key)
+  },
   get(target, key) {
     if (Object.hasOwn(target, key)) return Reflect.get(target, key)
     if (typeof key === "symbol" || key === "then") return undefined
