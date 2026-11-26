@@ -11,6 +11,7 @@ import {
   isStoreSettingsReadbackError,
   StoreSettingsProvider,
   useStoreSettings,
+  type StoreSettingsReadbackResult,
 } from "@/lib/store-settings-provider"
 import { useStoreBusiness } from "@/lib/use-store-business"
 import { PerfilLojaProvider, usePerfilLoja } from "@/lib/perfil-loja-provider"
@@ -178,12 +179,12 @@ describe("Provider real — configuração por loja, sem cache cruzado", () => {
     expect(isStoreSettingsReadbackError(caught)).toBe(true)
     expect(screen.getByTestId("loaded").textContent).toBe("false")
 
-    let revalidated: Awaited<ReturnType<ReturnType<typeof useStoreSettings>["revalidate"]>> | null = null
+    const revalidated: { current: StoreSettingsReadbackResult | null } = { current: null }
     await act(async () => {
-      revalidated = await apiRef.current!.revalidate()
+      revalidated.current = await apiRef.current!.revalidate()
     })
     expect(putCount).toBe(1)
-    expect(revalidated?.ok).toBe(true)
+    expect(revalidated.current?.ok).toBe(true)
     expect(screen.getByTestId("loaded").textContent).toBe("true")
     expect(apiRef.current!.capabilities?.business?.primaryBranch).toBe("padaria")
   })
