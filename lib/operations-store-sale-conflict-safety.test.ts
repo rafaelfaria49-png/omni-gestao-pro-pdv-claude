@@ -12,6 +12,7 @@
  */
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
+import ts from "typescript"
 import { describe, expect, it } from "vitest"
 
 const REPO_ROOT = resolve(__dirname, "..")
@@ -20,58 +21,46 @@ function read(relativePath: string): string {
   return readFileSync(join(REPO_ROOT, relativePath), "utf8")
 }
 
-function between(source: string, start: string, end: string): string {
-  const startIndex = source.indexOf(start)
-  const endIndex = source.indexOf(end, startIndex + start.length)
-  expect(startIndex, `marcador inicial ausente: ${start}`).toBeGreaterThanOrEqual(0)
-  expect(endIndex, `marcador final ausente: ${end}`).toBeGreaterThan(startIndex)
-  return source.slice(startIndex, endIndex)
+// Cada asserção lê a declaração que implementa a operação. Inserir, remover ou
+// reordenar outras operações do provider não muda o escopo analisado.
+function operationsCallbacks(source: string) {
+  const ast = ts.createSourceFile("operations-store.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const provider = ast.statements.filter(ts.isFunctionDeclaration).find((node) => node.name?.text === "OperationsProvider")
+  if (!provider?.body) throw new Error("OperationsProvider não encontrado")
+
+  const declarations = provider.body.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+
+  return (name: string): string => {
+    const matches = declarations.filter((declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === name)
+    expect(matches, `declaração de ${name} no OperationsProvider`).toHaveLength(1)
+    const initializer = matches[0]?.initializer
+    if (!initializer) throw new Error(`Inicializador de ${name} não encontrado`)
+    return initializer.getText(ast)
+  }
 }
 
 describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", () => {
   const store = read("lib/operations-store.tsx")
   const archive = read("components/dashboard/vendas/vendas-arquivo-geral.tsx")
+  const operation = operationsCallbacks(store)
 
-  const persistPending = between(
-    store,
-    "const persistPendingSale = useCallback",
-    "const flushPendingSales = useCallback",
-  )
-  const flush = between(
-    store,
-    "const flushPendingSales = useCallback",
-    "const refreshSalesFromServer = useCallback",
-  )
-  const retry = between(
-    store,
-    "const doRetrySyncSale = useCallback",
-    "const retrySyncSale = useCallback",
-  )
-  const wrappers = between(
-    store,
-    "const retrySyncSale = useCallback",
-    "const discardLocalPendingSale = useCallback",
-  )
-  const recover = between(
-    store,
-    "const recoverQuarantinedSale = useCallback",
-    "const discardLocalPendingSale = useCallback",
-  )
-  const recoverIndividual = between(
-    store,
-    "const recoverQuarantinedSale = useCallback",
-    "const collectQuarantinedCandidates = useCallback",
-  )
-  const individual = between(
-    store,
-    "const discardLocalPendingSale = useCallback",
-    "const bulkDiscardLocalPendingSales = useCallback",
-  )
-  const bulk = between(
-    store,
-    "const bulkDiscardLocalPendingSales = useCallback",
-    "const flushPendingDevolucoes = useCallback",
-  )
+  const persistPending = operation("persistPendingSale")
+  const flush = operation("flushPendingSales")
+  const retry = operation("doRetrySyncSale")
+  const recoverIndividual = operation("recoverQuarantinedSale")
+  const recover = [
+    recoverIndividual,
+    operation("collectQuarantinedCandidates"),
+    operation("reconcileRecoveredSales"),
+    operation("previewQuarantineRecovery"),
+    operation("recoverQuarantinedSalesBatch"),
+    operation("autoReconcileQuarantinedSales"),
+    operation("refreshInventoryFromServer"),
+  ].join("\n")
+  const individual = operation("discardLocalPendingSale")
+  const bulk = operation("bulkDiscardLocalPendingSales")
 
   it("auto-retry ignora o conflito antes do persist e não recupera sozinho", () => {
     const conflictGate = flush.indexOf("persistedSaleIdentityConflictCode(storageKey, sale)")
@@ -94,14 +83,14 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
     expect(retry).toContain("SALE_IDENTITY_CONFLICT_GUIDANCE")
     expect(retry).not.toContain("recoverQuarantinedSaleUrl")
 
-    expect(wrappers).toContain("doRetrySyncSale(saleId, false)")
-    expect(wrappers).toContain("doRetrySyncSale(saleId, true)")
+    expect(operation("retrySyncSale")).toContain("doRetrySyncSale(saleId, false)")
+    expect(operation("retrySyncSaleRetroactive")).toContain("doRetrySyncSale(saleId, true)")
   })
 
   it("descarte individual e em lote preservam conflitos sem consultar o servidor", () => {
-    expect(individual.indexOf("persistedSaleIdentityConflictCode(storageKey, sale)")).toBeLessThan(
-      individual.indexOf("fetch("),
-    )
+    const conflictGate = individual.indexOf("persistedSaleIdentityConflictCode(storageKey, sale)")
+    expect(conflictGate).toBeGreaterThanOrEqual(0)
+    expect(individual.indexOf("fetch(")).toBeGreaterThan(conflictGate)
     expect(individual).toContain("SALE_IDENTITY_CONFLICT_TITLE")
     expect(individual).toContain("SALE_IDENTITY_CONFLICT_GUIDANCE")
     expect(individual).not.toContain("recoverQuarantinedSaleUrl")
@@ -160,11 +149,7 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
   })
 
   it("reconciliação automática usa a rota própria — nunca o reenvio comum", () => {
-    const auto = between(
-      store,
-      "const autoReconcileQuarantinedSales = useCallback",
-      "const discardLocalPendingSale = useCallback",
-    )
+    const auto = operation("autoReconcileQuarantinedSales")
     expect(auto).toContain("quarantineAutoReconcileUrl")
     expect(auto).toContain("selectAutoReconcileCandidates")
     expect(auto).toContain("persistedClientSaleIds(storageKey)")
