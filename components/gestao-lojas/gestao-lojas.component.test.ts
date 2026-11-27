@@ -4,9 +4,8 @@ import { createRoot } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("next/font/google", () => ({
-  Plus_Jakarta_Sans: () => ({ variable: "--gl-font-jakarta" }),
-  IBM_Plex_Mono: () => ({ variable: "--gl-font-plex-mono" }),
+vi.mock("next/font/local", () => ({
+  default: (options?: { variable?: string }) => ({ variable: options?.variable ?? "--gl-font-local" }),
 }))
 
 vi.mock("next/image", () => ({
