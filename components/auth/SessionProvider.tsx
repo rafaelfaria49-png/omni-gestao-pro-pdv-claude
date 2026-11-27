@@ -40,7 +40,7 @@ function stable(value: unknown): string {
 
 /**
  * Identidade + autoridade do usuário (papel, lojas, módulos, troca de senha…): qualquer
- * mudança relê a sessão, como o poll antigo. `expires` fica de fora (desliza a cada leitura).
+ * mudança relê a sessão, como o poll antigo. A validade não muda a identidade do usuário.
  */
 function sessionIdentity(value: SessionLike): string {
   return stable(value?.user ?? null)
@@ -61,10 +61,12 @@ function SessionRevalidator() {
   useEffect(() => {
     if (status === "loading") return
     let cancelled = false
+    let pending: AbortController | undefined
     const check = async () => {
-      if (typeof navigator !== "undefined" && navigator.onLine === false) return
+      if (cancelled || pending || (typeof navigator !== "undefined" && navigator.onLine === false)) return
       let fetched: SessionLike
       const controller = new AbortController()
+      pending = controller
       const timer = window.setTimeout(() => controller.abort(), REVALIDATE_TIMEOUT_MS)
       try {
         const res = await fetch("/api/auth/session", { cache: "no-store", credentials: "include", signal: controller.signal })
@@ -74,8 +76,9 @@ function SessionRevalidator() {
         return
       } finally {
         window.clearTimeout(timer)
+        pending = undefined
       }
-      if (cancelled || sessionIdentity(fetched) === current) return
+      if (cancelled || controller.signal.aborted || sessionIdentity(fetched) === current) return
       // Se o servidor confirmou fim/revogação da sessão (null), limpa caches autenticados sem tocar em localStorage/PDV.
       if (!fetched?.user) {
         void purgeAuthenticatedBrowserCaches()
@@ -96,14 +99,9 @@ function SessionRevalidator() {
       if (event.persisted) void check()
     }
     const unsubscribeLogout = subscribeAuthLogout(() => {
+      // Auth.js already notifies its provider after the signout response.
+      pending?.abort()
       void purgeAuthenticatedBrowserCaches()
-      try {
-        const channel = new BroadcastChannel("next-auth")
-        channel.postMessage({ event: "session", data: { trigger: "getSession" } })
-        channel.close()
-      } catch {
-        /* ignore */
-      }
     })
     const timer = window.setInterval(() => void check(), REVALIDATE_SECONDS * 1000)
     document.addEventListener("visibilitychange", onVisible)
@@ -111,6 +109,7 @@ function SessionRevalidator() {
     window.addEventListener("pageshow", onPageShow)
     return () => {
       cancelled = true
+      pending?.abort()
       unsubscribeLogout()
       window.clearInterval(timer)
       document.removeEventListener("visibilitychange", onVisible)

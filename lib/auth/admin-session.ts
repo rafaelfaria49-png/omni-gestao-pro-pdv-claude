@@ -23,8 +23,8 @@ export function isSessionRevocationEnabled(env: Record<string, string | undefine
 }
 
 /**
- * Mesma validade do JWT do NextAuth (padrão 30 dias, DESLIZANTE: o NextAuth renova o cookie a
- * cada requisição). A sessão desliza junto — no máximo uma escrita por dia por sessão.
+ * Validade do registro de revogação (30 dias). O registro pode deslizar no máximo uma
+ * vez ao dia. A validade do JWT do navegador é independente e começa no login.
  */
 export const ADMIN_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 export const ADMIN_SESSION_EXTEND_AFTER_SECONDS = 24 * 60 * 60

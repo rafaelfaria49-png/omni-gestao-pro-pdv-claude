@@ -1,13 +1,9 @@
 "use client"
 import { useState } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm"
 import { Button } from "@/components/ui/button"
-import {
-  broadcastAuthLogout,
-  markCachePurgeRetryNeeded,
-  purgeAuthenticatedBrowserCaches,
-} from "@/lib/auth/pwa-cache-privacy"
+import { signOutBrowserSession } from "@/lib/auth/browser-signout"
 import { SettingsCard } from "../components/SettingsCard"
 
 export function SegurancaSection() {
@@ -18,16 +14,8 @@ export function SegurancaSection() {
   async function handleSignOut() {
     setSigningOut(true)
     setSignOutError(null)
-    broadcastAuthLogout()
-    const purge = await purgeAuthenticatedBrowserCaches()
-    if (!purge.ok) {
-      // Não bloqueia o encerramento da sessão no servidor; sinaliza nova tentativa no /login.
-      markCachePurgeRetryNeeded(true)
-    } else {
-      markCachePurgeRetryNeeded(false)
-    }
     try {
-      await signOut({ callbackUrl: "/login" })
+      window.location.assign(await signOutBrowserSession("/login"))
     } catch {
       setSigningOut(false)
       setSignOutError("Não foi possível encerrar a sessão agora. Verifique a conexão e tente novamente.")

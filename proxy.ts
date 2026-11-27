@@ -15,6 +15,7 @@ import {
 import { isSegmentoContadorExterno } from "@/lib/contador/auth-externa/proxy-publico"
 import { isRotaLegadaContador, PORTAL_V2_LOGIN } from "@/lib/contador/legado/rota-legada"
 import { isPublicPath, resolveProxyEntry } from "@/lib/auth/proxy-session-gate"
+import { withoutSessionCookieMutation } from "@/lib/auth/session-cookie-response"
 import { MELI_CALLBACK_PATH } from "@/lib/marketplace/mercado-livre/config"
 
 const ADMIN_COOKIE = "assistec_admin_session"
@@ -31,7 +32,7 @@ const ADMIN_COOKIE = "assistec_admin_session"
  * feita aqui — o schema atual não permite resolver a assinatura da empresa de um
  * funcionário sem heurística. Ver `lib/auth/session-entitlement.ts`.
  */
-export const proxy = auth(async (req) => {
+const authenticatedProxy = auth(async (req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
   const nextWithPath = () => {
@@ -165,6 +166,12 @@ export const proxy = auth(async (req) => {
 
   return nextWithPath()
 })
+
+// Auth.js appends cookies from the proxy’s session read to every response.
+export const proxy: typeof authenticatedProxy = async (...args) => {
+  const response = await authenticatedProxy(...args)
+  return response instanceof Response ? withoutSessionCookieMutation(response) : response
+}
 
 export { proxy as default }
 

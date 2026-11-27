@@ -27,6 +27,8 @@ export const authConfig = {
       return token
     },
     session({ session, token }) {
+      // Leituras devolvem a validade real do JWT gravado no login.
+      if (typeof token.exp === "number") session.expires = new Date(token.exp * 1000).toISOString()
       session.user.id = token.sub ?? ""
       session.user.role = (token.role as string) ?? "OPERADOR"
       session.user.lojaId = (token.lojaId as string | null) ?? null

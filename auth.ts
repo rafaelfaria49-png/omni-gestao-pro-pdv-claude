@@ -20,15 +20,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // Logout revoga SÓ esta sessão (outros dispositivos e usuários seguem ativos).
     async signOut(message) {
       if (!isSessionRevocationEnabled()) return
-      const sid = "token" in message ? message.token?.sid : undefined
-      if (typeof sid !== "string") return
-      // Uma nova tentativa; se ainda falhar, registra o prefixo do sid para acompanhamento.
+      const token = "token" in message ? message.token : null
+      if (!token?.sub) return
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          await sessionStore.revoke(sid, "logout")
+          let sid = token.sid
+          if (sid == null) {
+            // Uma leitura adota o JWT legado pelo jti, sem reemitir o cookie.
+            const legacy = await resolveAdminSession(sessionStore, {
+              sid, jti: token.jti, userId: token.sub, isSignIn: false,
+            })
+            if (!legacy.ok) return
+            sid = legacy.sid
+          }
+          if (typeof sid === "string") await sessionStore.revoke(sid, "logout")
           return
         } catch {
-          if (attempt === 2) console.error("[auth] session_revoke_failed sid=" + sid.slice(0, 8))
+          if (attempt === 2) console.error("[auth] session_revoke_failed")
         }
       }
     },

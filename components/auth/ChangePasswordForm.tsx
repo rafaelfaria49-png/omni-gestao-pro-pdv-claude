@@ -1,15 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  broadcastAuthLogout,
-  markCachePurgeRetryNeeded,
-  purgeAuthenticatedBrowserCaches,
-} from "@/lib/auth/pwa-cache-privacy"
+import { signOutBrowserSession } from "@/lib/auth/browser-signout"
 
 export function ChangePasswordForm({ required = false }: { required?: boolean }) {
   const [currentPassword, setCurrent] = useState("")
@@ -27,10 +22,7 @@ export function ChangePasswordForm({ required = false }: { required?: boolean })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Não foi possível alterar a senha."); return }
       setCurrent(""); setNew(""); setConfirmation("")
-      broadcastAuthLogout()
-      const purge = await purgeAuthenticatedBrowserCaches()
-      if (!purge.ok) markCachePurgeRetryNeeded(true)
-      await signOut({ callbackUrl: "/login?passwordChanged=1" })
+      window.location.assign(await signOutBrowserSession("/login?passwordChanged=1"))
     } catch { setError("Falha de conexão. Tente novamente.") }
     finally { setBusy(false) }
   }}>

@@ -1,14 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { signOut } from "next-auth/react"
 import { LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  broadcastAuthLogout,
-  markCachePurgeRetryNeeded,
-  purgeAuthenticatedBrowserCaches,
-} from "@/lib/auth/pwa-cache-privacy"
+import { signOutBrowserSession } from "@/lib/auth/browser-signout"
 
 /**
  * "Sair da conta" para QUALQUER usuário autenticado, inclusive no primeiro acesso (troca de senha
@@ -28,11 +23,7 @@ export function SignOutButton() {
         onClick={() => {
           setBusy(true)
           setFailed(false)
-          broadcastAuthLogout()
-          void purgeAuthenticatedBrowserCaches().then((res) => {
-            if (!res.ok) markCachePurgeRetryNeeded(true)
-          })
-          void signOut({ callbackUrl: "/login" }).catch(() => {
+          void signOutBrowserSession("/login").then((url) => window.location.assign(url)).catch(() => {
             setBusy(false)
             setFailed(true)
           })

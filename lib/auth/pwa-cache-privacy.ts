@@ -179,7 +179,7 @@ export function broadcastAuthLogout(): void {
   }
 }
 
-/** Escuta encerramento de sessão originado em outra aba. */
+/** Escuta o encerramento confirmado de sessão na mesma origem. */
 export function subscribeAuthLogout(onLogout: () => void): () => void {
   if (typeof BroadcastChannel === "undefined") return () => {}
   let channel: BroadcastChannel | null = null
