@@ -404,7 +404,8 @@ describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 readers reais 
     const responses = [await opsList(request("/api/ops/contas-receber-list")),
       await detalheVenda(request("/api/vendas/g003-pedido?full=1"), { params: Promise.resolve({ id: "g003-pedido" }) }),
       await detalheCaixa(request("/api/ops/caixa/sessao-detalhe?sessaoId=g003-sessao")),
-      await dashboard(request("/api/dashboard/elite"))]
+      // Na main o dashboard elite é exclusivo de sessão de plataforma; a prova de escopo da loja segue igual.
+      await (async () => { login(U1, undefined, "ADMIN", true); try { return await dashboard(request("/api/dashboard/elite")) } finally { login() } })()]
     for (const response of responses) { expect(response.status).toBe(200); semEstrangeiros(await response.text()) }
     login(U2, [L1])
     expect((await detalheVenda(request("/api/vendas/x", L2), { params: Promise.resolve({ id: "x" }) })).status).toBe(403)
