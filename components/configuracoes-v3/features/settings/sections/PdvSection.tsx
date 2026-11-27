@@ -26,6 +26,7 @@ import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name";
 import { UnidadeAtivaRequiredBanner } from "../components/UnidadeAtivaRequiredBanner";
 import { ImpressaoPdvSettingsCard } from "./ImpressaoPdvSettingsCard";
 import { PdvScaleVisorSettingsCard } from "./PdvScaleVisorSettingsCard";
+import { ImpressaoDiretaAgenteCard } from "./ImpressaoDiretaAgenteCard";
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
@@ -1006,6 +1007,11 @@ function PdvSectionContent() {
       </div> : usesClientExperience(permissions) && permissions?.modules?.pdv ? <div className="pt-6 border-t border-border/40 mt-8">
         {/* A ponte TCP (/api/print/raw) é interna; o cliente imprime pelo navegador. */}
         <ImpressaoPdvSettingsCard browserOnly />
+      </div> : null}
+
+      {permissions?.admin?.configuracoes ? <div className="pt-6 border-t border-border/40 mt-8">
+        {/* OMNI-PRINT-004C (candidato): oculto/indisponível até o gate do servidor ser aberto. */}
+        <ImpressaoDiretaAgenteCard />
       </div> : null}
 
       {/* Outros Fluxos Integrados — Mini-cards horizontais */}

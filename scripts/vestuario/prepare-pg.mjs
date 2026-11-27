@@ -82,6 +82,16 @@ try {
     run(["db", "execute", "--url", url, "--file", join(MIG_DIR, name, "migration.sql")])
     console.log(`MIGRATION_OK ${name}`)
   }
+  // OMNI-PRINT D02-A (PR #327): as tabelas print_* já estão no schema da branch, mas as migrations delas ficam
+  // preparadas em tools/print-d02/migrations até a aplicação manual (docs/print-004c-e2e/RUNBOOK_D02.md) — nunca em
+  // prisma/migrations antes disso. Aplicá-las aqui espelha o banco depois dessa aplicação; o drift abaixo segue exigindo zero.
+  const D02_DIR = "tools/print-d02/migrations"
+  if (existsSync(D02_DIR)) {
+    for (const name of readdirSync(D02_DIR).filter((n) => /^\d/.test(n) && existsSync(join(D02_DIR, n, "migration.sql"))).sort()) {
+      run(["db", "execute", "--url", url, "--file", join(D02_DIR, name, "migration.sql")])
+      console.log(`MIGRATION_OK ${name} (D02 preparada)`)
+    }
+  }
   const drift = run(["migrate", "diff", "--from-url", url, "--to-schema-datamodel", "prisma/schema.prisma", "--script"])
   const statements = drift.split("\n").filter((l) => l.trim() && !l.trim().startsWith("--"))
   if (statements.length > 0) {

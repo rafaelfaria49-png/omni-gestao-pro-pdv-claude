@@ -1,0 +1,100 @@
+{
+  "goal": "OMNI-PRINT-D03-EXPURGO-RETENCAO-CHAVES-001",
+  "at": "2026-11-04T21:00:00.435Z",
+  "node": "v24.22.2",
+  "productionExecution": false,
+  "physicalPrint": "PENDING_NO_HARDWARE",
+  "steps": [
+    {
+      "step": "generator",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0,
+      "tests": null
+    },
+    {
+      "step": "d02-generator",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0,
+      "tests": null
+    },
+    {
+      "step": "unit",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 9,
+      "tests": "78 passed (78)"
+    },
+    {
+      "step": "retention-pg",
+      "status": "FAIL",
+      "exit": 1,
+      "seconds": 62,
+      "tests": "1 failed | 14 passed (15)"
+    },
+    {
+      "step": "scenarios-pg",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 39,
+      "tests": "35 passed (35)"
+    },
+    {
+      "step": "two-agents-pg",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 11,
+      "tests": "1 passed (1)"
+    },
+    {
+      "step": "synthetic-pg",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 5,
+      "tests": "3 passed (3)"
+    },
+    {
+      "step": "d02-pg",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 203,
+      "tests": "8 passed (8)"
+    },
+    {
+      "step": "d02-rehearsal",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 23,
+      "tests": "5 passed (5)"
+    },
+    {
+      "step": "playwright",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 105,
+      "tests": "19 passed (1.7m)"
+    },
+    {
+      "step": "typecheck",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 1021,
+      "tests": null
+    },
+    {
+      "step": "eslint",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 10,
+      "tests": null
+    },
+    {
+      "step": "build",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 495,
+      "tests": null
+    }
+  ]
+}

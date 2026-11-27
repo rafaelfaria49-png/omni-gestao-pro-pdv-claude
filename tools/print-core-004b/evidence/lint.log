@@ -1,0 +1,640 @@
+
+[RUN 2026-10-30T14:20:50.314Z]
+
+[RUN 2026-10-30T14:26:54.204Z]
+
+[RUN 2026-10-30T14:29:20.774Z]
+
+C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+  2:39  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+✖ 1 problem (0 errors, 1 warning)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
+2026-10-30T14:28:34.765Z eslint:cli CLI args: [ '--config', 'C:\\Projetos\\omni-gestao-print-core-004b\\tools\\print-core-004b\\eslint.core.mjs', '--no-cache', '--debug', 'lib/print-core-synthetic', 'tools/print-core-004b/*.mjs', 'tools/print-core-004b/gate-b-run.ts' ]
+2026-10-30T14:28:34.767Z eslint:cli Using flat config? true
+2026-10-30T14:28:34.770Z eslint:cli Running on files
+2026-10-30T14:28:34.773Z eslint:eslint Using config loader LegacyConfigLoader
+2026-10-30T14:28:34.774Z eslint:eslint Using file patterns: lib/print-core-synthetic,tools/print-core-004b/*.mjs,tools/print-core-004b/gate-b-run.ts
+2026-10-30T14:28:34.774Z eslint:eslint Deleting cache file at C:\Projetos\omni-gestao-print-core-004b\.eslintcache
+2026-10-30T14:28:34.778Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:28:34.778Z eslint:config-loader Override config file path is C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:28:34.792Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:28:34.792Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:28:34.793Z eslint:config-loader Calculating config array from config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:28:34.793Z eslint:config-loader Loading config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:28:34.794Z eslint:config-loader Loading config from C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:28:34.794Z eslint:config-loader Config file URL is file:///C:/Projetos/omni-gestao-print-core-004b/tools/print-core-004b/eslint.core.mjs
+2026-10-30T14:28:51.695Z eslint:rules Loading rule 'consistent-return' (remaining=291)
+2026-10-30T14:28:51.892Z eslint:rules Loading rule 'dot-notation' (remaining=290)
+2026-10-30T14:28:52.005Z eslint:rules Loading rule 'init-declarations' (remaining=289)
+2026-10-30T14:28:52.027Z eslint:rules Loading rule 'max-params' (remaining=288)
+2026-10-30T14:28:52.378Z eslint:rules Loading rule 'no-dupe-class-members' (remaining=287)
+2026-10-30T14:28:52.474Z eslint:rules Loading rule 'no-empty-function' (remaining=286)
+2026-10-30T14:28:52.765Z eslint:rules Loading rule 'no-invalid-this' (remaining=285)
+2026-10-30T14:28:52.838Z eslint:rules Loading rule 'no-loop-func' (remaining=284)
+2026-10-30T14:28:52.881Z eslint:rules Loading rule 'no-loss-of-precision' (remaining=283)
+2026-10-30T14:28:52.932Z eslint:rules Loading rule 'no-magic-numbers' (remaining=282)
+2026-10-30T14:28:53.345Z eslint:rules Loading rule 'no-restricted-imports' (remaining=281)
+2026-10-30T14:28:53.956Z eslint:rules Loading rule 'no-unused-expressions' (remaining=280)
+2026-10-30T14:28:54.055Z eslint:rules Loading rule 'no-useless-constructor' (remaining=279)
+2026-10-30T14:28:54.190Z eslint:rules Loading rule 'prefer-destructuring' (remaining=278)
+2026-10-30T14:29:07.057Z eslint:config-loader Config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs is not empty
+2026-10-30T14:29:07.093Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\.gitignore
+2026-10-30T14:29:07.093Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\.gitignore
+2026-10-30T14:29:07.093Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.097Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:07.097Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:07.097Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.123Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:07.123Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:07.123Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.123Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:07.123Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:07.123Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.123Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:07.123Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:07.123Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.124Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:07.124Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:07.124Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.124Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:07.124Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:07.124Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.124Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:07.124Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:07.124Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.133Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:07.133Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:07.133Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.134Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:07.134Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:07.134Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.134Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\launch.ps1
+2026-10-30T14:29:07.134Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\launch.ps1
+2026-10-30T14:29:07.134Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.134Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\README.md
+2026-10-30T14:29:07.134Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\README.md
+2026-10-30T14:29:07.134Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.135Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\tsconfig.core.json
+2026-10-30T14:29:07.135Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\tsconfig.core.json
+2026-10-30T14:29:07.135Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.135Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:29:07.135Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:29:07.135Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.162Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:07.162Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:07.162Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.162Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:07.162Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:07.162Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.162Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:07.162Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:07.163Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.163Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:07.163Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:07.163Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.163Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:07.163Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:07.163Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:29:07.163Z eslint:eslint 15 file(s) found in 32389 ms
+2026-10-30T14:29:07.163Z eslint:eslint Linting in single-thread mode.
+2026-10-30T14:29:07.163Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:07.163Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.165Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:07.165Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.166Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:07.166Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.166Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:07.166Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:29:07.169Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts" read in 4 ms
+2026-10-30T14:29:07.170Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts (pass 1)
+2026-10-30T14:29:07.170Z eslint:linter Verify
+2026-10-30T14:29:07.170Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:29:07.171Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:29:07.199Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:29:07.199Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:29:07.199Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+Warning: React version was set to "detect" in eslint-plugin-react settings, but the "react" package is not installed. Assuming latest React version for linting.
+2026-10-30T14:29:10.261Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts (pass 1)
+2026-10-30T14:29:10.261Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.261Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.261Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts" linted in 3092 ms
+2026-10-30T14:29:10.262Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts" read in 3097 ms
+2026-10-30T14:29:10.262Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts (pass 1)
+2026-10-30T14:29:10.262Z eslint:linter Verify
+2026-10-30T14:29:10.262Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:10.262Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:10.280Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:10.280Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:10.280Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:29:10.315Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts (pass 1)
+2026-10-30T14:29:10.315Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.315Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.315Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts" linted in 53 ms
+2026-10-30T14:29:10.315Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts" read in 3151 ms
+2026-10-30T14:29:10.315Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts (pass 1)
+2026-10-30T14:29:10.315Z eslint:linter Verify
+2026-10-30T14:29:10.315Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:10.316Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:10.435Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:10.435Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:10.435Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:29:10.607Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts (pass 1)
+2026-10-30T14:29:10.607Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.607Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.607Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts" linted in 291 ms
+2026-10-30T14:29:10.607Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts" read in 3442 ms
+2026-10-30T14:29:10.607Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts (pass 1)
+2026-10-30T14:29:10.607Z eslint:linter Verify
+2026-10-30T14:29:10.607Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:10.607Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:10.611Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:10.611Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:10.611Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:29:10.632Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts (pass 1)
+2026-10-30T14:29:10.632Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.632Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.632Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts" linted in 25 ms
+2026-10-30T14:29:10.632Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts" read in 3467 ms
+2026-10-30T14:29:10.632Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts (pass 1)
+2026-10-30T14:29:10.632Z eslint:linter Verify
+2026-10-30T14:29:10.632Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:10.632Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:10.680Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:10.680Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:10.680Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:29:10.738Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts (pass 1)
+2026-10-30T14:29:10.738Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.738Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.738Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts" linted in 105 ms
+2026-10-30T14:29:10.738Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts" read in 3573 ms
+2026-10-30T14:29:10.738Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts (pass 1)
+2026-10-30T14:29:10.738Z eslint:linter Verify
+2026-10-30T14:29:10.738Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:10.738Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:10.743Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:10.743Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:10.743Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:29:10.751Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts (pass 1)
+2026-10-30T14:29:10.751Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.751Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.751Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts" linted in 14 ms
+2026-10-30T14:29:10.751Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts" read in 3587 ms
+2026-10-30T14:29:10.751Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts (pass 1)
+2026-10-30T14:29:10.751Z eslint:linter Verify
+2026-10-30T14:29:10.752Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:10.752Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:10.757Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:10.757Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:10.757Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:29:10.784Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts (pass 1)
+2026-10-30T14:29:10.784Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.784Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.784Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts" linted in 32 ms
+2026-10-30T14:29:10.784Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs" read in 3619 ms
+2026-10-30T14:29:10.784Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs (pass 1)
+2026-10-30T14:29:10.784Z eslint:linter Verify
+2026-10-30T14:29:10.784Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:10.784Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:10.794Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:10.794Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:10.797Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:29:10.853Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs (pass 1)
+2026-10-30T14:29:10.853Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.853Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.853Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs" linted in 69 ms
+2026-10-30T14:29:10.853Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs" read in 3689 ms
+2026-10-30T14:29:10.854Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs (pass 1)
+2026-10-30T14:29:10.854Z eslint:linter Verify
+2026-10-30T14:29:10.854Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:10.854Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:10.856Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:10.856Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:10.856Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:29:10.864Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs (pass 1)
+2026-10-30T14:29:10.865Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.865Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.865Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs" linted in 11 ms
+2026-10-30T14:29:10.865Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs" read in 3699 ms
+2026-10-30T14:29:10.865Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs (pass 1)
+2026-10-30T14:29:10.865Z eslint:linter Verify
+2026-10-30T14:29:10.865Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:10.865Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:10.865Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:10.865Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:10.866Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:29:10.873Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs (pass 1)
+2026-10-30T14:29:10.873Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.873Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.873Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs" linted in 8 ms
+2026-10-30T14:29:10.873Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs" read in 3708 ms
+2026-10-30T14:29:10.873Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs (pass 1)
+2026-10-30T14:29:10.873Z eslint:linter Verify
+2026-10-30T14:29:10.873Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:10.873Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:10.874Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:10.874Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:10.875Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:29:10.878Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs (pass 1)
+2026-10-30T14:29:10.878Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.879Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.879Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs" linted in 5 ms
+2026-10-30T14:29:10.879Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs" read in 3713 ms
+2026-10-30T14:29:10.879Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs (pass 1)
+2026-10-30T14:29:10.879Z eslint:linter Verify
+2026-10-30T14:29:10.879Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:10.879Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:10.880Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:10.880Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:10.880Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:29:10.890Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs (pass 1)
+2026-10-30T14:29:10.890Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.890Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.890Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs" linted in 11 ms
+2026-10-30T14:29:10.891Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs" read in 3725 ms
+2026-10-30T14:29:10.891Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs (pass 1)
+2026-10-30T14:29:10.891Z eslint:linter Verify
+2026-10-30T14:29:10.891Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:10.891Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:10.907Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:10.907Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:10.911Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:29:10.996Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs (pass 1)
+2026-10-30T14:29:10.996Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:10.996Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:10.996Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs" linted in 105 ms
+2026-10-30T14:29:10.996Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs" read in 3831 ms
+2026-10-30T14:29:10.996Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs (pass 1)
+2026-10-30T14:29:10.996Z eslint:linter Verify
+2026-10-30T14:29:10.996Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:10.996Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:11.003Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:11.004Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:11.006Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:29:11.065Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs (pass 1)
+2026-10-30T14:29:11.065Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:11.065Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:11.066Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs" linted in 69 ms
+2026-10-30T14:29:11.066Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs" read in 3900 ms
+2026-10-30T14:29:11.066Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs (pass 1)
+2026-10-30T14:29:11.066Z eslint:linter Verify
+2026-10-30T14:29:11.066Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:11.066Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:11.070Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:11.070Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:11.072Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:29:11.097Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs (pass 1)
+2026-10-30T14:29:11.097Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:29:11.097Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:29:11.098Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs" linted in 32 ms
+
+[RUN 2026-10-30T14:38:45.419Z]
+
+C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+  2:39  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+✖ 1 problem (0 errors, 1 warning)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
+2026-10-30T14:36:31.936Z eslint:cli CLI args: [ '--config', 'C:\\Projetos\\omni-gestao-print-core-004b\\tools\\print-core-004b\\eslint.core.mjs', '--no-cache', '--debug', 'lib/print-core-synthetic', 'tools/print-core-004b/*.mjs', 'tools/print-core-004b/gate-b-run.ts' ]
+2026-10-30T14:36:32.037Z eslint:cli Using flat config? true
+2026-10-30T14:36:32.048Z eslint:cli Running on files
+2026-10-30T14:36:32.051Z eslint:eslint Using config loader LegacyConfigLoader
+2026-10-30T14:36:32.052Z eslint:eslint Using file patterns: lib/print-core-synthetic,tools/print-core-004b/*.mjs,tools/print-core-004b/gate-b-run.ts
+2026-10-30T14:36:32.052Z eslint:eslint Deleting cache file at C:\Projetos\omni-gestao-print-core-004b\.eslintcache
+2026-10-30T14:36:32.102Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:36:32.103Z eslint:config-loader Override config file path is C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:36:32.724Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:36:32.724Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:36:32.725Z eslint:config-loader Calculating config array from config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:36:32.731Z eslint:config-loader Loading config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:36:32.731Z eslint:config-loader Loading config from C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:36:32.731Z eslint:config-loader Config file URL is file:///C:/Projetos/omni-gestao-print-core-004b/tools/print-core-004b/eslint.core.mjs
+2026-10-30T14:38:07.382Z eslint:rules Loading rule 'consistent-return' (remaining=291)
+2026-10-30T14:38:07.816Z eslint:rules Loading rule 'dot-notation' (remaining=290)
+2026-10-30T14:38:08.140Z eslint:rules Loading rule 'init-declarations' (remaining=289)
+2026-10-30T14:38:08.243Z eslint:rules Loading rule 'max-params' (remaining=288)
+2026-10-30T14:38:09.026Z eslint:rules Loading rule 'no-dupe-class-members' (remaining=287)
+2026-10-30T14:38:09.188Z eslint:rules Loading rule 'no-empty-function' (remaining=286)
+2026-10-30T14:38:09.757Z eslint:rules Loading rule 'no-invalid-this' (remaining=285)
+2026-10-30T14:38:09.931Z eslint:rules Loading rule 'no-loop-func' (remaining=284)
+2026-10-30T14:38:10.047Z eslint:rules Loading rule 'no-loss-of-precision' (remaining=283)
+2026-10-30T14:38:10.169Z eslint:rules Loading rule 'no-magic-numbers' (remaining=282)
+2026-10-30T14:38:10.840Z eslint:rules Loading rule 'no-restricted-imports' (remaining=281)
+2026-10-30T14:38:12.031Z eslint:rules Loading rule 'no-unused-expressions' (remaining=280)
+2026-10-30T14:38:12.360Z eslint:rules Loading rule 'no-useless-constructor' (remaining=279)
+2026-10-30T14:38:12.737Z eslint:rules Loading rule 'prefer-destructuring' (remaining=278)
+2026-10-30T14:38:37.099Z eslint:config-loader Config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs is not empty
+2026-10-30T14:38:37.134Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\.gitignore
+2026-10-30T14:38:37.134Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\.gitignore
+2026-10-30T14:38:37.134Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.149Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\acceptance-80-input.json
+2026-10-30T14:38:37.149Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\acceptance-80-input.json
+2026-10-30T14:38:37.149Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.150Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:37.150Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:37.150Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.198Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:37.198Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:37.198Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.199Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:37.199Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.200Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.200Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.200Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.200Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.200Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:37.200Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.211Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:37.211Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:37.211Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.212Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:37.212Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:37.212Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.212Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\launch.ps1
+2026-10-30T14:38:37.212Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\launch.ps1
+2026-10-30T14:38:37.212Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.213Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\README.md
+2026-10-30T14:38:37.213Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\README.md
+2026-10-30T14:38:37.213Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.213Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\tsconfig.core.json
+2026-10-30T14:38:37.213Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\tsconfig.core.json
+2026-10-30T14:38:37.213Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.213Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:37.213Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:37.213Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.229Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.229Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.229Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.229Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.229Z eslint:config-loader Calculating config for file C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Calculating config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:37.229Z eslint:config-loader [Legacy]: Using config file C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs and base path C:\Projetos\omni-gestao-print-core-004b
+2026-10-30T14:38:37.230Z eslint:eslint 16 file(s) found in 125177 ms
+2026-10-30T14:38:37.231Z eslint:eslint Linting in single-thread mode.
+2026-10-30T14:38:37.231Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:37.231Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.240Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:37.240Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:38:37.240Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:38:37.240Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:38:37.240Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:37.240Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:38:37.240Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:37.240Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:38:37.241Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:37.241Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:38:37.241Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:37.241Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic
+2026-10-30T14:38:37.241Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:37.241Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.245Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:37.245Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.245Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:37.245Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.245Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:37.245Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.245Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:37.245Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.245Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:37.245Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.245Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:37.245Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.246Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:37.246Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.246Z eslint:config-loader Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:37.246Z eslint:config-loader [Legacy]: Looking up cached config for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b
+2026-10-30T14:38:37.310Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts" read in 70 ms
+2026-10-30T14:38:37.310Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts (pass 1)
+2026-10-30T14:38:37.311Z eslint:linter Verify
+2026-10-30T14:38:37.311Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:38:37.315Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:38:37.362Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:38:37.362Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+2026-10-30T14:38:37.362Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts
+Warning: React version was set to "detect" in eslint-plugin-react settings, but the "react" package is not installed. Assuming latest React version for linting.
+2026-10-30T14:38:42.757Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts (pass 1)
+2026-10-30T14:38:42.757Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:42.757Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:42.760Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\codec.ts" linted in 5450 ms
+2026-10-30T14:38:42.768Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts" read in 5528 ms
+2026-10-30T14:38:42.768Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts (pass 1)
+2026-10-30T14:38:42.768Z eslint:linter Verify
+2026-10-30T14:38:42.768Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:42.768Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:42.780Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:42.781Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:42.781Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts
+2026-10-30T14:38:42.815Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts (pass 1)
+2026-10-30T14:38:42.815Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:42.815Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:42.816Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\authority.ts" linted in 48 ms
+2026-10-30T14:38:42.816Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts" read in 5575 ms
+2026-10-30T14:38:42.816Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts (pass 1)
+2026-10-30T14:38:42.816Z eslint:linter Verify
+2026-10-30T14:38:42.816Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:42.816Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:42.924Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:42.925Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:42.925Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts
+2026-10-30T14:38:43.128Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts (pass 1)
+2026-10-30T14:38:43.129Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.129Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.129Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\core.ts" linted in 313 ms
+2026-10-30T14:38:43.129Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts" read in 5894 ms
+2026-10-30T14:38:43.129Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts (pass 1)
+2026-10-30T14:38:43.129Z eslint:linter Verify
+2026-10-30T14:38:43.129Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:43.129Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:43.287Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:43.287Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:43.287Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts
+2026-10-30T14:38:43.520Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts (pass 1)
+2026-10-30T14:38:43.520Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.520Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.520Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b-run.ts" linted in 391 ms
+2026-10-30T14:38:43.520Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts" read in 6279 ms
+2026-10-30T14:38:43.520Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts (pass 1)
+2026-10-30T14:38:43.520Z eslint:linter Verify
+2026-10-30T14:38:43.520Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:43.520Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:43.528Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:43.528Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:43.528Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts
+2026-10-30T14:38:43.554Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts (pass 1)
+2026-10-30T14:38:43.554Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.554Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.554Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\sale.ts" linted in 35 ms
+2026-10-30T14:38:43.554Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts" read in 6314 ms
+2026-10-30T14:38:43.555Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts (pass 1)
+2026-10-30T14:38:43.555Z eslint:linter Verify
+2026-10-30T14:38:43.555Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:43.555Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:43.560Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:43.560Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:43.560Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts
+2026-10-30T14:38:43.578Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts (pass 1)
+2026-10-30T14:38:43.578Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.578Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.578Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\simulator.ts" linted in 23 ms
+2026-10-30T14:38:43.578Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts" read in 6337 ms
+2026-10-30T14:38:43.578Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts (pass 1)
+2026-10-30T14:38:43.578Z eslint:linter Verify
+2026-10-30T14:38:43.578Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:43.578Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:43.586Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:43.586Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:43.586Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts
+2026-10-30T14:38:43.610Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts (pass 1)
+2026-10-30T14:38:43.610Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.610Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.610Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\lib\print-core-synthetic\db.ts" linted in 32 ms
+2026-10-30T14:38:43.610Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs" read in 6369 ms
+2026-10-30T14:38:43.610Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs (pass 1)
+2026-10-30T14:38:43.610Z eslint:linter Verify
+2026-10-30T14:38:43.610Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:43.610Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:43.647Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:43.647Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:43.653Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs
+2026-10-30T14:38:43.886Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs (pass 1)
+2026-10-30T14:38:43.886Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.886Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.886Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\boundary-guard.mjs" linted in 276 ms
+2026-10-30T14:38:43.886Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs" read in 6641 ms
+2026-10-30T14:38:43.886Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs (pass 1)
+2026-10-30T14:38:43.886Z eslint:linter Verify
+2026-10-30T14:38:43.886Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:43.886Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:43.888Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:43.888Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:43.889Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs
+2026-10-30T14:38:43.919Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs (pass 1)
+2026-10-30T14:38:43.919Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.919Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.919Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\eslint.core.mjs" linted in 33 ms
+2026-10-30T14:38:43.919Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs" read in 6674 ms
+2026-10-30T14:38:43.919Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs (pass 1)
+2026-10-30T14:38:43.919Z eslint:linter Verify
+2026-10-30T14:38:43.919Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:43.919Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:43.934Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:43.934Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:43.935Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs
+2026-10-30T14:38:43.965Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs (pass 1)
+2026-10-30T14:38:43.965Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:43.965Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:43.965Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\driver.mjs" linted in 46 ms
+2026-10-30T14:38:43.965Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs" read in 6720 ms
+2026-10-30T14:38:43.965Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs (pass 1)
+2026-10-30T14:38:43.965Z eslint:linter Verify
+2026-10-30T14:38:43.965Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:43.965Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:43.976Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:43.976Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:43.977Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs
+2026-10-30T14:38:44.002Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs (pass 1)
+2026-10-30T14:38:44.002Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:44.002Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:44.002Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\checks.mjs" linted in 37 ms
+2026-10-30T14:38:44.002Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs" read in 6757 ms
+2026-10-30T14:38:44.002Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs (pass 1)
+2026-10-30T14:38:44.002Z eslint:linter Verify
+2026-10-30T14:38:44.002Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:44.002Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:44.007Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:44.007Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:44.009Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs
+2026-10-30T14:38:44.031Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs (pass 1)
+2026-10-30T14:38:44.031Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:44.031Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:44.031Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\cases.mjs" linted in 29 ms
+2026-10-30T14:38:44.031Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs" read in 6785 ms
+2026-10-30T14:38:44.031Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs (pass 1)
+2026-10-30T14:38:44.031Z eslint:linter Verify
+2026-10-30T14:38:44.031Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:44.031Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:44.038Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:44.039Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:44.042Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs
+2026-10-30T14:38:44.096Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs (pass 1)
+2026-10-30T14:38:44.096Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:44.096Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:44.096Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a-final.mjs" linted in 65 ms
+2026-10-30T14:38:44.099Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs" read in 6854 ms
+2026-10-30T14:38:44.099Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs (pass 1)
+2026-10-30T14:38:44.099Z eslint:linter Verify
+2026-10-30T14:38:44.099Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:44.100Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:44.102Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:44.102Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:44.103Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs
+2026-10-30T14:38:44.117Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs (pass 1)
+2026-10-30T14:38:44.117Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:44.117Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:44.117Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-b.mjs" linted in 17 ms
+2026-10-30T14:38:44.117Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs" read in 6871 ms
+2026-10-30T14:38:44.117Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs (pass 1)
+2026-10-30T14:38:44.117Z eslint:linter Verify
+2026-10-30T14:38:44.117Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:44.117Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:44.131Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:44.131Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:44.135Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs
+2026-10-30T14:38:44.187Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs (pass 1)
+2026-10-30T14:38:44.187Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:44.187Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:44.187Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\gate-a.mjs" linted in 70 ms
+2026-10-30T14:38:44.196Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs" read in 6950 ms
+2026-10-30T14:38:44.196Z eslint:linter Linting code for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs (pass 1)
+2026-10-30T14:38:44.196Z eslint:linter Verify
+2026-10-30T14:38:44.196Z eslint:linter With flat config: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:44.196Z eslint:languages:js Parsing: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:44.205Z eslint:languages:js Parsing successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:44.205Z eslint:languages:js Scope analysis: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:44.210Z eslint:languages:js Scope analysis successful: C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs
+2026-10-30T14:38:44.287Z eslint:linter Generating fixed text for C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs (pass 1)
+2026-10-30T14:38:44.287Z eslint:source-code-fixer Applying fixes
+2026-10-30T14:38:44.287Z eslint:source-code-fixer shouldFix parameter was false, not attempting fixes
+2026-10-30T14:38:44.287Z eslint:eslint-helpers File "C:\Projetos\omni-gestao-print-core-004b\tools\print-core-004b\lab.mjs" linted in 91 ms

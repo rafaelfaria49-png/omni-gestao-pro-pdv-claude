@@ -1,0 +1,350 @@
+{
+  "gate": "A",
+  "status": "PASS",
+  "prismaValidate": "PASS",
+  "prismaGenerate": "PASS",
+  "catalogParity": {
+    "status": "PASS",
+    "uniqueConstraintAndIndexFormsComparedSemantically": true,
+    "columns": 154,
+    "foreignKeys": 36,
+    "checkConstraints": 60,
+    "customFunctions": 6,
+    "customTriggers": 45,
+    "customIndexes": 5
+  },
+  "positiveT0T4": [
+    {
+      "kind": "SALE",
+      "status": "PASS",
+      "runtimeRole": "omni_004b_runtime_bf24468d",
+      "ids": {
+        "installation": "dbf592bf-b492-4cb7-939c-4ccd06042bf0",
+        "destination": "d124ac79-bead-4ac0-92b2-5af6381a01df",
+        "binding": "14e05585-5e97-442e-968a-95548cfeb638",
+        "bindingGroup": "cb0359e4-efec-444c-8b97-1798728f9c65",
+        "delegation": "60a0f3af-36af-4a9e-88c2-df0233b05307",
+        "document": "5154abaa-be21-4e46-8518-1ccd17be0178",
+        "intent": "320da4e1-9005-439a-b1cc-18aa3af685d3",
+        "request": "fd0fa7e3-9866-421c-ade9-88ab443dcca1",
+        "job": "a7eeafaa-fe76-4bcb-b582-7d97a314693b",
+        "copy": "100608ee-5698-41e3-8b54-173913327849",
+        "send": "96d85e8b-880c-4b57-a26b-ad2b017ca9c7",
+        "attempt": "fa0ea889-7273-4f4f-aaba-31ba8e254e51",
+        "ack": "3199271e-e7be-4f91-97f3-532bb95329b0",
+        "release": "60134e30-ea99-4540-a987-c5322b5abdf6"
+      },
+      "simulationOnly": true
+    },
+    {
+      "kind": "SYNTHETIC",
+      "status": "PASS",
+      "runtimeRole": "omni_004b_runtime_bf24468d",
+      "ids": {
+        "installation": "9170cdf6-292c-41f4-a562-5d8932a474f4",
+        "destination": "4a35eed7-c034-430d-8430-05593331b801",
+        "binding": "44a29ed4-3ba6-4da3-9969-0426fe74218a",
+        "bindingGroup": "7876e9e2-d3d0-45ec-a11a-d10377e5b774",
+        "delegation": "874af09d-318d-475a-a5b8-904cf72c1b24",
+        "document": "25369297-9eaa-45c3-a64e-226f8950e35a",
+        "intent": "aca5ff6d-276e-4e6f-9147-6c76f90bb217",
+        "request": "77ca4fb7-4c52-4a31-bd82-16589fd61376",
+        "job": "310fd065-fb85-4aaf-adfb-bf68c3c92f38",
+        "copy": "86f8fc4b-dabc-4aef-b830-b86bf74289e7",
+        "send": "85164f83-38f3-4848-a6a2-9503a3982b7c",
+        "attempt": "52e96ff8-3f02-45cf-8ef8-59c179dc39d2",
+        "ack": "4c95700a-0256-4a24-924f-11b813bdc9ba",
+        "release": "74a4c7fd-1212-43d3-901a-25825d8ab156"
+      },
+      "simulationOnly": true
+    }
+  ],
+  "leastPrivilege": {
+    "name": "omni_004b_runtime_bf24468d",
+    "superuser": false,
+    "bypassrls": false,
+    "createrole": false,
+    "createdb": false,
+    "ownerMembership": false,
+    "schemaCreate": false,
+    "temporary": false,
+    "commercialUpdate": false,
+    "adminUserSelectColumns": [
+      "id",
+      "role",
+      "active",
+      "mustChangePassword",
+      "accessScope",
+      "sessionVersion",
+      "lojaId"
+    ],
+    "passwordRead": false
+  },
+  "tests": [
+    {
+      "id": "R02-owner-print_installations",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_installations",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_destinations",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_destinations",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_bindings",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_bindings",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_delegations",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_delegations",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_documents",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_documents",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_jobs",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_jobs",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_requests",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-owner-print_copies",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_copies",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_attempts",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_attempts",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "R02-owner-print_events",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "R02-runtime-print_events",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": "permission denied"
+    },
+    {
+      "id": "DDL-ROLLBACK-CONFLICT",
+      "status": "PASS",
+      "sqlstate": "42P07",
+      "message": "already exists"
+    },
+    {
+      "id": "R01-SHADOW-SEARCH-PATH",
+      "status": "PASS",
+      "runtimePositive": {
+        "kind": "SYNTHETIC",
+        "status": "PASS",
+        "runtimeRole": "omni_004b_runtime_bf24468d",
+        "ids": {
+          "installation": "9170cdf6-292c-41f4-a562-5d8932a474f4",
+          "destination": "4a35eed7-c034-430d-8430-05593331b801",
+          "binding": "44a29ed4-3ba6-4da3-9969-0426fe74218a",
+          "bindingGroup": "7876e9e2-d3d0-45ec-a11a-d10377e5b774",
+          "delegation": "2502ec58-0af3-482c-a55c-4070c99ce4d5",
+          "document": "d8ce7f5f-67a3-469c-8483-303716b5fdba",
+          "intent": "2390de5d-b97e-4f84-914a-d1af35cbb3ec",
+          "request": "d28586ec-0365-4014-ae71-ae47ed8abb8e",
+          "job": "89d8927d-1559-48ce-bf5f-5b5b4277258a",
+          "copy": "8f274abd-cbdd-43ef-90d7-b3d47d0c0103",
+          "send": "307a01ed-59f0-48b6-bdd6-ad4c0b502db0",
+          "attempt": "833dd29e-7661-443f-8408-a2e6371248f6",
+          "ack": "34dd64f7-f519-40e2-87d1-410efeaaef1a",
+          "release": "873bcaf7-0f5b-43c1-9f71-640a03aeaef6"
+        },
+        "simulationOnly": true,
+        "reusedDurablePositive": true
+      },
+      "shadowRowsUnchanged": true
+    },
+    {
+      "id": "R01-TEMP-SHADOW",
+      "status": "PASS",
+      "context": "bootstrap-admin-created adversarial temp objects; DML runs after SET ROLE runtime; runtime itself has no TEMP privilege"
+    },
+    {
+      "id": "R02-EXPIRED-REQUEST",
+      "status": "PASS",
+      "fixturePolicy": "explicit expired synthetic grant; no production retention default",
+      "deletedId": "b0afaf44-6094-4e40-9292-8a0571c960a6"
+    },
+    {
+      "id": "R02-RUNTIME-UNEXPIRED",
+      "status": "PASS",
+      "sqlstate": "P0001",
+      "message": "p004 ledger deletion requires separate approved retirement/retention scope"
+    },
+    {
+      "id": "ROLE-NO-DDL",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": null
+    },
+    {
+      "id": "ROLE-NO-TEMP",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": null
+    },
+    {
+      "id": "ROLE-NO-TRUNCATE",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": null
+    },
+    {
+      "id": "ROLE-NO-DISABLE-TRIGGER",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": null
+    },
+    {
+      "id": "ROLE-NO-REPLICATION-BYPASS",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": null
+    },
+    {
+      "id": "ROLE-NO-OWNER-ESCALATION",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": null
+    },
+    {
+      "id": "ROLE-NO-COMMERCIAL-UPDATE",
+      "status": "PASS",
+      "sqlstate": "42501",
+      "message": null
+    },
+    {
+      "id": "DDL-ROLLBACK-IDENTITIES",
+      "status": "PASS",
+      "sqlstate": "42P07",
+      "message": "already exists"
+    },
+    {
+      "id": "R01-FUNCTION-CATALOG",
+      "status": "PASS",
+      "functions": [
+        {
+          "name": "p004_bump_risk",
+          "securityDefiner": false,
+          "searchPath": [
+            "search_path=pg_catalog, public, pg_temp"
+          ]
+        },
+        {
+          "name": "p004_commit_guard",
+          "securityDefiner": false,
+          "searchPath": [
+            "search_path=pg_catalog, public, pg_temp"
+          ]
+        },
+        {
+          "name": "p004_delete_guard",
+          "securityDefiner": false,
+          "searchPath": [
+            "search_path=pg_catalog, public, pg_temp"
+          ]
+        },
+        {
+          "name": "p004_immutable",
+          "securityDefiner": false,
+          "searchPath": [
+            "search_path=pg_catalog, public, pg_temp"
+          ]
+        },
+        {
+          "name": "p004_insert_guard",
+          "securityDefiner": false,
+          "searchPath": [
+            "search_path=pg_catalog, public, pg_temp"
+          ]
+        },
+        {
+          "name": "p004_lifecycle",
+          "securityDefiner": false,
+          "searchPath": [
+            "search_path=pg_catalog, public, pg_temp"
+          ]
+        }
+      ]
+    }
+  ],
+  "schemaQualification": "PASS",
+  "sharedDeleteGuard": "PASS",
+  "realTransportCalls": 0,
+  "productionWrites": 0
+}

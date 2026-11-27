@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "headSha": "683b0178ad844d10191e7fb2a0c96d28270297b1",
+  "checkoutSha": "387d02e6b170401cdc2047169dd39916a94ca544",
+  "runId": 41946614613,
+  "runAttempt": 1,
+  "artifactId": 13378403947,
+  "artifactName": "omni-print-d04-windows-evidence",
+  "artifactDigest": "sha256:048ac55da0b7173a0c119c930d0ad163b660183132cb804656a0c858427bec3c",
+  "platform": "win32",
+  "steps": [
+    {
+      "step": "unit",
+      "status": "PASS",
+      "tests": "78 passed (78)",
+      "sha256": "1bfe64ba930c0a6bcda821e80e5cd1039727c6f89cb7dae01f1e69cd31424313"
+    },
+    {
+      "step": "recovery",
+      "status": "PASS",
+      "tests": "24 passed (24)",
+      "sha256": "f37746866672262ea130ef125a4117c3c66d35c90d36d8527e50743d2965a7a1"
+    },
+    {
+      "step": "package",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "2455cfcabcf82e7717dc42b51c1fe974bb5de25d07afe8b2abb567c8074abf06"
+    },
+    {
+      "step": "d04-eslint",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "powershell-parse",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "b6aa105adb1389fc898ea0567c3ed6b0a21b08bf29d08c28324fda2a3183e498"
+    },
+    {
+      "step": "installer",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "266947566ed8d8569eaaa57e01b78223f06a84ead3505786a11289858d8cc2a4"
+    },
+    {
+      "step": "cross-user-dpapi",
+      "status": "PASS",
+      "tests": null,
+      "sha256": "34dd5e50f792c7e971e44f5e283d6afa2ade486b309c6306d6d72cea49901fb9"
+    }
+  ],
+  "physicalHomologation": "PENDING"
+}

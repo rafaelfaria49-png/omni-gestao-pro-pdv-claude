@@ -1,0 +1,114 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao-print-e2e-004c
+
+(node:24200) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ❯ lib/pdv/zz-main-parity-pin-keymap.component.test.ts (100 tests | 23 failed) 14680ms
+     × F1 abre pagamento uma vez, sem finalizar; Escape não remove item 39ms
+     × F7 coloca e retoma espera pelos componentes reais, sem venda 5ms
+     × Insert abre avulso; F7 não atravessa o modal; Escape fecha sem remover 4ms
+     × input não remove nem limpa via Escape/Delete/F5/Ctrl+L 4ms
+     × textarea não remove nem limpa via Escape/Delete/F5/Ctrl+L 9ms
+     × contenteditable não remove nem limpa via Escape/Delete/F5/Ctrl+L 3ms
+     × portal dialog bloqueia atalhos mesmo com foco fora dele 4ms
+     × portal alertdialog bloqueia atalhos mesmo com foco fora dele 3ms
+     × portal menu bloqueia atalhos mesmo com foco fora dele 3ms
+     × portal listbox bloqueia atalhos mesmo com foco fora dele 3ms
+     × repeat e evento consumido não abrem, removem ou finalizam 3ms
+     × capabilities bloqueiam F1/F7; caixa fechado preserva carrinho 4ms
+     × finalização real em voo bloqueia Escape, reentrada e remoção 2ms
+     × ajuda e hints descrevem somente as teclas desta superfície 2ms
+     × classic: F3 preserva busca/segunda forma rápida 6ms
+     × classic: F2 mantém seu domínio 3ms
+     × classic: F4 mantém quantidade/terceira forma/ausência 2ms
+     × classic: F10 mantém pagamento/cliente/ausência 2ms
+     × classic: F8 preserva foco/trocas 3ms
+     × classic: F9 continua recebimento, sem limpar o carrinho 2ms
+     × classic: F12 continua múltiplo, sem finalizar 2ms
+     × Classic F5 continua recebimento, sem PIN nem remoção 2ms
+     × classic: Escape padrão não remove; rápido explícito remove uma única linha fora de campos 2ms
+ ❯ lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts (16 tests | 16 failed) 110ms
+     × KG com saldo 0 bloqueia busca, seleção e bipagem 46ms
+     × KG com saldo 5 bloqueia busca, seleção e bipagem 5ms
+     × G com saldo 0 bloqueia busca, seleção e bipagem 6ms
+     × G com saldo 500 bloqueia busca, seleção e bipagem 4ms
+     × UN disponível entra normalmente e mantém quantidade inteira 4ms
+     × UN sem saldo continua mostrando Sem estoque 3ms
+     × fallback remoto KG com saldo 0 bloqueia SKU/EAN antes do carrinho 5ms
+     × fallback remoto KG com saldo 5 bloqueia SKU/EAN antes do carrinho 3ms
+     × fallback remoto G com saldo 0 bloqueia SKU/EAN antes do carrinho 3ms
+     × fallback remoto G com saldo 500 bloqueia SKU/EAN antes do carrinho 3ms
+     × UN disponível encontrado no fallback remoto entra normalmente 9ms
+     × catálogo atual impede que seleção antiga sem flag trate KG como UN 3ms
+     × comanda KG é bloqueada antes de alterar o carrinho 3ms
+     × linha antiga com quantidade 1 não pode editar quantidade, abrir pagamento ou finalizar como UN 2ms
+     × hold legado KG com quantidade 1 não altera o carrinho 3ms
+     × Item Avulso permanece UN e rejeita código conhecido de produto por peso 6ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 39 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > KG com saldo 0 bloqueia busca, seleção e bipagem
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > KG com saldo 5 bloqueia busca, seleção e bipagem
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > G com saldo 0 bloqueia busca, seleção e bipagem
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > G com saldo 500 bloqueia busca, seleção e bipagem
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > UN disponível entra normalmente e mantém quantidade inteira
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > UN sem saldo continua mostrando Sem estoque
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > fallback remoto KG com saldo 0 bloqueia SKU/EAN antes do carrinho
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > fallback remoto KG com saldo 5 bloqueia SKU/EAN antes do carrinho
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > fallback remoto G com saldo 0 bloqueia SKU/EAN antes do carrinho
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > fallback remoto G com saldo 500 bloqueia SKU/EAN antes do carrinho
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > UN disponível encontrado no fallback remoto entra normalmente
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > catálogo atual impede que seleção antiga sem flag trate KG como UN
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > comanda KG é bloqueada antes de alterar o carrinho
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > linha antiga com quantidade 1 não pode editar quantidade, abrir pagamento ou finalizar como UN
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > hold legado KG com quantidade 1 não altera o carrinho
+ FAIL  lib/pdv/zz-main-classic-weight-sale-guard.component.test.ts > PDV Clássico: guard comercial antes do saldo e das mutações > Item Avulso permanece UN e rejeita código conhecido de produto por peso
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > F1 abre pagamento uma vez, sem finalizar; Escape não remove item
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > F7 coloca e retoma espera pelos componentes reais, sem venda
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > Insert abre avulso; F7 não atravessa o modal; Escape fecha sem remover
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > input não remove nem limpa via Escape/Delete/F5/Ctrl+L
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > textarea não remove nem limpa via Escape/Delete/F5/Ctrl+L
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > contenteditable não remove nem limpa via Escape/Delete/F5/Ctrl+L
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > portal dialog bloqueia atalhos mesmo com foco fora dele
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > portal alertdialog bloqueia atalhos mesmo com foco fora dele
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > portal menu bloqueia atalhos mesmo com foco fora dele
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > portal listbox bloqueia atalhos mesmo com foco fora dele
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > repeat e evento consumido não abrem, removem ou finalizam
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > capabilities bloqueiam F1/F7; caixa fechado preserva carrinho
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > finalização real em voo bloqueia Escape, reentrada e remoção
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 classic — handlers reais > ajuda e hints descrevem somente as teclas desta superfície
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: F3 preserva busca/segunda forma rápida
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: F2 mantém seu domínio
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: F4 mantém quantidade/terceira forma/ausência
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: F10 mantém pagamento/cliente/ausência
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: F8 preserva foco/trocas
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: F9 continua recebimento, sem limpar o carrinho
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: F12 continua múltiplo, sem finalizar
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > Classic F5 continua recebimento, sem PIN nem remoção
+ FAIL  lib/pdv/zz-main-parity-pin-keymap.component.test.ts > N5-B2 — colisões e modo rápido > classic: Escape padrão não remove; rápido explícito remove uma única linha fora de campos
+TypeError: watchCatalogSync is not a function
+ ❯ components/dashboard/vendas/pdv-classic.tsx:1238:18
+    1236|     // PDV montado liga os checks automáticos; abrir confere a versão …
+    1237|     // Cadastros na mesma aba).
+    1238|     const stop = watchCatalogSync()
+       |                  ^
+    1239|     void checkCatalog()
+    1240|     return stop
+ ❯ Object.react_stack_bottom_frame ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20
+ ❯ runWithFiberInDEV ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ commitHookEffectListMount ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29
+ ❯ commitHookPassiveMountEffects ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11
+ ❯ commitPassiveMountOnFiber ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13
+ ❯ recursivelyTraversePassiveMountEffects ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11
+ ❯ commitPassiveMountOnFiber ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:15519:11
+ ❯ flushPassiveEffects ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:18432:9
+ ❯ ../omni-gestao/node_modules/react-dom/cjs/react-dom-client.development.js:17923:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/39]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  39 failed | 77 passed (116)
+   Start at  13:04:45
+   Duration  23.28s (transform 1.19s, setup 0ms, import 2.00s, tests 14.79s, environment 1.66s)
+

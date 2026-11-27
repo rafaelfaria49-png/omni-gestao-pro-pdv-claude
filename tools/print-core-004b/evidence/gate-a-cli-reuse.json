@@ -1,0 +1,4 @@
+{
+  "reason": "SQL-only minimal correction; datamodel unchanged; prior validate/generate succeeded",
+  "proposedSchemaSHA256": "AEA08DA0E8DB34AF5BFC73D90148A01BCF5BD3EEBED06E7A5835453AAC5E56ED"
+}

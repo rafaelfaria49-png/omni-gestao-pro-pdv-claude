@@ -1,0 +1,42 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d03-mutation
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 4830ms
+     × R15 UNKNOWN alone is preserved, even with finished_at and released egress; oversized documents fail closed 4653ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  18:17:41
+   Duration  5.45s (transform 285ms, setup 0ms, import 396ms, tests 4.83s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R15 UNKNOWN alone is preserved, even with finished_at and released egress; oversized documents fail closed
+AssertionError: expected { copies: 1, jobs: 1, …(2) } to deeply equal { copies: +0, jobs: +0, …(2) }
+
+- Expected
++ Received
+
+  {
+-   "copies": 0,
++   "copies": 1,
+    "events": 0,
+-   "jobs": 0,
+-   "requests": 0,
++   "jobs": 1,
++   "requests": 1,
+  }
+
+ ❯ tools/print-d03/retention.pg.test.ts:289:56
+    287|     const f = await create(), sent = await dispatch()
+    288|     await core.report(installA, { attemptId: sent.attemptId, sendKey: …
+    289|     expect((await run(Date.now() + 365 * DAY)).purged).toEqual({ copie…
+       |                                                        ^
+    290|     await db.exec(`INSERT INTO public.print_events(id,store_id,documen…
+    291|       SELECT gen_random_uuid(),$1,$2::uuid,$3::uuid,'DOCUMENT','LAB_EV…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

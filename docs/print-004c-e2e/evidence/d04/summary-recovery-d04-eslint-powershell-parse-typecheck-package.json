@@ -1,0 +1,56 @@
+{
+  "goal": "OMNI-PRINT-D04-WINDOWS-AGENT-FINALIZACAO-001",
+  "provenance": {
+    "platform": "win32",
+    "node": "v24.22.1",
+    "githubRunId": null,
+    "githubRunAttempt": null,
+    "commit": "5fd8743ce0c67c0847b09429f1b9e6ae5cae1e5a",
+    "localChanges": true
+  },
+  "productionWrites": 0,
+  "realPairing": false,
+  "physicalHomologation": "PENDING",
+  "steps": [
+    {
+      "step": "typecheck",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 86,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "recovery",
+      "status": "FAIL",
+      "exit": 1,
+      "seconds": 186,
+      "tests": "3 failed | 20 passed (23)",
+      "sha256": "22ece3accbfd880ed61b5aa7d30b37aefdc8b5ef972365af890038917688d3b0"
+    },
+    {
+      "step": "package",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 0,
+      "tests": null,
+      "sha256": "e9af86c624271c9addf30c2f3dbdf03d7a5037ffde8101b5a6848bcd74571bed"
+    },
+    {
+      "step": "d04-eslint",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 12,
+      "tests": null,
+      "sha256": "3c696c094e2a1323fa00cf0974a861af0cd6824b1672248c1d12791a70a61e4e"
+    },
+    {
+      "step": "powershell-parse",
+      "status": "PASS",
+      "exit": 0,
+      "seconds": 2,
+      "tests": null,
+      "sha256": "e1d17856cba043f50faa61ea8ea6e2c711f0fc19bcd9577b34a618e4ad267e62"
+    }
+  ]
+}

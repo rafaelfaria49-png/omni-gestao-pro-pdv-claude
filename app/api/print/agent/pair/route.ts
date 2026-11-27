@@ -1,0 +1,8 @@
+/** OMNI-PRINT-004C candidate — disabled unless the owner-approval gate is open (lib/printing/direct/activation.ts). */
+import * as direct from "@/lib/printing/direct/http"
+import { directPrintDeps } from "@/lib/printing/direct/server"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+export const POST = (req: Request) => direct.agentPair(req, directPrintDeps())

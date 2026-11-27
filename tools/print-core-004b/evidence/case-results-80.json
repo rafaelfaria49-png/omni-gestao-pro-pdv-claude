@@ -1,0 +1,1448 @@
+{
+  "goal": "OMNI-PRINT-PERSISTENCIA-004B-CORE-SYNTHETIC",
+  "run": "core-6909ccad",
+  "node": "v24.19.0",
+  "summary": {
+    "PASS": 53,
+    "FAIL": 0,
+    "DEFERRED": 27
+  },
+  "independentKernelTests": {
+    "pass": 35,
+    "fail": 0
+  },
+  "originalIds": 80,
+  "additionalR01R02": [
+    {
+      "id": "R02-owner-print_installations",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_installations",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_destinations",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_destinations",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_bindings",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_bindings",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_delegations",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_delegations",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_documents",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_documents",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_jobs",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_jobs",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_requests",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_copies",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_copies",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_attempts",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_attempts",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-owner-print_events",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-runtime-print_events",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R01-SHADOW-SEARCH-PATH",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R01-TEMP-SHADOW",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-EXPIRED-REQUEST",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R02-RUNTIME-UNEXPIRED",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    },
+    {
+      "id": "R01-FUNCTION-CATALOG",
+      "status": "PASS",
+      "evidence": "GATE_A.json"
+    }
+  ],
+  "rows": [
+    {
+      "id": "B01",
+      "scenario": "Duas criações INITIAL concorrentes, keys distintas",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Barreira sincroniza transações reais; somente um slot e job; perdedor relê vencedor, sem duas outboxes efetivas."
+    },
+    {
+      "id": "B02",
+      "scenario": "Duas abas, manual versus automático e dois usuários",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Concorrência converge ao mesmo slot loja/documento/família; origem UI e principal não abrem outro inicial."
+    },
+    {
+      "id": "B03",
+      "scenario": "Dois terminais/destinos ou versão/vias diferentes",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SEMANTIC-CONFLICT",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Conflito semântico explícito; não imprime silenciosamente em ambos os destinos."
+    },
+    {
+      "id": "B04",
+      "scenario": "Replay idêntico, resposta perdida após commit",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesma key encontra job/hash/estado; contagem de jobs/vias/tentativas não aumenta."
+    },
+    {
+      "id": "B05",
+      "scenario": "Replay alterado e outra identidade com key conhecida",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Conflito ou negação de acesso após guard; nenhum job/dado de outra loja é revelado."
+    },
+    {
+      "id": "B06",
+      "scenario": "Crash/rollback antes do commit T1",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum efeito/outbox visível e nenhum snapshot parcial elegível para envio."
+    },
+    {
+      "id": "B07",
+      "scenario": "Crash após T1 e antes de T2/T3",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Job selado recuperável; autorização reavaliada; só vias sem tentativa podem ser assumidas por CAS."
+    },
+    {
+      "id": "B08",
+      "scenario": "Dois executores disputam uma via",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-TWO-EXECUTORS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Só um CAS inicia tentativa; epoch cresce; outro executor não entra no adaptador."
+    },
+    {
+      "id": "B09",
+      "scenario": "Lease expira antes de T3 e executor antigo acorda",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-LEASE-FENCING",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Epoch antigo falha no CAS; nova posse não deixa duas tentativas potencialmente efetivas."
+    },
+    {
+      "id": "B10",
+      "scenario": "Crash após T3 antes da chamada e após envio antes de T4",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Ambos ficam incertos sem prova; recuperação nunca reenvia só por ausência de recibo."
+    },
+    {
+      "id": "B11",
+      "scenario": "Revogação concorre com T3",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVOCATION",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVOCATION-CONCURRENT-T3",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Commit de revogação anterior bloqueia; tentativa já autorizada preserva possibilidade de efeito, bloqueando vias futuras."
+    },
+    {
+      "id": "B12",
+      "scenario": "Correção/cancelamento da venda concorre com criação/envio",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-FINGERPRINT",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Leitura/versão consistente aborta snapshot desatualizado; após ponto de ordenação registra janela e bloqueia vias posteriores."
+    },
+    {
+      "id": "B13",
+      "scenario": "Bindings e previousJobId de outra loja",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CROSS-SCOPE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Constraints/relações e autorização impedem cruzamento inclusive por inserção concorrente; referência inválida não liga cadeia."
+    },
+    {
+      "id": "B14",
+      "scenario": "Duas confirmações concorrentes de segunda via",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPRINT-COALESCENCE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Uma intenção ativa por documento; outra preparação conflita ou encontra a mesma; risco incerto exige confirmação adicional."
+    },
+    {
+      "id": "B15",
+      "scenario": "Múltiplas vias com aceite/falha/incerteza parcial",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Cada copyId tem progresso próprio; retry seguro somente da via comprovadamente não enviada; aceitas/incertas intactas."
+    },
+    {
+      "id": "B16",
+      "scenario": "Evidência/callback duplicado e atrasado",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Evento deduplicado por tentativa; evidência preservada, sem nova outbox ou downgrade de aceite conhecido."
+    },
+    {
+      "id": "B17",
+      "scenario": "Retenção de payload sem remoção de dedup",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Apagar bytes não remove slot/recibo; replay autorizado retorna metadados/expiração; sem reconstrução automática."
+    },
+    {
+      "id": "B18",
+      "scenario": "Remoção posterior de tombstone de requisição",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Grant antigo continua expirado/inválido; requestKey velha não é reemitida nem aceita como comando novo."
+    },
+    {
+      "id": "B19",
+      "scenario": "Retenção/arquivamento de marca inicial",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Documento ainda imprimível mantém slot; cleanup não reabre INITIAL; eventual fechamento de elegibilidade é atômico."
+    },
+    {
+      "id": "B20",
+      "scenario": "Auditoria e falha de persistência",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ATOMIC-T1",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Transição e auditoria duráveis no mesmo commit; erro do banco antes de T3 impede efeito; falha depois preserva incerteza."
+    },
+    {
+      "id": "B21",
+      "scenario": "Dois jobs compartilham fila física",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Exclusão por destino impede intercalar vias; autorização e conteúdo permanecem separados por loja."
+    },
+    {
+      "id": "B22",
+      "scenario": "REPRINT histórico concorre com INITIAL",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-INITIAL-RACE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesma guarda/constraint fecha slot atomicamente; marca histórica não inventa job anterior; perdedor reavalia exposição ou recebe conflito."
+    },
+    {
+      "id": "B23",
+      "scenario": "INITIAL após REPRINT histórico e após cleanup",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "INITIAL_CLOSED_BY_HISTORICAL_REPRINT sobrevive à retenção; aceite/incerteza da segunda via não abre novo caminho inicial."
+    },
+    {
+      "id": "B24",
+      "scenario": "Emissão substituta seguida de reconciliação antiga como não enviada",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "RETRY_SUPPRESSED_BY_ADDITIONAL_INTENT impede retry da via antiga mesmo após prova posterior; outra emissão exige novo ato."
+    },
+    {
+      "id": "B25",
+      "scenario": "Executor A pausa após T3, posse do destino vence, B de outro job/loja disputa e A retorna",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Gate não libera B sem prova/fila serializadora; nenhum intercalamento, aliases físicos compartilham a exclusão."
+    },
+    {
+      "id": "B26",
+      "scenario": "INITIAL A4 concorre com INITIAL térmico",
+      "originalLayer": "BANCO_ISOLADO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-A4-THERMAL-SLOT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesmo slot documental entre deliveryModes; destino/modo diferente retorna conflito, sem dois jobs iniciais."
+    },
+    {
+      "id": "F01",
+      "scenario": "Windows + Chrome e Windows + Edge",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Executar separadamente cada navegador na versão registrada, com mecanismo real de transporte/pareamento e políticas de acesso local; mock não vale."
+    },
+    {
+      "id": "F02",
+      "scenario": "Perfil térmico 58 mm e 80 mm",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Cada combinação impressora/driver/perfil registra instalação sanitizada, legibilidade, corte, largura, acentos e totais; sem pressupor POS-80/USB005."
+    },
+    {
+      "id": "F03",
+      "scenario": "Frio/quente, reinício, desligamento e falta de papel",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Massa sintética; observar ACEITO_* versus papel, incerteza e retomada sem duplicação cega; medir sem usar 63 testes históricos."
+    },
+    {
+      "id": "F04",
+      "scenario": "Duas vias, falha parcial e resposta perdida real",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Progresso por via corresponde à evidência; não repetir conjunto após incerteza; risco/segunda via visíveis."
+    },
+    {
+      "id": "F05",
+      "scenario": "Fila padrão trocada/removida e binding revogado",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Nenhum documento aparece na fila substituta/padrão; registrar janela de envio já autorizado sem prometer interromper papel."
+    },
+    {
+      "id": "F06",
+      "scenario": "Gaveta desligada e teste sintético",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Verificar fisicamente ausência de pulso em inicial/segunda via/teste e inexistência de dados reais; comando só em GOAL próprio."
+    },
+    {
+      "id": "F07",
+      "scenario": "A4 e fallback em Chrome/Edge",
+      "originalLayer": "HOMOLOGACAO_FISICA",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Homologação física/navegador/transporte real fora do GOAL. Nenhuma simulação foi usada como prova de hardware, papel, gaveta, pareamento ou A4 real.",
+      "acceptanceCriterion": "Diálogo permite escolha explícita; cancelamento, múltiplas cópias e popup não são contabilizados como impressão física pelo Omni."
+    },
+    {
+      "id": "I01",
+      "scenario": "A01/PLATFORM com loja explícita",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Contexto A01 confiável de fixture usa guards reais; integração com endpoint/sessão de autenticação real não foi autorizada.",
+      "acceptanceCriterion": "Autoridade vem da sessão real; documento/terminal/binding da loja validados; ausência de loja recusada."
+    },
+    {
+      "id": "I02",
+      "scenario": "STORE autorizado com módulo/papel efetivos",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Papéis, módulos e vínculos STORE de fixture exercitam os guards reais; requireEnterprise/rotas/sessão real continuam fora do núcleo.",
+      "acceptanceCriterion": "Guards enterprise reais permitem somente escopo e ação autorizados; não depender de mocks de auth para este aceite."
+    },
+    {
+      "id": "I03",
+      "scenario": "Usuário sem permissão, módulo ou de outra loja",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUTHORITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "403/404 sanitizado, nenhum job elegível nem dado do recurso; role/storeId fornecidos no corpo não concedem acesso."
+    },
+    {
+      "id": "I04",
+      "scenario": "Reader canônico PDV/sales e propriedade da venda",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Reader isolado usa SELECT coerente, projeção e mapper existentes. Não foi extraído/conectado o reader da rota canônica nem alterada sua ACL.",
+      "acceptanceCriterion": "Leitura por loja + identidade; extrair reader sem relaxar rota sales existente nem ACL paralela; projeção mínima."
+    },
+    {
+      "id": "I05",
+      "scenario": "Documento inexistente, pendente, cancelado ou em quarentena",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ELIGIBILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Pedido recusado; impressão não cria/recupera/confirma venda nem resolve status comercial."
+    },
+    {
+      "id": "I06",
+      "scenario": "Terminal/impressora incompatíveis e deviceId forjado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Vínculos e terminal ACTIVE são testados no banco. Identidade/prova real de instalação, computador ou impressora requer gate de adaptador.",
+      "acceptanceCriterion": "Recusa por associação/prova; deviceId e lock lógico isolados não autorizam instalação/destino."
+    },
+    {
+      "id": "I07",
+      "scenario": "Pareamento, desafio repetido e segredo compartilhado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Pareamento/challenge/segredos por instalação reais fora do 004B. HMAC de fixture não certifica esse mecanismo.",
+      "acceptanceCriterion": "Somente configurador autorizado e prova de instalação; replay/expiração/challenge cruzado negados; segredo não aparece no browser/logs."
+    },
+    {
+      "id": "I08",
+      "scenario": "Duas lojas no computador e dois terminais na loja",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "O banco usa duas lojas e terminais com destino compartilhado sintético; o cenário de duas lojas no computador com pareamento real está pendente.",
+      "acceptanceCriterion": "Isolamento por binding/loja, concessões restritas e comportamento compartilhado somente quando explicitamente configurado."
+    },
+    {
+      "id": "I09",
+      "scenario": "Substituição/renomeação de computador ou fila",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Provisionamento, substituição e renomeação de fila/computador exigem instalação/prova reais. Nenhuma fila Windows foi consultada.",
+      "acceptanceCriterion": "Novo binding/prova; jobs antigos preservam destino/versionamento; nenhuma seleção da padrão do Windows."
+    },
+    {
+      "id": "I10",
+      "scenario": "Binding revogado antes e depois de início",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Revalidação de binding existe no núcleo, mas o workflow completo de revogação/configuração por instalação não foi integrado/homologado. Delegação sintética tem prova separada.",
+      "acceptanceCriterion": "Antes: cancelamento seguro; depois: consulta/possível incerteza e bloqueio de vias futuras, sem alegar recolher papel."
+    },
+    {
+      "id": "I11",
+      "scenario": "Troca de loja/configuração durante solicitação",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Loja e destino são fixos no ledger; troca de contexto da UI, descarte de resposta e handlers reais não foram conectados.",
+      "acceptanceCriterion": "Resposta original não atua no novo contexto; conteúdo/destino antigos não são alterados ou reenviados."
+    },
+    {
+      "id": "I12",
+      "scenario": "Logout/revogação e ACK atrasado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Revogação de delegação/sessionVersion sintéticas testadas; logout global e ACK de instalação real não foram alterados nem certificados.",
+      "acceptanceCriterion": "Jobs sem tentativa ficam bloqueados; recibo autenticado antigo somente registra evidência, não renova sessão nem inicia via."
+    },
+    {
+      "id": "I13",
+      "scenario": "Input de bytes, HTML, host/porta/URL/path/credenciais",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-INPUT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Shape estrito recusa campos livres e não encaminha /api/print/raw para STORE."
+    },
+    {
+      "id": "I14",
+      "scenario": "Origin/CSRF e consultas/replays sem autorização",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Não há API pública nova. Origin/CSRF/cache/headers e sessão de consulta real requerem gate de integração.",
+      "acceptanceCriterion": "Operações de criação, consulta e configuração protegidas; key conhecida não concede acesso; headers de cache não expõem conteúdo."
+    },
+    {
+      "id": "I15",
+      "scenario": "Adaptador aceita; conexão/resposta HTTP se perde",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUDIT-FAILURE-AFTER-T3",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Via desconhecida ou aceita conforme prova; consulta usa tentativa original; sem retry implícito do SDK/HTTP."
+    },
+    {
+      "id": "I16",
+      "scenario": "Falha comprovada antes de envio",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nova tentativa manual só daquela via, com payload/destino iguais e reautorização; prova ausente mantém desconhecido."
+    },
+    {
+      "id": "I17",
+      "scenario": "Timeout, lease vencido e consulta não encontrado",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-BEFORE-CALL",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SHARED-DESTINATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum deles isoladamente autoriza reenvio; negar retorno a PRONTO sem prova de invalidar envio tardio."
+    },
+    {
+      "id": "I18",
+      "scenario": "Cancelamento solicitado após aceite/spooler",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Cancelamento seguro de vias locais não comprova cancelamento de fila/spooler nem ausência de papel.",
+      "acceptanceCriterion": "Registro distingue pedido de cancelamento e efeito; eventual exclusão da fila não prova ausência de papel."
+    },
+    {
+      "id": "I19",
+      "scenario": "Capacidades ausentes/limitadas do adaptador",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Não existe adaptador real neste GOAL; capacidades, prazos de dedup e consultas de fornecedor precisam de evidência própria.",
+      "acceptanceCriterion": "UNSUPPORTED/UNKNOWN explícitos; sem spooler/availability/query fictícios; dedup respeita prazo/escopo documentado."
+    },
+    {
+      "id": "I20",
+      "scenario": "Fila offline com entrega tardia",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Pausa/egresso tardio simulados não homologam fila offline, autenticação ou entrega real após revogação.",
+      "acceptanceCriterion": "Aceite interno já significa possível efeito; nenhuma nova autorização offline; revogação e risco tardio demonstrados."
+    },
+    {
+      "id": "I21",
+      "scenario": "Segundo job de reimpressão e venda histórica sem anterior",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nova intenção ligada quando há job; histórico usa null/UNKNOWN; ambos autorizam documento/loja e marcam segunda via."
+    },
+    {
+      "id": "I22",
+      "scenario": "Segunda via após resultado incerto",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Ato explícito e reconhecimento do risco de cópia adicional; estado anterior não é apagado nem marcado sucesso."
+    },
+    {
+      "id": "I23",
+      "scenario": "Fallback explícito antes/depois de envio possível",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Substituição lógica e supressão são testadas; UI/handoff/fallback reais não foram habilitados.",
+      "acceptanceCriterion": "Antes cancela disputa térmica; depois nova intenção com risco; não abre HTML e baixa .bin em paralelo."
+    },
+    {
+      "id": "I24",
+      "scenario": "Gaveta em inicial, segunda via e teste",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SYNTHETIC-TEST",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum job documental dispara gaveta; nenhuma resposta genérica de cupom representa essa ação."
+    },
+    {
+      "id": "I25",
+      "scenario": "Integridade comercial em sucesso, erro, retry e crash",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-COMMERCIAL-INTEGRITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Spies/ledger isolado provam zero chamadas/escritas a venda, pagamento, caixa, recebimento e estoque; só domínio de impressão/auditoria muda."
+    },
+    {
+      "id": "I26",
+      "scenario": "Rate limit, payload expirado e grant invalidado",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "Limites, rate limit e retenção são somente fixtures finitas. D03 produtivo, incluindo composição loja/terminal, não está aprovado.",
+      "acceptanceCriterion": "Respostas preservam recibos/slots e não provocam fallback, novo comando ou bypass; consulta continua autorizada."
+    },
+    {
+      "id": "I27",
+      "scenario": "Concessão adulterada, callback falso e replay entre instalações",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "MAC/AAD/correlação de fixture são testados; assinatura, segredo e replay entre instalações reais requerem gate de adaptador.",
+      "acceptanceCriterion": "Assinatura/prova, destino/hash/epoch/TTL e vínculo negam efeito e evidência falsos; sem segredos no erro."
+    },
+    {
+      "id": "I28",
+      "scenario": "Segunda via/fallback omite previousJobId com job incerto conhecido",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Servidor descobre toda exposição por loja/documento; omissão não dispensa reconhecimento do risco."
+    },
+    {
+      "id": "I29",
+      "scenario": "Risco muda entre preparação, T1 e T3; reconhecimento aponta outra via/revisão",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-STALE-RISK-T0-T1",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-RISK-NOT-SELF-INVALIDATING",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "riskRevision e confirmação server-side são revalidadas; mudança relevante exige nova confirmação e impede efeito adicional."
+    },
+    {
+      "id": "I30",
+      "scenario": "Via substituta autorizada e resposta antiga reconciliada depois",
+      "originalLayer": "INTEGRACAO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLACEMENT-LATE-NO-EFFECT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Evidência antiga é preservada, mas supressão de retry não é removida; não resulta em duas entregas por recuperação tardia."
+    },
+    {
+      "id": "I31",
+      "scenario": "A4/fallback com destino lógico e replay de criação",
+      "originalLayer": "INTEGRACAO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "A4 tem somente identidade/slot/replay lógico. Execução é bloqueada com A4_LOGICAL_ONLY antes de T3; navegador legado não foi alterado.",
+      "acceptanceCriterion": "deliveryMode BROWSER_A4 aceita somente contexto lógico, uma via; nenhuma fila física é atestada, popup/reentrega não ocorre no replay."
+    },
+    {
+      "id": "P01",
+      "scenario": "Normalização de comando equivalente",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Defaults selados, ordem de campos e uiContextId não alteram commandHash semântico; payloadHash tem domínio separado."
+    },
+    {
+      "id": "P02",
+      "scenario": "Mesmo key com comando diferente",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-NORMALIZATION",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REPLAY-LOST-RESPONSE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mudar documento, versão, destino, vias ou confirmação gera conflito; key não substitui autorização."
+    },
+    {
+      "id": "P03",
+      "scenario": "Texto com ESC/GS/DLE/NUL, C0/C1 e DEL",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURE-CRYPTO-AND-CANONICAL",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Nenhum byte comercial consegue produzir comando de corte, gaveta, rede ou shell; controles recusados/sanitizados pela política definida."
+    },
+    {
+      "id": "P04",
+      "scenario": "HTML, atributos, logo e rodapé maliciosos",
+      "originalLayer": "PURO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "HTML, atributos, logo e rodapé dos renderers reais ainda precisam de revisão. O renderer novo emite somente JSON de fixture; nenhum HTML é executado.",
+      "acceptanceCriterion": "Escape/allowlist impedem execução, URL livre e conteúdo ativo; campos internos também são tratados como dados."
+    },
+    {
+      "id": "P05",
+      "scenario": "Encoding e largura 58/80 mm",
+      "originalLayer": "PURO",
+      "status": "DEFERRED",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [],
+      "reason": "58/80 mm e encoding térmico exigem renderer/driver/perfil reais. JSON UTF-8 de fixture não homologa largura ou caracteres do equipamento.",
+      "acceptanceCriterion": "Renderer determinístico por perfil; tratamento explícito de caracteres sem representação; total/quantidade não são truncados."
+    },
+    {
+      "id": "P06",
+      "scenario": "Snapshot imutável por via",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Mesmo snapshot/renderer/perfil gera mesmos bytes/hash; marcação ordinal gera hash específico quando muda conteúdo."
+    },
+    {
+      "id": "P07",
+      "scenario": "Agregação de vias aceitas/incertas/falhas",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PARTIAL-COPIES",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Resumo PARCIAL não esconde a via incerta; ações calculadas por via nunca incluem repetir tudo."
+    },
+    {
+      "id": "P08",
+      "scenario": "Matriz de transições inválidas",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-LEASE-FENCING",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CRASH-UNKNOWN",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-DEFERRED-COMMIT-AND-IMMUTABILITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Lease vencido, timeout, cancelamento pós-envio ou ausência de query não produzem FALHA_ANTES_ENVIO ou sucesso físico."
+    },
+    {
+      "id": "P09",
+      "scenario": "Segunda via e teste versus gaveta",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-SYNTHETIC-TEST",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Payload de todo job documental não contém pulso de gaveta; marcações de segunda via/teste preservadas."
+    },
+    {
+      "id": "P10",
+      "scenario": "Documentos PENDING/quarentena e estado comercial",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-ELIGIBILITY",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-REVIEW-REGRESSIONS",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Referência local não vira confirmada; status servidor não elegível é recusado; flags locais antigas não inventam nova elegibilidade."
+    },
+    {
+      "id": "P11",
+      "scenario": "Limites de comando, itens, vias e payload",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-INPUT",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Excedente falha antes do efeito sem truncar valores comerciais; uma via padrão e teto duas."
+    },
+    {
+      "id": "P12",
+      "scenario": "Grant expirado/revogado e replay após cleanup",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Grant sem recibo e sem validade produz REQUEST_EXPIRED; nunca é tratado como nova key livre."
+    },
+    {
+      "id": "P13",
+      "scenario": "Minimização e logs",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-POSITIVE",
+          "status": "PASS"
+        },
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-AUTHORITY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "DTO/logs excluem OS, senha/padrão, CPF desnecessário, token, bytes e erro bruto; contexto técnico permanece correlacionável."
+    },
+    {
+      "id": "P14",
+      "scenario": "Venda histórica sem job anterior",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-HISTORICAL-CLOSURE",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "REPRINT com sourceOriginal UNKNOWN e previousJobId null; nenhum sucesso/job anterior é fabricado."
+    },
+    {
+      "id": "P15",
+      "scenario": "Ações permitidas com payload expirado",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-PURGE-REQUEST-EXPIRY",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "Consultar metadados continua possível quando autorizado; retry/regeneração do mesmo job bloqueados."
+    },
+    {
+      "id": "P16",
+      "scenario": "Equivalência de intenção entre principais autorizados",
+      "originalLayer": "PURO",
+      "status": "PASS",
+      "scope": "LOCAL_SYNTHETIC_004B",
+      "evidence": [
+        {
+          "file": "gate-b-results.json",
+          "run": "core-6909ccad",
+          "test": "CORE-CONCURRENT-INITIAL",
+          "status": "PASS"
+        }
+      ],
+      "reason": "Prova executada em núcleo interno/fixtures/PostgreSQL real. Não aprova transporte, sessão/UI real ou política produtiva.",
+      "acceptanceCriterion": "commandHash por recibo inclui principal, mas projeção de equivalência inicial exclui autor; coalescer não transfere responsabilidade."
+    }
+  ]
+}

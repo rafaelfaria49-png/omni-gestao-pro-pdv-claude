@@ -1,0 +1,12 @@
+{
+  "_leia": "Registro da aplicação manual D02-A. Só muda depois da execução real autorizada pelo proprietário (RUNBOOK_D02.md §9). Enquanto status for NAO_APLICADA, nenhuma pasta omni_print_d02 pode existir em prisma/migrations (teste d02-guard).",
+  "status": "NAO_APLICADA",
+  "banco": null,
+  "endpoint": null,
+  "executor": null,
+  "aprovacao": null,
+  "janela": null,
+  "pontoDeRestauracao": null,
+  "commitAplicado": null,
+  "verifyPrisma": null
+}

@@ -1,0 +1,35 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d03-mutation
+
+ ❯ tools/print-d03/retention.pg.test.ts (17 tests | 1 failed | 16 skipped) 4440ms
+     × R14 legacy cancellation after browser-while-SENDING + late NO_EFFECT + REPRINT cannot use the old browser date 4286ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  18:18:14
+   Duration  5.07s (transform 296ms, setup 0ms, import 401ms, tests 4.44s, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/print-d03/retention.pg.test.ts > D03-A retention (disposable PostgreSQL) > R14 legacy cancellation after browser-while-SENDING + late NO_EFFECT + REPRINT cannot use the old browser date
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tools/print-d03/retention.pg.test.ts:283:41
+    281|     expect((await db.query("SELECT state FROM public.print_copies WHER…
+    282|     expect(await db.query("SELECT id FROM public.print_events WHERE co…
+    283|     expect((await run()).purged.copies).toBe(0)
+       |                                         ^
+    284|     expect((await contents()).find(c => c.job_id === f.job.jobId)?.pay…
+    285|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

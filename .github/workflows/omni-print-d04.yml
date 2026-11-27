@@ -1,0 +1,66 @@
+name: Omni Print D04 — agente Windows
+on:
+  pull_request:
+    paths:
+      - 'tools/omni-print-agent/**'
+      - 'tools/print-d04/**'
+      - 'tools/print-d03/verify.mjs'
+      - 'tools/print-004c-e2e/**'
+      - 'docs/print-004c-e2e/**'
+      - '.github/workflows/omni-print-d04.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-laboratory:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated
+      MIGRATION_AUTHORITY_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - name: Evidências exclusivas do runner
+        run: node tools/print-d04/evidence.mjs --reset
+      - run: npm ci --no-audit --no-fund
+      - name: Recovery, DPAPI, pacote, instalação e tarefa em laboratório descartável
+        shell: powershell
+        run: node tools/print-d04/verify.mjs unit recovery package d04-eslint powershell-parse installer cross-user-dpapi
+      - name: Consolidar resultados reais
+        if: always()
+        run: node tools/print-d04/evidence.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omni-print-d04-windows-evidence
+          path: docs/print-004c-e2e/evidence/d04/
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: omni-print-d04-windows-package-unsigned
+          path: |
+            tools/print-d04/.artifacts/omni-print-agent-0.2.0-d04.zip
+            tools/print-d04/.artifacts/omni-print-agent-0.2.0-d04.zip.sha256
+  linux-portability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:1/isolated
+      DIRECT_URL: postgresql://test:test@127.0.0.1:1/isolated
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: node tools/print-d04/evidence.mjs --reset
+      - run: npm ci --no-audit --no-fund
+      - run: node tools/print-d04/verify.mjs recovery package d04-eslint
+      - if: always()
+        run: node tools/print-d04/evidence.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omni-print-d04-linux-evidence
+          path: docs/print-004c-e2e/evidence/d04/

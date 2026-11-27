@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "headSha": "683b0178ad844d10191e7fb2a0c96d28270297b1",
+  "artifactId": 13378488760,
+  "artifactDigest": "sha256:26cb14bb842a83232a914206aa4bcf1fab191e40c53278a210f57a8eef99aaf7",
+  "packageSha256": "f48b30977a4cff2384e0ccfb8bf45bcc741d7da36c6edb3790cb55561255832a",
+  "contentId": "1cfecac07faec9fea0d3e5e5c582ebb509564c9a502fc4be28b9884dcc7db540",
+  "signed": false,
+  "reproducedLocally": true,
+  "nodePrerequisite": "24.x >=24.12.0"
+}

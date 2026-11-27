@@ -1,0 +1,13 @@
+
+ RUN  v4.1.4 C:/Projetos/omni-gestao/.worktrees/omni-print-d04
+
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  21:57:12
+   Duration  2.00s (transform 489ms, setup 0ms, import 730ms, tests 1.09s, environment 0ms)
+
+NOTICE:  database "pdv_offline_sync_disposable" does not exist, skipping
+psql:C:/Users/rafae/.codex/visualizations/2026/11/05/01a1a912-6599-73b0-8937-2303aaba5925/d04-pg-lab/baseline-main.sql:2: NOTICE:  schema "public" already exists, skipping
+
+exit=0
