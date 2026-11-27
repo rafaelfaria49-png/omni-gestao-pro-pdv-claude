@@ -31,17 +31,18 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: meli_qa
-          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_USER: meli_qa_bootstrap
+          POSTGRES_PASSWORD: isolated_bootstrap_ci_only
           POSTGRES_DB: omni_meli_e2e
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U meli_qa -d omni_meli_e2e"
+          --health-cmd "pg_isready -U meli_qa_bootstrap -d omni_meli_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      MELI_E2E_DATABASE_URL: postgresql://meli_qa:isolated_ci_only@127.0.0.1:5432/omni_meli_e2e
-      DATABASE_URL: postgresql://meli_qa:isolated_ci_only@127.0.0.1:5432/omni_meli_e2e
-      DIRECT_URL: postgresql://meli_qa:isolated_ci_only@127.0.0.1:5432/omni_meli_e2e
+      MELI_E2E_BOOTSTRAP_DATABASE_URL: postgresql://meli_qa_bootstrap:isolated_bootstrap_ci_only@127.0.0.1:5432/omni_meli_e2e
+      MELI_E2E_DATABASE_URL: postgresql://meli_qa:isolated_runtime_ci_only@127.0.0.1:5432/omni_meli_e2e
+      DATABASE_URL: postgresql://meli_qa:isolated_runtime_ci_only@127.0.0.1:5432/omni_meli_e2e
+      DIRECT_URL: postgresql://meli_qa:isolated_runtime_ci_only@127.0.0.1:5432/omni_meli_e2e
       AUTH_SECRET: isolated-marketplace-build-fixture
       AUTH_TRUST_HOST: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -60,6 +61,7 @@ jobs:
         run: npm run typecheck -- --incremental false
       - run: npx eslint app/api/marketplace app/dashboard/marketplace components/marketplace lib/marketplace scripts/marketplace e2e/marketplace-meli e2e/marketplace-meli.playwright.config.ts
       - run: npm test -- lib/marketplace
+      - run: node --test scripts/marketplace/qa-ingress.test.mjs
       - run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=6144
@@ -71,6 +73,7 @@ jobs:
           name: marketplace-meli-qa
           path: |
             test-results/marketplace-meli/provider-events.log
+            test-results/marketplace-meli/ingress-events.jsonl
             test-results/marketplace-meli/playwright/**/*.png
           if-no-files-found: ignore
           retention-days: 7

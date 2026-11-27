@@ -1,27 +1,31 @@
 #!/usr/bin/env node
 /**
  * Next.js compilado + NextAuth real + PostgreSQL descartável. Somente o provedor externo usa fixture.
- * Uso: MELI_E2E_DATABASE_URL=postgresql://meli_qa:...@127.0.0.1:5432/omni_meli_e2e node scripts/marketplace/run-meli-e2e.mjs
+ * Use MELI_E2E_BOOTSTRAP_DATABASE_URL e MELI_E2E_DATABASE_URL no mesmo banco local descartável.
  */
 import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 import { spawn, spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { once } from "node:events"
-import { createWriteStream } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
-import { request as httpRequest } from "node:http"
-import { createServer } from "node:https"
 import path from "node:path"
-import { setTimeout as delay } from "node:timers/promises"
 import bcrypt from "bcryptjs"
 import forge from "node-forge"
 import { Prisma, PrismaClient } from "../../generated/prisma/index.js"
+import { createMarketplaceQaIngress, waitForQaNext } from "./qa-ingress.mjs"
+import { attestMarketplaceQaDatasource, marketplaceQaGrants, marketplaceStoreLockColumn } from "./qa-datasource.mjs"
 
 const database = process.env.MELI_E2E_DATABASE_URL ?? ""
+const bootstrap = process.env.MELI_E2E_BOOTSTRAP_DATABASE_URL ?? ""
 localFixtureDatasource(database)
+localFixtureDatasource(bootstrap)
 const url = new URL(database)
+const adminUrl = new URL(bootstrap)
 if (url.protocol !== "postgresql:" || url.hostname !== "127.0.0.1" || url.username !== "meli_qa" ||
-  !/^\/omni_meli_e2e(?:_[a-z0-9]{1,20})?$/.test(url.pathname) || url.search || url.hash) {
+  !/^\/omni_meli_e2e(?:_[a-z0-9]{1,20})?$/.test(url.pathname) || url.search || url.hash ||
+  !/^[A-Za-z0-9_-]{12,96}$/.test(url.password) ||
+  adminUrl.protocol !== url.protocol || adminUrl.host !== url.host || adminUrl.pathname !== url.pathname ||
+  adminUrl.username !== "meli_qa_bootstrap" || adminUrl.search || adminUrl.hash || adminUrl.password === url.password) {
   throw new Error("Use um banco PostgreSQL descartável no loopback para o E2E Mercado Livre.")
 }
 const httpsPort = Number(process.env.MELI_E2E_HTTPS_PORT ?? 3119)
@@ -29,6 +33,7 @@ const appPort = Number(process.env.MELI_E2E_APP_PORT ?? 3120)
 const origin = `https://127.0.0.1:${httpsPort}`
 const evidence = path.resolve("test-results/marketplace-meli")
 const events = path.join(evidence, "provider-events.log")
+const ingressEvents = []
 const password = randomBytes(24).toString("base64url")
 const secret = () => randomBytes(32).toString("base64url")
 const authSecret = secret()
@@ -38,6 +43,7 @@ const localEnv = {
   ...process.env, DATABASE_URL: database, DIRECT_URL: database, CHECKPOINT_DISABLE: "1",
   VERCEL: "0", VERCEL_ENV: "development", MIGRATION_AUTHORITY_ENABLED: "false",
 }
+delete localEnv.MELI_E2E_BOOTSTRAP_DATABASE_URL
 
 function run(args, env = localEnv, input) {
   const result = spawnSync(process.execPath, args, {
@@ -49,15 +55,22 @@ function run(args, env = localEnv, input) {
 
 await mkdir(evidence, { recursive: true })
 await writeFile(events, "")
-const db = new PrismaClient({ datasourceUrl: database })
+const db = new PrismaClient({ datasourceUrl: bootstrap })
 try {
   const [existing] = await db.$queryRaw`SELECT count(*)::int AS total FROM pg_tables WHERE schemaname = 'public'`
   if (existing.total !== 0) throw new Error("O banco descartável de QA deve estar vazio.")
   // DDL derivado do schema versionado. Não roda migrate deploy, db push nem histórico de migrations.
+  const bootstrapEnv = { ...localEnv, DATABASE_URL: bootstrap, DIRECT_URL: bootstrap }
   const ddl = spawnSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "diff",
-    "--from-empty", "--to-schema-datamodel", "prisma/schema.prisma", "--script"], { env: localEnv, encoding: "utf8" })
+    "--from-empty", "--to-schema-datamodel", "prisma/schema.prisma", "--script"], { env: bootstrapEnv, encoding: "utf8" })
   if (ddl.error || ddl.status !== 0 || !ddl.stdout.includes("CREATE TABLE")) throw new Error("Não foi possível preparar o schema descartável.")
-  run(["node_modules/prisma/build/index.js", "db", "execute", "--stdin", "--schema", "prisma/schema.prisma"], localEnv, ddl.stdout)
+  run(["node_modules/prisma/build/index.js", "db", "execute", "--stdin", "--schema", "prisma/schema.prisma"], bootstrapEnv, ddl.stdout)
+  await db.$executeRawUnsafe(`CREATE ROLE meli_qa LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB NOREPLICATION NOBYPASSRLS PASSWORD '${url.password}'`)
+  await db.$executeRawUnsafe("GRANT USAGE ON SCHEMA public TO meli_qa")
+  for (const [table, grants] of marketplaceQaGrants) {
+    await db.$executeRawUnsafe(`GRANT ${grants.join(", ")} ON TABLE public.${table} TO meli_qa`)
+  }
+  await db.$executeRawUnsafe(`GRANT UPDATE ("${marketplaceStoreLockColumn}") ON TABLE public.stores TO meli_qa`)
 
   const stores = [
     { id: "meli-qa-a", cnpj: "00.000.000/0001-91" },
@@ -100,68 +113,70 @@ cert.setSubject(commonName)
 cert.setIssuer(commonName)
 cert.setExtensions([{ name: "subjectAltName", altNames: [{ type: 7, ip: "127.0.0.1" }] }])
 cert.sign(keys.privateKey, forge.md.sha256.create())
-const proxy = createServer({ key: forge.pki.privateKeyToPem(keys.privateKey), cert: forge.pki.certificateToPem(cert) }, (req, res) => {
-  const upstream = httpRequest({
-    hostname: "127.0.0.1", port: appPort, path: req.url, method: req.method,
-    headers: { ...req.headers, "x-forwarded-proto": "https", "x-forwarded-host": new URL(origin).host },
-  }, (response) => {
-    res.writeHead(response.statusCode ?? 502, response.headers)
-    response.pipe(res)
-  })
-  upstream.on("error", () => {
-    res.writeHead(502)
-    res.end()
-  })
-  req.pipe(upstream)
+const runtimeEnv = {
+  ...localEnv, NODE_ENV: "production", AUTH_URL: origin, NEXTAUTH_URL: origin, AUTH_TRUST_HOST: "true",
+  AUTH_SECRET: authSecret, AUTH_SESSION_REVOCATION: "on", NEXT_TELEMETRY_DISABLED: "1",
+  OTEL_SDK_DISABLED: "true", OTEL_TRACES_EXPORTER: "none", VERCEL_ENV: "preview", MELI_OAUTH_ENABLED: "1",
+  MELI_OAUTH_STORE_ALLOWLIST: "meli-qa-a,meli-qa-b,meli-qa-no-module,meli-qa-new",
+  MELI_OAUTH_CLIENT_ID: "99990001", MELI_OAUTH_CLIENT_SECRET: clientSecret, MELI_OAUTH_ENCRYPTION_KEY: encryptionKey,
+  MELI_OAUTH_REDIRECT_URI: origin + "/api/marketplace/mercado-livre/callback", MELI_E2E_PROVIDER_EVENTS: events,
+}
+for (const variable of ["NEXTAUTH_SECRET", "AUTH_SECRET_1", "AUTH_SECRET_2", "AUTH_SECRET_3", "NODE_DEBUG", "NODE_OPTIONS"]) {
+  delete runtimeEnv[variable]
+}
+await attestMarketplaceQaDatasource(runtimeEnv)
+const proxy = createMarketplaceQaIngress({
+  origin, upstreamPort: appPort,
+  tls: { key: forge.pki.privateKeyToPem(keys.privateKey), cert: forge.pki.certificateToPem(cert) },
+  record: (event) => ingressEvents.push(event),
 })
-await new Promise((resolve, reject) => {
-  proxy.once("error", reject)
-  proxy.listen(httpsPort, "127.0.0.1", resolve)
-})
-const serverLog = path.join(evidence, "next.log")
-const serverOutput = createWriteStream(serverLog)
 const app = spawn(process.execPath, [
   "--import", "./scripts/marketplace/meli-provider-fixture.mjs",
   "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", String(appPort),
 ], {
-  env: {
-    ...localEnv, NODE_ENV: "production", AUTH_URL: origin, NEXTAUTH_URL: origin, AUTH_TRUST_HOST: "true", AUTH_SECRET: authSecret,
-    NEXT_TELEMETRY_DISABLED: "1", VERCEL_ENV: "preview", MELI_OAUTH_ENABLED: "1",
-    MELI_OAUTH_STORE_ALLOWLIST: "meli-qa-a,meli-qa-b,meli-qa-no-module,meli-qa-new",
-    MELI_OAUTH_CLIENT_ID: "99990001", MELI_OAUTH_CLIENT_SECRET: clientSecret, MELI_OAUTH_ENCRYPTION_KEY: encryptionKey,
-    MELI_OAUTH_REDIRECT_URI: origin + "/api/marketplace/mercado-livre/callback", MELI_E2E_PROVIDER_EVENTS: events,
-  },
+  env: runtimeEnv,
   stdio: ["ignore", "pipe", "pipe"],
 })
-app.stdout.pipe(serverOutput, { end: false })
-app.stderr.pipe(serverOutput, { end: false })
-try {
-  const deadline = Date.now() + 120_000
-  for (;;) {
-    try {
-      if ((await fetch(`http://127.0.0.1:${appPort}/login`)).ok) break
-    } catch { /* Aguardando o app compilado. */ }
-    if (app.exitCode !== null || Date.now() > deadline) throw new Error("Next.js de QA indisponível. Consulte o log local de testes.")
-    await delay(1_000)
+// O conteúdo obtido do runtime é verificado em memória e nunca gravado como log bruto.
+let appOutput = ""
+let outputLimitExceeded = false
+function capture(chunk) {
+  if (appOutput.length + chunk.length > 1_000_000) {
+    outputLimitExceeded = true
+    return
   }
+  appOutput += chunk
+}
+app.stdout.setEncoding("utf8").on("data", capture)
+app.stderr.setEncoding("utf8").on("data", capture)
+try {
+  await waitForQaNext(app)
+  proxy.listen(httpsPort, "127.0.0.1")
+  await once(proxy, "listening")
   // O proxy HTTPS roda neste processo e precisa manter o event loop livre durante o Playwright.
   const browser = spawn(process.execPath, [
     "node_modules/@playwright/test/cli.js", "test", "--config", "e2e/marketplace-meli.playwright.config.ts", ...process.argv.slice(2),
   ], {
-    env: { ...localEnv, MELI_E2E_BASE_URL: origin, MELI_E2E_PASSWORD: password, MELI_E2E_PROVIDER_EVENTS: events },
+    env: {
+      ...localEnv, MELI_E2E_BASE_URL: origin, MELI_E2E_PASSWORD: password, MELI_E2E_PROVIDER_EVENTS: events,
+      MELI_E2E_BOOTSTRAP_DATABASE_URL: bootstrap, MELI_E2E_AUTH_SECRET: authSecret,
+    },
     stdio: "inherit",
   })
   const [status] = await once(browser, "exit")
   if (status !== 0) throw new Error("O Playwright reprovou o E2E do Marketplace.")
-  await new Promise((resolve) => { serverOutput.write("", resolve) })
-  const log = await readFile(serverLog, "utf8")
-  if ([password, authSecret, clientSecret, encryptionKey].some((value) => log.includes(value)) ||
-      /qa-(access|refresh|ingress)-|__Host-omni-meli-oauth=[\w.-]+|\/mercado-livre\/callback[^\s]*[?&](code|state)=/i.test(log)) {
-    throw new Error("O log do app registrou dados sensíveis do fixture OAuth.")
+  if (outputLimitExceeded || [password, authSecret, clientSecret, encryptionKey].some((value) => appOutput.includes(value)) ||
+      /qa-(access|refresh|ingress)-|(?:__Host-omni-meli-oauth|authjs\.session-token)=[\w.-]+|\/mercado-livre\/callback[^\s]*[?&](code|state)=/i.test(appOutput)) {
+    throw new Error("A saída em memória do app falhou na revisão de dados sintéticos.")
   }
-  console.log("QA OAuth: app logs sem credenciais ou query do callback sintético.")
+  if (!ingressEvents.some(({ route, status }) => route.endsWith("/callback") && status === 303) ||
+      /qa-(access|refresh|ingress)-|[?&](code|state)=/i.test(JSON.stringify(ingressEvents)) ||
+      (await readFile(events, "utf8")).split("\n").some((line) => !["", "exchange", "refresh", "identity", "search", "multiget"].includes(line))) {
+    throw new Error("A evidência de ingresso ou provedor de QA falhou na validação.")
+  }
+  await writeFile(path.join(evidence, "ingress-events.jsonl"), ingressEvents.map((event) => JSON.stringify(event)).join("\n") + "\n")
+  console.log("QA OAuth: par de banco atestado, registros do ingresso e saída do app verificados.")
 } finally {
   app.kill()
   proxy.close()
-  serverOutput.end()
 }

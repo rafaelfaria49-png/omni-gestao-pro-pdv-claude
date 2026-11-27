@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto"
+import { randomBytes, randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { setTimeout as delay } from "node:timers/promises"
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test"
+import { decode, encode } from "next-auth/jwt"
 import { Prisma, PrismaClient } from "../../generated/prisma"
 import { ASSISTEC_LOJA_HEADER } from "../../lib/assistec-headers"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "../../lib/store-defaults"
@@ -16,7 +17,7 @@ const storeA = "meli-qa-a"
 const storeB = "meli-qa-b"
 const storeNew = "meli-qa-new"
 const headers = (storeId: string) => ({ [ASSISTEC_LOJA_HEADER]: storeId, Origin: origin })
-const db = new PrismaClient({ datasourceUrl: localFixtureDatasource(process.env.MELI_E2E_DATABASE_URL) })
+const db = new PrismaClient({ datasourceUrl: localFixtureDatasource(process.env.MELI_E2E_BOOTSTRAP_DATABASE_URL) })
 
 test.describe.configure({ mode: "serial" })
 test.afterAll(async () => db.$disconnect())
@@ -100,6 +101,54 @@ async function setPendingExpiry(storeId: string, expiresAt: number) {
     ...metadata, pending: { ...(metadata.pending as Prisma.JsonObject), expiresAt },
   } } })
 }
+
+test("sessão HTTPS rejeita segredos de outros ambientes e replay do cookie após logout", async ({ page, browser }) => {
+  await login(page, "manager-a", storeA)
+  const sessionCookies = (await page.context().cookies(origin))
+    .filter(({ name }) => /(?:^|-)authjs\.session-token(?:\.\d+)?$/.test(name))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+  expect(sessionCookies.length).toBeGreaterThan(0)
+  for (const cookie of sessionCookies) {
+    expect(cookie).toMatchObject({ secure: true, httpOnly: true, path: "/", domain: "127.0.0.1", sameSite: "Lax" })
+  }
+  const salt = sessionCookies[0].name.replace(/\.\d+$/, "")
+  const token = await decode({
+    secret: process.env.MELI_E2E_AUTH_SECRET!,
+    token: sessionCookies.map(({ value }) => value).join(""),
+    salt,
+  })
+  if (!token || typeof token.sid !== "string") throw new Error("Sessão sintética sem registro revogável.")
+  expect((await db.adminSession.findUniqueOrThrow({ where: { id: token.sid } })).revokedAt).toBeNull()
+
+  const isolated = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true })
+  try {
+    // Mesmas claims válidas, com chaves distintas, representam Production e outro QA.
+    // Nenhum cookie nem chave de outro ambiente real é coletado.
+    for (const scope of ["Production simulada", "outro QA simulado"]) {
+      await test.step(scope, async () => {
+        const foreign = await encode({ token, salt, secret: randomBytes(32).toString("base64url") })
+        const response = await isolated.request.get("/api/auth/session", { headers: { Cookie: salt + "=" + foreign } })
+        expect(await response.json()).toBeNull()
+      })
+    }
+
+    const { csrfToken } = await (await page.request.get("/api/auth/csrf")).json()
+    const copied = sessionCookies.map(({ name, value }) => `${name}=${value}`).join("; ")
+    const signedOut = await page.request.post("/api/auth/signout", {
+      form: { csrfToken, callbackUrl: origin + "/login" }, headers: { "X-Auth-Return-Redirect": "1" },
+    })
+    expect(signedOut.ok()).toBe(true)
+    expect(await (await page.request.get("/api/auth/session")).json()).toBeNull()
+    const revoked = await db.adminSession.findUniqueOrThrow({ where: { id: token.sid } })
+    expect(revoked.revokedAt).toBeInstanceOf(Date)
+    expect(revoked.revokedReason).toBe("logout")
+    const replay = await isolated.request.get("/api/auth/session", { headers: { Cookie: copied } })
+    expect(await replay.json()).toBeNull()
+    expect((await readAds(page.request, storeA)).status()).toBe(401)
+  } finally {
+    await isolated.close()
+  }
+})
 
 test("autoriza pelo HUB, identifica vendedor e pagina clássico e User Products em desktop e mobile", async ({ page }, info) => {
   await login(page, "manager-a", storeA)
@@ -246,6 +295,8 @@ test("recusa vendedor conhecido antes do consentimento e limita intenções conc
     const denial = new URL(authorization.searchParams.get("redirect_uri")!)
     denial.searchParams.set("state", authorization.searchParams.get("state")!)
     denial.searchParams.set("error", "access_denied")
+    denial.searchParams.set("error_description", "qa-ingress-error-description")
+    denial.searchParams.set("query", "qa-ingress-query")
     await finish(winner.request, denial.href, "denied")
     expect(await providerEvents("exchange")).toBe(exchanges)
     const retry = await begin(loser.request, loser.store, "745002")
