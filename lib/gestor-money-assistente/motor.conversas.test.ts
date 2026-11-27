@@ -104,9 +104,31 @@ describe("conversas de registro — fluxo completo", () => {
     expect(c.execucao.chamadas).toHaveLength(0)
   })
 
-  it.each(["Transferi 500 do Nubank para o Itaú", "Recebi 300 que o João me devia"])("%s também não grava", async texto => {
+  it("“Recebi 300 que o João me devia” também não grava (recebimento sem contrato G004)", async () => {
     const c = montarCenario()
-    expect((await c.chat().texto(texto)).codigo).toBe("sem_contrato_financeiro")
+    expect((await c.chat().texto("Recebi 300 que o João me devia")).codigo).toBe("sem_contrato_financeiro")
+    expect(c.execucao.chamadas).toHaveLength(0)
+  })
+
+  it("transferência interna PESSOAL: resumo, confirmação e proposta TRANSFERENCIA_INTERNA (#405)", async () => {
+    const c = montarCenario()
+    const chat = c.chat()
+    const r1 = await chat.texto("Transferi 500 do Nubank para a Carteira")
+    expect(r1.codigo).toBe("aguardando_confirmacao")
+    expect(r1.mensagens.join("\n")).toContain("De: Nubank → Para: Carteira")
+    const r2 = await chat.texto("sim")
+    expect(r2.codigo).toBe("registrado")
+    expect(c.execucao.chamadas.at(-1)?.proposta).toMatchObject({ tipo: "TRANSFERENCIA_INTERNA", valorCentavos: "50000",
+      carteiraOrigemId: "ct_nubank_a", carteiraDestinoId: "ct_carteira_a" })
+  })
+
+  it("transferência com destino fora do perfil pergunta a conta de destino; só destino vira pergunta da origem", async () => {
+    const c = montarCenario()
+    const r = await c.chat().texto("Transferi 500 do Nubank para o Itaú")
+    expect(r.mensagens.join("\n")).toContain("Não encontrei uma única conta “Itaú”")
+    expect(r.rascunho?.pendencias).toEqual(["contaDestino"])
+    const r2 = await c.chat(undefined, "conversa-2").texto("passei 300 para a carteira")
+    expect(r2.rascunho?.pendencias).toEqual(["conta"])
     expect(c.execucao.chamadas).toHaveLength(0)
   })
 

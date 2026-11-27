@@ -4,7 +4,7 @@ import "server-only"
  * do Gestor Money (#405), sem segundo motor financeiro e sem schema novo.
  *
  * - Autorização: G001 `requireFinanceiroPerfilAccess` (sessão web + banco a cada chamada).
- *   Principal de binding (G007) ainda não existe → recusado (fail-closed).
+ *   Principal de vínculo WhatsApp (G007) usa `whatsapp/gateway.ts` (emissor G001 por principal); aqui é recusado.
  * - Leituras de cadastro: G003 `comLeituraFinanceira` (transação READ ONLY + RLS do dono).
  * - Consultas: G005 `consultarFinanceiro` (motor canônico, base CAIXA_REALIZADO).
  * - Escrita: G004 `prepararRevisaoGasto` → `aplicarOperacaoGasto` (idempotente por chave).
@@ -14,6 +14,7 @@ import "server-only"
  * gate próprio — nada disso é alterado aqui.
  */
 import { prisma } from "@/lib/prisma"
+import { resolveStoreModules } from "@/lib/auth/access-policy"
 import { requireFinanceiroPerfilAccess } from "@/lib/gastos/access"
 import { aplicarOperacaoGasto } from "@/lib/gastos/apply"
 import { prepararRevisaoGasto } from "@/lib/gastos/operacoes"
@@ -40,12 +41,12 @@ function escopoCarteira(ctx: FinanceiroContextoAutorizado) {
 }
 const storeDe = (ctx: FinanceiroContextoAutorizado) => (ctx.tipo === "EMPRESA" ? ctx.storeId : null)
 
-export const autorizacaoSessaoWeb: PortaAutorizacao = {
-  async listarPerfis(principal: Principal): Promise<PerfilAutorizado[]> {
-    if (principal.origem !== "SESSAO_WEB") return []
+/** Perfis candidatos do usuário (sugestão de escolha; cada uso passa pela autorização G001). */
+export async function listarPerfisDoUsuario(userId: string): Promise<PerfilAutorizado[]> {
+    const principal = { userId }
     const empresas = await prisma.financeiroPerfil.findMany({
       where: { tipo: "EMPRESA", ativo: true, membros: { some: { adminUserId: principal.userId, revogadoEm: null } } },
-      select: { id: true, storeId: true, store: { select: { name: true } } },
+      select: { id: true, storeId: true, store: { select: { name: true, moduleAccess: true } } },
     })
     const pessoal = await prisma.$transaction(async tx => {
       await declararDonoPessoalRls(tx, principal.userId)
@@ -54,9 +55,16 @@ export const autorizacaoSessaoWeb: PortaAutorizacao = {
     // Lista é só sugestão de escolha: cada uso passa por requireFinanceiroPerfilAccess.
     return [
       ...(pessoal ? [{ ref: { tipo: "PESSOAL" as const, perfilId: pessoal.id }, rotulo: "Pessoal" }] : []),
-      ...empresas.filter(e => e.storeId).map(e => ({ ref: { tipo: "EMPRESA" as const, perfilId: e.id, storeId: e.storeId! },
+      // Loja sem o módulo finance contratado não é oferecida (a autorização G001 recusaria de todo modo).
+      ...empresas.filter(e => e.storeId && e.store && resolveStoreModules(e.store.moduleAccess).includes("finance")).map(e => ({ ref: { tipo: "EMPRESA" as const, perfilId: e.id, storeId: e.storeId! },
         rotulo: e.store?.name ?? "Empresa", apelidos: [] })),
     ]
+}
+
+export const autorizacaoSessaoWeb: PortaAutorizacao = {
+  async listarPerfis(principal: Principal): Promise<PerfilAutorizado[]> {
+    if (principal.origem !== "SESSAO_WEB") return []
+    return listarPerfisDoUsuario(principal.userId)
   },
   async contexto(principal, ref, acao) {
     if (principal.origem !== "SESSAO_WEB") return { ok: false }

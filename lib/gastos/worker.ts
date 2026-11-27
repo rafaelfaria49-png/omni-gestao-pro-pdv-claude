@@ -104,7 +104,15 @@ export async function healthWorker(db: MensageriaClient, config: Pick<ConfigWork
   return { ok: r.ativo, versao: "g006-1", modo: config.modo, metricas: await metricasWorker(db) }
 }
 
-export async function processarClaim(db: MensageriaClient, claim: Claim, config: ConfigWorker, envio?: DependenciasEnvio, signal?: AbortSignal) {
+/**
+ * Gancho G008 (assistente conversacional): processa o STAGING de gestão em vez de só estacioná-lo.
+ * Recebe a MESMA claim (lease renovada pelo pulso abaixo) e deve concluí-la ou falhá-la via queue.ts.
+ * Ausente = comportamento G006 original (concluirStaging → AGUARDANDO_VINCULO).
+ */
+export type ProcessadorStaging = (db: MensageriaClient, claim: Claim, signal: AbortSignal) => Promise<void>
+
+export async function processarClaim(db: MensageriaClient, claim: Claim, config: ConfigWorker, envio?: DependenciasEnvio, signal?: AbortSignal,
+  staging?: ProcessadorStaging) {
   const pararPulso = new AbortController(), trabalho = new AbortController()
   const abortar = () => trabalho.abort()
   signal?.addEventListener("abort", abortar, { once: true })
@@ -117,7 +125,7 @@ export async function processarClaim(db: MensageriaClient, claim: Claim, config:
     }
   })()
   try {
-    if (claim.tipo === "STAGING") await concluirStaging(db, claim)
+    if (claim.tipo === "STAGING") await (staging ? staging(db, claim, trabalho.signal) : concluirStaging(db, claim))
     else if (claim.tipo === "ENVIAR_RESULTADO" && config.modo === "SIMULADO" && envio?.transporte?.modo === "SIMULADO") {
       await executarEnvio(db, claim, { ...envio, timeoutMs: config.envioTimeoutMs }, trabalho.signal)
     } else await falharJob(db, claim, { acao: "DLQ", codigo: "POISON_JOB", esperaMs: 0 })
@@ -135,6 +143,8 @@ export type EventoWorker = { evento: "INICIO" | "PULSO" | "FALHA" | "PARADA"; co
 
 export async function rodarWorker(db: MensageriaClient, config: ConfigWorker, options: {
   signal: AbortSignal; once?: boolean; envio?: DependenciasEnvio; observar?: (evento: EventoWorker) => void;
+  /** G008: processador de STAGING e tarefas por ciclo (respostas conversacionais, reconciliação). */
+  staging?: ProcessadorStaging; aposCiclo?: (signal: AbortSignal) => Promise<void>;
 }) {
   await validarPapelWorker(db)
   if (config.modo === "SIMULADO" && !options.envio?.transporte) throw new MensageriaError("CONFIG_INVALIDA")
@@ -159,8 +169,9 @@ export async function rodarWorker(db: MensageriaClient, config: ConfigWorker, op
         const resultados = await Promise.allSettled(Array.from({ length: config.concorrencia }, async () => {
           if (options.signal.aborted) return
           const claim = await claimJob(db, owner, config.leaseMs, config.modo === "SIMULADO")
-          if (claim) await processarClaim(db, claim, config, options.envio, options.signal)
+          if (claim) await processarClaim(db, claim, config, options.envio, options.signal, options.staging)
         }))
+        if (options.aposCiclo && !options.signal.aborted) await options.aposCiclo(options.signal)
         const falhou = resultados.find(r => r.status === "rejected")
         if (falhou?.status === "rejected") throw falhou.reason
         observar({ evento: "PULSO", versao: "g006-1", metricas: await metricasWorker(db) })

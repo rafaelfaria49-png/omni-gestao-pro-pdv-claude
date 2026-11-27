@@ -193,8 +193,14 @@ export function extrairCampos(original: string, hoje: string, opcoes: { sentidoD
   const f = forma(texto)
   if (f) e.formaPagamento = f
   const b = bancos(texto)
-  if (b[0]) e.conta = b[0]
-  if (b[1]) e.contaDestino = b[1]
+  // "passei 300 para a poupança": numa transferência, a única conta citada depois de "para" é o DESTINO.
+  const soDestino = b.length === 1 && /\b(transferi|passei|movi|mandei|joguei)\b/.test(texto)
+    && new RegExp(`\\b(?:para|pra|pro)\\s+(?:a |o )?(?:minha |meu )?${normalizarTexto(b[0])}`).test(texto)
+  if (soDestino) e.contaDestino = b[0]
+  else {
+    if (b[0]) e.conta = b[0]
+    if (b[1]) e.contaDestino = b[1]
+  }
   const cat = categoriaPorTexto(texto)
   if (cat) { e.categoria = cat.categoria; e.descricao = cat.categoria }
   if (/\b(daquela|dessa|desta|aquela|da) (divida|conta|boleto|parcela)\b|\bque (eu )?devia\b|\bdo que devo\b/.test(texto)) e.referenciaTitulo = true

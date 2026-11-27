@@ -62,6 +62,17 @@ export const GRUPOS = [
       // Contrato de privilégios do RUNBOOK G006 (§ Papel SQL e confiança), só neste cluster descartável.
       psqlAdmin(g, g.banco, readFileSync("scripts/ci/gestor-money/g006-qa-grants.sql", "utf8"))
     } },
+  // G007/G008 (assistente conversacional): webhook assinado → fila G006 → worker oficial com gancho → G001/G004/G005
+  // reais, sem sessão de navegador. Mesmos papéis G006 (worker sem acesso às tabelas gm_assist_*, provado no teste).
+  { nome: "g007", extraEnv: LIGADO, porta: 55530, pgdata: "G007-execution/pgdata", banco: "gm_g007_test", dono: "gm_g007_owner",
+    envs: ["GASTOS_G007_TEST_DATABASE_URL", "DATABASE_URL"], arquivos: ["test/gastos/assistente-whatsapp.postgres.test.ts"],
+    preparo: (g) => {
+      for (const papel of ["omni_gastos_ingress", "omni_gastos_worker", "omni_gastos_operator"]) {
+        psqlAdmin(g, "postgres", `CREATE ROLE ${papel} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`)
+        psqlAdmin(g, "postgres", `ALTER ROLE ${papel} SET timezone='UTC'`)
+      }
+      psqlAdmin(g, g.banco, readFileSync("scripts/ci/gestor-money/g006-qa-grants.sql", "utf8"))
+    } },
   // Runtime NÃO dono, NOBYPASSRLS, só DML: o `@/lib/prisma` real (com o guard #404) conecta como gm_runtime.
   { nome: "rls", porta: 55520, pgdata: "RLS-execution/pgdata", banco: "gm_rls_app", dono: "gm_owner",
     envs: ["GASTOS_RLS_OWNER_URL"], urlApp: "postgresql://gm_runtime@127.0.0.1:55520/gm_rls_app",

@@ -26,7 +26,7 @@ import {
 
 const TTL_PADRAO_MS = 15 * 60_000
 const JANELA_DUPLICIDADE_MS = 10 * 60_000
-const ORDEM_PERGUNTAS: Campo[] = ["perfil", "valor", "titulo", "formaPagamento", "conta", "cartao", "parcelas", "vencimento"]
+const ORDEM_PERGUNTAS: Campo[] = ["perfil", "valor", "titulo", "formaPagamento", "conta", "contaDestino", "cartao", "parcelas", "vencimento"]
 
 type Turno = {
   principal: Principal
@@ -254,7 +254,7 @@ function perfisOrdenados(perfis: PerfilAutorizado[]) {
 
 /** Limpa tudo que pertence ao perfil anterior — nada é copiado entre perfis. */
 function limparResolvidos(d: DadosRascunho) {
-  delete d.carteiraId; delete d.carteiraNome; delete d.categoriaId; delete d.cartaoId; delete d.cartaoNome
+  delete d.carteiraId; delete d.carteiraNome; delete d.carteiraDestinoId; delete d.carteiraDestinoNome; delete d.categoriaId; delete d.cartaoId; delete d.cartaoNome
   delete d.cicloIds; delete d.tituloId; delete d.tituloDescricao; delete d.tituloRestanteCentavos; delete d.opcoes
 }
 
@@ -297,6 +297,24 @@ async function resolverDados(t: Turno, r: Rascunho) {
         t.mensagens.push(`Não encontrei a conta “${d.conta}” neste perfil.`)
         delete d.conta
       }
+    }
+  }
+  if (r.intencao === "TRANSFERENCIA") {
+    const contas = (await t.deps.cadastros.listarContas(ctx)).filter(c => c.ativo && c.tipo !== "credito")
+    const achar = (nome?: string) => {
+      if (!nome) return undefined
+      const alvo = normalizarTexto(nome), c = contas.filter(x => normalizarTexto(x.nome).includes(alvo))
+      if (c.length !== 1) { t.mensagens.push(`Não encontrei uma única conta “${nome}” neste perfil.`); return null }
+      return c[0]
+    }
+    if (!d.carteiraId) { const o = achar(d.conta); if (o) { d.carteiraId = o.id; d.carteiraNome = o.nome } else if (o === null) delete d.conta }
+    if (!d.carteiraDestinoId) {
+      const o = achar(d.contaDestino)
+      if (o) { d.carteiraDestinoId = o.id; d.carteiraDestinoNome = o.nome } else if (o === null) delete d.contaDestino
+    }
+    if (d.carteiraId && d.carteiraId === d.carteiraDestinoId) {
+      t.mensagens.push("A conta de origem e a de destino são a mesma.")
+      delete d.carteiraDestinoId; delete d.carteiraDestinoNome; delete d.contaDestino
     }
   }
   if (r.intencao === "COMPRA_CREDITO" || r.intencao === "PARCELAMENTO") {
@@ -359,6 +377,7 @@ function pendencias(r: Rascunho): Campo[] {
     if (!d.carteiraId) p.push("conta")
   }
   if (r.intencao === "PAGAMENTO" && !d.tituloId) p.push("titulo")
+  if (r.intencao === "TRANSFERENCIA") { if (!d.carteiraId) p.push("conta"); if (!d.carteiraDestinoId) p.push("contaDestino") }
   if (r.intencao === "DIVIDA" && !d.vencimento) p.push("vencimento")
   if ((r.intencao === "COMPRA_CREDITO" || r.intencao === "PARCELAMENTO") && (!d.cartaoId || !d.cicloIds)) p.push("cartao")
   return ORDEM_PERGUNTAS.filter(c => p.includes(c))
@@ -435,6 +454,19 @@ async function perguntar(t: Turno, r: Rascunho, campo: Campo) {
       t.mensagens.push(`De qual conta saiu o dinheiro?\n${opcoes(contas.map(c => ({ id: c.id, rotulo: c.nome })))}`)
       return
     }
+    case "contaDestino": {
+      const ctx = await contextoLeitura(t, r)
+      if (!ctx) return
+      const contas = (await t.deps.cadastros.listarContas(ctx)).filter(c => c.ativo && c.tipo !== "credito" && c.id !== d.carteiraId)
+      if (!contas.length) {
+        t.estado.rascunho = undefined
+        t.codigo = "sem_conta"
+        t.mensagens.push("Não há outra conta ativa neste perfil para receber a transferência. Nada foi registrado.")
+        return
+      }
+      t.mensagens.push(`Para qual conta foi o dinheiro?\n${opcoes(contas.map(c => ({ id: c.id, rotulo: c.nome })))}`)
+      return
+    }
     case "cartao": {
       const ctx = await contextoLeitura(t, r)
       if (!ctx) return
@@ -473,6 +505,9 @@ function resumo(r: Rascunho, hoje: string): string[] {
         ? `em ${n}x de ${formatarCentavos(partes[0])}` : `em ${n}x (1ª de ${formatarCentavos(partes[0])}, demais de ${formatarCentavos(partes[n - 1])})`
       return [`Compra no crédito de ${valor}${cat}${quem}, ${parc}.`, `Cartão: ${d.cartaoNome} · Data: ${data} · ${perfil}${semCategoria}`]
     }
+    case "TRANSFERENCIA":
+      return [`Transferência de ${valor} entre contas do mesmo perfil.`,
+        `De: ${d.carteiraNome} → Para: ${d.carteiraDestinoNome} · Data: ${data} · ${perfil}`, "Não conta como receita nem despesa."]
     case "PAGAMENTO":
       return [`Pagamento de ${valor} da conta “${d.tituloDescricao}”${d.quitar ? " (quitação)" : ""}.`,
         `Via ${FORMA_ROTULO[d.formaPagamento!]} · Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
@@ -483,7 +518,7 @@ function resumo(r: Rascunho, hoje: string): string[] {
 
 function assinaturaRascunho(r: Rascunho, hoje: string) {
   const d = r.dados
-  return [r.perfil?.perfilId, r.intencao, d.valorCentavos, d.categoria ?? "", d.tituloId ?? "", d.dataEconomica ?? hoje].join("|")
+  return [r.perfil?.perfilId, r.intencao, d.valorCentavos, d.categoria ?? "", d.tituloId ?? "", d.carteiraDestinoId ?? "", d.dataEconomica ?? hoje].join("|")
 }
 
 /** Resposta complementar, correção ou nova intenção enquanto há rascunho aberto. */
@@ -549,6 +584,7 @@ async function aplicarOpcao(t: Turno, r: Rascunho, campo: Campo, opcao: { id: st
     }
     case "valor": d.valorCentavos = opcao.id; delete d.valoresAmbiguos; delete d.opcoes; return true
     case "conta": d.carteiraId = opcao.id; d.carteiraNome = opcao.rotulo; delete d.opcoes; return true
+    case "contaDestino": d.carteiraDestinoId = opcao.id; d.carteiraDestinoNome = opcao.rotulo; delete d.opcoes; return true
     case "cartao": d.cartaoId = opcao.id; d.cartaoNome = opcao.rotulo; delete d.cicloIds; delete d.opcoes; return true
     case "titulo": {
       const ctx = await contextoLeitura(t, r)
@@ -563,7 +599,7 @@ async function aplicarOpcao(t: Turno, r: Rascunho, campo: Campo, opcao: { id: st
 }
 
 const CAMPOS_MESCLAVEIS: Array<keyof Extracao> = ["valorCentavos", "categoria", "descricao", "dataEconomica", "vencimento",
-  "formaPagamento", "conta", "parcelas", "contraparte", "quitar", "documentoId"]
+  "formaPagamento", "conta", "contaDestino", "parcelas", "contraparte", "quitar", "documentoId"]
 
 function mesclar(r: Rascunho, campos: Extracao): boolean {
   const d = r.dados
@@ -575,6 +611,7 @@ function mesclar(r: Rascunho, campos: Extracao): boolean {
     mudou = true
     if (k === "valorCentavos") { delete d.valoresAmbiguos; delete d.cicloIds }
     if (k === "conta") { delete d.carteiraId; delete d.carteiraNome; delete d.cartaoId; delete d.cartaoNome; delete d.cicloIds }
+    if (k === "contaDestino") { delete d.carteiraDestinoId; delete d.carteiraDestinoNome }
     if (k === "categoria") delete d.categoriaId
     if (k === "parcelas" || k === "dataEconomica") delete d.cicloIds
     if (k === "contraparte" && r.intencao === "PAGAMENTO") { delete d.tituloId; delete d.tituloDescricao; delete d.tituloRestanteCentavos }
@@ -675,6 +712,10 @@ const MOTIVOS_DEFINITIVOS: Record<string, { texto: string; encerra?: boolean }> 
   acesso_negado: { texto: "Você não tem permissão para registrar nesse perfil.", encerra: true },
   periodo_fechado: { texto: "O período dessa data está fechado.", encerra: false },
   saldo_insuficiente: { texto: "A conta não tem saldo suficiente." },
+  saldo_conta_insuficiente: { texto: "A conta de origem não tem saldo suficiente." },
+  transferencia_mesma_conta: { texto: "A conta de origem e a de destino precisam ser diferentes." },
+  conta_indisponivel: { texto: "A conta de destino não está disponível." },
+  origem_ausente: { texto: "Não consegui retomar a operação com segurança." },
   titulo_indisponivel: { texto: "Essa conta a pagar não está mais disponível.", encerra: true },
   pagamento_acima_saldo: { texto: "O valor é maior que o saldo em aberto da conta." },
   categoria_indisponivel: { texto: "A categoria não está disponível neste perfil." },

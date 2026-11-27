@@ -21,7 +21,7 @@ export const INTENCOES_ESCRITA = ["DESPESA", "RECEITA", "DIVIDA", "PAGAMENTO", "
 export type IntencaoEscrita = typeof INTENCOES_ESCRITA[number]
 
 /** Intenções com contrato de escrita no G004 hoje. As demais são classificadas, mas não gravadas. */
-export const INTENCOES_COM_CONTRATO_G004 = ["DESPESA", "DIVIDA", "PAGAMENTO", "COMPRA_CREDITO", "PARCELAMENTO"] as const
+export const INTENCOES_COM_CONTRATO_G004 = ["DESPESA", "DIVIDA", "PAGAMENTO", "COMPRA_CREDITO", "PARCELAMENTO", "TRANSFERENCIA"] as const
 
 export type FormaPagamento = "pix" | "dinheiro" | "debito" | "transferencia" | "boleto" | "credito"
 
@@ -70,7 +70,7 @@ export type Interpretacao = {
   sinaisSuspeitos: string[]
 }
 
-export type Campo = "valor" | "perfil" | "formaPagamento" | "conta" | "vencimento" | "cartao" | "parcelas" | "titulo"
+export type Campo = "valor" | "perfil" | "formaPagamento" | "conta" | "contaDestino" | "vencimento" | "cartao" | "parcelas" | "titulo"
 
 export type EstadoRascunho = "COLETANDO" | "AGUARDANDO_CONFIRMACAO" | "EM_EXECUCAO" | "INCERTO"
   | "APLICADO" | "CANCELADO" | "EXPIRADO"
@@ -79,6 +79,9 @@ export type DadosRascunho = Extracao & {
   /** IDs resolvidos dentro do perfil do rascunho. Trocar de perfil limpa todos. */
   carteiraId?: string
   carteiraNome?: string
+  /** TRANSFERENCIA_INTERNA: conta de destino no MESMO perfil (origem = carteiraId). */
+  carteiraDestinoId?: string
+  carteiraDestinoNome?: string
   categoriaId?: string
   cartaoId?: string
   cartaoNome?: string

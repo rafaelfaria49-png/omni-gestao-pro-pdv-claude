@@ -18,8 +18,11 @@ const textoLivre = z.string().max(LIMITE_TEXTO * 2)
 const centavos = z.string().regex(/^[1-9]\d{0,12}$/)
 const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
-/** Canais aceitos hoje. WHATSAPP_CLOUD só entra após G007 (binding) + homologação. */
-export const CANAIS_ACEITOS = ["SIMULADO"] as const
+/**
+ * Canais aceitos. WHATSAPP_GESTAO = número de gestão G006/G007, montado SÓ pelo gateway do servidor a partir da
+ * inbox persistida (remetente com vínculo ativo). Não é prova de homologação Meta: o envio real segue desligado.
+ */
+export const CANAIS_ACEITOS = ["SIMULADO", "WHATSAPP_GESTAO"] as const
 
 const conteudoSchema = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("TEXTO"), texto: textoLivre }).strict(),

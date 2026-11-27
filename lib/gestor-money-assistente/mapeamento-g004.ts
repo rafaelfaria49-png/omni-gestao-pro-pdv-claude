@@ -75,9 +75,15 @@ export function propostaDoRascunho(r: Rascunho, agora: Date, hoje: string): Mape
         ...(d.quitar ? { quitar: true } : { valorCentavos: d.valorCentavos!, quitar: false }),
         carteiraId: d.carteiraId, formaPagamento: meio, dataPagamento,
         ...(d.documentoId ? { documentoId: d.documentoId } : {}) } }
+    case "TRANSFERENCIA":
+      // #405: TRANSFERENCIA_INTERNA — mesmo perfil, sem fato/pagamento, fora de receita/despesa.
+      if (!d.carteiraId || !d.carteiraDestinoId) return { ok: false, codigo: "conta_ausente" }
+      if (d.carteiraId === d.carteiraDestinoId) return { ok: false, codigo: "transferencia_mesma_conta" }
+      return { ok: true, proposta: { tipo: "TRANSFERENCIA_INTERNA", valorCentavos: d.valorCentavos!, moeda: "BRL",
+        carteiraOrigemId: d.carteiraId, carteiraDestinoId: d.carteiraDestinoId, dataPagamento,
+        descricao: `Transferência ${d.carteiraNome ?? ""} → ${d.carteiraDestinoNome ?? ""}`.replace(/\s+/g, " ").trim().slice(0, 500) } }
     case "RECEITA":
     case "RECEBIMENTO":
-    case "TRANSFERENCIA":
       return { ok: false, codigo: "sem_contrato_g004" }
   }
 }

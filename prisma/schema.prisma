@@ -4990,3 +4990,138 @@ model GastoWorkerPulso {
 
   @@map("gastos_worker_pulsos")
 }
+
+// ─── Gestor Money · assistente conversacional (G007 vínculo + G008 conversa persistente) ───
+// Tabelas próprias do assistente (migration 20261128100000, aditiva). Nenhuma tabela G001–G006 é alterada.
+// Identidade de usuário por id (sem relação Prisma com AdminUser: integridade por gatilho na migration).
+
+/**
+ * Desafio de pareamento: código exibido SÓ na sessão web autenticada; guardado apenas como hash.
+ */
+model GmAssistDesafio {
+  id                  String           @id
+  adminUserId         String
+  telefoneE164        String
+  codigoSalt          String
+  codigoHash          String           @db.Char(64)
+  estado              String           @default("PENDENTE")
+  tentativas          Int              @default(0)
+  limiteTentativas    Int              @default(5)
+  /**
+   * = adminUserId enquanto PENDENTE (um desafio aberto por usuário); NULL depois.
+   */
+  pendenteUsuario     String?          @unique
+  consentimentoVersao String
+  expiraEm            DateTime         @db.Timestamptz(3)
+  criadoEm            DateTime         @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  decididoEm          DateTime?        @db.Timestamptz(3)
+  vinculo             GmAssistVinculo?
+
+  @@index([telefoneE164, estado])
+  @@index([adminUserId, criadoEm])
+  @@map("gm_assist_desafios")
+}
+
+/**
+ * Vínculo telefone↔usuário no canal GESTAO. Revogação é definitiva: novo pareamento = novo vínculo.
+ */
+model GmAssistVinculo {
+  id                  String             @id
+  adminUserId         String
+  telefoneE164        String
+  estado              String             @default("ATIVO")
+  versao              Int                @default(1)
+  /**
+   * = telefoneE164 / adminUserId enquanto ATIVO; NULL após revogação (unicidade só entre ativos).
+   */
+  ativoTelefone       String?            @unique
+  ativoUsuario        String?            @unique
+  desafioId           String             @unique
+  desafio             GmAssistDesafio    @relation(fields: [desafioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  consentimentoVersao String
+  consentidoEm        DateTime           @db.Timestamptz(3)
+  criadoEm            DateTime           @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  revogadoEm          DateTime?          @db.Timestamptz(3)
+  revogacaoMotivo     String?
+  conversas           GmAssistConversa[]
+
+  @@index([adminUserId])
+  @@map("gm_assist_vinculos")
+}
+
+/**
+ * Trilha de auditoria minimizada (sem conteúdo de mensagem, telefone mascarado). Imutável.
+ */
+model GmAssistEvento {
+  id                String   @id
+  tipo              String
+  adminUserId       String?
+  vinculoId         String?
+  desafioId         String?
+  telefoneMascarado String?
+  criadoEm          DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+
+  @@index([adminUserId, criadoEm])
+  @@index([tipo, criadoEm])
+  @@map("gm_assist_eventos")
+}
+
+/**
+ * Estado conversacional (rascunho versionado, perfil fixado, confirmações) com CAS por versaoEstado.
+ */
+model GmAssistConversa {
+  chave        String             @id
+  adminUserId  String
+  vinculoId    String
+  vinculo      GmAssistVinculo    @relation(fields: [vinculoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versaoEstado Int
+  estado       Json
+  atualizadoEm DateTime           @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  mensagens    GmAssistMensagem[]
+
+  @@index([vinculoId])
+  @@map("gm_assist_conversas")
+}
+
+/**
+ * Idempotência por mensagem: resposta registrada uma vez; reentrega devolve a mesma resposta.
+ */
+model GmAssistMensagem {
+  id            String           @id
+  conversaChave String
+  conversa      GmAssistConversa @relation(fields: [conversaChave], references: [chave], onDelete: Restrict, onUpdate: Restrict)
+  mensagemId    String
+  resposta      Json
+  criadoEm      DateTime         @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+
+  @@unique([conversaChave, mensagemId])
+  @@map("gm_assist_mensagens")
+}
+
+/**
+ * Outbox das respostas conversacionais (perguntas/resumos/onboarding). Resultado financeiro sai pela outbox G006.
+ */
+model GmAssistResposta {
+  id                String    @id
+  chave             String    @unique
+  inboxId           String
+  canalId           String
+  destinatarioE164  String
+  vinculoId         String?
+  respostaId        String?
+  ordem             Int
+  texto             String?
+  estado            String    @default("PENDENTE")
+  tentativas        Int       @default(0)
+  runAfter          DateTime  @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  leaseToken        String?
+  leaseUntil        DateTime? @db.Timestamptz(3)
+  externalMessageId String?   @unique
+  falhaCodigo       String?
+  criadoEm          DateTime  @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  atualizadoEm      DateTime  @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+
+  @@index([estado, runAfter])
+  @@index([respostaId])
+  @@map("gm_assist_respostas")
+}
