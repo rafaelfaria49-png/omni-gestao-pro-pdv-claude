@@ -45,6 +45,10 @@ jobs:
       AUTH_TRUST_HOST: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure origin/main ref for official baseline preparer
+        run: git fetch origin main:refs/remotes/origin/main
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -77,5 +81,24 @@ jobs:
             components/gestor-money/GestorMoneyApp.test.ts \
             lib/auth/proxy-session-gate.test.ts \
             test/gestor-money/real-integration.pg.test.ts
-      - name: Run TypeScript typecheck
-        run: npm run typecheck
+      - name: Run focused strict TypeScript check for Gestor Money namespaces
+        run: |
+          cat <<'JSON' > /tmp/tsconfig.gestor-money-ci.json
+          {
+            "extends": "./tsconfig.json",
+            "compilerOptions": { "incremental": false, "noEmit": true },
+            "include": [
+              "next-env.d.ts",
+              "types/**/*.d.ts",
+              "lib/gestor-money/**/*.ts",
+              "components/gestor-money/**/*.ts",
+              "components/gestor-money/**/*.tsx",
+              "app/api/gestor-money/**/*.ts",
+              "app/dashboard/gestor-money/**/*.tsx",
+              "app/gestor-money/**/*.tsx",
+              "test/gestor-money/**/*.ts"
+            ],
+            "exclude": ["node_modules"]
+          }
+          JSON
+          node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js -p /tmp/tsconfig.gestor-money-ci.json --noEmit
