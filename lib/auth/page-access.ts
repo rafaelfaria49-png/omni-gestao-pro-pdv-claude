@@ -27,7 +27,7 @@ export function canAccessPage(p: EnterprisePermissions | null, pathname: string)
   if (at("/dashboard/estoque")) return p.hubs.cadastros && p.modules?.stock === true
   if (at("/dashboard/relatorios")) return p.hubs.relatorios
   if (at("/dashboard/configuracoes")) return p.admin.configuracoes
-  if (at("/dashboard/financeiro") || at("/dashboard/financeiro-v2")) return p.hubs.financeiro
+  if (at("/dashboard/financeiro") || at("/dashboard/financeiro-v2") || at("/dashboard/gestor-money")) return p.hubs.financeiro
   return false
 }
 
