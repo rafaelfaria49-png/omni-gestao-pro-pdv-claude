@@ -8,15 +8,15 @@
  * REAIS (`scripts/aparelhos/prepare-pg.mjs`, DRIFT_ZERO). Nenhum `.env`, nenhuma credencial, nenhum banco
  * externo — o Datasource Guard (#404) continua valendo (URLs loopback; `verifyTestDatasources`).
  *
- * Reprova se algum arquivo falhar, se algum teste for PULADO (as suítes pulam sem a URL exata) ou se um
- * grupo terminar com 0 testes. Fora daqui, por dependerem de baselines históricos montados à mão:
+ * Reprova se algum arquivo falhar, se algum ARQUIVO terminar sem teste executado (as suítes pulam inteiras
+ * sem a URL exata) ou se um grupo terminar com 0 testes. Pulos explícitos com motivo aparecem no resumo. Fora daqui, por dependerem de baselines históricos montados à mão:
  * migration.postgres, migration-g003, migration-g004 e mensageria-migration (o caminho das migrations é
  * provado pelo grupo Aparelhos de run-root-pg-suites.mjs, com DRIFT_ZERO).
  *
  * Uso (Linux com Docker): node scripts/ci/run-gestor-money-pg-suites.mjs [grupo...]
  */
 import { execFileSync, spawnSync } from "node:child_process"
-import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -25,11 +25,13 @@ const IMAGEM = process.env.GM_PG_IMAGE || "postgres:17"
 const ADMIN = "pgadmin"
 
 /** @typedef {{ nome: string, porta: number, pgdata: string, banco: string, dono: string, envs: string[], arquivos: string[], preparo?: (g: Grupo) => void, extraEnv?: Record<string,string>, urlApp?: string }} Grupo */
+// Suítes do comportamento LIGADO (evidências G002–G006): a flag é declarada aqui, explícita, nunca herdada.
+const LIGADO = { GESTOR_MONEY_ENABLED: "true" }
 /** @type {Grupo[]} */
 export const GRUPOS = [
   { nome: "g001", porta: 55493, pgdata: "G001-execution/pgdata", banco: "gastos_g001_test", dono: "gastos_g001",
     envs: ["GASTOS_TEST_DATABASE_URL"], arquivos: ["test/gastos/perfis.postgres.test.ts"] },
-  { nome: "g002", porta: 55494, pgdata: "G002-execution/pgdata", banco: "gastos_g002_test", dono: "gastos_g002",
+  { nome: "g002", extraEnv: LIGADO, porta: 55494, pgdata: "G002-execution/pgdata", banco: "gastos_g002_test", dono: "gastos_g002",
     envs: ["GASTOS_G002_TEST_DATABASE_URL"],
     arquivos: ["test/gastos/writers.postgres.test.ts", "test/gastos/writers-routes.postgres.test.ts"],
     preparo: (g) => {
@@ -38,10 +40,10 @@ export const GRUPOS = [
       psqlAdmin(g, "postgres", "GRANT gastos_g002_anon TO gastos_g002")
       psqlAdmin(g, g.banco, "GRANT USAGE ON SCHEMA public TO gastos_g002_anon; GRANT SELECT ON ALL TABLES IN SCHEMA public TO gastos_g002_anon")
     } },
-  { nome: "g003", porta: 55495, pgdata: "G003-execution/pgdata", banco: "gastos_g003_test", dono: "gastos_g003",
+  { nome: "g003", extraEnv: LIGADO, porta: 55495, pgdata: "G003-execution/pgdata", banco: "gastos_g003_test", dono: "gastos_g003",
     envs: ["GASTOS_G003_TEST_DATABASE_URL", "DATABASE_URL"],
     arquivos: ["test/gastos/readers.postgres.test.ts", "test/gastos/documentos.postgres.test.ts"] },
-  { nome: "g004", porta: 55496, pgdata: "G004-execution/pgdata", banco: "gastos_g004_test", dono: "gastos_g004",
+  { nome: "g004", extraEnv: LIGADO, porta: 55496, pgdata: "G004-execution/pgdata", banco: "gastos_g004_test", dono: "gastos_g004",
     envs: ["GASTOS_G004_TEST_DATABASE_URL", "DATABASE_URL"],
     arquivos: ["test/gastos/operacoes.postgres.test.ts", "test/gastos/operacoes-http.postgres.test.ts", "test/gastos/cartoes.postgres.test.ts",
       "test/gastos/concorrencia-g004.postgres.test.ts", "test/gastos/rollback-g004.postgres.test.ts"] },
@@ -49,7 +51,7 @@ export const GRUPOS = [
     envs: ["GASTOS_G005_TEST_DATABASE_URL", "DATABASE_URL"],
     arquivos: ["test/gastos/consumidores-g005.postgres.test.ts", "test/gastos/reconciliacao.postgres.test.ts",
       "test/gastos/contratos-produto.postgres.test.ts"] },
-  { nome: "g006", porta: 55516, pgdata: "G006-execution/pgdata", banco: "gastos_g006_test", dono: "gastos_g006_owner",
+  { nome: "g006", extraEnv: LIGADO, porta: 55516, pgdata: "G006-execution/pgdata", banco: "gastos_g006_test", dono: "gastos_g006_owner",
     envs: ["GASTOS_G006_TEST_DATABASE_URL", "DATABASE_URL"],
     arquivos: ["test/gastos/channels.postgres.test.ts", "test/gastos/queue.postgres.test.ts", "test/gastos/worker-recovery.integration.test.ts"],
     preparo: (g) => {
@@ -103,6 +105,9 @@ function preparar(g) {
   execFileSync(process.execPath, ["scripts/aparelhos/prepare-pg.mjs"], {
     env: { ...process.env, APARELHOS_TEST_DATABASE_URL: urlDono(g) }, stdio: ["ignore", "inherit", "inherit"],
   })
+  // Padrão do PostgreSQL e de Production (PUBLIC=U em public): papéis de teste sem login (ex.: *_anon)
+  // precisam enxergar o schema para que o RLS — e não a ausência de USAGE — seja o que nega a leitura.
+  psqlAdmin(g, g.banco, "GRANT USAGE ON SCHEMA public TO PUBLIC")
   g.preparo?.(g)
 }
 
@@ -110,15 +115,21 @@ function rodar(g) {
   const tmp = mkdtempSync(join(tmpdir(), `gm-${g.nome}-`)), saida = join(tmp, "vitest.json")
   const app = g.urlApp ?? urlDono(g)
   const env = { ...process.env, DATABASE_URL: app, DIRECT_URL: app, ...Object.fromEntries(g.envs.map((k) => [k, k === "DATABASE_URL" ? app : urlDono(g)])) }
+  Object.assign(env, g.extraEnv ?? {})
   if (g.nome === "rls") env.GASTOS_RLS_TEST_DATABASE_URL = app
+  if (g.nome === "g006") { env.G006_EVIDENCE_DIR = join(tmp, "G006-execution"); mkdirSync(env.G006_EVIDENCE_DIR) }
   const r = spawnSync(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...g.arquivos, "--maxWorkers=1", "--testTimeout=180000",
     "--hookTimeout=180000", "--reporter=default", "--reporter=json", `--outputFile.json=${saida}`], { env, stdio: "inherit" })
   let rel = null
   try { rel = JSON.parse(readFileSync(saida, "utf8")) } catch { /* sem relatório = falha */ }
   rmSync(tmp, { recursive: true, force: true })
+  // Arquivo sem NENHUM teste executado = suíte pulada por URL/opt-in errado (reprova). Pulos explícitos
+  // (it.skip com motivo) dentro de um arquivo que rodou ficam visíveis no resumo, sem reprovar.
+  const semExecucao = rel ? rel.testResults.filter((f) => !f.assertionResults.some((a) => a.status === "passed" || a.status === "failed"))
+    .map((f) => f.name.replaceAll("\\", "/").split("/test/gastos/").pop()) : []
   const resumo = rel ? { total: rel.numTotalTests, ok: rel.numPassedTests, falhas: rel.numFailedTests, pulados: rel.numPendingTests + (rel.numTodoTests ?? 0),
-    arquivosFalhos: rel.numFailedTestSuites } : null
-  const ok = r.status === 0 && resumo && resumo.falhas === 0 && resumo.pulados === 0 && resumo.total > 0 && resumo.arquivosFalhos === 0
+    arquivosFalhos: rel.numFailedTestSuites, semExecucao } : null
+  const ok = r.status === 0 && resumo && resumo.falhas === 0 && resumo.total > 0 && resumo.arquivosFalhos === 0 && semExecucao.length === 0
   console.log(`GM_PG_GRUPO ${g.nome} ${ok ? "OK" : "FALHOU"} ${JSON.stringify(resumo)}`)
   return ok
 }

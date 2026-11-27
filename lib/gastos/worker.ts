@@ -22,7 +22,7 @@ export type ConfigWorker = z.infer<typeof configSchema>
  */
 export function autorizarDatasourceWorker(ambiente: ConfigWorker["ambiente"], url: string): void {
   if (ambiente === "teste") localFixtureDatasource(url)
-  else nonproductionDatasource({ VERCEL: "1", VERCEL_ENV: "preview", DATABASE_URL: url, DIRECT_URL: url })
+  else nonproductionDatasource({ NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "preview", DATABASE_URL: url, DIRECT_URL: url })
 }
 
 /** Não carrega .env, não altera Node global e não permite produção neste GOAL. */

@@ -32,9 +32,10 @@ const L1 = prefix + "L1", L2 = prefix + "L2", L3 = prefix + "L3"
 const E1 = prefix + "E1", E2 = prefix + "E2", P1 = prefix + "P1", P2 = prefix + "P2"
 const empresa = (perfilId = E1, storeId = L1) => ({ tipo: "EMPRESA", perfilId, storeId })
 const pessoal = (perfilId = P1) => ({ tipo: "PESSOAL", perfilId })
-const login = (id = U1, stores = [L1, L2], role = "ADMIN", access: "all" | "restricted" = "restricted") => {
+// `platform`: autoridade global da main (platformAuthority). `storeAccess: "all"` sozinho não concede loja na main.
+const login = (id = U1, stores = [L1, L2], role = "ADMIN", access: "all" | "restricted" = "restricted", platform = false) => {
   vi.mocked(auth).mockResolvedValue({ user: {
-    id, role, storeAccess: access, allowedStoreIds: stores, storeModules: modulosSinteticos(stores), lojaId: L1,
+    id, role, storeAccess: access, ...(platform ? { platformAuthority: true } : {}), allowedStoreIds: stores, storeModules: modulosSinteticos(stores), lojaId: L1,
   } } as never)
 }
 const req = (storeId = L1, source: "header" | "query" | "cookie" = "header") => new Request(
@@ -160,6 +161,9 @@ describe.skipIf(!process.env.GASTOS_TEST_DATABASE_URL)("G001 PostgreSQL real", (
     login(U3, [L1], "GERENTE", "all")
     const result = await requireFinanceiroPerfilAccess(empresa())
     if (!result.ok) throw new Error("Esperado contexto")
+    // Regra da main (HARDENING-P0): a loja principal só vale para quem NÃO tem vínculo algum. A revogação
+    // precisa negar quem continua vinculado a outra loja — por isso U3 mantém o vínculo com L2.
+    await prisma.adminUserStore.create({ data: { adminUserId: U3, storeId: L2 } })
     await prisma.adminUserStore.delete({ where: { adminUserId_storeId: { adminUserId: U3, storeId: L1 } } })
     try {
       expect((await revalidateFinanceiroContexto(result.contexto)).ok).toBe(false)
@@ -167,6 +171,7 @@ describe.skipIf(!process.env.GASTOS_TEST_DATABASE_URL)("G001 PostgreSQL real", (
       expect((await guardWhatsAppApiWrite(req())).ok).toBe(false)
     } finally {
       await prisma.adminUserStore.create({ data: { adminUserId: U3, storeId: L1 } })
+      await prisma.adminUserStore.delete({ where: { adminUserId_storeId: { adminUserId: U3, storeId: L2 } } })
       expect((await requireFinanceiroPerfilAccess(empresa())).ok).toBe(false)
       await prisma.perfilMembro.create({ data: { perfilId: E1, adminUserId: U3, storeId: L1 } })
     }
@@ -272,7 +277,7 @@ describe.skipIf(!process.env.GASTOS_TEST_DATABASE_URL)("G001 PostgreSQL real", (
     await prisma.adminUser.update({ where: { id: U2 }, data: { role } })
     await prisma.adminUserStore.deleteMany({ where: { adminUserId: U2 } })
     try {
-      login(U2, [], role, "all")
+      login(U2, [], role, "all", true)
       expect(await prisma.adminUserStore.count({ where: { adminUserId: U2 } })).toBe(0)
       expect(await guardWhatsAppApiRead(req(L1))).toEqual({ ok: true, storeId: L1, userId: U2 })
       expect(await guardWhatsAppApiWrite(req(L2))).toEqual({ ok: true, storeId: L2, userId: U2 })
