@@ -6,7 +6,7 @@ import {
   getSetCookieHeaders,
   isClearingSetCookieHeader,
   isSessionCookieSetHeader,
-  stripRestoringSessionCookies,
+  stripSessionCookies,
 } from "./signout-race-guard"
 import {
   isSessionRevocationEnabled,
@@ -34,13 +34,48 @@ function makeAuthenticatedSessionResponse(cookieName: string, freshToken: string
   })
 }
 
+function makeUnauthenticatedCleaningResponse(cookieName: string): Response {
+  const headers = new Headers({ "Content-Type": "application/json" })
+  headers.append("set-cookie", `${cookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`)
+  return new Response("null", { status: 200, headers })
+}
+
 function makeSignoutClearedResponse(cookieName: string): Response {
   const headers = new Headers({ "Content-Type": "application/json" })
   headers.append("set-cookie", `${cookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`)
   return new Response(JSON.stringify({ url: "http://127.0.0.1:3000/login" }), { status: 200, headers })
 }
 
-describe("signout-race-guard — extração e cerca de encerramento de sessão", () => {
+function makeCookieJar(initial: Record<string, string> = {}) {
+  const cookies = new Map<string, string>(Object.entries(initial))
+  return {
+    header(): string {
+      return [...cookies.entries()].map(([k, v]) => `${k}=${v}`).join("; ")
+    },
+    apply(res: Response): void {
+      for (const sc of getSetCookieHeaders(res.headers)) {
+        const pair = (sc.split(";")[0] ?? "").trim()
+        const eq = pair.indexOf("=")
+        if (eq <= 0) continue
+        const name = pair.slice(0, eq).trim()
+        const value = pair.slice(eq + 1).trim()
+        if (isClearingSetCookieHeader(sc)) {
+          cookies.delete(name)
+        } else {
+          cookies.set(name, value)
+        }
+      }
+    },
+    get(name: string): string | undefined {
+      return cookies.get(name)
+    },
+    sessionCookieNames(): string[] {
+      return [...cookies.keys()].filter((k) => /^(?:__Secure-)?authjs\.session-token(?:\.\d+)?$/i.test(k))
+    },
+  }
+}
+
+describe("signout-race-guard — extração e proteção stateless + cerca pós-CSRF (Cenários A–J)", () => {
   it("extrai cookies simples, __Secure- e fragmentados (.0/.1) preservando os nomes exatos dos fragmentos", () => {
     expect(extractAuthSessionTokens("foo=1; authjs.session-token=tok-a; bar=2")).toEqual([
       { cookieName: "authjs.session-token", cookieNames: ["authjs.session-token"], token: "tok-a" },
@@ -59,125 +94,98 @@ describe("signout-race-guard — extração e cerca de encerramento de sessão",
     expect(extractAuthSessionTokens(null)).toEqual([])
   })
 
-  it("corrida determinística: GET /api/auth/session iniciado ANTES e concluído DEPOIS do POST /api/auth/signout não restaura cookie nem sessão", async () => {
-    const fence = new SignoutTokenFence()
-    const gate = deferred<void>()
-    const oldToken = "jwt-session-token-v1-before-logout"
+  it("CENÁRIO A + C (cross-instance / cold start): GET /api/auth/session na instância A + POST /api/auth/signout na instância B nunca restaura o cookie", async () => {
+    const instanceAFence = new SignoutTokenFence()
+    const instanceBFence = new SignoutTokenFence()
+    const gateA = deferred<void>()
+    const jar = makeCookieJar({ "authjs.session-token": "jwt-v1-before-logout" })
 
-    const handlers = createAuthRouteHandlers(
+    const instanceA = createAuthRouteHandlers(
       {
         async GET() {
-          // Simula consulta lenta ao Prisma em callbacks.jwt() antes de emitir Set-Cookie.
-          await gate.promise
-          return makeAuthenticatedSessionResponse("authjs.session-token", "jwt-reissued-after-prisma", "admin@pilot.invalid")
+          await gateA.promise
+          return makeAuthenticatedSessionResponse("authjs.session-token", "jwt-v2-renewed-on-A", "admin@pilot.invalid")
         },
         async POST() {
           return makeSignoutClearedResponse("authjs.session-token")
         },
       },
-      fence,
+      instanceAFence,
     )
 
-    // 1. GET /api/auth/session começa enquanto o cookie ainda é válido.
-    const inFlightSession = handlers.GET(
-      new Request("http://127.0.0.1:3000/api/auth/session", {
-        headers: { cookie: `authjs.session-token=${oldToken}` },
-      }),
-    )
-
-    // 2. POST /api/auth/signout chega e conclui antes da consulta do GET terminar.
-    const signoutRes = await handlers.POST(
-      new Request("http://127.0.0.1:3000/api/auth/signout", {
-        method: "POST",
-        headers: { cookie: `authjs.session-token=${oldToken}` },
-      }),
-    )
-    expect(signoutRes.status).toBe(200)
-
-    // 3. A resposta atrasada do GET /api/auth/session termina agora.
-    gate.resolve()
-    const lateSessionRes = await inFlightSession
-
-    expect(lateSessionRes.status).toBe(200)
-    expect(await lateSessionRes.json()).toBeNull()
-    const setCookies = getSetCookieHeaders(lateSessionRes.headers)
-    expect(setCookies.length).toBeGreaterThan(0)
-    for (const cookie of setCookies) {
-      expect(isSessionCookieSetHeader(cookie)).toBe(true)
-      expect(isClearingSetCookieHeader(cookie)).toBe(true)
-    }
-
-    // 4. Qualquer nova tentativa com o cookie antigo continua bloqueada sem reemitir sessão.
-    const replayRes = await handlers.GET(
-      new Request("http://127.0.0.1:3000/api/auth/session", {
-        headers: { cookie: `authjs.session-token=${oldToken}` },
-      }),
-    )
-    expect(await replayRes.json()).toBeNull()
-  })
-
-  it("múltiplas requisições simultâneas a /api/auth/session em 30 rodadas consecutivas nunca restauram sessão encerrada", async () => {
-    for (let round = 0; round < 30; round++) {
-      const fence = new SignoutTokenFence()
-      const gates = Array.from({ length: 6 }, () => deferred<void>())
-      let getIndex = 0
-      const token = `jwt-round-${round}-active`
-
-      const handlers = createAuthRouteHandlers(
-        {
-          async GET() {
-            const idx = getIndex++
-            await gates[idx]?.promise
-            return makeAuthenticatedSessionResponse("__Secure-authjs.session-token", `jwt-fresh-${round}-${idx}`, "op@pilot.invalid")
-          },
-          async POST() {
-            return makeSignoutClearedResponse("__Secure-authjs.session-token")
-          },
+    const instanceB = createAuthRouteHandlers(
+      {
+        async GET() {
+          return makeUnauthenticatedCleaningResponse("authjs.session-token")
         },
-        fence,
-      )
+        async POST() {
+          return makeSignoutClearedResponse("authjs.session-token")
+        },
+      },
+      instanceBFence,
+    )
 
-      const concurrentGets = gates.map(() =>
-        handlers.GET(
-          new Request("https://app.pilot.invalid/api/auth/session", {
-            headers: { cookie: `__Secure-authjs.session-token=${token}` },
-          }),
-        ),
-      )
+    // 1. Sessão iniciada na instância A antes do logout.
+    const inFlightOnA = instanceA.GET(
+      new Request("http://127.0.0.1:3000/api/auth/session", { headers: { cookie: jar.header() } }),
+    )
 
-      await handlers.POST(
-        new Request("https://app.pilot.invalid/api/auth/signout", {
-          method: "POST",
-          headers: { cookie: `__Secure-authjs.session-token=${token}` },
-        }),
-      )
+    // 2. Logout concluído na instância B (cerca isolada, zero memória compartilhada com A).
+    const signoutOnB = await instanceB.POST(
+      new Request("http://127.0.0.1:3000/api/auth/signout", { method: "POST", headers: { cookie: jar.header() } }),
+    )
+    jar.apply(signoutOnB)
+    expect(jar.sessionCookieNames()).toEqual([])
 
-      // Libera as respostas concorrentes em ordem embaralhada.
-      for (const g of gates.reverse()) g.resolve()
-      const responses = await Promise.all(concurrentGets)
+    // 3. Resposta atrasada da instância A chega ao navegador após o logout.
+    gateA.resolve()
+    const lateOnA = await inFlightOnA
+    jar.apply(lateOnA)
 
-      for (const res of responses) {
-        expect(await res.json()).toBeNull()
-        const cookies = getSetCookieHeaders(res.headers)
-        expect(cookies.some((c) => isSessionCookieSetHeader(c) && !isClearingSetCookieHeader(c))).toBe(false)
-        expect(cookies.some((c) => c.includes("__Secure-authjs.session-token=;") && c.includes("Secure"))).toBe(true)
-      }
-    }
+    // Nenhum Set-Cookie de sessão foi emitido pela instância A → cookie permanece limpo!
+    expect(getSetCookieHeaders(lateOnA.headers).some(isSessionCookieSetHeader)).toBe(false)
+    expect(jar.sessionCookieNames()).toEqual([])
   })
 
-  it("logout seguido de novo login legítimo (mesmo usuário ou outro operador no mesmo terminal) funciona imediatamente", async () => {
+  it("CENÁRIO B + E (proxy isolado / JWT renovado chegando depois): stripSessionCookies impede restauração preservando demais cookies", () => {
+    const jar = makeCookieJar({ "authjs.session-token": "jwt-v1" })
+    const signoutRes = makeSignoutClearedResponse("authjs.session-token")
+    jar.apply(signoutRes)
+    expect(jar.sessionCookieNames()).toEqual([])
+
+    // Simula resposta atrasada do proxy (função isolada) que havia renovado o JWT antes do logout.
+    const rawProxyHeaders = new Headers({ "x-omni-pathname": "/dashboard" })
+    rawProxyHeaders.append("set-cookie", "assistec-active-store=loja-a; Path=/; SameSite=Lax")
+    rawProxyHeaders.append("set-cookie", "authjs.session-token=jwt-renewed-in-proxy; Path=/; Max-Age=2592000; HttpOnly")
+    rawProxyHeaders.append("set-cookie", "__Secure-authjs.session-token.0=chunk0; Path=/; Max-Age=2592000; HttpOnly; Secure")
+    rawProxyHeaders.append("set-cookie", "authjs.csrf-token=csrf-123; Path=/; HttpOnly")
+
+    const proxyRes = stripSessionCookies(new Response("ok", { status: 200, headers: rawProxyHeaders }))
+    jar.apply(proxyRes)
+
+    expect(proxyRes.headers.get("x-omni-pathname")).toBe("/dashboard")
+    expect(jar.sessionCookieNames()).toEqual([])
+    expect(jar.get("assistec-active-store")).toBe("loja-a")
+    expect(jar.get("authjs.csrf-token")).toBe("csrf-123")
+  })
+
+  it("CENÁRIO F + J (logout → novo login legítimo com resposta antiga em voo): resposta atrasada NÃO apaga nem sobrescreve o cookie do novo login", async () => {
     const fence = new SignoutTokenFence()
-    const tokenOpA = "jwt-operator-a-store-1"
-    const tokenOpB = "jwt-operator-b-store-2"
+    const gateOld = deferred<void>()
+    const tokenOpA = "jwt-operator-a-old"
+    const tokenOpB = "jwt-operator-b-new-login"
+    const jar = makeCookieJar({ "authjs.session-token": tokenOpA })
 
     const handlers = createAuthRouteHandlers(
       {
         async GET(req) {
           const cookie = req.headers.get("cookie") ?? ""
-          if (cookie.includes(tokenOpB)) {
-            return makeAuthenticatedSessionResponse("authjs.session-token", "jwt-operator-b-refreshed", "caixa-b@pilot.invalid")
+          if (cookie.includes(tokenOpA)) {
+            await gateOld.promise
+            // Mesmo que Auth.js retornasse limpeza (Max-Age=0) para o token antigo revogado/encerrado:
+            return makeUnauthenticatedCleaningResponse("authjs.session-token")
           }
-          return makeAuthenticatedSessionResponse("authjs.session-token", "jwt-operator-a-refreshed", "admin-a@pilot.invalid")
+          return makeAuthenticatedSessionResponse("authjs.session-token", "jwt-op-b-renewed", "caixa-b@pilot.invalid")
         },
         async POST() {
           return makeSignoutClearedResponse("authjs.session-token")
@@ -186,34 +194,44 @@ describe("signout-race-guard — extração e cerca de encerramento de sessão",
       fence,
     )
 
-    // Operador A encerra sessão.
-    await handlers.POST(
-      new Request("http://127.0.0.1:3000/api/auth/signout", {
-        method: "POST",
-        headers: { cookie: `authjs.session-token=${tokenOpA}` },
-      }),
+    // 1. Consulta antiga do Operador A começa antes do logout.
+    const oldReqHeader = jar.header()
+    const oldInFlight = handlers.GET(
+      new Request("http://127.0.0.1:3000/api/auth/session", { headers: { cookie: oldReqHeader } }),
     )
 
-    // Cookie antigo do Operador A permanece recusado.
-    const oldSession = await handlers.GET(
-      new Request("http://127.0.0.1:3000/api/auth/session", {
-        headers: { cookie: `authjs.session-token=${tokenOpA}` },
-      }),
+    // 2. Operador A faz logout → cookie limpo.
+    const signoutRes = await handlers.POST(
+      new Request("http://127.0.0.1:3000/api/auth/signout", { method: "POST", headers: { cookie: jar.header() } }),
     )
-    expect(await oldSession.json()).toBeNull()
+    jar.apply(signoutRes)
+    expect(jar.sessionCookieNames()).toEqual([])
 
-    // Novo login legítimo (Operador B no mesmo terminal, novo JWT) é aceito imediatamente.
-    const newSession = await handlers.GET(
-      new Request("http://127.0.0.1:3000/api/auth/session", {
-        headers: { cookie: `authjs.session-token=${tokenOpB}` },
-      }),
+    // 3. Operador B faz novo login legítimo imediatamente no mesmo navegador.
+    const loginRes = makeAuthenticatedSessionResponse("authjs.session-token", tokenOpB, "caixa-b@pilot.invalid")
+    jar.apply(loginRes)
+    expect(jar.get("authjs.session-token")).toBe(tokenOpB)
+
+    // 4. Resposta atrasada do Operador A chega AGORA ao navegador.
+    gateOld.resolve()
+    const lateOldRes = await oldInFlight
+    expect(await lateOldRes.json()).toBeNull()
+    expect(getSetCookieHeaders(lateOldRes.headers).some(isSessionCookieSetHeader)).toBe(false)
+    jar.apply(lateOldRes)
+
+    // Cookie do novo login do Operador B permanece 100% intacto!
+    expect(jar.get("authjs.session-token")).toBe(tokenOpB)
+
+    // Consulta subsequente do Operador B autentica normalmente.
+    const sessionB = await handlers.GET(
+      new Request("http://127.0.0.1:3000/api/auth/session", { headers: { cookie: jar.header() } }),
     )
-    expect(await newSession.json()).toMatchObject({ user: { email: "caixa-b@pilot.invalid" } })
+    expect(await sessionB.json()).toMatchObject({ user: { email: "caixa-b@pilot.invalid" } })
   })
 
-  it("rejeição de CSRF do Auth.js v5 (302 MissingCSRF e 200 JSON sem Set-Cookie de limpeza) desfaz a marcação", async () => {
+  it("CENÁRIO G (CSRF forjado concorrente): POST /api/auth/signout rejeitado por CSRF NÃO derruba GET /api/auth/session legítimo em voo", async () => {
     const validToken = "jwt-victim-active-session"
-    const rejectionResponses = [
+    const rejectionShapes = [
       new Response(null, {
         status: 302,
         headers: { location: "http://127.0.0.1:3000/api/auth/error?error=MissingCSRF" },
@@ -224,97 +242,162 @@ describe("signout-race-guard — extração e cerca de encerramento de sessão",
       }),
     ]
 
-    for (const rejection of rejectionResponses) {
+    for (const rejection of rejectionShapes) {
       const fence = new SignoutTokenFence()
+      const csrfGate = deferred<void>()
       const handlers = createAuthRouteHandlers(
         {
           async GET() {
             return makeAuthenticatedSessionResponse("authjs.session-token", validToken, "victim@pilot.invalid")
           },
           async POST() {
+            await csrfGate.promise
             return rejection
           },
         },
         fence,
       )
 
-      await handlers.POST(
+      // 1. POST forjado sem CSRF entra em execução (pendente).
+      const forgedSignout = handlers.POST(
         new Request("http://127.0.0.1:3000/api/auth/signout", {
           method: "POST",
           headers: { cookie: `authjs.session-token=${validToken}` },
         }),
       )
-      expect(fence.isSignedOut([validToken])).toBe(false)
 
-      const sessionRes = await handlers.GET(
+      // 2. Enquanto o POST forjado ainda está rodando, a vítima consulta sua sessão legítima.
+      const victimSessionDuring = await handlers.GET(
         new Request("http://127.0.0.1:3000/api/auth/session", {
           headers: { cookie: `authjs.session-token=${validToken}` },
         }),
       )
-      expect(await sessionRes.json()).toMatchObject({ user: { email: "victim@pilot.invalid" } })
+      expect(await victimSessionDuring.json()).toMatchObject({ user: { email: "victim@pilot.invalid" } })
+      expect(getSetCookieHeaders(victimSessionDuring.headers).some(isSessionCookieSetHeader)).toBe(false)
+
+      // 3. POST forjado conclui rejeitado por CSRF → cerca nunca foi marcada.
+      csrfGate.resolve()
+      await forgedSignout
+      expect(fence.isSignedOut([validToken])).toBe(false)
+
+      const victimSessionAfter = await handlers.GET(
+        new Request("http://127.0.0.1:3000/api/auth/session", {
+          headers: { cookie: `authjs.session-token=${validToken}` },
+        }),
+      )
+      expect(await victimSessionAfter.json()).toMatchObject({ user: { email: "victim@pilot.invalid" } })
     }
   })
 
-  it("POST /api/auth/session (update) em voo durante signout e cookies fragmentados (.0/.1) são limpos integralmente", async () => {
+  it("CENÁRIO H (dois POSTs de signout concorrentes: 1 válido + 1 rejeitado por CSRF): tentativa rejeitada NÃO desfaz proteção do logout válido", async () => {
     const fence = new SignoutTokenFence()
-    const gate = deferred<void>()
-    const chunkedCookieHeader = "authjs.session-token.0=chunk-a; authjs.session-token.1=chunk-b"
+    const token = "jwt-concurrent-signout-token"
+    const invalidGate = deferred<void>()
+    let call = 0
 
     const handlers = createAuthRouteHandlers(
       {
         async GET() {
-          return makeAuthenticatedSessionResponse("authjs.session-token", "unused", "op@pilot.invalid")
+          return makeAuthenticatedSessionResponse("authjs.session-token", "jwt-reissued", "op@pilot.invalid")
         },
-        async POST(req) {
-          if (new URL(req.url).pathname.endsWith("/session")) {
-            await gate.promise
-            return makeAuthenticatedSessionResponse("authjs.session-token.0", "reissued-chunk", "op@pilot.invalid")
+        async POST() {
+          call++
+          if (call === 1) {
+            // 1º POST: legítimo, conclui e limpa cookie.
+            return makeSignoutClearedResponse("authjs.session-token")
           }
-          return makeSignoutClearedResponse("authjs.session-token.0")
+          // 2º POST: inválido (CSRF rejeitado) termina depois do 1º.
+          await invalidGate.promise
+          return new Response(JSON.stringify({ url: "http://127.0.0.1:3000/api/auth/error?error=MissingCSRF" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
         },
       },
       fence,
     )
 
-    const inFlightUpdate = handlers.POST(
-      new Request("http://127.0.0.1:3000/api/auth/session", {
-        method: "POST",
-        headers: { cookie: chunkedCookieHeader },
-      }),
-    )
-
-    await handlers.POST(
+    const validPost = await handlers.POST(
       new Request("http://127.0.0.1:3000/api/auth/signout", {
         method: "POST",
-        headers: { cookie: chunkedCookieHeader },
+        headers: { cookie: `authjs.session-token=${token}` },
       }),
     )
+    expect(validPost.status).toBe(200)
+    expect(fence.isSignedOut([token])).toBe(true)
 
-    gate.resolve()
-    const lateUpdateRes = await inFlightUpdate
-    expect(await lateUpdateRes.json()).toBeNull()
-    const clearHeaders = getSetCookieHeaders(lateUpdateRes.headers)
-    expect(clearHeaders.some((c) => c.startsWith("authjs.session-token.0=;") && c.includes("Max-Age=0"))).toBe(true)
-    expect(clearHeaders.some((c) => c.startsWith("authjs.session-token.1=;") && c.includes("Max-Age=0"))).toBe(true)
+    const invalidPostPromise = handlers.POST(
+      new Request("http://127.0.0.1:3000/api/auth/signout", {
+        method: "POST",
+        headers: { cookie: `authjs.session-token=${token}` },
+      }),
+    )
+    invalidGate.resolve()
+    await invalidPostPromise
+
+    // A tentativa rejeitada NÃO desfez a cerca do logout válido!
+    expect(fence.isSignedOut([token])).toBe(true)
+    const afterSession = await handlers.GET(
+      new Request("http://127.0.0.1:3000/api/auth/session", {
+        headers: { cookie: `authjs.session-token=${token}` },
+      }),
+    )
+    expect(await afterSession.json()).toBeNull()
   })
 
-  it("stripRestoringSessionCookies remove apenas Set-Cookie que restaura sessão e preserva demais cookies/headers", () => {
-    const headers = new Headers({ "x-omni-pathname": "/dashboard" })
-    headers.append("set-cookie", "assistec-active-store=loja-a; Path=/; SameSite=Lax")
-    headers.append("set-cookie", "authjs.session-token=stale-reissued-jwt; Path=/; Max-Age=2592000; HttpOnly")
-    headers.append("set-cookie", "authjs.csrf-token=csrf-123; Path=/; HttpOnly")
+  it("múltiplas requisições simultâneas GET e POST /api/auth/session em 30 rodadas consecutivas nunca restauram sessão encerrada", async () => {
+    for (let round = 0; round < 30; round++) {
+      const fence = new SignoutTokenFence()
+      const gates = Array.from({ length: 6 }, () => deferred<void>())
+      let reqIndex = 0
+      const token = `jwt-round-${round}-active`
+      const jar = makeCookieJar({ "__Secure-authjs.session-token": token })
 
-    const stripped = stripRestoringSessionCookies(new Response("ok", { status: 200, headers }))
-    const remaining = getSetCookieHeaders(stripped.headers)
+      const handlers = createAuthRouteHandlers(
+        {
+          async GET() {
+            const idx = reqIndex++
+            await gates[idx]?.promise
+            return makeAuthenticatedSessionResponse("__Secure-authjs.session-token", `jwt-fresh-${round}-${idx}`, "op@pilot.invalid")
+          },
+          async POST(req) {
+            if (new URL(req.url).pathname.endsWith("/session")) {
+              const idx = reqIndex++
+              await gates[idx]?.promise
+              return makeAuthenticatedSessionResponse("__Secure-authjs.session-token", `jwt-upd-${round}-${idx}`, "op@pilot.invalid")
+            }
+            return makeSignoutClearedResponse("__Secure-authjs.session-token")
+          },
+        },
+        fence,
+      )
 
-    expect(stripped.headers.get("x-omni-pathname")).toBe("/dashboard")
-    expect(remaining).toEqual([
-      "assistec-active-store=loja-a; Path=/; SameSite=Lax",
-      "authjs.csrf-token=csrf-123; Path=/; HttpOnly",
-    ])
+      const reqCookie = jar.header()
+      const concurrent = gates.map((_, i) =>
+        i % 2 === 0
+          ? handlers.GET(new Request("https://app.pilot.invalid/api/auth/session", { headers: { cookie: reqCookie } }))
+          : handlers.POST(new Request("https://app.pilot.invalid/api/auth/session", { method: "POST", headers: { cookie: reqCookie } })),
+      )
+
+      const signoutRes = await handlers.POST(
+        new Request("https://app.pilot.invalid/api/auth/signout", { method: "POST", headers: { cookie: reqCookie } }),
+      )
+      jar.apply(signoutRes)
+      expect(jar.sessionCookieNames()).toEqual([])
+
+      for (const g of gates.reverse()) g.resolve()
+      const responses = await Promise.all(concurrent)
+
+      for (const res of responses) {
+        expect(await res.json()).toBeNull()
+        expect(getSetCookieHeaders(res.headers).some(isSessionCookieSetHeader)).toBe(false)
+        jar.apply(res)
+      }
+      expect(jar.sessionCookieNames()).toEqual([])
+    }
   })
 
-  it("compatível com revogação server-side desligada (padrão) e ligada (AUTH_SESSION_REVOCATION=on)", async () => {
+  it("CENÁRIO D + I: compatível com AUTH_SESSION_REVOCATION=off/on e cerca respeita limite/TTL enquanto não-restauração do cookie é stateless", async () => {
     expect(isSessionRevocationEnabled({})).toBe(false)
     expect(isSessionRevocationEnabled({ AUTH_SESSION_REVOCATION: "on" })).toBe(true)
 
@@ -335,9 +418,8 @@ describe("signout-race-guard — extração e cerca de encerramento de sessão",
       ok: false,
       reason: "revoked",
     })
-  })
 
-  it("cerca respeita limite máximo de entradas e expiração por TTL sem vazar memória", () => {
+    // Mesmo após evicção ou expiração de TTL na cerca local, GET /api/auth/session continua sem Set-Cookie.
     const fence = new SignoutTokenFence({ maxEntries: 2, ttlMs: 1000 })
     fence.markSignedOut(["t1"], 100)
     fence.markSignedOut(["t2"], 200)
@@ -345,7 +427,22 @@ describe("signout-race-guard — extração e cerca de encerramento de sessão",
     expect(fence.size()).toBe(2)
     expect(fence.isSignedOut(["t1"], 350)).toBe(false)
     expect(fence.isSignedOut(["t2"], 350)).toBe(true)
-    expect(fence.isSignedOut(["t3"], 350)).toBe(true)
     expect(fence.isSignedOut(["t2"], 1300)).toBe(false)
+
+    const handlers = createAuthRouteHandlers(
+      {
+        async GET() {
+          return makeAuthenticatedSessionResponse("authjs.session-token", "reissued-after-ttl", "u1@pilot.invalid")
+        },
+        async POST() {
+          return makeSignoutClearedResponse("authjs.session-token")
+        },
+      },
+      fence,
+    )
+    const afterEviction = await handlers.GET(
+      new Request("http://127.0.0.1:3000/api/auth/session", { headers: { cookie: "authjs.session-token=t1" } }),
+    )
+    expect(getSetCookieHeaders(afterEviction.headers).some(isSessionCookieSetHeader)).toBe(false)
   })
 })

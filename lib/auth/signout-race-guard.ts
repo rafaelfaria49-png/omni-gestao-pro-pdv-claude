@@ -67,6 +67,22 @@ export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex")
 }
 
+/**
+ * Cerca em memória limitada (defesa em profundidade no processo Node atual).
+ *
+ * CONTRATO DE SEGURANÇA DISTRIBUÍDA:
+ * - A garantia de que respostas atrasadas (`/api/auth/session` ou `proxy.ts`) NUNCA
+ *   restauram um cookie encerrado nem apagam o cookie de um novo login legítimo é
+ *   **100% STATELESS** (`stripSessionCookies`): funciona entre instâncias serverless
+ *   distintas, funções isoladas (`proxy` vs `route`) e cold starts, sem depender desta
+ *   cerca nem de TTL/evicção.
+ * - A revogação distribuída contra replay de cookie copiado após logout é garantida pelo
+ *   PostgreSQL (`admin_sessions`) quando `AUTH_SESSION_REVOCATION=on`.
+ * - Esta cerca atua como defesa complementar no mesmo processo para respostas JSON
+ *   concorrentes de `/api/auth/session` e SÓ marca tokens APÓS o Auth.js validar CSRF
+ *   e emitir limpeza de sessão — nunca antes (impedindo negação de serviço via CSRF
+ *   forjado ou reversão de logout válido por tentativa concorrente rejeitada).
+ */
 export class SignoutTokenFence {
   private readonly entries = new Map<string, number>()
   private readonly ttlMs: number
@@ -91,13 +107,6 @@ export class SignoutTokenFence {
       const oldestKey = this.entries.keys().next().value
       if (oldestKey === undefined) break
       this.entries.delete(oldestKey)
-    }
-  }
-
-  unmark(tokens: readonly string[]): void {
-    for (const token of tokens) {
-      if (!token) continue
-      this.entries.delete(hashSessionToken(token))
     }
   }
 
@@ -134,10 +143,6 @@ type GlobalWithFence = typeof globalThis & {
   [GLOBAL_FENCE_KEY]?: SignoutTokenFence
 }
 
-/**
- * Instância compartilhada no processo Node entre `route.ts` (`/api/auth/*`) e `proxy.ts`.
- * Em `globalThis` para permanecer única mesmo quando Next.js avalia bundles separados.
- */
 export function getSignoutTokenFence(): SignoutTokenFence {
   const g = globalThis as GlobalWithFence
   if (!g[GLOBAL_FENCE_KEY]) {
@@ -166,14 +171,6 @@ export function isClearingSetCookieHeader(setCookieValue: string): boolean {
   return false
 }
 
-export function buildSessionCookieClearHeaders(cookieNames: readonly string[]): string[] {
-  const unique = [...new Set(cookieNames.length > 0 ? cookieNames : ["authjs.session-token"])]
-  return unique.map((name) => {
-    const secure = name.startsWith("__Secure-") ? "; Secure" : ""
-    return `${name}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${secure}`
-  })
-}
-
 export function getSetCookieHeaders(headers: Headers): string[] {
   if (typeof headers.getSetCookie === "function") {
     return headers.getSetCookie()
@@ -183,20 +180,29 @@ export function getSetCookieHeaders(headers: Headers): string[] {
 }
 
 /**
- * Remove qualquer `Set-Cookie` que reemita um cookie de sessão válido (`authjs.session-token*`),
- * preservando integralmente cabeçalhos de limpeza (`Max-Age=0`) e demais cookies da resposta.
+ * Remove TODOS os cabeçalhos `Set-Cookie` do cookie de sessão Auth.js (`authjs.session-token*`,
+ * `__Secure-authjs.session-token*` e fragmentos `.0`/`.1`) de respostas de leitura/proxy,
+ * preservando integralmente todos os demais cabeçalhos e cookies (ex.: `assistec-active-store`,
+ * `authjs.csrf-token`).
+ *
+ * Por que remover tanto restaurações quanto limpezas em caminhos de leitura/proxy:
+ * 1. Em runtime serverless distribuído (Vercel), respostas atrasadas de `GET/POST /api/auth/session`
+ *    ou `proxy.ts` em outra instância/cold-start JAMAIS podem reemitir um cookie de sessão encerrado.
+ * 2. Quando um logout é seguido rapidamente por um novo login legítimo (mesmo operador ou outro),
+ *    uma resposta atrasada da sessão anterior JAMAIS pode enviar `Max-Age=0` e apagar o cookie
+ *    recém-emitido do novo login.
+ * 3. Somente fluxos explícitos de mutação de sessão (`signIn` / `POST /api/auth/callback/*` e
+ *    `POST /api/auth/signout`) gravam ou limpam o cookie de sessão.
  */
-export function stripRestoringSessionCookies(response: Response): Response {
+export function stripSessionCookies(response: Response): Response {
   const setCookies = getSetCookieHeaders(response.headers)
-  const hasRestoringSessionCookie = setCookies.some(
-    (cookie) => isSessionCookieSetHeader(cookie) && !isClearingSetCookieHeader(cookie),
-  )
-  if (!hasRestoringSessionCookie) return response
+  const hasSessionCookie = setCookies.some((cookie) => isSessionCookieSetHeader(cookie))
+  if (!hasSessionCookie) return response
 
   const nextHeaders = new Headers(response.headers)
   nextHeaders.delete("set-cookie")
   for (const cookie of setCookies) {
-    if (isSessionCookieSetHeader(cookie) && !isClearingSetCookieHeader(cookie)) {
+    if (isSessionCookieSetHeader(cookie)) {
       continue
     }
     nextHeaders.append("set-cookie", cookie)
@@ -210,27 +216,25 @@ export function stripRestoringSessionCookies(response: Response): Response {
 }
 
 /**
- * Resposta de `/api/auth/session` quando o token de entrada pertence a uma sessão
- * já encerrada (antes ou durante o processamento concorrente da requisição).
+ * Resposta `200 null` de `/api/auth/session` para token já encerrado, SEM emitir
+ * qualquer `Set-Cookie` (preserva eventual cookie de um novo login legítimo no navegador;
+ * a limpeza explícita do cookie encerrado já foi emitida pelo `POST /api/auth/signout`).
  */
-export function buildSignedOutSessionResponse(cookieNames: readonly string[]): Response {
+export function buildSignedOutSessionResponse(): Response {
   const headers = new Headers({
     "Content-Type": "application/json",
     "Cache-Control": "private, no-cache, no-store",
     Pragma: "no-cache",
     Expires: "0",
   })
-  for (const clearCookie of buildSessionCookieClearHeaders(cookieNames)) {
-    headers.append("set-cookie", clearCookie)
-  }
   return new Response("null", { status: 200, headers })
 }
 
 /**
  * Verifica se a resposta de `POST /api/auth/signout` efetivamente encerrou a sessão
- * limpando o cookie de sessão. Em rejeições de CSRF do Auth.js v5 (`302 .../error?error=MissingCSRF`
- * ou `200 {"url":".../error?error=MissingCSRF"}`), nenhum `Set-Cookie` de limpeza é emitido —
- * nesse caso a marcação na cerca é desfeita para impedir logout forjado (CSRF DoS).
+ * limpando o cookie de sessão após validação de CSRF pelo Auth.js v5.
+ * Em rejeições de CSRF (`302 .../error?error=MissingCSRF` ou `200 {"url":".../error?error=MissingCSRF"}`),
+ * nenhum `Set-Cookie` de limpeza é emitido.
  */
 export function didSignoutClearSession(response: Response): boolean {
   const setCookies = getSetCookieHeaders(response.headers)
@@ -252,38 +256,39 @@ function requestPathname(req: Request): string {
   }
 }
 
-async function handleFencedSessionRequest<TRequest extends Request>(
+async function handleSessionRequest<TRequest extends Request>(
   req: TRequest,
   execute: (req: TRequest) => Promise<Response> | Response,
   fence: SignoutTokenFence,
 ): Promise<Response> {
   const incoming = extractAuthSessionTokens(req.headers.get("cookie"))
   const tokens = incoming.map((item) => item.token)
-  const cookieNames = incoming.flatMap((item) => item.cookieNames)
 
   if (tokens.length > 0 && fence.isSignedOut(tokens)) {
-    return buildSignedOutSessionResponse(cookieNames)
+    return buildSignedOutSessionResponse()
   }
 
   const response = await execute(req)
 
   if (tokens.length > 0 && fence.isSignedOut(tokens)) {
-    return buildSignedOutSessionResponse(cookieNames)
+    return buildSignedOutSessionResponse()
   }
 
-  return response
+  // Garantia stateless entre instâncias: consultas `/api/auth/session` jamais
+  // reescrevem nem apagam o cookie de sessão no navegador.
+  return stripSessionCookies(response)
 }
 
 /**
- * Envolve os handlers GET/POST do Auth.js (`/api/auth/[...nextauth]`) com cerca
- * de encerramento de sessão:
- * - Em `POST /api/auth/signout`: marca o hash do token de entrada ANTES do handler
- *   assíncrono e desfaz se o Auth.js não emitir limpeza do cookie (ex.: falha de CSRF).
- * - Em `GET` e `POST /api/auth/session`: se o token de entrada já foi encerrado antes OU
- *   durante a consulta assíncrona ao banco, descarta a resposta autenticada e qualquer
- *   `Set-Cookie` reemitido, retornando `null` com limpeza explícita de todos os cookies
- *   de sessão recebidos (inclusive fragmentados `.0`/`.1`).
- * - O próximo login legítimo gera um JWT novo (hash distinto) e segue imediatamente.
+ * Envolve os handlers GET/POST do Auth.js (`/api/auth/[...nextauth]`):
+ * - Em `GET` e `POST /api/auth/session`: remove qualquer `Set-Cookie` de sessão
+ *   (proteção stateless contra restauração entre instâncias/cold-starts e contra
+ *   remoção acidental de um novo login por resposta atrasada) e aplica a cerca local
+ *   como defesa complementar para o corpo JSON.
+ * - Em `POST /api/auth/signout`: executa primeiro o handler do Auth.js (que valida CSRF
+ *   e emite `Set-Cookie: Max-Age=0`) e SÓ marca o token na cerca após confirmação de
+ *   limpeza (`didSignoutClearSession`). Assim, tentativas com CSRF inválido nunca
+ *   interrompem sessões legítimas nem desfazem logouts válidos concorrentes.
  */
 export function createAuthRouteHandlers<TRequest extends Request>(
   baseHandlers: AuthRouteHandlers<TRequest>,
@@ -295,13 +300,13 @@ export function createAuthRouteHandlers<TRequest extends Request>(
       if (!pathname.endsWith("/session")) {
         return baseHandlers.GET(req)
       }
-      return handleFencedSessionRequest(req, baseHandlers.GET, fence)
+      return handleSessionRequest(req, baseHandlers.GET, fence)
     },
 
     async POST(req: TRequest): Promise<Response> {
       const pathname = requestPathname(req)
       if (pathname.endsWith("/session")) {
-        return handleFencedSessionRequest(req, baseHandlers.POST, fence)
+        return handleSessionRequest(req, baseHandlers.POST, fence)
       }
       if (!pathname.endsWith("/signout")) {
         return baseHandlers.POST(req)
@@ -310,22 +315,11 @@ export function createAuthRouteHandlers<TRequest extends Request>(
       const incoming = extractAuthSessionTokens(req.headers.get("cookie"))
       const tokens = incoming.map((item) => item.token)
 
-      if (tokens.length > 0) {
+      const response = await baseHandlers.POST(req)
+      if (tokens.length > 0 && didSignoutClearSession(response)) {
         fence.markSignedOut(tokens)
       }
-
-      try {
-        const response = await baseHandlers.POST(req)
-        if (tokens.length > 0 && !didSignoutClearSession(response)) {
-          fence.unmark(tokens)
-        }
-        return response
-      } catch (error) {
-        if (tokens.length > 0) {
-          fence.unmark(tokens)
-        }
-        throw error
-      }
+      return response
     },
   }
 }

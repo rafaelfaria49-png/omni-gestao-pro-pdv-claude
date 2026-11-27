@@ -5,7 +5,7 @@ import { authConfig } from "./auth.config"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { isPlatformAuthority, resolveStoreModules } from "@/lib/auth/access-policy"
-import { isSessionRevocationEnabled, prismaAdminSessionStore, resolveAdminSession } from "@/lib/auth/admin-session"
+import { isSessionRevocationEnabled, legacyAdminSessionId, prismaAdminSessionStore, resolveAdminSession } from "@/lib/auth/admin-session"
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -20,7 +20,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // Logout revoga SÓ esta sessão (outros dispositivos e usuários seguem ativos).
     async signOut(message) {
       if (!isSessionRevocationEnabled()) return
-      const sid = "token" in message ? message.token?.sid : undefined
+      const token = "token" in message ? message.token : undefined
+      const sid =
+        typeof token?.sid === "string"
+          ? token.sid
+          : typeof token?.jti === "string" && token.jti.trim()
+            ? legacyAdminSessionId(token.jti)
+            : undefined
       if (typeof sid !== "string") return
       // Uma nova tentativa; se ainda falhar, registra o prefixo do sid para acompanhamento.
       for (let attempt = 1; attempt <= 2; attempt++) {

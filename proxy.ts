@@ -15,11 +15,7 @@ import {
 import { isSegmentoContadorExterno } from "@/lib/contador/auth-externa/proxy-publico"
 import { isRotaLegadaContador, PORTAL_V2_LOGIN } from "@/lib/contador/legado/rota-legada"
 import { isPublicPath, resolveProxyEntry } from "@/lib/auth/proxy-session-gate"
-import {
-  extractAuthSessionTokens,
-  getSignoutTokenFence,
-  stripRestoringSessionCookies,
-} from "@/lib/auth/signout-race-guard"
+import { stripSessionCookies } from "@/lib/auth/signout-race-guard"
 import { MELI_CALLBACK_PATH } from "@/lib/marketplace/mercado-livre/config"
 
 const ADMIN_COOKIE = "assistec_admin_session"
@@ -177,22 +173,18 @@ const authProxy = auth(async (req) => {
 export async function proxy(req: NextRequest, ev: unknown) {
   const { pathname } = req.nextUrl
   // Rotas `/api/auth/*` (incluindo `/api/auth/csrf`, `/api/auth/session` e `/api/auth/signout`)
-  // já são tratadas diretamente pelo Auth.js com cerca de encerramento própria; passar pelo
-  // wrapper `auth()` aqui executaria `getSession()` redundante e emitiria `Set-Cookie`
-  // concorrente durante o logout.
+  // já são tratadas diretamente pelo Auth.js com proteção própria; passar pelo wrapper `auth()`
+  // aqui executaria `getSession()` redundante e emitiria `Set-Cookie` concorrente.
   if (pathname === "/api/auth" || pathname.startsWith("/api/auth/")) {
     return buildNextWithPath(req)
   }
 
-  const incomingTokens = extractAuthSessionTokens(req.headers.get("cookie")).map((item) => item.token)
   const response = (await (authProxy as (r: NextRequest, ctx: unknown) => Promise<Response | undefined>)(req, ev))
     ?? buildNextWithPath(req)
 
-  if (incomingTokens.length > 0 && getSignoutTokenFence().isSignedOut(incomingTokens)) {
-    return stripRestoringSessionCookies(response)
-  }
-
-  return response
+  // Garantia stateless entre funções isoladas (Vercel): o proxy nunca reemite nem limpa
+  // o cookie `authjs.session-token*`, preservando todos os demais cookies (ex.: `assistec-active-store`).
+  return stripSessionCookies(response)
 }
 
 export { proxy as default }
