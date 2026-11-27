@@ -71,7 +71,9 @@ idempotente de resposta nem respostas que não sejam resultado financeiro. Migra
 | Unitários `lib/gestor-money-assistente` + `lib/gastos` + `mensageria.unit` | 300/300 (+4 de desligamento) |
 | PostgreSQL descartável local (PG 17, 127.0.0.1:55530, migrations reais + DRIFT_ZERO) | 13/13, 3 execuções seguidas |
 | eslint nos arquivos alterados | limpo |
-| typecheck / build | ver PR (CI) |
+| `npm run typecheck` (local) | exit 0 |
+| `npm run build` (local) | Compiled successfully in 3.6 min; rota `/api/gestor-money/whatsapp/webhook` presente |
+| CI `Gestor Money PG` (commit 64d1883) | g001 24 · g002 60 (+31 pulos explícitos) · g003 102 · g004 51 · g005 34 · g006 54 · **g007 13** · rls 9 — GM_PG_OK |
 
 Cenários PostgreSQL (todos sem sessão de navegador, `@/auth` → null):
 1. Papéis: worker G006 válido e sem acesso às tabelas do assistente.
