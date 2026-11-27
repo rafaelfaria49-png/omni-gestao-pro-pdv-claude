@@ -1,6 +1,9 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
 import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { consultarFinanceiroEmpresa, diaNoFusoConsulta, erroConsultaFinanceira, reaisConsulta, resumoTitulosConsulta } from "@/lib/gastos/query"
+import { estornarPagamentoHub, pagarTituloHub } from "@/lib/gastos/apply"
+import { contextoEmpresaOperacao } from "@/lib/gastos/operacoes"
+import { OperacaoGastoError } from "@/lib/gastos/operacao-schema"
 /**
  * /api/financeiro/pagar
  *
@@ -189,6 +192,68 @@ const deleteQuerySchema = z.object({
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
+// ─── PATCH com o Gestor Money LIGADO (motor G004) ─────────────────────────────
+
+const centavosDeReais = (v: number | undefined) => v === undefined ? undefined : String(Math.round(v * 100))
+const chaveIdempotencia = z.string().trim().min(1).max(160).regex(/^[^\u0000-\u001f\u007f]+$/)
+/** Mesmo corpo da #397 + a chave do navegador (obrigatória com o motor) e a forma opcional. */
+const patchGestorMoneySchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("liquidar"), lojaId: z.string().max(120).optional(), localKey: z.string().min(1).max(260),
+    observacao: z.string().max(2000).optional(), restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
+    formaPagamento: z.string().max(80).optional(), idempotencyKey: chaveIdempotencia }),
+  z.object({ op: z.literal("parcial"), lojaId: z.string().max(120).optional(), localKey: z.string().min(1).max(260),
+    valor: z.number().finite().positive("Valor deve ser positivo"), observacao: z.string().max(2000).optional(),
+    restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
+    formaPagamento: z.string().max(80).optional(), idempotencyKey: chaveIdempotencia }),
+  z.object({ op: z.literal("estornar"), lojaId: z.string().max(120).optional(), localKey: z.string().min(1).max(260),
+    motivo: z.string().max(2000).optional(), pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(),
+    pagoEsperado: z.number().finite().nonnegative().max(1e12).optional(), idempotencyKey: chaveIdempotencia }),
+])
+
+/** Recusa definitiva = 4xx sem efeito que nunca vai passar com a MESMA chave; o navegador descarta a intenção.
+ * Acesso negado (pode voltar) e conteúdo divergente (a chave pertence a outro pedido) conservam a intenção. */
+function recusaDefinitiva(status: number, code: string) {
+  return status >= 400 && status < 500 && code !== "acesso_negado" && code !== "operacao_conteudo_divergente"
+}
+
+async function patchPagarGestorMoney(storeId: string, json: unknown, actor: ReturnType<typeof extractAuditoriaActor>): Promise<NextResponse> {
+  const parsed = patchGestorMoneySchema.safeParse(json)
+  if (!parsed.success) {
+    const semChave = typeof json === "object" && json !== null && !("idempotencyKey" in json)
+    return NextResponse.json({ ok: false, code: semChave ? "idempotency_obrigatoria" : "validation_error",
+      error: semChave ? "Atualize a página: esta operação exige a confirmação segura do navegador." : "Dados inválidos" }, { status: 400 })
+  }
+  const d = parsed.data, operacaoId = d.idempotencyKey
+  try {
+    const ctx = await contextoEmpresaOperacao(storeId)
+    if (d.op === "estornar") {
+      const resultado = await estornarPagamentoHub(ctx, { localKey: d.localKey, chave: operacaoId, motivo: d.motivo,
+        pagamentoIndex: d.pagamentoIndex, pagoEsperadoCentavos: centavosDeReais(d.pagoEsperado) })
+      void logAuditoriaFinanceira({ storeId, entidade: "pagar", entidadeId: d.localKey, acao: "estornar", actor,
+        depois: { localKey: d.localKey, motivo: d.motivo, operacaoId, operacaoFinanceiraId: resultado.operacaoId, valorCentavos: resultado.valorCentavos } })
+      return NextResponse.json({ ok: true, op: "estornar", operacaoId, valorEstornado: Number(resultado.valorCentavos) / 100, resultado })
+    }
+    const forma = d.formaPagamento?.trim().toLowerCase()
+    const resultado = await pagarTituloHub(ctx, { localKey: d.localKey, chave: operacaoId, quitar: d.op === "liquidar",
+      ...(d.op === "parcial" ? { valorCentavos: centavosDeReais(d.valor) } : {}),
+      ...(forma ? { formaPagamento: forma } : {}), restanteEsperadoCentavos: centavosDeReais(d.restanteEsperado) })
+    void logAuditoriaFinanceira({ storeId, entidade: "pagar", entidadeId: d.localKey, acao: "liquidar", actor,
+      depois: { localKey: d.localKey, operacaoId, operacaoFinanceiraId: resultado.operacaoId, valorCentavos: resultado.valorCentavos, parcial: d.op === "parcial" } })
+    return NextResponse.json({ ok: true, op: d.op, operacaoId, valorPago: Number(resultado.valorCentavos) / 100, resultado })
+  } catch (e) {
+    if (e instanceof OperacaoGastoError) {
+      // Contrato da #397 para recusas de estado: `<op>_titulo_alterado`; período fechado com a mensagem da main.
+      const code = e.code === "titulo_alterado" ? `${d.op}_titulo_alterado` : e.code
+      const error = e.code === "periodo_fechado" ? "Período financeiro fechado. Reabra o fechamento para alterar lançamentos." : e.message
+      return NextResponse.json({ ok: false, error, code, operacaoId, operacaoRejeitada: recusaDefinitiva(e.status, e.code) }, { status: e.status })
+    }
+    // Falha recuperável (banco, rede, gatilho): a intenção fica no navegador e a MESMA chave é reenviada.
+    console.error("[financeiro/pagar PATCH G004]", e instanceof Error ? e.name : "erro")
+    return NextResponse.json({ ok: false, error: "Não foi possível confirmar a operação financeira. Reenvie a mesma operação.",
+      code: "db_error", operacaoId, operacaoRejeitada: false }, { status: 503 })
+  }
+}
+
 /** GET com o Gestor Money LIGADO — mesma forma de resposta da main, valores da consulta G005. */
 async function getPagarGestorMoney(storeId: string, localKey: string | undefined): Promise<NextResponse> {
   try {
@@ -210,7 +275,8 @@ async function getPagarGestorMoney(storeId: string, localKey: string | undefined
     }))
     return NextResponse.json({
       ok: true, rows: q.pagar.map(linha), summary: resumoTitulosConsulta(q, "PAGAR"), audit,
-      metadata: { source: "server", storeId, generatedAt: q.asOf, base: q.base, versaoCalculo: q.versaoCalculo, criterios: q.criterios },
+      // `motor: "G004"`: o navegador passa a enviar liquidar/parcial/estornar com a chave de idempotência.
+      metadata: { source: "server", storeId, generatedAt: q.asOf, base: q.base, versaoCalculo: q.versaoCalculo, criterios: q.criterios, motor: "G004" },
     })
   } catch (e) {
     const erro = erroConsultaFinanceira(e)
@@ -395,6 +461,12 @@ export async function PATCH(req: Request) {
   const session = await auth()
   const userLabel = getOperatorLabelFromSession(session)
   const actor = extractAuditoriaActor(session, req)
+
+  // Gestor Money LIGADO: liquidar/parcial/estornar pelo motor G004, com a chave de idempotência do navegador.
+  // Desligado (padrão), nada abaixo muda: o caminho da main/#397 segue intacto. `cancelar` é sempre da main.
+  if (gestorMoneyAtivo() && parsed.data.op !== "cancelar") {
+    return respostaFinanceiraPrivada(await patchPagarGestorMoney(storeId, json, actor))
+  }
 
   try {
     await prismaEnsureConnected()
