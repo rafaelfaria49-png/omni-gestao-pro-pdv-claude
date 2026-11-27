@@ -47,7 +47,12 @@ export async function exigirLease(tx: MensageriaDb, claim: Claim) {
   return rows[0]
 }
 
-export async function concluirStaging(db: MensageriaClient, claim: Claim) {
+/** Estado final da inbox ao concluir o staging. Padrão G006 = AGUARDANDO_VINCULO; o processador G008 marca
+ * PROCESSADO_G008 (mensagem já interpretada) — o CHECK g006_inbox_check aceita os dois desde 20261127140000. */
+export type EstadoInboxConcluida = "AGUARDANDO_VINCULO" | "PROCESSADO_G008"
+export async function concluirStaging(db: MensageriaClient, claim: Claim, opcoes: { estadoInbox?: EstadoInboxConcluida } = {}) {
+  const estadoInbox = opcoes.estadoInbox ?? "AGUARDANDO_VINCULO"
+  if (estadoInbox !== "AGUARDANDO_VINCULO" && estadoInbox !== "PROCESSADO_G008") throw new MensageriaError("CONFIG_INVALIDA")
   return db.$transaction(async tx => {
     const row = await exigirLease(tx, claim)
     if (row.tipo !== "STAGING" || !row.inboxId) throw new MensageriaError("POISON_JOB")
@@ -55,7 +60,7 @@ export async function concluirStaging(db: MensageriaClient, claim: Claim) {
     const conteudo = inbox.conteudo
     if (!conteudo || typeof conteudo !== "object" || Array.isArray(conteudo)
       || !["texto", "audio", "foto", "tecnico"].includes(String(conteudo.tipo))) throw new MensageriaError("POISON_JOB")
-    await tx.whatsAppGestaoInbox.update({ where: { id: row.inboxId }, data: { estado: "AGUARDANDO_VINCULO" } })
+    await tx.whatsAppGestaoInbox.update({ where: { id: row.inboxId }, data: { estado: estadoInbox } })
     const n = await tx.$executeRaw`UPDATE gastos_jobs SET estado='CONCLUIDO',resultado='{"codigo":"STAGING_PRIVADO"}'::jsonb,
       "falhaCodigo"=NULL,"leaseOwner"=NULL,"leaseToken"=NULL,"leaseUntil"=NULL,"updatedAt"=clock_timestamp()
       WHERE id=${claim.id} AND "leaseToken"=${claim.leaseToken} AND "leaseUntil">clock_timestamp()`

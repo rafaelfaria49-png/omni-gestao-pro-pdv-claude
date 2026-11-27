@@ -63,6 +63,14 @@ const propostaSchema = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("TRANSFERENCIA_INTERNA"), valorCentavos: positivo, moeda,
     carteiraOrigemId: identificadorOperacao, carteiraDestinoId: identificadorOperacao,
     dataPagamento: instante, descricao: texto.optional() }).strict(),
+  // Receita já recebida (sem título): UMA entrada na conta do perfil, categoria de RECEITA opcional.
+  z.object({ tipo: z.literal("RECEITA_RECEBIDA"), descricao: texto, valorCentavos: positivo, moeda,
+    carteiraId: identificadorOperacao, formaPagamento: meio, dataPagamento: instante,
+    categoriaId: identificadorOperacao.optional(), contraparteTexto: texto.optional() }).strict(),
+  // Recebimento de título a receber existente (parcial ou quitação): UMA entrada + histórico do título.
+  z.object({ tipo: z.literal("RECEBER_TITULO"), tituloId: identificadorOperacao,
+    valorCentavos: positivo.optional(), quitar: z.boolean().default(false), moeda,
+    carteiraId: identificadorOperacao, formaPagamento: meio, dataPagamento: instante }).strict(),
   // Adaptador interno do HUB para recibos M1 existentes; não cria pagamento antigo.
   z.object({ tipo: z.literal("ESTORNAR_LEGADO"), ...estorno,
     tituloId: identificadorOperacao, movimentoOriginalId: identificadorOperacao,
@@ -86,7 +94,7 @@ export function normalizarPropostaGasto(input: unknown): PropostaGasto {
   const parsed = propostaSchema.safeParse(input)
   if (!parsed.success) throw new OperacaoGastoError("proposta_invalida")
   const p = parsed.data
-  if (p.tipo === "PAGAR_TITULO" && (p.quitar === (p.valorCentavos !== undefined))) {
+  if ((p.tipo === "PAGAR_TITULO" || p.tipo === "RECEBER_TITULO") && (p.quitar === (p.valorCentavos !== undefined))) {
     throw new OperacaoGastoError("valor_ou_quitacao_obrigatorio")
   }
   if (p.tipo === "TRANSFERENCIA_INTERNA" && p.carteiraOrigemId === p.carteiraDestinoId) {

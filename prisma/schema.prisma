@@ -2441,6 +2441,7 @@ model FinanceiroPerfil {
   cartoes CartaoInstrumento[]
   ciclos CartaoCiclo[]
   cartoesLimitesEventos CartaoLimiteEvento[]
+  membrosEventos PerfilMembroEvento[]
   eventosOperacao FinanceiroOperacaoEvento[]
   outbox GastoOutbox[]
 }
@@ -4807,6 +4808,24 @@ model CartaoInstrumento {
 }
 
 /** Histórico imutável de alterações de limite de cartão (auditoria privada, com RLS). */
+/// Auditoria imutável de provisionamento/concessão/revogação de acesso ao perfil EMPRESA.
+/// Alvo e autor sem FK: o histórico sobrevive à remoção do vínculo de loja (que revoga o membro).
+model PerfilMembroEvento {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String
+  adminUserId String
+  autorAdminUserId String
+  acao String
+  motivo String?
+  createdAt DateTime @default(now())
+
+  @@index([perfilId, createdAt])
+  @@index([adminUserId, createdAt])
+  @@map("financeiro_perfil_membros_eventos")
+}
+
 model CartaoLimiteEvento {
   id String @id @default(cuid())
   perfilId String

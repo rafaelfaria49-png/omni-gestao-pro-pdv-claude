@@ -15,6 +15,8 @@ import { limiteUtilizadoCartaoNaTransacao, travarCiclosGasto, verificarLimiteDis
 import { resolverFornecedorGasto } from "./fornecedores"
 import { datasDaProposta, exigirPeriodosAbertosGasto, travarPeriodosGasto } from "./periodo"
 import { vincularDocumentoGastoNaTransacao } from "./documentos"
+import { saldoTituloConsulta } from "./query-calculo"
+import { appendFinanceiroHistorico } from "@/lib/financeiro/contracts/payload"
 
 const confirmar = z.object({ revisaoId: identificadorOperacao, versaoEsperada: z.number().int().positive(), chave: chaveOperacao }).strict()
 
@@ -107,6 +109,9 @@ export async function aplicarOperacaoGasto(contexto: unknown, input: unknown): P
     await exigirPeriodosAbertosGasto(tx, ctx, datas)
     if (p.tipo === "TRANSFERENCIA_INTERNA") {
       return aplicarTransferenciaInterna(tx, ctx, p, { chave: command.chave, versaoEsperada: command.versaoEsperada, revisao, hash, agora })
+    }
+    if (p.tipo === "RECEITA_RECEBIDA" || p.tipo === "RECEBER_TITULO") {
+      return aplicarEntradaGasto(tx, ctx, p, { chave: command.chave, versaoEsperada: command.versaoEsperada, revisao, hash, agora })
     }
     const estorno = p.tipo === "ESTORNAR_PAGAMENTO" || p.tipo === "ESTORNAR_LEGADO"
     const carteiraId = "carteiraId" in p ? p.carteiraId : fonteBase?.movimento.carteiraId ?? undefined
@@ -239,6 +244,59 @@ async function concluirOperacaoGasto(tx: FinanceiroDb, ctx: FinanceiroContextoAu
   if (cas.count !== 1) throw new OperacaoGastoError("revisao_desatualizada", 409)
   await tx.financeiroOperacao.update({ where: { id: k.opId }, data: { estado: "APLICADA", resultado, concluidaEm: k.agora } })
   return resultado
+}
+
+/**
+ * RECEITA_RECEBIDA e RECEBER_TITULO: UMA entrada na conta do perfil (ativa, não crédito), pelo mesmo lock de
+ * conta do G004. Recebimento trava o título, calcula o aberto pelo MESMO cálculo do G005 (`saldoTituloConsulta`)
+ * e grava o histórico no formato da main (`appendFinanceiroHistorico`) — nunca um segundo recebimento.
+ */
+async function aplicarEntradaGasto(tx: FinanceiroDb, ctx: FinanceiroContextoAutorizado,
+  p: Extract<PropostaGasto, { tipo: "RECEITA_RECEBIDA" | "RECEBER_TITULO" }>,
+  k: { chave: string; versaoEsperada: number; revisao: { id: string; grupoChave: string }; hash: string; agora: Date }) {
+  const store = storeDoContexto(ctx)
+  let titulo: Awaited<ReturnType<typeof tx.contaReceberTitulo.findFirst>> = null
+  let valor: bigint
+  if (p.tipo === "RECEBER_TITULO") {
+    await tx.$queryRaw`SELECT id FROM contas_receber_titulos WHERE id=${p.tituloId} AND "storeId" IS NOT DISTINCT FROM ${store}
+      AND ("perfilId"=${ctx.perfilId} OR ("perfilId" IS NULL AND ${ctx.tipo === "EMPRESA"})) FOR UPDATE`
+    titulo = await tx.contaReceberTitulo.findFirst({ where: { id: p.tituloId, storeId: store, ativo: true,
+      ...(ctx.tipo === "PESSOAL" ? { perfilId: ctx.perfilId } : { OR: [{ perfilId: ctx.perfilId }, { perfilId: null }] }) } })
+    if (!titulo || ["cancelado", "estornado"].includes(titulo.status)) throw new OperacaoGastoError("titulo_indisponivel", 404)
+    let saldo: ReturnType<typeof saldoTituloConsulta>
+    try { saldo = saldoTituloConsulta({ ...titulo, alocacoesPagamento: [] }) } catch { throw new OperacaoGastoError("titulo_exige_revisao", 409) }
+    valor = p.quitar ? saldo.restante : BigInt(p.valorCentavos!)
+    if (valor <= BigInt(0) || valor > saldo.restante) throw new OperacaoGastoError("valor_acima_saldo_titulo", 409)
+  } else {
+    valor = BigInt(p.valorCentavos)
+    if (p.categoriaId && !await tx.categoriaGasto.findFirst({ where: { id: p.categoriaId, perfilId: ctx.perfilId, storeId: store,
+      ativo: true, natureza: "RECEITA" } })) throw new OperacaoGastoError("categoria_indisponivel", 404)
+  }
+  const contas = await travarCarteirasGasto(tx, ctx, [p.carteiraId], p.carteiraId)
+  const conta = contas.get(p.carteiraId)!
+  const op = await tx.financeiroOperacao.create({ data: { perfilId: ctx.perfilId, storeId: store,
+    autorAdminUserId: ctx.userId, chave: k.chave, grupoChave: k.revisao.grupoChave, tipo: p.tipo, payloadHash: k.hash, revisaoId: k.revisao.id } })
+  const movimentoId = randomUUID(), ocorridoEm = new Date(p.dataPagamento)
+  await tx.movimentacaoFinanceira.create({ data: {
+    id: movimentoId, perfilId: ctx.perfilId, storeId: store, operacaoFinanceiraId: op.id, tipo: "entrada",
+    origem: p.tipo === "RECEBER_TITULO" ? "receber" : "receita", referenciaId: titulo ? (titulo.localKey ?? titulo.id) : op.id,
+    receberTituloId: titulo?.id ?? null, categoriaId: titulo ? titulo.categoriaId : p.tipo === "RECEITA_RECEBIDA" ? p.categoriaId ?? null : null,
+    descricao: p.tipo === "RECEITA_RECEBIDA" ? p.descricao : `Recebimento — ${titulo!.descricao}`.slice(0, 500),
+    carteiraId: conta.id, valor: Number(valor) / 100, valorCentavos: valor.toString(), precisaoStatus: "CENTAVOS",
+    formaPagamento: p.formaPagamento, ocorridoEm,
+  } })
+  if (titulo) {
+    const base = titulo.payload && typeof titulo.payload === "object" && !Array.isArray(titulo.payload) ? titulo.payload as Record<string, unknown> : {}
+    const payload = appendFinanceiroHistorico(base, { tipo: "pagamento", valor: Number(valor) / 100, formaPagamento: p.formaPagamento,
+      movimentoId, operacaoId: op.id, at: ocorridoEm.toISOString() })
+    const depois = saldoTituloConsulta({ ...titulo, payload: payload as Prisma.JsonValue, alocacoesPagamento: [] })
+    await tx.contaReceberTitulo.update({ where: { id: titulo.id }, data: { payload: payload as Prisma.InputJsonObject,
+      status: depois.restante === BigInt(0) ? "pago" : "parcial", ...(titulo.perfilId ? {} : { perfilId: ctx.perfilId }) } })
+  }
+  await saldoCarteiraGasto(tx, ctx, conta, true)
+  const resultado: ResultadoOperacaoGasto = { operacaoId: op.id, revisaoId: k.revisao.id, gastoId: null,
+    tituloIds: titulo ? [titulo.id] : [], pagamentoId: null, movimentoIds: [movimentoId], valorCentavos: valor.toString(), estado: "APLICADA" }
+  return concluirOperacaoGasto(tx, ctx, { opId: op.id, revisaoId: k.revisao.id, versaoEsperada: k.versaoEsperada, agora: k.agora, resultado })
 }
 
 /**
