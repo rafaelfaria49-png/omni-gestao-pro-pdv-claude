@@ -77,8 +77,13 @@ export default async function RootLayout({
 }>) {
   const session = await auth()
   const path = (await headers()).get('x-omni-pathname') || '/'
+  const isIsolatedGestorPreview =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.GESTOR_MONEY_ISOLATED_PREVIEW === '1' &&
+    (path === '/gestor-money/preview' || path === '/gestor-money/preview/')
   const isPublic = path === '/' || path === '/privacy' || path === '/baixar' || path === '/suporte' ||
     path === '/gestao-lojas' || path === '/gestao-lojas/' ||
+    isIsolatedGestorPreview ||
     path.startsWith('/login') || path === '/portal' || path.startsWith('/portal/') ||
     path === '/contador' || path.startsWith('/contador/') || path.startsWith('/contador-externo')
   if (!isPublic && !path.startsWith('/dashboard') && path !== '/conta/seguranca') {

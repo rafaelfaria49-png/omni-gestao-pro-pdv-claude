@@ -34,6 +34,13 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/workbox-") || pathname.startsWith("/worker-")) return true
   if (/\.(png|svg|ico|webp|jpg|jpeg|gif|webmanifest)$/i.test(pathname)) return true
   if (pathname === "/login" || pathname.startsWith("/login/")) return true
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.GESTOR_MONEY_ISOLATED_PREVIEW === "1" &&
+    (pathname === "/gestor-money/preview" || pathname === "/gestor-money/preview/")
+  ) {
+    return true
+  }
   return false
 }
 
