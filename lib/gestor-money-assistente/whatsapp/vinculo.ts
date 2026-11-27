@@ -187,6 +187,19 @@ export async function revogarVinculo(db: GmDb, input: { userId: string; motivo: 
   })
 }
 
+/** Desiste do pareamento pendente (o usuário mudou de telefone ou fechou a tela). Idempotente. */
+export async function cancelarPareamento(db: GmDb, userId: string) {
+  return db.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"gm-assist-desafio:" + userId}))`
+    const d = await tx.gmAssistDesafio.findUnique({ where: { pendenteUsuario: userId }, select: { id: true } })
+    if (!d) return { cancelado: false }
+    const [{ agora }] = await tx.$queryRaw<Array<{ agora: Date }>>`SELECT clock_timestamp() AS agora`
+    await tx.gmAssistDesafio.update({ where: { id: d.id }, data: { estado: "CANCELADO", pendenteUsuario: null, decididoEm: agora } })
+    await evento(tx, { tipo: "DESAFIO_CANCELADO", adminUserId: userId, desafioId: d.id })
+    return { cancelado: true }
+  })
+}
+
 export type VinculoAtivo = { id: string; adminUserId: string; versao: number; telefoneE164: string }
 
 /** Vínculo ATIVO do remetente com usuário ainda ativo. Ausente = remetente não vinculado. */
@@ -208,14 +221,29 @@ export async function vinculoVigente(db: GmDb | Tx, vinculoId: string, versao: n
   return vinculoAtivoPorTelefone(db, v.telefoneE164).then(a => (a?.id === v.id ? a : null))
 }
 
-/** Situação para a tela (sessão web): telefone mascarado, sem código nem hash. */
+export type EstadoVinculoTela = "SEM_VINCULO" | "PENDENTE" | "EXPIRADO" | "BLOQUEADO" | "VINCULADO"
+
+/**
+ * Situação para a tela (sessão web, contrato da #418): telefone mascarado, sem código nem hash.
+ * Expiração pelo relógio do BANCO. VINCULADO prevalece; um pendente em andamento (novo pareamento) vem junto.
+ * EXPIRADO/BLOQUEADO refletem o desafio mais recente decidido nos últimos 30 min, para a tela orientar "gerar novo código".
+ */
 export async function situacaoVinculo(db: GmDb, userId: string) {
-  const [v, d] = await Promise.all([
+  const [{ agora }] = await db.$queryRaw<Array<{ agora: Date }>>`SELECT clock_timestamp() AS agora`
+  const [v, d, ultimo] = await Promise.all([
     db.gmAssistVinculo.findUnique({ where: { ativoUsuario: userId }, select: { telefoneE164: true, consentidoEm: true } }),
-    db.gmAssistDesafio.findUnique({ where: { pendenteUsuario: userId }, select: { telefoneE164: true, expiraEm: true } }),
+    db.gmAssistDesafio.findUnique({ where: { pendenteUsuario: userId }, select: { telefoneE164: true, expiraEm: true, tentativas: true, limiteTentativas: true } }),
+    db.gmAssistDesafio.findFirst({ where: { adminUserId: userId, estado: { in: ["EXPIRADO", "BLOQUEADO"] },
+      decididoEm: { gt: new Date(agora.getTime() - 30 * 60_000) } }, orderBy: { criadoEm: "desc" }, select: { estado: true } }),
   ])
+  const pendenteVigente = d && d.expiraEm.getTime() > agora.getTime()
+  const estado: EstadoVinculoTela = v ? "VINCULADO" : pendenteVigente ? "PENDENTE"
+    : d ? "EXPIRADO" : ultimo?.estado === "BLOQUEADO" ? "BLOQUEADO" : ultimo?.estado === "EXPIRADO" ? "EXPIRADO" : "SEM_VINCULO"
   return {
-    vinculado: v ? { telefoneMascarado: mascararTelefone(v.telefoneE164), desde: v.consentidoEm } : null,
-    pendente: d ? { telefoneMascarado: mascararTelefone(d.telefoneE164), expiraEm: d.expiraEm } : null,
+    estado,
+    vinculado: v ? { telefoneMascarado: mascararTelefone(v.telefoneE164), desde: v.consentidoEm.toISOString() } : null,
+    pendente: pendenteVigente ? { telefoneMascarado: mascararTelefone(d.telefoneE164), expiraEm: d.expiraEm.toISOString(),
+      tentativasRestantes: d.limiteTentativas - d.tentativas } : null,
+    consentimentoVersao: CONSENTIMENTO_VERSAO_ATUAL,
   }
 }

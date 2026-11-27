@@ -31,11 +31,11 @@ function entrypoint(env: Record<string, string>, opcoes: { reactServer?: boolean
       PATH: process.env.PATH ?? "", SYSTEMROOT: process.env.SYSTEMROOT ?? "", GESTOR_MONEY_ENABLED: "true",
       GASTOS_WORKER_ENV: "teste", GASTOS_WORKER_MODE: "SIMULADO", GASTOS_WORKER_DATABASE_URL: url("omni_gastos_worker"),
       GASTOS_WORKER_ASSISTENTE: "ligado", GASTOS_WORKER_APP_DATABASE_URL: url("gm_g007_runtime"),
-      GASTOS_WORKER_CONCURRENCY: "2", WHATSAPP_CANAL_TOKEN_G007_SYNTHETIC: "synthetic-only-token", ...env } })
+      GASTOS_WORKER_CONCURRENCY: "2", WHATSAPP_CANAL_TOKEN_G007_SYNTHETIC: "synthetic-only-token", ...env } as unknown as NodeJS.ProcessEnv })
     let saida = ""
-    filho.stdout!.on("data", b => { saida += b.toString() }); filho.stderr!.on("data", b => { saida += b.toString() })
+    filho.stdout!.on("data", (b: Buffer) => { saida += b.toString() }); filho.stderr!.on("data", (b: Buffer) => { saida += b.toString() })
     const timer = setTimeout(() => { filho.kill("SIGKILL"); falha(Error("entrypoint sem resposta: " + saida.slice(-500))) }, 120_000)
-    filho.once("exit", codigo => {
+    filho.once("exit", (codigo: number | null) => {
       clearTimeout(timer)
       const eventos = saida.split(/\r?\n/).filter(l => l.startsWith("{")).map(l => { try { return JSON.parse(l) } catch { return {} } })
       ok({ codigo, eventos, saida })

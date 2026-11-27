@@ -14,7 +14,7 @@ import { requireFinanceiroPerfilAccess, requireFinanceiroPerfilAccessPorPrincipa
 import { validarPapelWorker } from "@/lib/gastos/worker"
 import { execucaoG004 } from "@/lib/gestor-money-assistente/adaptador-servidor"
 import { processadorStagingGestao, reconciliarConversasGestao, TEXTOS } from "@/lib/gestor-money-assistente/whatsapp/gateway"
-import { revogarVinculo, iniciarPareamento, CONSENTIMENTO_VERSAO_ATUAL, VinculoError } from "@/lib/gestor-money-assistente/whatsapp/vinculo"
+import { cancelarPareamento, revogarVinculo, iniciarPareamento, situacaoVinculo, CONSENTIMENTO_VERSAO_ATUAL, VinculoError } from "@/lib/gestor-money-assistente/whatsapp/vinculo"
 import { processarWebhookGestao } from "@/lib/gestor-money-assistente/whatsapp/webhook"
 import { formatarCentavos } from "@/lib/gestor-money-assistente/texto"
 import { filtroDoPlano } from "@/lib/gestor-money-assistente/consultas"
@@ -54,6 +54,33 @@ suite("G007 vínculo + G008 conversa persistente (PostgreSQL descartável)", () 
     // Auditoria e vínculo imutáveis.
     await expect(owner.gmAssistEvento.deleteMany({ where: { adminUserId: c.U1 } })).rejects.toThrow()
     await expect(owner.gmAssistVinculo.update({ where: { id: v.id }, data: { adminUserId: c.U2 } })).rejects.toThrow()
+  })
+
+  it("contrato de tela (#418): SEM_VINCULO → PENDENTE → VINCULADO; cancelar; expirado; novo pareamento; revogado", async () => {
+    const c = await cenarioG007()
+    expect((await situacaoVinculo(owner, c.U1)).estado).toBe("SEM_VINCULO")
+    const d1 = await iniciarPareamento(owner, { userId: c.U1, telefoneE164: c.T1, consentimentoVersao: CONSENTIMENTO_VERSAO_ATUAL })
+    const p = await situacaoVinculo(owner, c.U1)
+    expect(p).toMatchObject({ estado: "PENDENTE", vinculado: null, pendente: { tentativasRestantes: 5 } })
+    expect(JSON.stringify(p)).not.toContain(d1.codigo) // a tela nunca recebe código nem hash de volta
+    expect(await cancelarPareamento(owner, c.U1)).toEqual({ cancelado: true })
+    expect((await situacaoVinculo(owner, c.U1)).estado).toBe("SEM_VINCULO")
+    await receber(c, c.T1, d1.codigo); await drenar(c) // código de desafio cancelado não vincula
+    expect(await owner.gmAssistVinculo.count({ where: { adminUserId: c.U1 } })).toBe(0)
+    // Pendente vencido aparece como EXPIRADO antes mesmo de chegar mensagem.
+    const salt = randomBytes(16).toString("hex"), criadoEm = new Date(Date.now() - 20 * 60_000)
+    await owner.gmAssistDesafio.create({ data: { id: randomUUID(), adminUserId: c.U1, telefoneE164: c.T1, codigoSalt: salt, codigoHash: hashCodigo(salt, "123123"),
+      pendenteUsuario: c.U1, consentimentoVersao: CONSENTIMENTO_VERSAO_ATUAL, criadoEm, expiraEm: new Date(criadoEm.getTime() + 10 * 60_000) } })
+    expect((await situacaoVinculo(owner, c.U1)).estado).toBe("EXPIRADO")
+    await parear(c, c.U1, c.T1)
+    expect((await situacaoVinculo(owner, c.U1))).toMatchObject({ estado: "VINCULADO", pendente: null })
+    // Novo pareamento em outro telefone substitui o vínculo anterior (um ativo por usuário).
+    await parear(c, c.U1, c.T2)
+    const vs = await owner.gmAssistVinculo.findMany({ where: { adminUserId: c.U1 }, orderBy: { criadoEm: "asc" } })
+    expect(vs.map(v => [v.estado, v.revogacaoMotivo])).toEqual([["REVOGADO", "NOVO_PAREAMENTO"], ["ATIVO", null]])
+    await revogarVinculo(owner, { userId: c.U1, motivo: "USUARIO" })
+    expect((await situacaoVinculo(owner, c.U1)).estado).toBe("SEM_VINCULO")
+    await expect(revogarVinculo(owner, { userId: c.U1, motivo: "USUARIO" })).rejects.toMatchObject({ codigo: "SEM_VINCULO" })
   })
 
   it("pareamento inválido: código errado, bloqueio por tentativas, outro telefone, expirado, consentimento e limite", async () => {
