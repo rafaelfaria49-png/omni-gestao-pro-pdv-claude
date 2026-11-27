@@ -21,7 +21,8 @@ export const INTENCOES_ESCRITA = ["DESPESA", "RECEITA", "DIVIDA", "PAGAMENTO", "
 export type IntencaoEscrita = typeof INTENCOES_ESCRITA[number]
 
 /** Intenções com contrato de escrita no G004 hoje. As demais são classificadas, mas não gravadas. */
-export const INTENCOES_COM_CONTRATO_G004 = ["DESPESA", "DIVIDA", "PAGAMENTO", "COMPRA_CREDITO", "PARCELAMENTO", "TRANSFERENCIA", "PAGAMENTO_FATURA"] as const
+export const INTENCOES_COM_CONTRATO_G004 = ["DESPESA", "DIVIDA", "PAGAMENTO", "COMPRA_CREDITO", "PARCELAMENTO", "TRANSFERENCIA",
+  "PAGAMENTO_FATURA", "RECEITA", "RECEBIMENTO"] as const
 
 export type FormaPagamento = "pix" | "dinheiro" | "debito" | "transferencia" | "boleto" | "credito"
 
@@ -178,8 +179,12 @@ export interface PortaCadastros {
   listarTitulosAbertos(ctx: unknown): Promise<TituloResumo[]>
   /** Cartões do perfil com limites e faturas por ciclo (contrato canônico G004/G005). */
   listarFaturas(ctx: unknown): Promise<CartaoComFaturas[]>
-  /** Títulos em aberto de uma fatura, com o restante calculado pelo cálculo canônico G005. */
-  titulosDaFatura(ctx: unknown, cicloId: string): Promise<Array<{ id: string; restanteCentavos: string; vencimento: string }>>
+  /** Plano canônico de pagamento de fatura (#405 `planejarPagamentoFaturaGasto`, só leitura). */
+  planejarFatura(ctx: unknown, input: { cicloId: string; valorCentavos?: string; quitar?: true }): Promise<
+    | { ok: true; restanteCentavos: string; valorCentavos: string; alocacoes: ReadonlyArray<{ tituloId: string; valorCentavos: string }> }
+    | { ok: false; codigo: string }>
+  /** Títulos a RECEBER em aberto (G005 `receber[]`). */
+  listarTitulosAReceber(ctx: unknown): Promise<TituloResumo[]>
 }
 
 /** Subconjunto do ConsultaFinanceiraDTO (G005) usado pelo motor. */

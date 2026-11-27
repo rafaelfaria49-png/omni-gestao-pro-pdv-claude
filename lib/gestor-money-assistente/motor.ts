@@ -287,7 +287,7 @@ async function resolverDados(t: Turno, r: Rascunho) {
     const cat = cats.find(c => mesmaCategoria(c.nome, d.categoria!))
     if (cat) d.categoriaId = cat.id
   }
-  if (r.intencao === "DESPESA" || r.intencao === "PAGAMENTO") {
+  if (r.intencao === "DESPESA" || r.intencao === "PAGAMENTO" || r.intencao === "RECEITA" || r.intencao === "RECEBIMENTO") {
     if (!d.carteiraId) {
       const contas = (await t.deps.cadastros.listarContas(ctx)).filter(c => c.ativo && c.tipo !== "credito")
       const alvo = d.conta ? normalizarTexto(d.conta) : null
@@ -344,14 +344,14 @@ async function resolverDados(t: Turno, r: Rascunho) {
       d.cicloIds = ciclos
     }
   }
-  if (r.intencao === "PAGAMENTO" && !d.tituloId) {
-    const abertos = (await t.deps.cadastros.listarTitulosAbertos(ctx)).filter(x => BigInt(x.restanteCentavos) > BigInt(0))
+  if ((r.intencao === "PAGAMENTO" || r.intencao === "RECEBIMENTO") && !d.tituloId) {
+    const abertos = (await titulosDoRascunho(t, r, ctx)).filter(x => BigInt(x.restanteCentavos) > BigInt(0))
     const alvo = d.contraparte ? normalizarTexto(d.contraparte) : null
     const candidatos = alvo ? abertos.filter(x => normalizarTexto(`${x.descricao} ${x.contraparte}`).includes(alvo)) : abertos
     if (!abertos.length) {
       t.estado.rascunho = undefined
       t.codigo = "sem_titulo_aberto"
-      t.mensagens.push("Não encontrei contas a pagar em aberto neste perfil. Nada foi registrado.")
+      t.mensagens.push(`Não encontrei contas a ${r.intencao === "RECEBIMENTO" ? "receber" : "pagar"} em aberto neste perfil. Nada foi registrado.`)
       return
     }
     if (candidatos.length === 1) selecionarTitulo(d, candidatos[0])
@@ -405,24 +405,23 @@ async function resolverDados(t: Turno, r: Rascunho) {
       delete d.valorCentavos; delete d.alocacoesFatura
     }
     if (d.cicloId && d.valorCentavos && !d.alocacoesFatura) {
-      // Alocação determinística: títulos do ciclo por vencimento; restante de cada um pelo cálculo canônico G005.
-      const titulos = (await t.deps.cadastros.titulosDaFatura(ctx, d.cicloId)).filter(x => BigInt(x.restanteCentavos) > BigInt(0))
-        .sort((a, b) => (a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-      let falta = BigInt(d.valorCentavos)
-      const alocacoes: Array<{ tituloId: string; valorCentavos: string }> = []
-      for (const x of titulos) {
-        if (falta <= BigInt(0)) break
-        const restante = BigInt(x.restanteCentavos), v = falta < restante ? falta : restante
-        alocacoes.push({ tituloId: x.id, valorCentavos: v.toString() })
-        falta -= v
+      // Plano canônico #405 (`planejarPagamentoFaturaGasto`, só leitura): restante e alocação por título do ciclo.
+      const plano = await t.deps.cadastros.planejarFatura(ctx, { cicloId: d.cicloId,
+        ...(d.quitar && d.valorCentavos === d.cicloRestanteCentavos ? { quitar: true } : { valorCentavos: d.valorCentavos }) })
+      if (!plano.ok) {
+        t.mensagens.push(plano.codigo === "valor_acima_saldo_fatura"
+          ? "O valor é maior que o saldo em aberto da fatura. Informe o valor novamente."
+          : "Não consegui calcular a fatura agora. Nada foi registrado.")
+        delete d.valorCentavos
+        if (plano.codigo !== "valor_acima_saldo_fatura") { delete d.cicloId; delete d.cicloRotulo; delete d.cicloRestanteCentavos }
+      } else {
+        d.cicloRestanteCentavos = plano.restanteCentavos
+        d.valorCentavos = plano.valorCentavos
+        d.alocacoesFatura = plano.alocacoes.map(a => ({ tituloId: a.tituloId, valorCentavos: a.valorCentavos }))
       }
-      if (falta > BigInt(0) || !alocacoes.length) {
-        t.mensagens.push("O saldo em aberto da fatura mudou. Informe o valor novamente.")
-        delete d.valorCentavos; delete d.cicloId; delete d.cicloRotulo; delete d.cicloRestanteCentavos
-      } else d.alocacoesFatura = alocacoes
     }
   }
-  if (r.intencao === "PAGAMENTO" && d.tituloRestanteCentavos && d.valorCentavos
+  if ((r.intencao === "PAGAMENTO" || r.intencao === "RECEBIMENTO") && d.tituloRestanteCentavos && d.valorCentavos
     && BigInt(d.valorCentavos) > BigInt(d.tituloRestanteCentavos)) {
     t.mensagens.push(`O valor informado é maior que o saldo em aberto (${formatarCentavos(d.tituloRestanteCentavos)}).`)
     delete d.valorCentavos
@@ -438,6 +437,10 @@ function selecionarFatura(d: DadosRascunho, c: FaturaCiclo) {
   delete d.alocacoesFatura; delete d.opcoes
 }
 
+function titulosDoRascunho(t: Turno, r: Rascunho, ctx: unknown) {
+  return r.intencao === "RECEBIMENTO" ? t.deps.cadastros.listarTitulosAReceber(ctx) : t.deps.cadastros.listarTitulosAbertos(ctx)
+}
+
 function selecionarTitulo(d: DadosRascunho, x: { id: string; descricao: string; restanteCentavos: string }) {
   d.tituloId = x.id; d.tituloDescricao = x.descricao; d.tituloRestanteCentavos = x.restanteCentavos; delete d.opcoes
   if (d.quitar) d.valorCentavos = x.restanteCentavos
@@ -451,11 +454,11 @@ function pendencias(r: Rascunho): Campo[] {
     if (!d.cartaoId) p.push("cartao")
     else if (!d.cicloId) p.push("fatura")
   }
-  if (r.intencao === "DESPESA" || r.intencao === "PAGAMENTO" || r.intencao === "PAGAMENTO_FATURA") {
+  if (["DESPESA", "PAGAMENTO", "PAGAMENTO_FATURA", "RECEITA", "RECEBIMENTO"].includes(r.intencao)) {
     if (!d.formaPagamento || d.formaPagamento === "credito") p.push("formaPagamento")
     if (!d.carteiraId) p.push("conta")
   }
-  if (r.intencao === "PAGAMENTO" && !d.tituloId) p.push("titulo")
+  if ((r.intencao === "PAGAMENTO" || r.intencao === "RECEBIMENTO") && !d.tituloId) p.push("titulo")
   if (r.intencao === "TRANSFERENCIA") { if (!d.carteiraId) p.push("conta"); if (!d.carteiraDestinoId) p.push("contaDestino") }
   if (r.intencao === "DIVIDA" && !d.vencimento) p.push("vencimento")
   if ((r.intencao === "COMPRA_CREDITO" || r.intencao === "PARCELAMENTO") && (!d.cartaoId || !d.cicloIds)) p.push("cartao")
@@ -513,11 +516,11 @@ async function perguntar(t: Turno, r: Rascunho, campo: Campo) {
       } else if (r.intencao === "PAGAMENTO_FATURA" && d.cicloRestanteCentavos) {
         delete d.opcoes
         t.mensagens.push(`Quanto você pagou da fatura? Em aberto: ${formatarCentavos(d.cicloRestanteCentavos)} (ou diga “a fatura toda”).`)
-      } else { delete d.opcoes; t.mensagens.push(r.intencao === "PAGAMENTO" && d.tituloRestanteCentavos
-        ? `Quanto você pagou? O saldo em aberto é ${formatarCentavos(d.tituloRestanteCentavos)}.` : "Qual foi o valor?") }
+      } else { delete d.opcoes; t.mensagens.push((r.intencao === "PAGAMENTO" || r.intencao === "RECEBIMENTO") && d.tituloRestanteCentavos
+        ? `Quanto você ${r.intencao === "RECEBIMENTO" ? "recebeu" : "pagou"}? O saldo em aberto é ${formatarCentavos(d.tituloRestanteCentavos)}.` : "Qual foi o valor?") }
       return
     case "titulo":
-      t.mensagens.push(`Qual conta você pagou?\n${opcoes(d.opcoes ?? [])}`)
+      t.mensagens.push(`${r.intencao === "RECEBIMENTO" ? "Qual conta a receber foi paga?" : "Qual conta você pagou?"}\n${opcoes(d.opcoes ?? [])}`)
       return
     case "fatura":
       t.mensagens.push(`Qual fatura você pagou?\n${opcoes(d.opcoes ?? [])}`)
@@ -536,7 +539,7 @@ async function perguntar(t: Turno, r: Rascunho, campo: Campo) {
         t.mensagens.push("Não há conta ativa cadastrada neste perfil para registrar o pagamento. Nada foi registrado.")
         return
       }
-      t.mensagens.push(`De qual conta saiu o dinheiro?\n${opcoes(contas.map(c => ({ id: c.id, rotulo: c.nome })))}`)
+      t.mensagens.push(`${r.intencao === "RECEITA" || r.intencao === "RECEBIMENTO" ? "Em qual conta entrou o dinheiro?" : "De qual conta saiu o dinheiro?"}\n${opcoes(contas.map(c => ({ id: c.id, rotulo: c.nome })))}`)
       return
     }
     case "contaDestino": {
@@ -590,6 +593,12 @@ function resumo(r: Rascunho, hoje: string): string[] {
         ? `em ${n}x de ${formatarCentavos(partes[0])}` : `em ${n}x (1ª de ${formatarCentavos(partes[0])}, demais de ${formatarCentavos(partes[n - 1])})`
       return [`Compra no crédito de ${valor}${cat}${quem}, ${parc}.`, `Cartão: ${d.cartaoNome} · Data: ${data} · ${perfil}${semCategoria}`]
     }
+    case "RECEITA":
+      return [`Receita de ${valor}${cat}${quem}.`, `Recebida via ${FORMA_ROTULO[d.formaPagamento!]}.`,
+        `Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
+    case "RECEBIMENTO":
+      return [`Recebimento de ${valor} da conta a receber “${d.tituloDescricao}”${d.quitar ? " (quitação)" : ""}.`,
+        `Via ${FORMA_ROTULO[d.formaPagamento!]} · Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
     case "PAGAMENTO_FATURA":
       return [`Pagamento de ${valor} da fatura ${d.cicloRotulo} do cartão ${d.cartaoNome}${d.cicloRestanteCentavos === d.valorCentavos ? " (quitação)" : ""}.`,
         `Via ${FORMA_ROTULO[d.formaPagamento!]} · Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
@@ -686,7 +695,7 @@ async function aplicarOpcao(t: Turno, r: Rascunho, campo: Campo, opcao: { id: st
     case "titulo": {
       const ctx = await contextoLeitura(t, r)
       if (!ctx) return false
-      const x = (await t.deps.cadastros.listarTitulosAbertos(ctx)).find(y => y.id === opcao.id)
+      const x = (await titulosDoRascunho(t, r, ctx)).find(y => y.id === opcao.id)
       if (!x) { t.mensagens.push("Essa conta não está mais em aberto."); return false }
       selecionarTitulo(d, x)
       return true
@@ -822,6 +831,8 @@ const MOTIVOS_DEFINITIVOS: Record<string, { texto: string; encerra?: boolean }> 
   categoria_indisponivel: { texto: "A categoria não está disponível neste perfil." },
   carteira_indisponivel: { texto: "A conta escolhida não está disponível." },
   ciclo_indisponivel: { texto: "A fatura do cartão não está disponível.", encerra: true },
+  valor_acima_saldo_titulo: { texto: "O valor é maior que o saldo em aberto da conta." },
+  valor_acima_saldo_fatura: { texto: "O valor é maior que o saldo em aberto da fatura." },
   alocacao_fatura_invalida: { texto: "O saldo da fatura mudou desde o resumo." },
   limite_cartao_insuficiente: { texto: "O cartão não tem limite disponível para essa compra.", encerra: true },
   ciclo_cartao_divergente: { texto: "As faturas escolhidas não pertencem ao mesmo cartão.", encerra: true },

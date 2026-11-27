@@ -94,20 +94,33 @@ describe("conversas de registro — fluxo completo", () => {
       tipo: "CONTA_PAGAR", valorCentavos: "80000", vencimento: "2026-12-10", contraparteTexto: "Fornecedor", dataGasto: "2026-11-27" })
   })
 
-  it("“Recebi 1500 reais de um cliente”: classifica, mas não grava (sem contrato G004)", async () => {
+  it("“Recebi 1500 reais de um cliente”: pergunta forma e conta e grava RECEITA_RECEBIDA (#405)", async () => {
     const c = montarCenario()
-    const r = await c.chat().texto("Recebi 1500 reais de um cliente.")
-    expect(r.codigo).toBe("sem_contrato_financeiro")
-    expect(r.mensagens[0]).toBe("Entendi: Receita de R$ 1.500,00 (Cliente).")
-    expect(r.mensagens[1]).toContain("nada foi gravado")
-    expect(r.rascunho).toBeUndefined()
-    expect(c.execucao.chamadas).toHaveLength(0)
+    const chat = c.chat()
+    const r = await chat.texto("Recebi 1500 reais de um cliente.")
+    expect(r.codigo).toBe("pergunta")
+    expect(r.rascunho?.pendencias).toEqual(["formaPagamento", "conta"])
+    await chat.texto("pix")
+    const r2 = await chat.texto("nubank")
+    expect(r2.mensagens[0]).toBe("Receita de R$ 1.500,00 — Cliente.")
+    expect(r2.mensagens[1]).toBe("Recebida via Pix.")
+    expect(c.execucao.chamadas).toHaveLength(0) // nada antes do "sim"
+    expect((await chat.texto("sim")).codigo).toBe("registrado")
+    expect(c.execucao.chamadas.at(-1)?.proposta).toMatchObject({ tipo: "RECEITA_RECEBIDA", valorCentavos: "150000",
+      carteiraId: "ct_nubank_a", formaPagamento: "pix", contraparteTexto: "Cliente" })
   })
 
-  it("“Recebi 300 que o João me devia” também não grava (recebimento sem contrato G004)", async () => {
+  it("“Recebi 300 que o João me devia”: acha o título a receber e grava RECEBER_TITULO parcial (#405)", async () => {
     const c = montarCenario()
-    expect((await c.chat().texto("Recebi 300 que o João me devia")).codigo).toBe("sem_contrato_financeiro")
-    expect(c.execucao.chamadas).toHaveLength(0)
+    const chat = c.chat()
+    await chat.texto("Recebi 300 que o João me devia no pix pelo nubank")
+    const r = await chat.texto("sim")
+    expect(r.codigo).toBe("registrado")
+    expect(c.execucao.chamadas.at(-1)?.proposta).toMatchObject({ tipo: "RECEBER_TITULO", tituloId: "tit_receber_joao",
+      valorCentavos: "30000", quitar: false, carteiraId: "ct_nubank_a" })
+    const acima = c.chat(undefined, "conversa-2")
+    const r2 = await acima.texto("recebi 900 que o João me devia no pix pelo nubank")
+    expect(r2.mensagens.join("\n")).toContain("maior que o saldo em aberto (R$ 500,00)")
   })
 
   it("transferência interna PESSOAL: resumo, confirmação e proposta TRANSFERENCIA_INTERNA (#405)", async () => {

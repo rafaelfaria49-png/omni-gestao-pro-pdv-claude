@@ -20,8 +20,7 @@ import { aplicarOperacaoGasto } from "@/lib/gastos/apply"
 import { prepararRevisaoGasto } from "@/lib/gastos/operacoes"
 import { OperacaoGastoError } from "@/lib/gastos/operacao-schema"
 import { consultarFinanceiro, type ConsultaFinanceiraDTO } from "@/lib/gastos/query"
-import { consultarCartoesGasto } from "@/lib/gastos/cartoes"
-import { saldoTituloConsulta } from "@/lib/gastos/query-calculo"
+import { consultarCartoesGasto, planejarPagamentoFaturaGasto } from "@/lib/gastos/cartoes"
 import { comLeituraFinanceira } from "@/lib/gastos/read-scope"
 import { declararDonoPessoalRls } from "@/lib/gastos/rls-contexto"
 import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
@@ -94,7 +93,13 @@ export const cadastrosGestorMoney: PortaCadastros = {
   }),
   /** Contrato canônico #405: cartões com limites e faturas por ciclo. */
   listarFaturas: ctx => consultarCartoesGasto(ctx, {}),
-  titulosDaFatura,
+  planejarFatura,
+  async listarTitulosAReceber(ctx) {
+    const hoje = diaCivil(new Date())
+    const q = await consultarFinanceiro(ctx, filtroDoPlano(hoje.slice(0, 7) + "-01", hoje))
+    return q.receber.filter(t => !t.cancelado && BigInt(t.restanteCentavos) > BigInt(0))
+      .map(t => ({ id: t.id, descricao: t.descricao, contraparte: t.contraparte, restanteCentavos: t.restanteCentavos, vencimento: t.vencimento }))
+  },
   async listarTitulosAbertos(ctx) {
     const hoje = diaCivil(new Date())
     const q = await consultarFinanceiro(ctx, filtroDoPlano(hoje.slice(0, 7) + "-01", hoje))
@@ -103,18 +108,14 @@ export const cadastrosGestorMoney: PortaCadastros = {
   },
 }
 
-/** Títulos de uma fatura com o restante pelo cálculo canônico G005 (`saldoTituloConsulta`). Só leitura. */
-async function titulosDaFatura(ctx: unknown, cicloId: string) {
-  return comLeituraFinanceira(ctx, async (db, c) => {
-    const rows = await db.contaPagarTitulo.findMany({ where: { perfilId: c.perfilId, storeId: storeDe(c), cartaoCicloId: cicloId },
-      include: { alocacoesPagamento: { select: { pagamentoId: true, valorCentavos: true, pagamento: { select: { tipo: true } } } } },
-      orderBy: { id: "asc" } })
-    return rows.flatMap(t => {
-      const sx = saldoTituloConsulta(t)
-      return sx.cancelado || sx.restante <= BigInt(0) ? []
-        : [{ id: t.id, restanteCentavos: sx.restante.toString(), vencimento: t.vencimento.toISOString().slice(0, 10) }]
-    })
-  })
+/** Plano canônico #405 de pagamento de fatura (só leitura). Recusa conhecida vira código, nunca valor inventado. */
+async function planejarFatura(ctx: unknown, input: { cicloId: string; valorCentavos?: string; quitar?: true }) {
+  try {
+    const p = await planejarPagamentoFaturaGasto(ctx, input)
+    return { ok: true as const, restanteCentavos: p.restanteCentavos, valorCentavos: p.valorCentavos, alocacoes: p.alocacoes }
+  } catch (e) {
+    return { ok: false as const, codigo: e instanceof OperacaoGastoError ? e.code : "indisponivel" }
+  }
 }
 
 export const consultaG005: PortaConsulta = {

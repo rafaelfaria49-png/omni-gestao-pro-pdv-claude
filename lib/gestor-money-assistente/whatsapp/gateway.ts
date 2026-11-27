@@ -128,7 +128,8 @@ export function processadorStagingGestao(d: DependenciasGateway = {}): Processad
   return async (fila, claim) => {
     try {
       await processar(fila, app, claim, d)
-      await concluirStaging(fila, claim)
+      // PROCESSADO_G008 (#405): a mensagem foi efetivamente tratada pelo assistente (motor, pareamento ou onboarding).
+      await concluirStaging(fila, claim, { estadoInbox: "PROCESSADO_G008" })
     } catch (e) {
       const codigo = (e as { codigo?: string })?.codigo
       if (codigo === "LEASE_PERDIDA") throw e

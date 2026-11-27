@@ -14,7 +14,7 @@ const ROTEIROS: Array<{ titulo: string; perfis?: typeof PESSOAL_A[]; passos: Pas
   { titulo: "2. Energia no Pix com escolha numerada", passos: ["Paguei 180 de energia no Pix.", "1", "confirmo"] },
   { titulo: "3. Compra parcelada no cartão", passos: ["Comprei 600 reais em 3 vezes no cartão.", "sim"] },
   { titulo: "4. Dívida com fornecedor (pergunta só o vencimento)", passos: ["Estou devendo 800 para o fornecedor.", "dia 10", "sim"] },
-  { titulo: "5. Receita — classificada, sem escrita (sem contrato G004)", passos: ["Recebi 1500 reais de um cliente."] },
+  { titulo: "5. Receita recebida (RECEITA_RECEBIDA, #405)", passos: ["Recebi 1500 reais de um cliente.", "pix", "nubank", "sim"] },
   { titulo: "6. Pagamento parcial de dívida existente", passos: ["Paguei 200 daquela dívida.", "pix", "nubank", "sim"] },
   { titulo: "7. Consultas (números somente do G005)", passos: ["Quanto gastei este mês?", "Quanto gastei com mercado este mês?",
     "Quanto ainda estou devendo?", "Onde mais gastei este mês?", "Compara meus gastos com o mês passado", "Qual meu saldo?"] },
@@ -58,7 +58,7 @@ describe("demonstração de conversas", () => {
   it("roteiros executam; escritas só onde houve confirmação válida", async () => {
     const { texto, totais } = await rodar()
     expect(totais.roteiros).toBe(ROTEIROS.length)
-    expect(totais.escritas).toBe(7) // roteiros 1,2,3,4,6,9,12 — 12 grava uma única vez apesar da falha
+    expect(totais.escritas).toBe(8) // roteiros 1,2,3,4,5,6,9,12 — 12 grava uma única vez apesar da falha
     if (process.env.GM_DEMO_OUT) writeFileSync(process.env.GM_DEMO_OUT, texto + "\n", "utf8")
   })
 })

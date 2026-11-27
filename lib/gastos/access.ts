@@ -1,7 +1,6 @@
 import "server-only"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
-import { requireEnterpriseSession } from "@/lib/auth/guard-enterprise"
 import { canAccessStore, canUseModule, getEnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { resolveStoreModules } from "@/lib/auth/access-policy"
 import { declararDonoPessoalRls } from "./rls-contexto"
@@ -38,6 +37,8 @@ export async function requireFinanceiroPerfilAccess(
   acao: FinanceiroAcao = "view",
 ): Promise<FinanceiroAccessResult> {
   try {
+    // Import tardio: o caminho por principal (worker G008) não carrega NextAuth/React de sessão web.
+    const { requireEnterpriseSession } = await import("@/lib/auth/guard-enterprise")
     const base = await requireEnterpriseSession()
     if (!base.ok) return { ok: false, status: base.status === 401 ? 401 : 403, error: base.error }
     const parsed = seletorSchema.safeParse(input)

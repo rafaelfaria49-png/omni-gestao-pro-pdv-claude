@@ -42,7 +42,7 @@ export function rotuloIntencao(r: Pick<Rascunho, "intencao">): string {
 
 export function propostaDoRascunho(r: Rascunho, agora: Date, hoje: string): MapeamentoResultado {
   const d = r.dados
-  if (!d.valorCentavos && !(r.intencao === "PAGAMENTO" && d.quitar)) return { ok: false, codigo: "valor_ausente" }
+  if (!d.valorCentavos && !((r.intencao === "PAGAMENTO" || r.intencao === "RECEBIMENTO") && d.quitar)) return { ok: false, codigo: "valor_ausente" }
   const dataGasto = d.dataEconomica ?? hoje
   const dataPagamento = dataGasto === hoje ? agora.toISOString() : meioDiaSaoPaulo(dataGasto)
   const fato = {
@@ -91,7 +91,19 @@ export function propostaDoRascunho(r: Rascunho, agora: Date, hoje: string): Mape
       return { ok: true, proposta: { tipo: "PAGAR_FATURA", cicloId: d.cicloId, alocacoes: d.alocacoesFatura.map(a => ({ ...a })),
         moeda: "BRL", carteiraId: d.carteiraId, formaPagamento: meio, dataPagamento } }
     case "RECEITA":
+      // #405: RECEITA_RECEBIDA — uma entrada na conta, sem título (categoria de receita opcional, não inferida).
+      if (!d.carteiraId) return { ok: false, codigo: "conta_ausente" }
+      if (!meio) return { ok: false, codigo: "forma_pagamento_ausente" }
+      return { ok: true, proposta: { tipo: "RECEITA_RECEBIDA", descricao: descricao(r), valorCentavos: d.valorCentavos!, moeda: "BRL",
+        carteiraId: d.carteiraId, formaPagamento: meio, dataPagamento,
+        ...(d.contraparte ? { contraparteTexto: d.contraparte.slice(0, 500) } : {}) } }
     case "RECEBIMENTO":
-      return { ok: false, codigo: "sem_contrato_g004" }
+      // #405: RECEBER_TITULO — parcial ou quitação de título a receber do mesmo perfil.
+      if (!d.tituloId) return { ok: false, codigo: "titulo_ausente" }
+      if (!d.carteiraId) return { ok: false, codigo: "conta_ausente" }
+      if (!meio) return { ok: false, codigo: "forma_pagamento_ausente" }
+      return { ok: true, proposta: { tipo: "RECEBER_TITULO", tituloId: d.tituloId, moeda: "BRL",
+        ...(d.quitar ? { quitar: true } : { valorCentavos: d.valorCentavos!, quitar: false }),
+        carteiraId: d.carteiraId, formaPagamento: meio, dataPagamento } }
   }
 }

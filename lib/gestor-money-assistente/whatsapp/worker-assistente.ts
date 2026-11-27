@@ -8,7 +8,7 @@
  * - SEGUNDA conexão `GASTOS_WORKER_APP_DATABASE_URL` (runtime da aplicação, para G001–G005 e `gm_assist_*`),
  *   distinta da conexão do papel `omni_gastos_worker`, aprovada pelo MESMO Datasource Guard (#404) do worker e com
  *   papel restrito: não superusuário, sem BYPASSRLS, sem CREATEROLE/CREATEDB, não é papel G006, e com DML nas tabelas do
- *   assistente. `DATABASE_URL` do processo, se existir, tem de ser a mesma URL (é a que `@/lib/prisma` usa).
+ *   assistente, e não dono de tabela alguma (dono ignora RLS). `DATABASE_URL` do processo, se existir, tem de ser a mesma URL (é a que `@/lib/prisma` usa).
  */
 import type { PrismaClient } from "@/generated/prisma"
 import { MensageriaError } from "@/lib/gastos/messaging-types"
@@ -35,12 +35,14 @@ export async function prepararAssistenteWorker(db: PrismaClient, config: ConfigW
   process.env.DIRECT_URL = appUrl
   // Importação tardia: só depois do guard; módulos server-only sob a condição react-server.
   const { prisma } = await import("@/lib/prisma")
-  const [papel] = await prisma.$queryRaw<Array<{ papel: string; sup: boolean; byp: boolean; cria: boolean; dml: boolean }>>`
+  const [papel] = await prisma.$queryRaw<Array<{ papel: string; sup: boolean; byp: boolean; cria: boolean; dml: boolean; dono: boolean }>>`
     SELECT current_user AS papel, r.rolsuper AS sup, r.rolbypassrls AS byp, (r.rolcreaterole OR r.rolcreatedb) AS cria,
       (has_table_privilege(current_user,'public.gm_assist_conversas','INSERT,UPDATE,SELECT')
-        AND has_table_privilege(current_user,'public.gm_assist_respostas','INSERT,UPDATE,SELECT')) AS dml
+        AND has_table_privilege(current_user,'public.gm_assist_respostas','INSERT,UPDATE,SELECT')) AS dml,
+      EXISTS(SELECT 1 FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relowner=r.oid) AS dono
     FROM pg_roles r WHERE r.rolname=current_user`
-  if (!papel || papel.sup || papel.byp || papel.cria || !papel.dml || papel.papel.startsWith("omni_gastos_")) throw invalida()
+  // Dono de tabela ignora RLS: o runtime do assistente nunca pode ser dono do schema.
+  if (!papel || papel.sup || papel.byp || papel.cria || papel.dono || !papel.dml || papel.papel.startsWith("omni_gastos_")) throw invalida()
   const { cicloGestao, processadorStagingGestao, verificadorVinculoG006 } = await import("./gateway")
   const { transporteResultadoG006, transporteSimulado } = await import("./transporte")
   const transporte = transporteSimulado()

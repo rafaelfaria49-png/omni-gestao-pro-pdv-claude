@@ -1,7 +1,7 @@
 /**
  * PostgreSQL DESCARTÁVEL do assistente (G007/G008). Nenhuma sessão de navegador: `@/auth` devolve null
  * em TODOS os testes — o chat só funciona pelo principal de vínculo. Meta é transporte SIMULADO.
- * Identidade física exigida: 127.0.0.1:55530, banco gm_g007_test, dono gm_g007_owner, PGDATA …/G007-execution/pgdata.
+ * Identidade física exigida: 127.0.0.1:55530, banco gastos_g006_test (exigido pelo config do worker G006 em ambiente teste), dono gm_g007_owner, PGDATA …/G007-execution/pgdata.
  */
 import { vi } from "vitest"
 import { createHash, createHmac, randomUUID } from "node:crypto"
@@ -17,22 +17,22 @@ import { CONSENTIMENTO_VERSAO_ATUAL, iniciarPareamento } from "@/lib/gestor-mone
 vi.mock("@/auth", () => ({ auth: async () => null }))
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }), headers: async () => new Headers() }))
 vi.mock("@/lib/prisma", async () => {
-  const url = "postgresql://gm_g007_owner@127.0.0.1:55530/gm_g007_test"
+  const url = "postgresql://gm_g007_owner@127.0.0.1:55530/gastos_g006_test"
   if (process.env.DATABASE_URL !== url || process.env.GASTOS_G007_TEST_DATABASE_URL !== url) throw Error("G007 recusa destino nao identificado")
   const { PrismaClient } = await import("@/generated/prisma")
   const client = new PrismaClient({ datasources: { db: { url } }, log: [] })
   return { prisma: client, prismaEnsureConnected: () => client.$connect() }
 })
 
-export const G007_URL = "postgresql://gm_g007_owner@127.0.0.1:55530/gm_g007_test"
+export const G007_URL = "postgresql://gm_g007_owner@127.0.0.1:55530/gastos_g006_test"
 export const habilitadoG007 = process.env.GASTOS_G007_TEST_DATABASE_URL === G007_URL
 export const owner = prisma
-const conexao = (role: string) => new PrismaClient({ datasources: { db: { url: `postgresql://${role}@127.0.0.1:55530/gm_g007_test?connection_limit=4` } }, log: [] })
+const conexao = (role: string) => new PrismaClient({ datasources: { db: { url: `postgresql://${role}@127.0.0.1:55530/gastos_g006_test?connection_limit=4` } }, log: [] })
 export const worker = conexao("omni_gastos_worker"), ingress = conexao("omni_gastos_ingress"), operator = conexao("omni_gastos_operator")
 export const SEGREDO = "segredo-sintetico-app-gestao"
 export const ENV = { GESTOR_MONEY_ENABLED: "true", GESTOR_MONEY_WHATSAPP_GESTAO: "ligado", GESTOR_MONEY_WHATSAPP_APP_SECRET: SEGREDO,
   WHATSAPP_CANAL_TOKEN_G007_SYNTHETIC: "synthetic-only-token" }
-export const CONFIG: ConfigWorker = { ambiente: "teste", databaseUrl: "postgresql://omni_gastos_worker@127.0.0.1:55530/gm_g007_test",
+export const CONFIG: ConfigWorker = { ambiente: "teste", databaseUrl: "postgresql://omni_gastos_worker@127.0.0.1:55530/gastos_g006_test",
   modo: "SIMULADO", concorrencia: 2, leaseMs: 30_000, pollMs: 100, envioTimeoutMs: 5000, shutdownMs: 10_000 }
 
 export async function bancoG007() {
@@ -40,7 +40,7 @@ export async function bancoG007() {
   const [r] = await owner.$queryRaw<Array<{ db: string; user: string; host: string; port: number; data: string; sup: boolean; byp: boolean }>>`
     SELECT current_database() db,current_user AS user,host(inet_server_addr()) host,inet_server_port() port,current_setting('data_directory') data,
       rolsuper sup,rolbypassrls byp FROM pg_roles WHERE rolname=current_user`
-  if (r.db !== "gm_g007_test" || r.user !== "gm_g007_owner" || r.host !== "127.0.0.1" || r.port !== 55530 || r.sup || r.byp
+  if (r.db !== "gastos_g006_test" || r.user !== "gm_g007_owner" || r.host !== "127.0.0.1" || r.port !== 55530 || r.sup || r.byp
     || !r.data.replaceAll("\\", "/").endsWith("G007-execution/pgdata")) throw Error("Identidade fisica G007 divergente")
 }
 

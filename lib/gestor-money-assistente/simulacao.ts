@@ -63,7 +63,7 @@ export class AutorizacaoSimulada implements PortaAutorizacao {
 export type CadastroPerfil = { contas: ContaResumo[]; categorias: CategoriaResumo[]; cartoes: CartaoResumo[];
   ciclos: Record<string, string[]>; titulos: TituloResumo[]
   /** Projeção sintética de cartões com faturas por ciclo e títulos de cada fatura. */
-  faturas?: CartaoComFaturas[]; titulosFatura?: Record<string, Array<{ id: string; restanteCentavos: string; vencimento: string }>> }
+  faturas?: CartaoComFaturas[]; titulosReceber?: TituloResumo[]; titulosFatura?: Record<string, Array<{ id: string; restanteCentavos: string; vencimento: string }>> }
 
 export class CadastrosSimulados implements PortaCadastros {
   constructor(private auth: AutorizacaoSimulada, private porPerfil: Record<string, CadastroPerfil>) {}
@@ -76,7 +76,22 @@ export class CadastrosSimulados implements PortaCadastros {
   async listarCartoes(ctx: unknown) { return this.de(ctx).cartoes }
   async listarTitulosAbertos(ctx: unknown) { return this.de(ctx).titulos }
   async listarFaturas(ctx: unknown) { return this.de(ctx).faturas ?? [] }
-  async titulosDaFatura(ctx: unknown, cicloId: string) { return this.de(ctx).titulosFatura?.[cicloId] ?? [] }
+  /** Dublê do plano #405: mesma regra pública (vencimento, restante, recusa acima do saldo). */
+  async planejarFatura(ctx: unknown, i: { cicloId: string; valorCentavos?: string; quitar?: true }) {
+    const titulos = this.de(ctx).titulosFatura?.[i.cicloId] ?? []
+    const restante = titulos.reduce((s, t) => s + BigInt(t.restanteCentavos), BigInt(0))
+    const alvo = i.quitar ? restante : BigInt(i.valorCentavos ?? "0")
+    if (alvo <= BigInt(0) || alvo > restante) return { ok: false as const, codigo: "valor_acima_saldo_fatura" }
+    let falta = alvo
+    const alocacoes = []
+    for (const t of titulos) {
+      if (falta === BigInt(0)) break
+      const v = BigInt(t.restanteCentavos) < falta ? BigInt(t.restanteCentavos) : falta
+      alocacoes.push({ tituloId: t.id, valorCentavos: v.toString() }); falta -= v
+    }
+    return { ok: true as const, restanteCentavos: restante.toString(), valorCentavos: alvo.toString(), alocacoes }
+  }
+  async listarTitulosAReceber(ctx: unknown) { return this.de(ctx).titulosReceber ?? [] }
   async resolverCiclos(ctx: unknown, i: { cartaoId: string; parcelas: number }) {
     const c = this.de(ctx).ciclos[i.cartaoId] ?? []
     return c.length >= i.parcelas ? c.slice(0, i.parcelas) : null

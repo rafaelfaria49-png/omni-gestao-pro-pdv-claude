@@ -42,6 +42,7 @@ export const CADASTROS: Record<string, CadastroPerfil> = {
     ciclos: { cartao_nu_a: ["ciclo_2026_12", "ciclo_2027_01", "ciclo_2027_02", "ciclo_2027_03"] },
     titulos: [{ id: "tit_fornecedor_a", descricao: "Compra de estoque", contraparte: "Fornecedor Alfa", restanteCentavos: "80000", vencimento: "2026-12-10" }],
     faturas: [FATURAS_NUBANK_A],
+    titulosReceber: [{ id: "tit_receber_joao", descricao: "Empréstimo ao João", contraparte: "João", restanteCentavos: "50000", vencimento: "2026-12-01" }],
     titulosFatura: {
       ciclo_2026_12: [{ id: "tit_cc_1", restanteCentavos: "30000", vencimento: "2026-12-10" }, { id: "tit_cc_2", restanteCentavos: "15000", vencimento: "2026-12-10" }],
       ciclo_2027_01: [{ id: "tit_cc_3", restanteCentavos: "20000", vencimento: "2027-01-10" }],
