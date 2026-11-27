@@ -13,8 +13,9 @@
  * Não há modo --apply aqui de propósito: limpeza/merge é decisão manual.
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 const args = process.argv.slice(2)
 const storeArgIdx = args.indexOf("--store")

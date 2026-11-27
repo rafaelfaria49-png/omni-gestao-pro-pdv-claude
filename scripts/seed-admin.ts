@@ -11,13 +11,14 @@
  */
 
 import { PrismaClient } from "../generated/prisma"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import bcrypt from "bcryptjs"
 import * as dotenv from "dotenv"
 import { resolve } from "path"
 
 dotenv.config({ path: resolve(__dirname, "../.env") })
 
-const db = new PrismaClient()
+const db = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 async function main() {
   const email = process.env.ADMIN_EMAIL ?? "admin@rafacell.com.br"

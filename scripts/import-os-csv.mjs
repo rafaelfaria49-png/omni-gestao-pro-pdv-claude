@@ -8,6 +8,7 @@
  */
 
 import { PrismaClient } from '../generated/prisma/index.js'
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -19,7 +20,7 @@ const DRY_RUN = !process.argv.includes('--exec')
 const STORE_ID = 'loja-1'
 const CSV_PATH = join(__dirname, '..', 'os_orig.csv')
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

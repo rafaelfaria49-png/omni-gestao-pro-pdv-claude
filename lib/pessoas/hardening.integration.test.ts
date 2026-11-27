@@ -20,7 +20,7 @@ const ator: AtorPessoas = { userId: "", storeId: "dp-hardening-" + chave(), role
 type Callback = (tx: Prisma.TransactionClient) => Promise<string>
 type Opcoes = { isolationLevel?: Prisma.TransactionIsolationLevel; maxWait?: number; timeout?: number }
 type Transacao = (callback: Callback, opcoes?: Opcoes) => Promise<string>
-const transacaoReal = prisma.$transaction.bind(prisma) as Transacao
+let transacaoReal: Transacao
 const erroPrisma = (code: string) => Object.assign(new Error("FALHA_TRANSACIONAL_SINTETICA"), { code })
 
 /** Injeta depois de mutação + auditoria, dentro de uma transação PostgreSQL real. */
@@ -106,6 +106,7 @@ describe.skipIf(!dbUrl).sequential("Pessoas hardening: PostgreSQL real, retry e 
         url.pathname !== "/omni_pessoas_001a_homolog" || url.username !== "omni_homolog") {
       throw new Error("DESTINO_NAO_ISOLADO")
     }
+    transacaoReal = prisma.$transaction.bind(prisma) as Transacao
     process.env.PESSOAS_DP_ENABLED = "on"
     process.env.PESSOAS_CPF_ENC_KEY = randomBytes(32).toString("base64")
     process.env.PESSOAS_CPF_HMAC_KEY = randomBytes(32).toString("base64")

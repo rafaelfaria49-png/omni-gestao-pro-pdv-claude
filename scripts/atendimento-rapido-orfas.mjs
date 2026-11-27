@@ -25,9 +25,10 @@
  */
 
 import { PrismaClient } from "../generated/prisma/index.js";
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import { mutarPayloadOS } from "./lib/os-payload-lock.mjs";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() });
 const argv = process.argv.slice(2);
 const DO_CANCEL = argv.includes("--cancel");
 const storeArg = (argv.find((a) => a.startsWith("--store=")) || "").split("=")[1] || null;

@@ -5,6 +5,7 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Page } 
 import { Prisma, PrismaClient } from "../../generated/prisma"
 import { ASSISTEC_LOJA_HEADER } from "../../lib/assistec-headers"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "../../lib/store-defaults"
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 
 const origin = process.env.MELI_E2E_BASE_URL!
 const oauth = "/api/marketplace/mercado-livre"
@@ -15,7 +16,7 @@ const storeA = "meli-qa-a"
 const storeB = "meli-qa-b"
 const storeNew = "meli-qa-new"
 const headers = (storeId: string) => ({ [ASSISTEC_LOJA_HEADER]: storeId, Origin: origin })
-const db = new PrismaClient({ datasourceUrl: process.env.MELI_E2E_DATABASE_URL })
+const db = new PrismaClient({ datasourceUrl: localFixtureDatasource(process.env.MELI_E2E_DATABASE_URL) })
 
 test.describe.configure({ mode: "serial" })
 test.afterAll(async () => db.$disconnect())

@@ -17,8 +17,9 @@
  *   node --env-file=.env scripts/backfill-deposito.mjs --store=loja-2  → restringe a 1 loja
  */
 import { PrismaClient } from "../generated/prisma/index.js";
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() });
 const DRY_RUN = !process.argv.includes("--exec");
 const storeArg = (process.argv.find((a) => a.startsWith("--store=")) ?? "").split("=")[1]?.trim();
 

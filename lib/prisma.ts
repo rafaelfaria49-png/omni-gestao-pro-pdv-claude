@@ -1,6 +1,7 @@
 import { PrismaClient } from "@/generated/prisma"
+import { runtimeDatasource } from "@/lib/db/datasource-policy.mjs"
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
+const globalForPrisma = globalThis as unknown as { omniRuntimePrisma: PrismaClient | undefined }
 
 /** Margem para `$connect` explícito (ms). Complementa `connect_timeout` na `DATABASE_URL`. */
 const PRISMA_CONNECT_WAIT_MS = Math.min(
@@ -15,18 +16,35 @@ const PRISMA_CONNECT_WAIT_MS = Math.min(
  * O Prisma Client não faz cache HTTP de `findMany`; para evitar respostas antigas no Next.js,
  * use `export const dynamic = "force-dynamic"` nas rotas de API que leem dados ao vivo.
  */
-function createPrismaClient(): PrismaClient {
-  return new PrismaClient({
+function getPrismaClient(): PrismaClient {
+  if (globalForPrisma.omniRuntimePrisma) return globalForPrisma.omniRuntimePrisma
+
+  const datasource = runtimeDatasource()
+  const client = new PrismaClient({
     // Prisma error events can embed customer values and SQL parameters.
     log: [],
+    ...(datasource.kind === "nonproduction" ? { datasourceUrl: datasource.url } : {}),
   })
+  globalForPrisma.omniRuntimePrisma = client
+  return client
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient()
-
-if (!globalForPrisma.prisma) {
-  globalForPrisma.prisma = prisma
-}
+// A build may import auth and route modules without a datasource. Creating a
+// client is deferred to the first access, including explicit $connect and raw SQL.
+export const prisma = new Proxy({} as PrismaClient, {
+  has(target, key) {
+    if (Reflect.has(target, key)) return true
+    if (typeof key === "symbol" || key === "then") return false
+    return Reflect.has(globalForPrisma.omniRuntimePrisma ?? PrismaClient.prototype, key)
+  },
+  get(target, key) {
+    if (Object.hasOwn(target, key)) return Reflect.get(target, key)
+    if (typeof key === "symbol" || key === "then") return undefined
+    const client = getPrismaClient()
+    const value = Reflect.get(client, key, client)
+    return typeof value === "function" ? value.bind(client) : value
+  },
+})
 
 /**
  * Aguarda o banco aceitar conexão (útil se a rede oscila 1–2s). Não obrigatório — o Prisma conecta sob demanda.

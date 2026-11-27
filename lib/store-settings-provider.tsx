@@ -43,6 +43,14 @@ import {
   sanitizeStringList,
 } from "@/lib/pdv-mount-guards"
 
+import {
+  StoreSettingsReadbackError,
+  isStoreSettingsReadbackError,
+  type StoreSettingsReadbackResult,
+} from "@/lib/store-settings-readback"
+
+export { StoreSettingsReadbackError, isStoreSettingsReadbackError, type StoreSettingsReadbackResult }
+
 export type StoreSettingsContextType = {
   /** ID da unidade ativa; vazio quando nenhuma loja está selecionada (sem fallback silencioso). */
   storeId: string
@@ -63,6 +71,8 @@ export type StoreSettingsContextType = {
   pdvScaleVisorVisible: boolean
   getGarantiaById: (id: string) => CategoriaGarantia | undefined
   refresh: () => Promise<void>
+  /** Relê `/api/stores/:id/settings` e informa explicitamente se a leitura foi confirmada pelo servidor. */
+  revalidate: () => Promise<StoreSettingsReadbackResult>
   save: (patch: StoreSettingsPutPayload) => Promise<void>
 }
 
@@ -170,10 +180,13 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   // Registro de backfill já tentado nesta sessão para cada loja (evita loops e repetições)
   const backfillAttemptedStoresRef = useRef<Set<string>>(new Set())
   const epochGateRef = useRef(createStoreSettingsEpochGate())
+  const latestRefreshRef = useRef<{ storeId: string; promise: Promise<StoreSettingsReadbackResult> } | null>(null)
 
-  const refresh = useCallback(async () => {
+  const refreshWithOutcome = useCallback(async (): Promise<StoreSettingsReadbackResult> => {
     const request = epochGateRef.current.begin(storeId)
-    if (!request) return
+    if (!request) {
+      return { ok: false, stale: true, settings: null, reason: "store_changed" }
+    }
     if (!storeId) {
       applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
         setSettings(null)
@@ -181,43 +194,92 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
         setSettledStoreId(storeId)
         setHydrated(true)
       })
-      return
+      return { ok: true, stale: false, settings: null }
     }
     applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
       setHydrated(false)
     })
-    try {
-      const r = await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
-        credentials: "include",
-        cache: "no-store",
-        headers: { [ASSISTEC_LOJA_HEADER]: storeId },
-      })
-      const j = (await r.json().catch(() => null)) as { settings?: (StoreSettingsApi & { storeId?: unknown }) | null } | null
-      const loaded = r.ok && j !== null && Object.hasOwn(j, "settings") &&
-        (j.settings === null || (typeof j.settings === "object" && j.settings?.storeId === storeId))
-      applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
-        setSettings(loaded ? j.settings ?? null : null)
-        setLoadedStoreId(loaded ? storeId : null)
-      })
-      // P0 PDV-RAFACELL-LOAD-CRASH: observabilidade do mount (só status/contagens).
-      markPdvMountStep("settings", storeId, loaded, { code: loaded ? undefined : r.ok ? "invalid_response" : `HTTP_${r.status}` })
-    } catch {
-      applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
-        setSettings(null)
-        setLoadedStoreId(null)
-      })
-      markPdvMountStep("settings", storeId, false, { code: "fetch_failed" })
-    } finally {
-      applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
-        setSettledStoreId(storeId)
-        setHydrated(true)
-      })
-    }
+
+    const run = (async (): Promise<StoreSettingsReadbackResult> => {
+      let result: StoreSettingsReadbackResult = { ok: false, stale: false, settings: null, reason: "fetch_failed" }
+      try {
+        const r = await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { [ASSISTEC_LOJA_HEADER]: storeId },
+        })
+        const j = (await r.json().catch(() => null)) as { settings?: (StoreSettingsApi & { storeId?: unknown }) | null } | null
+        const loaded = r.ok && j !== null && Object.hasOwn(j, "settings") &&
+          (j.settings === null || (typeof j.settings === "object" && j.settings?.storeId === storeId))
+        const reason = loaded ? undefined : r.ok ? "invalid_response" : `HTTP_${r.status}`
+        const applied = applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+          setSettings(loaded ? j.settings ?? null : null)
+          setLoadedStoreId(loaded ? storeId : null)
+        })
+        // P0 PDV-RAFACELL-LOAD-CRASH: observabilidade do mount (só status/contagens).
+        markPdvMountStep("settings", storeId, loaded, { code: reason })
+        result = applied
+          ? { ok: loaded, stale: false, settings: loaded ? j.settings ?? null : null, reason }
+          : { ok: false, stale: true, settings: null, reason: "stale_epoch" }
+      } catch {
+        const applied = applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+          setSettings(null)
+          setLoadedStoreId(null)
+        })
+        markPdvMountStep("settings", storeId, false, { code: "fetch_failed" })
+        result = applied
+          ? { ok: false, stale: false, settings: null, reason: "fetch_failed" }
+          : { ok: false, stale: true, settings: null, reason: "stale_epoch" }
+      } finally {
+        applyIfLiveStoreSettingsEpoch(epochGateRef.current, request, () => {
+          setSettledStoreId(storeId)
+          setHydrated(true)
+        })
+      }
+      return result
+    })()
+
+    latestRefreshRef.current = { storeId, promise: run }
+    return run
   }, [storeId])
+
+  const settleSameStoreRefresh = useCallback(
+    async (
+      targetStoreId: string,
+      initialPromise: Promise<StoreSettingsReadbackResult>,
+    ): Promise<StoreSettingsReadbackResult> => {
+      let currentPromise = initialPromise
+      let outcome = await currentPromise
+      let hops = 0
+      while (
+        outcome.stale &&
+        hops < 8 &&
+        epochGateRef.current.active.storeId === targetStoreId &&
+        latestRefreshRef.current?.storeId === targetStoreId &&
+        latestRefreshRef.current.promise !== currentPromise
+      ) {
+        currentPromise = latestRefreshRef.current.promise
+        hops += 1
+        outcome = await currentPromise
+      }
+      return outcome
+    },
+    [],
+  )
+
+  const refresh = useCallback(async () => {
+    await refreshWithOutcome()
+  }, [refreshWithOutcome])
+
+  const revalidate = useCallback(async (): Promise<StoreSettingsReadbackResult> => {
+    const promise = refreshWithOutcome()
+    return settleSameStoreRefresh(storeId, promise)
+  }, [refreshWithOutcome, settleSameStoreRefresh, storeId])
 
   // Ao trocar de loja: invalida geração (descarta GET/backfill in-flight) e zera estado.
   useEffect(() => {
     epochGateRef.current.onStoreChange(storeId)
+    latestRefreshRef.current = null
     setSettings(null)
     setHydrated(false)
     setLoadedStoreId(null)
@@ -341,15 +403,16 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
 
   const save = useCallback(
     async (patch: StoreSettingsPutPayload) => {
-      if (!storeId) {
+      const targetStoreId = storeId
+      if (!targetStoreId) {
         throw new Error("Nenhuma unidade ativa selecionada.")
       }
-      const res = await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
+      const res = await fetch(`/api/stores/${encodeURIComponent(targetStoreId)}/settings`, {
         method: "PUT",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          [ASSISTEC_LOJA_HEADER]: storeId,
+          [ASSISTEC_LOJA_HEADER]: targetStoreId,
         },
         body: JSON.stringify(patch),
       })
@@ -357,9 +420,19 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
         const err = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(err.error || `Falha ao salvar configurações (HTTP ${res.status})`)
       }
-      await refresh()
+      if (epochGateRef.current.active.storeId !== targetStoreId) {
+        throw new StoreSettingsReadbackError(
+          targetStoreId,
+          "store_changed",
+          "O envio foi aceito, mas a unidade ativa mudou antes da confirmação de releitura.",
+        )
+      }
+      const outcome = await settleSameStoreRefresh(targetStoreId, refreshWithOutcome())
+      if (!outcome.ok) {
+        throw new StoreSettingsReadbackError(targetStoreId, outcome.reason ?? "readback_failed")
+      }
     },
-    [refresh, storeId]
+    [refreshWithOutcome, settleSameStoreRefresh, storeId]
   )
 
   const value = useMemo<StoreSettingsContextType>(
@@ -384,6 +457,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       ),
       getGarantiaById,
       refresh,
+      revalidate,
       save,
     }),
     [
@@ -402,6 +476,7 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       resolvedScanUnregisteredAction.value,
       getGarantiaById,
       refresh,
+      revalidate,
       save,
     ]
   )
@@ -430,6 +505,7 @@ export function useStoreSettings(): StoreSettingsContextType {
       pdvScaleVisorVisible: false,
       getGarantiaById: () => undefined,
       refresh: async () => {},
+      revalidate: async () => ({ ok: false, settings: null, reason: "provider_missing" }),
       save: async () => {
         throw new Error("StoreSettingsProvider ausente — não é possível salvar configurações.")
       },

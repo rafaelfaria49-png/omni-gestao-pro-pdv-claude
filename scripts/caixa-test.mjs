@@ -11,8 +11,9 @@
  * NUNCA escreve em dados reais — setup cria só a loja; cleanup só apaga a loja de teste (exige CONFIRM=1).
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 const STORE_ID = process.env.TEST_STORE_ID || "loja-teste-caixa"
 const mode = (process.argv[2] || "check").toLowerCase()
 const brl = (n) =>

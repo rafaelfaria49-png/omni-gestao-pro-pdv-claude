@@ -10,6 +10,7 @@ import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { resolveBusinessDayBounds } from "@/lib/pdv/trocas/troca-regularizacao-tempo"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,9 +33,9 @@ export async function GET(req: Request) {
   if (denied) return denied
 
   const dia = (new URL(req.url).searchParams.get("dia") ?? "").trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return NextResponse.json({ error: "dia inválido (AAAA-MM-DD)." }, { status: 400 })
-  const inicio = new Date(`${dia}T00:00:00-03:00`)
-  const fim = new Date(`${dia}T23:59:59.999-03:00`)
+  const bounds = resolveBusinessDayBounds(dia)
+  if (!bounds.ok) return NextResponse.json({ error: "dia inválido (AAAA-MM-DD)." }, { status: 400 })
+  const { inicio, fim } = bounds
   const sessoes = await prisma.sessaoCaixa.findMany({
     where: { storeId: lojaId, status: "FECHADA", abertaEm: { lte: fim }, fechadaEm: { gte: inicio } },
     select: { id: true, abertaEm: true, fechadaEm: true, operador: true, terminalId: true },

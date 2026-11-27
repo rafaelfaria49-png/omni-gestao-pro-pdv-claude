@@ -7,8 +7,9 @@
  *   node --env-file=.env scripts/migrate-legacy-financeiro.mjs --table=contas_receber --storeId=loja-1 --dry-run
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 function arg(name) {
   const eq = `--${name}=`

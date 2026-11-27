@@ -23,6 +23,7 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import { toStrongDocumentKey } from "@/lib/cadastros/client-identity/document.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -47,7 +48,7 @@ type Planned = { id: string; storeId: string; key: string | null; stored: string
 
 async function main(): Promise<void> {
   const { batchSize, exec } = parseArgs(process.argv.slice(2))
-  const db = new PrismaClient()
+  const db = new PrismaClient({ datasourceUrl: scriptDatasource() })
   try {
     let scanned = 0
     let alreadyOk = 0

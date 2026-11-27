@@ -16,6 +16,7 @@
  * Fora do CI exige também data_directory em scratchpad; nunca reseta um banco populado.
  * Uso: VESTUARIO_P02_TEST_DATABASE_URL=postgresql://user@127.0.0.1:55457/vest_p02_pg node scripts/vestuario/prepare-pg.mjs
  */
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 import { execFileSync } from "node:child_process"
 import { mkdtempSync, writeFileSync, rmSync, readdirSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -23,7 +24,11 @@ import { join } from "node:path"
 import { assertFreshDisposableDatabase } from "../cadastros/disposable-db-preflight.mjs"
 
 const url = (process.env.VESTUARIO_P02_TEST_DATABASE_URL ?? "").trim()
-if (!url) throw new Error("BLOQUEIO_EXPLICITO_PG: defina VESTUARIO_P02_TEST_DATABASE_URL (PostgreSQL descartável).")
+try {
+  localFixtureDatasource(url)
+} catch {
+  throw new Error("BLOQUEIO_EXPLICITO_PG: VESTUARIO_P02_TEST_DATABASE_URL deve identificar um banco descartável local.")
+}
 let target
 try { target = new URL(url) } catch { throw new Error("BLOQUEIO_EXPLICITO_PG: URL de QA inválida.") }
 if (!["postgresql:", "postgres:"].includes(target.protocol)
