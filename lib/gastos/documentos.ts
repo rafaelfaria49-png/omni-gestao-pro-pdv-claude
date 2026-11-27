@@ -5,6 +5,7 @@ import type { Prisma } from "@/generated/prisma"
 import { comContextoFinanceiro, storeDoContexto, type FinanceiroDb } from "./financeiro-scope"
 import { comLeituraFinanceira, FinanceiroReadError, leituraPerfilWhere } from "./read-scope"
 import { documentoStorageRef, type DocumentoStoragePort } from "./documentos-fixture"
+import { ehStoragePrivadoR2G003 } from "./documentos-storage"
 import type { FinanceiroContextoAutorizado } from "./types"
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,191}$/)
@@ -43,8 +44,9 @@ function mimeDosBytes(bytes: Buffer): string {
 }
 
 async function storagePrivado(storage: DocumentoStoragePort) {
-  if (storage.ambiente !== "fixture") throw new FinanceiroReadError(503)
+  if (storage.ambiente !== "fixture" && !ehStoragePrivadoR2G003(storage)) throw new FinanceiroReadError(503)
   const bucket = await storage.verificarBucket()
+  // `publico: null` NUNCA é aceito como prova de privacidade: fail-closed exige `publico === false`.
   if (!bucket.existe || bucket.publico !== false) throw new FinanceiroReadError(503)
 }
 
@@ -74,13 +76,29 @@ export async function registrarDocumentoGasto(contexto: unknown, input: unknown,
         ownerAdminUserId: ctx.tipo === "PESSOAL" ? ctx.userId : null, criadoPorAdminUserId: ctx.userId,
         nomeArquivo: parsed.data.nomeArquivo, mime, bytes: bytes.length, sha256, storageRef,
         proveniencia: parsed.data.proveniencia,
-        historico: [{ acao: "REGISTRADO", at: new Date().toISOString(), atorId: ctx.userId }],
+        historico: [{ acao: "REGISTRADO", at: new Date().toISOString(), atorId: ctx.userId, storageAmbiente: storage.ambiente }],
       }, select: documentoSelect })
       return dto(row)
     })
   } catch {
     // Se a transação falhou, este path novo nunca pertenceu a outro documento/perfil.
-    if (criadoPath) await storage.removerObjeto(criadoPath).catch(() => {})
+    if (criadoPath) {
+      await storage.removerObjeto(criadoPath).catch(() => {
+        if (ehStoragePrivadoR2G003(storage) && storage.onAuditoria) {
+          try {
+            storage.onAuditoria(Object.freeze({
+              acao: "LIMPEZA_ORFAO_FALHOU",
+              ambiente: storage.ambiente,
+              resultado: "FALHA",
+              motivoCodigo: "remocao_pos_falha_db",
+              at: new Date().toISOString(),
+            }))
+          } catch {
+            // Auditoria nunca mascara erro original.
+          }
+        }
+      })
+    }
     throw new FinanceiroReadError()
   }
 }

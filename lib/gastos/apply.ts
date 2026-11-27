@@ -11,7 +11,7 @@ import { agoraDoBanco, autorizarOperacaoNaTransacao, emTransacaoGasto, exigirRev
 import { chaveOperacao, identificadorOperacao, hashOperacaoGasto, normalizarPropostaGasto, OperacaoGastoError,
   type PropostaGasto, type ResultadoOperacaoGasto, valorPropostaGasto, ordemBinaria, meioCompensacaoGasto, MEIOS_PAGAMENTO_GASTO } from "./operacao-schema"
 import { centavosLegadosExatos, saldoTituloGasto, travarTitulosGasto, type AlocacaoPlanejada } from "./pagamentos"
-import { travarCiclosGasto } from "./cartoes"
+import { limiteUtilizadoCartaoNaTransacao, travarCiclosGasto, verificarLimiteDisponivelParaCompra } from "./cartoes"
 import { resolverFornecedorGasto } from "./fornecedores"
 import { datasDaProposta, exigirPeriodosAbertosGasto, travarPeriodosGasto } from "./periodo"
 import { vincularDocumentoGastoNaTransacao } from "./documentos"
@@ -87,8 +87,17 @@ export async function aplicarOperacaoGasto(contexto: unknown, input: unknown): P
         throw new OperacaoGastoError("documento_ja_vinculado_titulo", 409)
       }
     }
-    const ciclos = await travarCiclosGasto(tx, ctx, p.tipo === "COMPRA_CREDITO"
-      ? p.parcelas?.map(a => a.cicloId) ?? [p.cicloId!] : p.tipo === "PAGAR_FATURA" ? [p.cicloId] : [])
+    const ciclos = await travarCiclosGasto(
+      tx,
+      ctx,
+      p.tipo === "COMPRA_CREDITO"
+        ? p.parcelas?.map(a => a.cicloId) ?? [p.cicloId!] : p.tipo === "PAGAR_FATURA" ? [p.cicloId] : [],
+      { travarCartaoParaEscrita: p.tipo === "COMPRA_CREDITO" },
+    )
+    if (p.tipo === "COMPRA_CREDITO") {
+      const cartaoIds = new Set(ciclos.map(c => c.cartaoId))
+      if (cartaoIds.size !== 1) throw new OperacaoGastoError("ciclo_cartao_divergente", 422)
+    }
     const fonteBase = await fontesEstorno(tx, ctx, p)
     const ids = p.tipo === "PAGAR_TITULO" || p.tipo === "ESTORNAR_LEGADO" ? [p.tituloId]
       : p.tipo === "PAGAR_FATURA" ? p.alocacoes.map(a => a.tituloId)
@@ -142,6 +151,13 @@ export async function aplicarOperacaoGasto(contexto: unknown, input: unknown): P
       fornecedorId = await resolverFornecedorGasto(tx, ctx, fato)
       if (fato.categoriaId && !await tx.categoriaGasto.findFirst({ where: { id: fato.categoriaId, perfilId: ctx.perfilId,
         storeId: storeDoContexto(ctx), ativo: true, natureza: "DESPESA" } })) throw new OperacaoGastoError("categoria_indisponivel", 404)
+    }
+    if (p.tipo === "COMPRA_CREDITO" && ciclos[0]?.cartao.limiteCentavos !== null && ciclos[0]?.cartao.limiteCentavos !== undefined) {
+      const utilizadoAtual = await limiteUtilizadoCartaoNaTransacao(tx, ctx, ciclos[0].cartaoId)
+      const limiteTotal = BigInt(ciclos[0].cartao.limiteCentavos.toString())
+      if (!verificarLimiteDisponivelParaCompra(limiteTotal, utilizadoAtual, valor!).permitido) {
+        throw new OperacaoGastoError("limite_cartao_insuficiente", 409)
+      }
     }
     const temPagamento = p.tipo !== "CONTA_PAGAR" && p.tipo !== "COMPRA_CREDITO"
     if (temPagamento && (!carteiraId || !contas.get(carteiraId))) throw new OperacaoGastoError("conta_obrigatoria")
