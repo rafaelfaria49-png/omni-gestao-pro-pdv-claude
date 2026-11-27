@@ -521,7 +521,9 @@ export function TrocasDevolucao({
     setRegErro("")
     fetch(`/api/ops/trocas/sessoes?dia=${encodeURIComponent(parsedRegData.dia)}`, { headers: { "x-assistec-loja-id": lojaId }, credentials: "include", cache: "no-store", signal: ctrl.signal })
       .then(async (r) => {
+        if (ctrl.signal.aborted) return
         const j = (await r.json().catch(() => ({}))) as { sessoes?: typeof regSessoes; error?: string }
+        if (ctrl.signal.aborted) return
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
         const lista = j.sessoes ?? []
         setRegSessoes(lista)
