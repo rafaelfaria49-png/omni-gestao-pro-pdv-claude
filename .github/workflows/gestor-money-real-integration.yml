@@ -83,7 +83,7 @@ jobs:
             test/gestor-money/real-integration.pg.test.ts
       - name: Run focused strict TypeScript check for Gestor Money namespaces
         run: |
-          cat <<'JSON' > /tmp/tsconfig.gestor-money-ci.json
+          cat <<'JSON' > ./tsconfig.gestor-money-ci.json
           {
             "extends": "./tsconfig.json",
             "compilerOptions": { "incremental": false, "noEmit": true },
@@ -101,4 +101,5 @@ jobs:
             "exclude": ["node_modules"]
           }
           JSON
-          node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js -p /tmp/tsconfig.gestor-money-ci.json --noEmit
+          trap 'rm -f ./tsconfig.gestor-money-ci.json' EXIT
+          node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js -p ./tsconfig.gestor-money-ci.json --noEmit
