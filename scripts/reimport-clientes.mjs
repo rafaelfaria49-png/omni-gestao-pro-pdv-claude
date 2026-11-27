@@ -13,8 +13,9 @@
 import fs from "node:fs"
 import path from "node:path"
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 function argValue(flag) {
   const i = process.argv.indexOf(flag)

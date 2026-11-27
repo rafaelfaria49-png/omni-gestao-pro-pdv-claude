@@ -20,9 +20,10 @@ import { randomBytes } from "node:crypto"
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import bcrypt from "bcryptjs"
+import { localFixtureDatasource } from "../../../../lib/db/datasource-policy.mjs"
 import { assertFreshDisposableDatabase } from "../../../../scripts/cadastros/disposable-db-preflight.mjs"
 
-const database = process.env.DESKTOP_QA_DATABASE_URL ?? ""
+const database = localFixtureDatasource(process.env.DESKTOP_QA_DATABASE_URL)
 const parsed = (() => {
   try {
     return new URL(database)

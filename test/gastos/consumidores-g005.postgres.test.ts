@@ -1,5 +1,5 @@
 import "./g005-fixtures"
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
 import { NextRequest } from "next/server"
 import { GET as pagar } from "@/app/api/financeiro/pagar/route"
@@ -37,6 +37,8 @@ vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { id: bro
 vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: browser.store }) }))
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 afterAll(async () => { await prisma.$disconnect() })
+// Suíte do comportamento LIGADO (G005); a ativação é explícita aqui, nunca herdada do ambiente.
+beforeAll(() => { vi.stubEnv("GESTOR_MONEY_ENABLED", "true") })
 const periodo = { dataInicio: "2026-10-01", dataFim: "2026-10-31" }, qs = "dataInicio=2026-10-01&dataFim=2026-10-31"
 const request = (store: string, path: string) => new NextRequest(`http://localhost/api/financeiro/${path}`, { headers: { "x-assistec-loja-id": store } })
 async function linhasExport(store: string, tipo: string, formato: "csv" | "xlsx") {
@@ -127,10 +129,12 @@ describe("G005 serviço/API/relatório/export/Agent/Contador", () => {
       const rel = await (await resumo(request(f.L1, `relatorios/resumo?${qs}`))).json(), fluxo = await getFluxoCaixaResumo(f.L1)
       expect(api.summary.totalAberto).toBe(restante); expect(api.rows[0].restante).toBe(restante)
       expect(api.rows[0].pago).toBe(despesa); expect(a.resultadoLoja[0].totalPagar).toBe(restante)
-      expect(a.resultadoLoja[0].totalPago).toBe(despesa); expect(a.consulta.despesaRealizadaCentavos).toBe(q.despesaRealizadaCentavos)
+      expect(a.resultadoLoja[0].totalPago).toBe(despesa); expect(Math.round(a.resultadoLoja[0].despesa * 100)).toBe(Number(q.despesaRealizadaCentavos)) // `consulta` saiu do payload na reconciliação
       expect(rel.indicadores.pagarPendente).toBe(restante); expect(rel.indicadores.despesaTotal).toBe(despesa)
       expect(fluxo.totalPagarAberto).toBe(restante); expect(fluxo.saldoAtual).toBe(1000 - despesa)
-      const agent = await executeOmniAgentIntent(f.L1, interpretOmniAgentCommand("Quanto ainda tenho a pagar?"))
+      // O Agent resolve o período pelo relógio do servidor: fixado em 25/10/2026 só nesta chamada.
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-25T15:00:00.000Z"))
+      const agent = await executeOmniAgentIntent(f.L1, interpretOmniAgentCommand("Quanto ainda tenho a pagar?")).finally(() => vi.useRealTimers())
       expect(agent.ok).toBe(true)
       if (!agent.ok) throw new Error("Agent negado")
       expect(agent.payload.valores).toMatchObject({ pagarAbertoCentavos: String(Math.round(restante * 100)), despesaRealizadaCentavos: String(Math.round(despesa * 100)) })
@@ -172,7 +176,8 @@ describe("G005 serviço/API/relatório/export/Agent/Contador", () => {
     await aplicarG005(f, { tipo: "PAGAR_TITULO", tituloId: t.resultado.tituloIds[0], quitar: true, carteiraId: f.conta(), formaPagamento: "pix", dataPagamento })
     fireEvent.click(view.getByText("reler"))
     await waitFor(() => expect(JSON.parse(view.getByTestId("valor").textContent!)).toEqual({ aberto: 0, pago: 365.01 }), { timeout: 10000 })
-    cleanup(); dom.window.close()
+    // Esvazia o agendador do React (setImmediate) ANTES de fechar o DOM e de o afterEach remover `window`.
+    cleanup(); for (let i = 0; i < 3; i++) await new Promise((r) => setImmediate(r)); dom.window.close()
   }, 30000)
   it("fatura com categorias diferentes e estorno alocado não duplicam caixa nem atribuem tudo a uma categoria", async () => {
     const f = await fixtureG005(), ctx = await f.contexto(), categorias = ["Energia", "Alimentação"]
@@ -192,6 +197,10 @@ describe("G005 serviço/API/relatório/export/Agent/Contador", () => {
   it("Agent ignora total sugerido pelo modelo, exige período/categoria inequívocos e não consulta pessoal", async () => {
     const f = await fixtureG005(), cat = await prisma.categoriaGasto.create({ data: { perfilId: f.E1, storeId: f.L1, nome: "Energia", nomeNormalizado: "energia", natureza: "DESPESA" } })
     await aplicarG005(f, pagoG005(f, { valorCentavos: "8020", categoriaId: cat.id }))
+    // "neste mês" é resolvido pelo relógio do servidor: fixado em 25/10/2026 (mês dos fatos da fixture),
+    // só para as chamadas ao Agent — escrita e banco seguem no relógio real.
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-25T15:00:00.000Z"))
+    try {
     const interp = interpretOmniAgentCommand("Quanto paguei de energia neste mês?"); interp.fields.total = "99999999"
     const result = await executeOmniAgentIntent(f.L1, interp)
     expect(result.ok).toBe(true); if (result.ok) expect(result.payload.valores).toMatchObject({ despesaRealizadaCentavos: "8020" })
@@ -200,6 +209,7 @@ describe("G005 serviço/API/relatório/export/Agent/Contador", () => {
     const semCategoria = await executeOmniAgentIntent(f.L1, { ...interp, fields: { preset: "estemes", categoriaNome: "Inexistente" } })
     expect(semCategoria).toMatchObject({ ok: false, error: "Esclareça a categoria financeira antes de consultar o total." })
     expect(await executeOmniAgentIntent(f.L1, { ...interp, fields: { preset: "estemes", perfil: "PESSOAL" } })).toMatchObject({ ok: false })
+    } finally { vi.useRealTimers() }
   })
   it("forjar seletores e IDs não revela valores/descrições pessoais em API ou CSV/XLSX", async () => {
     const f = await fixtureG005()

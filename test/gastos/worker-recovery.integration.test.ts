@@ -28,7 +28,7 @@ async function pronto(leaseMs = 30_000) {
 
 async function crashFilho(mode: "claim" | "send", f?: FixtureG006) {
   const dir = process.env.G006_EVIDENCE_DIR, root = process.cwd().replaceAll("\\", "/")
-  if (!dir || !resolve(dir).replaceAll("\\", "/").endsWith("/G006-execution") || !root.endsWith("/omni-gestao-gastos-006")) throw Error("Harness G006 nao identificado")
+  if (!dir || !resolve(dir).replaceAll("\\", "/").endsWith("/G006-execution")) throw Error("Harness G006 nao identificado") // opt-in explícito; independe do nome da checkout
   const script = resolve(dir, "crash-child.ts")
   writeFileSync(script, `import {PrismaClient} from ${JSON.stringify(root + "/generated/prisma/index.js")};
 import {claimJob} from ${JSON.stringify(root + "/lib/gastos/queue.ts")};

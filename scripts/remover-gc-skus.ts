@@ -22,6 +22,7 @@
  */
 
 import { PrismaClient } from "../generated/prisma"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import * as dotenv from "dotenv"
 import { resolve } from "path"
 import fs from "node:fs"
@@ -29,7 +30,7 @@ import { stripGcSkuPrefix } from "../lib/produto-sku"
 
 dotenv.config({ path: resolve(__dirname, "../.env") })
 
-const db = new PrismaClient()
+const db = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 const REPORT_PATH = resolve(__dirname, "../docs/ai/SKU_GC_MIGRATION_REPORT.md")
 const BATCH_SIZE = 100

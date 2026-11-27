@@ -8,6 +8,7 @@ import {
   broadcastAuthLogout,
   markCachePurgeRetryNeeded,
   purgeAuthenticatedBrowserCaches,
+  setLocalSignOutInProgress,
 } from "@/lib/auth/pwa-cache-privacy"
 
 /**
@@ -33,6 +34,7 @@ export function SignOutButton() {
             if (!res.ok) markCachePurgeRetryNeeded(true)
           })
           void signOut({ callbackUrl: "/login" }).catch(() => {
+            setLocalSignOutInProgress(false)
             setBusy(false)
             setFailed(true)
           })

@@ -17,8 +17,9 @@
  *   node --env-file=.env scripts/merge-produtos-duplicados.mjs --store loja-1 --apply
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 const args = process.argv.slice(2)
 const APPLY = args.includes("--apply")

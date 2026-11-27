@@ -17,6 +17,7 @@
 import { spawnSync } from "node:child_process"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..")
 process.chdir(root)
@@ -94,6 +95,11 @@ function assertLocalHomologationDatabaseUrl(url) {
     fail(`Database de homologação deve ser ${HOMOLOGATION_DATABASE} (recebido: ${database}).`)
   }
 
+  try {
+    localFixtureDatasource(url)
+  } catch {
+    fail(`${ENV_KEY} contém opções de conexão inválidas.`)
+  }
   return parsed
 }
 

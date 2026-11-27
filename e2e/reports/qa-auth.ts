@@ -2,11 +2,12 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { expect,type Page } from "@playwright/test"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "../../lib/store-defaults"
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 export const QA_ORIGIN="http://127.0.0.1:3107",QA_STORE="reports-qa-a"
 export const QA_EVIDENCE=path.resolve("docs/ai-execution/_evidence/OMNI-RELATORIOS-HUB-ENTERPRISE-REAL-001")
 export async function readQASession():Promise<{url:string;qaPassword:string;sessionRevocation:string}> {
   const manifest=JSON.parse(await readFile(path.join(QA_EVIDENCE,"local-qa-session.json"),"utf8"))
-  const target=new URL(manifest.url)
+  const target=new URL(localFixtureDatasource(manifest.url))
   if(target.hostname!=="127.0.0.1"||target.pathname!=="/omni_reports_qa"||typeof manifest.qaPassword!=="string"||manifest.qaPassword.length<24||manifest.sessionRevocation!=="on")throw new Error("ISOLATED_SESSION_QA_REQUIRED")
   return manifest
 }

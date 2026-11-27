@@ -1,6 +1,8 @@
 /** Só pelo preparador que já provou banco vazio + descartável, ANTES da migration P03. */
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
+
 export async function seedP03LegacyFixture(PrismaClient, url) {
-  const db = new PrismaClient({ datasourceUrl: url })
+  const db = new PrismaClient({ datasourceUrl: localFixtureDatasource(url) })
   try {
     await db.store.create({ data: { id: "p03-history", name: "Histórico sintético pré-P03", cnpj: "00.000.000/0000-00", phone: "0" } })
     await db.produto.createMany({ data: [

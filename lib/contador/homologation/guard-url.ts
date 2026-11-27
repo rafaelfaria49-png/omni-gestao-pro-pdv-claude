@@ -7,6 +7,8 @@
  * Contrato canônico — manter idêntico em
  * `scripts/contador/provision-fiscal-homolog-db.mjs`.
  */
+import { localFixtureDatasource } from "../../db/datasource-policy.mjs"
+
 const HOSTS_LOCAIS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
 
 const HOST_PROIBIDO = /supabase|neon\.tech|vercel|amazonaws|azure|googleusercontent|pooler/i
@@ -98,6 +100,12 @@ export function assertLocalHomologationDatabaseUrl(url: string): string {
     throw new HomologationUrlError(
       `Database de homologação deve ser ${HOMOLOGATION_DATABASE} (recebido: ${database}).`,
     )
+  }
+
+  try {
+    localFixtureDatasource(url)
+  } catch {
+    throw new HomologationUrlError(`${ENV_HOMOLOGATION_DATABASE_URL} contém opções de conexão inválidas.`)
   }
 
   parsed.searchParams.set("connection_limit", "8")

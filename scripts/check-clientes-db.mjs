@@ -4,8 +4,9 @@
  *   node --env-file=.env scripts/check-clientes-db.mjs
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 async function main() {
   await prisma.$connect()

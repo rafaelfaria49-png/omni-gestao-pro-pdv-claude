@@ -11,7 +11,6 @@
  */
 import "server-only"
 
-import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { normalizeDocDigits } from "@/lib/cpf"
 import {
@@ -25,10 +24,11 @@ import { normalizarTermoBusca } from "@/lib/pdv/trocas/troca-busca-termo"
 const ACENTOS = "áàâãäåéèêëíìîïóòôõöúùûüçñ"
 const SEM_ACENTO = "aaaaaaeeeeiiiiooooouuuucn"
 
-/** Normalização SQL equivalente a `normalizarTermoBusca` (minúsculas, sem acento). */
-function norm(expr: Prisma.Sql): Prisma.Sql {
-  return Prisma.sql`translate(lower(coalesce(${expr}, '')), ${ACENTOS}, ${SEM_ACENTO})`
-}
+// Normalização SQL equivalente a `normalizarTermoBusca` (minúsculas, sem acento):
+// `translate(lower(coalesce(<coluna>, '')), ACENTOS, SEM_ACENTO)`, escrita INLINE nas consultas.
+// Não compor `Prisma.sql` aninhado dentro do `$queryRaw`: no bundle do Next o fragmento pode não
+// ser reconhecido como SQL (instanceof entre cópias do runtime) e seguir como parâmetro JSON,
+// gerando `jsonb ~~ text` (42883) — visto no E2E de trocas da PR #405.
 
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`)
@@ -244,7 +244,7 @@ export async function buscarVendasParaTroca(params: BuscaTrocaParams): Promise<B
     termo.length >= 3
       ? await prisma.$queryRaw<Array<{ id: string; name: string; sku: string | null; barcode: string | null }>>`
           SELECT id, name, sku, barcode FROM estoque_produtos
-          WHERE "storeId" = ${storeId} AND ${norm(Prisma.raw('"name"'))} LIKE ${like}
+          WHERE "storeId" = ${storeId} AND translate(lower(coalesce("name", '')), ${ACENTOS}, ${SEM_ACENTO}) LIKE ${like}
           LIMIT 200`
       : []
   const produtos = [...porCodigo, ...porNome.filter((p) => !porCodigo.some((c) => c.id === p.id))]
@@ -261,15 +261,15 @@ export async function buscarVendasParaTroca(params: BuscaTrocaParams): Promise<B
       AND v.at >= ${desde}
       AND (
         upper(v."pedidoId") LIKE ${pedidoLike}
-        OR ${norm(Prisma.raw('v."clienteNome"'))} LIKE ${like}
+        OR translate(lower(coalesce(v."clienteNome", '')), ${ACENTOS}, ${SEM_ACENTO}) LIKE ${like}
         OR (${doc} <> '' AND regexp_replace(coalesce(v.payload->>'customerCpf', ''), '[^0-9]', '', 'g') = ${doc})
         OR EXISTS (
           SELECT 1 FROM venda_itens i WHERE i."vendaId" = v.id
-            AND (${norm(Prisma.raw("i.nome"))} LIKE ${like} OR i."inventoryId" = ANY(${ids}::text[]))
+            AND (translate(lower(coalesce(i.nome, '')), ${ACENTOS}, ${SEM_ACENTO}) LIKE ${like} OR i."inventoryId" = ANY(${ids}::text[]))
         )
         OR (jsonb_typeof(v.payload->'lines') = 'array' AND EXISTS (
           SELECT 1 FROM jsonb_array_elements(v.payload->'lines') l
-          WHERE ${norm(Prisma.raw("l->>'name'"))} LIKE ${like}
+          WHERE translate(lower(coalesce(l->>'name', '')), ${ACENTOS}, ${SEM_ACENTO}) LIKE ${like}
              OR l->>'inventoryId' = ANY(${ids}::text[])
              OR l->>'produtoId' = ANY(${ids}::text[])
         ))

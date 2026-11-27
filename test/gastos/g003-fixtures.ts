@@ -18,9 +18,10 @@ export const hoje = () => new Date().toISOString().slice(0, 10)
 export const periodo = () => ({ dataInicio: hoje(), dataFim: hoje() })
 export let sessaoAtual: Session | null = null
 
-export function login(userId = U1, allowedStoreIds = stores, role = "ADMIN") {
+/** `platform`: sessão de plataforma da main (`requireModuleApi(req, "platform")`, ex.: /api/dashboard/elite). */
+export function login(userId = U1, allowedStoreIds = stores, role = "ADMIN", platform = false) {
   sessaoAtual = { expires: "2099-01-01T00:00:00.000Z", user: {
-    id: userId, role, name: "Synthetic G003", email: `${userId}@example.invalid`,
+    id: userId, role, name: "Synthetic G003", email: `${userId}@example.invalid`, ...(platform ? { platformAuthority: true } : {}),
     storeAccess: "restricted", allowedStoreIds, storeModules: modulosSinteticos(allowedStoreIds), lojaId: allowedStoreIds[0] ?? null,
   } }
 }

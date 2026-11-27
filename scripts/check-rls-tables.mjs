@@ -4,8 +4,9 @@
  *   node --env-file=.env scripts/check-rls-tables.mjs
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 const TABLES = ["clientes_importados", "estoque_produtos", "categorias_produto", "ordens_servico"]
 

@@ -51,7 +51,7 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
         className={
           isFixedScreen
             ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden basis-0"
-            : "min-h-0 flex-1 overflow-auto flex flex-col"
+            : "flex min-w-0 flex-[1_0_auto] flex-col"
         }
       >
         {children}

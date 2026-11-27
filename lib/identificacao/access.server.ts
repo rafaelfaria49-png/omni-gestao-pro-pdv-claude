@@ -9,7 +9,7 @@ import { identificationEnabled } from "./feature-flags.server"
 export async function identificationAccess(storeId: unknown): Promise<Result<CatalogContext>> {
   const sid = typeof storeId === "string" ? storeId.trim() : ""
   const denied = { ok: false as const, code: "UNTRUSTED", message: "Identificação e etiquetas não estão disponíveis para esta loja/sessão." }
-  // Antes de sessão/banco e antes de carregar o motor de PDF; Production sempre recusada.
+  // Gate de loja e ambiente antes da sessão, do banco e do motor de PDF.
   if (!sid || !identificationEnabled(sid)) return denied
   try {
     await requireModuleAction(sid, "catalog")

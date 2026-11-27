@@ -1,5 +1,7 @@
 # P03 — Auditoria, contratos e modelo escolhido (QA)
 
+O procedimento vigente da janela usa DDL e grants em uma transação e registro pelo Prisma. As instruções de execução desta auditoria registram a proposta histórica. [Janela de liberação da P03](./P03_RELEASE_GATE_009.md)
+
 GOAL `OMNI-VESTUARIO-P03-CODIGOS-ETIQUETAS-001`. Base `51265894a8a019fbd5e679003de0b08dd95feba9`.
 PRs #357, #358 e #360 integradas e revalidadas. AEP opt-in inativo nesta worktree.
 

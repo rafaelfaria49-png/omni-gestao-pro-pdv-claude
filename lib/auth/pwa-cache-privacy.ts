@@ -165,28 +165,68 @@ export function isCachePurgeRetryNeeded(): boolean {
 export type AuthPrivacyBroadcastMessage = {
   type: "OMNI_LOGOUT"
   at: number
+  senderTabId?: string
+}
+
+const LOCAL_TAB_ID =
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+let localSignOutInProgress = false
+const localSignOutListeners = new Set<() => void>()
+
+export function isLocalSignOutInProgress(): boolean {
+  return localSignOutInProgress
+}
+
+export function setLocalSignOutInProgress(active: boolean): void {
+  localSignOutInProgress = active
+  if (active) {
+    for (const listener of localSignOutListeners) {
+      try {
+        listener()
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+export function subscribeLocalSignOutStart(onStart: () => void): () => void {
+  localSignOutListeners.add(onStart)
+  return () => {
+    localSignOutListeners.delete(onStart)
+  }
 }
 
 /** Notifica outras abas abertas da mesma origem que a sessão foi encerrada. */
 export function broadcastAuthLogout(): void {
+  setLocalSignOutInProgress(true)
   try {
     if (typeof BroadcastChannel === "undefined") return
     const channel = new BroadcastChannel(AUTH_PRIVACY_CHANNEL)
-    channel.postMessage({ type: "OMNI_LOGOUT", at: Date.now() } satisfies AuthPrivacyBroadcastMessage)
+    channel.postMessage({
+      type: "OMNI_LOGOUT",
+      at: Date.now(),
+      senderTabId: LOCAL_TAB_ID,
+    } satisfies AuthPrivacyBroadcastMessage)
     channel.close()
   } catch {
     /* BroadcastChannel indisponível */
   }
 }
 
-/** Escuta encerramento de sessão originado em outra aba. */
+/** Escuta encerramento de sessão originado em outra aba (ignora eco da própria aba). */
 export function subscribeAuthLogout(onLogout: () => void): () => void {
   if (typeof BroadcastChannel === "undefined") return () => {}
   let channel: BroadcastChannel | null = null
   try {
     channel = new BroadcastChannel(AUTH_PRIVACY_CHANNEL)
     channel.onmessage = (event: MessageEvent<AuthPrivacyBroadcastMessage>) => {
-      if (event.data?.type === "OMNI_LOGOUT") onLogout()
+      if (event.data?.type !== "OMNI_LOGOUT") return
+      if (event.data.senderTabId && event.data.senderTabId === LOCAL_TAB_ID) return
+      onLogout()
     }
   } catch {
     return () => {}

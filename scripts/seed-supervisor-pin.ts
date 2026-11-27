@@ -17,6 +17,7 @@
  */
 
 import { PrismaClient } from "../generated/prisma"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import * as dotenv from "dotenv"
 import { resolve } from "path"
 import { isBlockedLegacySupervisorPin } from "../lib/auth/pin-authorization"
@@ -88,7 +89,7 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
-  const db = new PrismaClient()
+  const db = new PrismaClient({ datasourceUrl: scriptDatasource() })
   seedSupervisorPin(db)
     .catch((err) => {
       console.error("✗ Erro no seed do supervisor:", err instanceof Error ? err.message : err)

@@ -7,6 +7,7 @@ import {
   broadcastAuthLogout,
   markCachePurgeRetryNeeded,
   purgeAuthenticatedBrowserCaches,
+  setLocalSignOutInProgress,
 } from "@/lib/auth/pwa-cache-privacy"
 import { SettingsCard } from "../components/SettingsCard"
 
@@ -29,6 +30,7 @@ export function SegurancaSection() {
     try {
       await signOut({ callbackUrl: "/login" })
     } catch {
+      setLocalSignOutInProgress(false)
       setSigningOut(false)
       setSignOutError("Não foi possível encerrar a sessão agora. Verifique a conexão e tente novamente.")
     }

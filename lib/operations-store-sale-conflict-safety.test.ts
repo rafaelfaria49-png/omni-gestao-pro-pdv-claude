@@ -12,6 +12,7 @@
  */
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
+import ts from "typescript"
 import { describe, expect, it } from "vitest"
 
 const REPO_ROOT = resolve(__dirname, "..")
@@ -20,60 +21,36 @@ function read(relativePath: string): string {
   return readFileSync(join(REPO_ROOT, relativePath), "utf8")
 }
 
-function between(source: string, start: string, end: string): string {
-  const startIndex = source.indexOf(start)
-  const endIndex = source.indexOf(end, startIndex + start.length)
-  expect(startIndex, `marcador inicial ausente: ${start}`).toBeGreaterThanOrEqual(0)
-  expect(endIndex, `marcador final ausente: ${end}`).toBeGreaterThan(startIndex)
-  return source.slice(startIndex, endIndex)
+const storePath = "lib/operations-store.tsx"
+const store = read(storePath)
+const source = ts.createSourceFile(storePath, store, ts.ScriptTarget.Latest, false, ts.ScriptKind.TSX)
+const provider = source.statements.filter(ts.isFunctionDeclaration).find((declaration) =>
+  declaration.name?.text === "OperationsProvider",
+)
+const declarations = provider?.body?.statements.filter(ts.isVariableStatement).flatMap((statement) =>
+  statement.declarationList.declarations,
+)
+
+// Delimita o corpo do callback pelo TSX, sem depender da declaração seguinte.
+function callbackBody(name: string): string {
+  const declaration = declarations?.find((entry) => ts.isIdentifier(entry.name) && entry.name.text === name)
+  const initializer = declaration?.initializer
+  if (!initializer || !ts.isCallExpression(initializer) ||
+    !ts.isIdentifier(initializer.expression) || initializer.expression.text !== "useCallback") {
+    throw new Error(`Callback ${name} ausente em OperationsProvider`)
+  }
+  const callback = initializer.arguments[0]
+  if (!callback || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))) {
+    throw new Error(`Corpo do callback ${name} ausente em OperationsProvider`)
+  }
+  return callback.body.getText(source)
 }
 
 describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", () => {
-  const store = read("lib/operations-store.tsx")
   const archive = read("components/dashboard/vendas/vendas-arquivo-geral.tsx")
 
-  const persistPending = between(
-    store,
-    "const persistPendingSale = useCallback",
-    "const flushPendingSales = useCallback",
-  )
-  const flush = between(
-    store,
-    "const flushPendingSales = useCallback",
-    "const refreshSalesFromServer = useCallback",
-  )
-  const retry = between(
-    store,
-    "const doRetrySyncSale = useCallback",
-    "const retrySyncSale = useCallback",
-  )
-  const wrappers = between(
-    store,
-    "const retrySyncSale = useCallback",
-    "const discardLocalPendingSale = useCallback",
-  )
-  const recover = between(
-    store,
-    "const recoverQuarantinedSale = useCallback",
-    "const discardLocalPendingSale = useCallback",
-  )
-  const recoverIndividual = between(
-    store,
-    "const recoverQuarantinedSale = useCallback",
-    "const collectQuarantinedCandidates = useCallback",
-  )
-  const individual = between(
-    store,
-    "const discardLocalPendingSale = useCallback",
-    "const bulkDiscardLocalPendingSales = useCallback",
-  )
-  const bulk = between(
-    store,
-    "const bulkDiscardLocalPendingSales = useCallback",
-    "const flushPendingDevolucoes = useCallback",
-  )
-
   it("auto-retry ignora o conflito antes do persist e não recupera sozinho", () => {
+    const flush = callbackBody("flushPendingSales")
     const conflictGate = flush.indexOf("persistedSaleIdentityConflictCode(storageKey, sale)")
     const persist = flush.indexOf("persistPendingSale(")
     expect(conflictGate).toBeGreaterThanOrEqual(0)
@@ -86,6 +63,7 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
   })
 
   it("reenvio manual e retroativo compartilham o bloqueio anterior ao persist", () => {
+    const retry = callbackBody("doRetrySyncSale")
     const conflictGate = retry.indexOf("persistedSaleIdentityConflictCode(storageKey, sale)")
     const persist = retry.indexOf("persistPendingSale(")
     expect(conflictGate).toBeGreaterThanOrEqual(0)
@@ -93,20 +71,22 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
     expect(retry).toContain("SALE_IDENTITY_CONFLICT_TITLE")
     expect(retry).toContain("SALE_IDENTITY_CONFLICT_GUIDANCE")
     expect(retry).not.toContain("recoverQuarantinedSaleUrl")
+    expect(callbackBody("resolveUnknownTwin")).not.toContain("recoverQuarantinedSaleUrl")
 
-    expect(wrappers).toContain("doRetrySyncSale(saleId, false)")
-    expect(wrappers).toContain("doRetrySyncSale(saleId, true)")
+    expect(callbackBody("retrySyncSale")).toContain("doRetrySyncSale(saleId, false)")
+    expect(callbackBody("retrySyncSaleRetroactive")).toContain("doRetrySyncSale(saleId, true)")
   })
 
   it("descarte individual e em lote preservam conflitos sem consultar o servidor", () => {
-    expect(individual.indexOf("persistedSaleIdentityConflictCode(storageKey, sale)")).toBeLessThan(
-      individual.indexOf("fetch("),
-    )
+    const individual = callbackBody("discardLocalPendingSale")
+    const conflictGate = individual.indexOf("persistedSaleIdentityConflictCode(storageKey, sale)")
+    expect(conflictGate).toBeGreaterThanOrEqual(0)
+    expect(individual.indexOf("fetch(")).toBeGreaterThan(conflictGate)
     expect(individual).toContain("SALE_IDENTITY_CONFLICT_TITLE")
     expect(individual).toContain("SALE_IDENTITY_CONFLICT_GUIDANCE")
     expect(individual).not.toContain("recoverQuarantinedSaleUrl")
 
-    expect(bulk).toMatch(
+    expect(callbackBody("bulkDiscardLocalPendingSales")).toMatch(
       /persistedSaleIdentityConflictCode\(storageKey, sale\)\)\s*\{[\s\S]*conflicts \+= 1[\s\S]*continue[\s\S]*fetch\(`\/api\/vendas\//,
     )
   })
@@ -127,15 +107,30 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
   })
 
   it("recovery administrado é o único caminho que chama recoverQuarantinedSale", () => {
+    const persistPending = callbackBody("persistPendingSale")
     expect(persistPending).toContain("postV2Sale")
     expect(persistPending).toContain("postV1Sale")
     expect(persistPending).not.toContain("recoverQuarantinedSaleUrl")
     expect(persistPending).not.toContain("predictedNovaVendaId")
+    const latestPending = callbackBody("latestPendingSale")
+    expect(latestPending).not.toContain("recoverQuarantinedSaleUrl")
+    expect(latestPending).not.toContain("predictedNovaVendaId")
 
+    const recover = callbackBody("recoverQuarantinedSale")
     expect(recover).toContain("recoverQuarantinedSaleUrl")
     expect(recover).toContain("isSaleIdentityConflictCode")
     expect(recover).toContain("conflictingPedidoId")
-    expect(recover).not.toContain("persistPendingSale(")
+    for (const name of [
+      "recoverQuarantinedSale",
+      "collectQuarantinedCandidates",
+      "reconcileRecoveredSales",
+      "previewQuarantineRecovery",
+      "recoverQuarantinedSalesBatch",
+      "autoReconcileQuarantinedSales",
+      "refreshInventoryFromServer",
+    ]) {
+      expect(callbackBody(name), name).not.toContain("persistPendingSale(")
+    }
 
     expect(archive).toContain("openRecoverDialog")
     expect(archive).toContain("recoverQuarantinedSale")
@@ -144,6 +139,7 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
   })
 
   it("recovery individual reconcilia só por clientSaleId — nunca pelo VDA antigo", () => {
+    const recoverIndividual = callbackBody("recoverQuarantinedSale")
     expect(recoverIndividual).toContain("buildIndividualRecoveryConfirmations")
     expect(recoverIndividual).toContain("applyRecoveryConfirmations")
     expect(recoverIndividual).not.toContain("markSaleConfirmed")
@@ -160,11 +156,7 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
   })
 
   it("reconciliação automática usa a rota própria — nunca o reenvio comum", () => {
-    const auto = between(
-      store,
-      "const autoReconcileQuarantinedSales = useCallback",
-      "const discardLocalPendingSale = useCallback",
-    )
+    const auto = callbackBody("autoReconcileQuarantinedSales")
     expect(auto).toContain("quarantineAutoReconcileUrl")
     expect(auto).toContain("selectAutoReconcileCandidates")
     expect(auto).toContain("persistedClientSaleIds(storageKey)")
@@ -173,11 +165,15 @@ describe("PDV-V1-ATOMIC-REPLAY-CONFLICT-HARDEN-001 — quarentena client-side", 
     expect(auto).not.toContain("persistPendingSale(")
     expect(auto).not.toContain("vendaPersistV2Url")
     expect(auto).not.toContain("generateClientSaleId")
+    const inventoryRefresh = callbackBody("refreshInventoryFromServer")
+    expect(inventoryRefresh).not.toContain("vendaPersistV2Url")
+    expect(inventoryRefresh).not.toContain("generateClientSaleId")
     // Roda no bootstrap e no ciclo de wake (online/foco/30s), ao lado dos demais flushes.
     expect(store.match(/flushPendingCaixaOperations\(\)\s+void autoReconcileQuarantinedSales\(\)/g)).toHaveLength(2)
   })
 
   it("verificação em lote nunca descarta venda ausente no servidor", () => {
+    const bulk = callbackBody("bulkDiscardLocalPendingSales")
     expect(bulk).not.toContain("discardedIds")
     expect(bulk).toMatch(/res\.status === 404\)\s*\{[\s\S]*kept \+= 1/)
     expect(archive).not.toContain("Não existe → descarta apenas o registro local.")

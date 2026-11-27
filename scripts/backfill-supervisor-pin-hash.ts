@@ -13,6 +13,7 @@
  */
 
 import { PrismaClient } from "../generated/prisma"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 import * as dotenv from "dotenv"
 import { resolve } from "path"
 import { hashSupervisorPin, isBcryptHash, isOpaqueUnusablePin } from "../lib/auth/pin-hash"
@@ -84,7 +85,7 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
-  const db = new PrismaClient()
+  const db = new PrismaClient({ datasourceUrl: scriptDatasource() })
   const exec = process.argv.includes("--exec")
   backfillSupervisorPinHash(db, { exec })
     .catch((err) => {

@@ -13,9 +13,9 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border border-border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
+          "border border-[var(--cfg-border-strong,var(--border))] bg-[var(--cfg-surface,var(--background))] text-[var(--cfg-fg,var(--foreground))] shadow-xs hover:bg-[var(--cfg-hover,var(--muted))] hover:text-[var(--cfg-fg,var(--foreground))]",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        ghost: "text-[var(--cfg-fg-body,var(--foreground))] hover:bg-[var(--cfg-hover,var(--muted))] hover:text-[var(--cfg-fg,var(--foreground))]",
         link: "text-primary underline-offset-4 hover:underline",
         neon:
           "bg-[image:var(--gradient-neon)] text-neutral-950 shadow-[0_0_30px_-10px_oklch(0.85_0.25_145)] hover:opacity-95",
