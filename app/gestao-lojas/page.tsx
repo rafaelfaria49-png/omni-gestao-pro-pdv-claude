@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Image from "next/image"
-import { Plus_Jakarta_Sans, IBM_Plex_Mono } from "next/font/google"
+import localFont from "next/font/local"
 import "@/components/gestao-lojas/gestao-lojas.css"
 import { GestaoLojasHeader } from "@/components/gestao-lojas/GestaoLojasHeader"
 import { HeroStage } from "@/components/gestao-lojas/HeroStage"
@@ -29,17 +29,24 @@ import {
  * - sem depoimentos, clientes ou estatísticas inventadas; capturas reais do sistema com dados fictícios.
  */
 
-const display = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
+const display = localFont({
+  src: [
+    { path: "../fonts/plus-jakarta-sans/PlusJakartaSans-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "../fonts/plus-jakarta-sans/PlusJakartaSans-Bold.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/plus-jakarta-sans/PlusJakartaSans-ExtraBold.woff2", weight: "800", style: "normal" },
+  ],
   variable: "--gl-font-jakarta",
   display: "swap",
+  fallback: ["system-ui", "-apple-system", "Segoe UI", "sans-serif"],
 })
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["500", "700"],
+const mono = localFont({
+  src: [
+    { path: "../fonts/ibm-plex-mono/IBMPlexMono-Medium.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/ibm-plex-mono/IBMPlexMono-Bold.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--gl-font-plex-mono",
   display: "swap",
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
 })
 
 const TITULO = "Sistema de vendas, caixa e estoque para lojas | OmniGestão Pro"

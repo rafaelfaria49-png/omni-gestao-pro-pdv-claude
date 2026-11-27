@@ -9,6 +9,7 @@ import {
   broadcastAuthLogout,
   markCachePurgeRetryNeeded,
   purgeAuthenticatedBrowserCaches,
+  setLocalSignOutInProgress,
 } from "@/lib/auth/pwa-cache-privacy"
 
 export function ChangePasswordForm({ required = false }: { required?: boolean }) {
@@ -31,7 +32,10 @@ export function ChangePasswordForm({ required = false }: { required?: boolean })
       const purge = await purgeAuthenticatedBrowserCaches()
       if (!purge.ok) markCachePurgeRetryNeeded(true)
       await signOut({ callbackUrl: "/login?passwordChanged=1" })
-    } catch { setError("Falha de conexão. Tente novamente.") }
+    } catch {
+      setLocalSignOutInProgress(false)
+      setError("Falha de conexão. Tente novamente.")
+    }
     finally { setBusy(false) }
   }}>
     <p className="text-sm text-muted-foreground">{required ? "Defina sua senha pessoal antes de operar a loja." : "Após salvar, entre novamente. As sessões anteriores serão encerradas."}</p>
