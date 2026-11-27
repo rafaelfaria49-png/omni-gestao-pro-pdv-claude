@@ -10,6 +10,7 @@ import {
   centavosConsulta, saldoTituloConsulta, reaisConsulta, objetoConsulta, diaNoFusoConsulta,
   intervaloConsulta, FUSO_FINANCEIRO, VERSAO_CALCULO_FINANCEIRO, ConsultaFinanceiraError,
 } from "./query-calculo"
+import { calcularResumoLimiteCartao } from "./cartoes-calculo"
 
 export { reaisConsulta, diaNoFusoConsulta, intervaloConsulta } from "./query-calculo"
 const id = z.string().trim().min(1).max(191)
@@ -258,11 +259,53 @@ async function apurarPosicoes(db: Prisma.TransactionClient, scope: Scope, raw: u
       saidasCentavos: ledger.filter(noPeriodo).filter(m => m.tipo === "saida").reduce((s, m) => s + valores.get(m.id)!, BigInt(0)).toString(),
       quantidadeMovimentos: ledger.filter(noPeriodo).length }
   })
+  const cartoesRows = scope.perfilId
+    ? await db.cartaoInstrumento.findMany({
+        where: { perfilId: scope.perfilId, storeId: scope.storeId },
+        include: { ciclos: { orderBy: [{ competencia: "asc" }, { vencimento: "asc" }, { id: "asc" }] } },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      })
+    : []
+  const pagarPorCiclo = new Map<string, typeof pagarRows>()
+  for (const t of pagarRows) {
+    if (!t.cartaoCicloId) continue
+    const lista = pagarPorCiclo.get(t.cartaoCicloId) ?? []
+    lista.push(t)
+    pagarPorCiclo.set(t.cartaoCicloId, lista)
+  }
+  const cartoesDTO = cartoesRows.map(cartao => {
+    let utilizadoTotal = BigInt(0)
+    const ciclos = cartao.ciclos.map(ciclo => {
+      const rows = pagarPorCiclo.get(ciclo.id) ?? []
+      let total = BigInt(0), pago = BigInt(0), restante = BigInt(0), quantidadeTitulos = 0
+      for (const t of rows) {
+        const s = comRegistro("contas_pagar_titulos", t.id, () => saldoTituloConsulta(t))
+        if (s.cancelado) continue
+        total += s.total; pago += s.pago; restante += s.restante; quantidadeTitulos++
+      }
+      utilizadoTotal += restante
+      return {
+        id: ciclo.id, identificador: ciclo.identificador, competencia: ciclo.competencia,
+        vencimento: ciclo.vencimento.toISOString().slice(0, 10),
+        fechamentoEm: ciclo.fechamentoEm ? ciclo.fechamentoEm.toISOString().slice(0, 10) : null,
+        ativo: ciclo.ativo, totalCentavos: total.toString(), pagoCentavos: pago.toString(),
+        restanteCentavos: restante.toString(), quantidadeTitulos,
+      }
+    })
+    const resumo = calcularResumoLimiteCartao(
+      cartao.limiteCentavos === null ? null : BigInt(cartao.limiteCentavos.toString()),
+      utilizadoTotal,
+    )
+    return {
+      id: cartao.id, nome: cartao.nome, ultimos4: cartao.ultimos4, bandeira: cartao.bandeira,
+      ativo: cartao.ativo, ...resumo, ciclos,
+    }
+  })
   return { ...dto, criterios: { ...dto.criterios, posicaoTitulos: "ATUAL_NO_SNAPSHOT" as const },
     saldoCentavos: somar(contasDTO.filter(c => c.ativo && c.tipo !== "credito"), c => c.saldoCentavos),
     pagarAbertoCentavos: somar(pagar, t => t.restanteCentavos), receberAbertoCentavos: somar(receber, t => t.restanteCentavos),
     valorPagoTitulosCentavos: somar(pagar, t => t.pagoCentavos), valorRecebidoTitulosCentavos: somar(receber, t => t.pagoCentavos),
-    contas: contasDTO, pagar, receber }
+    contas: contasDTO, pagar, receber, cartoes: cartoesDTO }
 }
 
 export type ConsultaFinanceiraDTO = Awaited<ReturnType<typeof apurarPosicoes>>

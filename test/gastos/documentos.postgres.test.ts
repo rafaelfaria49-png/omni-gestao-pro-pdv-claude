@@ -1,7 +1,12 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createHash } from "node:crypto"
 import { prisma } from "@/lib/prisma"
-import { DocumentoStorageFixture, documentoStorageRef } from "@/lib/gastos/documentos-fixture"
+import { DocumentoStorageFixture, documentoStorageRef, type DocumentoStoragePort } from "@/lib/gastos/documentos-fixture"
+import {
+  criarStoragePrivadoR2G003,
+  type EventoAuditoriaStorageG003,
+  type ProvaPrivacidadeBucketR2,
+} from "@/lib/gastos/documentos-storage"
 import { autorizarDownloadDocumentoGasto, consultarDocumentoGasto, listarDocumentosGasto,
   registrarDocumentoGasto, revisarOrfaosDocumentosGasto, vincularDocumentoGasto } from "@/lib/gastos/documentos"
 import { contexto, E1, E2, P1, P2, L1, U1, U2, ids, login, prepararG003, limparG003, estadoFinanceiroG003 } from "./g003-fixtures"
@@ -284,5 +289,89 @@ describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 documentos / P
     expect(error).not.toHaveBeenCalled()
     vi.spyOn(storage, "abrirConteudoPrivado").mockRejectedValue(new Error("SENTINELA_DOCUMENTO_PRIVADO raw-path/token"))
     await expect(autorizarDownloadDocumentoGasto(ctx, doc.id, storage)).rejects.toMatchObject({ status: 404, message: "Registro financeiro indisponível." })
+  })
+
+  it("G003-STORAGE: bloqueia adapter forjado, publico:null e escopo excessivo; libera somente com prova real R2", async () => {
+    const ctxP1 = await contexto(P1), ctxE1 = await contexto(E1), ctxE2 = await contexto(E2)
+    const envR2 = {
+      GESTOR_MONEY_STORAGE_G003_ENABLED: "true",
+      CONTADOR_STORAGE_PROVIDER: "r2",
+      R2_ACCOUNT_ID: "acct_pg_g003",
+      R2_ACCESS_KEY_ID: "synthetic-ak-pg",
+      R2_SECRET_ACCESS_KEY: "synthetic-sk-pg",
+      R2_BUCKET: "omni-gestao-privado-pg",
+    }
+    const baseR2 = {
+      verificarBucket: async () => ({ existe: true, publico: null }),
+      enviarConteudoPrivado: storage.enviarConteudoPrivado.bind(storage),
+      obterMetadata: storage.obterMetadata.bind(storage),
+      abrirConteudoPrivado: storage.abrirConteudoPrivado.bind(storage),
+      criarDownloadAssinado: storage.criarDownloadAssinado.bind(storage),
+      removerObjeto: storage.removerObjeto.bind(storage),
+    }
+
+    // 1. Tentativa de forjar objeto literal sem símbolo opaco é recusada (fail-closed)
+    const forjado = { ...baseR2, ambiente: "r2_privado_g003" as const } as DocumentoStoragePort
+    await expect(registrarDocumentoGasto(ctxP1, input(), forjado)).rejects.toThrow()
+    expect(await prisma.documentoGasto.count({ where: { perfilId: P1 } })).toBe(0)
+
+    // 2. Privacidade não comprovada (r2DevPublico: null) mantém bloqueio mesmo com HeadBucket ok
+    const provaIncerta: ProvaPrivacidadeBucketR2 = {
+      bucketExiste: true, r2DevPublico: null, dominiosPublicosCount: 0, probeAnonimoNegado: true,
+      escopoCredencial: { restritoAoBucket: true, escopoGlobalConta: false, podeListarTodosBuckets: false, bucketAutorizado: envR2.R2_BUCKET },
+    }
+    const r2SemProva = criarStoragePrivadoR2G003({
+      env: envR2, storageBase: baseR2,
+      verificadorPrivacidade: { verificarPrivacidadeEEscopo: async () => provaIncerta },
+    })
+    await expect(registrarDocumentoGasto(ctxP1, input(), r2SemProva)).rejects.toThrow()
+    expect(await prisma.documentoGasto.count({ where: { perfilId: P1 } })).toBe(0)
+
+    // 3. Credencial com escopo excessivo (global) é recusada
+    const provaEscopoExcessivo: ProvaPrivacidadeBucketR2 = {
+      bucketExiste: true, r2DevPublico: false, dominiosPublicosCount: 0, probeAnonimoNegado: true,
+      escopoCredencial: { restritoAoBucket: true, escopoGlobalConta: true, podeListarTodosBuckets: false, bucketAutorizado: envR2.R2_BUCKET },
+    }
+    const r2EscopoExcessivo = criarStoragePrivadoR2G003({
+      env: envR2, storageBase: baseR2,
+      verificadorPrivacidade: { verificarPrivacidadeEEscopo: async () => provaEscopoExcessivo },
+    })
+    await expect(registrarDocumentoGasto(ctxP1, input(), r2EscopoExcessivo)).rejects.toThrow()
+
+    // 4. Com prova formal completa + escopo mínimo: upload, vínculo, download assinado 60s e isolamento multiloja/usuário
+    const auditoria: EventoAuditoriaStorageG003[] = []
+    const provaValida: ProvaPrivacidadeBucketR2 = {
+      bucketExiste: true, r2DevPublico: false, dominiosPublicosCount: 0, probeAnonimoNegado: true,
+      escopoCredencial: { restritoAoBucket: true, escopoGlobalConta: false, podeListarTodosBuckets: false, bucketAutorizado: envR2.R2_BUCKET },
+    }
+    const r2Privado = criarStoragePrivadoR2G003({
+      env: envR2, storageBase: baseR2,
+      verificadorPrivacidade: { verificarPrivacidadeEEscopo: async () => provaValida },
+      onAuditoria: (ev) => auditoria.push(ev),
+    })
+
+    const docP1 = await registrarDocumentoGasto(ctxP1, { ...input(), proveniencia: "UPLOAD_INTERNO" }, r2Privado)
+    const docE2 = await registrarDocumentoGasto(ctxE2, { ...input(Buffer.from("comprovante-loja-2")), proveniencia: "UPLOAD_INTERNO" }, r2Privado)
+    await vincularDocumentoGasto(ctxP1, docP1.id, { tipo: "PAGAR", id: ids(P1).pagar })
+    const dl = await autorizarDownloadDocumentoGasto(ctxP1, docP1.id, r2Privado)
+    expect(dl.expiresInSec).toBe(60)
+    expect(dl.headers["Cache-Control"]).toContain("private, no-store")
+    expect(await storage.consumirDownload(dl.signedUrl)).toEqual(bytes)
+
+    // Isolamento multiloja e cross-user preservado com adapter R2
+    await expect(autorizarDownloadDocumentoGasto(ctxE1, docE2.id, r2Privado)).rejects.toMatchObject({ status: 404 })
+    login(U2, [L1])
+    await expect(autorizarDownloadDocumentoGasto(await contexto(P2), docP1.id, r2Privado)).rejects.toMatchObject({ status: 404 })
+
+    // Histórico registra proveniência do gate e auditoria nunca vaza segredo/conteúdo/URL
+    const row = await prisma.documentoGasto.findUniqueOrThrow({ where: { id: docP1.id } })
+    expect(row.historico).toMatchObject([{ acao: "REGISTRADO", atorId: U1, storageAmbiente: "r2_privado_g003" }])
+    const auditJson = JSON.stringify(auditoria)
+    expect(auditJson).toContain("GATE_VERIFICADO")
+    expect(auditJson).toContain("OBJETO_GRAVADO")
+    expect(auditJson).toContain("DOWNLOAD_ASSINADO")
+    for (const segredo of [envR2.R2_ACCESS_KEY_ID, envR2.R2_SECRET_ACCESS_KEY, dl.signedUrl, bytes.toString(), P1, U1]) {
+      expect(auditJson).not.toContain(segredo)
+    }
   })
 })

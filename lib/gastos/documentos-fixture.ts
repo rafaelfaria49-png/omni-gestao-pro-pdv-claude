@@ -3,11 +3,11 @@ import { randomBytes } from "node:crypto"
 import type { StorageDocumentosPort } from "@/lib/contador/documentos/storage-types"
 import { FinanceiroReadError } from "./read-scope"
 
-/** Porta compatível com o storage privado existente; somente fixture é liberada no G003. */
+/** Porta compatível com o storage privado existente (fixture ou gate formal G003-STORAGE R2). */
 export type DocumentoStoragePort = Pick<StorageDocumentosPort,
   "verificarBucket" | "enviarConteudoPrivado" | "obterMetadata" | "abrirConteudoPrivado" |
   "criarDownloadAssinado" | "removerObjeto"
-> & { readonly ambiente: "fixture" }
+> & { readonly ambiente: "fixture" | "r2_privado_g003" }
 
 export function documentoStorageRef(perfilId: string, documentoId: string): string {
   const id = /^[a-zA-Z0-9_-]{1,191}$/

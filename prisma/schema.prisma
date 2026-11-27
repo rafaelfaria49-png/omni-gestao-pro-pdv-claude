@@ -178,6 +178,7 @@ model Store {
   gastosAlocacoes AlocacaoPagamento[]
   gastosCartoes CartaoInstrumento[]
   gastosCiclos CartaoCiclo[]
+  gastosCartoesLimitesEventos CartaoLimiteEvento[]
   gastosEventos FinanceiroOperacaoEvento[]
   gastosOutbox GastoOutbox[]
 }
@@ -2382,6 +2383,7 @@ model AdminUser {
   documentosGastosCriados DocumentoGasto[] @relation("DocumentoGastoCriador")
   gastosRevisoes GastoRevisao[]
   gastosOperacoes FinanceiroOperacao[]
+  gastosCartoesLimitesEventos CartaoLimiteEvento[]
 }
 
 /**
@@ -2438,6 +2440,7 @@ model FinanceiroPerfil {
   alocacoes AlocacaoPagamento[]
   cartoes CartaoInstrumento[]
   ciclos CartaoCiclo[]
+  cartoesLimitesEventos CartaoLimiteEvento[]
   eventosOperacao FinanceiroOperacaoEvento[]
   outbox GastoOutbox[]
 }
@@ -4791,13 +4794,39 @@ model CartaoInstrumento {
   nome String
   ultimos4 String? @db.VarChar(4)
   bandeira String?
+  limiteCentavos Decimal? @db.Decimal(20, 0)
   ativo Boolean @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   ciclos CartaoCiclo[]
+  limitesEventos CartaoLimiteEvento[]
 
   @@unique([id, perfilId])
   @@index([perfilId, ativo])
   @@map("cartoes_instrumentos")
+}
+
+/** Histórico imutável de alterações de limite de cartão (auditoria privada, com RLS). */
+model CartaoLimiteEvento {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cartaoId String
+  cartao CartaoInstrumento @relation(fields: [cartaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  autorAdminUserId String
+  autor AdminUser @relation(fields: [autorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  acao String
+  limiteAnteriorCentavos Decimal? @db.Decimal(20, 0)
+  limiteNovoCentavos Decimal? @db.Decimal(20, 0)
+  motivo String?
+  createdAt DateTime @default(now())
+
+  @@unique([id, perfilId])
+  @@index([cartaoId, createdAt])
+  @@index([perfilId, createdAt])
+  @@map("cartoes_limites_eventos")
 }
 
 /** Ciclo explícito agrega títulos de compras; não é um segundo título/despesa. */
