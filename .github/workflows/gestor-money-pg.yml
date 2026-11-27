@@ -1,0 +1,75 @@
+name: Gestor Money PG
+
+# Suítes PostgreSQL G001–G006 + RLS com runtime restrito do Gestor Money. Cada grupo sobe o próprio
+# postgres:17 descartável (porta/papel/PGDATA exigidos pela fixture) — ver scripts/ci/run-gestor-money-pg-suites.mjs.
+# Nenhuma credencial, nenhum banco externo; o Gestor Money continua DESLIGADO fora dos testes.
+
+on:
+  pull_request:
+    paths:
+      - "lib/gastos/**"
+      - "lib/financeiro/**"
+      - "lib/db/**"
+      - "lib/prisma.ts"
+      - "app/api/financeiro/**"
+      - "app/actions/omni-agent.ts"
+      - "lib/omni-agent/**"
+      - "lib/contador/**"
+      - "workers/gastos/**"
+      - "test/gastos/**"
+      - "prisma/**"
+      - "scripts/aparelhos/prepare-pg.mjs"
+      - "scripts/ci/run-gestor-money-pg-suites.mjs"
+      - "scripts/ci/gestor-money/**"
+      - "vitest.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/gestor-money-pg.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gestor-money-pg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pg:
+    name: Gestor Money PG (G001–G006 + RLS)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      APARELHOS_BASE_REF: origin/${{ github.base_ref || 'main' }}
+      AUTH_SECRET: isolated-gestor-money-pg-fixture-without-production-authority
+      AUTH_TRUST_HOST: "true"
+      VERCEL: "0"
+      VERCEL_ENV: development
+      MIGRATION_AUTHORITY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=6144
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # O preparador lê o schema da base no histórico (git show/log).
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          # O worker G006 exige Node 24 (carregarConfigWorker).
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: docker pull postgres:17
+      - name: Suítes PostgreSQL do Gestor Money
+        run: node scripts/ci/run-gestor-money-pg-suites.mjs 2>&1 | tee gestor-money-pg.log; exit ${PIPESTATUS[0]}
+        shell: bash
+      - name: Arquivar log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gestor-money-pg-${{ github.sha }}
+          path: gestor-money-pg.log
+          if-no-files-found: warn
+          retention-days: 14

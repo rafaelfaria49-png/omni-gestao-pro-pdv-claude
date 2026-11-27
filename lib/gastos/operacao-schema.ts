@@ -58,6 +58,11 @@ const propostaSchema = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("ESTORNAR_PAGAMENTO"), ...estorno, pagamentoId: identificadorOperacao,
     pedidoHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     alocacoes: z.array(z.object({ alocacaoId: identificadorOperacao, valorCentavos: positivo }).strict()).min(1).max(120).optional() }).strict(),
+  // Transferência entre contas do MESMO perfil (PESSOAL ou EMPRESA): uma saída e uma entrada, sem fato,
+  // sem pagamento e fora de receita/despesa. `dataPagamento` é o instante bancário (mesmo papel nos demais tipos).
+  z.object({ tipo: z.literal("TRANSFERENCIA_INTERNA"), valorCentavos: positivo, moeda,
+    carteiraOrigemId: identificadorOperacao, carteiraDestinoId: identificadorOperacao,
+    dataPagamento: instante, descricao: texto.optional() }).strict(),
   // Adaptador interno do HUB para recibos M1 existentes; não cria pagamento antigo.
   z.object({ tipo: z.literal("ESTORNAR_LEGADO"), ...estorno,
     tituloId: identificadorOperacao, movimentoOriginalId: identificadorOperacao,
@@ -83,6 +88,9 @@ export function normalizarPropostaGasto(input: unknown): PropostaGasto {
   const p = parsed.data
   if (p.tipo === "PAGAR_TITULO" && (p.quitar === (p.valorCentavos !== undefined))) {
     throw new OperacaoGastoError("valor_ou_quitacao_obrigatorio")
+  }
+  if (p.tipo === "TRANSFERENCIA_INTERNA" && p.carteiraOrigemId === p.carteiraDestinoId) {
+    throw new OperacaoGastoError("transferencia_mesma_conta")
   }
   if (p.tipo === "PAGAR_FATURA") {
     if (new Set(p.alocacoes.map(a => a.tituloId)).size !== p.alocacoes.length

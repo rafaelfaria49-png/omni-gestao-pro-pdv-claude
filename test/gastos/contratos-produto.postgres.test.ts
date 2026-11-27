@@ -103,7 +103,49 @@ describe("Gestor Money — contratos de produto 01–07 (motor canônico, sem ca
     expect(q.contas.find((c) => c.id === f.conta())?.saldoCentavos).toBe("70000")
     expect(q.contas.find((c) => c.id === caixa)?.saldoCentavos).toBe("30000")
     expect([q.receitaRealizadaCentavos, q.despesaRealizadaCentavos]).toEqual(["0", "0"])
-    // Lacuna registrada (G006.5): não existe operação de transferência para perfil PESSOAL no motor G004.
+  })
+
+  it("06 PESSOAL: TRANSFERENCIA_INTERNA no motor G004 move 30000 sem receita/despesa, idempotente e isolada", async () => {
+    const f = await fixtureG005(), ctx = await f.contexto(f.P1), carteira = `${f.P1}-carteira`
+    await prisma.carteiraFinanceira.create({ data: { id: carteira, perfilId: f.P1, storeId: null, nome: "Carteira pessoal", tipo: "caixa",
+      saldoInicial: 0, saldoAtual: 0, saldoInicialCentavos: "0", saldoAtualCentavos: "0", precisaoStatus: "CENTAVOS" } })
+    const transferir = (patch: Record<string, unknown> = {}) => ({ tipo: "TRANSFERENCIA_INTERNA", valorCentavos: "30000",
+      carteiraOrigemId: f.conta(f.P1), carteiraDestinoId: carteira, dataPagamento, ...patch })
+    const a = await aplicarG005(f, transferir(), "ex06-pessoal", f.P1)
+    expect(a.resultado).toMatchObject({ gastoId: null, pagamentoId: null, tituloIds: [], valorCentavos: "30000" })
+    expect(await aplicarOperacaoGasto(a.ctx, a.command)).toEqual(a.resultado) // confirmar de novo não move de novo
+    expect([await saldo(f.conta(f.P1)), await saldo(carteira)]).toEqual(["70000", "30000"])
+    const movs = await prisma.movimentacaoFinanceira.findMany({ where: { operacaoFinanceiraId: a.resultado.operacaoId }, orderBy: { tipo: "desc" } })
+    expect(movs.map((m) => [m.tipo, m.carteiraId, m.valorCentavos?.toString(), m.origem, m.storeId])).toEqual([
+      ["saida", f.conta(f.P1), "30000", "transferencia", null], ["entrada", carteira, "30000", "transferencia", null]])
+    expect(await prisma.gasto.count({ where: { perfilId: f.P1 } })).toBe(0)
+    expect(await prisma.pagamentoFinanceiro.count({ where: { perfilId: f.P1 } })).toBe(0)
+    const q = await consultarFinanceiro(ctx, filtroConsultaFinanceira(outubro))
+    expect(q.contas.find((c) => c.id === carteira)?.saldoCentavos).toBe("30000")
+    expect([q.receitaRealizadaCentavos, q.despesaRealizadaCentavos]).toEqual(["0", "0"])
+    // Isolamento: conta de outro perfil (EMPRESA do mesmo usuário ou PESSOAL de outro dono), mesma conta e saldo insuficiente.
+    await expect(aplicarG005(f, transferir({ carteiraDestinoId: f.conta(f.E1) }), "ex06-empresa", f.P1)).rejects.toMatchObject({ code: "conta_indisponivel" })
+    await expect(aplicarG005(f, transferir({ carteiraDestinoId: f.conta(f.P2) }), "ex06-alheia", f.P1)).rejects.toMatchObject({ code: "conta_indisponivel" })
+    await expect(aplicarG005(f, transferir({ carteiraDestinoId: f.conta(f.P1) }), "ex06-mesma", f.P1)).rejects.toMatchObject({ code: "transferencia_mesma_conta" })
+    await expect(aplicarG005(f, transferir({ valorCentavos: "70001" }), "ex06-saldo", f.P1)).rejects.toMatchObject({ code: "saldo_conta_insuficiente" })
+    f.login(f.U2, [f.L1])
+    await expect(f.contexto(f.P1)).rejects.toThrow("Contexto G005 negado")
+    expect([await saldo(f.conta(f.P1)), await saldo(carteira), await saldo(f.conta(f.P2))]).toEqual(["70000", "30000", "100000"])
+  })
+
+  it("06 SQL: o banco recusa transferência forjada fora do motor (só uma perna)", async () => {
+    const f = await fixtureG005(), ctx = await f.contexto(f.P1)
+    const r = await prepararRevisaoGasto(ctx, { grupoChave: "ex06-forjada", proposta: { tipo: "TRANSFERENCIA_INTERNA", valorCentavos: "1000",
+      carteiraOrigemId: f.conta(f.P1), carteiraDestinoId: f.conta(f.E1), dataPagamento } })
+    const forjar = prisma.$transaction(async (tx) => {
+      const op = await tx.financeiroOperacao.create({ data: { perfilId: f.P1, storeId: null, autorAdminUserId: f.U1, chave: "forjada",
+        grupoChave: "ex06-forjada", tipo: "TRANSFERENCIA_INTERNA", payloadHash: r.payloadHash, revisaoId: r.id } })
+      await tx.movimentacaoFinanceira.create({ data: { perfilId: f.P1, storeId: null, operacaoFinanceiraId: op.id, tipo: "saida",
+        origem: "transferencia", referenciaId: op.id, descricao: "forjada", carteiraId: f.conta(f.P1), valor: 10, valorCentavos: "1000",
+        precisaoStatus: "CENTAVOS", formaPagamento: "transferencia", ocorridoEm: new Date(dataPagamento) } })
+    })
+    await expect(forjar).rejects.toThrow()
+    expect(await saldo(f.conta(f.P1))).toBe("100000")
   })
 
   it("07: 'registrei errado' — antes de confirmar corrige por CAS; depois, estorno auditado do pagamento escolhido", async () => {

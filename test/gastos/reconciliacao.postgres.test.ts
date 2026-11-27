@@ -1,5 +1,5 @@
 import "./g005-fixtures"
-import { afterAll, describe, expect, it, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 import { consultarFinanceiro, consultarFinanceiroEmpresa, filtroConsultaFinanceira } from "@/lib/gastos/query"
@@ -12,6 +12,13 @@ import { fixtureG005, aplicarG005, pagoG005, dataGasto, dataPagamento, estadoG00
 
 afterAll(async () => { vi.restoreAllMocks(); await prisma.$disconnect() })
 const periodo = { dataInicio: "2026-10-01", dataFim: "2026-10-31" }
+// Serviços legados (transferirEntreCarteiras, aplicarPagamentoLegado) não recebem data: o movimento leva o
+// createdAt do relógio real, preenchido pelo motor do Prisma (fora do alcance de vi.setSystemTime). O período
+// desses casos termina no maior entre 31/10/2026 e o dia civil de São Paulo — cobre o instante gravado em qualquer data.
+const hojeSP = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })
+const periodoComLegado = () => ({ dataInicio: "2026-10-01", dataFim: hojeSP() > "2026-10-31" ? hojeSP() : "2026-10-31" })
+// Suíte do comportamento LIGADO (G005); a ativação é explícita aqui, nunca herdada do ambiente.
+beforeAll(() => { vi.stubEnv("GESTOR_MONEY_ENABLED", "true") })
 
 describe("G005 A13 completo pelo serviço e SQL real", () => {
   it("oito posições exatas, crédito/fatura/transferência/estorno sem duplicar despesa", async () => {
@@ -20,7 +27,7 @@ describe("G005 A13 completo pelo serviço e SQL real", () => {
     const t = await aplicarG005(f, { tipo: "CONTA_PAGAR", descricao: "T1 A13", valorCentavos: "36501", dataGasto, vencimento: "2026-10-31", carteiraId: f.conta() })
     const prova: unknown[] = []
     const conferir = async (passo: string, banco: string, dinheiro: string, aberto: string, despesa: string) => {
-      const antes = await estadoG005(f), q = await consultarFinanceiro(ctx, filtroConsultaFinanceira(periodo))
+      const antes = await estadoG005(f), q = await consultarFinanceiro(ctx, filtroConsultaFinanceira(periodoComLegado()))
       expect(q.contas.find(c => c.id === f.conta())?.saldoCentavos).toBe(banco)
       expect(q.contas.find(c => c.id === caixa)?.saldoCentavos).toBe(dinheiro)
       expect(q.pagarAbertoCentavos).toBe(aberto); expect(q.despesaRealizadaCentavos).toBe(despesa)
@@ -67,7 +74,7 @@ describe("G005 A13 completo pelo serviço e SQL real", () => {
     await conferir("fatura100", "46499", "5000", "0", "48501")
     await aplicarG005(f, { tipo: "ESTORNAR_PAGAMENTO", pagamentoId: pix.resultado.pagamentoId, valorCentavos: "2000", dataPagamento, motivo: "A13 devolver PIX" })
     await conferir("estorno20", "48499", "5000", "0", "46501")
-    const q = await consultarFinanceiroEmpresa(f.L1, periodo)
+    const q = await consultarFinanceiroEmpresa(f.L1, periodoComLegado())
     expect(q.saldoCentavos).toBe("53499")
     expect(await prisma.gasto.count({ where: { perfilId: f.E1 } })).toBe(3)
     expect(await prisma.contaPagarTitulo.count({ where: { perfilId: f.E1 } })).toBe(2)
@@ -99,10 +106,10 @@ describe("G005 filtros, precisão, período e privacidade PostgreSQL", () => {
     const f = await fixtureG005(), ctx = await f.contexto()
     const t = await gravarTituloFinanceiro(ctx, { natureza: "RECEBER", chave: "cr-g005", descricao: "Recebível real", valorCentavos: "36501", vencimento: "2026-10-31", carteiraId: f.conta() })
     await aplicarPagamentoLegado({ storeId: f.L1, tipo: "receber", canal: "financeiro", op: "parcial", localKey: t.localKey!, valor: 200, idempotencyKey: `${f.id}-parcial` })
-    const parcial = await consultarFinanceiroEmpresa(f.L1, periodo)
+    const parcial = await consultarFinanceiroEmpresa(f.L1, periodoComLegado())
     expect(parcial.receberAbertoCentavos).toBe("16501"); expect(parcial.receitaRealizadaCentavos).toBe("20000")
     await aplicarPagamentoLegado({ storeId: f.L1, tipo: "receber", canal: "financeiro", op: "liquidar", localKey: t.localKey!, idempotencyKey: `${f.id}-quitar` })
-    const final = await consultarFinanceiroEmpresa(f.L1, periodo)
+    const final = await consultarFinanceiroEmpresa(f.L1, periodoComLegado())
     expect(final.receberAbertoCentavos).toBe("0"); expect(final.receitaRealizadaCentavos).toBe("36501"); expect(final.despesaRealizadaCentavos).toBe("0")
     expect(await prisma.contaReceberTitulo.count({ where: { perfilId: f.E1 } })).toBe(1)
   })
