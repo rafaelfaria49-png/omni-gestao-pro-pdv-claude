@@ -192,4 +192,30 @@ describe.skipIf(!RUNTIME || !OWNER)("RLS do Gestor Money com runtime restrito (P
     }
   })
 
+  it("RLS runtime restrito: cartões e histórico de limites pessoais são isolados por dono e invisíveis sem contexto", async () => {
+    login(U1)
+    const { cadastrarCartaoGasto, consultarCartoesGasto, editarCartaoGasto } = await import("@/lib/gastos/cartoes")
+    const ctxP1 = await contexto(P1, { tipo: "PESSOAL" })
+    const card = await cadastrarCartaoGasto(ctxP1, { nome: "Cartão RLS U1", limiteCentavos: "200000", motivo: "RLS" })
+    await editarCartaoGasto(ctxP1, { cartaoId: card.id, limiteCentavos: "250000", motivo: "Aumento RLS" })
+
+    const [lidoU1] = await consultarCartoesGasto(ctxP1, { cartaoId: card.id })
+    expect(lidoU1.limiteCentavos).toBe("250000")
+    expect(lidoU1.historicoLimites).toHaveLength(2)
+
+    // Sem contexto no pool restrito (NOBYPASSRLS): zero linhas pessoais de cartão ou histórico
+    expect(await prisma.cartaoInstrumento.count({ where: { storeId: null } })).toBe(0)
+    expect(await prisma.cartaoLimiteEvento.count({ where: { storeId: null } })).toBe(0)
+
+    // Contexto EMPRESA não enxerga cartão nem eventos pessoais
+    const ctxE1 = await contexto(E1, { tipo: "EMPRESA", storeId: L1 })
+    expect(await consultarCartoesGasto(ctxE1)).toEqual([])
+
+    // Outro dono (U2) não lê nem altera o cartão pessoal de U1
+    login(U2)
+    const ctxP2 = await contexto(P2, { tipo: "PESSOAL" })
+    expect(await consultarCartoesGasto(ctxP2)).toEqual([])
+    await expect(editarCartaoGasto(ctxP2, { cartaoId: card.id, limiteCentavos: "1" })).rejects.toMatchObject({ code: "cartao_indisponivel", status: 404 })
+  })
+
 })

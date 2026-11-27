@@ -1,7 +1,14 @@
 import "./g004-fixtures"
 import { afterAll, describe, expect, it } from "vitest"
 import { prisma } from "@/lib/prisma"
-import { cadastrarCartaoGasto, cadastrarCicloGasto } from "@/lib/gastos/cartoes"
+import {
+  cadastrarCartaoGasto,
+  cadastrarCicloGasto,
+  consultarCartoesGasto,
+  consultarHistoricoLimiteCartaoGasto,
+  editarCartaoGasto,
+} from "@/lib/gastos/cartoes"
+import { consultarFinanceiro, filtroConsultaFinanceira } from "@/lib/gastos/query"
 import { aplicarG004, dataGasto, dataPagamento, estadoG004, fixtureG004, pagoG004 } from "./g004-fixtures"
 
 afterAll(async () => { await prisma.$disconnect() })
@@ -67,5 +74,127 @@ describe("G004 cartão/crédito/fatura PostgreSQL", () => {
     const { ctx } = await ciclos()
     await expect(cadastrarCartaoGasto(ctx, { nome: "Não armazenar", pan: "4111111111111111", cvv: "123" })).rejects.toMatchObject({ code: "cartao_invalido" })
     await expect(cadastrarCartaoGasto(ctx, { nome: "Não armazenar", ultimos4: "4111111111111111" })).rejects.toMatchObject({ code: "cartao_invalido" })
+  })
+
+  it("limites: null quando não informado, cadastro/edição auditados, histórico imutável no PostgreSQL", async () => {
+    const { f, ctx, cartao } = await ciclos()
+    expect(cartao.limiteCentavos).toBeNull()
+    const [inicial] = await consultarCartoesGasto(ctx, { cartaoId: cartao.id })
+    expect(inicial).toMatchObject({
+      limiteCentavos: null,
+      limiteUtilizadoCentavos: "0",
+      limiteDisponivelCentavos: null,
+      limiteExcedidoCentavos: null,
+    })
+    expect(inicial.historicoLimites).toHaveLength(0)
+
+    const ed1 = await editarCartaoGasto(ctx, { cartaoId: cartao.id, limiteCentavos: "500000", motivo: "Limite inicial aprovado" })
+    expect(ed1.resumoLimite).toMatchObject({ limiteCentavos: "500000", limiteUtilizadoCentavos: "0", limiteDisponivelCentavos: "500000", limiteExcedidoCentavos: "0" })
+    expect(ed1.eventoLimite).toMatchObject({ acao: "CADASTRO", limiteAnteriorCentavos: null, limiteNovoCentavos: "500000", motivo: "Limite inicial aprovado", autorAdminUserId: f.U1 })
+
+    // Edição idempotente com mesmo valor não gera evento duplicado
+    const edSemMudanca = await editarCartaoGasto(ctx, { cartaoId: cartao.id, limiteCentavos: "500000" })
+    expect(edSemMudanca.eventoLimite).toBeNull()
+
+    const ed2 = await editarCartaoGasto(ctx, { cartaoId: cartao.id, limiteCentavos: "750000", motivo: "Aumento de limite" })
+    expect(ed2.eventoLimite).toMatchObject({ acao: "ALTERACAO", limiteAnteriorCentavos: "500000", limiteNovoCentavos: "750000" })
+
+    const ed3 = await editarCartaoGasto(ctx, { cartaoId: cartao.id, limiteCentavos: null, motivo: "Remover teto informado" })
+    expect(ed3.eventoLimite).toMatchObject({ acao: "REMOCAO", limiteAnteriorCentavos: "750000", limiteNovoCentavos: null })
+
+    const historico = await consultarHistoricoLimiteCartaoGasto(ctx, cartao.id)
+    expect(historico.map(h => [h.acao, h.limiteAnteriorCentavos, h.limiteNovoCentavos])).toEqual([
+      ["CADASTRO", null, "500000"],
+      ["ALTERACAO", "500000", "750000"],
+      ["REMOCAO", "750000", null],
+    ])
+
+    // Imutabilidade no PostgreSQL: UPDATE e DELETE no histórico são recusados por trigger
+    await expect(prisma.cartaoLimiteEvento.update({ where: { id: historico[0].id }, data: { motivo: "adulterado" } })).rejects.toThrow()
+    await expect(prisma.cartaoLimiteEvento.delete({ where: { id: historico[0].id } })).rejects.toThrow()
+  })
+
+  it("parcelas comprometem limite integral, bloqueiam excesso, recompõem no pagamento e não alteram saldo de contas", async () => {
+    const f = await fixtureG004(), ctx = await f.contexto()
+    const card = await cadastrarCartaoGasto(ctx, { nome: "Corporativo Limite", ultimos4: "4321", bandeira: "Visa", limiteCentavos: "30000", motivo: "Emissão" })
+    const c1 = await cadastrarCicloGasto(ctx, { cartaoId: card.id, identificador: "2026-10", competencia: "2026-10", vencimento: "2026-10-28" })
+    const c2 = await cadastrarCicloGasto(ctx, { cartaoId: card.id, identificador: "2026-11", competencia: "2026-11", vencimento: "2026-11-28" })
+    const c3 = await cadastrarCicloGasto(ctx, { cartaoId: card.id, identificador: "2026-12", competencia: "2026-12", vencimento: "2026-12-28" })
+
+    // Compra 3x de R$ 240,00 (3 parcelas de R$ 80,00) compromete 24000 de imediato
+    const compra = await aplicarG004(f, {
+      tipo: "COMPRA_CREDITO", descricao: "Equipamento 3x", valorCentavos: "24000", dataGasto,
+      parcelas: [
+        { cicloId: c1.id, numero: 1, total: 3, valorCentavos: "8000" },
+        { cicloId: c2.id, numero: 2, total: 3, valorCentavos: "8000" },
+        { cicloId: c3.id, numero: 3, total: 3, valorCentavos: "8000" },
+      ],
+    })
+    const [aposCompra] = await consultarCartoesGasto(ctx, { cartaoId: card.id })
+    expect(aposCompra).toMatchObject({ limiteCentavos: "30000", limiteUtilizadoCentavos: "24000", limiteDisponivelCentavos: "6000", limiteExcedidoCentavos: "0" })
+
+    // Nova compra de R$ 60,01 excede o disponível (6000) -> bloqueada com 409 limite_cartao_insuficiente
+    await expect(aplicarG004(f, {
+      tipo: "COMPRA_CREDITO", descricao: "Excesso", valorCentavos: "6001", dataGasto, cicloId: c1.id,
+    })).rejects.toMatchObject({ code: "limite_cartao_insuficiente", status: 409 })
+
+    // Pagar 1ª parcela (8000) recompõe limite disponível de 6000 para 14000
+    const titulos = await prisma.contaPagarTitulo.findMany({ where: { gastoId: compra.resultado.gastoId! }, orderBy: { vencimento: "asc" } })
+    const pagFatura = await aplicarG004(f, {
+      tipo: "PAGAR_FATURA", cicloId: c1.id, carteiraId: f.conta(), formaPagamento: "pix", dataPagamento,
+      alocacoes: [{ tituloId: titulos[0].id, valorCentavos: "8000" }],
+    })
+    const [aposPagamento] = await consultarCartoesGasto(ctx, { cartaoId: card.id })
+    expect(aposPagamento).toMatchObject({ limiteCentavos: "30000", limiteUtilizadoCentavos: "16000", limiteDisponivelCentavos: "14000", limiteExcedidoCentavos: "0" })
+
+    // Estorno parcial de 3000 volta a comprometer o limite (utilizado 19000, disponível 11000)
+    await aplicarG004(f, {
+      tipo: "ESTORNAR_PAGAMENTO", pagamentoId: pagFatura.resultado.pagamentoId, valorCentavos: "3000", dataPagamento, motivo: "Estorno fatura",
+    })
+    const [aposEstorno] = await consultarCartoesGasto(ctx, { cartaoId: card.id })
+    expect(aposEstorno).toMatchObject({ limiteCentavos: "30000", limiteUtilizadoCentavos: "19000", limiteDisponivelCentavos: "11000", limiteExcedidoCentavos: "0" })
+
+    // G005 projeta cartões + faturas por ciclo sem jamais misturar limite de crédito com saldo de contas
+    const g005 = await consultarFinanceiro(ctx, filtroConsultaFinanceira({ dataInicio: "2026-10-01", dataFim: "2026-10-31" }))
+    expect(g005.saldoCentavos).toBe("95000") // 100000 - 8000 + 3000 (nunca soma 30000 ou 11000 do cartão)
+    const cardG005 = g005.cartoes.find(c => c.id === card.id)
+    expect(cardG005).toMatchObject({ limiteCentavos: "30000", limiteUtilizadoCentavos: "19000", limiteDisponivelCentavos: "11000" })
+    expect(cardG005?.ciclos.map(c => [c.identificador, c.totalCentavos, c.pagoCentavos, c.restanteCentavos])).toEqual([
+      ["2026-10", "8000", "5000", "3000"],
+      ["2026-11", "8000", "0", "8000"],
+      ["2026-12", "8000", "0", "8000"],
+    ])
+  })
+
+  it("concorrência real no limite e isolamento estrito PESSOAL vs EMPRESA + ciclos de cartões distintos", async () => {
+    const f = await fixtureG004()
+    const ctxP1 = await f.contexto(f.P1), ctxE1 = await f.contexto(f.E1)
+    const cardP1 = await cadastrarCartaoGasto(ctxP1, { nome: "Pessoal Black", limiteCentavos: "10000" })
+    const cicloP1 = await cadastrarCicloGasto(ctxP1, { cartaoId: cardP1.id, identificador: "2026-10", competencia: "2026-10", vencimento: "2026-10-25" })
+    const cardP1Outro = await cadastrarCartaoGasto(ctxP1, { nome: "Pessoal Outro", limiteCentavos: "10000" })
+    const cicloP1Outro = await cadastrarCicloGasto(ctxP1, { cartaoId: cardP1Outro.id, identificador: "2026-10", competencia: "2026-10", vencimento: "2026-10-25" })
+
+    // Parcelas de cartões distintos na mesma compra são recusadas
+    await expect(aplicarG004(f, {
+      tipo: "COMPRA_CREDITO", descricao: "Misturado", valorCentavos: "2000", dataGasto,
+      parcelas: [
+        { cicloId: cicloP1.id, numero: 1, total: 2, valorCentavos: "1000" },
+        { cicloId: cicloP1Outro.id, numero: 2, total: 2, valorCentavos: "1000" },
+      ],
+    }, "misturado", f.P1)).rejects.toMatchObject({ code: "ciclo_cartao_divergente", status: 422 })
+
+    // Duas compras simultâneas de 7000 em limite de 10000: exatamente 1 passa e 1 falha
+    const res = await Promise.allSettled([
+      aplicarG004(f, { tipo: "COMPRA_CREDITO", descricao: "Concorrente A", valorCentavos: "7000", dataGasto, cicloId: cicloP1.id }, "conc-a", f.P1),
+      aplicarG004(f, { tipo: "COMPRA_CREDITO", descricao: "Concorrente B", valorCentavos: "7000", dataGasto, cicloId: cicloP1.id }, "conc-b", f.P1),
+    ])
+    expect(res.filter(r => r.status === "fulfilled")).toHaveLength(1)
+    expect(res.filter(r => r.status === "rejected")).toHaveLength(1)
+
+    // Isolamento: contexto EMPRESA não enxerga nem edita cartão PESSOAL; U2 não acessa P1
+    expect(await consultarCartoesGasto(ctxE1)).toEqual([])
+    await expect(editarCartaoGasto(ctxE1, { cartaoId: cardP1.id, limiteCentavos: "999999" })).rejects.toMatchObject({ code: "cartao_indisponivel", status: 404 })
+    f.login(f.U2, [f.L1])
+    await expect(consultarCartoesGasto(ctxP1)).rejects.toMatchObject({ status: 403 })
   })
 })
