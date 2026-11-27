@@ -33,6 +33,11 @@ import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { planoTroca, valorDevolucaoLinha } from "@/lib/pdv/trocas/troca-disponibilidade"
 import { normalizarTermoBusca } from "@/lib/pdv/trocas/troca-busca-termo"
 import {
+  formatInstantBusinessPtBr,
+  parseBusinessDateTimeLocal,
+  selectCoveringCashSessionId,
+} from "@/lib/pdv/trocas/troca-regularizacao-tempo"
+import {
   buscarVendasTroca,
   carregarVendaTroca,
   enviarTroca,
@@ -100,7 +105,7 @@ function parseValor(raw: string): number {
 }
 
 function dataHora(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  return formatInstantBusinessPtBr(iso)
 }
 
 function codigoDaLinha(l: LinhaView): string {
@@ -343,6 +348,7 @@ export function TrocasDevolucao({
   const setQty = (l: LinhaView, q: number) => setQtyByLine((prev) => ({ ...prev, [l.lineIndex]: Math.max(0, Math.min(l.disponivel, q)) }))
 
   // ── Validação (antes de enviar; o servidor valida de novo) ───────────────────
+  const parsedRegData = useMemo(() => (regData ? parseBusinessDateTimeLocal(regData) : null), [regData])
   const docDigits = normalizeDocDigits(cpf)
   const exigeTitular = mode === "vale_credito" || (mode === "troca" && plano.excedente > 0 && excessHandling === "vale")
   const motivoBloqueio = (() => {
@@ -356,7 +362,7 @@ export function TrocasDevolucao({
     if (mode === "somente_estoque" && !selecionadas.some((l) => l.destino === "retorna_estoque"))
       return "Os itens selecionados não têm vínculo com o estoque."
     if (exigeTitular && (!docDigits || !nome.trim())) return "Informe CPF/CNPJ e nome do titular do vale."
-    if (regularizar && (!regData || !regSessaoId || regJustificativa.trim().length < 10))
+    if (regularizar && (!parsedRegData?.ok || !regSessaoId || regJustificativa.trim().length < 10))
       return "Na regularização, informe a data/hora real, a sessão de caixa da época e a justificativa."
     if (regularizar && mode === "troca" && (!(parseValor(regTotalConfirmado) > 0) || regDiferencaRecebida.trim() === ""))
       return "Confirme o valor cobrado pela nova compra na ocasião e a diferença efetivamente recebida."
@@ -450,11 +456,11 @@ export function TrocasDevolucao({
           }
         : {}),
       ...(mode === "reembolso" && formaReembolso ? { formaReembolso } : {}),
-      ...(regularizar && regData && regSessaoId
+      ...(regularizar && parsedRegData?.ok && regSessaoId
         ? {
             regularizacao: {
               sessaoId: regSessaoId,
-              dataEconomica: new Date(regData).toISOString(),
+              dataEconomica: parsedRegData.iso,
               justificativa: regJustificativa.trim(),
               horarioAproximado: regHorarioAproximado,
               ...(mode === "troca"
@@ -495,31 +501,40 @@ export function TrocasDevolucao({
     if (body) void enviar(body)
   }
 
-  // ── Regularização: sessões fechadas do dia escolhido ─────────────────────────
+  // ── Regularização: sessões fechadas do dia escolhido (fuso comercial da loja) ─
   useEffect(() => {
     if (!regularizar || !regData || !lojaId) {
       setRegSessoes([])
+      setRegSessaoId("")
+      setRegErro("")
       return
     }
-    const dia = regData.slice(0, 10)
+    if (!parsedRegData || !parsedRegData.ok) {
+      setRegSessoes([])
+      setRegSessaoId("")
+      setRegErro("Data/hora inválida no fuso comercial da loja.")
+      return
+    }
     const ctrl = new AbortController()
+    setRegSessoes([])
+    setRegSessaoId("")
     setRegErro("")
-    fetch(`/api/ops/trocas/sessoes?dia=${encodeURIComponent(dia)}`, { headers: { "x-assistec-loja-id": lojaId }, credentials: "include", cache: "no-store", signal: ctrl.signal })
+    fetch(`/api/ops/trocas/sessoes?dia=${encodeURIComponent(parsedRegData.dia)}`, { headers: { "x-assistec-loja-id": lojaId }, credentials: "include", cache: "no-store", signal: ctrl.signal })
       .then(async (r) => {
+        if (ctrl.signal.aborted) return
         const j = (await r.json().catch(() => ({}))) as { sessoes?: typeof regSessoes; error?: string }
+        if (ctrl.signal.aborted) return
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
         const lista = j.sessoes ?? []
         setRegSessoes(lista)
-        const t = new Date(regData).getTime()
-        const cobre = lista.filter((s) => new Date(s.abertaEm).getTime() <= t && (!s.fechadaEm || new Date(s.fechadaEm).getTime() >= t))
-        setRegSessaoId(cobre.length === 1 ? cobre[0]!.id : "")
+        setRegSessaoId(selectCoveringCashSessionId(lista, parsedRegData.timestampMs))
         if (lista.length === 0) setRegErro("Nenhuma sessão de caixa fechada nesse dia.")
       })
       .catch((e) => {
         if (!ctrl.signal.aborted) setRegErro(e instanceof Error ? e.message : String(e))
       })
     return () => ctrl.abort()
-  }, [regularizar, regData, lojaId])
+  }, [regularizar, regData, parsedRegData, lojaId])
 
   // ── Devolução antiga só deste terminal: enviar ou arquivar (com trilha) ──────
   const enviarLocal = async (id: string) => {

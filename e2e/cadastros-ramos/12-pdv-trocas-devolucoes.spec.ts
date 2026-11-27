@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
 import { STORES, USERS, closeDb, guardOnboarding, login, readDb, switchStore } from "./support"
+import { formatInstantToBusinessDateTimeLocal } from "../../lib/pdv/trocas/troca-regularizacao-tempo"
 
 /**
  * OMNI-PDV-TROCAS-DEVOLUCOES-FINAL-RECOVERY-P1-002 — trocas e devoluções no app real (build de
@@ -376,11 +377,7 @@ test("Trocas e devoluções: busca, troca 119,90 → 129,90, recuperação, caix
     await novo.fill("E2E-X360")
     await novo.press("Enter")
     await dialog.getByText("Regularizar operação já feita no balcão (data passada)").click()
-    const local = await page.evaluate((iso) => {
-      const d = new Date(new Date(iso).getTime() + 120_000)
-      const p = (n: number) => String(n).padStart(2, "0")
-      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
-    }, vRegAt.toISOString())
+    const local = formatInstantToBusinessDateTimeLocal(new Date(vRegAt.getTime() + 120_000))
     await dialog.getByLabel("Data e hora reais da operação").fill(local)
     await expect(dialog.getByLabel("Sessão de caixa da época")).toHaveValue(sessao.id)
     await dialog.getByText(/Horário exato desconhecido/).click()
