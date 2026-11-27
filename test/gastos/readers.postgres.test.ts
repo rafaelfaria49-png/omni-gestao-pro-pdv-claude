@@ -392,10 +392,12 @@ describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 readers reais 
 
   it("GET venda não usa token ADMIN antigo para contornar hubs.vendas do TECNICO atual", async () => {
     await prisma.adminUser.update({ where: { id: U1 }, data: { role: "TECNICO" } })
-    login(U1, [L1], "ADMIN")
-    const response = await detalheVenda(request("/api/vendas/g003-pedido?full=1"), { params: Promise.resolve({ id: "g003-pedido" }) })
-    expect(response.status).toBe(403)
-    expect(response.headers.get("cache-control")).toContain("no-store")
+    try {
+      login(U1, [L1], "ADMIN")
+      const response = await detalheVenda(request("/api/vendas/g003-pedido?full=1"), { params: Promise.resolve({ id: "g003-pedido" }) })
+      expect(response.status).toBe(403)
+      expect(response.headers.get("cache-control")).toContain("no-store")
+    } finally { await prisma.adminUser.update({ where: { id: U1 }, data: { role: "ADMIN" } }); login() } // sem vazar estado
   })
 
   it("listagem PDV, venda, caixa e dashboard reais só leem a empresa autorizada", async () => {

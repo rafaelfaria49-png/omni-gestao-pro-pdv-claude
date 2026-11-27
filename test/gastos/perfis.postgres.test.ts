@@ -235,17 +235,26 @@ describe.skipIf(!process.env.GASTOS_TEST_DATABASE_URL)("G001 PostgreSQL real", (
     expect(await prisma.financeiroPerfil.findUnique({ where: { id: P1 } })).toMatchObject({ ownerAdminUserId: U1, storeId: null })
   })
 
-  it("RLS não concede leitura a papel público mesmo com SELECT concedido", async () => {
+  // Contrato do HARDENING-P0 (policies gm_runtime_* na mesma transação do ENABLE): linha EMPRESA segue
+  // visível ao runtime como na main (isolamento entre lojas na aplicação); linha PESSOAL só com o dono
+  // declarado em app.gm_owner_user na transação. Sem contexto, nenhum perfil pessoal aparece.
+  it("RLS não concede leitura de perfil PESSOAL a papel público mesmo com SELECT concedido", async () => {
+    const empresas = await prisma.financeiroPerfil.count({ where: { tipo: "EMPRESA" } })
+    const pessoais = await prisma.financeiroPerfil.count({ where: { tipo: "PESSOAL" } })
+    const membros = await prisma.perfilMembro.count()
+    expect(pessoais).toBeGreaterThan(0) // a massa tem perfis pessoais: o zero abaixo é do RLS
     await prisma.$executeRawUnsafe('CREATE ROLE gastos_g001_anon NOLOGIN')
     try {
       await prisma.$executeRawUnsafe('GRANT SELECT ON financeiro_perfis, financeiro_perfil_membros TO gastos_g001_anon')
       const counts = await prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe('SET LOCAL ROLE gastos_g001_anon')
-        return tx.$queryRaw<Array<{ actor: string; perfis: number; membros: number }>>`
-          SELECT current_user AS actor, (SELECT count(*)::int FROM financeiro_perfis) AS perfis,
+        return tx.$queryRaw<Array<{ actor: string; pessoais: number; empresas: number; membros: number }>>`
+          SELECT current_user AS actor,
+                 (SELECT count(*)::int FROM financeiro_perfis WHERE tipo='PESSOAL') AS pessoais,
+                 (SELECT count(*)::int FROM financeiro_perfis WHERE tipo='EMPRESA') AS empresas,
                  (SELECT count(*)::int FROM financeiro_perfil_membros) AS membros`
       })
-      expect(counts).toEqual([{ actor: "gastos_g001_anon", perfis: 0, membros: 0 }])
+      expect(counts).toEqual([{ actor: "gastos_g001_anon", pessoais: 0, empresas, membros }])
     } finally {
       await prisma.$executeRawUnsafe('REVOKE SELECT ON financeiro_perfis, financeiro_perfil_membros FROM gastos_g001_anon')
       await prisma.$executeRawUnsafe('DROP ROLE gastos_g001_anon')
