@@ -1086,16 +1086,70 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
   }
 }
 
-/**
- * Fronteira de runtime real: consulta `/api/gestor-money/status`.
- * Jamais fabrica dados reais nem expõe ações indisponíveis como funcionais.
- */
-export function createRealBoundaryGateway(): GestorMoneyGateway {
-  const unavailable = (acao: string): never => {
+function queryParamsFromSeletor(
+  seletor: FinanceiroPerfilSeletor,
+  periodo?: { dataInicio?: string; dataFim?: string }
+): string {
+  const qs = new URLSearchParams()
+  qs.set("tipo", seletor.tipo)
+  qs.set("perfilId", seletor.perfilId)
+  if (seletor.tipo === "EMPRESA") {
+    qs.set("storeId", seletor.storeId)
+  }
+  if (periodo?.dataInicio) qs.set("dataInicio", periodo.dataInicio)
+  if (periodo?.dataFim) qs.set("dataFim", periodo.dataFim)
+  return qs.toString()
+}
+
+function novaChaveIdempotencia(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return `gm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+async function parseRealApiResponse<T>(res: Response): Promise<T> {
+  let body: { ok?: boolean; code?: string; error?: string } & Record<string, unknown>
+  try {
+    body = (await res.json()) as { ok?: boolean; code?: string; error?: string } & Record<string, unknown>
+  } catch {
+    throw new GestorMoneyBoundaryError("resposta_invalida", "Resposta inválida do servidor financeiro.")
+  }
+  if (!res.ok || body.ok === false) {
     throw new GestorMoneyBoundaryError(
-      "contrato_pendente_pr405",
-      `Ação "${acao}" indisponível no modo real até a reconciliação da PR #405 (G001–G006) e ativação controlada de GESTOR_MONEY_ENABLED.`
+      body.code ?? `http_${res.status}`,
+      body.error ?? "Operação financeira recusada pelo servidor."
     )
+  }
+  return body as T
+}
+
+/**
+ * Fronteira de runtime real conectada aos endpoints autenticados `/api/gestor-money/*`
+ * que reutilizam os serviços canônicos `lib/gastos/*` (G001–G006).
+ *
+ * - Jamais fabrica dados reais quando `GESTOR_MONEY_ENABLED !== "true"` ou sem perfil autorizado.
+ * - Jamais expõe ações pendentes (G007 WhatsApp, transferência pessoal G004, storage G003) como funcionais.
+ */
+export function createRealBoundaryGateway(fetchImpl: typeof fetch = fetch): GestorMoneyGateway {
+  async function postOperacao(
+    seletor: FinanceiroPerfilSeletor,
+    operacao: string,
+    payload: unknown
+  ): Promise<OperacaoFeedback> {
+    const res = await fetchImpl("/api/gestor-money/operacoes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        seletor,
+        chave: novaChaveIdempotencia(),
+        operacao,
+        payload,
+      }),
+    })
+    const data = await parseRealApiResponse<{ ok: true; feedback: OperacaoFeedback }>(res)
+    return data.feedback
   }
 
   return {
@@ -1103,7 +1157,7 @@ export function createRealBoundaryGateway(): GestorMoneyGateway {
 
     async obterReadiness(): Promise<IntegrationReadiness> {
       try {
-        const res = await fetch("/api/gestor-money/status", { cache: "no-store" })
+        const res = await fetchImpl("/api/gestor-money/status", { cache: "no-store" })
         if (!res.ok) {
           return {
             mode: "real",
@@ -1123,12 +1177,12 @@ export function createRealBoundaryGateway(): GestorMoneyGateway {
         }
         return {
           mode: "real",
-          state: data.state ?? "FOUNDATION_PENDING_PR405",
+          state: data.state ?? "MODULE_DISABLED",
           moduleEnabled: Boolean(data.moduleEnabled),
           foundationMerged: Boolean(data.foundationMerged),
           mensagem:
             data.mensagem ??
-            "Fundação G001–G006 pendente de reconciliação na PR #405. Nenhum dado simulado é exibido no modo real.",
+            "Fundação G001–G006 dormente (GESTOR_MONEY_ENABLED !== 'true'). Nenhum dado simulado é exibido no modo real.",
           contratos: data.contratos ?? CONTRATOS_FUNDACAO_PADRAO,
         }
       } catch {
@@ -1144,55 +1198,134 @@ export function createRealBoundaryGateway(): GestorMoneyGateway {
     },
 
     async listarPerfis() {
-      return []
+      try {
+        const res = await fetchImpl("/api/gestor-money/perfis", { cache: "no-store" })
+        if (!res.ok) return []
+        const data = (await res.json()) as { ok?: boolean; perfis?: PerfilResumo[] }
+        return data.ok && Array.isArray(data.perfis) ? data.perfis : []
+      } catch {
+        return []
+      }
     },
 
-    async obterSnapshot() {
-      return null
+    async obterSnapshot(seletor, periodo) {
+      try {
+        const res = await fetchImpl(
+          `/api/gestor-money/snapshot?${queryParamsFromSeletor(seletor, periodo)}`,
+          { cache: "no-store" }
+        )
+        if (!res.ok) return null
+        const data = (await res.json()) as { ok?: boolean; snapshot?: ConsultaFinanceiraSnapshot }
+        return data.ok && data.snapshot ? data.snapshot : null
+      } catch {
+        return null
+      }
     },
 
-    async obterAssistenteConfig() {
+    async obterAssistenteConfig(seletor) {
+      try {
+        const res = await fetchImpl(
+          `/api/gestor-money/assistente?${queryParamsFromSeletor(seletor)}`,
+          { cache: "no-store" }
+        )
+        if (res.ok) {
+          const data = (await res.json()) as { ok?: boolean; config?: AssistenteWhatsAppConfig }
+          if (data.ok && data.config) return data.config
+        }
+      } catch {
+        /* fallback seguro para estado desconectado honesto */
+      }
       return createSyntheticPersonalState().assistente
     },
 
     async salvarPreferenciasAssistente() {
-      return unavailable("salvarPreferenciasAssistente")
+      throw new GestorMoneyBoundaryError(
+        "assistente_preferencias_pendente_g007",
+        "Persistência real das preferências do assistente WhatsApp aguarda etapa G007."
+      )
     },
-    async registrarDespesa() {
-      return unavailable("registrarDespesa")
+
+    async registrarDespesa(seletor, input) {
+      return postOperacao(seletor, "despesa", input)
     },
-    async registrarReceita() {
-      return unavailable("registrarReceita")
+
+    async registrarReceita(seletor, input) {
+      return postOperacao(seletor, "receita", input)
     },
-    async registrarDivida() {
-      return unavailable("registrarDivida")
+
+    async registrarDivida(seletor, input) {
+      return postOperacao(seletor, "divida", input)
     },
-    async pagarDivida() {
-      return unavailable("pagarDivida")
+
+    async pagarDivida(seletor, input) {
+      return postOperacao(seletor, "pagar_divida", input)
     },
-    async transferir() {
-      return unavailable("transferir")
+
+    async transferir(seletor, input) {
+      return postOperacao(seletor, "transferir", input)
     },
-    async criarConta() {
-      return unavailable("criarConta")
+
+    async criarConta(seletor, input) {
+      const res = await fetchImpl("/api/gestor-money/contas", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ seletor, payload: input }),
+      })
+      const data = await parseRealApiResponse<{ ok: true; feedback: OperacaoFeedback }>(res)
+      return data.feedback
     },
-    async alternarContaAtiva() {
-      return unavailable("alternarContaAtiva")
+
+    async alternarContaAtiva(seletor, contaId, ativo) {
+      const res = await fetchImpl("/api/gestor-money/contas", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ seletor, contaId, ativo }),
+      })
+      const data = await parseRealApiResponse<{ ok: true; feedback: OperacaoFeedback }>(res)
+      return data.feedback
     },
-    async criarCategoria() {
-      return unavailable("criarCategoria")
+
+    async criarCategoria(seletor, input) {
+      const res = await fetchImpl("/api/gestor-money/categorias", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ seletor, payload: input }),
+      })
+      const data = await parseRealApiResponse<{ ok: true; feedback: OperacaoFeedback }>(res)
+      return data.feedback
     },
-    async alternarCategoriaAtiva() {
-      return unavailable("alternarCategoriaAtiva")
+
+    async alternarCategoriaAtiva(seletor, categoriaId, ativo) {
+      const res = await fetchImpl("/api/gestor-money/categorias", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ seletor, categoriaId, ativo }),
+      })
+      const data = await parseRealApiResponse<{ ok: true; feedback: OperacaoFeedback }>(res)
+      return data.feedback
     },
-    async criarCartao() {
-      return unavailable("criarCartao")
+
+    async criarCartao(seletor, input) {
+      const res = await fetchImpl("/api/gestor-money/cartoes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ seletor, payload: input }),
+      })
+      const data = await parseRealApiResponse<{ ok: true; feedback: OperacaoFeedback }>(res)
+      return data.feedback
     },
-    async registrarCompraCartao() {
-      return unavailable("registrarCompraCartao")
+
+    async registrarCompraCartao(seletor, input) {
+      return postOperacao(seletor, "compra_cartao", input)
     },
-    async pagarFatura() {
-      return unavailable("pagarFatura")
+
+    async pagarFatura(seletor, input) {
+      return postOperacao(seletor, "pagar_fatura", input)
     },
   }
 }

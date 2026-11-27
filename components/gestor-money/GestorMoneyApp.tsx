@@ -400,14 +400,20 @@ export function GestorMoneyApp({
                     </div>
                     <div className="space-y-1.5">
                       <h2 className="font-display text-lg font-bold text-foreground">
-                        Gestor Money · Aguardando fundação G001–G006 (PR #405)
+                        {readiness?.state === "READY"
+                          ? "Gestor Money · Nenhum perfil financeiro provisionado para sua sessão"
+                          : readiness?.state === "MODULE_DISABLED"
+                            ? "Gestor Money · Módulo integrado em modo dormente"
+                            : "Gestor Money · Aguardando fundação G001–G006 (PR #405)"}
                       </h2>
                       <p className="text-sm text-muted-foreground">
-                        {readiness?.mensagem ??
-                          "Os contratos reais do motor financeiro G001–G006 ainda estão em reconciliação na PR #405 e a flag GESTOR_MONEY_ENABLED permanece desligada."}
+                        {readiness?.state === "READY"
+                          ? "A fundação G001–G006 está ativa neste ambiente, mas ainda não existe perfil PESSOAL ou vínculo EMPRESA ativo para o usuário autenticado."
+                          : readiness?.mensagem ??
+                            "Os contratos reais do motor financeiro G001–G006 permanecem dormentes enquanto GESTOR_MONEY_ENABLED estiver desligada."}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Para manter integridade financeira absoluta, nenhum dado simulado é apresentado no modo real e todas as ações de escrita permanecem bloqueadas até a integração definitiva.
+                        Para manter integridade financeira absoluta, nenhum dado simulado é apresentado no modo real e ações indisponíveis permanecem bloqueadas.
                       </p>
                     </div>
                   </div>

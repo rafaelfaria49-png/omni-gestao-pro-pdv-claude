@@ -232,8 +232,32 @@ describe("Gestor Money — Fronteira Isolada e Contratos G001–G006", () => {
     expect(csv).toContain("CAIXA_REALIZADO")
   })
 
-  it("Honestidade de fronteira: modo real nunca fabrica dados e bloqueia mutações pendentes da PR #405", async () => {
-    const realGw = createRealBoundaryGateway()
+  it("Honestidade de fronteira: modo real nunca fabrica dados e bloqueia mutações quando módulo desligado", async () => {
+    const mockFetch = async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes("/api/gestor-money/status")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            foundationMerged: true,
+            moduleEnabled: false,
+            state: "MODULE_DISABLED",
+            mensagem: "Gestor Money desligado.",
+          }),
+          { status: 200 }
+        )
+      }
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: "module_disabled",
+          error: "Gestor Money desligado (GESTOR_MONEY_ENABLED !== 'true').",
+        }),
+        { status: 404 }
+      )
+    }
+
+    const realGw = createRealBoundaryGateway(mockFetch as typeof fetch)
     expect(await realGw.listarPerfis()).toEqual([])
     expect(await realGw.obterSnapshot({ tipo: "PESSOAL", perfilId: "p1" })).toBeNull()
 
@@ -254,7 +278,7 @@ describe("Gestor Money — Fronteira Isolada e Contratos G001–G006", () => {
           formaPagamento: "pix",
         }
       )
-    ).rejects.toThrow(/PR #405/)
+    ).rejects.toThrow(/GESTOR_MONEY_ENABLED/)
   })
 
   it("Segurança: rota de preview isolado permanece fechada por padrão sem opt-in explícito", () => {
