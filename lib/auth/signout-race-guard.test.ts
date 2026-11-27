@@ -70,7 +70,7 @@ function makeCookieJar(initial: Record<string, string> = {}) {
       return cookies.get(name)
     },
     sessionCookieNames(): string[] {
-      return [...cookies.keys()].filter((k) => /^(?:__Secure-)?authjs\.session-token(?:\.\d+)?$/i.test(k))
+      return [...cookies.keys()].filter((k) => /^(?:(?:__Secure|__Host)-)?authjs\.session-token(?:\.\d+)?$/i.test(k))
     },
   }
 }

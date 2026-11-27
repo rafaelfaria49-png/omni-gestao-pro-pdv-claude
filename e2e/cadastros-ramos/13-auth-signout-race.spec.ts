@@ -3,7 +3,7 @@ import { STORES, USERS, login, logoutViaSeguranca } from "./support"
 
 test.use({ trace: "off", video: "off", screenshot: "off", serviceWorkers: "block" })
 
-const sessionCookieName = /^(?:__Secure-)?authjs\.session-token(?:\.\d+)?$/
+const sessionCookieName = /^(?:(?:__Secure|__Host)-)?authjs\.session-token(?:\.\d+)?$/
 
 async function session(page: Page) {
   const response = await page.request.get("/api/auth/session")
@@ -18,6 +18,10 @@ function holdSessionRead(page: Page, id: string) {
   const pattern = new RegExp(`/api/auth/session\\?qaHeldRead=${id}$`)
   return {
     async start() {
+      // Sem `{ times: 1 }`: remover o handler antes de `second.release()` desliga
+      // `Fetch.enable` no Chromium enquanto a segunda resposta ainda está retida,
+      // fazendo o browser reenviar a requisição real pós-logout. O unroute acontece
+      // somente após `fulfill`/`abort` desta resposta retida.
       await page.route(pattern, async (route) => {
         try {
           const response = await route.fetch()
@@ -27,8 +31,10 @@ function holdSessionRead(page: Page, id: string) {
         } catch (error) {
           ready.reject(error)
           await route.abort().catch(() => {})
+        } finally {
+          await page.unroute(pattern).catch(() => {})
         }
-      }, { times: 1 })
+      })
       return {
         ready: ready.promise,
         done: page.evaluate(async (url) => {

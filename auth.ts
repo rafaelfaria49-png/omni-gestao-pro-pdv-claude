@@ -22,7 +22,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!isSessionRevocationEnabled()) return
       const token = "token" in message ? message.token : undefined
       if (!token?.sub) return
-      // Uma nova tentativa; se ainda falhar, registra o prefixo do sid para acompanhamento.
+      // Uma nova tentativa; se ainda falhar, registra falha genérica sem expor o sid.
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           let sid = token.sid
