@@ -30,6 +30,8 @@ export type DashboardNavItem = {
   label: string
   icon: LucideIcon
   badge?: string
+  /** Subtítulo curto opcional exibido abaixo do título sem truncar o rótulo principal. */
+  subtitle?: string
   visible?: (p: EnterprisePermissions) => boolean
   experimental?: boolean
 }
@@ -69,9 +71,9 @@ export const hubsNavItems: DashboardNavItem[] = [
   },
   {
     to: "/dashboard/operacoes-v4-preview",
-    label: "Operações V4 · Beta",
+    label: "Operações V4",
     icon: Activity,
-    badge: "V4",
+    badge: "Beta",
     visible: (p) => p.hubs.operacoes,
   },
   {
@@ -108,8 +110,8 @@ export const hubsNavItems: DashboardNavItem[] = [
     to: "/dashboard/catalogo-aparelhos",
     // COMPAT-PROFISSIONAL-001 — HUB Compat (películas + capinhas). Rota mantida.
     label: "Compat",
+    subtitle: "Películas · Capinhas",
     icon: ScanSearch,
-    badge: "Películas · Capinhas",
     visible: (p) => p.hubs.cadastros,
   },
   { to: "/dashboard/vendas-hub", label: "Vendas HUB", icon: ShoppingCart, visible: (p) => p.hubs.vendas },

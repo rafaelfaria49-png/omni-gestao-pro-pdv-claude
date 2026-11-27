@@ -15,7 +15,12 @@ vi.mock("./config-empresa", () => {
   return { configPadrao: { empresa }, useConfigEmpresa: () => ({ configHydrated: true, config: { empresa, minhasLojas: { lojas: [] } } }) }
 })
 
-import { LojaAtivaProvider, registrarGuardaTrocaLojaV4, useLojaAtiva } from "./loja-ativa"
+import {
+  LojaAtivaProvider,
+  registrarGuardaTrocaLoja,
+  registrarGuardaTrocaLojaV4,
+  useLojaAtiva,
+} from "./loja-ativa"
 
 function Harness() {
   const { lojaAtivaId, setLojaAtivaId } = useLojaAtiva()
@@ -90,5 +95,34 @@ describe("setLojaAtivaId · onSettled", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
     expect(screen.getByTestId("store").textContent).toBe("loja-a")
     expect(h.settled).not.toHaveBeenCalled()
+  })
+
+  it("guarda adicional via registrarGuardaTrocaLoja bloqueia troca até confirmação explícita e limpa no desregistro", async () => {
+    let pendingSwitch: (() => void) | null = null
+    let dirty = true
+    const unregister = registrarGuardaTrocaLoja({
+      temRascunhoSujo: () => dirty,
+      solicitarSaida: (trocar) => {
+        pendingSwitch = trocar
+        return "bloqueada"
+      },
+    })
+    try {
+      mount()
+      await waitFor(() => expect(screen.getByTestId("store").textContent).toBe("loja-a"))
+      fireEvent.click(screen.getByRole("button", { name: "loja-b" }))
+      await act(async () => { await new Promise((r) => setTimeout(r, 40)) })
+      expect(screen.getByTestId("store").textContent).toBe("loja-a")
+      expect(h.settled).not.toHaveBeenCalled()
+      expect(pendingSwitch).not.toBeNull()
+
+      // Usuário confirma descarte e prossegue com a troca
+      dirty = false
+      await act(async () => { pendingSwitch?.() })
+      await waitFor(() => expect(screen.getByTestId("store").textContent).toBe("loja-b"))
+      await waitFor(() => expect(h.settled).toHaveBeenCalledWith("loja-b", true))
+    } finally {
+      unregister()
+    }
   })
 })

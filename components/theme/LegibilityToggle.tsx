@@ -34,13 +34,13 @@ export function LegibilityToggle() {
             aria-pressed={active}
             aria-label="Alta legibilidade"
             className={cn(
-              "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border backdrop-blur-md transition-all duration-200",
+              "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               active
-                ? "border-primary/60 bg-primary/15 text-primary shadow-sm"
-                : "border-border/80 bg-card/60 text-muted-foreground hover:text-foreground hover:border-border-hover"
+                ? "border-primary/50 bg-primary/15 text-primary shadow-xs"
+                : "border-border/85 bg-panel/80 text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border-hover"
             )}
           >
-            <Eye className="h-4 w-4" strokeWidth={active ? 2.4 : 1.9} />
+            <Eye className="h-3.5 w-3.5" strokeWidth={active ? 2.25 : 1.85} />
           </button>
         </TooltipTrigger>
         <TooltipContent
