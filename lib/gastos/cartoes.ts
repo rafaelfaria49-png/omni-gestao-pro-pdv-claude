@@ -424,3 +424,53 @@ export async function consultarHistoricoLimiteCartaoGasto(
   })
   return [...cartao.historicoLimites]
 }
+
+const planejarFaturaSchema = z.object({
+  cicloId: identificadorOperacao, quitar: z.boolean().default(false),
+  valorCentavos: z.string().regex(/^\d{1,16}$/).optional(),
+}).strict()
+
+export type PlanoPagamentoFaturaDTO = Readonly<{
+  cicloId: string
+  restanteCentavos: string
+  valorCentavos: string
+  alocacoes: ReadonlyArray<Readonly<{ tituloId: string; valorCentavos: string }>>
+}>
+
+/**
+ * Assistente/HUB: "pagar R$ X da fatura do ciclo Y" → alocações EXPLÍCITAS para a proposta PAGAR_FATURA.
+ * Só leitura (snapshot + RLS). Ordem determinística: vencimento, depois id; nunca aloca acima do aberto de
+ * cada título nem do ciclo. A aplicação continua sendo a do G004 (revisão + confirmação), que revalida tudo.
+ */
+export async function planejarPagamentoFaturaGasto(contexto: unknown, input: unknown): Promise<PlanoPagamentoFaturaDTO> {
+  const parsed = planejarFaturaSchema.safeParse(input)
+  if (!parsed.success || parsed.data.quitar === (parsed.data.valorCentavos !== undefined)) throw new FinanceiroReadError(422)
+  const { cicloId, quitar, valorCentavos } = parsed.data
+  // Leitura no snapshot; a validação do valor vem DEPOIS, para a recusa tipada não virar 503 genérico.
+  const abertos = await comLeituraFinanceira(contexto, async (db, ctx) => {
+    const storeId = storeDoContexto(ctx)
+    const ciclo = await db.cartaoCiclo.findFirst({ where: { id: cicloId, perfilId: ctx.perfilId, storeId }, select: { id: true } })
+    if (!ciclo) throw new FinanceiroReadError(404)
+    const titulos = await db.contaPagarTitulo.findMany({
+      where: { perfilId: ctx.perfilId, storeId, cartaoCicloId: cicloId, ativo: true },
+      include: { alocacoesPagamento: { select: { pagamentoId: true, valorCentavos: true, pagamento: { select: { tipo: true } } } } },
+      orderBy: [{ vencimento: "asc" }, { id: "asc" }],
+    })
+    return titulos.map((t) => ({ id: t.id, restante: saldoTituloConsulta(t).restante })).filter((t) => t.restante > BigInt(0))
+  })
+  {
+    const restante = abertos.reduce((s, t) => s + t.restante, BigInt(0))
+    const alvo = quitar ? restante : BigInt(valorCentavos!)
+    if (alvo <= BigInt(0) || alvo > restante) throw new OperacaoGastoError("valor_acima_saldo_fatura", 409)
+    let falta = alvo
+    const alocacoes: Array<{ tituloId: string; valorCentavos: string }> = []
+    for (const t of abertos) {
+      if (falta === BigInt(0)) break
+      const v = t.restante < falta ? t.restante : falta
+      alocacoes.push({ tituloId: t.id, valorCentavos: v.toString() })
+      falta -= v
+    }
+    return Object.freeze({ cicloId, restanteCentavos: restante.toString(), valorCentavos: alvo.toString(),
+      alocacoes: Object.freeze(alocacoes.map((a) => Object.freeze(a))) })
+  }
+}
