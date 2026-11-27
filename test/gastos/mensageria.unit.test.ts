@@ -4,7 +4,7 @@ import { resolve } from "node:path"
 import { credenciaisDoCanal } from "@/lib/gastos/channels"
 import { codigoRedigido, MensageriaError } from "@/lib/gastos/messaging-types"
 import { decidirFalha, type FalhaTransporte } from "@/lib/gastos/retry"
-import { carregarConfigWorker } from "@/lib/gastos/worker"
+import { autorizarDatasourceWorker, carregarConfigWorker } from "@/lib/gastos/worker"
 
 const env = { GASTOS_WORKER_ENV: "teste", GASTOS_WORKER_DATABASE_URL: "postgresql://omni_gastos_worker@127.0.0.1:55516/gastos_g006_test" }
 describe("G006 políticas técnicas", () => {
@@ -56,19 +56,30 @@ describe("G006 políticas técnicas", () => {
   })
 
   it("Node24 explícito, cloud sem local/produção/SSL omitido", () => {
+    const aceita = () => undefined // alvo sintético: só as regras próprias do worker
     expect(carregarConfigWorker(env, "24.22.1")).toMatchObject({ concorrencia: 1, modo: "STAGING" })
     expect(() => carregarConfigWorker(env, "26.12.1")).toThrow("CONFIG_INVALIDA")
     const cloud = { GASTOS_WORKER_ENV: "homologacao", GASTOS_WORKER_APPROVED_DATABASE: "gastos_g006_hml_synthetic", GASTOS_WORKER_DATABASE_URL: "postgresql://omni_gastos_worker@synthetic.example.invalid/gastos_g006_hml_synthetic?sslmode=require" }
-    expect(carregarConfigWorker(cloud, "24.22.1").ambiente).toBe("homologacao")
-    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_MODE: "SIMULADO" }, "24.22.1")).toThrow("CONFIG_INVALIDA")
-    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_DATABASE_URL: cloud.GASTOS_WORKER_DATABASE_URL.replace("?sslmode=require", "") }, "24.22.1")).toThrow("CONFIG_INVALIDA")
-    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_APPROVED_DATABASE: undefined }, "24.22.1")).toThrow("CONFIG_INVALIDA")
-    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_APPROVED_DATABASE: "gastos_g006_hml_outro" }, "24.22.1")).toThrow("CONFIG_INVALIDA")
+    expect(carregarConfigWorker(cloud, "24.22.1", aceita).ambiente).toBe("homologacao")
+    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_MODE: "SIMULADO" }, "24.22.1", aceita)).toThrow("CONFIG_INVALIDA")
+    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_DATABASE_URL: cloud.GASTOS_WORKER_DATABASE_URL.replace("?sslmode=require", "") }, "24.22.1", aceita)).toThrow("CONFIG_INVALIDA")
+    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_APPROVED_DATABASE: undefined }, "24.22.1", aceita)).toThrow("CONFIG_INVALIDA")
+    expect(() => carregarConfigWorker({ ...cloud, GASTOS_WORKER_APPROVED_DATABASE: "gastos_g006_hml_outro" }, "24.22.1", aceita)).toThrow("CONFIG_INVALIDA")
   })
 
   it.each(["sslaccept=accept_invalid_certs", "host=outro.example.invalid", "schema=private", "sslmode=disable", "options=unsafe"])("homologação recusa override de conexão %s", parametro => {
     expect(() => carregarConfigWorker({ GASTOS_WORKER_ENV: "homologacao", GASTOS_WORKER_APPROVED_DATABASE: "gastos_g006_hml_synthetic",
-      GASTOS_WORKER_DATABASE_URL: "postgresql://omni_gastos_worker@synthetic.example.invalid/gastos_g006_hml_synthetic?sslmode=require&" + parametro }, "24.22.1")).toThrow("CONFIG_INVALIDA")
+      GASTOS_WORKER_DATABASE_URL: "postgresql://omni_gastos_worker@synthetic.example.invalid/gastos_g006_hml_synthetic?sslmode=require&" + parametro }, "24.22.1", () => undefined)).toThrow("CONFIG_INVALIDA")
+  })
+
+  it("Datasource Guard #404: homologação só em alvo atestado; sem atestado, nem um host válido passa", () => {
+    const cloud = { GASTOS_WORKER_ENV: "homologacao", GASTOS_WORKER_APPROVED_DATABASE: "gastos_g006_hml_synthetic", GASTOS_WORKER_DATABASE_URL: "postgresql://omni_gastos_worker:x@synthetic.example.invalid/gastos_g006_hml_synthetic?sslmode=require" }
+    expect(() => carregarConfigWorker(cloud, "24.22.1")).toThrow("CONFIG_INVALIDA")
+    expect(() => autorizarDatasourceWorker("homologacao", cloud.GASTOS_WORKER_DATABASE_URL)).toThrow("ISOLATION_SCOPE_BLOCKED")
+    expect(() => autorizarDatasourceWorker("teste", "postgresql://omni_gastos_worker@127.0.0.1:55516/omnigestao_prod")).toThrow("ISOLATION_SCOPE_BLOCKED")
+    expect(() => autorizarDatasourceWorker("teste", "postgresql://omni_gastos_worker@db.example.invalid:5432/gastos_g006_test")).toThrow("ISOLATION_SCOPE_BLOCKED")
+    expect(() => autorizarDatasourceWorker("teste", "postgresql://omni_gastos_worker@127.0.0.1:55516/gastos_g006_test")).not.toThrow()
+    expect(carregarConfigWorker(env, "24.22.1").ambiente).toBe("teste")
   })
 
   it("redação descarta corpo de erro de provider/SQL, telefone e token", () => {

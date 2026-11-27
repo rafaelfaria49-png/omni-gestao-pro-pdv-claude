@@ -34,6 +34,20 @@ export async function criarMovimentoOperacaoGasto(tx: FinanceiroDb, ctx: Finance
   } })
 }
 
+/** TRANSFERENCIA_INTERNA do G004: saída na origem e entrada no destino, mesmo valor/instante, sem título/categoria. */
+export async function criarMovimentosTransferenciaGasto(tx: FinanceiroDb, ctx: FinanceiroContextoAutorizado, p: {
+  saidaId: string; entradaId: string; operacaoId: string; origemId: string; destinoId: string; valor: bigint; ocorridoEm: Date; descricao: string
+}) {
+  for (const [id, tipo, carteiraId] of [[p.saidaId, "saida", p.origemId], [p.entradaId, "entrada", p.destinoId]] as const) {
+    await tx.movimentacaoFinanceira.create({ data: {
+      id, perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), operacaoFinanceiraId: p.operacaoId,
+      tipo, origem: "transferencia", referenciaId: p.operacaoId, descricao: p.descricao, carteiraId,
+      valor: Number(p.valor) / 100, valorCentavos: p.valor.toString(), precisaoStatus: "CENTAVOS",
+      formaPagamento: "transferencia", ocorridoEm: p.ocorridoEm,
+    } })
+  }
+}
+
 // ─── tipos públicos ───────────────────────────────────────────────────────────
 
 export type MovTipo = "entrada" | "saida"

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { setTimeout as esperar } from "node:timers/promises"
 import { z } from "zod"
+import { localFixtureDatasource, nonproductionDatasource } from "../db/datasource-policy.mjs"
 import { exigirPapelSql } from "./channels"
 import { codigoRedigido, MensageriaError, type MensageriaClient } from "./messaging-types"
 import { claimJob, concluirStaging, falharJob, renovarLease, type Claim } from "./queue"
@@ -14,8 +15,19 @@ const configSchema = z.object({ ambiente: z.enum(["teste", "homologacao"]), data
 })
 export type ConfigWorker = z.infer<typeof configSchema>
 
+/**
+ * Datasource Guard (#404) do worker: `teste` só em loopback descartável (recusa nomes de produção);
+ * `homologacao` só em alvo hospedado ATESTADO como Preview na política — nunca Production. Um banco de
+ * homologação do worker só passa depois de atestado em `lib/db/datasource-policy.mjs`.
+ */
+export function autorizarDatasourceWorker(ambiente: ConfigWorker["ambiente"], url: string): void {
+  if (ambiente === "teste") localFixtureDatasource(url)
+  else nonproductionDatasource({ VERCEL: "1", VERCEL_ENV: "preview", DATABASE_URL: url, DIRECT_URL: url })
+}
+
 /** Não carrega .env, não altera Node global e não permite produção neste GOAL. */
-export function carregarConfigWorker(env: Record<string, string | undefined>, nodeVersion = process.versions.node): ConfigWorker {
+export function carregarConfigWorker(env: Record<string, string | undefined>, nodeVersion = process.versions.node,
+  autorizarDatasource: typeof autorizarDatasourceWorker = autorizarDatasourceWorker): ConfigWorker {
   if (nodeVersion.split(".")[0] !== "24") throw new MensageriaError("CONFIG_INVALIDA")
   const parsed = configSchema.safeParse({ ambiente: env.GASTOS_WORKER_ENV, databaseUrl: env.GASTOS_WORKER_DATABASE_URL,
     modo: env.GASTOS_WORKER_MODE, concorrencia: env.GASTOS_WORKER_CONCURRENCY, leaseMs: env.GASTOS_WORKER_LEASE_MS,
@@ -41,6 +53,8 @@ export function carregarConfigWorker(env: Record<string, string | undefined>, no
     || (c.modo === "SIMULADO" && c.ambiente !== "teste") || c.envioTimeoutMs >= c.leaseMs || c.shutdownMs < c.envioTimeoutMs) {
     throw new MensageriaError("CONFIG_INVALIDA")
   }
+  // Por último: as regras acima valem por si; o guard da #404 é a barreira final de identidade do banco.
+  try { autorizarDatasource(c.ambiente, c.databaseUrl) } catch { throw new MensageriaError("CONFIG_INVALIDA") }
   return c
 }
 
@@ -53,10 +67,17 @@ export async function validarPapelWorker(db: MensageriaClient) {
         OR has_table_privilege(current_user,c.oid,'DELETE,TRUNCATE')))
       OR EXISTS(SELECT 1 FROM pg_roles p WHERE p.rolname<>current_user AND pg_has_role(current_user,p.oid,'MEMBER'))
       OR has_schema_privilege(current_user,'public','CREATE') OR has_database_privilege(current_user,current_database(),'CREATE')
+      -- EXECUTE indevido = função SECURITY DEFINER fora da allowlist OU qualquer GRANT EXPLÍCITO ao worker.
+      -- Funções de invocador executáveis só pelo padrão PUBLIC (ex.: p03_*/vestuario_* de outros módulos) não
+      -- dão ao worker nada além dos próprios privilégios. Allowlist: helpers G006 + auxiliares de RLS do Gestor
+      -- Money avaliados pelas policies (gm_*) + validador G004 somente leitura.
       OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
         AND p.prorettype<>'trigger'::regtype AND has_function_privilege(current_user,p.oid,'EXECUTE')
-        AND p.oid NOT IN ('public.g006_autorizar_escopo(text,text,text)'::regprocedure,'public.g006_canal_vigente(text)'::regprocedure)
-        AND NOT (p.oid='public.g004_compensacao_individual_valida(jsonb)'::regprocedure AND NOT p.prosecdef AND p.provolatile='s'))
+        AND p.oid NOT IN ('public.g006_autorizar_escopo(text,text,text)'::regprocedure,'public.g006_canal_vigente(text)'::regprocedure,
+          'public.gm_papel_g006()'::regprocedure,'public.gm_perfil_pessoal_contexto()'::regprocedure,'public.gm_contexto_owner()'::regprocedure)
+        AND NOT (p.oid='public.g004_compensacao_individual_valida(jsonb)'::regprocedure AND NOT p.prosecdef AND p.provolatile='s')
+        AND (p.prosecdef OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+          WHERE a.grantee=(SELECT oid FROM pg_roles WHERE rolname=current_user) AND a.privilege_type='EXECUTE')))
       OR EXISTS(SELECT 1 FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','p','v','m','f')
       AND has_any_column_privilege(current_user,c.oid,'SELECT') AND c.relname NOT IN ('whatsapp_canais','whatsapp_gestao_inbox',
         'gastos_origens_canal','gastos_jobs','gastos_job_eventos','gastos_worker_pulsos','financeiro_operacoes','gastos_outbox'))) AS indevido,

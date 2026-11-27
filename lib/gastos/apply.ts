@@ -4,7 +4,7 @@ import { z } from "zod"
 import type { Prisma } from "@/generated/prisma"
 import { projetarPagamentoEstruturadoContaPagar } from "@/lib/financeiro/services/contas-pagar-service"
 import { saldoCarteiraGasto, travarCarteirasGasto } from "@/lib/financeiro/services/carteiras-service"
-import { criarMovimentoOperacaoGasto } from "@/lib/financeiro/services/movimentacoes-service"
+import { criarMovimentoOperacaoGasto, criarMovimentosTransferenciaGasto } from "@/lib/financeiro/services/movimentacoes-service"
 import { storeDoContexto, type FinanceiroDb } from "./financeiro-scope"
 import type { FinanceiroContextoAutorizado } from "./types"
 import { agoraDoBanco, autorizarOperacaoNaTransacao, emTransacaoGasto, exigirRevisaoPronta, lockGasto, travarRevisaoGasto } from "./operacoes"
@@ -96,6 +96,9 @@ export async function aplicarOperacaoGasto(contexto: unknown, input: unknown): P
     let titulos = await travarTitulosGasto(tx, ctx, ids)
     await autorizarOperacaoNaTransacao(tx, ctx)
     await exigirPeriodosAbertosGasto(tx, ctx, datas)
+    if (p.tipo === "TRANSFERENCIA_INTERNA") {
+      return aplicarTransferenciaInterna(tx, ctx, p, { chave: command.chave, versaoEsperada: command.versaoEsperada, revisao, hash, agora })
+    }
     const estorno = p.tipo === "ESTORNAR_PAGAMENTO" || p.tipo === "ESTORNAR_LEGADO"
     const carteiraId = "carteiraId" in p ? p.carteiraId : fonteBase?.movimento.carteiraId ?? undefined
     const contas = await travarCarteirasGasto(tx, ctx,
@@ -203,16 +206,48 @@ export async function aplicarOperacaoGasto(contexto: unknown, input: unknown): P
     const resultado: ResultadoOperacaoGasto = { operacaoId: op.id, revisaoId: revisao.id, gastoId,
       tituloIds: novosTitulos.length ? novosTitulos : [...new Set(alocacoes.flatMap(a => a.tituloId ? [a.tituloId] : []))].sort(ordemBinaria),
       pagamentoId, movimentoIds, valorCentavos: valor!.toString(), estado: "APLICADA" }
-    await tx.financeiroOperacaoEvento.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), operacaoId: op.id,
-      tipo: "APLICADA", dados: resultado } })
-    await tx.gastoOutbox.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), operacaoId: op.id,
-      tipo: "OPERACAO_APLICADA", payload: resultado } })
-    const cas = await tx.gastoRevisao.updateMany({ where: { id: revisao.id, versao: command.versaoEsperada, estado: "PRONTA" },
-      data: { estado: "APLICADA", decididaEm: agora } })
-    if (cas.count !== 1) throw new OperacaoGastoError("revisao_desatualizada", 409)
-    await tx.financeiroOperacao.update({ where: { id: op.id }, data: { estado: "APLICADA", resultado, concluidaEm: agora } })
-    return resultado
+    return concluirOperacaoGasto(tx, ctx, { opId: op.id, revisaoId: revisao.id, versaoEsperada: command.versaoEsperada, agora, resultado })
   })
+}
+
+/** Evento + outbox + CAS da revisão + conclusão: o mesmo fechamento para todo tipo de operação. */
+async function concluirOperacaoGasto(tx: FinanceiroDb, ctx: FinanceiroContextoAutorizado,
+  k: { opId: string; revisaoId: string; versaoEsperada: number; agora: Date; resultado: ResultadoOperacaoGasto }) {
+  const { resultado } = k
+  await tx.financeiroOperacaoEvento.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), operacaoId: k.opId,
+    tipo: "APLICADA", dados: resultado } })
+  await tx.gastoOutbox.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx), operacaoId: k.opId,
+    tipo: "OPERACAO_APLICADA", payload: resultado } })
+  const cas = await tx.gastoRevisao.updateMany({ where: { id: k.revisaoId, versao: k.versaoEsperada, estado: "PRONTA" },
+    data: { estado: "APLICADA", decididaEm: k.agora } })
+  if (cas.count !== 1) throw new OperacaoGastoError("revisao_desatualizada", 409)
+  await tx.financeiroOperacao.update({ where: { id: k.opId }, data: { estado: "APLICADA", resultado, concluidaEm: k.agora } })
+  return resultado
+}
+
+/**
+ * TRANSFERENCIA_INTERNA: contas do MESMO perfil (PESSOAL global ou EMPRESA da loja), ambas travadas pelo
+ * mesmo lock do G004; destino ativo e não crédito; saldo da origem pelo ledger. Nenhum fato/pagamento.
+ */
+async function aplicarTransferenciaInterna(tx: FinanceiroDb, ctx: FinanceiroContextoAutorizado,
+  p: Extract<PropostaGasto, { tipo: "TRANSFERENCIA_INTERNA" }>,
+  k: { chave: string; versaoEsperada: number; revisao: { id: string; grupoChave: string }; hash: string; agora: Date }) {
+  const contas = await travarCarteirasGasto(tx, ctx, [p.carteiraOrigemId, p.carteiraDestinoId], p.carteiraOrigemId)
+  const origem = contas.get(p.carteiraOrigemId)!, destino = contas.get(p.carteiraDestinoId)!
+  if (!destino.ativo || destino.tipo === "credito") throw new OperacaoGastoError("conta_indisponivel", 404)
+  const valor = BigInt(p.valorCentavos)
+  if (await saldoCarteiraGasto(tx, ctx, origem) < valor) throw new OperacaoGastoError("saldo_conta_insuficiente", 409)
+  const op = await tx.financeiroOperacao.create({ data: { perfilId: ctx.perfilId, storeId: storeDoContexto(ctx),
+    autorAdminUserId: ctx.userId, chave: k.chave, grupoChave: k.revisao.grupoChave, tipo: p.tipo,
+    payloadHash: k.hash, revisaoId: k.revisao.id } })
+  const saidaId = randomUUID(), entradaId = randomUUID()
+  await criarMovimentosTransferenciaGasto(tx, ctx, { saidaId, entradaId, operacaoId: op.id, origemId: origem.id, destinoId: destino.id,
+    valor, ocorridoEm: new Date(p.dataPagamento), descricao: p.descricao ?? "Transferência entre contas" })
+  await saldoCarteiraGasto(tx, ctx, origem, true)
+  await saldoCarteiraGasto(tx, ctx, destino, true)
+  const resultado: ResultadoOperacaoGasto = { operacaoId: op.id, revisaoId: k.revisao.id, gastoId: null, tituloIds: [],
+    pagamentoId: null, movimentoIds: [saidaId, entradaId], valorCentavos: valor.toString(), estado: "APLICADA" }
+  return concluirOperacaoGasto(tx, ctx, { opId: op.id, revisaoId: k.revisao.id, versaoEsperada: k.versaoEsperada, agora: k.agora, resultado })
 }
 
 const estornoHubSchema = z.object({ localKey: z.string().trim().min(1).max(260), chave: chaveOperacao,

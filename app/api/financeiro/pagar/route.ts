@@ -1,4 +1,6 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import { consultarFinanceiroEmpresa, diaNoFusoConsulta, erroConsultaFinanceira, reaisConsulta, resumoTitulosConsulta } from "@/lib/gastos/query"
 /**
  * /api/financeiro/pagar
  *
@@ -187,6 +189,35 @@ const deleteQuerySchema = z.object({
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
+/** GET com o Gestor Money LIGADO — mesma forma de resposta da main, valores da consulta G005. */
+async function getPagarGestorMoney(storeId: string, localKey: string | undefined): Promise<NextResponse> {
+  try {
+    const q = await consultarFinanceiroEmpresa(storeId, { dataInicio: "1900-01-01", dataFim: diaNoFusoConsulta(new Date()) })
+    const linha = (t: (typeof q.pagar)[number]) => ({
+      id: t.localKey?.trim() || t.id, localKey: t.localKey, descricao: t.descricao, valor: reaisConsulta(t.valorCentavos),
+      vencimento: t.vencimento, status: t.status, ...t.apresentacao,
+      pago: reaisConsulta(t.pagoCentavos), restante: reaisConsulta(t.restanteCentavos), categoriaId: t.categoriaId,
+    })
+    if (localKey) {
+      const t = q.pagar.find((x) => x.localKey === localKey)
+      if (!t) return err("Título não encontrado", "not_found", 404)
+      return NextResponse.json({ ok: true, titulo: { ...linha(t), id: t.id } })
+    }
+    const audit = q.pagar.map((t) => ({
+      id: t.id, storeId, localKey: t.localKey ?? t.id, status: t.status, valor: reaisConsulta(t.valorCentavos),
+      pago: reaisConsulta(t.pagoCentavos), restante: reaisConsulta(t.restanteCentavos), saldoAberto: reaisConsulta(t.restanteCentavos),
+      vencimento: t.vencimento, cliente: t.apresentacao.cliente, fornecedorNome: t.apresentacao.fornecedor,
+    }))
+    return NextResponse.json({
+      ok: true, rows: q.pagar.map(linha), summary: resumoTitulosConsulta(q, "PAGAR"), audit,
+      metadata: { source: "server", storeId, generatedAt: q.asOf, base: q.base, versaoCalculo: q.versaoCalculo, criterios: q.criterios },
+    })
+  } catch (e) {
+    const erro = erroConsultaFinanceira(e)
+    return NextResponse.json(erro.body, { status: erro.status })
+  }
+}
+
 export async function GET(req: Request) {
   const moduleDenied = await requireModuleApi(req, "finance")
   if (moduleDenied) return moduleDenied
@@ -198,6 +229,10 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const localKeyParam = url.searchParams.get("localKey")?.trim()
+
+  // Ligado: a lista vem da consulta canônica G005 (pago/restante por alocação estruturada, anomalia
+  // legada recusada com 409). Desligado: corpo da main abaixo, sem nenhuma alteração.
+  if (gestorMoneyAtivo()) return respostaFinanceiraPrivada(await getPagarGestorMoney(storeId, localKeyParam))
 
   try {
     await prismaEnsureConnected()
