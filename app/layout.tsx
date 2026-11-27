@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Space_Grotesk } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { LegibilityProvider } from '@/components/theme/LegibilityProvider'
@@ -14,16 +14,22 @@ import { canAccessPage } from '@/lib/auth/page-access'
 import { getPermissionsFromSession } from '@/lib/auth/enterprise-permissions'
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from '@/lib/store-defaults'
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: './fonts/inter/InterVariable.woff2',
+  weight: '100 900',
+  style: 'normal',
   variable: '--font-sans',
   display: 'swap',
+  fallback: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
 })
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
+const spaceGrotesk = localFont({
+  src: './fonts/space-grotesk/SpaceGrotesk-Variable.woff2',
+  weight: '300 700',
+  style: 'normal',
   variable: '--font-display',
   display: 'swap',
+  fallback: ['system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
 })
 
 const appUrl =

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { auth } from "@/auth"
 import type { Session } from "next-auth"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
@@ -15,9 +15,23 @@ import {
 import { isSegmentoContadorExterno } from "@/lib/contador/auth-externa/proxy-publico"
 import { isRotaLegadaContador, PORTAL_V2_LOGIN } from "@/lib/contador/legado/rota-legada"
 import { isPublicPath, resolveProxyEntry } from "@/lib/auth/proxy-session-gate"
+import { stripSessionCookies } from "@/lib/auth/signout-race-guard"
 import { MELI_CALLBACK_PATH } from "@/lib/marketplace/mercado-livre/config"
 
 const ADMIN_COOKIE = "assistec_admin_session"
+
+function buildNextWithPath(req: NextRequest): NextResponse {
+  const { pathname } = req.nextUrl
+  const headers = new Headers(req.headers)
+  headers.set("x-omni-pathname", pathname)
+  // O callback lê a URL original. Evita duplicar code e state em cabeçalhos internos.
+  if (pathname === MELI_CALLBACK_PATH || pathname === MELI_CALLBACK_PATH + "/") {
+    headers.delete("x-omni-search")
+  } else {
+    headers.set("x-omni-search", req.nextUrl.search)
+  }
+  return NextResponse.next({ request: { headers } })
+}
 
 /**
  * GOAL 003D-lite — a entrada passou a depender de SESSÃO, não do selo.
@@ -31,20 +45,10 @@ const ADMIN_COOKIE = "assistec_admin_session"
  * feita aqui — o schema atual não permite resolver a assinatura da empresa de um
  * funcionário sem heurística. Ver `lib/auth/session-entitlement.ts`.
  */
-export const proxy = auth(async (req) => {
+const authProxy = auth(async (req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
-  const nextWithPath = () => {
-    const headers = new Headers(req.headers)
-    headers.set("x-omni-pathname", pathname)
-    // O callback lê a URL original. Evita duplicar code e state em cabeçalhos internos.
-    if (pathname === MELI_CALLBACK_PATH || pathname === MELI_CALLBACK_PATH + "/") {
-      headers.delete("x-omni-search")
-    } else {
-      headers.set("x-omni-search", req.nextUrl.search)
-    }
-    return NextResponse.next({ request: { headers } })
-  }
+  const nextWithPath = () => buildNextWithPath(req)
 
   if (session?.user?.mustChangePassword && !pathname.startsWith("/api/auth/") &&
       pathname !== "/api/account/password" && pathname !== "/conta/seguranca" &&
@@ -165,6 +169,23 @@ export const proxy = auth(async (req) => {
 
   return nextWithPath()
 })
+
+export async function proxy(req: NextRequest, ev: unknown) {
+  const { pathname } = req.nextUrl
+  // Rotas `/api/auth/*` (incluindo `/api/auth/csrf`, `/api/auth/session` e `/api/auth/signout`)
+  // já são tratadas diretamente pelo Auth.js com proteção própria; passar pelo wrapper `auth()`
+  // aqui executaria `getSession()` redundante e emitiria `Set-Cookie` concorrente.
+  if (pathname === "/api/auth" || pathname.startsWith("/api/auth/")) {
+    return buildNextWithPath(req)
+  }
+
+  const response = (await (authProxy as (r: NextRequest, ctx: unknown) => Promise<Response | undefined>)(req, ev))
+    ?? buildNextWithPath(req)
+
+  // Garantia stateless entre funções isoladas (Vercel): o proxy nunca reemite nem limpa
+  // o cookie `authjs.session-token*`, preservando todos os demais cookies (ex.: `assistec-active-store`).
+  return stripSessionCookies(response)
+}
 
 export { proxy as default }
 
