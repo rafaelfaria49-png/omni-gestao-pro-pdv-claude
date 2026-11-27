@@ -55,6 +55,8 @@ export const MANIFESTO = [
     ],
   },
   { db: "aparelhos_pg_ci", envs: ["APARELHOS_TEST_DATABASE_URL"], preparo: "aparelhos", arquivos: ["test/aparelhos/aparelhos.pg.test.ts"] },
+  // OMNI-PDV-TROCAS-…-P1-002: troca atômica, regularização, a prazo/carnê, fechamento × devolução.
+  { db: "pdv_trocas_qa_ci", envs: ["TROCAS_PG_URL"], preparo: "datamodel", arquivos: ["lib/pdv/trocas/troca-service.pg.test.ts"] },
 ]
 
 const npx = process.platform === "win32" ? "npx.cmd" : "npx"

@@ -84,6 +84,48 @@ function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0
 }
 
+function ehObjeto(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v)
+}
+
+/**
+ * Snapshot `payload.resumoFechamento` como veio do banco → resumo utilizável, ou `null` quando
+ * não dá para montar os blocos (sem `porOrigem`/`porPagamento`). Snapshot parcial nunca derruba
+ * a tela nem a impressão: itens de origem inválidos são descartados e os campos do 003A só
+ * valem se os três vierem como objeto (senão, recalcula pelo caminho legado).
+ */
+export function normalizarResumoFechamento(raw: unknown): ResumoFechamentoPersistido | null {
+  if (!ehObjeto(raw)) return null
+  if (!Array.isArray(raw.porOrigem) || !ehObjeto(raw.porPagamento)) return null
+  const porOrigem = raw.porOrigem.filter(ehObjeto)
+  const temTotal = (v: unknown, campo: string) => ehObjeto(v) && typeof v[campo] === "number" && Number.isFinite(v[campo])
+  // Blocos 003A só valem com os totais numéricos; objeto vazio/malformado → recálculo legado (sem "R$ NaN").
+  const completo003A =
+    temTotal(raw.recebidoPorOrigem, "total") && temTotal(raw.recebidoPorForma, "total") && temTotal(raw.gavetaDinheiro, "esperado")
+  const r: Record<string, unknown> = { ...raw, porOrigem }
+  if (!completo003A) {
+    delete r.recebidoPorOrigem
+    delete r.recebidoPorForma
+    delete r.gavetaDinheiro
+  }
+  return r as ResumoFechamentoPersistido
+}
+
+/**
+ * Dinheiro esperado na gaveta gravado no fechamento original. `null` quando a sessão (antiga)
+ * não gravou esse valor — nunca usar `saldoFinal` (soma de todas as formas) no lugar.
+ */
+export function dinheiroEsperadoGravado(
+  payload: Record<string, unknown> | null | undefined,
+  resumo: ResumoFechamentoPersistido | null,
+): number | null {
+  const doPayload = payload?.saldoDinheiroEsperado
+  if (typeof doPayload === "number" && Number.isFinite(doPayload)) return doPayload
+  const doResumo = resumo?.saldoDinheiroEsperado
+  if (typeof doResumo === "number" && Number.isFinite(doResumo)) return doResumo
+  return null
+}
+
 function fmtBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
     Number.isFinite(v) ? v : 0,
@@ -198,7 +240,7 @@ export function montarBlocosFechamento(
     if (!(Math.abs(valor) > EPS) && !(qtd > 0)) continue
     linhasVendas.push({
       id: `vendas.${o.key}`,
-      rotulo: (ORIGEM_VENDA_LABEL as Record<string, string>)[o.key] ?? o.label,
+      rotulo: (ORIGEM_VENDA_LABEL as Record<string, string>)[o.key] ?? o.label ?? "Origem não identificada",
       valor,
       tipo: "item",
       qtd,
@@ -329,6 +371,14 @@ export function montarBlocosFechamento(
       id: "gaveta.estornos-dinheiro",
       rotulo: "Estornos em dinheiro",
       valor: gv.estornosDinheiro,
+      tipo: "deducao",
+    })
+  }
+  if ((gv.reembolsosDinheiro ?? 0) > EPS) {
+    linhasGaveta.push({
+      id: "gaveta.reembolsos-dinheiro",
+      rotulo: "Reembolsos de devolução em dinheiro",
+      valor: gv.reembolsosDinheiro ?? 0,
       tipo: "deducao",
     })
   }

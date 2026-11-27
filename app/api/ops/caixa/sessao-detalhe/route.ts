@@ -12,6 +12,7 @@ import {
 } from "@/lib/caixa/sessao-vendas-escopo"
 import { avaliarRecebiveisParaEstorno } from "@/lib/vendas/estorno-recebivel-guard"
 import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
+import { regularizacoesDaSessao, resumoDevolucoesCaixa } from "@/lib/pdv/trocas/troca-caixa"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -140,6 +141,8 @@ export async function GET(req: Request) {
             clienteNome: true,
             operador: true,
             at: true,
+            // Só para o resumo de caixa (forma do reembolso); removido da resposta (contém CPF).
+            payload: true,
             _count: { select: { itens: true } },
           },
           orderBy: { at: "asc" },
@@ -163,6 +166,8 @@ export async function GET(req: Request) {
       .reduce((s, o) => s + o.valor, 0)
     const qtdRecebimentosContas = sessao.operacoes.filter((o) => o.tipo === "recebimento_cr").length
     const totalDevolucoes = sessao.devolucoes.reduce((s, d) => s + d.valorTotal, 0)
+    // OMNI-PDV-TROCAS-…-P1-002: dinheiro que SAIU da gaveta por devolução nesta sessão.
+    const devolucoesCaixa = resumoDevolucoesCaixa(sessao.devolucoes)
 
     const fimPeriodo = sessao.fechadaEm ?? new Date()
 
@@ -193,6 +198,8 @@ export async function GET(req: Request) {
       select: vendaSelect,
       orderBy: { at: "asc" },
     })
+    // P1-003: operações regularizadas DEPOIS do fechamento (exibidas à parte do original).
+    const regularizacoes = regularizacoesDaSessao(vendasPorSessaoId, sessao.devolucoes)
     const { vendas: vendaRows, modo: escopoVendasModo } = escolherEscopoVendas(
       vendasPorSessaoId,
       vendasPorSessaoId.length > 0
@@ -288,7 +295,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      sessao,
+      sessao: { ...sessao, devolucoes: sessao.devolucoes.map(({ payload: _payload, ...d }) => d) },
+      regularizacoes,
       terminal,
       vendas,
       totais: {
@@ -297,6 +305,7 @@ export async function GET(req: Request) {
         recebimentosContas: Math.round(recebimentosContas * 100) / 100,
         qtdRecebimentosContas,
         totalDevolucoes,
+        devolucoesCaixa,
         totalVendas,
         totalVendasCount,
         totalVendasTerminal,

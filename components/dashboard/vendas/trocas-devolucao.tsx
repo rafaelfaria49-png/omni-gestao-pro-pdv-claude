@@ -1,14 +1,24 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+/**
+ * Troca e Devolução — fluxo COMPARTILHADO por PDV Classic, Assistência, Supermercado,
+ * Black e Histórico de Vendas (OMNI-PDV-TROCAS-DEVOLUCOES-INTEGRIDADE-HISTORICO-P1-001).
+ *
+ * Autoridade é o SERVIDOR:
+ *  - busca nas vendas persistidas (`/api/ops/trocas/buscar`), não no array do navegador;
+ *  - quantidade disponível calculada no servidor a partir das devoluções persistidas
+ *    (o `qtyReturned` local de um terminal não conta);
+ *  - troca/vale/reembolso/estoque numa única transação (`POST /api/ops/trocas`), com a
+ *    nova venda criada pelo motor canônico. Nada local é alterado antes do `ok` do
+ *    servidor; sem confirmação a operação fica "pendente" para verificar/reenviar com a
+ *    MESMA chave (nunca uma segunda devolução nem nova cobrança).
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Search, Package, Wallet, RotateCcw, Printer, Plus, Minus, X, ShoppingCart } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { AlertTriangle, History, Loader2, Minus, Package, Plus, Printer, RotateCcw, Search, ShoppingCart, Wallet, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { useConfigEmpresa, configPadrao } from "@/lib/config-empresa"
@@ -16,1466 +26,1430 @@ import { useOperationsStore, type SaleRecord, type InventoryItem } from "@/lib/o
 import { normalizeDocDigits } from "@/lib/cpf"
 import { buildValeTrocaEscPos } from "@/lib/escpos"
 import { sendEscPosViaProxy, downloadEscPosFile, openThermalHtmlPrint, escapeHtml } from "@/lib/thermal-print"
-import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
+import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import { planoTroca, valorDevolucaoLinha } from "@/lib/pdv/trocas/troca-disponibilidade"
+import { normalizarTermoBusca } from "@/lib/pdv/trocas/troca-busca-termo"
 import {
-  PENDING_SALE_DESCRIPTION,
-  PENDING_SALE_TITLE,
-  findUnresolvedSaleLines,
-  unresolvedSaleLinesDescription,
-} from "@/lib/pdv-finalize-integrity"
+  formatInstantBusinessPtBr,
+  parseBusinessDateTimeLocal,
+  selectCoveringCashSessionId,
+} from "@/lib/pdv/trocas/troca-regularizacao-tempo"
+import {
+  buscarVendasTroca,
+  carregarVendaTroca,
+  enviarTroca,
+  lerTrocasPendentes,
+  novoOperationId,
+  registrarTrocaPendente,
+  removerTrocaPendente,
+  type BuscaTrocaResultado,
+  type ResultadoTroca,
+  type TrocaPendente,
+  type TrocaRequestBody,
+  type VendaTrocaView,
+} from "@/lib/pdv/trocas/troca-client"
 
-/** Modos de operação expostos na UI. `troca`/`vale_credito` geram crédito local; `devolucao`/`somente_estoque` não. */
-type DevMode = "devolucao" | "troca" | "vale_credito" | "somente_estoque"
+type DevMode = "troca" | "vale_credito" | "reembolso" | "somente_estoque"
+type FormaDif = "dinheiro" | "pix" | "debito" | "credito"
+type LinhaView = VendaTrocaView["linhas"][number]
+type TrocaCartLine = { produtoId: string; inventoryId: string; name: string; unitPrice: number; quantity: number }
+
+const PERIODOS: Array<{ dias: number; label: string }> = [
+  { dias: 7, label: "7 dias" },
+  { dias: 30, label: "30 dias" },
+  { dias: 90, label: "90 dias" },
+  { dias: 365, label: "1 ano" },
+  { dias: 0, label: "Tudo" },
+]
+
+const MODOS: Array<{ id: DevMode; label: string; icon: typeof RotateCcw; ajuda: string }> = [
+  { id: "troca", label: "Troca imediata", icon: RotateCcw, ajuda: "Devolve e leva outro produto agora." },
+  { id: "vale_credito", label: "Vale-troca", icon: Wallet, ajuda: "Gera crédito no CPF/CNPJ do cliente." },
+  { id: "reembolso", label: "Reembolso", icon: RotateCcw, ajuda: "Devolve o dinheiro ao cliente." },
+  { id: "somente_estoque", label: "Apenas estoque", icon: Package, ajuda: "Só retorna o produto ao estoque." },
+]
+
+const SITUACAO_LABEL: Record<LinhaView["situacaoCadastro"], string | null> = {
+  cadastrado: null,
+  inativo: "Produto inativo no cadastro — volta ao estoque do mesmo produto.",
+  removido: "Produto removido do cadastro — não volta ao estoque (devolução só financeira).",
+  avulso: "Item avulso, sem vínculo de estoque — devolução só financeira.",
+  servico: "Serviço — não retorna ao estoque físico.",
+  aparelho_imei: "Aparelho por IMEI — devolução ainda não integrada.",
+  venda_por_peso: "Vendido por peso (KG) — troca/devolução fracionada ainda não suportada aqui.",
+}
+
+const FORMA_LABEL: Record<string, string> = {
+  dinheiro: "Dinheiro",
+  pix: "Pix",
+  debito: "Débito",
+  credito: "Crédito",
+  estorno_cartao: "Estorno no cartão",
+}
+
+function formatBrl(n: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
+}
+
+/** "129,90" / "129.90" / "1.299,90" → número. Vazio ou inválido → NaN. */
+function parseValor(raw: string): number {
+  const t = raw.trim().replace(/\s|R\$/g, "")
+  if (!t) return Number.NaN
+  // "1.299,90" / "129,90" (vírgula decimal); "1.299" sem vírgula = milhar (pt-BR); "129.90" = decimal.
+  const norm = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "") : t
+  const n = Number(norm)
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : Number.NaN
+}
+
+function dataHora(iso: string) {
+  return formatInstantBusinessPtBr(iso)
+}
+
+function codigoDaLinha(l: LinhaView): string {
+  return l.snapshotBarcode || l.snapshotSku || l.codigoNaVenda || l.cadastroAtual?.barcode || l.cadastroAtual?.sku || ""
+}
 
 export function TrocasDevolucao({
   initialSaleId,
-  initialSale,
   onRegistered,
 }: {
-  /** Pré-carrega uma venda pelo ID (ex.: abertura a partir do Histórico de Vendas). */
+  /** Pré-carrega uma venda pelo número (ex.: abertura a partir do Histórico de Vendas). */
   initialSaleId?: string
-  /** Snapshot da venda (ex.: de `/api/ops/vendas-list`) quando ainda não está no localStorage. */
+  /** Mantido por compatibilidade com os chamadores; a venda é sempre relida do servidor. */
   initialSale?: SaleRecord
-  /** Disparado após o servidor confirmar a devolução — usado para refresh externo (histórico). */
+  /** Disparado após o servidor confirmar a operação (ao fechar o comprovante). */
   onRegistered?: () => void
 } = {}) {
   const { config } = useConfigEmpresa()
   const { toast } = useToast()
-  const { sales, registrarDevolucao, inventory, finalizeSaleTransaction, caixa } = useOperationsStore()
+  const { inventory, devolucoes, sales, refreshSalesFromServer, refreshCatalogFromServer, reenviarDevolucaoLocal, arquivarDevolucaoLocal } =
+    useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
   const { sessaoId } = useCaixa()
   const searchParams = useSearchParams()
+  const nomeLoja = (config.empresa.nomeFantasia || "").trim() || configPadrao.empresa.nomeFantasia
 
+  // ── Busca ───────────────────────────────────────────────────────────────────
   const [busca, setBusca] = useState("")
-  const [showSearch, setShowSearch] = useState(!initialSaleId)
-  const [sale, setSale] = useState<SaleRecord | null>(null)
-  const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({})
-  const [mode, setMode] = useState<DevMode>("vale_credito")
-  const [motivo, setMotivo] = useState("")
-  const [cpfExtra, setCpfExtra] = useState("")
-  const [nomeExtra, setNomeExtra] = useState("")
-  const [lastDevolucao, setLastDevolucao] = useState<{
-    id: string
-    credit: number
-    nome: string
-    cpf: string
-  } | null>(null)
-  const [candidateSales, setCandidateSales] = useState<SaleRecord[] | null>(null)
-  const [candidateLabel, setCandidateLabel] = useState("")
+  const [dias, setDias] = useState(90)
+  const [resultado, setResultado] = useState<BuscaTrocaResultado | null>(null)
+  const [buscando, setBuscando] = useState(false)
+  const [erroBusca, setErroBusca] = useState("")
+  const buscaRef = useRef<HTMLInputElement>(null)
+  const listaRef = useRef<HTMLDivElement>(null)
 
-  // ── Troca imediata (modo `troca`): mini-carrinho de novos itens ────────────
-  type TrocaCartLine = { inventoryId: string; name: string; unitPrice: number; quantity: number }
+  // ── Venda selecionada (sempre do servidor) ─────────────────────────────────
+  const [venda, setVenda] = useState<VendaTrocaView | null>(null)
+  const [carregandoVenda, setCarregandoVenda] = useState(false)
+  const [qtyByLine, setQtyByLine] = useState<Record<number, number>>({})
+  const [mode, setMode] = useState<DevMode>("troca")
+  const [motivo, setMotivo] = useState("")
+  const [cpf, setCpf] = useState("")
+  const [nome, setNome] = useState("")
+  const [mostrarHistorico, setMostrarHistorico] = useState(false)
+
+  // ── Troca imediata ──────────────────────────────────────────────────────────
   const [trocaCart, setTrocaCart] = useState<TrocaCartLine[]>([])
   const [trocaSearch, setTrocaSearch] = useState("")
-  /** Forma de pagamento da DIFERENÇA (quando novo > devolvido). */
-  const [diffPayMethod, setDiffPayMethod] = useState<"dinheiro" | "pix" | "debito" | "credito">("dinheiro")
-  /** Destino quando devolvido > novo: gerar vale com saldo restante, ou devolver dinheiro. */
-  const [excessHandling, setExcessHandling] = useState<"vale_credito" | "dinheiro">("vale_credito")
+  const [diffPayMethod, setDiffPayMethod] = useState<FormaDif>("dinheiro")
+  const [excessHandling, setExcessHandling] = useState<"vale" | "dinheiro" | null>(null)
+  const [formaReembolso, setFormaReembolso] = useState<"dinheiro" | "pix" | "estorno_cartao" | null>(null)
 
-  // ── Cupom de troca/devolução (abre automaticamente após confirmar) ────────
-  type CupomTrocaData = {
-    tipo: "devolucao" | "vale_credito" | "troca" | "somente_estoque"
-    devolucaoId: string
-    vendaOrigemId: string
-    novaVendaId?: string | null
-    clienteNome: string
-    clienteCpf: string
-    operador: string
-    itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
-    itensNovos: { nome: string; quantidade: number; valorTotal: number }[]
-    valorDevolvido: number
-    totalNovaCompra: number
-    creditoGerado: number
-    creditoUtilizado: number
-    saldoFinal: number
-    diferencaPaga: number
-    diferencaForma: string | null
-    motivo: string
-    at: string
-  }
-  const [cupomData, setCupomData] = useState<CupomTrocaData | null>(null)
-  const [cupomOpen, setCupomOpen] = useState(false)
+  // ── Envio ───────────────────────────────────────────────────────────────────
+  const [enviando, setEnviando] = useState(false)
+  const [erroEnvio, setErroEnvio] = useState("")
+  const [pendentes, setPendentes] = useState<TrocaPendente[]>([])
+  const [cupom, setCupom] = useState<ResultadoTroca | null>(null)
+  /**
+   * Abertura do comprovante SEPARADA dos dados: o diálogo aninhado fecha pelo Radix (camada,
+   * foco e Escape devolvidos ao diálogo de troca) e só depois os dados são limpos. Desmontar um
+   * Dialog aberto deixava a pilha de camadas inconsistente: Escape e atalhos do PDV (CTRL)
+   * paravam de responder depois do comprovante (E2E P1-003).
+   */
+  const [cupomAberto, setCupomAberto] = useState(false)
 
-  // Prefill via prop `initialSaleId` (Histórico) ou query `?sale=` em /dashboard/vendas-arquivo-geral
-  useEffect(() => {
-    const id = (initialSaleId || searchParams.get("sale") || "").trim()
-    if (!id) return
-    setBusca(id)
-    setShowSearch(false)
-    const upper = id.toUpperCase()
-    const idNorm = id.replace(/\s/g, "").toUpperCase()
+  // ── Regularização de troca já feita (P1-002) ────────────────────────────────
+  const [regularizar, setRegularizar] = useState(false)
+  const [regData, setRegData] = useState("")
+  const [regSessoes, setRegSessoes] = useState<Array<{ id: string; abertaEm: string; fechadaEm: string | null; operador: string }>>([])
+  const [regSessaoId, setRegSessaoId] = useState("")
+  const [regJustificativa, setRegJustificativa] = useState("")
+  const [regErro, setRegErro] = useState("")
+  const [regHorarioAproximado, setRegHorarioAproximado] = useState(false)
+  const [regTotalConfirmado, setRegTotalConfirmado] = useState("")
+  const [regDiferencaRecebida, setRegDiferencaRecebida] = useState("")
+  /** Efeitos conferidos (simulação no servidor) + a assinatura do pedido simulado. */
+  const [simulacao, setSimulacao] = useState<{ chave: string; resultado: ResultadoTroca } | null>(null)
+  const [simulando, setSimulando] = useState(false)
+  // ── Item com defeito: não volta ao estoque vendável (P1-003) ─────────────────
+  const [avariaByLine, setAvariaByLine] = useState<Record<number, boolean>>({})
 
-    if (initialSale && (initialSale.id.toUpperCase() === upper || initialSale.id.replace(/\s/g, "").toUpperCase() === idNorm)) {
-      aplicarVenda(initialSale)
-      return
-    }
+  // ── Devoluções antigas só deste terminal (P1-002) ───────────────────────────
+  const [acaoLocal, setAcaoLocal] = useState<{ id: string; tipo: "arquivar" } | null>(null)
+  const [motivoArquivo, setMotivoArquivo] = useState("")
+  const [msgLocal, setMsgLocal] = useState<Record<string, string>>({})
+  const [processandoLocal, setProcessandoLocal] = useState("")
 
-    const s = sales.find(
-      (x) =>
-        x.id.toUpperCase() === upper ||
-        x.id.replace(/\s/g, "").toUpperCase() === idNorm
-    )
-    if (s) {
-      aplicarVenda(s)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- aplicarVenda estável o suficiente para prefill
-  }, [initialSaleId, initialSale, searchParams, sales])
+  const lojaId = lojaAtivaId ?? ""
 
   useEffect(() => {
-    if (!sale) return
-    const fresh = sales.find((x) => x.id === sale.id)
-    if (!fresh) return
-    if (JSON.stringify(fresh.lines) !== JSON.stringify(sale.lines)) setSale(fresh)
-  }, [sales, sale])
+    if (lojaId) setPendentes(lerTrocasPendentes(lojaId))
+  }, [lojaId])
 
-  const nomeLoja =
-    (config.empresa.nomeFantasia || "").trim() || configPadrao.empresa.nomeFantasia
+  const resetFormulario = useCallback((v: VendaTrocaView | null) => {
+    setQtyByLine({})
+    setTrocaCart([])
+    setTrocaSearch("")
+    setMotivo("")
+    setExcessHandling(null)
+    setFormaReembolso(null)
+    setErroEnvio("")
+    setRegularizar(false)
+    setRegData("")
+    setRegSessaoId("")
+    setRegJustificativa("")
+    setRegHorarioAproximado(false)
+    setRegTotalConfirmado("")
+    setRegDiferencaRecebida("")
+    setSimulacao(null)
+    setAvariaByLine({})
+    setAcaoLocal(null)
+    setMotivoArquivo("")
+    setCpf("")
+    setNome(v?.clienteNome ?? "")
+    setMostrarHistorico(Boolean(v && v.linhas.some((l) => l.disponivel === 0 && l.devolvido > 0)))
+  }, [])
 
-  const aplicarVenda = (s: SaleRecord) => {
-    setSale(s)
-    setCandidateSales(null)
-    setCandidateLabel("")
-    setShowSearch(false)
-    const q: Record<string, string> = {}
-    for (const l of s.lines) {
-      const max = l.quantity - (l.qtyReturned ?? 0)
-      q[l.inventoryId] = max > 0 ? "0" : "0"
-    }
-    setQtyByLine(q)
-    setCpfExtra(s.customerCpf ?? "")
-    setNomeExtra(s.customerName ?? "")
-    setLastDevolucao(null)
-    toast({ title: "Venda localizada", description: s.id })
-  }
-
-  const encontrarVenda = () => {
-    const raw = busca.trim()
-    if (!raw) {
-      toast({ title: "Informe a busca", description: "ID da venda, nome do cliente ou código do produto.", variant: "destructive" })
-      return
-    }
-    setCandidateSales(null)
-    setCandidateLabel("")
-
-    const idUpper = raw.toUpperCase()
-    const idNorm = raw.replace(/\s/g, "").toUpperCase()
-    const qLower = raw.toLowerCase()
-    const digitsOnly = raw.replace(/\D/g, "")
-
-    const byId = sales.find(
-      (x) =>
-        x.id.toUpperCase() === idUpper ||
-        x.id.replace(/\s/g, "").toUpperCase() === idNorm
-    )
-    if (byId) {
-      aplicarVenda(byId)
-      return
-    }
-
-    const byName = sales.filter((s) => (s.customerName || "").toLowerCase().includes(qLower))
-    if (byName.length === 1) {
-      aplicarVenda(byName[0]!)
-      return
-    }
-    if (byName.length > 1) {
-      setCandidateSales(byName.slice(0, 8))
-      setCandidateLabel(`Vendas com cliente contendo “${raw}”`)
-      toast({ title: "Várias vendas", description: "Escolha o cupom correto na lista abaixo." })
-      return
-    }
-
-    const invMatch =
-      inventory.find(
-        (i) =>
-          i.id === raw ||
-          (digitsOnly.length >= 8 && i.id.replace(/\D/g, "") === digitsOnly) ||
-          i.name.toLowerCase().includes(qLower)
-      ) ?? null
-
-    if (invMatch) {
-      const last5 = sales
-        .filter((s) => s.lines.some((l) => l.inventoryId === invMatch.id))
-        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-        .slice(0, 5)
-      if (last5.length === 0) {
-        setSale(null)
-        toast({
-          title: "Nenhuma venda",
-          description: `O produto “${invMatch.name}” ainda não consta em vendas registradas.`,
-          variant: "destructive",
-        })
-        return
+  const abrirVenda = useCallback(
+    async (pedidoId: string) => {
+      if (!lojaId) return
+      setCarregandoVenda(true)
+      try {
+        const v = await carregarVendaTroca(lojaId, pedidoId)
+        if (!v) {
+          toast({ title: "Venda não encontrada", description: `${pedidoId} não existe nesta loja.`, variant: "destructive" })
+          return
+        }
+        setVenda(v)
+        resetFormulario(v)
+      } catch (e) {
+        toast({ title: "Falha ao carregar a venda", description: e instanceof Error ? e.message : String(e), variant: "destructive" })
+      } finally {
+        setCarregandoVenda(false)
       }
-      if (last5.length === 1) {
-        aplicarVenda(last5[0]!)
-        return
-      }
-      setCandidateSales(last5)
-      setCandidateLabel(`Últimas vendas com “${invMatch.name}” (origem da troca)`)
-      toast({ title: "Selecione a venda", description: "Escolha de qual cupom sairá a devolução." })
-      return
-    }
-
-    setSale(null)
-    setLastDevolucao(null)
-    toast({
-      title: "Não encontrado",
-      description: "Nenhuma venda, cliente ou produto correspondente.",
-      variant: "destructive",
-    })
-  }
-
-  const linhasComMax = useMemo(() => {
-    if (!sale) return []
-    return sale.lines.map((l) => ({
-      ...l,
-      maxReturn: l.quantity - (l.qtyReturned ?? 0),
-    }))
-  }, [sale])
-
-  // ── Cálculos da troca imediata ─────────────────────────────────────────────
-  /** Valor devolvido baseado nas quantidades atuais × preço unitário da venda original. */
-  const valorDevolvido = useMemo(() => {
-    if (!sale) return 0
-    let total = 0
-    for (const l of linhasComMax) {
-      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
-      if (q > 0 && l.quantity > 0) total += (l.lineTotal / l.quantity) * q
-    }
-    return Math.round(total * 100) / 100
-  }, [sale, linhasComMax, qtyByLine])
-
-  const totalNovaCompra = useMemo(
-    () => Math.round(trocaCart.reduce((s, l) => s + l.unitPrice * l.quantity, 0) * 100) / 100,
-    [trocaCart],
+    },
+    [lojaId, resetFormulario, toast],
   )
 
-  const diferenca = Math.round((totalNovaCompra - valorDevolvido) * 100) / 100
-  /** Quanto cabe abater do vale (= mínimo entre devolvido e nova compra). */
-  const valePassivelAbatimento = Math.round(Math.min(valorDevolvido, totalNovaCompra) * 100) / 100
-  const creditoRestante = Math.round(Math.max(0, valorDevolvido - totalNovaCompra) * 100) / 100
+  // Prefill: Histórico (`initialSaleId`) ou `?sale=` em /dashboard/vendas-arquivo-geral.
+  useEffect(() => {
+    const id = (initialSaleId || searchParams.get("sale") || "").trim()
+    if (id && lojaId) void abrirVenda(id)
+  }, [initialSaleId, searchParams, lojaId, abrirVenda])
 
-  /** Buscar produtos para a aba "Troca imediata" — limitado a 8 sugestões. */
+  const executarBusca = useCallback(
+    async (skip = 0) => {
+      const q = busca.trim()
+      if (q.length < 2) {
+        setErroBusca("Digite ao menos 2 caracteres ou bipe o código do produto.")
+        return
+      }
+      if (!lojaId) return
+      setBuscando(true)
+      setErroBusca("")
+      try {
+        const r = await buscarVendasTroca(lojaId, q, { dias, skip })
+        setResultado((prev) => (skip > 0 && prev ? { ...r, vendas: [...prev.vendas, ...r.vendas] } : r))
+        if (skip === 0 && r.vendas.length === 1) void abrirVenda(r.vendas[0]!.pedidoId)
+        if (skip === 0 && r.vendas.length === 0) {
+          setErroBusca(
+            dias > 0
+              ? `Nenhuma venda nos últimos ${dias} dias com “${q}”. Amplie o período ou busque pelo nome do produto/cliente.`
+              : `Nenhuma venda com “${q}”.`,
+          )
+        }
+      } catch (e) {
+        setErroBusca(e instanceof Error ? e.message : String(e))
+      } finally {
+        setBuscando(false)
+      }
+    },
+    [busca, dias, lojaId, abrirVenda],
+  )
+
+  const focarCandidato = (idx: number) => {
+    const els = listaRef.current?.querySelectorAll<HTMLButtonElement>("[data-candidato]")
+    if (!els || els.length === 0) return
+    els[Math.max(0, Math.min(els.length - 1, idx))]?.focus()
+  }
+
+  // ── Cálculos (mesma regra pura do servidor; o servidor recalcula e é o que vale) ──
+  // Mesmo rateio do servidor (já vem pronto em `valorLiquido` por linha).
+  const selecionadas = useMemo(
+    () => (venda ? venda.linhas.filter((l) => (qtyByLine[l.lineIndex] ?? 0) > 0) : []),
+    [venda, qtyByLine],
+  )
+  const valorDevolvido = useMemo(
+    () =>
+      Math.round(
+        selecionadas.reduce((s, l) => s + valorDevolucaoLinha(l, l.valorLiquido, l.devolvido, qtyByLine[l.lineIndex] ?? 0), 0) * 100,
+      ) / 100,
+    [selecionadas, qtyByLine],
+  )
+  const totalNovaCompra = useMemo(() => Math.round(trocaCart.reduce((s, l) => s + l.unitPrice * l.quantity, 0) * 100) / 100, [trocaCart])
+  const plano = useMemo(() => planoTroca(valorDevolvido, totalNovaCompra), [valorDevolvido, totalNovaCompra])
+
+  const pendentesDaVenda = useMemo(() => (venda ? pendentes.filter((p) => p.body.pedidoIdOrigem === venda.pedidoId) : []), [pendentes, venda])
+  const devolucoesLocaisNaoConfirmadas = useMemo(
+    // Inclui a devolução que o terminal dá como sincronizada mas que NÃO existe no servidor
+    // (o servidor antigo respondia "ok" a um número DEV-AAAA-NNNN já usado por outra venda).
+    () =>
+      venda
+        ? devolucoes.filter(
+            (d) =>
+              d.saleId === venda.pedidoId &&
+              !d.arquivada &&
+              (d.syncPending === true || !venda.devolucoes.some((s) => s.localId === d.id)),
+          )
+        : [],
+    [devolucoes, venda],
+  )
+
   const trocaSearchResults = useMemo<InventoryItem[]>(() => {
-    const q = trocaSearch.trim().toLowerCase()
-    if (!q) return []
-    const digits = q.replace(/\D/g, "")
+    const raw = trocaSearch.trim()
+    if (!raw) return []
+    const q = normalizarTermoBusca(raw)
     return inventory
       .filter((i) => {
-        if (i.name.toLowerCase().includes(q)) return true
-        if (i.id.toLowerCase() === q) return true
-        if (i.sku && i.sku.toLowerCase() === q) return true
-        if (i.barcode && i.barcode === digits) return true
-        if (i.codigo && i.codigo.toLowerCase() === q) return true
-        return false
+        if (normalizarTermoBusca(i.name).includes(q)) return true
+        return [i.id, i.dbId, i.sku, i.codigo, i.barcode, i.codigoBarras].some((c) => typeof c === "string" && c.trim() === raw)
       })
       .slice(0, 8)
   }, [trocaSearch, inventory])
 
   const addTrocaItem = (item: InventoryItem) => {
     const isService = item.category === "Servicos"
-    if (!isService && item.stock <= 0) {
-      toast({ title: "Sem estoque", description: `${item.name} está sem estoque.`, variant: "destructive" })
-      return
-    }
-    const existing = trocaCart.find((l) => l.inventoryId === item.id)
-    const used = existing?.quantity ?? 0
+    const used = trocaCart.find((l) => l.inventoryId === item.id)?.quantity ?? 0
     if (!isService && used + 1 > item.stock) {
-      toast({ title: "Estoque insuficiente", description: `${item.name}: máx ${item.stock}.`, variant: "destructive" })
+      toast({ title: "Estoque insuficiente", description: `${item.name}: disponível ${item.stock}.`, variant: "destructive" })
       return
     }
     setTrocaCart((prev) => {
       const i = prev.findIndex((l) => l.inventoryId === item.id)
-      if (i >= 0) {
-        const next = [...prev]
-        next[i] = { ...next[i], quantity: next[i].quantity + 1 }
-        return next
-      }
-      return [...prev, { inventoryId: item.id, name: item.name, unitPrice: item.price, quantity: 1 }]
+      if (i >= 0) return prev.map((l, j) => (j === i ? { ...l, quantity: l.quantity + 1 } : l))
+      return [...prev, { produtoId: item.dbId || item.id, inventoryId: item.id, name: item.name, unitPrice: item.price, quantity: 1 }]
     })
     setTrocaSearch("")
   }
 
-  const decTrocaItem = (inventoryId: string) => {
-    setTrocaCart((prev) =>
-      prev
-        .map((l) => (l.inventoryId === inventoryId ? { ...l, quantity: l.quantity - 1 } : l))
-        .filter((l) => l.quantity > 0),
-    )
-  }
+  const setQty = (l: LinhaView, q: number) => setQtyByLine((prev) => ({ ...prev, [l.lineIndex]: Math.max(0, Math.min(l.disponivel, q)) }))
 
-  const incTrocaItem = (inventoryId: string) => {
-    const item = inventory.find((i) => i.id === inventoryId)
-    if (!item) return
-    const isService = item.category === "Servicos"
-    const existing = trocaCart.find((l) => l.inventoryId === inventoryId)
-    const used = existing?.quantity ?? 0
-    if (!isService && used + 1 > item.stock) {
-      toast({ title: "Estoque insuficiente", description: `${item.name}: máx ${item.stock}.`, variant: "destructive" })
-      return
+  // ── Validação (antes de enviar; o servidor valida de novo) ───────────────────
+  const parsedRegData = useMemo(() => (regData ? parseBusinessDateTimeLocal(regData) : null), [regData])
+  const docDigits = normalizeDocDigits(cpf)
+  const exigeTitular = mode === "vale_credito" || (mode === "troca" && plano.excedente > 0 && excessHandling === "vale")
+  const motivoBloqueio = (() => {
+    if (!venda) return "Selecione a venda."
+    // Uma operação sem resposta pode ter sido gravada: nova chave aqui criaria uma 2ª troca.
+    if (pendentesDaVenda.length > 0) return "Verifique a operação enviada sem confirmação antes de registrar outra."
+    if (selecionadas.length === 0) return "Selecione a quantidade a devolver."
+    if (mode === "troca" && trocaCart.length === 0) return "Adicione o produto que o cliente vai levar."
+    if (mode === "troca" && plano.excedente > 0 && !excessHandling) return "Escolha o destino da sobra."
+    if (mode === "reembolso" && !formaReembolso) return "Escolha a forma do reembolso."
+    if (mode === "somente_estoque" && !selecionadas.some((l) => l.destino === "retorna_estoque"))
+      return "Os itens selecionados não têm vínculo com o estoque."
+    if (exigeTitular && (!docDigits || !nome.trim())) return "Informe CPF/CNPJ e nome do titular do vale."
+    if (regularizar && (!parsedRegData?.ok || !regSessaoId || regJustificativa.trim().length < 10))
+      return "Na regularização, informe a data/hora real, a sessão de caixa da época e a justificativa."
+    if (regularizar && mode === "troca" && (!(parseValor(regTotalConfirmado) > 0) || regDiferencaRecebida.trim() === ""))
+      return "Confirme o valor cobrado pela nova compra na ocasião e a diferença efetivamente recebida."
+    if (selecionadas.some((l) => avariaByLine[l.lineIndex]) && motivo.trim().length < 5)
+      return "Descreva no motivo o defeito do item que não volta ao estoque."
+    if (docDigits && docDigits.length !== 11 && docDigits.length !== 14) return "CPF/CNPJ deve ter 11 ou 14 dígitos."
+    return ""
+  })()
+
+  const concluir = useCallback(
+    (r: ResultadoTroca, replayed: boolean) => {
+      removerTrocaPendente(lojaId, r.operationId)
+      setPendentes(lerTrocasPendentes(lojaId))
+      setCupom(r)
+      setCupomAberto(true)
+      void refreshSalesFromServer()
+      void refreshCatalogFromServer()
+      if (venda) void abrirVenda(venda.pedidoId)
+      toast({
+        title: replayed ? "Operação já estava registrada" : r.modo === "troca" ? "Troca concluída" : "Devolução registrada",
+        description:
+          r.modo === "troca"
+            ? r.diferenca.valor > 0
+              ? `Nova venda ${r.novaVenda?.pedidoId} · diferença ${formatBrl(r.diferenca.valor)} (${FORMA_LABEL[r.diferenca.forma ?? ""] ?? ""}).`
+              : r.excedente.valor > 0
+                ? r.excedente.destino === "dinheiro"
+                  ? `Devolva ${formatBrl(r.excedente.valor)} em dinheiro ao cliente.`
+                  : `Vale de ${formatBrl(r.excedente.valor)} gerado.`
+                : `Nova venda ${r.novaVenda?.pedidoId} · sem diferença.`
+            : r.valeEmitido > 0
+              ? `Vale de ${formatBrl(r.valeEmitido)} para ${r.clienteNome}.`
+              : r.reembolso
+                ? `Reembolso ${formatBrl(r.reembolso.valor)} (${FORMA_LABEL[r.reembolso.forma]}).`
+                : "Itens retornaram ao estoque.",
+      })
+    },
+    [lojaId, refreshSalesFromServer, refreshCatalogFromServer, venda, abrirVenda, toast],
+  )
+
+  const enviar = useCallback(
+    async (body: TrocaRequestBody) => {
+      if (!lojaId || enviando) return
+      setEnviando(true)
+      setErroEnvio("")
+      registrarTrocaPendente(lojaId, body)
+      setPendentes(lerTrocasPendentes(lojaId))
+      try {
+        const r = await enviarTroca(lojaId, body)
+        if (r.status === "confirmada") {
+          concluir(r.resultado, r.replayed)
+          return
+        }
+        if (r.status === "recusada") {
+          // Recusa conclusiva: nada foi gravado — não há o que reenviar com esta chave.
+          removerTrocaPendente(lojaId, body.operationId)
+          setPendentes(lerTrocasPendentes(lojaId))
+          setErroEnvio(r.message)
+          if (r.code === "DEVOLUCAO_ACIMA_DO_DISPONIVEL" && venda) void abrirVenda(venda.pedidoId)
+          return
+        }
+        setErroEnvio(`${r.message} A operação pode ter sido gravada: use “Verificar / reenviar” — nada será cobrado ou devolvido duas vezes.`)
+      } finally {
+        setEnviando(false)
+      }
+    },
+    [lojaId, enviando, concluir, venda, abrirVenda],
+  )
+
+  /** Monta o pedido (mesmo corpo para simular e confirmar). */
+  const montarBody = (operationId: string): TrocaRequestBody | null => {
+    if (!venda) return null
+    return {
+      operationId,
+      pedidoIdOrigem: venda.pedidoId,
+      modo: mode,
+      linhas: selecionadas.map((l) => ({
+        lineIndex: l.lineIndex,
+        quantidade: qtyByLine[l.lineIndex] ?? 0,
+        ...(avariaByLine[l.lineIndex] ? { naoRevendavel: true } : {}),
+      })),
+      clienteDoc: docDigits || undefined,
+      clienteNome: nome.trim() || undefined,
+      motivo: motivo.trim() || undefined,
+      sessaoId: sessaoId ?? null,
+      terminalId: lojaId ? readSelectedTerminal(lojaId)?.id ?? null : null,
+      ...(mode === "troca"
+        ? {
+            novosItens: trocaCart.map((l) => ({ produtoId: l.produtoId, quantidade: l.quantity })),
+            formaDiferenca: diffPayMethod,
+            ...(plano.excedente > 0 && excessHandling ? { destinoExcedente: excessHandling } : {}),
+          }
+        : {}),
+      ...(mode === "reembolso" && formaReembolso ? { formaReembolso } : {}),
+      ...(regularizar && parsedRegData?.ok && regSessaoId
+        ? {
+            regularizacao: {
+              sessaoId: regSessaoId,
+              dataEconomica: parsedRegData.iso,
+              justificativa: regJustificativa.trim(),
+              horarioAproximado: regHorarioAproximado,
+              ...(mode === "troca"
+                ? { valoresConfirmados: { totalNovaCompra: parseValor(regTotalConfirmado), diferencaRecebida: parseValor(regDiferencaRecebida) } }
+                : {}),
+            },
+          }
+        : {}),
     }
-    setTrocaCart((prev) =>
-      prev.map((l) => (l.inventoryId === inventoryId ? { ...l, quantity: l.quantity + 1 } : l)),
-    )
   }
 
-  const removeTrocaItem = (inventoryId: string) => {
-    setTrocaCart((prev) => prev.filter((l) => l.inventoryId !== inventoryId))
+  /** Assinatura do pedido sem a chave da operação: a simulação vale só para ESTE pedido. */
+  const chaveSimulacao = (() => {
+    const b = montarBody("sim")
+    return b ? JSON.stringify({ ...b, operationId: undefined, terminalId: undefined }) : ""
+  })()
+  const simulacaoValida = simulacao !== null && simulacao.chave === chaveSimulacao
+
+  const conferirEfeitos = async () => {
+    const body = montarBody(novoOperationId())
+    if (!body || !lojaId || motivoBloqueio) return
+    setSimulando(true)
+    setErroEnvio("")
+    const r = await enviarTroca(lojaId, { ...body, simular: true })
+    setSimulando(false)
+    if (r.status === "confirmada") setSimulacao({ chave: chaveSimulacao, resultado: r.resultado })
+    else {
+      setSimulacao(null)
+      setErroEnvio(r.status === "recusada" ? r.message : `${r.message} Nada foi gravado.`)
+    }
   }
 
-  // Limpa o mini-carrinho ao trocar de venda ou mudar de modo (sai de "troca")
+  const finalizar = () => {
+    if (!venda || motivoBloqueio) return
+    // Regularização só depois de conferir os efeitos simulados para EXATAMENTE este pedido.
+    if (regularizar && !simulacaoValida) return
+    const body = montarBody(novoOperationId())
+    if (body) void enviar(body)
+  }
+
+  // ── Regularização: sessões fechadas do dia escolhido (fuso comercial da loja) ─
   useEffect(() => {
-    if (mode !== "troca") setTrocaCart([])
-  }, [mode, sale?.id])
-
-  /**
-   * Finalização da TROCA IMEDIATA (mode === "troca" + mini-carrinho preenchido):
-   * 1) Registra devolução normalmente (estoque dos itens devolvidos sobe, vale emitido = valorDevolvido);
-   * 2) Cria nova venda via `finalizeSaleTransaction`, abatendo o vale recém-emitido (`creditoVale`) e
-   *    cobrando apenas a diferença na forma escolhida (quando positiva);
-   * 3) Se devolvido > nova compra e cliente escolheu "dinheiro", o saldo remanescente do vale é
-   *    devolvido em dinheiro (debita do `customerCredits` local).
-   */
-  const handleFinalizarTroca = async () => {
-    if (!sale) return
-    if (!caixa.isOpen) {
-      toast({ title: "Caixa fechado", description: "Abra o caixa antes de finalizar a troca.", variant: "destructive" })
+    if (!regularizar || !regData || !lojaId) {
+      setRegSessoes([])
+      setRegSessaoId("")
+      setRegErro("")
       return
     }
-    const cpf = normalizeDocDigits(sale.customerCpf || "") || normalizeDocDigits(cpfExtra)
-    const nome = (sale.customerName || nomeExtra).trim()
-    if (!cpf) {
-      toast({ title: "CPF obrigatório", description: "Informe o CPF/CNPJ do cliente para a troca.", variant: "destructive" })
+    if (!parsedRegData || !parsedRegData.ok) {
+      setRegSessoes([])
+      setRegSessaoId("")
+      setRegErro("Data/hora inválida no fuso comercial da loja.")
       return
     }
-    if (!nome) {
-      toast({ title: "Nome obrigatório", description: "Informe o nome do cliente.", variant: "destructive" })
-      return
-    }
-
-    // Linhas devolvidas (mesma validação do fluxo padrão)
-    const lines: { inventoryId: string; quantity: number }[] = []
-    for (const l of linhasComMax) {
-      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
-      if (q > 0) {
-        if (q > l.maxReturn) {
-          toast({ title: "Quantidade inválida", description: `${l.name}: máximo ${l.maxReturn}`, variant: "destructive" })
-          return
-        }
-        lines.push({ inventoryId: l.inventoryId, quantity: q })
-      }
-    }
-    if (lines.length === 0) {
-      toast({ title: "Nada a devolver", description: "Informe quantidades do item a trocar.", variant: "destructive" })
-      return
-    }
-    if (trocaCart.length === 0) {
-      toast({ title: "Sem itens novos", description: "Adicione ao menos um produto/serviço à nova compra.", variant: "destructive" })
-      return
-    }
-
-    const excessoDinheiro = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
-    const creditoFinal = Math.max(0, creditoRestante - excessoDinheiro)
-    const usaVale = valePassivelAbatimento
-    const diff = Math.round((totalNovaCompra - usaVale) * 100) / 100
-
-    const payload = {
-      saleId: sale.id,
-      linhas: lines,
-      modo: "troca_imediata",
-      vendaOriginalId: sale.id,
-      novaVendaId: null,
-      valorDevolvido,
-      totalNovaCompra,
-      diferencaPaga: diff > 0 ? diff : 0,
-      diferencaForma: diff > 0 ? diffPayMethod : null,
-      creditoRestante: creditoFinal,
-      excessoDinheiro,
-      motivo: motivo.trim(),
-    }
-
-    // Step 1 — devolução com modo "vale_credito" (gera saldo local de `valorDevolvido`)
-    const dev = registrarDevolucao({
-      saleId: sale.id,
-      lines,
-      mode: "vale_credito",
-      customerCpf: cpf,
-      customerName: nome,
-      sessaoId: sessaoId ?? undefined,
-      tipo: "troca",
-      motivo: motivo.trim(),
-      payload,
-    })
-    if (!dev.ok) {
-      toast({ title: "Devolução não registrada", description: dev.reason, variant: "destructive" })
-      return
-    }
-    const creditEmitido = dev.creditIssued
-
-    // Step 2 — nova venda abatendo o vale recém-emitido
-    const pb = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: usaVale }
-    if (diff > 0) {
-      if (diffPayMethod === "dinheiro") pb.dinheiro = diff
-      else if (diffPayMethod === "pix") pb.pix = diff
-      else if (diffPayMethod === "debito") pb.cartaoDebito = diff
-      else if (diffPayMethod === "credito") pb.cartaoCredito = diff
-    }
-
-    // Guard fail-closed pré-motor (PDV-MOTOR-INTEGRITY-N1, padrão Black):
-    // item novo sem cadastro BLOQUEIA com os nomes — nunca cobrado sem persistir.
-    const unresolvedTroca = findUnresolvedSaleLines(
-      trocaCart.map((l) => ({ inventoryId: l.inventoryId, name: l.name })),
-      inventory.map((i) => i.id),
-    )
-    if (unresolvedTroca.length > 0) {
-      toast({
-        title: "Item não pode ser vendido",
-        description: unresolvedSaleLinesDescription(unresolvedTroca),
-        variant: "destructive",
+    const ctrl = new AbortController()
+    setRegSessoes([])
+    setRegSessaoId("")
+    setRegErro("")
+    fetch(`/api/ops/trocas/sessoes?dia=${encodeURIComponent(parsedRegData.dia)}`, { headers: { "x-assistec-loja-id": lojaId }, credentials: "include", cache: "no-store", signal: ctrl.signal })
+      .then(async (r) => {
+        if (ctrl.signal.aborted) return
+        const j = (await r.json().catch(() => ({}))) as { sessoes?: typeof regSessoes; error?: string }
+        if (ctrl.signal.aborted) return
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+        const lista = j.sessoes ?? []
+        setRegSessoes(lista)
+        setRegSessaoId(selectCoveringCashSessionId(lista, parsedRegData.timestampMs))
+        if (lista.length === 0) setRegErro("Nenhuma sessão de caixa fechada nesse dia.")
       })
-      return
-    }
-
-    const novaVenda = await finalizeSaleTransaction({
-      lines: trocaCart.map((l) => ({ inventoryId: l.inventoryId, quantity: l.quantity, name: l.name, unitPrice: l.unitPrice })),
-      total: totalNovaCompra,
-      paymentBreakdown: pb,
-      customerCpf: cpf,
-      customerName: nome,
-    })
-    if (!novaVenda.ok) {
-      // Não tentamos reverter a devolução automaticamente — o operador deve cancelar a venda manualmente
-      // se necessário. Avisamos com clareza para evitar estado inconsistente silencioso.
-      toast({
-        title: "Devolução registrada, nova venda falhou",
-        description: `${novaVenda.reason} — devolução ${dev.devolucaoId} mantida. Registre a nova venda manualmente.`,
-        variant: "destructive",
+      .catch((e) => {
+        if (!ctrl.signal.aborted) setRegErro(e instanceof Error ? e.message : String(e))
       })
-      return
-    }
+    return () => ctrl.abort()
+  }, [regularizar, regData, parsedRegData, lojaId])
 
-    // PENDING (CORREÇÃO-01): a nova venda ainda NÃO confirmou — sem callback
-    // de conclusão, sem marcar a devolução como concluída, sem cupom. Só
-    // informa o estado honesto e mantém o mini-carrinho; o reenvio usa a MESMA
-    // identidade (Vendas → Reenviar sync). Tudo abaixo é CONFIRMED.
-    // (O audit devolucao_vale abaixo é trilha honesta da devolução registrada +
-    // venda pendente — não é audit de venda concluída.)
-    if (novaVenda.pending) {
-      appendAuditLog({
-        action: "devolucao_vale",
-        userLabel: `${nomeLoja} (PDV)`,
-        detail: `[troca_imediata PENDENTE — AGUARDANDO CONFIRMAÇÃO] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
-      })
-      toast({
-        title: PENDING_SALE_TITLE,
-        description: PENDING_SALE_DESCRIPTION,
-        duration: 6000,
-      })
-      return
-    }
-
-    onRegistered?.()
-
-    // Excesso em dinheiro: debita o vale local pelo valor a devolver
-    // (o customerCredits ainda guarda `creditoRestante` da devolução; o operador entrega o $ ao cliente)
-    if (creditoRestante > 0 && excessHandling === "dinheiro") {
-      // Não há API direta no store; o crédito persiste como "vale" no localStorage até a Fase 1.
-      // Aqui apenas registramos no audit-log para rastreabilidade operacional.
-      appendAuditLog({
-        action: "devolucao_vale",
-        userLabel: `${nomeLoja} (PDV)`,
-        detail: `[troca_excesso_dinheiro] Troca ${dev.devolucaoId} | venda ${sale.id} | excesso devolvido em dinheiro: ${creditoRestante.toFixed(2)}`,
-      })
-    }
-
-    appendAuditLog({
-      action: "devolucao_vale",
-      userLabel: `${nomeLoja} (PDV)`,
-      detail: `[troca_imediata] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
-    })
-
-    setLastDevolucao({ id: dev.devolucaoId, credit: creditEmitido, nome, cpf })
-
-    // CONFIRMED: abre o cupom de troca (resumo operacional para o cliente).
-    // (PENDING já retornou acima — nunca abre cupom pendente.)
-    const itensDevolvidos = lines.map((req) => {
-      const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
-      const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
-      return {
-        nome: sl?.name ?? req.inventoryId,
-        quantidade: req.quantity,
-        valorTotal: Math.round(valorUnit * req.quantity * 100) / 100,
-      }
-    })
-    const itensNovos = trocaCart.map((l) => ({
-      nome: l.name,
-      quantidade: l.quantity,
-      valorTotal: Math.round(l.unitPrice * l.quantity * 100) / 100,
-    }))
-    const excessoDinheiroFinal = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
-    const saldoFinal = Math.max(0, creditoRestante - excessoDinheiroFinal)
-    setCupomData({
-      tipo: "troca",
-      devolucaoId: dev.devolucaoId,
-      vendaOrigemId: sale.id,
-      novaVendaId: novaVenda.saleId,
-      clienteNome: nome,
-      clienteCpf: cpf,
-      operador: nomeLoja,
-      itensDevolvidos,
-      itensNovos,
-      valorDevolvido,
-      totalNovaCompra,
-      creditoGerado: creditEmitido,
-      creditoUtilizado: valePassivelAbatimento,
-      saldoFinal,
-      diferencaPaga: diff > 0 ? diff : 0,
-      diferencaForma: diff > 0 ? diffPayMethod : null,
-      motivo: motivo.trim(),
-      at: new Date().toISOString(),
-    })
-    setCupomOpen(true)
-
-    toast({
-      title: "Troca finalizada",
-      description:
-        diff > 0
-          ? `Cobrado ${formatBrl(diff)} em ${diffPayMethod}.`
-          : creditoRestante > 0 && excessHandling === "dinheiro"
-            ? `Devolva ${formatBrl(creditoRestante)} em dinheiro ao cliente.`
-            : creditoRestante > 0
-              ? `Crédito de ${formatBrl(creditoRestante)} gerado.`
-              : "Troca casada sem diferença.",
-    })
-
-    // Reset do mini-carrinho (a venda original é atualizada via efeito)
-    setTrocaCart([])
-    setQtyByLine({})
+  // ── Devolução antiga só deste terminal: enviar ou arquivar (com trilha) ──────
+  const enviarLocal = async (id: string) => {
+    setProcessandoLocal(id)
+    const r = await reenviarDevolucaoLocal(id)
+    setProcessandoLocal("")
+    setMsgLocal((m) => ({ ...m, [id]: r.ok ? "Enviada e confirmada pelo servidor." : r.message }))
+    if (r.ok && venda) void abrirVenda(venda.pedidoId)
   }
 
-  const handleRegistrar = () => {
-    if (!sale) return
-    const cpf =
-      normalizeDocDigits(sale.customerCpf || "") || normalizeDocDigits(cpfExtra)
-    const nome = (sale.customerName || nomeExtra).trim()
-    if (!cpf) {
-      toast({ title: "CPF obrigatório", description: "Informe o CPF/CNPJ do cliente para devolução.", variant: "destructive" })
-      return
-    }
-    if (!nome) {
-      toast({ title: "Nome obrigatório", description: "Informe o nome do cliente.", variant: "destructive" })
-      return
-    }
-    const lines: { inventoryId: string; quantity: number }[] = []
-    for (const l of linhasComMax) {
-      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
-      if (q > 0) {
-        if (q > l.maxReturn) {
-          toast({
-            title: "Quantidade inválida",
-            description: `${l.name}: máximo ${l.maxReturn}`,
-            variant: "destructive",
-          })
-          return
-        }
-        lines.push({ inventoryId: l.inventoryId, quantity: q })
+  const arquivarLocal = async (id: string) => {
+    const dev = devolucoes.find((d) => d.id === id)
+    if (!dev || !venda || motivoArquivo.trim().length < 10) return
+    setProcessandoLocal(id)
+    try {
+      const res = await fetch("/api/ops/trocas/pendencia-local", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaId },
+        body: JSON.stringify({
+          localId: dev.id,
+          pedidoId: venda.pedidoId,
+          motivo: motivoArquivo.trim(),
+          declarado: {
+            at: dev.at,
+            tipo: dev.tipo || dev.mode,
+            creditoLocal: dev.creditIssued,
+            itens: dev.lines.map((l) => ({ nome: l.name, quantidade: l.quantity, valor: l.valor })),
+            estavaComoSincronizada: dev.syncPending !== true,
+          },
+        }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        setMsgLocal((m) => ({ ...m, [id]: j.error || `Servidor recusou (HTTP ${res.status}).` }))
+        return
       }
+      const a = arquivarDevolucaoLocal(id, motivoArquivo)
+      setMsgLocal((m) => ({ ...m, [id]: a.ok ? "Arquivada neste terminal; trilha registrada no servidor." : a.message }))
+      setAcaoLocal(null)
+      setMotivoArquivo("")
+    } catch {
+      setMsgLocal((m) => ({ ...m, [id]: "Sem resposta do servidor. Nada foi alterado." }))
+    } finally {
+      setProcessandoLocal("")
     }
-    if (lines.length === 0) {
-      toast({ title: "Nada a devolver", description: "Informe quantidades.", variant: "destructive" })
-      return
-    }
-
-    // `troca` e `vale_credito` geram crédito local (vale); `devolucao` e `somente_estoque` não.
-    const localMode: "vale_credito" | "somente_estoque" =
-      mode === "troca" || mode === "vale_credito" ? "vale_credito" : "somente_estoque"
-
-    const r = registrarDevolucao({
-      saleId: sale.id,
-      lines,
-      mode: localMode,
-      customerCpf: cpf,
-      customerName: nome,
-      sessaoId: sessaoId ?? undefined,
-      tipo: mode,
-      motivo: motivo.trim(),
-      payload: { saleId: sale.id, linhas: lines, modo: mode, motivo: motivo.trim() },
-    })
-    if (!r.ok) {
-      toast({ title: "Devolução não registrada", description: r.reason, variant: "destructive" })
-      return
-    }
-
-    appendAuditLog({
-      action: "devolucao_vale",
-      userLabel: `${nomeLoja} (PDV)`,
-      detail: `${r.devolucaoId} | venda ${sale.id} | modo ${mode} | crédito ${r.creditIssued.toFixed(2)}${motivo.trim() ? ` | motivo ${motivo.trim()}` : ""}`,
-    })
-
-    onRegistered?.()
-
-    setLastDevolucao({
-      id: r.devolucaoId,
-      credit: r.creditIssued,
-      nome,
-      cpf,
-    })
-
-    // Abre cupom de devolução/vale/estoque para conferência do cliente
-    const itensDev = lines.map((req) => {
-      const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
-      const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
-      return {
-        nome: sl?.name ?? req.inventoryId,
-        quantidade: req.quantity,
-        valorTotal: Math.round(valorUnit * req.quantity * 100) / 100,
-      }
-    })
-    const valorDevTotal = itensDev.reduce((s, i) => s + i.valorTotal, 0)
-    setCupomData({
-      tipo: mode === "devolucao" || mode === "vale_credito" || mode === "somente_estoque" ? mode : "devolucao",
-      devolucaoId: r.devolucaoId,
-      vendaOrigemId: sale.id,
-      novaVendaId: null,
-      clienteNome: nome,
-      clienteCpf: cpf,
-      operador: nomeLoja,
-      itensDevolvidos: itensDev,
-      itensNovos: [],
-      valorDevolvido: valorDevTotal,
-      totalNovaCompra: 0,
-      creditoGerado: r.creditIssued,
-      creditoUtilizado: 0,
-      saldoFinal: r.creditIssued,
-      diferencaPaga: 0,
-      diferencaForma: null,
-      motivo: motivo.trim(),
-      at: new Date().toISOString(),
-    })
-    setCupomOpen(true)
-
-    const gerouCredito = r.creditIssued > 0
-    toast({
-      title: gerouCredito ? "Crédito em haver gerado" : "Devolução registrada",
-      description: gerouCredito ? `${formatBrl(r.creditIssued)} para ${nome}` : "Itens retornaram ao estoque.",
-    })
   }
 
-  const imprimirVale = async () => {
-    if (!lastDevolucao || lastDevolucao.credit <= 0) {
-      toast({ title: "Sem comprovante", description: "Gere um vale (modo crédito) antes de imprimir.", variant: "destructive" })
-      return
-    }
+  const descartarPendente = (operationId: string) => {
+    removerTrocaPendente(lojaId, operationId)
+    setPendentes(lerTrocasPendentes(lojaId))
+    if (venda) void abrirVenda(venda.pedidoId)
+  }
+
+  const imprimirVale = async (r: ResultadoTroca) => {
+    if (r.valeEmitido <= 0) return
     const bytes = buildValeTrocaEscPos({
       nomeFantasia: nomeLoja,
-      nomeCliente: lastDevolucao.nome,
-      cpfCliente: lastDevolucao.cpf,
-      valorCredito: lastDevolucao.credit,
-      dataLabel: new Date().toLocaleString("pt-BR"),
-      devolucaoId: lastDevolucao.id,
+      nomeCliente: r.clienteNome,
+      cpfCliente: r.clienteDoc,
+      valorCredito: r.valeEmitido,
+      dataLabel: dataHora(r.at),
+      devolucaoId: r.operationId,
     })
     const res = await sendEscPosViaProxy(bytes)
     if (res.ok) {
-      toast({ title: "Enviado à impressora", description: "Comprovante ESC/POS." })
+      toast({ title: "Enviado à impressora", description: "Comprovante do vale." })
       return
     }
     toast({ title: "Impressora indisponível", description: res.error, variant: "destructive" })
-    downloadEscPosFile(bytes, `vale-${lastDevolucao.id}.bin`)
-    const br = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-    openThermalHtmlPrint(
-      `
-      <div style="text-align:center;font-weight:700">COMPROVANTE VALE-TROCA</div>
-      <div style="text-align:center;font-size:10px;margin:4px 0">${escapeHtml(nomeLoja)}</div>
-      <div style="border-top:1px dashed #000;margin:6px 0"></div>
-      <p><strong>Cliente:</strong> ${escapeHtml(lastDevolucao.nome)}</p>
-      <p><strong>CPF/CNPJ:</strong> ${escapeHtml(lastDevolucao.cpf)}</p>
-      <p><strong>Crédito:</strong> ${br.format(lastDevolucao.credit)}</p>
-      <p><strong>Data:</strong> ${escapeHtml(new Date().toLocaleString("pt-BR"))}</p>
-      <p><strong>ID devolução:</strong> ${escapeHtml(lastDevolucao.id)}</p>
-    `,
-      "Vale-troca"
-    )
+    downloadEscPosFile(bytes, `vale-${r.operationId}.bin`)
   }
 
+  const fecharCupom = () => {
+    setCupomAberto(false)
+    onRegistered?.()
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 w-full">
-      {(!sale || showSearch) && (
-        <Card className="bg-card border-border shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-xl font-bold">
-              <RotateCcw className="w-6 h-6 text-primary" />
-              Troca e Devolução
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Busque pelo <strong>ID do cupom</strong>, <strong>nome do cliente</strong> ou <strong>código/bip do produto</strong>.
-              Ao bipar um item, listamos as últimas vendas em que ele aparece para você escolher a origem da troca. Os itens
-              retornam ao estoque; use <strong>crédito em haver</strong> vinculado ao CPF quando aplicável.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1 space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground">Venda, cliente ou código de barras do produto</Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="VDA-2026-0001 · João Silva · código do produto"
-                    value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") encontrarVenda()
-                    }}
-                    className="h-11 pl-9 font-mono text-sm border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                  />
-                </div>
-              </div>
-              <div className="flex items-end">
-                <Button type="button" className="h-11 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6" onClick={encontrarVenda}>
-                  Buscar Venda
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {candidateSales && candidateSales.length > 0 && (
-        <Card className="border-primary/30 bg-primary/5 shadow-inner">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">{candidateLabel || "Escolha a venda"}</CardTitle>
-            <CardDescription>Selecione o cupom de origem da troca ou devolução.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {candidateSales.map((s) => (
-              <Button
-                key={s.id}
-                type="button"
-                variant="outline"
-                className="h-auto w-full flex-col items-start gap-1 py-3 px-4 text-left border-border/80 hover:border-primary hover:bg-background/80 transition-all sm:flex-row sm:items-center sm:justify-between"
-                onClick={() => aplicarVenda(s)}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold text-primary">{s.id}</span>
-                  <span className="text-xs text-muted-foreground">·</span>
-                  <span className="text-sm font-medium text-foreground">
-                    {s.customerName || "Consumidor Final"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-semibold tabular-nums text-foreground">{formatBrl(s.total)}</span>
-                  <span className="text-xs text-muted-foreground">{new Date(s.at).toLocaleString("pt-BR")}</span>
-                </div>
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {sale && (
-        <div className="w-full space-y-4">
-          {/* Cabeçalho Compacto da Venda de Origem */}
-          <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border border-border bg-muted/15">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                <Package className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-xs text-muted-foreground uppercase tracking-wider">Origem:</span>
-                  <span className="font-mono text-sm font-bold text-primary">{sale.id}</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                  <span>Realizada em {new Date(sale.at).toLocaleString("pt-BR")}</span>
-                  {initialSaleId && (
-                    <>
-                      <span>·</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSale(null)
-                          setShowSearch(true)
-                          setBusca("")
-                        }}
-                        className="text-primary hover:underline font-semibold"
-                      >
-                        Trocar venda
-                      </button>
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">Total da Venda</span>
-              <span className="text-base font-extrabold text-foreground tabular-nums">{formatBrl(sale.total)}</span>
-            </div>
+    <div className="w-full min-w-0 space-y-4">
+      {/* Busca */}
+      <section className="min-w-0 space-y-3 rounded-xl border border-border bg-card p-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <RotateCcw className="h-5 w-5 shrink-0 text-primary" />
+          <h2 className="text-base font-bold text-foreground">Troca e Devolução</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Bipe o <strong>código de barras</strong> ou digite o <strong>nome do produto</strong>, o <strong>cupom</strong>, o{" "}
+          <strong>nome</strong> ou o <strong>CPF/CNPJ do cliente</strong>. A busca consulta todas as vendas salvas da loja.
+        </p>
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={buscaRef}
+              autoFocus={!initialSaleId}
+              aria-label="Buscar venda por produto, código, cupom ou cliente"
+              placeholder="Código de barras · nome do produto · VDA-… · cliente"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  void executarBusca(0)
+                } else if (e.key === "Escape" && busca) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setBusca("")
+                  setResultado(null)
+                  setErroBusca("")
+                } else if (e.key === "ArrowDown") {
+                  e.preventDefault()
+                  focarCandidato(0)
+                }
+              }}
+              className="h-11 pl-9 font-mono text-sm"
+            />
           </div>
+          <select
+            aria-label="Período da busca"
+            value={dias}
+            onChange={(e) => setDias(Number(e.target.value))}
+            className="h-11 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          >
+            {PERIODOS.map((p) => (
+              <option key={p.dias} value={p.dias}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <Button type="button" className="h-11 px-5 font-semibold" onClick={() => void executarBusca(0)} disabled={buscando}>
+            {buscando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+            Buscar
+          </Button>
+        </div>
+        {erroBusca && <p className="text-xs text-destructive">{erroBusca}</p>}
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-            {/* Coluna Esquerda: Dados do Cliente e Modo de Operação (lg:col-span-4) */}
-            <div className="lg:col-span-4 space-y-3">
-              {/* CPF / Nome */}
-              <div className="space-y-2 rounded-lg border border-border/50 bg-muted/10 p-2.5">
-                <h3 className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Search className="w-3 h-3 text-primary" />
-                  Identificação do Cliente
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="space-y-0.5">
-                    <Label className="text-[9px] font-semibold text-muted-foreground">CPF/CNPJ (se não veio)</Label>
-                    <Input
-                      value={cpfExtra}
-                      onChange={(e) => setCpfExtra(e.target.value)}
-                      placeholder="Somente números"
-                      className="h-7 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                    />
-                  </div>
-                  <div className="space-y-0.5">
-                    <Label className="text-[9px] font-semibold text-muted-foreground">Nome do Cliente</Label>
-                    <Input
-                      value={nomeExtra}
-                      onChange={(e) => setNomeExtra(e.target.value)}
-                      placeholder="Nome completo"
-                      className="h-7 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                    />
-                  </div>
-                </div>
-              </div>
-
-                {/* Modo de Operação */}
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">
-                    Modo de Operação
-                  </Label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {/* Tile 1: Troca Imediata */}
-                    <button
-                      type="button"
-                      onClick={() => setMode("troca")}
-                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
-                        mode === "troca"
-                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                          : "border-border bg-background hover:bg-muted/50"
-                      }`}
-                    >
-                      <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${mode === "troca" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Troca Imediata</span>
-                    </button>
-
-                    {/* Tile 2: Vale Crédito */}
-                    <button
-                      type="button"
-                      onClick={() => setMode("vale_credito")}
-                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
-                        mode === "vale_credito"
-                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                          : "border-border bg-background hover:bg-muted/50"
-                      }`}
-                    >
-                      <Wallet className={`w-3.5 h-3.5 shrink-0 ${mode === "vale_credito" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Vale-Troca</span>
-                    </button>
-
-                    {/* Tile 3: Devolução/Reembolso */}
-                    <button
-                      type="button"
-                      onClick={() => setMode("devolucao")}
-                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
-                        mode === "devolucao"
-                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                          : "border-border bg-background hover:bg-muted/50"
-                      }`}
-                    >
-                      <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${mode === "devolucao" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Reembolso</span>
-                    </button>
-
-                    {/* Tile 4: Somente Estoque */}
-                    <button
-                      type="button"
-                      onClick={() => setMode("somente_estoque")}
-                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
-                        mode === "somente_estoque"
-                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                          : "border-border bg-background hover:bg-muted/50"
-                      }`}
-                    >
-                      <Package className={`w-3.5 h-3.5 shrink-0 ${mode === "somente_estoque" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Apenas Estoque</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Coluna Direita: Quantidades, Carrinho (se Troca), Resumo e Ações (lg:col-span-8) */}
-              <div className="lg:col-span-8 space-y-3">
-                {/* Seleção de Itens a Devolver */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 pb-1 border-b border-border/40">
-                    <Package className="w-3.5 h-3.5 text-primary" />
-                    <h3 className="font-bold text-xs text-foreground">Selecione as Quantidades a Devolver</h3>
-                  </div>
-
-                  <div className="space-y-2">
-                    {linhasComMax.map((l) => {
-                      const currentQty = parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0
-                      return (
-                        <div
-                          key={l.inventoryId}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-1.5 px-3 rounded-lg border border-border bg-muted/20"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-xs text-foreground truncate">{l.name}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{l.maxReturn}</span>
-                            </p>
-                          </div>
-
-                          {/* Incrementador +/- Premium Compacto */}
-                          <div className="flex items-center gap-1 bg-background border border-border rounded-md p-0.5 self-start sm:self-center shadow-sm">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                              disabled={l.maxReturn <= 0 || currentQty <= 0}
-                              onClick={() => {
-                                const val = Math.max(0, currentQty - 1)
-                                setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
-                              }}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <input
-                              type="text"
-                              className="w-10 text-center bg-transparent border-0 font-bold text-xs text-foreground tabular-nums focus:ring-0 focus:outline-none"
-                              value={qtyByLine[l.inventoryId] ?? "0"}
-                              readOnly
-                            />
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                              disabled={l.maxReturn <= 0 || currentQty >= l.maxReturn}
-                              onClick={() => {
-                                const val = Math.min(l.maxReturn, currentQty + 1)
-                                setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
-                              }}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Motivo (Opcional) */}
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-semibold text-muted-foreground">Motivo da Troca/Devolução (opcional)</Label>
-                  <Input
-                    value={motivo}
-                    onChange={(e) => setMotivo(e.target.value)}
-                    placeholder="Ex.: produto com defeito, tamanho incorreto, insatisfação..."
-                    className="h-7 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                  />
-                </div>
-
-                {/* Carrinho da Nova Compra - Apenas se modo "troca" */}
-                {mode === "troca" && (
-                  <div className="space-y-3 pt-3 border-t border-border/80">
-                    <div className="flex items-center gap-2 pb-1 border-b border-border/40">
-                      <ShoppingCart className="h-3.5 w-3.5 text-primary" />
-                      <h3 className="font-bold text-xs text-foreground">Carrinho da Nova Compra</h3>
-                    </div>
-
-                    {/* Busca Inline */}
-                    <div className="space-y-1">
-                      <Label className="text-[10px] font-semibold text-muted-foreground">Buscar Novo Produto</Label>
-                      <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={trocaSearch}
-                          onChange={(e) => setTrocaSearch(e.target.value)}
-                          placeholder="Buscar por nome, SKU, código de barras..."
-                          className="pl-8.5 h-7.5 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                        />
-                      </div>
-
-                      {/* Resultados Inline */}
-                      {trocaSearchResults.length > 0 && (
-                        <div className="rounded-lg border border-border bg-muted/20 overflow-hidden divide-y divide-border/60 max-h-40 overflow-y-auto shadow-inner mt-1">
-                          {trocaSearchResults.map((p) => {
-                            const isService = p.category === "Servicos"
-                            const out = !isService && p.stock <= 0
-                            return (
-                              <button
-                                key={p.id}
-                                type="button"
-                                disabled={out}
-                                onClick={() => addTrocaItem(p)}
-                                className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[11px] hover:bg-primary/5 transition-colors disabled:opacity-40"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate font-semibold text-foreground">{p.name}</p>
-                                  <p className="text-[9px] text-muted-foreground">
-                                    {p.category} · {isService ? "Serviço" : out ? "Sem estoque" : `Estoque: ${p.stock}`}
-                                  </p>
-                                </div>
-                                <span className="shrink-0 font-bold text-primary tabular-nums">{formatBrl(p.price)}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Mini-carrinho */}
-                    <div className="space-y-1">
-                      <Label className="text-[10px] font-semibold text-muted-foreground">Itens da Nova Compra</Label>
-                      {trocaCart.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-3 border border-dashed border-border/80 rounded-lg bg-muted/10 text-center">
-                          <ShoppingCart className="w-6 h-6 text-muted-foreground/45 mb-1" />
-                          <p className="text-[11px] text-muted-foreground">Busque produtos acima para adicionar ao carrinho.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                          {trocaCart.map((l) => (
-                            <div key={l.inventoryId} className="flex items-center justify-between gap-2 py-1 px-2.5 rounded-lg border border-border bg-background shadow-sm text-xs">
-                              <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-foreground truncate">{l.name}</p>
-                                <p className="text-[10px] text-muted-foreground">{formatBrl(l.unitPrice)} cada</p>
-                              </div>
-                              <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-md">
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-5 w-5 rounded-md hover:bg-muted"
-                                  onClick={() => decTrocaItem(l.inventoryId)}
-                                >
-                                  <Minus className="h-2.5 w-2.5" />
-                                </Button>
-                                <span className="w-5 text-center font-bold tabular-nums text-xs text-foreground">{l.quantity}</span>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-5 w-5 rounded-md hover:bg-muted"
-                                  onClick={() => incTrocaItem(l.inventoryId)}
-                                >
-                                  <Plus className="h-2.5 w-2.5" />
-                                </Button>
-                              </div>
-                              <div className="text-right w-16 shrink-0 font-bold tabular-nums text-foreground">
-                                {formatBrl(l.unitPrice * l.quantity)}
-                              </div>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="h-5 w-5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-md"
-                                onClick={() => removeTrocaItem(l.inventoryId)}
-                              >
-                                <X className="h-2.5 w-2.5" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Resumo Financeiro e Ações da Devolução (se modo NÃO troca) */}
-                {mode !== "troca" && (
-                  <div className="rounded-lg border border-border bg-muted/15 p-2.5 flex items-center justify-between gap-3 shadow-sm">
-                    <div className="min-w-0">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">Total a Devolver</span>
-                      <span className="font-extrabold text-lg text-foreground tabular-nums leading-none">{formatBrl(valorDevolvido)}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {lastDevolucao && lastDevolucao.credit > 0 && (
-                        <Button type="button" variant="outline" size="sm" className="rounded-md h-8.5 px-3 text-xs" onClick={() => void imprimirVale()}>
-                          <Printer className="w-3.5 h-3.5 mr-1.5" />
-                          Imprimir Comprovante
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold h-8.5 px-4 rounded-md text-xs"
-                        onClick={handleRegistrar}
-                        disabled={valorDevolvido <= 0}
-                      >
-                        Confirmar Devolução
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Resumo Financeiro da Troca Imediata */}
-                {mode === "troca" && (
-                  <div className="rounded-lg border border-border bg-muted/15 p-2.5 space-y-2 shadow-sm">
-                    <div className="grid grid-cols-3 gap-2 text-center bg-background p-1.5 rounded border border-border/60">
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Devolvido</p>
-                        <p className="font-extrabold text-xs text-foreground mt-0.5 tabular-nums">{formatBrl(valorDevolvido)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Nova Compra</p>
-                        <p className="font-extrabold text-xs text-foreground mt-0.5 tabular-nums">{formatBrl(totalNovaCompra)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">
-                          {diferenca > 0 ? "Diferença" : diferenca < 0 ? "Crédito" : "Saldo"}
-                        </p>
-                        <p
-                          className={`font-extrabold text-xs mt-0.5 tabular-nums ${
-                            diferenca > 0
-                              ? "text-amber-600 dark:text-amber-400"
-                              : diferenca < 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-muted-foreground"
-                          }`}
-                        >
-                          {formatBrl(Math.abs(diferenca))}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Forma de pagamento da diferença */}
-                    {diferenca > 0 && (
-                      <div className="space-y-1 pt-1.5 border-t border-border/60">
-                        <Label className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Forma de pagamento da diferença</Label>
-                        <div className="grid grid-cols-4 gap-1">
-                          {(["dinheiro", "pix", "debito", "credito"] as const).map((m) => (
-                            <Button
-                              key={m}
-                              type="button"
-                              size="sm"
-                              variant={diffPayMethod === m ? "default" : "outline"}
-                              onClick={() => setDiffPayMethod(m)}
-                              className="capitalize text-[10px] h-7 border-border/80 px-1"
-                            >
-                              {m === "debito" ? "Débito" : m === "credito" ? "Crédito" : m}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Excesso devolvido — escolher destino */}
-                    {creditoRestante > 0 && (
-                      <div className="space-y-1 pt-1.5 border-t border-border/60">
-                        <Label className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Sobrou {formatBrl(creditoRestante)} — tratar como:</Label>
-                        <RadioGroup
-                          value={excessHandling}
-                          onValueChange={(v) => setExcessHandling(v as "vale_credito" | "dinheiro")}
-                          className="flex flex-row gap-4"
-                        >
-                          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer text-foreground font-medium">
-                            <RadioGroupItem value="vale_credito" id="ex1" className="h-3.5 w-3.5" />
-                            <span>Gerar vale</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer text-foreground font-medium">
-                            <RadioGroupItem value="dinheiro" id="ex2" className="h-3.5 w-3.5" />
-                            <span>Devolver dinheiro</span>
-                          </label>
-                        </RadioGroup>
-                      </div>
-                    )}
-
-                    {/* Ações da Troca Imediata */}
-                    <div className="pt-1.5 flex gap-1.5">
-                      {lastDevolucao && lastDevolucao.credit > 0 && (
-                        <Button type="button" size="sm" variant="outline" className="flex-1 h-8.5 border-border/80 text-xs" onClick={() => void imprimirVale()}>
-                          <Printer className="w-3.5 h-3.5 mr-1.5" />
-                          Imprimir
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold flex-1 h-8.5 text-xs"
-                        onClick={handleFinalizarTroca}
-                        disabled={trocaCart.length === 0 || valorDevolvido <= 0}
-                      >
-                        Finalizar Troca Imediata
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+        {pendentes.some((p) => p.body.pedidoIdOrigem !== venda?.pedidoId) && (
+          <div className="min-w-0 space-y-1 rounded-lg border border-primary/40 bg-primary/5 p-2.5 text-xs">
+            <p className="flex items-center gap-1.5 font-semibold text-foreground">
+              <AlertTriangle className="h-4 w-4 text-primary" /> Operações enviadas sem confirmação do servidor
+            </p>
+            {pendentes
+              .filter((p) => p.body.pedidoIdOrigem !== venda?.pedidoId)
+              .map((p) => (
+                <button
+                  key={p.body.operationId}
+                  type="button"
+                  className="block font-mono text-primary underline-offset-2 hover:underline"
+                  onClick={() => void abrirVenda(p.body.pedidoIdOrigem)}
+                >
+                  {p.body.pedidoIdOrigem} · {dataHora(p.enviadaEm)} — abrir para verificar
+                </button>
+              ))}
           </div>
         )}
 
-      {cupomData && (
+        {resultado && resultado.vendas.length > 1 && (
+          <div ref={listaRef} className="min-w-0 space-y-1.5" role="listbox" aria-label="Vendas encontradas">
+            <p className="text-xs font-semibold text-muted-foreground">{resultado.vendas.length} venda(s) encontrada(s) — escolha a de origem:</p>
+            {resultado.vendas.map((v, idx) => {
+              const linhas = v.linhas.filter((l) => l.corresponde)
+              const mostrar = linhas.length > 0 ? linhas : v.linhas.slice(0, 2)
+              return (
+                <button
+                  key={v.pedidoId}
+                  type="button"
+                  data-candidato
+                  onClick={() => void abrirVenda(v.pedidoId)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault()
+                      focarCandidato(idx + 1)
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault()
+                      if (idx === 0) buscaRef.current?.focus()
+                      else focarCandidato(idx - 1)
+                    }
+                  }}
+                  className={`w-full min-w-0 rounded-lg border px-3 py-2 text-left transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    venda?.pedidoId === v.pedidoId ? "border-primary bg-primary/5" : "border-border bg-background"
+                  }`}
+                >
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+                    <span className="font-mono text-sm font-bold text-primary">{v.pedidoId}</span>
+                    <span className="text-xs text-muted-foreground">{dataHora(v.at)}</span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">{formatBrl(v.total)}</span>
+                    {v.status !== "concluida" && <span className="rounded bg-muted px-1.5 text-[10px] font-semibold uppercase text-muted-foreground">{v.status.replace("_", " ")}</span>}
+                  </div>
+                  {mostrar.map((l) => (
+                    <p key={l.lineIndex} className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {l.name}
+                      {codigoDaLinha(l) ? ` · ${codigoDaLinha(l)}` : ""} · vendido {l.quantity} · devolvido {l.devolvido} · disponível{" "}
+                      <span className="font-semibold text-foreground">{l.disponivel}</span>
+                    </p>
+                  ))}
+                  {v.clienteNome && <p className="truncate text-[11px] text-muted-foreground">Cliente: {v.clienteNome}</p>}
+                </button>
+              )
+            })}
+            {resultado.hasMore && (
+              <Button type="button" variant="outline" size="sm" className="w-full" disabled={buscando} onClick={() => void executarBusca(resultado.vendas.length)}>
+                Carregar mais vendas
+              </Button>
+            )}
+          </div>
+        )}
+      </section>
+
+      {carregandoVenda && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Carregando a venda do servidor…
+        </div>
+      )}
+
+      {venda && !carregandoVenda && (
+        <section className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4">
+          {/* Cabeçalho */}
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Venda de origem</p>
+              <p className="font-mono text-base font-bold text-primary">{venda.pedidoId}</p>
+              <p className="text-xs text-muted-foreground">
+                {dataHora(venda.at)} · {venda.clienteNome || "Cliente não identificado"}
+                {venda.status !== "concluida" ? ` · ${venda.status.replace("_", " ")}` : ""}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</p>
+              <p className="text-base font-extrabold tabular-nums text-foreground">{formatBrl(venda.total)}</p>
+            </div>
+          </div>
+
+          {/* Operações enviadas sem confirmação (mesma chave) */}
+          {pendentesDaVenda.map((p) => (
+            <div key={p.body.operationId} className="min-w-0 space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs">
+              <p className="flex items-center gap-1.5 font-semibold text-foreground">
+                <AlertTriangle className="h-4 w-4 text-primary" /> Operação enviada em {dataHora(p.enviadaEm)} sem confirmação do servidor
+              </p>
+              <p className="text-muted-foreground">
+                Verifique antes de refazer: o reenvio usa a mesma chave e nunca duplica devolução, venda ou cobrança.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" disabled={enviando} onClick={() => void enviar(p.body)}>
+                  {enviando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null} Verificar / reenviar
+                </Button>
+                <Button type="button" size="sm" variant="ghost" disabled={enviando} onClick={() => descartarPendente(p.body.operationId)}>
+                  Descartar aviso
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          {devolucoesLocaisNaoConfirmadas.length > 0 && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-foreground">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-destructive" /> Este terminal tem devolução que não existe no servidor
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Ela não conta como devolvida e não é reenviada sozinha. Trate uma a uma: envie ao servidor (ele recusa número repetido,
+                quantidade já devolvida e venda com saldo a receber) ou arquive se a troca já foi regularizada ou não aconteceu.
+              </p>
+              {devolucoesLocaisNaoConfirmadas.map((d) => {
+                const vinculada = sales.find(
+                  (s) =>
+                    s.syncPending === true &&
+                    (s.paymentBreakdown?.creditoVale ?? 0) > 0 &&
+                    Math.abs(new Date(s.at).getTime() - new Date(d.at).getTime()) < 6 * 3_600_000,
+                )
+                return (
+                  <div key={d.id} className="mt-2 min-w-0 space-y-1.5 rounded-md border border-border bg-background p-2">
+                    <p className="font-mono font-semibold">
+                      {d.id} · {dataHora(d.at)} · {d.syncPending ? "pendente" : "marcada como enviada, ausente no servidor"}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {d.lines.map((l) => `${l.quantity}× ${l.name}`).join(", ")}
+                      {d.creditIssued > 0 ? ` · vale local ${formatBrl(d.creditIssued)}` : ""}
+                    </p>
+                    {vinculada && (
+                      <p className="text-destructive">
+                        Venda pendente possivelmente vinculada: {vinculada.id} (usa vale). Resolva-a em Vendas → pendências; não reenvie às cegas.
+                      </p>
+                    )}
+                    {acaoLocal?.id === d.id ? (
+                      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row">
+                        <Input
+                          value={motivoArquivo}
+                          onChange={(e) => setMotivoArquivo(e.target.value)}
+                          placeholder="Motivo (ex.: troca regularizada em 25/11)"
+                          className="h-8 min-w-0 flex-1 text-xs"
+                          aria-label="Motivo do arquivamento"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={motivoArquivo.trim().length < 10 || processandoLocal === d.id}
+                          onClick={() => void arquivarLocal(d.id)}
+                        >
+                          Confirmar arquivamento
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setAcaoLocal(null)}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button type="button" size="sm" variant="outline" disabled={processandoLocal === d.id} onClick={() => void enviarLocal(d.id)}>
+                          {processandoLocal === d.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null} Enviar ao servidor
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setAcaoLocal({ id: d.id, tipo: "arquivar" })}>
+                          Arquivar neste terminal…
+                        </Button>
+                      </div>
+                    )}
+                    {msgLocal[d.id] && <p className="text-muted-foreground">{msgLocal[d.id]}</p>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Itens */}
+          <div className="min-w-0 space-y-2" data-testid="troca-linhas-venda">
+            <h3 className="text-xs font-bold text-foreground">Quantidade a devolver</h3>
+            {venda.linhas.map((l) => {
+              const q = qtyByLine[l.lineIndex] ?? 0
+              const aviso = SITUACAO_LABEL[l.situacaoCadastro]
+              const codigo = codigoDaLinha(l)
+              return (
+                <div key={l.lineIndex} className="min-w-0 rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">{l.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {codigo ? `${codigo} · ` : ""}
+                        {formatBrl(l.valorLiquido)} · vendido {l.quantity} · devolvido {l.devolvido} · disponível{" "}
+                        <span className="font-semibold text-foreground">{l.disponivel}</span>
+                        {l.accessoryLabel ? ` · ${l.accessoryLabel}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 self-start rounded-md border border-border bg-background p-0.5 sm:self-center">
+                      <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label={`Diminuir ${l.name}`} disabled={q <= 0} onClick={() => setQty(l, q - 1)}>
+                        <Minus className="h-3.5 w-3.5" />
+                      </Button>
+                      <span className="w-8 text-center text-sm font-bold tabular-nums text-foreground" aria-live="polite">
+                        {q}
+                      </span>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        aria-label={`Aumentar ${l.name}`}
+                        disabled={q >= l.disponivel || l.destino === "aparelho_imei" || l.destino === "venda_por_peso"}
+                        onClick={() => setQty(l, q + 1)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  {l.disponivel === 0 && l.devolvido > 0 && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Já devolvido em {l.devolucoes.map((d) => d.localId).join(", ")}.{" "}
+                      <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => setMostrarHistorico(true)}>
+                        Ver histórico
+                      </button>
+                    </p>
+                  )}
+                  {aviso && <p className="mt-1 text-[11px] text-muted-foreground">{aviso}</p>}
+                  {q > 0 && l.destino === "retorna_estoque" && (
+                    <label className="mt-1 flex items-center gap-1.5 text-[11px] text-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-primary"
+                        checked={avariaByLine[l.lineIndex] === true}
+                        onChange={(e) => setAvariaByLine((prev) => ({ ...prev, [l.lineIndex]: e.target.checked }))}
+                      />
+                      Com defeito — não volta ao estoque vendável (descreva no motivo)
+                    </label>
+                  )}
+                </div>
+              )
+            })}
+            {venda.naoAlocado.length > 0 && (
+              <p className="text-[11px] text-destructive">
+                Há devolução antiga que não corresponde a nenhum item desta venda ({venda.naoAlocado.map((n) => `${n.localId}: ${n.quantidade}× ${n.nome}`).join("; ")}). Revise com o gerente.
+              </p>
+            )}
+          </div>
+
+          {/* Histórico de trocas/devoluções da venda */}
+          {venda.devolucoes.length > 0 && (
+            <div className="min-w-0 rounded-lg border border-border">
+              <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-foreground" onClick={() => setMostrarHistorico((s) => !s)} aria-expanded={mostrarHistorico}>
+                <History className="h-4 w-4 text-primary" /> Trocas e devoluções desta venda ({venda.devolucoes.length})
+              </button>
+              {mostrarHistorico && <HistoricoDevolucoes devolucoes={venda.devolucoes} />}
+            </div>
+          )}
+
+          {/* Modo */}
+          <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Tipo de operação">
+            {MODOS.map((m) => {
+              const Icon = m.icon
+              const ativo = mode === m.id
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={ativo}
+                  onClick={() => setMode(m.id)}
+                  className={`min-w-0 rounded-lg border p-2 text-left transition-colors ${ativo ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background hover:bg-muted/50"}`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Icon className={`h-3.5 w-3.5 shrink-0 ${ativo ? "text-primary" : "text-muted-foreground"}`} /> {m.label}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">{m.ajuda}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Nova compra (troca imediata) */}
+          {mode === "troca" && (
+            <div className="min-w-0 space-y-2 border-t border-border pt-3">
+              <h3 className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                <ShoppingCart className="h-3.5 w-3.5 text-primary" /> Produto que o cliente leva
+              </h3>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="Buscar novo produto"
+                  value={trocaSearch}
+                  onChange={(e) => setTrocaSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && trocaSearchResults[0]) {
+                      e.preventDefault()
+                      addTrocaItem(trocaSearchResults[0])
+                    } else if (e.key === "Escape" && trocaSearch) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setTrocaSearch("")
+                    }
+                  }}
+                  placeholder="Bipe ou digite o novo produto"
+                  className="h-9 pl-8 text-sm"
+                />
+              </div>
+              {trocaSearchResults.length > 0 && (
+                <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-muted/20">
+                  {trocaSearchResults.map((p) => {
+                    const isService = p.category === "Servicos"
+                    const out = !isService && p.stock <= 0
+                    return (
+                      <button key={p.id} type="button" disabled={out} onClick={() => addTrocaItem(p)} className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-primary/5 disabled:opacity-40">
+                        <span className="min-w-0 flex-1 truncate font-semibold text-foreground">{p.name}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">{isService ? "Serviço" : out ? "Sem estoque" : `Estoque ${p.stock}`}</span>
+                        <span className="shrink-0 font-bold tabular-nums text-primary">{formatBrl(p.price)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {trocaCart.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-3 text-center text-xs text-muted-foreground">Nenhum produto adicionado.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {trocaCart.map((l) => (
+                    <div key={l.inventoryId} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-foreground">{l.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{formatBrl(l.unitPrice)} cada</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={`Diminuir ${l.name}`} onClick={() => setTrocaCart((prev) => prev.map((x) => (x.inventoryId === l.inventoryId ? { ...x, quantity: x.quantity - 1 } : x)).filter((x) => x.quantity > 0))}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-5 text-center font-bold tabular-nums text-foreground">{l.quantity}</span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          aria-label={`Aumentar ${l.name}`}
+                          onClick={() => {
+                            const item = inventory.find((i) => i.id === l.inventoryId)
+                            if (item) addTrocaItem(item)
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <span className="w-20 shrink-0 text-right font-bold tabular-nums text-foreground">{formatBrl(l.unitPrice * l.quantity)}</span>
+                      <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" aria-label={`Remover ${l.name}`} onClick={() => setTrocaCart((prev) => prev.filter((x) => x.inventoryId !== l.inventoryId))}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {plano.diferenca > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Forma de pagamento da diferença</Label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {(["dinheiro", "pix", "debito", "credito"] as const).map((m) => (
+                      <Button key={m} type="button" size="sm" variant={diffPayMethod === m ? "default" : "outline"} onClick={() => setDiffPayMethod(m)} className="h-8 px-1 text-xs">
+                        {FORMA_LABEL[m]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {plano.excedente > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Sobra de {formatBrl(plano.excedente)} a favor do cliente</Label>
+                  <div className="grid grid-cols-2 gap-1">
+                    <Button type="button" size="sm" variant={excessHandling === "vale" ? "default" : "outline"} onClick={() => setExcessHandling("vale")} className="h-8 text-xs">
+                      Gerar vale
+                    </Button>
+                    <Button type="button" size="sm" variant={excessHandling === "dinheiro" ? "default" : "outline"} onClick={() => setExcessHandling("dinheiro")} className="h-8 text-xs">
+                      Devolver em dinheiro
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === "reembolso" && (
+            <div className="space-y-1 border-t border-border pt-3">
+              <Label className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Forma do reembolso</Label>
+              <div className="grid grid-cols-3 gap-1">
+                {(["dinheiro", "pix", "estorno_cartao"] as const).map((f) => (
+                  <Button key={f} type="button" size="sm" variant={formaReembolso === f ? "default" : "outline"} onClick={() => setFormaReembolso(f)} className="h-8 px-1 text-xs">
+                    {FORMA_LABEL[f]}
+                  </Button>
+                ))}
+              </div>
+              {formaReembolso === "estorno_cartao" && (
+                <p className="text-[11px] text-muted-foreground">O estorno na maquininha/adquirente é feito fora do sistema; aqui ele fica registrado como pendente de execução manual.</p>
+              )}
+            </div>
+          )}
+
+          {/* Regularização de operação já feita no balcão (P1-002) */}
+          {(mode === "troca" || mode === "reembolso") && (
+            <div className="min-w-0 space-y-2 rounded-lg border border-border p-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                <input type="checkbox" checked={regularizar} onChange={(e) => setRegularizar(e.target.checked)} className="h-4 w-4 accent-primary" />
+                Regularizar operação já feita no balcão (data passada)
+              </label>
+              {regularizar && (
+                <div className="min-w-0 space-y-2 text-xs">
+                  <p className="text-muted-foreground">
+                    Grava na sessão de caixa da época, com a data real e trilha de auditoria. O dinheiro já recebido não entra na gaveta de hoje
+                    e nada é cobrado de novo. Exige permissão de gerente.
+                  </p>
+                  <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="min-w-0 space-y-1">
+                      <Label className="text-[10px] font-semibold text-muted-foreground">Data e hora reais</Label>
+                      <Input type="datetime-local" value={regData} onChange={(e) => setRegData(e.target.value)} className="h-9 text-sm" aria-label="Data e hora reais da operação" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <Label className="text-[10px] font-semibold text-muted-foreground">Sessão de caixa da época</Label>
+                      <select
+                        aria-label="Sessão de caixa da época"
+                        value={regSessaoId}
+                        onChange={(e) => setRegSessaoId(e.target.value)}
+                        className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                      >
+                        <option value="">Selecione…</option>
+                        {regSessoes.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {dataHora(s.abertaEm)} → {s.fechadaEm ? dataHora(s.fechadaEm) : "—"} · {s.operador || "operador"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <Input
+                    value={regJustificativa}
+                    onChange={(e) => setRegJustificativa(e.target.value)}
+                    placeholder="Justificativa (obrigatória)"
+                    className="h-9 text-sm"
+                    aria-label="Justificativa da regularização"
+                  />
+                  <label className="flex items-center gap-2 text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={regHorarioAproximado}
+                      onChange={(e) => setRegHorarioAproximado(e.target.checked)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    Horário exato desconhecido (o horário informado é aproximado — explique na justificativa)
+                  </label>
+                  {mode === "troca" && (
+                    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="min-w-0 space-y-1">
+                        <Label className="text-[10px] font-semibold text-muted-foreground">Valor cobrado pela nova compra na ocasião</Label>
+                        <Input
+                          inputMode="decimal"
+                          value={regTotalConfirmado}
+                          onChange={(e) => setRegTotalConfirmado(e.target.value)}
+                          placeholder={totalNovaCompra > 0 ? `Preço atual: ${formatBrl(totalNovaCompra)}` : "0,00"}
+                          className="h-9 text-sm"
+                          aria-label="Valor cobrado pela nova compra na ocasião"
+                        />
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <Label className="text-[10px] font-semibold text-muted-foreground">Diferença efetivamente recebida</Label>
+                        <Input
+                          inputMode="decimal"
+                          value={regDiferencaRecebida}
+                          onChange={(e) => setRegDiferencaRecebida(e.target.value)}
+                          placeholder="0,00"
+                          className="h-9 text-sm"
+                          aria-label="Diferença efetivamente recebida"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {regErro && <p className="text-destructive">{regErro}</p>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cliente e motivo */}
+          <div className="grid min-w-0 grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-3">
+            <div className="min-w-0 space-y-1">
+              <Label className="text-[10px] font-semibold text-muted-foreground">CPF/CNPJ {exigeTitular ? "(obrigatório para vale)" : "(opcional)"}</Label>
+              <Input value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" placeholder="Somente números" className="h-9 text-sm" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-[10px] font-semibold text-muted-foreground">Nome {exigeTitular ? "(obrigatório para vale)" : "(opcional)"}</Label>
+              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do cliente" className="h-9 text-sm" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-[10px] font-semibold text-muted-foreground">Motivo</Label>
+              <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: não serviu, defeito" className="h-9 text-sm" />
+            </div>
+          </div>
+
+          {/* Rodapé de confirmação */}
+          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 min-w-0 space-y-2 rounded-b-xl border-t border-border bg-card px-4 py-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Devolvido</p>
+                <p className="text-sm font-extrabold tabular-nums text-foreground">{formatBrl(mode === "somente_estoque" ? 0 : valorDevolvido)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{mode === "troca" ? "Nova compra" : "Crédito/reembolso"}</p>
+                <p className="text-sm font-extrabold tabular-nums text-foreground">
+                  {formatBrl(mode === "troca" ? totalNovaCompra : mode === "somente_estoque" ? 0 : valorDevolvido)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {mode !== "troca" ? "—" : plano.diferenca > 0 ? "Cliente paga" : plano.excedente > 0 ? "Sobra" : "Diferença"}
+                </p>
+                <p className={`text-sm font-extrabold tabular-nums ${mode === "troca" && plano.diferenca > 0 ? "text-primary" : "text-foreground"}`}>
+                  {mode === "troca" ? formatBrl(plano.diferenca > 0 ? plano.diferenca : plano.excedente) : "—"}
+                </p>
+              </div>
+            </div>
+            {erroEnvio && (
+              <p role="alert" className="text-xs text-destructive">
+                {erroEnvio}
+              </p>
+            )}
+            {regularizar && (
+              <div className="min-w-0 space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-full"
+                  disabled={Boolean(motivoBloqueio) || simulando || enviando}
+                  onClick={() => void conferirEfeitos()}
+                >
+                  {simulando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Conferir efeitos (simulação no servidor, nada é gravado)
+                </Button>
+                {simulacaoValida && simulacao && <EfeitosSimulados r={simulacao.resultado} />}
+                {simulacao && !simulacaoValida && (
+                  <p className="text-[11px] text-muted-foreground">Os dados mudaram depois da conferência: confira os efeitos de novo.</p>
+                )}
+              </div>
+            )}
+            <Button
+              type="button"
+              className="h-11 w-full font-bold"
+              disabled={Boolean(motivoBloqueio) || enviando || (regularizar && !simulacaoValida)}
+              onClick={finalizar}
+            >
+              {enviando ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando no servidor…
+                </>
+              ) : mode === "troca" ? (
+                "Finalizar troca"
+              ) : (
+                "Confirmar devolução"
+              )}
+            </Button>
+            {motivoBloqueio && <p className="text-center text-[11px] text-muted-foreground">{motivoBloqueio}</p>}
+          </div>
+        </section>
+      )}
+
+      {cupom && (
         <CupomTroca
-          open={cupomOpen}
-          onClose={() => setCupomOpen(false)}
-          data={cupomData}
+          open={cupomAberto}
+          data={cupom}
           nomeLoja={nomeLoja}
-          onImprimirVale={() => void imprimirVale()}
+          onClose={fecharCupom}
+          onCloseAutoFocus={() => buscaRef.current?.focus()}
+          onImprimirVale={() => void imprimirVale(cupom)}
         />
       )}
     </div>
   )
 }
 
-// ─── Cupom Troca/Devolução ────────────────────────────────────────────────
-// Reaproveita o helper de impressão térmica (`openThermalHtmlPrint`) e o ESC/POS
-// do vale (`buildValeTrocaEscPos`). Não substitui o `CupomNaoFiscal` da venda — é
-// um comprovante operacional dedicado ao fluxo de troca.
+/** Efeitos que a operação PRODUZIRIA (simulação desfeita no servidor) — para conferir antes. */
+function EfeitosSimulados({ r }: { r: ResultadoTroca }) {
+  const DESTINO: Record<string, string> = {
+    retorna_estoque: "volta ao estoque",
+    nao_revendavel: "não volta (defeito)",
+    sem_vinculo_estoque: "sem vínculo de estoque",
+    servico: "serviço (sem estoque)",
+  }
+  const absorvidos = new Set((r.estoqueAbsorvidoPorAjuste ?? []).map((a) => a.produtoId))
+  const reg = r.regularizacao
+  return (
+    <div className="min-w-0 space-y-1 rounded-lg border border-primary/40 bg-primary/5 p-2.5 text-[11px] text-foreground" data-testid="troca-efeitos-simulados">
+      <p className="font-semibold">Efeitos conferidos (ainda não gravados)</p>
+      {reg && (
+        <p className="text-muted-foreground">
+          Data econômica {dataHora(reg.dataEconomica)}
+          {reg.horarioAproximado ? " (horário aproximado)" : ""} · sessão de caixa da época · registrado agora por {reg.operador || "operador"}
+        </p>
+      )}
+      {r.itensDevolvidos.map((i) => (
+        <p key={i.lineIndex}>
+          ↩ {i.quantidade}× {i.nome}: {i.produtoId && absorvidos.has(i.produtoId) ? "já refletido por contagem de inventário posterior (estoque não muda)" : DESTINO[i.destino] ?? i.destino}
+        </p>
+      ))}
+      {r.itensNovos.map((i) => (
+        <p key={i.produtoId}>
+          ＋ {i.quantidade}× {i.nome}: {formatBrl(i.valorTotal)}
+        </p>
+      ))}
+      {reg?.precos && (
+        <p className={reg.precos.divergente ? "text-destructive" : "text-muted-foreground"}>
+          Valor praticado {formatBrl(reg.precos.precoConfirmado)} × preço atual {formatBrl(reg.precos.precoAtual)}
+          {reg.precos.divergente ? " — divergente: confirme pela justificativa" : ""}
+        </p>
+      )}
+      {r.diferenca.valor > 0 && (
+        <p>
+          Diferença recebida: {formatBrl(r.diferenca.valor)} ({FORMA_LABEL[r.diferenca.forma ?? ""] ?? "—"}){reg ? " — na sessão da época, não na gaveta de hoje" : ""}
+        </p>
+      )}
+      {r.reembolso && <p>Reembolso: {formatBrl(r.reembolso.valor)} ({FORMA_LABEL[r.reembolso.forma]})</p>}
+      {r.valeEmitido > 0 && <p>Vale emitido: {formatBrl(r.valeEmitido)}</p>}
+    </div>
+  )
+}
+
+function HistoricoDevolucoes({ devolucoes }: { devolucoes: VendaTrocaView["devolucoes"] }) {
+  const TIPO: Record<string, string> = { troca: "Troca", vale_credito: "Vale-troca", devolucao: "Reembolso", somente_estoque: "Apenas estoque" }
+  return (
+    <ul className="divide-y divide-border border-t border-border text-[11px]">
+      {devolucoes.map((d) => (
+        <li key={d.id} className="space-y-0.5 px-3 py-2">
+          <p className="flex flex-wrap items-center gap-x-2 font-semibold text-foreground">
+            <span>{TIPO[d.tipo] ?? d.tipo}</span>
+            <span className="font-mono text-muted-foreground">{d.localId}</span>
+            <span className="text-muted-foreground">{dataHora(d.at)}</span>
+            {d.status === "legado" && <span className="rounded bg-muted px-1 text-[9px] uppercase text-muted-foreground">registro antigo</span>}
+          </p>
+          <p className="text-muted-foreground">{d.itens.map((i) => `${i.quantidade}× ${i.nome}`).join(", ")} · {formatBrl(d.valorTotal)}</p>
+          {d.novaVenda && (
+            <p className="text-muted-foreground">
+              Venda substituta <span className="font-mono text-foreground">{d.novaVenda.pedidoId}</span> ({formatBrl(d.novaVenda.total)})
+              {d.diferenca && d.diferenca.valor > 0 ? ` · diferença ${formatBrl(d.diferenca.valor)} em ${FORMA_LABEL[d.diferenca.forma ?? ""] ?? d.diferenca.forma}` : ""}
+            </p>
+          )}
+          {d.reembolso && <p className="text-muted-foreground">Reembolso {formatBrl(d.reembolso.valor)} · {FORMA_LABEL[d.reembolso.forma] ?? d.reembolso.forma}</p>}
+          {(d.valeEmitido ?? 0) > 0 && <p className="text-muted-foreground">Vale emitido {formatBrl(d.valeEmitido ?? 0)}</p>}
+          {(d.operador || d.motivo) && (
+            <p className="text-muted-foreground">
+              {d.operador ? `Operador: ${d.operador}` : ""}
+              {d.operador && d.motivo ? " · " : ""}
+              {d.motivo ? `Motivo: ${d.motivo}` : ""}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// ─── Comprovante (somente após confirmação do servidor) ─────────────────────
 function CupomTroca({
   open,
-  onClose,
   data,
   nomeLoja,
+  onClose,
+  onCloseAutoFocus,
   onImprimirVale,
 }: {
   open: boolean
-  onClose: () => void
-  data: {
-    tipo: "devolucao" | "vale_credito" | "troca" | "somente_estoque"
-    devolucaoId: string
-    vendaOrigemId: string
-    novaVendaId?: string | null
-    clienteNome: string
-    clienteCpf: string
-    operador: string
-    itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
-    itensNovos: { nome: string; quantidade: number; valorTotal: number }[]
-    valorDevolvido: number
-    totalNovaCompra: number
-    creditoGerado: number
-    creditoUtilizado: number
-    saldoFinal: number
-    diferencaPaga: number
-    diferencaForma: string | null
-    motivo: string
-    at: string
-  }
+  data: ResultadoTroca
   nomeLoja: string
+  onClose: () => void
+  onCloseAutoFocus: () => void
   onImprimirVale: () => void
 }) {
-  const { toast } = useToast()
   const tipoLabel =
-    data.tipo === "troca"
-      ? "TROCA IMEDIATA"
-      : data.tipo === "vale_credito"
-        ? "VALE-TROCA"
-        : data.tipo === "somente_estoque"
-          ? "DEVOLUÇÃO AO ESTOQUE"
-          : "DEVOLUÇÃO"
-  const dataLabel = new Date(data.at).toLocaleString("pt-BR")
-
-  const copiarResumo = useCallback(() => {
-    const linhas: string[] = [
-      `${nomeLoja} — ${tipoLabel}`,
-      `Data: ${dataLabel}`,
-      `Operador: ${data.operador}`,
-      `Venda origem: ${data.vendaOrigemId}`,
-      data.novaVendaId ? `Nova venda: ${data.novaVendaId}` : "",
-      `Cliente: ${data.clienteNome} (${data.clienteCpf})`,
-      "",
-      "ITENS DEVOLVIDOS",
-      ...data.itensDevolvidos.map((i) => `  ${i.quantidade}× ${i.nome} — ${formatBrl(i.valorTotal)}`),
-      `  Total devolvido: ${formatBrl(data.valorDevolvido)}`,
-    ]
-    if (data.itensNovos.length > 0) {
-      linhas.push("", "ITENS NOVOS")
-      linhas.push(...data.itensNovos.map((i) => `  ${i.quantidade}× ${i.nome} — ${formatBrl(i.valorTotal)}`))
-      linhas.push(`  Total nova compra: ${formatBrl(data.totalNovaCompra)}`)
-    }
-    linhas.push("")
-    if (data.creditoGerado > 0) linhas.push(`Crédito gerado: ${formatBrl(data.creditoGerado)}`)
-    if (data.creditoUtilizado > 0) linhas.push(`Crédito utilizado: ${formatBrl(data.creditoUtilizado)}`)
-    if (data.diferencaPaga > 0) linhas.push(`Diferença paga: ${formatBrl(data.diferencaPaga)} (${data.diferencaForma ?? "—"})`)
-    if (data.saldoFinal > 0) linhas.push(`Saldo final em haver: ${formatBrl(data.saldoFinal)}`)
-    if (data.motivo) linhas.push("", `Motivo: ${data.motivo}`)
-    linhas.push("", `ID devolução: ${data.devolucaoId}`)
-    const texto = linhas.filter((l) => l !== null).join("\n")
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      void navigator.clipboard.writeText(texto).then(
-        () => toast({ title: "Resumo copiado", description: "Cole onde precisar." }),
-        () => toast({ title: "Falha ao copiar", variant: "destructive" }),
-      )
-    }
-  }, [data, nomeLoja, tipoLabel, dataLabel, toast])
-
-  const imprimirHtml = useCallback(() => {
-    const esc = (s: string) => escapeHtml(s)
-    const linhasDev = data.itensDevolvidos
-      .map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">${formatBrl(i.valorTotal)}</td></tr>`)
-      .join("")
-    const linhasNovos = data.itensNovos
-      .map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">${formatBrl(i.valorTotal)}</td></tr>`)
-      .join("")
+    data.modo === "troca" ? "TROCA IMEDIATA" : data.modo === "vale_credito" ? "VALE-TROCA" : data.modo === "somente_estoque" ? "DEVOLUÇÃO AO ESTOQUE" : "DEVOLUÇÃO / REEMBOLSO"
+  const quando = dataHora(data.at)
+  const imprimir = () => {
+    const esc = escapeHtml
+    const tabela = (rows: Array<{ nome: string; quantidade: number; valor: number }>) =>
+      rows.map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">${formatBrl(i.valor)}</td></tr>`).join("")
     openThermalHtmlPrint(
       `
       <div style="text-align:center;font-weight:700">${esc(nomeLoja)}</div>
       <div style="text-align:center;font-size:11px;margin:2px 0">${esc(tipoLabel)}</div>
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
-      <p style="margin:2px 0;font-size:11px">Data: ${esc(dataLabel)}</p>
-      <p style="margin:2px 0;font-size:11px">Operador: ${esc(data.operador)}</p>
-      <p style="margin:2px 0;font-size:11px">Venda origem: ${esc(data.vendaOrigemId)}</p>
-      ${data.novaVendaId ? `<p style="margin:2px 0;font-size:11px">Nova venda: ${esc(data.novaVendaId)}</p>` : ""}
-      <p style="margin:2px 0;font-size:11px">Cliente: ${esc(data.clienteNome)} (${esc(data.clienteCpf)})</p>
+      <p style="margin:2px 0;font-size:11px">Data: ${esc(quando)}</p>
+      <p style="margin:2px 0;font-size:11px">Operador: ${esc(data.operador || "—")}</p>
+      <p style="margin:2px 0;font-size:11px">Venda origem: ${esc(data.vendaOrigem)}</p>
+      ${data.novaVenda ? `<p style="margin:2px 0;font-size:11px">Nova venda: ${esc(data.novaVenda.pedidoId)}</p>` : ""}
+      ${data.clienteNome ? `<p style="margin:2px 0;font-size:11px">Cliente: ${esc(data.clienteNome)}</p>` : ""}
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
       <p style="font-weight:700;margin:4px 0">Itens devolvidos</p>
-      <table style="width:100%;font-size:11px;border-collapse:collapse">${linhasDev}</table>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">${tabela(data.itensDevolvidos.map((i) => ({ nome: i.nome, quantidade: i.quantidade, valor: i.valor })))}</table>
       <p style="text-align:right;margin:4px 0">Total devolvido: <strong>${formatBrl(data.valorDevolvido)}</strong></p>
       ${
         data.itensNovos.length > 0
-          ? `<div style="border-top:1px dashed #000;margin:6px 0"></div>
-             <p style="font-weight:700;margin:4px 0">Itens novos</p>
-             <table style="width:100%;font-size:11px;border-collapse:collapse">${linhasNovos}</table>
+          ? `<div style="border-top:1px dashed #000;margin:6px 0"></div><p style="font-weight:700;margin:4px 0">Itens novos</p>
+             <table style="width:100%;font-size:11px;border-collapse:collapse">${tabela(data.itensNovos.map((i) => ({ nome: i.nome, quantidade: i.quantidade, valor: i.valorTotal })))}</table>
              <p style="text-align:right;margin:4px 0">Total nova compra: <strong>${formatBrl(data.totalNovaCompra)}</strong></p>`
           : ""
       }
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
-      ${data.creditoGerado > 0 ? `<p style="margin:2px 0">Crédito gerado: ${formatBrl(data.creditoGerado)}</p>` : ""}
-      ${data.creditoUtilizado > 0 ? `<p style="margin:2px 0">Crédito utilizado: ${formatBrl(data.creditoUtilizado)}</p>` : ""}
-      ${data.diferencaPaga > 0 ? `<p style="margin:2px 0">Diferença paga: ${formatBrl(data.diferencaPaga)} (${esc(data.diferencaForma ?? "—")})</p>` : ""}
-      ${data.saldoFinal > 0 ? `<p style="margin:2px 0"><strong>Saldo em haver: ${formatBrl(data.saldoFinal)}</strong></p>` : ""}
+      ${data.creditoAplicado > 0 ? `<p style="margin:2px 0">Crédito da troca utilizado: ${formatBrl(data.creditoAplicado)}</p>` : ""}
+      ${data.diferenca.valor > 0 ? `<p style="margin:2px 0">Diferença paga: ${formatBrl(data.diferenca.valor)} (${esc(FORMA_LABEL[data.diferenca.forma ?? ""] ?? "—")})</p>` : ""}
+      ${data.excedente.valor > 0 && data.excedente.destino === "dinheiro" ? `<p style="margin:2px 0">Devolvido em dinheiro: ${formatBrl(data.excedente.valor)}</p>` : ""}
+      ${data.reembolso ? `<p style="margin:2px 0">Reembolso: ${formatBrl(data.reembolso.valor)} (${esc(FORMA_LABEL[data.reembolso.forma])})</p>` : ""}
+      ${data.valeEmitido > 0 ? `<p style="margin:2px 0"><strong>Vale em haver: ${formatBrl(data.valeEmitido)}</strong></p>` : ""}
       ${data.motivo ? `<p style="margin:6px 0 2px 0;font-size:11px">Motivo: ${esc(data.motivo)}</p>` : ""}
-      <p style="margin:6px 0 0 0;font-size:10px;color:#555">ID devolução: ${esc(data.devolucaoId)}</p>
-      `,
+      <p style="margin:6px 0 0 0;font-size:10px">Operação: ${esc(data.operationId)}</p>`,
       tipoLabel,
     )
-  }, [data, nomeLoja, tipoLabel, dataLabel])
-
+  }
+  const Linha = ({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: boolean }) => (
+    <div className="flex justify-between gap-2 text-xs">
+      <span className="text-muted-foreground">{rotulo}</span>
+      <span className={forte ? "font-bold text-foreground" : "font-medium text-foreground"}>{valor}</span>
+    </div>
+  )
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md p-0">
+      <DialogContent
+        className="max-w-md p-0"
+        onCloseAutoFocus={(e) => {
+          // Foco volta para DENTRO do diálogo de troca (campo de busca), não para um botão que
+          // já saiu da tela (ex.: "Verificar / reenviar") — Escape e teclado seguem funcionando.
+          e.preventDefault()
+          onCloseAutoFocus()
+        }}
+      >
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <RotateCcw className="h-4 w-4 text-primary" />
-            Comprovante — {tipoLabel}
+            <RotateCcw className="h-4 w-4 text-primary" /> Comprovante — {tipoLabel}
           </DialogTitle>
         </DialogHeader>
-
-        <div className="max-h-[60vh] overflow-y-auto px-5 py-4 text-sm">
-          <div className="space-y-1 text-center">
-            <p className="font-semibold">{nomeLoja}</p>
-            <p className="text-xs text-muted-foreground">{tipoLabel}</p>
-            <p className="text-xs text-muted-foreground">{dataLabel}</p>
-          </div>
-          <Separator className="my-3" />
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <p className="text-muted-foreground">Operador</p>
-              <p className="font-medium">{data.operador}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Venda origem</p>
-              <p className="font-mono font-medium">{data.vendaOrigemId}</p>
-            </div>
-            {data.novaVendaId && (
-              <div className="col-span-2">
-                <p className="text-muted-foreground">Nova venda</p>
-                <p className="font-mono font-medium">{data.novaVendaId}</p>
-              </div>
-            )}
-            <div className="col-span-2">
-              <p className="text-muted-foreground">Cliente</p>
-              <p className="font-medium">
-                {data.clienteNome} <span className="text-xs text-muted-foreground">({data.clienteCpf})</span>
-              </p>
-            </div>
-          </div>
-
-          <Separator className="my-3" />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens devolvidos</p>
-          <div className="mt-1 space-y-1">
-            {data.itensDevolvidos.map((i, idx) => (
-              <div key={idx} className="flex justify-between text-xs">
-                <span>{i.quantidade}× {i.nome}</span>
-                <span className="font-medium">{formatBrl(i.valorTotal)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between border-t border-border pt-1 text-xs">
-              <span className="text-muted-foreground">Total devolvido</span>
-              <span className="font-semibold">{formatBrl(data.valorDevolvido)}</span>
-            </div>
-          </div>
-
-          {data.itensNovos.length > 0 && (
-            <>
-              <Separator className="my-3" />
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens novos</p>
-              <div className="mt-1 space-y-1">
-                {data.itensNovos.map((i, idx) => (
-                  <div key={idx} className="flex justify-between text-xs">
-                    <span>{i.quantidade}× {i.nome}</span>
-                    <span className="font-medium">{formatBrl(i.valorTotal)}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between border-t border-border pt-1 text-xs">
-                  <span className="text-muted-foreground">Total nova compra</span>
-                  <span className="font-semibold">{formatBrl(data.totalNovaCompra)}</span>
-                </div>
-              </div>
-            </>
-          )}
-
-          <Separator className="my-3" />
-          <div className="space-y-1 text-xs">
-            {data.creditoGerado > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Crédito gerado</span>
-                <span className="font-medium">{formatBrl(data.creditoGerado)}</span>
-              </div>
-            )}
-            {data.creditoUtilizado > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Crédito utilizado</span>
-                <span className="font-medium">{formatBrl(data.creditoUtilizado)}</span>
-              </div>
-            )}
-            {data.diferencaPaga > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Diferença paga ({data.diferencaForma ?? "—"})</span>
-                <span className="font-medium">{formatBrl(data.diferencaPaga)}</span>
-              </div>
-            )}
-            {data.saldoFinal > 0 && (
-              <div className="flex justify-between border-t border-border pt-1">
-                <span className="font-semibold">Saldo em haver</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatBrl(data.saldoFinal)}</span>
-              </div>
-            )}
-          </div>
-
-          {data.motivo && (
-            <>
-              <Separator className="my-3" />
-              <p className="text-xs text-muted-foreground">Motivo: {data.motivo}</p>
-            </>
-          )}
-          <p className="mt-3 text-[10px] text-muted-foreground">ID: {data.devolucaoId}</p>
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4 text-sm">
+          <p className="text-center text-xs text-muted-foreground">
+            {nomeLoja} · {quando}
+          </p>
+          <Linha rotulo="Venda origem" valor={data.vendaOrigem} />
+          {data.novaVenda && <Linha rotulo="Nova venda" valor={data.novaVenda.pedidoId} />}
+          {data.clienteNome && <Linha rotulo="Cliente" valor={data.clienteNome} />}
+          <Separator />
+          {data.itensDevolvidos.map((i) => (
+            <Linha key={`d${i.lineIndex}`} rotulo={`↩ ${i.quantidade}× ${i.nome}`} valor={formatBrl(i.valor)} />
+          ))}
+          {data.itensNovos.map((i) => (
+            <Linha key={`n${i.produtoId}`} rotulo={`＋ ${i.quantidade}× ${i.nome}`} valor={formatBrl(i.valorTotal)} />
+          ))}
+          <Separator />
+          {data.creditoAplicado > 0 && <Linha rotulo="Crédito da troca utilizado" valor={formatBrl(data.creditoAplicado)} />}
+          {data.diferenca.valor > 0 && <Linha rotulo={`Diferença paga (${FORMA_LABEL[data.diferenca.forma ?? ""] ?? "—"})`} valor={formatBrl(data.diferenca.valor)} forte />}
+          {data.excedente.valor > 0 && data.excedente.destino === "dinheiro" && <Linha rotulo="Devolver em dinheiro" valor={formatBrl(data.excedente.valor)} forte />}
+          {data.reembolso && <Linha rotulo={`Reembolso (${FORMA_LABEL[data.reembolso.forma]})`} valor={formatBrl(data.reembolso.valor)} forte />}
+          {data.valeEmitido > 0 && <Linha rotulo="Vale em haver" valor={formatBrl(data.valeEmitido)} forte />}
+          {data.motivo && <p className="text-xs text-muted-foreground">Motivo: {data.motivo}</p>}
+          <p className="text-[10px] text-muted-foreground">Operação {data.operationId}</p>
         </div>
-
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
-          <Button type="button" size="sm" onClick={imprimirHtml}>
+          <Button type="button" size="sm" onClick={imprimir}>
             <Printer className="mr-2 h-4 w-4" /> Imprimir
           </Button>
-          {data.creditoGerado > 0 && (
+          {data.valeEmitido > 0 && (
             <Button type="button" size="sm" variant="outline" onClick={onImprimirVale}>
               Imprimir vale 80mm
             </Button>
           )}
-          <Button type="button" size="sm" variant="outline" onClick={copiarResumo}>
-            <Search className="mr-2 h-4 w-4" /> Copiar resumo
-          </Button>
           <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={onClose}>
             Fechar
           </Button>
@@ -1484,8 +1458,3 @@ function CupomTroca({
     </Dialog>
   )
 }
-
-function formatBrl(n: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
-}
-
