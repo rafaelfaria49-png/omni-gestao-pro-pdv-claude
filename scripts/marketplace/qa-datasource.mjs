@@ -10,7 +10,7 @@ export const marketplaceQaGrants = [
   ["marketplace_connections", ["SELECT", "INSERT", "UPDATE"]],
   ["marketplace_sync_logs", ["SELECT"]],
   ["marketplace_product_links", ["SELECT"]],
-  ["produtos", ["SELECT"]],
+  ["estoque_produtos", ["SELECT"]],
   ["logs_auditoria", ["SELECT", "INSERT"]],
 ]
 export const marketplaceStoreLockColumn = "updatedAt"
@@ -42,7 +42,7 @@ export async function attestMarketplaceQaDatasource(env) {
             AND NOT has_table_privilege(to_regclass('public.marketplace_connections'), 'DELETE')
             AND NOT has_table_privilege(to_regclass('public.logs_auditoria'), 'UPDATE')
             AND NOT has_table_privilege(to_regclass('public.logs_auditoria'), 'DELETE')
-            AND NOT has_table_privilege(to_regclass('public.produtos'), 'UPDATE')
+            AND NOT has_table_privilege(to_regclass('public.estoque_produtos'), 'UPDATE')
           ) AS permissions
       `)
       const role = decodeURIComponent(expected.username)
