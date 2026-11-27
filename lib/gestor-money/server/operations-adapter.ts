@@ -7,6 +7,7 @@ import {
   consultarCartoesGasto,
   consultarHistoricoLimiteCartaoGasto,
   editarCartaoGasto,
+  planejarPagamentoFaturaGasto,
 } from "@/lib/gastos/cartoes"
 import { criarCategoriaGasto, definirCategoriaGastoAtiva } from "@/lib/gastos/categorias"
 import { criarContaFinanceira, definirContaFinanceiraAtiva } from "@/lib/gastos/contas"
@@ -93,6 +94,8 @@ async function executarPropostaG004(
 const MENSAGENS_OPERACAO_GASTO: Record<string, string> = {
   limite_cartao_insuficiente:
     "Limite disponível insuficiente neste cartão para concluir a compra (todas as parcelas comprometem o limite integralmente). Reduza o valor, pague uma fatura em aberto ou ajuste o limite do cartão.",
+  valor_acima_saldo_fatura:
+    "O valor informado excede o saldo em aberto desta fatura.",
   ciclo_cartao_divergente:
     "Todos os ciclos informados para uma compra no cartão devem pertencer ao mesmo cartão.",
   saldo_conta_insuficiente:
@@ -583,71 +586,20 @@ export async function pagarFaturaReal(
   }
   const p = parsed.data
 
-  // Carrega os títulos abertos do ciclo e calcula saldo restante exato em centavos
-  const alocacoes = await comLeituraFinanceira(ctx, async (db, scope) => {
-    const titulos = await db.contaPagarTitulo.findMany({
-      where: {
-        perfilId: scope.perfilId,
-        storeId: scope.tipo === "EMPRESA" ? scope.storeId : null,
-        cartaoCicloId: p.cicloId,
-        ativo: true,
-        status: { notIn: ["cancelado", "estornado"] },
-      },
-      include: {
-        alocacoesPagamento: {
-          select: { valorCentavos: true, pagamento: { select: { tipo: true } } },
-        },
-      },
-      orderBy: { id: "asc" },
-    })
-    const lista: Array<{ tituloId: string; valorCentavos: string }> = []
-    for (const t of titulos) {
-      const total = BigInt(t.valorCentavos?.toString() ?? Math.round(t.valor * 100))
-      let pago = BigInt(0)
-      for (const a of t.alocacoesPagamento) {
-        const av = BigInt(a.valorCentavos.toString())
-        pago += a.pagamento.tipo === "PAGAMENTO" ? av : -av
-      }
-      if (pago < BigInt(0)) pago = BigInt(0)
-      const restante = total > pago ? total - pago : BigInt(0)
-      if (restante > BigInt(0)) {
-        lista.push({ tituloId: t.id, valorCentavos: restante.toString() })
-      }
-    }
-    return lista
+  // Planejamento canônico G004/G005 via `planejarPagamentoFaturaGasto` (zero recálculo paralelo):
+  const plano = await planejarPagamentoFaturaGasto(ctx, {
+    cicloId: p.cicloId,
+    ...(p.valorCentavos ? { quitar: false, valorCentavos: p.valorCentavos } : { quitar: true }),
   })
 
-  if (alocacoes.length === 0) {
+  if (plano.alocacoes.length === 0) {
     throw new GestorMoneyApiError("fatura_sem_saldo", 409, "Esta fatura não possui títulos pendentes.")
-  }
-
-  let alocacoesAplicadas = alocacoes
-  if (p.valorCentavos) {
-    const desejado = parseBigIntCentavos(p.valorCentavos)
-    const totalAberto = alocacoes.reduce((acc, a) => acc + parseBigIntCentavos(a.valorCentavos), BigInt(0))
-    if (desejado <= BigInt(0) || desejado > totalAberto) {
-      throw new GestorMoneyApiError(
-        "valor_fatura_invalido",
-        409,
-        "O valor informado excede o saldo em aberto desta fatura."
-      )
-    }
-    let restanteDistribuir = desejado
-    const parciais: Array<{ tituloId: string; valorCentavos: string }> = []
-    for (const item of alocacoes) {
-      if (restanteDistribuir <= BigInt(0)) break
-      const abertoItem = parseBigIntCentavos(item.valorCentavos)
-      const aplicado = abertoItem <= restanteDistribuir ? abertoItem : restanteDistribuir
-      parciais.push({ tituloId: item.tituloId, valorCentavos: aplicado.toString() })
-      restanteDistribuir -= aplicado
-    }
-    alocacoesAplicadas = parciais
   }
 
   const proposta: PropostaGasto = {
     tipo: "PAGAR_FATURA",
     cicloId: p.cicloId,
-    alocacoes: alocacoesAplicadas,
+    alocacoes: plano.alocacoes.map((a) => ({ tituloId: a.tituloId, valorCentavos: a.valorCentavos })),
     moeda: "BRL",
     carteiraId: p.carteiraId,
     formaPagamento: p.formaPagamento,
