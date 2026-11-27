@@ -21,7 +21,7 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     serviceWorkers: "block",
     trace: "off",
-    screenshot: "only-on-failure",
+    video: "off",
     launchOptions: { executablePath: process.env.MELI_E2E_BROWSER_PATH },
   },
 })
