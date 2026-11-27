@@ -12,6 +12,7 @@ import {
   Lock,
   Menu,
   Moon,
+  Paperclip,
   Plus,
   RefreshCw,
   Scale,
@@ -47,6 +48,7 @@ import { CreditCardsView } from "./CreditCardsView"
 import { AccountsWalletsView } from "./AccountsWalletsView"
 import { CategoriesView } from "./CategoriesView"
 import { ReportsView } from "./ReportsView"
+import { ReceiptsView } from "./ReceiptsView"
 import { AssistantSettingsView } from "./AssistantSettingsView"
 import { DashboardSkeleton } from "./shared"
 
@@ -56,6 +58,7 @@ export type GestorMoneySection =
   | "cartoes"
   | "contas"
   | "categorias"
+  | "comprovantes"
   | "relatorios"
   | "assistente"
 
@@ -70,6 +73,7 @@ const NAV_ITEMS: Array<{
   { id: "cartoes", label: "Cartões de Crédito", shortLabel: "Cartões", icon: CreditCard },
   { id: "contas", label: "Contas e Carteiras", shortLabel: "Contas", icon: Wallet },
   { id: "categorias", label: "Categorias", shortLabel: "Categorias", icon: Tag },
+  { id: "comprovantes", label: "Comprovantes", shortLabel: "Anexos", icon: Paperclip },
   { id: "relatorios", label: "Relatórios", shortLabel: "Relatórios", icon: BarChart3 },
   { id: "assistente", label: "Assistente WhatsApp", shortLabel: "Assistente", icon: Bot },
 ]
@@ -491,6 +495,13 @@ export function GestorMoneyApp({
                     onMutationSuccess={handleOperationSuccess}
                   />
                 )}
+                {section === "comprovantes" && (
+                  <ReceiptsView
+                    snapshot={snapshot}
+                    gateway={gateway}
+                    onMutationSuccess={handleOperationSuccess}
+                  />
+                )}
                 {section === "relatorios" && <ReportsView snapshot={snapshot} />}
                 {section === "assistente" && assistenteConfig && (
                   <AssistantSettingsView
@@ -571,7 +582,7 @@ export function GestorMoneyApp({
             onClick={() => setMobileMoreOpen(true)}
             className={cn(
               "flex flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium",
-              ["contas", "categorias", "relatorios", "assistente"].includes(section)
+              ["contas", "categorias", "comprovantes", "relatorios", "assistente"].includes(section)
                 ? "text-primary"
                 : "text-muted-foreground"
             )}
@@ -589,7 +600,9 @@ export function GestorMoneyApp({
             <SheetTitle className="font-display text-base">Módulos do Gestor Money</SheetTitle>
           </SheetHeader>
           <div className="mt-4 grid grid-cols-2 gap-2.5">
-            {NAV_ITEMS.filter((n) => ["contas", "categorias", "relatorios", "assistente"].includes(n.id)).map(
+            {NAV_ITEMS.filter((n) =>
+              ["contas", "categorias", "comprovantes", "relatorios", "assistente"].includes(n.id)
+            ).map(
               (item) => {
                 const Icon = item.icon
                 const active = section === item.id

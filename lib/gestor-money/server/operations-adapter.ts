@@ -1,9 +1,16 @@
 import "server-only"
 import { randomUUID } from "node:crypto"
 import { aplicarOperacaoGasto } from "@/lib/gastos/apply"
-import { cadastrarCartaoGasto, cadastrarCicloGasto } from "@/lib/gastos/cartoes"
+import {
+  cadastrarCartaoGasto,
+  cadastrarCicloGasto,
+  consultarCartoesGasto,
+  consultarHistoricoLimiteCartaoGasto,
+  editarCartaoGasto,
+} from "@/lib/gastos/cartoes"
 import { criarCategoriaGasto, definirCategoriaGastoAtiva } from "@/lib/gastos/categorias"
 import { criarContaFinanceira, definirContaFinanceiraAtiva } from "@/lib/gastos/contas"
+import { GateStorageG003Error } from "@/lib/gastos/documentos-storage"
 import {
   criarMovimentoFinanceiro,
   FinanceiroScopeError,
@@ -22,6 +29,7 @@ import {
   criarCartaoInputSchema,
   criarCategoriaInputSchema,
   criarContaInputSchema,
+  editarCartaoInputSchema,
   pagarDividaInputSchema,
   pagarFaturaInputSchema,
   registrarCompraCartaoInputSchema,
@@ -32,6 +40,7 @@ import {
   type CriarCartaoInput,
   type CriarCategoriaInput,
   type CriarContaInput,
+  type EditarCartaoInput,
   type OperacaoFeedback,
   type PagarDividaInput,
   type PagarFaturaInput,
@@ -43,6 +52,7 @@ import {
 } from "@/lib/gestor-money/contracts"
 import { hojeSaoPaulo, parseBigIntCentavos } from "@/lib/gestor-money/money"
 import { GestorMoneyApiError } from "./auth-boundary"
+import { descreverBloqueioGateStorageG003 } from "./documents-adapter"
 
 function instanteParaDataCivil(dataCivil: string): string {
   return `${dataCivil}T12:00:00.000Z`
@@ -80,10 +90,34 @@ async function executarPropostaG004(
   return { revisao, resultado }
 }
 
+const MENSAGENS_OPERACAO_GASTO: Record<string, string> = {
+  limite_cartao_insuficiente:
+    "Limite disponível insuficiente neste cartão para concluir a compra (todas as parcelas comprometem o limite integralmente). Reduza o valor, pague uma fatura em aberto ou ajuste o limite do cartão.",
+  ciclo_cartao_divergente:
+    "Todos os ciclos informados para uma compra no cartão devem pertencer ao mesmo cartão.",
+  saldo_conta_insuficiente:
+    "Saldo insuficiente na conta selecionada para concluir a operação.",
+  cartao_indisponivel: "Cartão não encontrado ou inativo no perfil autorizado.",
+  cartao_invalido: "Dados do cartão ou limite informados são inválidos.",
+  documento_indisponivel: "Comprovante não encontrado ou em quarentena no perfil autorizado.",
+  documento_ja_vinculado_titulo: "Este comprovante já está vinculado a outro título.",
+}
+
 export function mapearErroIntegracaoReal(error: unknown): GestorMoneyApiError {
   if (error instanceof GestorMoneyApiError) return error
+  if (error instanceof GateStorageG003Error) {
+    return new GestorMoneyApiError(
+      error.code,
+      error.status,
+      descreverBloqueioGateStorageG003(error.code)
+    )
+  }
   if (error instanceof OperacaoGastoError) {
-    return new GestorMoneyApiError(error.code, error.status, error.message)
+    return new GestorMoneyApiError(
+      error.code,
+      error.status,
+      MENSAGENS_OPERACAO_GASTO[error.code] ?? error.message
+    )
   }
   if (error instanceof FinanceiroScopeError) {
     return new GestorMoneyApiError("escopo_financeiro_invalido", error.status, error.message)
@@ -376,6 +410,8 @@ export async function criarCartaoReal(
     nome: p.nome,
     bandeira: p.bandeira,
     ultimos4: p.ultimos4,
+    ...(p.limiteCentavos !== undefined ? { limiteCentavos: p.limiteCentavos } : {}),
+    ...(p.motivo ? { motivo: p.motivo } : {}),
   })
   const competenciaAtual = hojeSaoPaulo().slice(0, 7)
   await cadastrarCicloGasto(ctx, {
@@ -389,8 +425,63 @@ export async function criarCartaoReal(
     ok: true,
     operacaoId: cartao.id,
     contratoG004: "G004_CARTAO_CADASTRAR",
-    mensagem: `Cartão "${cartao.nome}" e ciclo inicial ${competenciaAtual} persistidos.`,
+    mensagem:
+      p.limiteCentavos !== undefined && p.limiteCentavos !== null
+        ? `Cartão "${cartao.nome}", limite inicial e ciclo ${competenciaAtual} persistidos (G004).`
+        : `Cartão "${cartao.nome}" e ciclo inicial ${competenciaAtual} persistidos (limite não informado).`,
   }
+}
+
+export async function editarCartaoReal(
+  ctx: FinanceiroContextoAutorizado,
+  raw: EditarCartaoInput
+) {
+  const parsed = editarCartaoInputSchema.safeParse(raw)
+  if (!parsed.success) {
+    throw new GestorMoneyApiError("validacao_cartao", 422, parsed.error.issues[0]?.message ?? "Dados inválidos.")
+  }
+  const p = parsed.data
+  const res = await editarCartaoGasto(ctx, {
+    cartaoId: p.cartaoId,
+    ...(p.nome !== undefined ? { nome: p.nome } : {}),
+    ...(p.bandeira !== undefined ? { bandeira: p.bandeira } : {}),
+    ...(p.ultimos4 !== undefined ? { ultimos4: p.ultimos4 } : {}),
+    ...(p.ativo !== undefined ? { ativo: p.ativo } : {}),
+    ...(p.limiteCentavos !== undefined ? { limiteCentavos: p.limiteCentavos } : {}),
+    ...(p.motivo !== undefined ? { motivo: p.motivo } : {}),
+  })
+
+  const feedback: OperacaoFeedback = {
+    ok: true,
+    operacaoId: res.eventoLimite?.id ?? res.cartao.id,
+    contratoG004: res.eventoLimite ? `G004_CARTAO_LIMITE_${res.eventoLimite.acao}` : "G004_CARTAO_EDITAR",
+    mensagem: res.eventoLimite
+      ? res.eventoLimite.acao === "REMOCAO"
+        ? `Limite do cartão "${res.cartao.nome}" removido e auditado no histórico (G004).`
+        : `Limite do cartão "${res.cartao.nome}" atualizado e registrado no histórico (G004).`
+      : `Dados do cartão "${res.cartao.nome}" atualizados (G004).`,
+  }
+
+  return {
+    feedback,
+    cartao: res.cartao,
+    resumoLimite: res.resumoLimite,
+    eventoLimite: res.eventoLimite,
+  }
+}
+
+export async function listarCartoesCanonicosReal(
+  ctx: FinanceiroContextoAutorizado,
+  opcoes?: { cartaoId?: string; incluirInativos?: boolean; incluirHistoricoLimites?: boolean }
+) {
+  return consultarCartoesGasto(ctx, opcoes ?? {})
+}
+
+export async function listarHistoricoLimiteCartaoReal(
+  ctx: FinanceiroContextoAutorizado,
+  cartaoId: string
+) {
+  return consultarHistoricoLimiteCartaoGasto(ctx, cartaoId)
 }
 
 export async function registrarCompraCartaoReal(
@@ -530,10 +621,33 @@ export async function pagarFaturaReal(
     throw new GestorMoneyApiError("fatura_sem_saldo", 409, "Esta fatura não possui títulos pendentes.")
   }
 
+  let alocacoesAplicadas = alocacoes
+  if (p.valorCentavos) {
+    const desejado = parseBigIntCentavos(p.valorCentavos)
+    const totalAberto = alocacoes.reduce((acc, a) => acc + parseBigIntCentavos(a.valorCentavos), BigInt(0))
+    if (desejado <= BigInt(0) || desejado > totalAberto) {
+      throw new GestorMoneyApiError(
+        "valor_fatura_invalido",
+        409,
+        "O valor informado excede o saldo em aberto desta fatura."
+      )
+    }
+    let restanteDistribuir = desejado
+    const parciais: Array<{ tituloId: string; valorCentavos: string }> = []
+    for (const item of alocacoes) {
+      if (restanteDistribuir <= BigInt(0)) break
+      const abertoItem = parseBigIntCentavos(item.valorCentavos)
+      const aplicado = abertoItem <= restanteDistribuir ? abertoItem : restanteDistribuir
+      parciais.push({ tituloId: item.tituloId, valorCentavos: aplicado.toString() })
+      restanteDistribuir -= aplicado
+    }
+    alocacoesAplicadas = parciais
+  }
+
   const proposta: PropostaGasto = {
     tipo: "PAGAR_FATURA",
     cicloId: p.cicloId,
-    alocacoes,
+    alocacoes: alocacoesAplicadas,
     moeda: "BRL",
     carteiraId: p.carteiraId,
     formaPagamento: p.formaPagamento,
@@ -545,7 +659,9 @@ export async function pagarFaturaReal(
     ok: true,
     operacaoId: resultado.operacaoId,
     contratoG004: "PAGAR_FATURA",
-    mensagem: "Fatura paga atomicamente no motor G004 sem duplicar despesas.",
+    mensagem: p.valorCentavos
+      ? "Pagamento parcial da fatura aplicado no motor G004 com recomposição proporcional do limite."
+      : "Fatura paga atomicamente no motor G004 com recomposição do limite disponível.",
   }
 }
 

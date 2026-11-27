@@ -37,7 +37,7 @@ export async function GET(req: Request) {
       {
         ok: true,
         documentos,
-        storagePrivadoProvisionado: storageDiagnostico.liberadoNoMotorG003,
+        storagePrivadoProvisionado: storageDiagnostico.runtimeLiberado,
         storageDiagnostico,
       },
       200

@@ -120,6 +120,15 @@ export function DebtsView({
         throw new Error("Informe um valor de pagamento parcial válido.")
       }
 
+      let documentoIdReal: string | undefined
+      if (gateway.mode === "real" && comprovante?.conteudoBase64) {
+        const doc = await gateway.enviarComprovante(seletor, {
+          nomeArquivo: comprovante.nomeArquivo,
+          conteudoBase64: comprovante.conteudoBase64,
+        })
+        documentoIdReal = doc.id
+      }
+
       const fb = await gateway.pagarDivida(seletor, {
         dividaId: dividaAlvo.divida.id,
         quitar: dividaAlvo.quitar,
@@ -129,6 +138,7 @@ export function DebtsView({
         dataPagamento,
         observacao: observacao || undefined,
         comprovante,
+        ...(documentoIdReal ? { documentoId: documentoIdReal } : {}),
       })
       await onMutationSuccess(fb)
       setDividaAlvo(null)
@@ -461,7 +471,13 @@ export function DebtsView({
                 />
               </div>
             </div>
-            <ReceiptAttachmentInput value={comprovante} onChange={setComprovante} disabled={submitting} />
+            <ReceiptAttachmentInput
+              value={comprovante}
+              onChange={setComprovante}
+              disabled={submitting}
+              storageDiagnostico={snapshot.storageDiagnostico}
+              mode={gateway.mode}
+            />
             {error && (
               <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-600 dark:text-rose-300">
                 {error}

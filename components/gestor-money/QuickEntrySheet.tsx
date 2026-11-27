@@ -142,6 +142,15 @@ export function QuickEntrySheet({
     try {
       let feedback: OperacaoFeedback
 
+      let documentoIdReal: string | undefined
+      if (gateway.mode === "real" && comprovante?.conteudoBase64) {
+        const doc = await gateway.enviarComprovante(seletor, {
+          nomeArquivo: comprovante.nomeArquivo,
+          conteudoBase64: comprovante.conteudoBase64,
+        })
+        documentoIdReal = doc.id
+      }
+
       if (tab === "despesa") {
         const centavos = parseBRLParaCentavos(valorTexto)
         if (!centavos || BigInt(centavos) <= BigInt(0)) {
@@ -158,6 +167,7 @@ export function QuickEntrySheet({
           formaPagamento,
           contraparte: contraparte || undefined,
           comprovante,
+          ...(documentoIdReal ? { documentoId: documentoIdReal } : {}),
         })
       } else if (tab === "receita") {
         const centavos = parseBRLParaCentavos(valorTexto)
@@ -189,6 +199,7 @@ export function QuickEntrySheet({
           parcelasTotal: Math.max(1, Number(parcelasTotal) || 1),
           categoriaId,
           comprovante,
+          ...(documentoIdReal ? { documentoId: documentoIdReal } : {}),
         })
       } else if (tab === "pagamento") {
         if (!dividaId) throw new Error("Selecione a dívida para registrar o pagamento.")
@@ -205,6 +216,7 @@ export function QuickEntrySheet({
           dataPagamento: data,
           observacao: descricao || undefined,
           comprovante,
+          ...(documentoIdReal ? { documentoId: documentoIdReal } : {}),
         })
       } else {
         const centavos = parseBRLParaCentavos(valorTexto)
@@ -520,8 +532,14 @@ export function QuickEntrySheet({
           )}
 
           <div className="space-y-1.5">
-            <Label>Comprovante (opcional · G003)</Label>
-            <ReceiptAttachmentInput value={comprovante} onChange={setComprovante} disabled={submitting} />
+            <Label>Comprovante (opcional · G003-STORAGE)</Label>
+            <ReceiptAttachmentInput
+              value={comprovante}
+              onChange={setComprovante}
+              disabled={submitting}
+              storageDiagnostico={snapshot.storageDiagnostico}
+              mode={gateway.mode}
+            />
           </div>
 
           {error && (

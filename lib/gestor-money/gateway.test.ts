@@ -166,7 +166,7 @@ describe("Gestor Money — Fronteira Isolada e Contratos G001–G006", () => {
     expect(depois!.receitasCentavos).toBe(antes!.receitasCentavos)
   })
 
-  it("G004: cartão de crédito — compra parcelada reduz limite e pagamento de fatura restaura limite", async () => {
+  it("G004: cartão de crédito — cadastro, edição/remoção com histórico, compra parcelada, limite insuficiente e recomposição no pagamento", async () => {
     const gw = createSyntheticGestorMoneyGateway()
     const [pessoal] = await gw.listarPerfis()
     const sel: FinanceiroPerfilSeletor = { tipo: "PESSOAL", perfilId: pessoal.perfilId }
@@ -174,8 +174,36 @@ describe("Gestor Money — Fronteira Isolada e Contratos G001–G006", () => {
     const antes = await gw.obterSnapshot(sel)
     const cardAntes = antes!.cartoes[0]
 
-    await gw.registrarCompraCartao(sel, {
+    // Edição de limite grava evento imutável ALTERACAO
+    await gw.editarCartao(sel, {
       cartaoId: cardAntes.id,
+      limiteCentavos: "1500000",
+      motivo: "Aumento anual",
+    })
+    const histAposEdit = await gw.obterHistoricoLimiteCartao(sel, cardAntes.id)
+    expect(histAposEdit[0].acao).toBe("ALTERACAO")
+    expect(histAposEdit[0].limiteAnteriorCentavos).toBe("1200000")
+    expect(histAposEdit[0].limiteNovoCentavos).toBe("1500000")
+    expect(histAposEdit[0].motivo).toBe("Aumento anual")
+
+    // Compra acima do limite disponível falha com limite_cartao_insuficiente
+    await expect(
+      gw.registrarCompraCartao(sel, {
+        cartaoId: cardAntes.id,
+        descricao: "Equipamento Acima Limite",
+        estabelecimento: "Loja X",
+        valorTotalCentavos: "2000000",
+        parcelasTotal: 6,
+        categoriaId: "cat-pessoal-fornecedores",
+        dataCompra: "2026-11-27",
+      })
+    ).rejects.toMatchObject({ code: "limite_cartao_insuficiente" })
+
+    const aposEdit = (await gw.obterSnapshot(sel))!
+    const cardEditado = aposEdit.cartoes.find((c) => c.id === cardAntes.id)!
+
+    await gw.registrarCompraCartao(sel, {
+      cartaoId: cardEditado.id,
       descricao: "Monitor 4K",
       estabelecimento: "Kabum",
       valorTotalCentavos: "120000",
@@ -185,13 +213,27 @@ describe("Gestor Money — Fronteira Isolada e Contratos G001–G006", () => {
     })
 
     const aposCompra = await gw.obterSnapshot(sel)
-    const cardAposCompra = aposCompra!.cartoes.find((c) => c.id === cardAntes.id)!
-    expect(cardAntes.disponivelCentavos).not.toBeNull()
+    const cardAposCompra = aposCompra!.cartoes.find((c) => c.id === cardEditado.id)!
+    expect(cardEditado.disponivelCentavos).not.toBeNull()
     expect(cardAposCompra.disponivelCentavos).not.toBeNull()
-    expect(BigInt(cardAposCompra.disponivelCentavos!)).toBe(BigInt(cardAntes.disponivelCentavos!) - BigInt(120000))
+    expect(BigInt(cardAposCompra.disponivelCentavos!)).toBe(BigInt(cardEditado.disponivelCentavos!) - BigInt(120000))
     expect(cardAposCompra.comprasParceladas.some((cp) => cp.descricao === "Monitor 4K")).toBe(true)
 
     const faturaAberta = cardAposCompra.ciclos.find((ci) => ci.status === "aberta")!
+    // Pagamento parcial da fatura recompõe proporcionalmente o limite disponível
+    await gw.pagarFatura(sel, {
+      cartaoId: cardAposCompra.id,
+      cicloId: faturaAberta.id,
+      carteiraId: "conta-p-banco",
+      formaPagamento: "pix",
+      dataPagamento: "2026-11-27",
+      valorCentavos: "50000",
+    })
+    const aposParcial = (await gw.obterSnapshot(sel))!
+    const cardAposParcial = aposParcial.cartoes.find((c) => c.id === cardEditado.id)!
+    expect(BigInt(cardAposParcial.disponivelCentavos!)).toBe(BigInt(cardAposCompra.disponivelCentavos!) + BigInt(50000))
+
+    // Pagamento restante liquida a fatura
     await gw.pagarFatura(sel, {
       cartaoId: cardAposCompra.id,
       cicloId: faturaAberta.id,
@@ -206,6 +248,18 @@ describe("Gestor Money — Fronteira Isolada e Contratos G001–G006", () => {
       .ciclos.find((ci) => ci.id === faturaAberta.id)!
     expect(cicloPago.status).toBe("paga")
     expect(cicloPago.restanteCentavos).toBe("0")
+
+    // Remoção de limite grava REMOCAO e define limiteCentavos=null (nunca 0)
+    await gw.editarCartao(sel, {
+      cartaoId: cardAntes.id,
+      limiteCentavos: null,
+      motivo: "Sem limite informado",
+    })
+    const aposRemocao = (await gw.obterSnapshot(sel))!
+    const cardSemLimite = aposRemocao.cartoes.find((c) => c.id === cardAntes.id)!
+    expect(cardSemLimite.limiteCentavos).toBeNull()
+    expect(cardSemLimite.disponivelCentavos).toBeNull()
+    expect(cardSemLimite.historicoLimites[0].acao).toBe("REMOCAO")
   })
 
   it("G005: relatórios projetam granularidades (diário, semanal, mensal, período) e CSV honesto", async () => {

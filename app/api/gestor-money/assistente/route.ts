@@ -4,6 +4,7 @@ import {
   requireGestorMoneyApiContext,
   respostaPrivadaJson,
 } from "@/lib/gestor-money/server/auth-boundary"
+import { diagnosticarStorageComprovantes } from "@/lib/gestor-money/server/documents-adapter"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -40,6 +41,8 @@ export async function GET(req: Request) {
     })
     .catch(() => null)
 
+  const storageDiag = diagnosticarStorageComprovantes()
+
   const config: AssistenteWhatsAppConfig = {
     estadoConexao: "DESCONECTADO_AGUARDANDO_G007",
     estadoDescricao:
@@ -75,10 +78,9 @@ export async function GET(req: Request) {
       },
       {
         codigo: "G003-STORAGE",
-        titulo: "Liberação do Cloudflare R2 privado em lib/gastos/documentos.ts",
-        status: "PENDENTE_PR_405",
-        detalhe:
-          "Adapter R2 já existe em lib/contador/documentos/storage-r2.ts; aguarda gate G003-STORAGE na fundação sem bypass.",
+        titulo: "Gate formal de armazenamento privado Cloudflare R2 (lib/gastos/documentos-storage.ts)",
+        status: storageDiag.runtimeLiberado ? "DISPONIVEL_NO_RUNTIME" : "BLOQUEADO_G003_STORAGE",
+        detalhe: storageDiag.motivo,
       },
     ],
     alinhamentoG007: {

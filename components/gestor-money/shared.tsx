@@ -30,6 +30,7 @@ import {
   DOCUMENTO_MAX_BYTES,
   DOCUMENTO_MIME_PERMITIDOS,
   type ComprovanteUploadDraft,
+  type StorageComprovantesDiagnostico,
 } from "@/lib/gestor-money/contracts"
 import { formatarTamanhoArquivo } from "@/lib/gestor-money/money"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -87,6 +88,9 @@ export function StatusPill({
     vencido: "bg-rose-500/12 text-rose-600 dark:text-rose-300 border-rose-500/25",
     vencida: "bg-rose-500/12 text-rose-600 dark:text-rose-300 border-rose-500/25",
     cancelado: "bg-muted text-muted-foreground border-border",
+    DISPONIVEL: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 border-emerald-500/25",
+    RETIDO: "bg-sky-500/12 text-sky-600 dark:text-sky-300 border-sky-500/25",
+    QUARENTENA: "bg-rose-500/12 text-rose-600 dark:text-rose-300 border-rose-500/25",
   }
   const labels: Record<string, string> = {
     aberto: "Em aberto",
@@ -100,6 +104,9 @@ export function StatusPill({
     vencido: "Vencido",
     vencida: "Vencida",
     cancelado: "Cancelado",
+    DISPONIVEL: "Disponível",
+    RETIDO: "Retido",
+    QUARENTENA: "Quarentena",
   }
   return (
     <span
@@ -177,19 +184,34 @@ export function DashboardSkeleton() {
   )
 }
 
+function bytesParaBase64(bytes: Uint8Array): string {
+  let binary = ""
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
+}
+
 export function ReceiptAttachmentInput({
   value,
   onChange,
   disabled,
+  storageDiagnostico,
+  mode,
 }: {
   value: ComprovanteUploadDraft | undefined
   onChange: (draft: ComprovanteUploadDraft | undefined) => void
   disabled?: boolean
+  storageDiagnostico?: StorageComprovantesDiagnostico
+  mode?: "real" | "synthetic"
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const bloqueadoPorStorage = mode === "real" && !(storageDiagnostico?.runtimeLiberado ?? false)
+  const inputDisabled = Boolean(disabled || bloqueadoPorStorage)
 
-  const handleFile = (file: File | null | undefined) => {
+  const handleFile = async (file: File | null | undefined) => {
     setError(null)
     if (!file) return
     const mimePermitido = DOCUMENTO_MIME_PERMITIDOS.find((m) => m === file.type)
@@ -201,11 +223,17 @@ export function ReceiptAttachmentInput({
       setError("Arquivo excede o limite máximo de 10 MB.")
       return
     }
-    onChange({
-      nomeArquivo: file.name.replace(/[/\\]/g, "_"),
-      mime: mimePermitido,
-      bytes: file.size,
-    })
+    try {
+      const buf = await file.arrayBuffer()
+      onChange({
+        nomeArquivo: file.name.replace(/[/\\]/g, "_"),
+        mime: mimePermitido,
+        bytes: file.size,
+        conteudoBase64: bytesParaBase64(new Uint8Array(buf)),
+      })
+    } catch {
+      setError("Não foi possível ler os bytes do arquivo selecionado.")
+    }
   }
 
   return (
@@ -215,13 +243,26 @@ export function ReceiptAttachmentInput({
         type="file"
         accept=".pdf,.png,.jpg,.jpeg,.txt"
         className="hidden"
-        disabled={disabled}
+        disabled={inputDisabled}
         onChange={(e) => {
-          handleFile(e.target.files?.[0])
+          void handleFile(e.target.files?.[0])
           e.target.value = ""
         }}
       />
-      {value ? (
+      {bloqueadoPorStorage ? (
+        <div
+          data-testid="receipt-storage-blocked-notice"
+          className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-[11px] text-amber-800 dark:text-amber-300"
+        >
+          <p className="font-semibold">
+            Anexo indisponível · Gate G003-STORAGE ({storageDiagnostico?.bloqueioCodigo ?? "privacidade_bucket_nao_comprovada"})
+          </p>
+          <p className="mt-0.5 opacity-90">
+            {storageDiagnostico?.motivo ??
+              "Storage privado R2 bloqueado (fail-closed) até comprovação real da privacidade do bucket."}
+          </p>
+        </div>
+      ) : value ? (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
             <Paperclip className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -246,11 +287,11 @@ export function ReceiptAttachmentInput({
       ) : (
         <button
           type="button"
-          disabled={disabled}
+          disabled={inputDisabled}
           onClick={() => inputRef.current?.click()}
           className={cn(
             "flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-3 py-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/60 hover:text-foreground",
-            disabled && "cursor-not-allowed opacity-50"
+            inputDisabled && "cursor-not-allowed opacity-50"
           )}
         >
           <Upload className="h-4 w-4" />

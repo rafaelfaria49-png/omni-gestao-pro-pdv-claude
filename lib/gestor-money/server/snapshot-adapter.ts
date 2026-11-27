@@ -1,8 +1,10 @@
 import "server-only"
+import { consultarCartoesGasto } from "@/lib/gastos/cartoes"
 import { consultarFinanceiro, filtroConsultaFinanceira } from "@/lib/gastos/query"
 import { comLeituraFinanceira, leituraPerfilWhere } from "@/lib/gastos/read-scope"
 import { listarDocumentosGasto } from "@/lib/gastos/documentos"
 import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
+import { diagnosticarStorageComprovantes } from "./documents-adapter"
 import {
   CATEGORIAS_PADRAO_DESPESA,
   GESTOR_MONEY_BASE,
@@ -108,11 +110,12 @@ export async function obterSnapshotReal(
     ...(periodo?.dataFim ? { dataFim: periodo.dataFim } : {}),
   })
 
-  const [consulta, extras, documentosRaw] = await Promise.all([
+  const [consulta, cartoesCanonicos, extras, documentosRaw] = await Promise.all([
     consultarFinanceiro(contexto, filtro),
+    consultarCartoesGasto(contexto, { incluirInativos: false, incluirHistoricoLimites: true }),
     comLeituraFinanceira(contexto, async (db, ctx) => {
       const wherePerfil = leituraPerfilWhere(ctx)
-      const [categorias, contasMeta, cartoes, pagarExtra] = await Promise.all([
+      const [categorias, contasMeta, cartoesDetalhes, pagarExtra] = await Promise.all([
         db.categoriaGasto.findMany({
           where: { perfilId: ctx.perfilId, storeId: ctx.tipo === "EMPRESA" ? ctx.storeId : null },
           orderBy: [{ natureza: "asc" }, { nome: "asc" }],
@@ -122,14 +125,24 @@ export async function obterSnapshotReal(
           select: { id: true, instituicao: true, identificadorInstrumento: true, tipo: true },
         }),
         db.cartaoInstrumento.findMany({
-          where: { perfilId: ctx.perfilId, storeId: ctx.tipo === "EMPRESA" ? ctx.storeId : null },
-          include: {
+          where: { perfilId: ctx.perfilId, storeId: ctx.tipo === "EMPRESA" ? ctx.storeId : null, ativo: true },
+          select: {
+            id: true,
             ciclos: {
-              orderBy: { competencia: "asc" },
-              include: {
+              orderBy: [{ competencia: "asc" }, { vencimento: "asc" }, { id: "asc" }],
+              select: {
+                id: true,
+                competencia: true,
                 titulos: {
                   where: { ativo: true },
-                  include: {
+                  select: {
+                    id: true,
+                    descricao: true,
+                    valor: true,
+                    valorCentavos: true,
+                    categoriaId: true,
+                    payload: true,
+                    createdAt: true,
                     categoria: { select: { id: true, nome: true } },
                     gasto: { select: { id: true, descricao: true, dataGasto: true, valorCentavos: true } },
                     alocacoesPagamento: {
@@ -152,7 +165,7 @@ export async function obterSnapshotReal(
               },
             },
           },
-          orderBy: { createdAt: "asc" },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         }),
         db.contaPagarTitulo.findMany({
           where: { ...wherePerfil, ativo: true },
@@ -181,7 +194,7 @@ export async function obterSnapshotReal(
           },
         }),
       ])
-      return { categorias, contasMeta, cartoes, pagarExtra }
+      return { categorias, contasMeta, cartoesDetalhes, pagarExtra }
     }),
     listarDocumentosGasto(contexto),
   ])
@@ -378,24 +391,22 @@ export async function obterSnapshotReal(
       }
     })
 
-  // Cartões de crédito: projetados diretamente de cartoes_instrumentos + cartoes_ciclos (G004)
+  // Cartões de crédito: valores financeiros (limite, utilizado, disponível, excedido, percentual, ciclos e histórico de limites)
+  // vêm EXCLUSIVAMENTE do contrato canônico `consultarCartoesGasto` (G004/G005), sem recálculo paralelo.
   const gradientes = [
     "from-violet-700 via-purple-700 to-slate-900",
     "from-amber-600 via-orange-600 to-zinc-900",
     "from-rose-700 via-red-700 to-slate-950",
     "from-slate-800 via-zinc-800 to-emerald-900",
   ]
-  const cartoes: CartaoCreditoResumo[] = extras.cartoes.map((card, idx) => {
-    const ciclos: CartaoCicloResumo[] = []
+  const detalhesCartaoMap = new Map(extras.cartoesDetalhes.map((c) => [c.id, c]))
+  const cartoes: CartaoCreditoResumo[] = cartoesCanonicos.map((card, idx) => {
+    const detalhes = detalhesCartaoMap.get(card.id)
     const comprasParceladas: CompraParceladaCartao[] = []
     const historico: HistoricoCartaoItem[] = []
-    let usadoTotal = BigInt(0)
 
-    for (const ciclo of card.ciclos) {
-      let totalCiclo = BigInt(0)
-      let pagoCiclo = BigInt(0)
-
-      for (const titulo of ciclo.titulos) {
+    for (const cicloDetalhe of detalhes?.ciclos ?? []) {
+      for (const titulo of cicloDetalhe.titulos) {
         const valor = BigInt(titulo.valorCentavos?.toString() ?? Math.round(titulo.valor * 100))
         let pagoTitulo = BigInt(0)
         for (const a of titulo.alocacoesPagamento) {
@@ -406,17 +417,14 @@ export async function obterSnapshotReal(
               id: `pag-${a.id}`,
               cartaoId: card.id,
               tipo: "PAGAMENTO_FATURA",
-              descricao: `Pagamento Fatura ${ciclo.competencia}`,
+              descricao: `Pagamento Fatura ${cicloDetalhe.competencia}`,
               valorCentavos: av.toString(),
               data: a.pagamento.pagoEm.toISOString().slice(0, 10),
-              competencia: ciclo.competencia,
+              competencia: cicloDetalhe.competencia,
             })
           }
         }
         if (pagoTitulo < BigInt(0)) pagoTitulo = BigInt(0)
-        if (pagoTitulo > valor) pagoTitulo = valor
-        totalCiclo += valor
-        pagoCiclo += pagoTitulo
 
         const parcelasTitulo = extrairParcelasPayload(titulo.payload)
         historico.push({
@@ -426,7 +434,7 @@ export async function obterSnapshotReal(
           descricao: titulo.descricao,
           valorCentavos: valor.toString(),
           data: (titulo.gasto?.dataGasto ?? titulo.createdAt).toISOString().slice(0, 10),
-          competencia: ciclo.competencia,
+          competencia: cicloDetalhe.competencia,
           parcelaTexto:
             parcelasTitulo.numero && parcelasTitulo.total
               ? `${parcelasTitulo.numero}/${parcelasTitulo.total}`
@@ -438,7 +446,7 @@ export async function obterSnapshotReal(
           comprasParceladas.push({
             id: titulo.id,
             cartaoId: card.id,
-            cicloId: ciclo.id,
+            cicloId: cicloDetalhe.id,
             descricao: titulo.gasto?.descricao ?? titulo.descricao,
             estabelecimento: titulo.descricao,
             categoriaId: titulo.categoriaId,
@@ -452,11 +460,12 @@ export async function obterSnapshotReal(
           })
         }
       }
+    }
 
-      const restanteCiclo = totalCiclo > pagoCiclo ? totalCiclo - pagoCiclo : BigInt(0)
-      usadoTotal += restanteCiclo
-      const vencIso = ciclo.vencimento.toISOString().slice(0, 10)
-      const fechIso = (ciclo.fechamentoEm ?? ciclo.vencimento).toISOString().slice(0, 10)
+    const ciclos: CartaoCicloResumo[] = card.ciclos.map((ciclo) => {
+      const totalCiclo = parseBigIntCentavos(ciclo.totalCentavos)
+      const restanteCiclo = parseBigIntCentavos(ciclo.restanteCentavos)
+      const fechIso = ciclo.fechamentoEm ?? ciclo.vencimento
       const status: CartaoCicloResumo["status"] =
         totalCiclo > BigInt(0) && restanteCiclo === BigInt(0)
           ? "paga"
@@ -466,19 +475,20 @@ export async function obterSnapshotReal(
               ? "fechada"
               : "aberta"
 
-      ciclos.push({
+      return {
         id: ciclo.id,
         cartaoId: card.id,
         identificador: ciclo.identificador,
         competencia: ciclo.competencia,
         fechamentoEm: fechIso,
-        vencimento: vencIso,
-        totalCentavos: totalCiclo.toString(),
-        pagoCentavos: pagoCiclo.toString(),
-        restanteCentavos: restanteCiclo.toString(),
+        vencimento: ciclo.vencimento,
+        totalCentavos: ciclo.totalCentavos,
+        pagoCentavos: ciclo.pagoCentavos,
+        restanteCentavos: ciclo.restanteCentavos,
+        quantidadeTitulos: ciclo.quantidadeTitulos,
         status,
-      })
-    }
+      }
+    })
 
     const ultimoCiclo = ciclos[ciclos.length - 1]
     const fechamentoDia = ultimoCiclo ? Number(ultimoCiclo.fechamentoEm.slice(8, 10)) || 5 : 5
@@ -491,18 +501,20 @@ export async function obterSnapshotReal(
       bandeira: card.bandeira ?? "Cartão",
       ultimos4: card.ultimos4 ?? "0000",
       corGradiente: gradientes[idx % gradientes.length],
-      // Lacuna G004: `cartoes_instrumentos` não possui coluna `limiteCentavos` no schema PR #405.
-      // Nunca apresentar R$ 0,00 como limite real: `null` indica dado não cadastrado/não modelado.
-      limiteCentavos: null,
-      usadoCentavos: usadoTotal.toString(),
-      disponivelCentavos: null,
-      limitePersistenciaDisponivel: false,
+      politicaComprometimento: card.politicaComprometimento,
+      limiteCentavos: card.limiteCentavos,
+      usadoCentavos: card.limiteUtilizadoCentavos,
+      disponivelCentavos: card.limiteDisponivelCentavos,
+      limiteExcedidoCentavos: card.limiteExcedidoCentavos,
+      limiteComprometidoPercentual: card.limiteComprometidoPercentual,
+      limitePersistenciaDisponivel: true,
       fechamentoDia,
       vencimentoDia,
       ativo: card.ativo,
       ciclos,
       comprasParceladas,
       historico: historico.sort((a, b) => (a.data < b.data ? 1 : -1)),
+      historicoLimites: [...card.historicoLimites].reverse(),
     }
   })
 
@@ -643,5 +655,6 @@ export async function obterSnapshotReal(
     categorias,
     eventos,
     documentos,
+    storageDiagnostico: diagnosticarStorageComprovantes(),
   }
 }

@@ -368,7 +368,7 @@ export function AssistantSettingsView({
                 <p className="text-[11px] text-muted-foreground">{dep.detalhe}</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                {dep.status === "DISPONIVEL_EM_SANDBOX" ? (
+                {dep.status === "DISPONIVEL_EM_SANDBOX" || dep.status === "DISPONIVEL_NO_RUNTIME" ? (
                   <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                 ) : (
                   <Lock className="h-3 w-3 text-amber-500" />

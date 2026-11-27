@@ -43,6 +43,10 @@ vi.mock("@/lib/prisma", async () => {
 
 import { prisma } from "@/lib/prisma"
 import { DocumentoStorageFixture } from "@/lib/gastos/documentos-fixture"
+import {
+  criarStoragePrivadoR2G003,
+  type VerificadorPrivacidadeR2G003,
+} from "@/lib/gastos/documentos-storage"
 import { declararDonoPessoalRls } from "@/lib/gastos/rls-contexto"
 import { createRealBoundaryGateway } from "@/lib/gestor-money/gateway"
 import { projetarRelatorioFinanceiro } from "@/lib/gestor-money/reports"
@@ -55,7 +59,12 @@ import { GET as snapshotGet } from "@/app/api/gestor-money/snapshot/route"
 import { POST as operacoesPost } from "@/app/api/gestor-money/operacoes/route"
 import { PATCH as contasPatch, POST as contasPost } from "@/app/api/gestor-money/contas/route"
 import { PATCH as categoriasPatch, POST as categoriasPost } from "@/app/api/gestor-money/categorias/route"
-import { POST as cartoesPost } from "@/app/api/gestor-money/cartoes/route"
+import {
+  GET as cartoesGet,
+  PATCH as cartoesPatch,
+  POST as cartoesPost,
+} from "@/app/api/gestor-money/cartoes/route"
+import { GET as cartaoLimitesGet } from "@/app/api/gestor-money/cartoes/[cartaoId]/limites/route"
 import { GET as documentosGet, POST as documentosPost } from "@/app/api/gestor-money/documentos/route"
 import { GET as documentoDownloadGet } from "@/app/api/gestor-money/documentos/[documentoId]/download/route"
 import { GET as assistenteGet } from "@/app/api/gestor-money/assistente/route"
@@ -77,8 +86,23 @@ function inProcessFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
   if (pathname === "/api/gestor-money/operacoes") return operacoesPost(req)
   if (pathname === "/api/gestor-money/contas") return method === "PATCH" ? contasPatch(req) : contasPost(req)
   if (pathname === "/api/gestor-money/categorias") return method === "PATCH" ? categoriasPatch(req) : categoriasPost(req)
-  if (pathname === "/api/gestor-money/cartoes") return cartoesPost(req)
+  if (pathname === "/api/gestor-money/cartoes") {
+    if (method === "GET") return cartoesGet(req)
+    return method === "PATCH" ? cartoesPatch(req) : cartoesPost(req)
+  }
+  const cartaoLimitesMatch = /^\/api\/gestor-money\/cartoes\/([^/]+)\/limites$/.exec(pathname)
+  if (cartaoLimitesMatch) {
+    return cartaoLimitesGet(req, {
+      params: Promise.resolve({ cartaoId: decodeURIComponent(cartaoLimitesMatch[1]) }),
+    })
+  }
   if (pathname === "/api/gestor-money/documentos") return method === "POST" ? documentosPost(req) : documentosGet(req)
+  const docDownloadMatch = /^\/api\/gestor-money\/documentos\/([^/]+)\/download$/.exec(pathname)
+  if (docDownloadMatch) {
+    return documentoDownloadGet(req, {
+      params: Promise.resolve({ documentoId: decodeURIComponent(docDownloadMatch[1]) }),
+    })
+  }
   if (pathname === "/api/gestor-money/assistente") return assistenteGet(req)
 
   return Promise.resolve(new Response(JSON.stringify({ ok: false, code: "not_found" }), { status: 404 }))
@@ -393,7 +417,9 @@ describe.skipIf(!pgConfig.enabled)(
       const card = snap.cartoes.find((c) => c.id === cardFb.operacaoId)!
       expect(card.limiteCentavos).toBeNull()
       expect(card.disponivelCentavos).toBeNull()
-      expect(card.limitePersistenciaDisponivel).toBe(false)
+      expect(card.limiteExcedidoCentavos).toBeNull()
+      expect(card.limiteComprometidoPercentual).toBeNull()
+      expect(card.limitePersistenciaDisponivel).toBe(true)
       expect(card.ciclos.length).toBe(3)
       expect(card.ciclos[0].totalCentavos).toBe("20001")
       expect(card.ciclos[1].totalCentavos).toBe("20000")
@@ -508,7 +534,9 @@ describe.skipIf(!pgConfig.enabled)(
       loginAs(s.U1, [s.L1])
       const selPessoal = { tipo: "PESSOAL" as const, perfilId: s.P1 }
 
-      // Sem storage injetado -> HTTP POST /documentos falha fechado com 503 honesto (sem bypass do G003)
+      // Sem storage injetado e sem flag -> HTTP POST /documentos falha fechado com 503 (flag_desligada)
+      const prevStorageFlag = process.env.GESTOR_MONEY_STORAGE_G003_ENABLED
+      delete process.env.GESTOR_MONEY_STORAGE_G003_ENABLED
       const uploadBlocked = await documentosPost(
         new Request("http://localhost/api/gestor-money/documentos", {
           method: "POST",
@@ -521,10 +549,75 @@ describe.skipIf(!pgConfig.enabled)(
         })
       )
       expect(uploadBlocked.status).toBe(503)
-      expect((await uploadBlocked.json()).code).toBe("documentos_storage_privado_bloqueado_g003")
+      expect((await uploadBlocked.json()).code).toBe("flag_desligada")
 
-      // Com storage privado descartável G003 -> fluxo HTTP completo: upload + validação + vínculo + URL temporária + download + bloqueio cruzado
-      const storage = new DocumentoStorageFixture()
+      // Mesmo com flag=true + R2 config, sem prova de privacidade do bucket -> fail-closed 503 (privacidade_bucket_nao_comprovada)
+      const prevR2 = {
+        CONTADOR_STORAGE_PROVIDER: process.env.CONTADOR_STORAGE_PROVIDER,
+        R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+        R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+        R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+        R2_BUCKET: process.env.R2_BUCKET,
+      }
+      process.env.GESTOR_MONEY_STORAGE_G003_ENABLED = "true"
+      process.env.CONTADOR_STORAGE_PROVIDER = "r2"
+      process.env.R2_ACCOUNT_ID = "acc-ci-test"
+      process.env.R2_ACCESS_KEY_ID = "key-ci-test"
+      process.env.R2_SECRET_ACCESS_KEY = "secret-ci-test"
+      process.env.R2_BUCKET = "bucket-ci-privado"
+      try {
+        const uploadUnproven = await documentosPost(
+          new Request("http://localhost/api/gestor-money/documentos", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              seletor: selPessoal,
+              nomeArquivo: "recibo.txt",
+              conteudoBase64: Buffer.from("comprovante sintetico").toString("base64"),
+            }),
+          })
+        )
+        expect(uploadUnproven.status).toBe(503)
+        expect((await uploadUnproven.json()).code).toBe("privacidade_bucket_nao_comprovada")
+      } finally {
+        if (prevStorageFlag === undefined) delete process.env.GESTOR_MONEY_STORAGE_G003_ENABLED
+        else process.env.GESTOR_MONEY_STORAGE_G003_ENABLED = prevStorageFlag
+        for (const [k, v] of Object.entries(prevR2)) {
+          if (v === undefined) delete process.env[k]
+          else process.env[k] = v
+        }
+      }
+
+      // Com adapter G003-STORAGE real (`criarStoragePrivadoR2G003`) conectado a verificador comprovando privacidade R2 (em ambiente de teste)
+      const r2BaseFixture = new DocumentoStorageFixture()
+      const verificadorPrivado: VerificadorPrivacidadeR2G003 = {
+        async verificarPrivacidadeEEscopo(cfg) {
+          return {
+            bucketExiste: true,
+            r2DevPublico: false,
+            dominiosPublicosCount: 0,
+            probeAnonimoNegado: true,
+            escopoCredencial: {
+              restritoAoBucket: true,
+              escopoGlobalConta: false,
+              podeListarTodosBuckets: false,
+              bucketAutorizado: cfg.bucket,
+            },
+          }
+        },
+      }
+      const storage = criarStoragePrivadoR2G003({
+        env: {
+          GESTOR_MONEY_STORAGE_G003_ENABLED: "true",
+          CONTADOR_STORAGE_PROVIDER: "r2",
+          R2_ACCOUNT_ID: "acc-ci-test",
+          R2_ACCESS_KEY_ID: "key-ci-test",
+          R2_SECRET_ACCESS_KEY: "secret-ci-test",
+          R2_BUCKET: "bucket-ci-privado",
+        },
+        storageBase: r2BaseFixture,
+        verificadorPrivacidade: verificadorPrivado,
+      })
       definirStorageComprovantesTeste(storage)
 
       const gw = createRealBoundaryGateway(inProcessFetch)
@@ -548,21 +641,12 @@ describe.skipIf(!pgConfig.enabled)(
       )
       expect(htmlReject.status).toBe(422)
 
-      // Upload autenticado válido + vínculo com CONTA no perfil PESSOAL
-      const uploadOk = await documentosPost(
-        new Request("http://localhost/api/gestor-money/documentos", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            seletor: selPessoal,
-            nomeArquivo: "nota-pessoal.txt",
-            conteudoBase64: Buffer.from("comprovante-g003-real").toString("base64"),
-            alvo: { tipo: "CONTA", id: contaP.operacaoId },
-          }),
-        })
-      )
-      expect(uploadOk.status).toBe(201)
-      const doc = (await uploadOk.json()).documento as { id: string; estado: string }
+      // Upload autenticado válido + vínculo com CONTA via gateway real
+      const doc = await gw.enviarComprovante(selPessoal, {
+        nomeArquivo: "nota-pessoal.txt",
+        conteudoBase64: Buffer.from("comprovante-g003-real").toString("base64"),
+        alvo: { tipo: "CONTA", id: contaP.operacaoId },
+      })
       expect(doc.estado).toBe("DISPONIVEL")
 
       // HTTP GET /documentos/[id]/download emite URL temporária (TTL 60s) + Cache-Control privado
@@ -575,16 +659,16 @@ describe.skipIf(!pgConfig.enabled)(
       const dlBody = (await dlRes.json()) as { signedUrl: string; expiresInSec: number }
       expect(dlBody.signedUrl).toContain("fixture-private://download/")
       expect(dlBody.expiresInSec).toBe(60)
-      expect((await storage.consumirDownload(dlBody.signedUrl)).toString("utf8")).toBe("comprovante-g003-real")
+      expect((await r2BaseFixture.consumirDownload(dlBody.signedUrl)).toString("utf8")).toBe("comprovante-g003-real")
 
-      // HTTP GET /documentos lista metadados + diagnóstico honesto de storage
+      // HTTP GET /documentos lista metadados + diagnóstico honesto
       const listRes = await documentosGet(
         new Request(`http://localhost/api/gestor-money/documentos?tipo=PESSOAL&perfilId=${s.P1}`)
       )
       expect(listRes.status).toBe(200)
       const listBody = await listRes.json()
       expect(listBody.documentos.some((d: { id: string }) => d.id === doc.id)).toBe(true)
-      expect(listBody.storageDiagnostico.liberadoNoMotorG003).toBe(false)
+      expect(listBody.storageDiagnostico.gate).toBe("G003-STORAGE")
 
       // U2 NÃO consegue listar nem baixar URL temporária do documento privado de U1 (403)
       loginAs(s.U2, [s.L1])
@@ -606,6 +690,193 @@ describe.skipIf(!pgConfig.enabled)(
       expect(assist.alinhamentoG007?.principalAutorizadoAtual).toBe("SESSAO_WEB")
       expect(assist.alinhamentoG007?.verificadorVinculoDisponivel).toBe(false)
       expect(assist.alinhamentoG007?.homologacoes.whatsappOficial).toBe(false)
+    })
+
+    it("6. Cartões canônicos (PR #405 6c67cbb): cadastro/edição/remoção de limite, histórico imutável, comprometimento integral 3x, bloqueio limite_cartao_insuficiente (409), recomposição parcial/total, idempotência e isolamento RLS", async () => {
+      const s = await seedScenario()
+      loginAs(s.U1, [s.L1])
+      const gw = createRealBoundaryGateway(inProcessFetch)
+      const selPessoal = { tipo: "PESSOAL" as const, perfilId: s.P1 }
+      const hoje = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })
+
+      const conta = await gw.criarConta(selPessoal, {
+        nome: "Conta Fatura",
+        tipo: "banco",
+        saldoInicialCentavos: "200000", // R$ 2.000,00
+      })
+      const cat = await gw.criarCategoria(selPessoal, {
+        nome: "Eletrônicos",
+        natureza: "DESPESA",
+        cor: "#3b82f6",
+        icone: "Tag",
+      })
+
+      // 1. Cadastrar cartão com limite inicial de R$ 1.000,00 (100000 centavos)
+      const cardFb = await gw.criarCartao(selPessoal, {
+        nome: "Visa Black Canônico",
+        bandeira: "Visa",
+        ultimos4: "7788",
+        limiteCentavos: "100000",
+        motivo: "Limite inicial aprovado",
+        fechamentoDia: 5,
+        vencimentoDia: 12,
+      })
+
+      let snap = (await gw.obterSnapshot(selPessoal))!
+      // Limite de crédito NUNCA entra no saldo disponível das contas!
+      expect(snap.saldoDisponivelCentavos).toBe("200000")
+
+      let card = snap.cartoes.find((c) => c.id === cardFb.operacaoId)!
+      expect(card.limiteCentavos).toBe("100000")
+      expect(card.usadoCentavos).toBe("0")
+      expect(card.disponivelCentavos).toBe("100000")
+      expect(card.limiteExcedidoCentavos).toBe("0")
+      expect(card.limiteComprometidoPercentual).toBe(0)
+      expect(card.politicaComprometimento).toBe("COMPROMETIMENTO_INTEGRAL_COMPRA_RECOMPOSICAO_NO_PAGAMENTO")
+      expect(card.historicoLimites).toHaveLength(1)
+      expect(card.historicoLimites[0].acao).toBe("CADASTRO")
+      expect(card.historicoLimites[0].motivo).toBe("Limite inicial aprovado")
+
+      // 2. Compra parcelada em 3x de R$ 600,00 (60000 centavos) com idempotência explícita
+      const chaveCompra = `compra-3x-${randomUUID()}`
+      const compraBody = {
+        seletor: selPessoal,
+        chave: chaveCompra,
+        operacao: "compra_cartao",
+        payload: {
+          cartaoId: card.id,
+          descricao: "Cadeira Ergonômica",
+          estabelecimento: "Office Store",
+          valorTotalCentavos: "60000",
+          parcelasTotal: 3,
+          categoriaId: cat.operacaoId,
+          dataCompra: hoje,
+        },
+      }
+      const c1 = await operacoesPost(
+        new Request("http://localhost/api/gestor-money/operacoes", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(compraBody),
+        })
+      )
+      expect(c1.status).toBe(200)
+      const c1Json = await c1.json()
+      // Replay idempotente com a mesma chave devolve a mesma operação sem comprometer o limite 2x
+      const c2 = await operacoesPost(
+        new Request("http://localhost/api/gestor-money/operacoes", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(compraBody),
+        })
+      )
+      expect(c2.status).toBe(200)
+      expect((await c2.json()).feedback.operacaoId).toBe(c1Json.feedback.operacaoId)
+
+      snap = (await gw.obterSnapshot(selPessoal))!
+      card = snap.cartoes.find((c) => c.id === card.id)!
+      // Comprometimento integral das 3 parcelas (60000) imediatamente!
+      expect(card.usadoCentavos).toBe("60000")
+      expect(card.disponivelCentavos).toBe("40000")
+      expect(card.limiteComprometidoPercentual).toBe(60)
+      expect(card.ciclos).toHaveLength(3)
+      expect(card.ciclos[0].totalCentavos).toBe("20000")
+      expect(card.ciclos[1].totalCentavos).toBe("20000")
+      expect(card.ciclos[2].totalCentavos).toBe("20000")
+
+      // 3. Compra excedendo o limite disponível (R$ 450,00 > R$ 400,00) -> 409 limite_cartao_insuficiente
+      const exceedRes = await operacoesPost(
+        new Request("http://localhost/api/gestor-money/operacoes", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            seletor: selPessoal,
+            chave: `exceed-${randomUUID()}`,
+            operacao: "compra_cartao",
+            payload: {
+              cartaoId: card.id,
+              descricao: "Compra Acima Limite",
+              estabelecimento: "Loja Y",
+              valorTotalCentavos: "45000",
+              parcelasTotal: 2,
+              categoriaId: cat.operacaoId,
+              dataCompra: hoje,
+            },
+          }),
+        })
+      )
+      expect(exceedRes.status).toBe(409)
+      const exceedJson = await exceedRes.json()
+      expect(exceedJson.code).toBe("limite_cartao_insuficiente")
+
+      // 4. Pagamento parcial da 1ª fatura (R$ 100,00 de R$ 200,00) -> recompõe R$ 100,00
+      await gw.pagarFatura(selPessoal, {
+        cartaoId: card.id,
+        cicloId: card.ciclos[0].id,
+        carteiraId: conta.operacaoId,
+        formaPagamento: "pix",
+        dataPagamento: hoje,
+        valorCentavos: "10000",
+      })
+      snap = (await gw.obterSnapshot(selPessoal))!
+      card = snap.cartoes.find((c) => c.id === card.id)!
+      expect(card.usadoCentavos).toBe("50000")
+      expect(card.disponivelCentavos).toBe("50000")
+      expect(card.ciclos[0].pagoCentavos).toBe("10000")
+      expect(card.ciclos[0].restanteCentavos).toBe("10000")
+
+      // 5. Quitação do restante da 1ª fatura (R$ 100,00) -> recompõe mais R$ 100,00
+      await gw.pagarFatura(selPessoal, {
+        cartaoId: card.id,
+        cicloId: card.ciclos[0].id,
+        carteiraId: conta.operacaoId,
+        formaPagamento: "pix",
+        dataPagamento: hoje,
+      })
+      snap = (await gw.obterSnapshot(selPessoal))!
+      card = snap.cartoes.find((c) => c.id === card.id)!
+      expect(card.usadoCentavos).toBe("40000")
+      expect(card.disponivelCentavos).toBe("60000")
+      expect(card.ciclos[0].restanteCentavos).toBe("0")
+      expect(card.ciclos[0].status).toBe("paga")
+
+      // 6. Editar limite (ALTERACAO -> 150000) + Remover limite (REMOCAO -> null)
+      await gw.editarCartao(selPessoal, {
+        cartaoId: card.id,
+        limiteCentavos: "150000",
+        motivo: "Aumento solicitado",
+      })
+      snap = (await gw.obterSnapshot(selPessoal))!
+      card = snap.cartoes.find((c) => c.id === card.id)!
+      expect(card.limiteCentavos).toBe("150000")
+      expect(card.disponivelCentavos).toBe("110000")
+
+      await gw.editarCartao(selPessoal, {
+        cartaoId: card.id,
+        limiteCentavos: null,
+        motivo: "Sem limite definido",
+      })
+      const historicoEndpoint = await gw.obterHistoricoLimiteCartao(selPessoal, card.id)
+      expect(historicoEndpoint.map((e) => e.acao)).toEqual(["CADASTRO", "ALTERACAO", "REMOCAO"])
+
+      // 7. Isolamento RLS: U2 não pode ler histórico nem editar cartão pessoal de U1 (403)
+      loginAs(s.U2, [s.L1])
+      const crossEdit = await cartoesPatch(
+        new Request("http://localhost/api/gestor-money/cartoes", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            seletor: selPessoal,
+            payload: { cartaoId: card.id, limiteCentavos: "500000" },
+          }),
+        })
+      )
+      expect(crossEdit.status).toBe(403)
+      const crossHist = await cartaoLimitesGet(
+        new Request(`http://localhost/api/gestor-money/cartoes/${card.id}/limites?tipo=PESSOAL&perfilId=${s.P1}`),
+        { params: Promise.resolve({ cartaoId: card.id }) }
+      )
+      expect(crossHist.status).toBe(403)
     })
   }
 )

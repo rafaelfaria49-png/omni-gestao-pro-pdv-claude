@@ -6,6 +6,7 @@ import {
   criarCartaoInputSchema,
   criarCategoriaInputSchema,
   criarContaInputSchema,
+  editarCartaoInputSchema,
   pagarDividaInputSchema,
   pagarFaturaInputSchema,
   registrarCompraCartaoInputSchema,
@@ -14,11 +15,16 @@ import {
   registrarReceitaInputSchema,
   transferirInputSchema,
   type AssistenteWhatsAppConfig,
+  type CartaoLimiteEventoResumo,
+  type ComprovanteDownloadResult,
+  type ComprovanteUploadInput,
   type ConsultaFinanceiraSnapshot,
   type CriarCartaoInput,
   type CriarCategoriaInput,
   type CriarContaInput,
   type DocumentoComprovante,
+  type DocumentosPerfilResponse,
+  type EditarCartaoInput,
   type EvolucaoMensalPonto,
   type FinanceiroPerfilSeletor,
   type GastoPorCategoriaResumo,
@@ -33,6 +39,7 @@ import {
   type RegistrarDespesaInput,
   type RegistrarDividaInput,
   type RegistrarReceitaInput,
+  type StorageComprovantesDiagnostico,
   type TipoPerfilFinanceiro,
   type TransferirInput,
 } from "./contracts"
@@ -82,11 +89,25 @@ export interface GestorMoneyGateway {
     ativo: boolean
   ): Promise<OperacaoFeedback>
   criarCartao(seletor: FinanceiroPerfilSeletor, input: CriarCartaoInput): Promise<OperacaoFeedback>
+  editarCartao(seletor: FinanceiroPerfilSeletor, input: EditarCartaoInput): Promise<OperacaoFeedback>
+  obterHistoricoLimiteCartao(
+    seletor: FinanceiroPerfilSeletor,
+    cartaoId: string
+  ): Promise<CartaoLimiteEventoResumo[]>
   registrarCompraCartao(
     seletor: FinanceiroPerfilSeletor,
     input: RegistrarCompraCartaoInput
   ): Promise<OperacaoFeedback>
   pagarFatura(seletor: FinanceiroPerfilSeletor, input: PagarFaturaInput): Promise<OperacaoFeedback>
+  obterDocumentos(seletor: FinanceiroPerfilSeletor): Promise<DocumentosPerfilResponse>
+  enviarComprovante(
+    seletor: FinanceiroPerfilSeletor,
+    input: ComprovanteUploadInput
+  ): Promise<DocumentoComprovante>
+  obterDownloadComprovante(
+    seletor: FinanceiroPerfilSeletor,
+    documentoId: string
+  ): Promise<ComprovanteDownloadResult>
 }
 
 export class GestorMoneyBoundaryError extends Error {
@@ -96,6 +117,57 @@ export class GestorMoneyBoundaryError extends Error {
   ) {
     super(message)
     this.name = "GestorMoneyBoundaryError"
+  }
+}
+
+const DIAGNOSTICO_STORAGE_SINTETICO: StorageComprovantesDiagnostico = {
+  gate: "G003-STORAGE",
+  runtimeLiberado: true,
+  bloqueioCodigo: "ambiente_sintetico_sem_r2",
+  flagHabilitada: false,
+  providerDeclaradoValido: false,
+  configR2Completa: false,
+  variaveisObrigatorias: [
+    "GESTOR_MONEY_STORAGE_G003_ENABLED",
+    "CONTADOR_STORAGE_PROVIDER",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
+  ],
+  variaveisFaltando: [],
+  privacidadeComprovadaNoRuntime: false,
+  reutilizaAdapter: "lib/contador/documentos/storage-r2.ts",
+  liberadoNoMotorG003: false,
+  variaveisR2Presentes: false,
+  motivo:
+    "Ambiente sintético isolado (em memória): simula anexos localmente sem tocar Cloudflare R2 real.",
+}
+
+function recalcularResumoLimiteSintetico(
+  limiteCentavos: string | null,
+  usadoCentavos: string
+): {
+  disponivelCentavos: string | null
+  limiteExcedidoCentavos: string | null
+  limiteComprometidoPercentual: number | null
+} {
+  if (limiteCentavos === null) {
+    return {
+      disponivelCentavos: null,
+      limiteExcedidoCentavos: null,
+      limiteComprometidoPercentual: null,
+    }
+  }
+  const limite = parseBigIntCentavos(limiteCentavos)
+  const usado = parseBigIntCentavos(usadoCentavos)
+  const disponivel = limite >= usado ? limite - usado : BigInt(0)
+  const excedido = usado > limite ? usado - limite : BigInt(0)
+  const percentual = limite > BigInt(0) ? Number((usado * BigInt(10000)) / limite) / 100 : null
+  return {
+    disponivelCentavos: disponivel.toString(),
+    limiteExcedidoCentavos: excedido.toString(),
+    limiteComprometidoPercentual: percentual,
   }
 }
 
@@ -313,10 +385,12 @@ function buildSnapshotFromState(
       ciclos: [...c.ciclos],
       comprasParceladas: [...c.comprasParceladas],
       historico: [...c.historico],
+      historicoLimites: [...c.historicoLimites],
     })),
     categorias: categoriasAtualizadas,
     eventos: [...state.eventos].sort((a, b) => (a.ocorridoEm < b.ocorridoEm ? 1 : -1)),
     documentos: [...state.documentos],
+    storageDiagnostico: DIAGNOSTICO_STORAGE_SINTETICO,
   }
 }
 
@@ -912,6 +986,8 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const mes = hojeSaoPaulo().slice(0, 7)
       const pad = (n: number) => String(n).padStart(2, "0")
       const limite = p.limiteCentavos ?? null
+      const resumo = recalcularResumoLimiteSintetico(limite, "0")
+      const nowIso = new Date().toISOString()
       st.cartoes.push({
         id: cardId,
         perfilId: st.perfil.perfilId,
@@ -919,10 +995,13 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
         bandeira: p.bandeira,
         ultimos4: p.ultimos4,
         corGradiente: "from-slate-800 via-zinc-800 to-emerald-900",
+        politicaComprometimento: "COMPROMETIMENTO_INTEGRAL_COMPRA_RECOMPOSICAO_NO_PAGAMENTO",
         limiteCentavos: limite,
         usadoCentavos: "0",
-        disponivelCentavos: limite,
-        limitePersistenciaDisponivel: limite !== null,
+        disponivelCentavos: resumo.disponivelCentavos,
+        limiteExcedidoCentavos: resumo.limiteExcedidoCentavos,
+        limiteComprometidoPercentual: resumo.limiteComprometidoPercentual,
+        limitePersistenciaDisponivel: true,
         fechamentoDia: p.fechamentoDia,
         vencimentoDia: p.vencimentoDia,
         ativo: true,
@@ -937,11 +1016,26 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
             totalCentavos: "0",
             pagoCentavos: "0",
             restanteCentavos: "0",
+            quantidadeTitulos: 0,
             status: "aberta",
           },
         ],
         comprasParceladas: [],
         historico: [],
+        historicoLimites:
+          limite !== null
+            ? [
+                {
+                  id: nextId("hl"),
+                  acao: "CADASTRO",
+                  limiteAnteriorCentavos: null,
+                  limiteNovoCentavos: limite,
+                  motivo: p.motivo ?? null,
+                  autorAdminUserId: "user-sintetico-owner",
+                  criadoEm: nowIso,
+                },
+              ]
+            : [],
       })
       return {
         ok: true,
@@ -949,6 +1043,59 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
         contratoG004: "G004_CARTAO_CADASTRAR",
         mensagem: `Cartão ${p.nome} •••• ${p.ultimos4} cadastrado.`,
       }
+    },
+
+    async editarCartao(seletor, raw) {
+      const st = resolveState(seletor)
+      const parsed = editarCartaoInputSchema.safeParse(raw)
+      if (!parsed.success) {
+        throw new GestorMoneyBoundaryError("validacao_cartao", parsed.error.issues[0]?.message ?? "Dados inválidos.")
+      }
+      const p = parsed.data
+      const cartao = st.cartoes.find((c) => c.id === p.cartaoId)
+      if (!cartao) throw new GestorMoneyBoundaryError("cartao_indisponivel", "Cartão não encontrado.")
+
+      if (p.nome !== undefined) cartao.nome = p.nome
+      if (p.bandeira !== undefined && p.bandeira !== null) cartao.bandeira = p.bandeira
+      if (p.ultimos4 !== undefined && p.ultimos4 !== null) cartao.ultimos4 = p.ultimos4
+      if (p.ativo !== undefined) cartao.ativo = p.ativo
+
+      let acaoLimite: "CADASTRO" | "ALTERACAO" | "REMOCAO" | null = null
+      if (p.limiteCentavos !== undefined && p.limiteCentavos !== cartao.limiteCentavos) {
+        const anterior = cartao.limiteCentavos
+        const novo = p.limiteCentavos
+        acaoLimite = anterior === null && novo !== null ? "CADASTRO" : anterior !== null && novo === null ? "REMOCAO" : "ALTERACAO"
+        cartao.limiteCentavos = novo
+        const resumo = recalcularResumoLimiteSintetico(novo, cartao.usadoCentavos)
+        cartao.disponivelCentavos = resumo.disponivelCentavos
+        cartao.limiteExcedidoCentavos = resumo.limiteExcedidoCentavos
+        cartao.limiteComprometidoPercentual = resumo.limiteComprometidoPercentual
+        cartao.historicoLimites.unshift({
+          id: nextId("hl"),
+          acao: acaoLimite,
+          limiteAnteriorCentavos: anterior,
+          limiteNovoCentavos: novo,
+          motivo: p.motivo ?? null,
+          autorAdminUserId: "user-sintetico-owner",
+          criadoEm: new Date().toISOString(),
+        })
+      }
+
+      return {
+        ok: true,
+        operacaoId: nextId("op-card-edit"),
+        contratoG004: acaoLimite ? `G004_CARTAO_LIMITE_${acaoLimite}` : "G004_CARTAO_EDITAR",
+        mensagem: acaoLimite
+          ? `Limite do cartão "${cartao.nome}" atualizado no histórico.`
+          : `Cartão "${cartao.nome}" atualizado.`,
+      }
+    },
+
+    async obterHistoricoLimiteCartao(seletor, cartaoId) {
+      const st = resolveState(seletor)
+      const cartao = st.cartoes.find((c) => c.id === cartaoId)
+      if (!cartao) throw new GestorMoneyBoundaryError("cartao_indisponivel", "Cartão não encontrado.")
+      return [...cartao.historicoLimites]
     },
 
     async registrarCompraCartao(seletor, raw) {
@@ -963,7 +1110,10 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const total = parseBigIntCentavos(p.valorTotalCentavos)
       const disponivel = cartao.disponivelCentavos !== null ? parseBigIntCentavos(cartao.disponivelCentavos) : null
       if (disponivel !== null && total > disponivel) {
-        throw new GestorMoneyBoundaryError("limite_insuficiente", "Valor excede o limite disponível do cartão.")
+        throw new GestorMoneyBoundaryError(
+          "limite_cartao_insuficiente",
+          "Limite disponível insuficiente neste cartão para concluir a compra (todas as parcelas comprometem o limite integralmente)."
+        )
       }
       const cicloAberta = cartao.ciclos.find((ci) => ci.status === "aberta") ?? cartao.ciclos[cartao.ciclos.length - 1]
       if (!cicloAberta) throw new GestorMoneyBoundaryError("ciclo_indisponivel", "Nenhum ciclo aberto para o cartão.")
@@ -974,9 +1124,13 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const primeiraParcela = valorParcela + resto
 
       cartao.usadoCentavos = (parseBigIntCentavos(cartao.usadoCentavos) + total).toString()
-      cartao.disponivelCentavos = disponivel !== null ? (disponivel - total).toString() : null
+      const resumo = recalcularResumoLimiteSintetico(cartao.limiteCentavos, cartao.usadoCentavos)
+      cartao.disponivelCentavos = resumo.disponivelCentavos
+      cartao.limiteExcedidoCentavos = resumo.limiteExcedidoCentavos
+      cartao.limiteComprometidoPercentual = resumo.limiteComprometidoPercentual
       cicloAberta.totalCentavos = (parseBigIntCentavos(cicloAberta.totalCentavos) + primeiraParcela).toString()
       cicloAberta.restanteCentavos = (parseBigIntCentavos(cicloAberta.restanteCentavos) + primeiraParcela).toString()
+      cicloAberta.quantidadeTitulos = (cicloAberta.quantidadeTitulos ?? 0) + 1
 
       if (p.parcelasTotal > 1) {
         cartao.comprasParceladas.unshift({
@@ -1028,22 +1182,31 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const p = parsed.data
       const cartao = st.cartoes.find((c) => c.id === p.cartaoId)
       const ciclo = cartao?.ciclos.find((ci) => ci.id === p.cicloId)
-      if (!cartao || !ciclo || parseBigIntCentavos(ciclo.restanteCentavos) <= BigInt(0)) {
+      const abertoCiclo = ciclo ? parseBigIntCentavos(ciclo.restanteCentavos) : BigInt(0)
+      if (!cartao || !ciclo || abertoCiclo <= BigInt(0)) {
         throw new GestorMoneyBoundaryError("fatura_indisponivel", "Fatura não encontrada ou já paga.")
       }
       const conta = st.contas.find((c) => c.id === p.carteiraId && c.ativo)
       if (!conta) throw new GestorMoneyBoundaryError("conta_indisponivel", "Conta de pagamento não encontrada.")
 
-      const valor = parseBigIntCentavos(ciclo.restanteCentavos)
+      const valor = p.valorCentavos ? parseBigIntCentavos(p.valorCentavos) : abertoCiclo
+      if (valor <= BigInt(0) || valor > abertoCiclo) {
+        throw new GestorMoneyBoundaryError("valor_fatura_invalido", "Valor informado excede o saldo em aberto da fatura.")
+      }
+      const novoRestante = abertoCiclo - valor
       ciclo.pagoCentavos = (parseBigIntCentavos(ciclo.pagoCentavos) + valor).toString()
-      ciclo.restanteCentavos = "0"
-      ciclo.status = "paga"
+      ciclo.restanteCentavos = novoRestante.toString()
+      if (novoRestante === BigInt(0)) {
+        ciclo.status = "paga"
+      }
 
       const usadoAtual = parseBigIntCentavos(cartao.usadoCentavos)
       const novoUsado = usadoAtual > valor ? usadoAtual - valor : BigInt(0)
       cartao.usadoCentavos = novoUsado.toString()
-      cartao.disponivelCentavos =
-        cartao.limiteCentavos !== null ? subtrairCentavos(cartao.limiteCentavos, novoUsado) : null
+      const resumo = recalcularResumoLimiteSintetico(cartao.limiteCentavos, cartao.usadoCentavos)
+      cartao.disponivelCentavos = resumo.disponivelCentavos
+      cartao.limiteExcedidoCentavos = resumo.limiteExcedidoCentavos
+      cartao.limiteComprometidoPercentual = resumo.limiteComprometidoPercentual
 
       conta.saldoCentavos = subtrairCentavos(conta.saldoCentavos, valor)
       conta.saidasCentavos = somarCentavos([conta.saidasCentavos, valor])
@@ -1083,7 +1246,58 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
         ok: true,
         operacaoId: nextId("op-fatura"),
         contratoG004: "PAGAR_FATURA",
-        mensagem: `Fatura ${ciclo.competencia} do ${cartao.nome} paga com sucesso.`,
+        mensagem:
+          novoRestante === BigInt(0)
+            ? `Fatura ${ciclo.competencia} do ${cartao.nome} paga com sucesso.`
+            : `Pagamento parcial aplicado na fatura ${ciclo.competencia} com recomposição do limite.`,
+      }
+    },
+
+    async obterDocumentos(seletor) {
+      const st = resolveState(seletor)
+      return {
+        documentos: [...st.documentos],
+        storagePrivadoProvisionado: false,
+        storageDiagnostico: DIAGNOSTICO_STORAGE_SINTETICO,
+      }
+    },
+
+    async enviarComprovante(seletor, input) {
+      const st = resolveState(seletor)
+      const bytes = Math.max(1, Math.floor((input.conteudoBase64.length * 3) / 4))
+      const lower = input.nomeArquivo.toLowerCase()
+      const mime: DocumentoComprovante["mime"] = lower.endsWith(".pdf")
+        ? "application/pdf"
+        : lower.endsWith(".png")
+          ? "image/png"
+          : lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+            ? "image/jpeg"
+            : "text/plain"
+      const doc: DocumentoComprovante = {
+        id: nextId("doc-sint"),
+        perfilId: st.perfil.perfilId,
+        nomeArquivo: input.nomeArquivo,
+        mime,
+        bytes,
+        estado: "DISPONIVEL",
+        criadoEm: new Date().toISOString(),
+        alvoTipo: input.alvo?.tipo,
+        alvoId: input.alvo?.id,
+      }
+      st.documentos.unshift(doc)
+      return doc
+    },
+
+    async obterDownloadComprovante(seletor, documentoId) {
+      const st = resolveState(seletor)
+      const doc = st.documentos.find((d) => d.id === documentoId)
+      if (!doc) {
+        throw new GestorMoneyBoundaryError("documento_indisponivel", "Comprovante não encontrado neste perfil.")
+      }
+      return {
+        documento: doc,
+        signedUrl: `data:${doc.mime};charset=utf-8,${encodeURIComponent(`Comprovante sintético: ${doc.nomeArquivo}`)}`,
+        expiresInSec: 60,
       }
     },
   }
@@ -1177,6 +1391,7 @@ export function createRealBoundaryGateway(fetchImpl: typeof fetch = fetch): Gest
           state?: IntegrationReadiness["state"]
           mensagem?: string
           contratos?: IntegrationContractStatus[]
+          storageG003?: StorageComprovantesDiagnostico
         }
         return {
           mode: "real",
@@ -1187,6 +1402,7 @@ export function createRealBoundaryGateway(fetchImpl: typeof fetch = fetch): Gest
             data.mensagem ??
             "Fundação G001–G006 dormente (GESTOR_MONEY_ENABLED !== 'true'). Nenhum dado simulado é exibido no modo real.",
           contratos: data.contratos ?? CONTRATOS_FUNDACAO_PADRAO,
+          ...(data.storageG003 ? { storageG003: data.storageG003 } : {}),
         }
       } catch {
         return {
@@ -1323,12 +1539,87 @@ export function createRealBoundaryGateway(fetchImpl: typeof fetch = fetch): Gest
       return data.feedback
     },
 
+    async editarCartao(seletor, input) {
+      const res = await fetchImpl("/api/gestor-money/cartoes", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ seletor, payload: input }),
+      })
+      const data = await parseRealApiResponse<{ ok: true; feedback: OperacaoFeedback }>(res)
+      return data.feedback
+    },
+
+    async obterHistoricoLimiteCartao(seletor, cartaoId) {
+      const res = await fetchImpl(
+        `/api/gestor-money/cartoes/${encodeURIComponent(cartaoId)}/limites?${queryParamsFromSeletor(seletor)}`,
+        { cache: "no-store" }
+      )
+      const data = await parseRealApiResponse<{
+        ok: true
+        historicoLimites: CartaoLimiteEventoResumo[]
+      }>(res)
+      return data.historicoLimites
+    },
+
     async registrarCompraCartao(seletor, input) {
       return postOperacao(seletor, "compra_cartao", input)
     },
 
     async pagarFatura(seletor, input) {
       return postOperacao(seletor, "pagar_fatura", input)
+    },
+
+    async obterDocumentos(seletor) {
+      const res = await fetchImpl(
+        `/api/gestor-money/documentos?${queryParamsFromSeletor(seletor)}`,
+        { cache: "no-store" }
+      )
+      const data = await parseRealApiResponse<{
+        ok: true
+        documentos: DocumentoComprovante[]
+        storagePrivadoProvisionado: boolean
+        storageDiagnostico: StorageComprovantesDiagnostico
+      }>(res)
+      return {
+        documentos: data.documentos,
+        storagePrivadoProvisionado: data.storagePrivadoProvisionado,
+        storageDiagnostico: data.storageDiagnostico,
+      }
+    },
+
+    async enviarComprovante(seletor, input) {
+      const res = await fetchImpl("/api/gestor-money/documentos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          seletor,
+          nomeArquivo: input.nomeArquivo,
+          conteudoBase64: input.conteudoBase64,
+          ...(input.alvo ? { alvo: input.alvo } : {}),
+        }),
+      })
+      const data = await parseRealApiResponse<{ ok: true; documento: DocumentoComprovante }>(res)
+      return data.documento
+    },
+
+    async obterDownloadComprovante(seletor, documentoId) {
+      const res = await fetchImpl(
+        `/api/gestor-money/documentos/${encodeURIComponent(documentoId)}/download?${queryParamsFromSeletor(seletor)}`,
+        { cache: "no-store" }
+      )
+      const data = await parseRealApiResponse<{
+        ok: true
+        documento: DocumentoComprovante
+        signedUrl: string
+        expiresInSec: number
+      }>(res)
+      return {
+        documento: data.documento,
+        signedUrl: data.signedUrl,
+        expiresInSec: data.expiresInSec,
+      }
     },
   }
 }

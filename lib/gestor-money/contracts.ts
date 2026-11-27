@@ -158,6 +158,54 @@ export interface ComprovanteUploadDraft {
   nomeArquivo: string
   mime: (typeof DOCUMENTO_MIME_PERMITIDOS)[number]
   bytes: number
+  /** Conteúdo em base64 para envio autenticado ao endpoint G003 (`POST /api/gestor-money/documentos`). */
+  conteudoBase64?: string
+}
+
+export type StorageG003BloqueioCodigo =
+  | "flag_desligada"
+  | "provider_invalido"
+  | "config_r2_incompleta"
+  | "segredo_em_next_public"
+  | "bucket_inexistente"
+  | "privacidade_bucket_nao_comprovada"
+  | "bucket_publico_detectado"
+  | "escopo_credencial_invalido"
+  | "verificador_indisponivel"
+  | "ambiente_sintetico_sem_r2"
+
+export interface StorageComprovantesDiagnostico {
+  gate: "G003-STORAGE"
+  runtimeLiberado: boolean
+  bloqueioCodigo: StorageG003BloqueioCodigo | null
+  flagHabilitada: boolean
+  providerDeclaradoValido: boolean
+  configR2Completa: boolean
+  variaveisObrigatorias: readonly string[]
+  variaveisFaltando: readonly string[]
+  privacidadeComprovadaNoRuntime: boolean
+  reutilizaAdapter: "lib/contador/documentos/storage-r2.ts"
+  liberadoNoMotorG003: boolean
+  variaveisR2Presentes: boolean
+  motivo: string
+}
+
+export interface ComprovanteUploadInput {
+  nomeArquivo: string
+  conteudoBase64: string
+  alvo?: { tipo: "PAGAR" | "RECEBER" | "CONTA" | "MOVIMENTACAO"; id: string }
+}
+
+export interface ComprovanteDownloadResult {
+  documento: DocumentoComprovante
+  signedUrl: string
+  expiresInSec: number
+}
+
+export interface DocumentosPerfilResponse {
+  documentos: DocumentoComprovante[]
+  storagePrivadoProvisionado: boolean
+  storageDiagnostico: StorageComprovantesDiagnostico
 }
 
 export type StatusTitulo = "aberto" | "parcial" | "pago" | "vencido" | "cancelado"
@@ -221,7 +269,18 @@ export interface CartaoCicloResumo {
   totalCentavos: CentavosString
   pagoCentavos: CentavosString
   restanteCentavos: CentavosString
+  quantidadeTitulos?: number
   status: "aberta" | "fechada" | "paga" | "futura"
+}
+
+export interface CartaoLimiteEventoResumo {
+  id: string
+  acao: "CADASTRO" | "ALTERACAO" | "REMOCAO"
+  limiteAnteriorCentavos: CentavosString | null
+  limiteNovoCentavos: CentavosString | null
+  motivo: string | null
+  autorAdminUserId: string
+  criadoEm: string
 }
 
 export interface CompraParceladaCartao {
@@ -252,6 +311,9 @@ export interface HistoricoCartaoItem {
   categoriaNome?: string
 }
 
+export type PoliticaComprometimentoCartao =
+  "COMPROMETIMENTO_INTEGRAL_COMPRA_RECOMPOSICAO_NO_PAGAMENTO"
+
 export interface CartaoCreditoResumo {
   id: string
   perfilId: string
@@ -259,11 +321,16 @@ export interface CartaoCreditoResumo {
   bandeira: string
   ultimos4: string
   corGradiente: string
-  /** `null` quando a fundação ainda não persiste limite de crédito (nunca exibir R$ 0,00 como limite real). */
+  politicaComprometimento?: PoliticaComprometimentoCartao
+  /** `null` quando o limite não foi informado (nunca exibir R$ 0,00 por ausência de dado). */
   limiteCentavos: CentavosString | null
   usadoCentavos: CentavosString
-  /** `null` quando `limiteCentavos` não está cadastrado/disponível. */
+  /** `null` quando `limiteCentavos === null`; fornecido diretamente pelo backend canônico. */
   disponivelCentavos: CentavosString | null
+  /** `null` quando `limiteCentavos === null`; `"0"` quando dentro do limite. */
+  limiteExcedidoCentavos: CentavosString | null
+  /** Percentual comprometido com 2 casas decimais fornecido pelo backend canônico, ou `null`. */
+  limiteComprometidoPercentual: number | null
   limitePersistenciaDisponivel?: boolean
   fechamentoDia: number
   vencimentoDia: number
@@ -271,6 +338,7 @@ export interface CartaoCreditoResumo {
   ciclos: CartaoCicloResumo[]
   comprasParceladas: CompraParceladaCartao[]
   historico: HistoricoCartaoItem[]
+  historicoLimites: CartaoLimiteEventoResumo[]
 }
 
 export interface EventoFinanceiroResumo {
@@ -365,6 +433,7 @@ export interface ConsultaFinanceiraSnapshot {
   categorias: CategoriaGestorMoney[]
   eventos: EventoFinanceiroResumo[]
   documentos: DocumentoComprovante[]
+  storageDiagnostico?: StorageComprovantesDiagnostico
 }
 
 export type EstadoConexaoWhatsApp =
@@ -399,7 +468,12 @@ export interface AssistenteWhatsAppConfig {
   dependenciasPendentes: Array<{
     codigo: string
     titulo: string
-    status: "PENDENTE_PR_405" | "PENDENTE_G007" | "DISPONIVEL_EM_SANDBOX"
+    status:
+      | "PENDENTE_PR_405"
+      | "PENDENTE_G007"
+      | "BLOQUEADO_G003_STORAGE"
+      | "DISPONIVEL_NO_RUNTIME"
+      | "DISPONIVEL_EM_SANDBOX"
     detalhe: string
   }>
   /** Alinhamento visual somente leitura com os contratos G006/G007 e motor G008 (PR #417). */
@@ -438,6 +512,7 @@ export interface IntegrationReadiness {
   foundationMerged: boolean
   mensagem: string
   contratos: IntegrationContractStatus[]
+  storageG003?: StorageComprovantesDiagnostico
 }
 
 /** Schemas de entrada alinhados com G002/G003/G004 */
@@ -472,6 +547,29 @@ const comprovanteDraftSchema = z
   })
   .optional()
 
+const limiteCartaoCentavosSchema = z
+  .union([
+    z.null(),
+    z
+      .string()
+      .trim()
+      .regex(/^\d{1,16}$/, "Informe um limite válido em centavos.")
+      .refine((v) => {
+        try {
+          const n = BigInt(v)
+          return n >= BigInt(0) && n <= LIMITE_CENTAVOS
+        } catch {
+          return false
+        }
+      }, "Limite fora da faixa permitida."),
+  ])
+  .optional()
+
+const documentoIdOpcionalSchema = z
+  .string()
+  .regex(/^[a-zA-Z0-9_-]{1,191}$/)
+  .optional()
+
 export const registrarDespesaInputSchema = z.object({
   descricao: z.string().trim().min(2, "Informe a descrição.").max(500),
   valorCentavos: centavosPositivosSchema,
@@ -483,6 +581,7 @@ export const registrarDespesaInputSchema = z.object({
   formaPagamento: z.enum(MEIOS_PAGAMENTO_GASTO),
   contraparte: z.string().trim().max(180).optional(),
   comprovante: comprovanteDraftSchema,
+  documentoId: documentoIdOpcionalSchema,
 })
 
 export type RegistrarDespesaInput = z.infer<typeof registrarDespesaInputSchema>
@@ -511,6 +610,7 @@ export const registrarDividaInputSchema = z.object({
   categoriaId: z.string().min(1, "Selecione uma categoria."),
   observacao: z.string().trim().max(500).optional(),
   comprovante: comprovanteDraftSchema,
+  documentoId: documentoIdOpcionalSchema,
 })
 
 export type RegistrarDividaInput = z.infer<typeof registrarDividaInputSchema>
@@ -524,6 +624,7 @@ export const pagarDividaInputSchema = z.object({
   dataPagamento: dataCivilSchema,
   observacao: z.string().trim().max(300).optional(),
   comprovante: comprovanteDraftSchema,
+  documentoId: documentoIdOpcionalSchema,
 })
 
 export type PagarDividaInput = z.infer<typeof pagarDividaInputSchema>
@@ -567,12 +668,35 @@ export const criarCartaoInputSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome do cartão.").max(120),
   bandeira: z.string().trim().min(2, "Informe a bandeira.").max(40),
   ultimos4: z.string().regex(/^\d{4}$/, "Informe os 4 últimos dígitos."),
-  limiteCentavos: centavosPositivosSchema.optional(),
+  limiteCentavos: limiteCartaoCentavosSchema,
+  motivo: z.string().trim().min(1).max(500).optional(),
   fechamentoDia: z.number().int().min(1).max(28),
   vencimentoDia: z.number().int().min(1).max(28),
 })
 
 export type CriarCartaoInput = z.infer<typeof criarCartaoInputSchema>
+
+export const editarCartaoInputSchema = z
+  .object({
+    cartaoId: z.string().trim().min(1, "Selecione o cartão.").max(191),
+    nome: z.string().trim().min(2, "Informe o nome do cartão.").max(120).optional(),
+    bandeira: z.string().trim().min(1).max(40).nullable().optional(),
+    ultimos4: z.string().regex(/^\d{4}$/, "Informe os 4 últimos dígitos.").nullable().optional(),
+    ativo: z.boolean().optional(),
+    limiteCentavos: limiteCartaoCentavosSchema,
+    motivo: z.string().trim().min(1).max(500).optional(),
+  })
+  .refine(
+    (d) =>
+      d.nome !== undefined ||
+      d.bandeira !== undefined ||
+      d.ultimos4 !== undefined ||
+      d.ativo !== undefined ||
+      d.limiteCentavos !== undefined,
+    { message: "Informe ao menos uma alteração para salvar no cartão." }
+  )
+
+export type EditarCartaoInput = z.infer<typeof editarCartaoInputSchema>
 
 export const registrarCompraCartaoInputSchema = z.object({
   cartaoId: z.string().min(1, "Selecione o cartão."),
@@ -592,6 +716,8 @@ export const pagarFaturaInputSchema = z.object({
   carteiraId: z.string().min(1, "Selecione a conta para pagamento."),
   formaPagamento: z.enum(MEIOS_PAGAMENTO_GASTO),
   dataPagamento: dataCivilSchema,
+  /** Opcional: quando informado, realiza pagamento parcial da fatura (recompondo o limite na mesma proporção). */
+  valorCentavos: centavosPositivosSchema.optional(),
 })
 
 export type PagarFaturaInput = z.infer<typeof pagarFaturaInputSchema>
