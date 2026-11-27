@@ -20,12 +20,13 @@ import { propostaDoRascunho, rotuloIntencao, dividirParcelas } from "./mapeament
 import { formatarCentavos, formatarDataCivil, normalizarTexto } from "./texto"
 import {
   INTENCOES_COM_CONTRATO_G004, INTENCOES_ESCRITA,
-  type Campo, type DadosRascunho, type DependenciasMotor, type EstadoConversa, type Extracao, type IntencaoEscrita,
+  type Campo, type DadosRascunho, type DependenciasMotor, type FaturaCiclo, type EstadoConversa, type Extracao, type IntencaoEscrita,
   type Interpretacao, type PerfilAutorizado, type PerfilRef, type Principal, type Rascunho, type RespostaAssistente,
 } from "./tipos"
 
 const TTL_PADRAO_MS = 15 * 60_000
 const JANELA_DUPLICIDADE_MS = 10 * 60_000
+const ORDEM_FATURA: Campo[] = ["perfil", "cartao", "fatura", "valor", "formaPagamento", "conta"]
 const ORDEM_PERGUNTAS: Campo[] = ["perfil", "valor", "titulo", "formaPagamento", "conta", "contaDestino", "cartao", "parcelas", "vencimento"]
 
 type Turno = {
@@ -254,7 +255,8 @@ function perfisOrdenados(perfis: PerfilAutorizado[]) {
 
 /** Limpa tudo que pertence ao perfil anterior — nada é copiado entre perfis. */
 function limparResolvidos(d: DadosRascunho) {
-  delete d.carteiraId; delete d.carteiraNome; delete d.carteiraDestinoId; delete d.carteiraDestinoNome; delete d.categoriaId; delete d.cartaoId; delete d.cartaoNome
+  delete d.carteiraId; delete d.carteiraNome; delete d.carteiraDestinoId; delete d.carteiraDestinoNome; delete d.cicloId; delete d.cicloRotulo
+  delete d.cicloRestanteCentavos; delete d.alocacoesFatura; delete d.cartaoDica; delete d.categoriaId; delete d.cartaoId; delete d.cartaoNome
   delete d.cicloIds; delete d.tituloId; delete d.tituloDescricao; delete d.tituloRestanteCentavos; delete d.opcoes
 }
 
@@ -356,11 +358,84 @@ async function resolverDados(t: Turno, r: Rascunho) {
     else d.opcoes = (candidatos.length ? candidatos : abertos).slice(0, 5).map(x => ({ id: x.id,
       rotulo: `${x.descricao}${x.contraparte ? ` (${x.contraparte})` : ""} — ${formatarCentavos(x.restanteCentavos)}, vence ${formatarDataCivil(x.vencimento)}` }))
   }
+  if (r.intencao === "PAGAMENTO_FATURA") {
+    // Contrato canônico #405: cartões, limites e faturas por ciclo (consultarCartoesGasto) + PAGAR_FATURA (G004).
+    const cartoes = (await t.deps.cadastros.listarFaturas(ctx)).filter(c => c.ativo)
+    if (!cartoes.length) {
+      t.estado.rascunho = undefined
+      t.codigo = "sem_cartao"
+      t.mensagens.push("Não há cartão de crédito cadastrado neste perfil. Nada foi registrado.")
+      return
+    }
+    if (!d.cartaoId) {
+      for (const dica of [d.conta, d.contaDestino]) {
+        if (!dica) continue
+        const c = cartoes.filter(x => normalizarTexto(x.nome).includes(normalizarTexto(dica)))
+        if (c.length === 1) {
+          d.cartaoId = c[0].id; d.cartaoNome = c[0].nome; d.cartaoDica = dica
+          // A menção consumida pelo cartão não vira conta de pagamento; a conta vem da outra menção ou da pergunta.
+          if (dica === d.conta) delete d.conta; else delete d.contaDestino
+          break
+        }
+      }
+      if (!d.cartaoId && cartoes.length === 1) { d.cartaoId = cartoes[0].id; d.cartaoNome = cartoes[0].nome }
+    }
+    if (!d.carteiraId) {
+      const dica = d.conta ?? d.contaDestino
+      const contas = (await t.deps.cadastros.listarContas(ctx)).filter(c => c.ativo && c.tipo !== "credito")
+      const candidatas = dica ? contas.filter(c => normalizarTexto(c.nome).includes(normalizarTexto(dica))) : contas
+      if (candidatas.length === 1 && (dica || contas.length === 1)) { d.carteiraId = candidatas[0].id; d.carteiraNome = candidatas[0].nome }
+    }
+    const cartao = cartoes.find(c => c.id === d.cartaoId)
+    if (cartao && !d.cicloId) {
+      const abertas = cartao.ciclos.filter(c => c.ativo && BigInt(c.restanteCentavos) > BigInt(0))
+        .sort((a, b) => (a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : 0))
+      if (!abertas.length) {
+        t.estado.rascunho = undefined
+        t.codigo = "fatura_sem_saldo"
+        t.mensagens.push(`O cartão ${cartao.nome} não tem fatura com valor em aberto. Nada foi registrado.`)
+        return
+      }
+      if (abertas.length === 1) selecionarFatura(d, abertas[0])
+      else d.opcoes = abertas.slice(0, 6).map(c => ({ id: c.id, rotulo: rotuloFatura(c) }))
+    }
+    if (d.cicloId && d.quitar && d.cicloRestanteCentavos) d.valorCentavos = d.cicloRestanteCentavos
+    if (d.cicloId && d.valorCentavos && d.cicloRestanteCentavos && BigInt(d.valorCentavos) > BigInt(d.cicloRestanteCentavos)) {
+      t.mensagens.push(`O valor informado é maior que o saldo em aberto da fatura (${formatarCentavos(d.cicloRestanteCentavos)}).`)
+      delete d.valorCentavos; delete d.alocacoesFatura
+    }
+    if (d.cicloId && d.valorCentavos && !d.alocacoesFatura) {
+      // Alocação determinística: títulos do ciclo por vencimento; restante de cada um pelo cálculo canônico G005.
+      const titulos = (await t.deps.cadastros.titulosDaFatura(ctx, d.cicloId)).filter(x => BigInt(x.restanteCentavos) > BigInt(0))
+        .sort((a, b) => (a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      let falta = BigInt(d.valorCentavos)
+      const alocacoes: Array<{ tituloId: string; valorCentavos: string }> = []
+      for (const x of titulos) {
+        if (falta <= BigInt(0)) break
+        const restante = BigInt(x.restanteCentavos), v = falta < restante ? falta : restante
+        alocacoes.push({ tituloId: x.id, valorCentavos: v.toString() })
+        falta -= v
+      }
+      if (falta > BigInt(0) || !alocacoes.length) {
+        t.mensagens.push("O saldo em aberto da fatura mudou. Informe o valor novamente.")
+        delete d.valorCentavos; delete d.cicloId; delete d.cicloRotulo; delete d.cicloRestanteCentavos
+      } else d.alocacoesFatura = alocacoes
+    }
+  }
   if (r.intencao === "PAGAMENTO" && d.tituloRestanteCentavos && d.valorCentavos
     && BigInt(d.valorCentavos) > BigInt(d.tituloRestanteCentavos)) {
     t.mensagens.push(`O valor informado é maior que o saldo em aberto (${formatarCentavos(d.tituloRestanteCentavos)}).`)
     delete d.valorCentavos
   }
+}
+
+function rotuloFatura(c: FaturaCiclo) {
+  return `Fatura ${c.competencia} — vence ${formatarDataCivil(c.vencimento)} — em aberto ${formatarCentavos(c.restanteCentavos)}`
+}
+
+function selecionarFatura(d: DadosRascunho, c: FaturaCiclo) {
+  d.cicloId = c.id; d.cicloRotulo = `${c.competencia} (vence ${formatarDataCivil(c.vencimento)})`; d.cicloRestanteCentavos = c.restanteCentavos
+  delete d.alocacoesFatura; delete d.opcoes
 }
 
 function selecionarTitulo(d: DadosRascunho, x: { id: string; descricao: string; restanteCentavos: string }) {
@@ -372,7 +447,11 @@ function pendencias(r: Rascunho): Campo[] {
   const d = r.dados, p: Campo[] = []
   if (!r.perfil) p.push("perfil")
   if (!d.valorCentavos) p.push("valor")
-  if (r.intencao === "DESPESA" || r.intencao === "PAGAMENTO") {
+  if (r.intencao === "PAGAMENTO_FATURA") {
+    if (!d.cartaoId) p.push("cartao")
+    else if (!d.cicloId) p.push("fatura")
+  }
+  if (r.intencao === "DESPESA" || r.intencao === "PAGAMENTO" || r.intencao === "PAGAMENTO_FATURA") {
     if (!d.formaPagamento || d.formaPagamento === "credito") p.push("formaPagamento")
     if (!d.carteiraId) p.push("conta")
   }
@@ -380,7 +459,7 @@ function pendencias(r: Rascunho): Campo[] {
   if (r.intencao === "TRANSFERENCIA") { if (!d.carteiraId) p.push("conta"); if (!d.carteiraDestinoId) p.push("contaDestino") }
   if (r.intencao === "DIVIDA" && !d.vencimento) p.push("vencimento")
   if ((r.intencao === "COMPRA_CREDITO" || r.intencao === "PARCELAMENTO") && (!d.cartaoId || !d.cicloIds)) p.push("cartao")
-  return ORDEM_PERGUNTAS.filter(c => p.includes(c))
+  return (r.intencao === "PAGAMENTO_FATURA" ? ORDEM_FATURA : ORDEM_PERGUNTAS).filter(c => p.includes(c))
 }
 
 async function perguntarOuResumir(t: Turno, r: Rascunho) {
@@ -431,11 +510,17 @@ async function perguntar(t: Turno, r: Rascunho, campo: Campo) {
     case "valor":
       if (d.valoresAmbiguos?.length) {
         t.mensagens.push(`Encontrei mais de um valor na mensagem. Qual é o valor da operação?\n${opcoes(d.valoresAmbiguos.map(v => ({ id: v, rotulo: formatarCentavos(v) })))}`)
+      } else if (r.intencao === "PAGAMENTO_FATURA" && d.cicloRestanteCentavos) {
+        delete d.opcoes
+        t.mensagens.push(`Quanto você pagou da fatura? Em aberto: ${formatarCentavos(d.cicloRestanteCentavos)} (ou diga “a fatura toda”).`)
       } else { delete d.opcoes; t.mensagens.push(r.intencao === "PAGAMENTO" && d.tituloRestanteCentavos
         ? `Quanto você pagou? O saldo em aberto é ${formatarCentavos(d.tituloRestanteCentavos)}.` : "Qual foi o valor?") }
       return
     case "titulo":
       t.mensagens.push(`Qual conta você pagou?\n${opcoes(d.opcoes ?? [])}`)
+      return
+    case "fatura":
+      t.mensagens.push(`Qual fatura você pagou?\n${opcoes(d.opcoes ?? [])}`)
       return
     case "formaPagamento":
       delete d.opcoes
@@ -471,7 +556,7 @@ async function perguntar(t: Turno, r: Rascunho, campo: Campo) {
       const ctx = await contextoLeitura(t, r)
       if (!ctx) return
       const cartoes = await t.deps.cadastros.listarCartoes(ctx)
-      t.mensagens.push(`Em qual cartão foi a compra?\n${opcoes(cartoes.map(c => ({ id: c.id, rotulo: c.nome })))}`)
+      t.mensagens.push(`${r.intencao === "PAGAMENTO_FATURA" ? "De qual cartão é a fatura?" : "Em qual cartão foi a compra?"}\n${opcoes(cartoes.map(c => ({ id: c.id, rotulo: c.nome })))}`)
       return
     }
     case "vencimento":
@@ -505,6 +590,9 @@ function resumo(r: Rascunho, hoje: string): string[] {
         ? `em ${n}x de ${formatarCentavos(partes[0])}` : `em ${n}x (1ª de ${formatarCentavos(partes[0])}, demais de ${formatarCentavos(partes[n - 1])})`
       return [`Compra no crédito de ${valor}${cat}${quem}, ${parc}.`, `Cartão: ${d.cartaoNome} · Data: ${data} · ${perfil}${semCategoria}`]
     }
+    case "PAGAMENTO_FATURA":
+      return [`Pagamento de ${valor} da fatura ${d.cicloRotulo} do cartão ${d.cartaoNome}${d.cicloRestanteCentavos === d.valorCentavos ? " (quitação)" : ""}.`,
+        `Via ${FORMA_ROTULO[d.formaPagamento!]} · Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
     case "TRANSFERENCIA":
       return [`Transferência de ${valor} entre contas do mesmo perfil.`,
         `De: ${d.carteiraNome} → Para: ${d.carteiraDestinoNome} · Data: ${data} · ${perfil}`, "Não conta como receita nem despesa."]
@@ -518,7 +606,7 @@ function resumo(r: Rascunho, hoje: string): string[] {
 
 function assinaturaRascunho(r: Rascunho, hoje: string) {
   const d = r.dados
-  return [r.perfil?.perfilId, r.intencao, d.valorCentavos, d.categoria ?? "", d.tituloId ?? "", d.carteiraDestinoId ?? "", d.dataEconomica ?? hoje].join("|")
+  return [r.perfil?.perfilId, r.intencao, d.valorCentavos, d.categoria ?? "", d.tituloId ?? "", d.carteiraDestinoId ?? "", d.cicloId ?? "", d.dataEconomica ?? hoje].join("|")
 }
 
 /** Resposta complementar, correção ou nova intenção enquanto há rascunho aberto. */
@@ -585,7 +673,16 @@ async function aplicarOpcao(t: Turno, r: Rascunho, campo: Campo, opcao: { id: st
     case "valor": d.valorCentavos = opcao.id; delete d.valoresAmbiguos; delete d.opcoes; return true
     case "conta": d.carteiraId = opcao.id; d.carteiraNome = opcao.rotulo; delete d.opcoes; return true
     case "contaDestino": d.carteiraDestinoId = opcao.id; d.carteiraDestinoNome = opcao.rotulo; delete d.opcoes; return true
-    case "cartao": d.cartaoId = opcao.id; d.cartaoNome = opcao.rotulo; delete d.cicloIds; delete d.opcoes; return true
+    case "cartao": d.cartaoId = opcao.id; d.cartaoNome = opcao.rotulo; delete d.cicloIds; delete d.opcoes
+      delete d.cicloId; delete d.cicloRotulo; delete d.cicloRestanteCentavos; delete d.alocacoesFatura; return true
+    case "fatura": {
+      const ctx = await contextoLeitura(t, r)
+      if (!ctx) return false
+      const ciclo = (await t.deps.cadastros.listarFaturas(ctx)).find(c => c.id === d.cartaoId)?.ciclos.find(c => c.id === opcao.id)
+      if (!ciclo || BigInt(ciclo.restanteCentavos) <= BigInt(0)) { t.mensagens.push("Essa fatura não está mais em aberto."); return false }
+      selecionarFatura(d, ciclo)
+      return true
+    }
     case "titulo": {
       const ctx = await contextoLeitura(t, r)
       if (!ctx) return false
@@ -609,8 +706,12 @@ function mesclar(r: Rascunho, campos: Extracao): boolean {
     if (v === undefined || d[k] === v) continue
     ;(d as Record<string, unknown>)[k] = v
     mudou = true
-    if (k === "valorCentavos") { delete d.valoresAmbiguos; delete d.cicloIds }
-    if (k === "conta") { delete d.carteiraId; delete d.carteiraNome; delete d.cartaoId; delete d.cartaoNome; delete d.cicloIds }
+    if (k === "valorCentavos" || k === "quitar") { delete d.valoresAmbiguos; delete d.cicloIds; delete d.alocacoesFatura }
+    if (k === "conta") {
+      delete d.carteiraId; delete d.carteiraNome
+      // Na fatura, o cartão já escolhido não muda quando o usuário informa a conta de pagamento.
+      if (r.intencao !== "PAGAMENTO_FATURA") { delete d.cartaoId; delete d.cartaoNome; delete d.cicloIds }
+    }
     if (k === "contaDestino") { delete d.carteiraDestinoId; delete d.carteiraDestinoNome }
     if (k === "categoria") delete d.categoriaId
     if (k === "parcelas" || k === "dataEconomica") delete d.cicloIds
@@ -721,6 +822,10 @@ const MOTIVOS_DEFINITIVOS: Record<string, { texto: string; encerra?: boolean }> 
   categoria_indisponivel: { texto: "A categoria não está disponível neste perfil." },
   carteira_indisponivel: { texto: "A conta escolhida não está disponível." },
   ciclo_indisponivel: { texto: "A fatura do cartão não está disponível.", encerra: true },
+  alocacao_fatura_invalida: { texto: "O saldo da fatura mudou desde o resumo." },
+  limite_cartao_insuficiente: { texto: "O cartão não tem limite disponível para essa compra.", encerra: true },
+  ciclo_cartao_divergente: { texto: "As faturas escolhidas não pertencem ao mesmo cartão.", encerra: true },
+  fatura_ausente: { texto: "Não consegui identificar a fatura com segurança." },
   revisao_expirada: { texto: "A operação expirou antes de ser concluída." },
 }
 

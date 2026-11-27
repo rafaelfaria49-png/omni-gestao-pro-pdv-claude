@@ -36,6 +36,7 @@ export function rotuloIntencao(r: Pick<Rascunho, "intencao">): string {
     case "RECEITA": return "Receita"
     case "RECEBIMENTO": return "Recebimento"
     case "TRANSFERENCIA": return "Transferência"
+    case "PAGAMENTO_FATURA": return "Pagamento de fatura"
   }
 }
 
@@ -82,6 +83,13 @@ export function propostaDoRascunho(r: Rascunho, agora: Date, hoje: string): Mape
       return { ok: true, proposta: { tipo: "TRANSFERENCIA_INTERNA", valorCentavos: d.valorCentavos!, moeda: "BRL",
         carteiraOrigemId: d.carteiraId, carteiraDestinoId: d.carteiraDestinoId, dataPagamento,
         descricao: `Transferência ${d.carteiraNome ?? ""} → ${d.carteiraDestinoNome ?? ""}`.replace(/\s+/g, " ").trim().slice(0, 500) } }
+    case "PAGAMENTO_FATURA":
+      // #405: PAGAR_FATURA — alocação explícita por título do MESMO ciclo; o G004 revalida cada restante no COMMIT.
+      if (!d.cicloId || !d.alocacoesFatura?.length) return { ok: false, codigo: "fatura_ausente" }
+      if (!d.carteiraId) return { ok: false, codigo: "conta_ausente" }
+      if (!meio) return { ok: false, codigo: "forma_pagamento_ausente" }
+      return { ok: true, proposta: { tipo: "PAGAR_FATURA", cicloId: d.cicloId, alocacoes: d.alocacoesFatura.map(a => ({ ...a })),
+        moeda: "BRL", carteiraId: d.carteiraId, formaPagamento: meio, dataPagamento } }
     case "RECEITA":
     case "RECEBIMENTO":
       return { ok: false, codigo: "sem_contrato_g004" }

@@ -135,6 +135,7 @@ function consulta(texto: string, original: string, hoje: string): PlanoConsulta 
   if (!pergunta) return null
   const cat = categoriaPorTexto(texto)
   if (/\bvenc\w*\b/.test(texto)) return { tipo: "VENCIMENTOS", ...periodoVencimento(texto, hoje) }
+  if (/\blimites?\b/.test(texto)) return { tipo: "LIMITES", ...periodoConsulta(texto, hoje) }
   if (/\bfatura/.test(texto)) return { tipo: "FATURAS", ...periodoConsulta(texto, hoje) }
   if (/\b(compar\w*|em relacao ao|versus|vs)\b/.test(texto)) return { tipo: "COMPARATIVO", dataInicio: inicioMes(hoje), dataFim: hoje, rotulo: "neste mês vs. mês passado" }
   if (/\b(a receber|me devem|para receber|pra receber|estao me devendo)\b/.test(texto)) return { tipo: "A_RECEBER", ...periodoConsulta(texto, hoje) }
@@ -150,6 +151,7 @@ function consulta(texto: string, original: string, hoje: string): PlanoConsulta 
 }
 
 function classificar(texto: string, e: Extracao): Intencao {
+  if (/\b(paguei|quitei|pago|abati)\b/.test(texto) && /\bfaturas?\b/.test(texto)) return "PAGAMENTO_FATURA"
   if (/\btransferi\b|\bpassei\b.*\bpara\b|\bmovi\b/.test(texto)
     && (e.contaDestino || /\bpara (a |o )?(minha |outra )?(conta|poupanca|carteira)\b/.test(texto))) return "TRANSFERENCIA"
   if (/\b(estou devendo|to devendo|tou devendo|devo|fiquei devendo|tenho que pagar|preciso pagar|vou pagar|a pagar|comprei fiado|pendurei|vai vencer|vence|vencendo)\b/.test(texto)
@@ -204,7 +206,7 @@ export function extrairCampos(original: string, hoje: string, opcoes: { sentidoD
   const cat = categoriaPorTexto(texto)
   if (cat) { e.categoria = cat.categoria; e.descricao = cat.categoria }
   if (/\b(daquela|dessa|desta|aquela|da) (divida|conta|boleto|parcela)\b|\bque (eu )?devia\b|\bdo que devo\b/.test(texto)) e.referenciaTitulo = true
-  if (/\b(quitei|quitar|paguei tudo|paguei o total|tudo que devia|o restante)\b/.test(texto)) e.quitar = true
+  if (/\b(quitei|quitar|paguei tudo|paguei o total|tudo que devia|o restante|fatura toda|fatura inteira|total da fatura)\b/.test(texto)) e.quitar = true
   const c = contraparte(original, texto)
   if (c) e.contraparte = c
   return e

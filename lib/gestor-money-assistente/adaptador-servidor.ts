@@ -20,6 +20,8 @@ import { aplicarOperacaoGasto } from "@/lib/gastos/apply"
 import { prepararRevisaoGasto } from "@/lib/gastos/operacoes"
 import { OperacaoGastoError } from "@/lib/gastos/operacao-schema"
 import { consultarFinanceiro, type ConsultaFinanceiraDTO } from "@/lib/gastos/query"
+import { consultarCartoesGasto } from "@/lib/gastos/cartoes"
+import { saldoTituloConsulta } from "@/lib/gastos/query-calculo"
 import { comLeituraFinanceira } from "@/lib/gastos/read-scope"
 import { declararDonoPessoalRls } from "@/lib/gastos/rls-contexto"
 import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
@@ -90,12 +92,29 @@ export const cadastrosGestorMoney: PortaCadastros = {
     if (inicio < 0 || ciclos.length - inicio < i.parcelas) return null
     return ciclos.slice(inicio, inicio + i.parcelas).map(x => x.id)
   }),
+  /** Contrato canônico #405: cartões com limites e faturas por ciclo. */
+  listarFaturas: ctx => consultarCartoesGasto(ctx, {}),
+  titulosDaFatura,
   async listarTitulosAbertos(ctx) {
     const hoje = diaCivil(new Date())
     const q = await consultarFinanceiro(ctx, filtroDoPlano(hoje.slice(0, 7) + "-01", hoje))
     return q.pagar.filter(t => !t.cancelado && BigInt(t.restanteCentavos) > BigInt(0))
       .map(t => ({ id: t.id, descricao: t.descricao, contraparte: t.contraparte, restanteCentavos: t.restanteCentavos, vencimento: t.vencimento }))
   },
+}
+
+/** Títulos de uma fatura com o restante pelo cálculo canônico G005 (`saldoTituloConsulta`). Só leitura. */
+async function titulosDaFatura(ctx: unknown, cicloId: string) {
+  return comLeituraFinanceira(ctx, async (db, c) => {
+    const rows = await db.contaPagarTitulo.findMany({ where: { perfilId: c.perfilId, storeId: storeDe(c), cartaoCicloId: cicloId },
+      include: { alocacoesPagamento: { select: { pagamentoId: true, valorCentavos: true, pagamento: { select: { tipo: true } } } } },
+      orderBy: { id: "asc" } })
+    return rows.flatMap(t => {
+      const sx = saldoTituloConsulta(t)
+      return sx.cancelado || sx.restante <= BigInt(0) ? []
+        : [{ id: t.id, restanteCentavos: sx.restante.toString(), vencimento: t.vencimento.toISOString().slice(0, 10) }]
+    })
+  })
 }
 
 export const consultaG005: PortaConsulta = {

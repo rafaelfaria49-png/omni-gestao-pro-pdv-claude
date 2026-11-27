@@ -10,18 +10,18 @@ import type { PropostaGasto } from "@/lib/gastos/operacao-schema"
 
 export const INTENCOES = [
   "DESPESA", "RECEITA", "DIVIDA", "PAGAMENTO", "RECEBIMENTO", "TRANSFERENCIA",
-  "COMPRA_CREDITO", "PARCELAMENTO", "CONSULTA", "CORRECAO", "CANCELAMENTO",
+  "COMPRA_CREDITO", "PARCELAMENTO", "PAGAMENTO_FATURA", "CONSULTA", "CORRECAO", "CANCELAMENTO",
   "CONFIRMACAO", "NEGACAO", "DESCONHECIDO",
 ] as const
 export type Intencao = typeof INTENCOES[number]
 
 /** Intenções que propõem um fato financeiro novo. */
 export const INTENCOES_ESCRITA = ["DESPESA", "RECEITA", "DIVIDA", "PAGAMENTO", "RECEBIMENTO",
-  "TRANSFERENCIA", "COMPRA_CREDITO", "PARCELAMENTO"] as const
+  "TRANSFERENCIA", "COMPRA_CREDITO", "PARCELAMENTO", "PAGAMENTO_FATURA"] as const
 export type IntencaoEscrita = typeof INTENCOES_ESCRITA[number]
 
 /** Intenções com contrato de escrita no G004 hoje. As demais são classificadas, mas não gravadas. */
-export const INTENCOES_COM_CONTRATO_G004 = ["DESPESA", "DIVIDA", "PAGAMENTO", "COMPRA_CREDITO", "PARCELAMENTO", "TRANSFERENCIA"] as const
+export const INTENCOES_COM_CONTRATO_G004 = ["DESPESA", "DIVIDA", "PAGAMENTO", "COMPRA_CREDITO", "PARCELAMENTO", "TRANSFERENCIA", "PAGAMENTO_FATURA"] as const
 
 export type FormaPagamento = "pix" | "dinheiro" | "debito" | "transferencia" | "boleto" | "credito"
 
@@ -55,7 +55,7 @@ export type Extracao = {
 
 export type PlanoConsulta = {
   tipo: "GASTOS" | "RECEITAS" | "RECEITAS_DESPESAS" | "SALDO" | "DIVIDAS" | "VENCIMENTOS"
-    | "FATURAS" | "COMPARATIVO" | "A_RECEBER" | "POR_CATEGORIA"
+    | "FATURAS" | "LIMITES" | "COMPARATIVO" | "A_RECEBER" | "POR_CATEGORIA"
   dataInicio: string
   dataFim: string
   rotulo: string
@@ -70,7 +70,7 @@ export type Interpretacao = {
   sinaisSuspeitos: string[]
 }
 
-export type Campo = "valor" | "perfil" | "formaPagamento" | "conta" | "contaDestino" | "vencimento" | "cartao" | "parcelas" | "titulo"
+export type Campo = "valor" | "perfil" | "formaPagamento" | "conta" | "contaDestino" | "fatura" | "vencimento" | "cartao" | "parcelas" | "titulo"
 
 export type EstadoRascunho = "COLETANDO" | "AGUARDANDO_CONFIRMACAO" | "EM_EXECUCAO" | "INCERTO"
   | "APLICADO" | "CANCELADO" | "EXPIRADO"
@@ -89,6 +89,13 @@ export type DadosRascunho = Extracao & {
   tituloId?: string
   tituloDescricao?: string
   tituloRestanteCentavos?: string
+  /** PAGAMENTO_FATURA: ciclo (fatura) escolhido e alocação por título, recalculada a cada mudança de valor. */
+  cicloId?: string
+  /** Menção usada para identificar o cartão (não é reaproveitada como conta de pagamento). */
+  cartaoDica?: string
+  cicloRotulo?: string
+  cicloRestanteCentavos?: string
+  alocacoesFatura?: Array<{ tituloId: string; valorCentavos: string }>
   /** Opções numeradas oferecidas na última pergunta (ex.: títulos candidatos). */
   opcoes?: Array<{ id: string; rotulo: string }>
   proveniencia?: Partial<Record<keyof Extracao, Proveniencia>>
@@ -156,6 +163,11 @@ export type ContaResumo = { id: string; nome: string; tipo: string; ativo: boole
 export type CategoriaResumo = { id: string; nome: string }
 export type CartaoResumo = { id: string; nome: string }
 export type TituloResumo = { id: string; descricao: string; contraparte: string; restanteCentavos: string; vencimento: string }
+/** Projeção canônica G004/G005 de um cartão (consultarCartoesGasto): limites e faturas por ciclo. */
+export type FaturaCiclo = { id: string; identificador: string; competencia: string; vencimento: string; fechamentoEm: string | null;
+  ativo: boolean; totalCentavos: string; pagoCentavos: string; restanteCentavos: string; quantidadeTitulos: number }
+export type CartaoComFaturas = { id: string; nome: string; ativo: boolean; limiteCentavos: string | null; limiteUtilizadoCentavos: string;
+  limiteDisponivelCentavos: string | null; limiteExcedidoCentavos: string | null; ciclos: readonly FaturaCiclo[] }
 
 export interface PortaCadastros {
   listarContas(ctx: unknown): Promise<ContaResumo[]>
@@ -164,6 +176,10 @@ export interface PortaCadastros {
   /** IDs de ciclos G004 já cadastrados para cada parcela, ou null se não houver ciclos suficientes. */
   resolverCiclos(ctx: unknown, input: { cartaoId: string; dataCompra: string; parcelas: number }): Promise<string[] | null>
   listarTitulosAbertos(ctx: unknown): Promise<TituloResumo[]>
+  /** Cartões do perfil com limites e faturas por ciclo (contrato canônico G004/G005). */
+  listarFaturas(ctx: unknown): Promise<CartaoComFaturas[]>
+  /** Títulos em aberto de uma fatura, com o restante calculado pelo cálculo canônico G005. */
+  titulosDaFatura(ctx: unknown, cicloId: string): Promise<Array<{ id: string; restanteCentavos: string; vencimento: string }>>
 }
 
 /** Subconjunto do ConsultaFinanceiraDTO (G005) usado pelo motor. */
@@ -180,6 +196,8 @@ export type ResumoConsulta = {
   receberAbertoCentavos: string
   contas: Array<{ nome: string; tipo: string; ativo: boolean; saldoCentavos: string }>
   pagar: Array<{ descricao: string; contraparte: string; restanteCentavos: string; vencimento: string; cancelado: boolean }>
+  /** G005 `ConsultaFinanceiraDTO.cartoes` (limites + faturas por ciclo). Ausente = projeção indisponível. */
+  cartoes?: readonly CartaoComFaturas[]
 }
 
 export type FiltroConsulta = {

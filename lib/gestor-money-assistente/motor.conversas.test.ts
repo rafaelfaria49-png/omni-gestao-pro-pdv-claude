@@ -407,10 +407,14 @@ describe("consultas inteligentes — somente números do G005", () => {
       dataInicio: "2026-11-23", dataFim: "2026-11-27" })
   })
 
-  it("faturas: indisponível de forma honesta, sem estimar por cartão", async () => {
+  it("faturas por ciclo vêm do G005 (cartoes[]); sem a projeção, indisponível sem estimar", async () => {
     const c = montarCenario()
     const r = await c.chat().texto("qual o valor da fatura do cartão?")
-    expect(r.mensagens[0]).toBe("A consulta de faturas por cartão ainda não está disponível no motor de consultas.")
+    expect(r.mensagens[0]).toBe("Nubank Crédito:")
+    expect(r.mensagens[1]).toContain("Fatura 2026-12")
+    const loja = montarCenario({ perfisA: [LOJA_CENTRO] })
+    loja.consulta.semCartoes = true
+    expect((await loja.chat().texto("qual o valor da fatura do cartão?")).mensagens[0]).toContain("não está disponível agora")
   })
 
   it("sem dados: responde que não encontrou, sem inventar", async () => {

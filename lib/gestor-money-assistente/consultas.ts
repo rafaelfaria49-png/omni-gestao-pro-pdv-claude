@@ -22,7 +22,7 @@ export type ResultadoConsultaTexto = { mensagens: string[]; asOf: string; versao
 export async function executarConsulta(plano: PlanoConsulta, ctx: unknown, porta: PortaConsulta, hoje: string,
   rotuloPerfil: string): Promise<ResultadoConsultaTexto> {
   // Posição de títulos/contas é "atual no snapshot"; o período só afeta eventos realizados.
-  const filtro = ["VENCIMENTOS", "DIVIDAS", "A_RECEBER", "SALDO", "FATURAS"].includes(plano.tipo)
+  const filtro = ["VENCIMENTOS", "DIVIDAS", "A_RECEBER", "SALDO", "FATURAS", "LIMITES"].includes(plano.tipo)
     ? filtroDoPlano(hoje.slice(0, 7) + "-01", hoje) : filtroDoPlano(plano.dataInicio, plano.dataFim)
   const q = await porta.consultar(ctx, filtro)
   const rodape = `(${rotuloPerfil} · base caixa realizado)`
@@ -78,11 +78,32 @@ export async function executarConsulta(plano: PlanoConsulta, ctx: unknown, porta
         ...linhas.map(t => `• ${t.descricao}${t.contraparte ? ` (${t.contraparte})` : ""}: ${formatarCentavos(t.restanteCentavos)} — ${formatarDataCivil(t.vencimento)}`),
         `Total: ${formatarCentavos(soma(linhas.map(t => t.restanteCentavos)))}`])
     }
-    case "FATURAS":
-      // O DTO G005 não expõe ciclo/cartão dos títulos: somar por fatura seria estimativa.
-      // Dependência registrada: projeção de faturas por ciclo no motor de consultas.
-      return ret(["A consulta de faturas por cartão ainda não está disponível no motor de consultas.",
-        `Total de contas a pagar em aberto (inclui parcelas de cartão): ${formatarCentavos(q.pagarAbertoCentavos)}.`])
+    case "FATURAS": {
+      // G005 `ConsultaFinanceiraDTO.cartoes[].ciclos[]` (#405): total/pago/restante por fatura, sem estimativa.
+      if (!q.cartoes) return ret(["A consulta de faturas por cartão não está disponível agora. Nenhum valor foi estimado."])
+      const cartoes = q.cartoes.filter(c => c.ativo)
+      if (!cartoes.length) return ret(["Não há cartão de crédito cadastrado neste perfil."])
+      const linhas: string[] = []
+      for (const c of cartoes) {
+        const abertas = c.ciclos.filter(x => x.ativo && BigInt(x.restanteCentavos) > BigInt(0))
+          .sort((a, b) => (a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : 0))
+        if (!abertas.length) { linhas.push(`${c.nome}: nenhuma fatura em aberto.`); continue }
+        linhas.push(`${c.nome}:`, ...abertas.map(x => `• Fatura ${x.competencia} — vence ${formatarDataCivil(x.vencimento)}: `
+          + `${formatarCentavos(x.restanteCentavos)} em aberto (total ${formatarCentavos(x.totalCentavos)}, pago ${formatarCentavos(x.pagoCentavos)})`))
+      }
+      return ret(linhas)
+    }
+    case "LIMITES": {
+      // Limite informado no cadastro; utilizado = faturas em aberto (política de comprometimento do G004/G005).
+      if (!q.cartoes) return ret(["A consulta de limites dos cartões não está disponível agora. Nenhum valor foi estimado."])
+      const cartoes = q.cartoes.filter(c => c.ativo)
+      if (!cartoes.length) return ret(["Não há cartão de crédito cadastrado neste perfil."])
+      return ret(cartoes.map(c => c.limiteCentavos === null
+        ? `${c.nome}: limite não informado no cadastro · utilizado ${formatarCentavos(c.limiteUtilizadoCentavos)}.`
+        : `${c.nome}: limite ${formatarCentavos(c.limiteCentavos)} · utilizado ${formatarCentavos(c.limiteUtilizadoCentavos)} · `
+          + `disponível ${formatarCentavos(c.limiteDisponivelCentavos ?? "0")}`
+          + `${c.limiteExcedidoCentavos && BigInt(c.limiteExcedidoCentavos) > BigInt(0) ? ` · excedido em ${formatarCentavos(c.limiteExcedidoCentavos)}` : ""}.`))
+    }
     case "COMPARATIVO": {
       const anterior = await porta.consultar(ctx, filtroDoPlano(mesAnterior(hoje).inicio, mesmoDiaMesAnterior(hoje)))
       const atual = BigInt(q.despesaRealizadaCentavos), antes = BigInt(anterior.despesaRealizadaCentavos)

@@ -16,6 +16,20 @@ export const PESSOAL_A: PerfilAutorizado = { ref: { tipo: "PESSOAL", perfilId: "
 export const LOJA_CENTRO: PerfilAutorizado = { ref: { tipo: "EMPRESA", perfilId: "pf_loja_centro", storeId: "store_centro" }, rotulo: "Loja Centro" }
 export const PESSOAL_B: PerfilAutorizado = { ref: { tipo: "PESSOAL", perfilId: "pf_pessoal_b" }, rotulo: "Pessoal" }
 
+/** Projeção sintética no formato do G005 `cartoes[]` (#405): limite 3.000,00; faturas de dez/26 e jan/27 em aberto. */
+export const FATURAS_NUBANK_A = {
+  id: "cartao_nu_a", nome: "Nubank Crédito", ativo: true, limiteCentavos: "300000", limiteUtilizadoCentavos: "65000",
+  limiteDisponivelCentavos: "235000", limiteExcedidoCentavos: "0",
+  ciclos: [
+    { id: "ciclo_2026_11", identificador: "2026-11", competencia: "2026-11", vencimento: "2026-11-10", fechamentoEm: "2026-11-03", ativo: true,
+      totalCentavos: "12000", pagoCentavos: "12000", restanteCentavos: "0", quantidadeTitulos: 1 },
+    { id: "ciclo_2026_12", identificador: "2026-12", competencia: "2026-12", vencimento: "2026-12-10", fechamentoEm: "2026-12-03", ativo: true,
+      totalCentavos: "45000", pagoCentavos: "0", restanteCentavos: "45000", quantidadeTitulos: 2 },
+    { id: "ciclo_2027_01", identificador: "2027-01", competencia: "2027-01", vencimento: "2027-01-10", fechamentoEm: "2027-01-03", ativo: true,
+      totalCentavos: "20000", pagoCentavos: "0", restanteCentavos: "20000", quantidadeTitulos: 1 },
+  ],
+}
+
 export const CADASTROS: Record<string, CadastroPerfil> = {
   pf_pessoal_a: {
     contas: [
@@ -27,6 +41,11 @@ export const CADASTROS: Record<string, CadastroPerfil> = {
     cartoes: [{ id: "cartao_nu_a", nome: "Nubank Crédito" }],
     ciclos: { cartao_nu_a: ["ciclo_2026_12", "ciclo_2027_01", "ciclo_2027_02", "ciclo_2027_03"] },
     titulos: [{ id: "tit_fornecedor_a", descricao: "Compra de estoque", contraparte: "Fornecedor Alfa", restanteCentavos: "80000", vencimento: "2026-12-10" }],
+    faturas: [FATURAS_NUBANK_A],
+    titulosFatura: {
+      ciclo_2026_12: [{ id: "tit_cc_1", restanteCentavos: "30000", vencimento: "2026-12-10" }, { id: "tit_cc_2", restanteCentavos: "15000", vencimento: "2026-12-10" }],
+      ciclo_2027_01: [{ id: "tit_cc_3", restanteCentavos: "20000", vencimento: "2027-01-10" }],
+    },
   },
   pf_loja_centro: {
     contas: [{ id: "ct_itau_centro", nome: "Itaú PJ", tipo: "banco", ativo: true }],
@@ -58,6 +77,7 @@ export function fixturePessoal(f: { dataInicio: string }): ResumoConsulta {
       { categoria: "Alimentação", despesaCentavos: "117830", receitaCentavos: "0", quantidade: 20 },
     ],
     saldoCentavos: "512340", pagarAbertoCentavos: "80000", receberAbertoCentavos: "0",
+    cartoes: [FATURAS_NUBANK_A],
     contas: [
       { nome: "Nubank", tipo: "banco", ativo: true, saldoCentavos: "498340" },
       { nome: "Carteira", tipo: "dinheiro", ativo: true, saldoCentavos: "14000" },
@@ -73,6 +93,7 @@ export function fixtureLoja(): ResumoConsulta {
     despesaRealizadaCentavos: "1873400", receitaRealizadaCentavos: "4210050", resultadoCentavos: "2336650", quantidadeRegistros: 143,
     porCategoria: [{ categoria: "Fornecedores", despesaCentavos: "1500000", receitaCentavos: "0", quantidade: 12 }],
     saldoCentavos: "1250000", pagarAbertoCentavos: "411290", receberAbertoCentavos: "93000",
+    cartoes: [],
     contas: [{ nome: "Itaú PJ", tipo: "banco", ativo: true, saldoCentavos: "1250000" }],
     pagar: [
       { descricao: "Aluguel da loja", contraparte: "Imobiliária", restanteCentavos: "250000", vencimento: "2026-11-28", cancelado: false },

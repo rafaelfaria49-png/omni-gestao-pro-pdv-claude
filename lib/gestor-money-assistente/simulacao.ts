@@ -18,7 +18,7 @@ import { processarMensagem } from "./motor"
 import type {
   CartaoResumo, CategoriaResumo, ContaResumo, DependenciasMotor, EstadoConversa, PerfilAutorizado, PerfilRef,
   PortaAutorizacao, PortaCadastros, PortaConsulta, PortaExecucao, Principal, RepositorioConversa, RespostaAssistente,
-  ResultadoExecucao, ResumoConsulta, TituloResumo, FiltroConsulta,
+  ResultadoExecucao, ResumoConsulta, TituloResumo, FiltroConsulta, CartaoComFaturas,
 } from "./tipos"
 
 export class RepositorioMemoria implements RepositorioConversa {
@@ -61,7 +61,9 @@ export class AutorizacaoSimulada implements PortaAutorizacao {
 }
 
 export type CadastroPerfil = { contas: ContaResumo[]; categorias: CategoriaResumo[]; cartoes: CartaoResumo[];
-  ciclos: Record<string, string[]>; titulos: TituloResumo[] }
+  ciclos: Record<string, string[]>; titulos: TituloResumo[]
+  /** Projeção sintética de cartões com faturas por ciclo e títulos de cada fatura. */
+  faturas?: CartaoComFaturas[]; titulosFatura?: Record<string, Array<{ id: string; restanteCentavos: string; vencimento: string }>> }
 
 export class CadastrosSimulados implements PortaCadastros {
   constructor(private auth: AutorizacaoSimulada, private porPerfil: Record<string, CadastroPerfil>) {}
@@ -73,6 +75,8 @@ export class CadastrosSimulados implements PortaCadastros {
   async listarCategorias(ctx: unknown) { return this.de(ctx).categorias }
   async listarCartoes(ctx: unknown) { return this.de(ctx).cartoes }
   async listarTitulosAbertos(ctx: unknown) { return this.de(ctx).titulos }
+  async listarFaturas(ctx: unknown) { return this.de(ctx).faturas ?? [] }
+  async titulosDaFatura(ctx: unknown, cicloId: string) { return this.de(ctx).titulosFatura?.[cicloId] ?? [] }
   async resolverCiclos(ctx: unknown, i: { cartaoId: string; parcelas: number }) {
     const c = this.de(ctx).ciclos[i.cartaoId] ?? []
     return c.length >= i.parcelas ? c.slice(0, i.parcelas) : null
@@ -81,13 +85,16 @@ export class CadastrosSimulados implements PortaCadastros {
 
 export class ConsultaFixture implements PortaConsulta {
   readonly chamadas: Array<{ perfilId: string; filtro: FiltroConsulta }> = []
+  /** Simula um G005 sem a projeção de cartões (versão anterior da fundação). */
+  semCartoes = false
   constructor(private auth: AutorizacaoSimulada, private porPerfil: Record<string, ResumoConsulta | ((f: FiltroConsulta) => ResumoConsulta)>) {}
   async consultar(ctx: unknown, filtro: FiltroConsulta) {
     if (!this.auth.reconhece(ctx)) throw new Error("contexto_nao_emitido")
     this.chamadas.push({ perfilId: ctx.perfilId, filtro })
     const f = this.porPerfil[ctx.perfilId]
     if (!f) throw new Error("sem_fixture")
-    return typeof f === "function" ? f(filtro) : f
+    const r = typeof f === "function" ? f(filtro) : f
+    return this.semCartoes ? { ...r, cartoes: undefined } : r
   }
 }
 
@@ -121,7 +128,7 @@ export class ExecucaoSimulada implements PortaExecucao {
       const g = `${ctx.perfilId}:${input.grupoChave}`
       if (this.grupos.has(g) && this.grupos.get(g) !== hash) return { ok: false, tipo: "DEFINITIVO", codigo: "grupo_conteudo_divergente" }
       this.grupos.set(g, hash)
-      const valor = proposta.tipo === "PAGAR_FATURA" ? "0" : (proposta as { valorCentavos?: string }).valorCentavos ?? "0"
+      const valor = proposta.tipo === "PAGAR_FATURA" ? proposta.alocacoes.reduce((s, a) => s + BigInt(a.valorCentavos), BigInt(0)).toString() : (proposta as { valorCentavos?: string }).valorCentavos ?? "0"
       this.aplicadas.set(k, { operacaoId: `op_sim_${++this.seq}`, hash, grupoChave: input.grupoChave, valorCentavos: valor, perfilId: ctx.perfilId })
     }
     if (falha?.falha === "INCERTO_DEPOIS") return { ok: false, tipo: "INCERTO", codigo: "resposta_perdida" }
