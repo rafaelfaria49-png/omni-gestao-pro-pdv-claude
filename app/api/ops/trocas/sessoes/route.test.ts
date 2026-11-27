@@ -1,12 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+interface MockSessaoRow {
+  id: string
+  abertaEm: Date
+  fechadaEm: Date | null
+  operador: string | null
+  terminalId: string | null
+}
+
+interface FindManyQuery {
+  where: {
+    storeId: string
+    status: string
+    abertaEm: { lte: Date }
+    fechadaEm: { gte: Date }
+  }
+}
+
 const mocks = vi.hoisted(() => ({
   requireModuleApi: vi.fn(async () => null),
   auth: vi.fn(async () => ({ user: { id: "u1", role: "ADMIN" } })),
   canAccessStore: vi.fn(() => true),
   opsLojaIdFromRequest: vi.fn(() => "loja-b"),
   apiGuardEnterpriseOrOps: vi.fn(async () => null),
-  findMany: vi.fn(async () => []),
+  findMany: vi.fn(async (_args?: FindManyQuery): Promise<MockSessaoRow[]> => []),
 }))
 
 vi.mock("@/lib/auth/module-access", () => ({ requireModuleApi: mocks.requireModuleApi }))
@@ -54,23 +71,21 @@ describe("GET /api/ops/trocas/sessoes — limites canônicos em America/Sao_Paul
     expect(body.sessoes[0].id).toBe("sessao-noite-26")
 
     expect(mocks.findMany).toHaveBeenCalledTimes(1)
-    const query = mocks.findMany.mock.calls[0]![0] as {
-      where: { storeId: string; status: string; abertaEm: { lte: Date }; fechadaEm: { gte: Date } }
-    }
-    expect(query.where.storeId).toBe("loja-b")
-    expect(query.where.status).toBe("FECHADA")
-    expect(query.where.abertaEm.lte.toISOString()).toBe("2026-11-27T02:59:59.999Z")
-    expect(query.where.fechadaEm.gte.toISOString()).toBe("2026-11-26T03:00:00.000Z")
+    const query = mocks.findMany.mock.calls[0]?.[0]
+    expect(query).toBeDefined()
+    expect(query!.where.storeId).toBe("loja-b")
+    expect(query!.where.status).toBe("FECHADA")
+    expect(query!.where.abertaEm.lte.toISOString()).toBe("2026-11-27T02:59:59.999Z")
+    expect(query!.where.fechadaEm.gte.toISOString()).toBe("2026-11-26T03:00:00.000Z")
   })
 
   it("respeita horário de verão histórico (2018-11-15 = UTC-2) sem offset fixo -03:00", async () => {
     const res = await GET(new Request("http://127.0.0.1:3000/api/ops/trocas/sessoes?dia=2018-11-15"))
     expect(res.status).toBe(200)
-    const query = mocks.findMany.mock.calls[0]![0] as {
-      where: { abertaEm: { lte: Date }; fechadaEm: { gte: Date } }
-    }
-    expect(query.where.fechadaEm.gte.toISOString()).toBe("2018-11-15T02:00:00.000Z")
-    expect(query.where.abertaEm.lte.toISOString()).toBe("2018-11-16T01:59:59.999Z")
+    const query = mocks.findMany.mock.calls[0]?.[0]
+    expect(query).toBeDefined()
+    expect(query!.where.fechadaEm.gte.toISOString()).toBe("2018-11-15T02:00:00.000Z")
+    expect(query!.where.abertaEm.lte.toISOString()).toBe("2018-11-16T01:59:59.999Z")
   })
 
   it("rejeita data civil inexistente (2026-02-30) com 400 sem consultar o banco", async () => {
