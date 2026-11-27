@@ -14,18 +14,9 @@
 import { spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import bcrypt from "bcryptjs"
+import { desktopQaProvisioningDatasource } from "../../../../lib/db/datasource-policy.mjs"
 
-const url = process.env.DESKTOP_QA_HOSTED_DATABASE_URL ?? ""
-let parsed
-try {
-  parsed = new URL(url)
-} catch {
-  throw new Error("DESKTOP_QA_HOSTED_DATABASE_URL ausente ou inválida")
-}
-const dbName = parsed.pathname.replace(/^\//, "")
-if (!/^postgres(ql)?:$/.test(parsed.protocol)) throw new Error("URL não é PostgreSQL")
-if (/prod|candidate/i.test(dbName)) throw new Error(`banco "${dbName}" parece de Produção/candidate — recusado`)
-if (!/sslmode=require|sslmode=verify/i.test(parsed.search)) throw new Error("exija TLS (sslmode=require) na URL")
+const url = desktopQaProvisioningDatasource()
 
 const { PrismaClient } = await import("../../../../generated/prisma/index.js")
 const db = new PrismaClient({ datasourceUrl: url })

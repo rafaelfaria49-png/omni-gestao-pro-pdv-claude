@@ -4,8 +4,9 @@
  * Uso: node --env-file=.env scripts/diag-sessoes-presas.mjs
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 const brl = (n) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(n) || 0)
 const iso = (d) => (d ? new Date(d).toISOString().slice(0, 16).replace("T", " ") : "—")
 const PAY_KEYS = ["dinheiro", "pix", "cartaoDebito", "cartaoCredito", "carne", "aPrazo", "creditoVale"]

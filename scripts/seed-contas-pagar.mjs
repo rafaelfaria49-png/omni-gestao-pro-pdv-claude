@@ -6,8 +6,9 @@
  *   node scripts/seed-contas-pagar.mjs --exec  → executa upserts
  */
 import { PrismaClient } from "../generated/prisma/index.js";
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() });
 const STORE_ID = "loja-1";
 const DRY_RUN = !process.argv.includes("--exec");
 

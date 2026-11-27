@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto"
 import { mkdir } from "node:fs/promises"
 import bcrypt from "bcryptjs"
 import { PrismaClient } from "../../generated/prisma"
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 
 /*
  * Capturas REAIS do sistema para a página /gestao-lojas (public/gestao-lojas/*.png).
@@ -44,7 +45,7 @@ const CLIENTES = [
 let db: PrismaClient
 const contexts = new Set<APIRequestContext>()
 test.beforeAll(async () => {
-  db = new PrismaClient({ datasourceUrl: database })
+  db = new PrismaClient({ datasourceUrl: localFixtureDatasource(database) })
   await mkdir(destino, { recursive: true })
   await db.store.create({ data: { id: STORE, name: "Loja Exemplo Variedades", cnpj: "00.000.000/0000-00", phone: "1130000000", address: { rua: "Rua Exemplo", numero: "100", bairro: "Centro", cidade: "São Paulo", estado: "SP", cep: "01000-000" }, profile: "VARIEDADES", moduleAccess: { version: 1, modules: ["home", "pdv", "sales", "cash", "catalog", "stock", "reports", "settings"] } } })
   await db.storeSettings.create({ data: { storeId: STORE, contactEmail: "contato@loja-exemplo.invalid", contactWhatsapp: "11900000000", contactWhatsappDono: "11900000000", printerConfig: { pdvMainLayout: "classic", capabilities: { version: 1, business: { primaryBranch: "variedades" } } } } })

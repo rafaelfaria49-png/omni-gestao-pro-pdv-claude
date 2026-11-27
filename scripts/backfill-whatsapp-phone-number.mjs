@@ -14,8 +14,9 @@
  */
 
 import { PrismaClient } from "../generated/prisma/index.js";
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() });
 const DRY_RUN = !process.argv.includes("--exec");
 const mask = (s) => (s.length > 7 ? `${s.slice(0, 4)}***${s.slice(-3)}` : "***");
 

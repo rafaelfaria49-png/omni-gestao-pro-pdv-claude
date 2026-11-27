@@ -10,6 +10,7 @@
  *   npx tsx --env-file=.env scripts/reset-db.ts
  */
 import { PrismaClient } from "../generated/prisma/index.js"
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
 const SCHEMA = "public"
 const TABLE_SALE = "Sale"
@@ -37,7 +38,7 @@ const REMAINING_BALANCE = 1090
 const STATUS = "PENDENTE"
 const FIRST_DUE_DATE_BR = "17/03/2026"
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 
 async function findExistingDueDateColumn(): Promise<string | null> {
   const cols = await prisma.$queryRawUnsafe<{ column_name: string }[]>(

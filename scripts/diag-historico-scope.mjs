@@ -3,7 +3,8 @@
  * node --env-file=.env scripts/diag-historico-scope.mjs
  */
 import { PrismaClient } from "../generated/prisma/index.js"
-const prisma = new PrismaClient()
+import { scriptDatasource } from "./prisma-datasource.mjs"
+const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() })
 const d10 = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—")
 const dt = (d) => (d ? new Date(d).toISOString().slice(0, 16).replace("T", " ") : "—")
 

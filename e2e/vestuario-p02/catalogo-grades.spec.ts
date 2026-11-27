@@ -1,6 +1,7 @@
 import path from "node:path"
 import { expect, test, type Browser, type Page } from "@playwright/test"
 import { PrismaClient } from "../../generated/prisma"
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 
 /**
  * OMNI-VESTUARIO-P02 — jornadas reais no navegador (build de produção, NextAuth real, PostgreSQL
@@ -20,8 +21,8 @@ let db: PrismaClient | null = null
 async function readDb(): Promise<PrismaClient> {
   if (db) return db
   const url = process.env.VESTUARIO_P02_E2E_DATABASE_URL ?? ""
-  if (!url.includes("vest_p02_e2e") || !/127\.0\.0\.1|localhost/.test(url)) throw new Error("VESTUARIO_E2E_DATABASE_REQUIRED")
-  db = new PrismaClient({ datasourceUrl: url })
+  if (!url.includes("vest_p02_e2e")) throw new Error("VESTUARIO_E2E_DATABASE_REQUIRED")
+  db = new PrismaClient({ datasourceUrl: localFixtureDatasource(url) })
   return db
 }
 test.afterAll(async () => { await db?.$disconnect() })

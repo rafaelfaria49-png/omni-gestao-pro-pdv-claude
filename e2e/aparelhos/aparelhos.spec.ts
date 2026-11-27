@@ -1,6 +1,7 @@
 import path from "node:path"
 import { expect, test, type Browser, type Page } from "@playwright/test"
 import { PrismaClient } from "../../generated/prisma"
+import { localFixtureDatasource } from "../../lib/db/datasource-policy.mjs"
 
 /**
  * OMNI-APARELHOS-ENDTOEND-001 — jornadas reais no navegador (build de produção, NextAuth real,
@@ -30,8 +31,8 @@ let db: PrismaClient | null = null
 async function readDb(): Promise<PrismaClient> {
   if (db) return db
   const url = process.env.APARELHOS_E2E_DATABASE_URL ?? ""
-  if (!url.includes("aparelhos_e2e") || !/127\.0\.0\.1|localhost/.test(url)) throw new Error("APARELHOS_E2E_DATABASE_REQUIRED")
-  db = new PrismaClient({ datasourceUrl: url })
+  if (!url.includes("aparelhos_e2e")) throw new Error("APARELHOS_E2E_DATABASE_REQUIRED")
+  db = new PrismaClient({ datasourceUrl: localFixtureDatasource(url) })
   return db
 }
 test.afterAll(async () => { await db?.$disconnect() })

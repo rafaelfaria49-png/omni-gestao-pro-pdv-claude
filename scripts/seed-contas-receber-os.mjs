@@ -18,6 +18,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { PrismaClient } from "../generated/prisma/index.js";
+import { scriptDatasource } from "./prisma-datasource.mjs"
 
 const STORE_ID = "loja-1";
 const TX_SEED_TITULO = { maxWait: 5_000, timeout: 15_000 };
@@ -182,7 +183,7 @@ export async function seedContasReceberOS(prisma, { storeId = STORE_ID, dryRun =
 }
 
 async function main() {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ datasourceUrl: scriptDatasource() });
   try {
     await seedContasReceberOS(prisma, { dryRun: !process.argv.includes("--exec") });
   } finally {
