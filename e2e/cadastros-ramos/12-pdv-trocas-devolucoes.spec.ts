@@ -8,6 +8,8 @@ import { STORES, USERS, closeDb, guardOnboarding, login, readDb, switchStore } f
  * autoritativa. O banco só é LIDO aqui. Capturas em test-results/cadastros-ramos-e2e/trocas/.
  */
 
+// A rota de sessões interpreta o dia civil no fuso de São Paulo.
+test.use({ timezoneId: "America/Sao_Paulo" })
 test.afterAll(closeDb)
 
 const B = STORES.variedades
