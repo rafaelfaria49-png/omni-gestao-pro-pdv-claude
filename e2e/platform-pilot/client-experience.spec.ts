@@ -258,7 +258,7 @@ test("cliente padaria: configurações permitidas, patches parciais e campos ocu
     expect({ garantia: stored.pdvParams.garantiaPadraoDias, atalhos: stored.pdvParams.atalhosRapidos, untouched: stored.untouched, impressao: stored.impressao })
       .toEqual({ garantia: 45, atalhos: ["sintetico"], untouched: "preservado", impressao: STORED_PRINT })
 
-    await pdv.getByRole("button", { name: "Salvar impressão" }).click()
+    await pdv.getByRole("button", { name: "Salvar alterações" }).click()
     await expect(pdv.getByText("Impressão salva").first()).toBeVisible()
     stored = await settingsOf(A)
     expect(stored.impressao).toEqual({ ...STORED_PRINT, rodapeCupom: "Volte sempre CX" })

@@ -27,11 +27,23 @@ const h = vi.hoisted(() => ({
 }))
 vi.mock("@/lib/auth/use-enterprise-permissions", () => ({ useEnterprisePermissions: () => h.permissions }))
 vi.mock("next/link", () => ({ default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => React.createElement("a", { href, className }, children) }))
-vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({ lojaAtivaId: "loja-a", lojaAtivaRaw: { nomeFantasia: "Padaria Sintética", cnpj: "00.000.000/0001-00", logoUrl: "" } }) }))
+vi.mock("@/lib/loja-ativa", () => ({ useLojaAtiva: () => ({
+  lojaAtivaId: "loja-a",
+  lojaAtivaRaw: { nomeFantasia: "Padaria Sintética", cnpj: "00.000.000/0001-00", logoUrl: "" },
+  // Cabeçalho do cupom (o mesmo do PDV): documentos da empresa + endereço.
+  empresaDocumentos: { nomeFantasia: "Padaria Sintética", cnpj: "00.000.000/0001-00" },
+  getEnderecoDocumentos: () => "Rua Sintética, 1",
+}) }))
 vi.mock("@/components/configuracoes-v3/hooks/use-toast", () => ({ useToast: () => ({ toast: h.toast }) }))
+// A aba PDV abre a prévia do layout no tema atual; fora do shell não há StudioThemeProvider.
+vi.mock("@/components/theme/ThemeProvider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/theme/ThemeProvider")>()),
+  useTheme: () => ({ mode: "light", theme: "light" }),
+}))
 vi.mock("@/lib/store-settings-provider", () => ({
   useStoreSettings: () => ({
-    hydrated: true, storeId: "loja-a", refresh: h.refresh,
+    hydrated: true, loaded: true, storeId: "loja-a", refresh: h.refresh,
+    blob: {}, capabilities: null, pdvScaleVisorVisible: false,
     pdvParams: h.pdvParams as StorePdvParams,
     settings: { receiptFooter: "Rodapé geral", printerConfig: h.printerConfig },
     // O provider real memoiza por printerConfig.
@@ -48,7 +60,7 @@ vi.mock("./sections/FormasPagamentoSettings", () => ({
 }))
 
 import { VendasSection } from "./sections/VendasSection"
-import { ImpressaoPdvSettingsCard } from "./sections/ImpressaoPdvSettingsCard"
+import { PdvSection } from "./sections/PdvSection"
 import { SettingsSidebar } from "./components/SettingsSidebar"
 
 type Call = { url: string; method: string; body: unknown }
@@ -148,10 +160,10 @@ describe("Configurações → Impressão", () => {
   it("cliente vê só preferências do navegador; sem TCP, gaveta, OS ou teste que daria 403", () => {
     stubFetch(() => Response.json({ ok: true }))
     h.printerConfig = stored
-    render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
+    render(React.createElement(PdvSection))
     expect(screen.getByText("Impressão do cupom")).toBeTruthy()
     // Impressão automática depende da ponte interna no PDV (sem fallback): não é oferecida.
-    for (const hidden of [/host\/IP/, /Porta TCP/, /Vias do cupom/, /gaveta após/, /impressão térmica de OS/, /crediário/, /Testar impressão/, /\/api\/print\/raw/, /Imprimir cupom automaticamente/]) {
+    for (const hidden of [/host\/IP/, /Porta TCP/, /Vias do cupom/, /Vias por venda/, /gaveta após/, /Abrir gaveta/, /impressão térmica de OS/, /crediário/, /Testar impressão/, /\/api\/print\/raw/, /Imprimir cupom automaticamente/, /Impressora de rede/]) {
       expect(document.body.textContent).not.toMatch(hidden)
     }
     expect(screen.getByLabelText("Rodapé do cupom")).toBeTruthy()
@@ -162,10 +174,10 @@ describe("Configurações → Impressão", () => {
   it("envia só as chaves alteradas de impressão; host/vias/gaveta/automática ocultos não viajam", async () => {
     h.printerConfig = { ...stored, impressao: { ...stored.impressao, imprimirAutomatico: true } }
     stubFetch(() => Response.json({ ok: true }))
-    render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
+    render(React.createElement(PdvSection))
     fireEvent.change(screen.getByLabelText("Rodapé do cupom"), { target: { value: "  Volte sempre  " } })
     fireEvent.click(screen.getByRole("switch", { name: "Exibir logo no cupom" }))
-    fireEvent.click(screen.getByRole("button", { name: "Salvar impressão" }))
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }))
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0].method).toBe("PUT")
     expect(calls[0].body).toEqual({
@@ -177,32 +189,41 @@ describe("Configurações → Impressão", () => {
 
   it("falha de gravação não anuncia sucesso e mantém o rascunho", async () => {
     stubFetch(() => Response.json({ ok: false, error: "Falha sintética" }, { status: 500 }))
-    render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
+    render(React.createElement(PdvSection))
     fireEvent.change(screen.getByLabelText("Rodapé do cupom"), { target: { value: "Rascunho" } })
-    fireEvent.click(screen.getByRole("button", { name: "Salvar impressão" }))
-    await waitFor(() => expect(h.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive", description: "Falha sintética" })))
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    // A barra de alterações explica a falha e continua oferecendo salvar; nada de sucesso.
+    const alert = await screen.findByRole("alert")
+    expect(alert.textContent).toContain("Impressão: não foi salvo")
+    expect(alert.textContent).toContain("Falha sintética")
     expect(h.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Impressão salva" }))
     expect((screen.getByLabelText("Rodapé do cupom") as HTMLInputElement).value).toBe("Rascunho")
+    expect((screen.getByRole("button", { name: "Salvar alterações" }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it("prévia usa a impressão do navegador, sem ponte TCP nem gravação", async () => {
     stubFetch(() => Response.json({ ok: true }))
     let written = ""
     vi.stubGlobal("open", vi.fn(() => ({ document: { open() {}, write(html: string) { written += html }, close() {} } })))
-    render(React.createElement(ImpressaoPdvSettingsCard, { browserOnly: true }))
+    render(React.createElement(PdvSection))
     fireEvent.click(screen.getByRole("button", { name: "Prévia no navegador" }))
     await waitFor(() => expect(written).toContain("PRÉVIA — sem valor fiscal"), { timeout: 5000 })
     expect(written).toContain("Padaria Sintética")
+    expect(written).toContain("Rua Sintética, 1")
     expect(calls).toHaveLength(0)
   })
 
   it("plataforma conserva o cartão técnico com host, vias e teste", () => {
     h.permissions = perms("owner")
     h.printerConfig = stored
-    render(React.createElement(ImpressaoPdvSettingsCard))
+    render(React.createElement(PdvSection))
     expect(screen.getByText("Impressão operacional")).toBeTruthy()
-    expect(screen.getByLabelText("Impressora de comprovante (host/IP)")).toBeTruthy()
+    expect((screen.getByLabelText("Impressora de comprovante (host/IP)") as HTMLInputElement).value).toBe("10.0.0.5")
     expect(screen.getByRole("button", { name: /Testar impressão/ })).toBeTruthy()
+    // Valores gravados aparecem como estão: 3 vias, gaveta ligada, OS desligada.
+    expect(screen.getByRole("group", { name: "Vias por venda" }).textContent).toContain("3")
+    expect(screen.getByRole("switch", { name: "Abrir gaveta após imprimir" }).getAttribute("aria-checked")).toBe("true")
+    expect(screen.getByRole("switch", { name: "Permitir impressão térmica de OS" }).getAttribute("aria-checked")).toBe("false")
   })
 })
 
