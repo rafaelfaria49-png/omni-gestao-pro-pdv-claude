@@ -59,10 +59,14 @@ describe("G004 receita e recebimento canônicos", () => {
   it("RECEBER_TITULO isola perfis: título EMPRESA não é recebido no PESSOAL e vice-versa", async () => {
     const f = await fixtureG005(), ctx = await f.contexto()
     const t = await gravarTituloFinanceiro(ctx, { natureza: "RECEBER", chave: "isolado", descricao: "Empresa", valorCentavos: "1000", vencimento: "2026-10-30", carteiraId: f.conta() })
-    const antes = await estadoG005(f)
+    const tituloAntes = await prisma.contaReceberTitulo.findUniqueOrThrow({ where: { id: t.id } })
     await expect(aplicarG005(f, { tipo: "RECEBER_TITULO", tituloId: t.id, quitar: true, carteiraId: f.conta(f.P1), formaPagamento: "pix", dataPagamento },
       "cruzado", f.P1)).rejects.toMatchObject({ code: "titulo_indisponivel" })
-    expect(await estadoG005(f)).toBe(antes)
+    // A revisão preparada é a única escrita (preparar não move dinheiro); título, movimentos e saldos intactos.
+    expect(await prisma.contaReceberTitulo.findUniqueOrThrow({ where: { id: t.id } })).toEqual(tituloAntes)
+    expect(await prisma.movimentacaoFinanceira.count({ where: { perfilId: { in: f.perfis } } })).toBe(0)
+    expect(await prisma.financeiroOperacao.count({ where: { perfilId: { in: f.perfis } } })).toBe(0)
+    expect([await saldo(f.conta()), await saldo(f.conta(f.P1))]).toEqual(["100000", "100000"])
   })
 })
 
@@ -98,7 +102,7 @@ describe("Acesso ao perfil EMPRESA (PerfilMembro)", () => {
   async function lojaNova() {
     const f = await fixtureG005(), loja = `${f.id}-L9`, admin = `${f.id}-A9`, gerente = `${f.id}-G9`, tecnico = `${f.id}-T9`
     await prisma.store.create({ data: { id: loja, name: "Loja sem perfil" } })
-    await prisma.adminUser.createMany({ data: [[admin, "ADMIN"], [gerente, "GERENTE"], [tecnico, "TECNICO"]].map(([id, role]) => ({
+    await prisma.adminUser.createMany({ data: ([[admin, "ADMIN"], [gerente, "GERENTE"], [tecnico, "TECNICO"]] as const).map(([id, role]) => ({
       id, email: `${id}@example.invalid`, password: "synthetic-only", role, lojaId: loja })) })
     await prisma.adminUserStore.createMany({ data: [admin, gerente, tecnico].map((adminUserId) => ({ adminUserId, storeId: loja })) })
     return { f, loja, admin, gerente, tecnico }

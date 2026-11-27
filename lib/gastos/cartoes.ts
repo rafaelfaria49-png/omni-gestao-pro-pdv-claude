@@ -446,7 +446,8 @@ export async function planejarPagamentoFaturaGasto(contexto: unknown, input: unk
   const parsed = planejarFaturaSchema.safeParse(input)
   if (!parsed.success || parsed.data.quitar === (parsed.data.valorCentavos !== undefined)) throw new FinanceiroReadError(422)
   const { cicloId, quitar, valorCentavos } = parsed.data
-  return comLeituraFinanceira(contexto, async (db, ctx) => {
+  // Leitura no snapshot; a validação do valor vem DEPOIS, para a recusa tipada não virar 503 genérico.
+  const abertos = await comLeituraFinanceira(contexto, async (db, ctx) => {
     const storeId = storeDoContexto(ctx)
     const ciclo = await db.cartaoCiclo.findFirst({ where: { id: cicloId, perfilId: ctx.perfilId, storeId }, select: { id: true } })
     if (!ciclo) throw new FinanceiroReadError(404)
@@ -455,7 +456,9 @@ export async function planejarPagamentoFaturaGasto(contexto: unknown, input: unk
       include: { alocacoesPagamento: { select: { pagamentoId: true, valorCentavos: true, pagamento: { select: { tipo: true } } } } },
       orderBy: [{ vencimento: "asc" }, { id: "asc" }],
     })
-    const abertos = titulos.map((t) => ({ id: t.id, restante: saldoTituloConsulta(t).restante })).filter((t) => t.restante > BigInt(0))
+    return titulos.map((t) => ({ id: t.id, restante: saldoTituloConsulta(t).restante })).filter((t) => t.restante > BigInt(0))
+  })
+  {
     const restante = abertos.reduce((s, t) => s + t.restante, BigInt(0))
     const alvo = quitar ? restante : BigInt(valorCentavos!)
     if (alvo <= BigInt(0) || alvo > restante) throw new OperacaoGastoError("valor_acima_saldo_fatura", 409)
@@ -469,5 +472,5 @@ export async function planejarPagamentoFaturaGasto(contexto: unknown, input: unk
     }
     return Object.freeze({ cicloId, restanteCentavos: restante.toString(), valorCentavos: alvo.toString(),
       alocacoes: Object.freeze(alocacoes.map((a) => Object.freeze(a))) })
-  })
+  }
 }
