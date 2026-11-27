@@ -1,0 +1,15 @@
+{
+  "requestedFamily": "anthropic",
+  "executor": "Claude Code CLI 2.1.288",
+  "requestedSha": "d647537c88a763f33f0f3a7f5263ff10ab632a03",
+  "base": "4a85dd95202b56873487b31c318fc2d751fc26f5",
+  "corpusBytes": 291781,
+  "corpusSha256": "646f5d75ff0417389b4b8b9994ade4fc526315865cebed01a447288f6ecdb779",
+  "diffBytes": 241349,
+  "diffSha256": "59eaeb11d7197a7e8d1b36efb99e6f4a88fe83590b54102f2dd78478bf6d6ad8",
+  "exitCode": 1,
+  "signal": null,
+  "errorCode": null,
+  "stdout": "{\"duration_api_ms\":0,\"stop_reason\":\"stop_sequence\",\"session_id\":\"4d4dc06e-fda8-47a1-97d4-6195ee7fdc32\",\"total_cost_usd\":0,\"usage\":{\"output_tokens_details\":{\"thinking_tokens\":0},\"input_tokens\":0,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":0,\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"\",\"iterations\":[],\"speed\":\"standard\",\"fallback_credit\":null},\"modelUsage\":{},\"permission_denials\":[],\"terminal_reason\":\"api_error\",\"fast_mode_state\":\"off\",\"fast_mode_disabled_reason\":\"sdk_opt_in_required\",\"subagent_stats\":{\"spawned\":0,\"requested\":{\"background\":0,\"foreground\":0,\"unset\":0},\"started_in_background\":0,\"max_depth\":0,\"spawned_by_subagents\":0,\"completed\":0,\"failed\":0,\"killed\":{\"parent\":0,\"user\":0,\"system\":0},\"refused\":{\"depth_limit\":0,\"concurrency_limit\":0,\"budget\":0},\"by_type\":{}},\"is_error\":true,\"num_turns\":1,\"subtype\":\"success\",\"api_error_status\":429,\"result\":\"You've hit your weekly limit · resets 11am (America/Sao_Paulo)\",\"type\":\"result\",\"duration_ms\":709,\"uuid\":\"91a59082-d918-4efb-aec7-bf6ac50f4a5a\",\"queued_turn_count\":0,\"result_index\":0}\n",
+  "stderr": ""
+}

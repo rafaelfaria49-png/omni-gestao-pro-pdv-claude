@@ -1,0 +1,45 @@
+{
+  "baseMain": "4a85dd95202b56873487b31c318fc2d751fc26f5",
+  "goal": "FISCAL-025B-OFFLINE-ARCHIVE-FOUNDATION-001",
+  "bootstrapPr": 274,
+  "canonicalFocused": {
+    "command": "npx vitest run lib/fiscal/archive-offline",
+    "exitCode": 1,
+    "reason": "No local node_modules; npm offline ENOTCACHED"
+  },
+  "canonicalTypes": {
+    "command": "npm run typecheck",
+    "exitCode": 1,
+    "reason": "MODULE_NOT_FOUND node_modules/typescript/lib/tsc.js"
+  },
+  "supplementalFocused": {
+    "command": "node docs/ai-execution/_evidence/FISCAL-025B-OFFLINE-001/run-offline-checks.mjs C:/Projetos/omni-gestao focused",
+    "passedTests": 274,
+    "passedFiles": 5,
+    "exitCode": 0
+  },
+  "supplementalTypes": {
+    "command": "node --max-old-space-size=4096 docs/ai-execution/_evidence/FISCAL-025B-OFFLINE-001/run-offline-checks.mjs C:/Projetos/omni-gestao types",
+    "files": 14,
+    "diagnostics": 0,
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "aepVerify": {
+    "command": "node scripts/track.mjs verify --all",
+    "exitCode": 0
+  },
+  "aepCheck": "NOT_EXECUTED_R_REQUIRED_FIRST",
+  "aepClose": "NOT_EXECUTED",
+  "dependencyLinks": "NOT_CREATED_APPROVAL_PENDING",
+  "dbWrites": 0,
+  "schemaChanged": false,
+  "storageProvisioned": false,
+  "sefazTransmissions": 0,
+  "parentGoalPreserved": true,
+  "gF7": "BLOCKED",
+  "gF12": "BLOCKED"
+}
