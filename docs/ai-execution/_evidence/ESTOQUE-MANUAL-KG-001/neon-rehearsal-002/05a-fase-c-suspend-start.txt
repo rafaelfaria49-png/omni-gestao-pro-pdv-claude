@@ -1,0 +1,20 @@
+# fase C — depois de suspender/retomar o compute — 2026-10-26T12:20:37.391Z
+  compute: 
+backend_start_min=2026-10-26 12:20:37.57292+00 postmaster_start=2026-10-26 12:20:25.625149+00 
+  acl-dump pós-corte × pós-restart: DIFERENTE (27 linhas)
+    + 
+  06-verificacao.sql [omni_migrator@omnigestao_prod] verificacao pos-restart: exit=0 330ms 
+    
+    database=omnigestao_prod dono=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+    papel neon_service connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel neondb_owner connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel omni_migrator connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=true
+    papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    papel omnigestao_candidate_audit_ro connect=false escreve_estoque=false pg_write_all_data=false dono_por_heranca=false
+    sessoes papel=omni_migrator app=kg-rehearsal-002 n=1
+    objetos do papel antigo=0
+    colunas estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+  antigo cold start direto após restart (esperado: recusado): FALHOU (503ms) ->  app: `old-after-restart-${k}` }) → 193 await tryOp(`antigo cold start ${k} após restart (esperado: recusado)`, () => re.produto.count( Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  runtime_v2 direto após restart grava un13 -> 10: SUCESSO (70ms) -> 10
+  antigo cold start pooler após restart (esperado: recusado): FALHOU (10040ms) ->  restart (esperado: recusado)`, () => re.produto.count( Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 2)
+  runtime_v2 pooler após restart grava un13 -> 10: SUCESSO (59ms) -> 10

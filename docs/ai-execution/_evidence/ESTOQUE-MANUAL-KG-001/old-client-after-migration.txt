@@ -1,0 +1,10 @@
+{
+  "kgiso-un-10": {
+    "stock": 12
+  },
+  "kgiso-pao-kg": {
+    "stock": 3
+  },
+  "findManyAll": 5,
+  "countStock": 5
+}

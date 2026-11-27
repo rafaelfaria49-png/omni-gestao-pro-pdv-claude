@@ -1,0 +1,266 @@
+{
+  "pass": true,
+  "label": "02-owner-preflight",
+  "role": "neondb_owner",
+  "host": "ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech",
+  "pooled": false,
+  "database": "omnigestao_prod",
+  "started_at": "2026-10-29T12:08:11.288Z",
+  "finished_at": "2026-10-29T12:08:12.023Z",
+  "exit_code": 0,
+  "rollback_completed": true,
+  "client_connection_closed": true,
+  "client_ssl_confirmed": true,
+  "client_connection_info": [
+    "You are connected to database \"omnigestao_prod\" as user \"neondb_owner\" on host \"ep-summer-tooth-acltc6wi.sa-east-1.aws.neon.tech\" (address \"18.229.40.57\") at port \"5432\".",
+    "SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off, ALPN: postgresql)"
+  ],
+  "checks": [
+    {
+      "check": "identity",
+      "ok": true,
+      "project": "dry-mouse-36002471",
+      "branch": "br-muddy-meadow-ac7ah2wl",
+      "endpoint": "ep-summer-tooth-acltc6wi",
+      "database": "omnigestao_prod",
+      "current_user": "neondb_owner",
+      "session_user": "neondb_owner",
+      "transaction_read_only": "on",
+      "xid_unassigned": true,
+      "time": "2026-10-29T12:08:11.456041+00:00"
+    },
+    {
+      "check": "roles",
+      "rows": [
+        {
+          "role": "neondb_owner",
+          "login": true,
+          "superuser": false,
+          "bypassrls": true,
+          "createrole": true,
+          "createdb": true,
+          "replication": true,
+          "inherit": true,
+          "connection_limit": -1,
+          "no_role_settings": true
+        },
+        {
+          "role": "omni_migrator",
+          "login": true,
+          "superuser": false,
+          "bypassrls": false,
+          "createrole": false,
+          "createdb": false,
+          "replication": false,
+          "inherit": true,
+          "connection_limit": -1,
+          "no_role_settings": true
+        },
+        {
+          "role": "omni_owner",
+          "login": false,
+          "superuser": false,
+          "bypassrls": false,
+          "createrole": false,
+          "createdb": false,
+          "replication": false,
+          "inherit": true,
+          "connection_limit": -1,
+          "no_role_settings": true
+        },
+        {
+          "role": "omni_runtime_v2",
+          "login": true,
+          "superuser": false,
+          "bypassrls": false,
+          "createrole": false,
+          "createdb": false,
+          "replication": false,
+          "inherit": true,
+          "connection_limit": -1,
+          "no_role_settings": true
+        }
+      ]
+    },
+    {
+      "check": "memberships",
+      "rows": [
+        {
+          "member": "neondb_owner",
+          "role": "omni_migrator",
+          "admin_option": true,
+          "inherit_option": false,
+          "set_option": false,
+          "grantor": "cloud_admin"
+        },
+        {
+          "member": "neondb_owner",
+          "role": "omni_owner",
+          "admin_option": true,
+          "inherit_option": false,
+          "set_option": false,
+          "grantor": "cloud_admin"
+        },
+        {
+          "member": "neondb_owner",
+          "role": "omni_runtime_v2",
+          "admin_option": true,
+          "inherit_option": false,
+          "set_option": false,
+          "grantor": "cloud_admin"
+        },
+        {
+          "member": "omni_migrator",
+          "role": "omni_owner",
+          "admin_option": false,
+          "inherit_option": true,
+          "set_option": true,
+          "grantor": "neondb_owner"
+        }
+      ]
+    },
+    {
+      "check": "reachable_roles",
+      "rows": [
+        {
+          "subject": "omni_migrator",
+          "role": "omni_owner",
+          "member": true,
+          "inherited": true,
+          "can_set": true
+        }
+      ]
+    },
+    {
+      "check": "database_privileges",
+      "owner": "neondb_owner",
+      "rows": [
+        {
+          "role": "neondb_owner",
+          "connect": true,
+          "create": true,
+          "temp": true
+        },
+        {
+          "role": "omni_migrator",
+          "connect": true,
+          "create": false,
+          "temp": true
+        },
+        {
+          "role": "omni_owner",
+          "connect": true,
+          "create": false,
+          "temp": true
+        },
+        {
+          "role": "omni_runtime_v2",
+          "connect": true,
+          "create": false,
+          "temp": true
+        }
+      ]
+    },
+    {
+      "check": "schema_privileges",
+      "runtime_public_usage": true,
+      "runtime_public_create": false,
+      "runtime_schemas_with_create": 0,
+      "migrator_public_usage": true,
+      "migrator_public_create": false
+    },
+    {
+      "check": "runtime_table_grants",
+      "tables": 110,
+      "select": 110,
+      "insert": 110,
+      "update": 110,
+      "delete": 110,
+      "missing_dml": 0,
+      "truncate": 0,
+      "references": 0,
+      "trigger": 0,
+      "maintain": 0,
+      "grant_options": 0,
+      "runtime_owned": 0,
+      "rls_enabled": 0
+    },
+    {
+      "check": "runtime_sequence_grants",
+      "sequences": 0,
+      "missing_usage_select_update": 0
+    },
+    {
+      "check": "migrator_pre_transfer",
+      "owner_member": true,
+      "owner_inherited": true,
+      "owner_set": true,
+      "stock_select": false,
+      "stock_update": false,
+      "omni_owner_public_relations": 0,
+      "old_owner_public_relations": 504
+    },
+    {
+      "check": "stock_columns",
+      "rows": [
+        {
+          "table_name": "estoque_produtos",
+          "column_name": "stock",
+          "type": "integer"
+        },
+        {
+          "table_name": "movimentacoes_estoque",
+          "column_name": "estoqueAntes",
+          "type": "integer"
+        },
+        {
+          "table_name": "movimentacoes_estoque",
+          "column_name": "estoqueDepois",
+          "type": "integer"
+        },
+        {
+          "table_name": "movimentacoes_estoque",
+          "column_name": "quantidade",
+          "type": "integer"
+        },
+        {
+          "table_name": "produto_depositos",
+          "column_name": "quantidade",
+          "type": "integer"
+        }
+      ]
+    },
+    {
+      "check": "ssl",
+      "enabled": false,
+      "protocol": null
+    },
+    {
+      "check": "migration_state",
+      "total": 23,
+      "finished": 23,
+      "kg_records": 0
+    },
+    {
+      "check": "old_runtime",
+      "login": true,
+      "connect": true,
+      "stock_update_catalog_only": true
+    },
+    {
+      "check": "sessions",
+      "rows": [
+        {
+          "role": "neondb_owner",
+          "origin": "A4",
+          "sessions": 1
+        },
+        {
+          "role": "neondb_owner",
+          "origin": "other",
+          "sessions": 4
+        }
+      ]
+    }
+  ]
+}

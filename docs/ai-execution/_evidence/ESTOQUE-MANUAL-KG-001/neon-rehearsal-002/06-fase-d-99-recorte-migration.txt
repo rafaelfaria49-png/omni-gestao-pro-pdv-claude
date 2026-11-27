@@ -1,0 +1,43 @@
+# fase D — 99 antes da migration, corte refeito, migration — 2026-10-26T12:22:31.049Z
+  99-desfazer-corte.sql [omni_migrator@neondb] desfazer rodado do database ERRADO (deve recusar): exit=3 238ms KG_DATABASE_ERRADO: conectado em neondb
+  99-desfazer-corte.sql [omni_migrator@omnigestao_prod] desfazer corte: exit=0 297ms 
+  antigo direto conecta após 99: SUCESSO (176ms) -> "clone"
+  antigo direto após 99 grava un7 -> 7: SUCESSO (29ms) -> 7
+  antigo pooler conecta após 99: SUCESSO (7430ms) -> "clone"
+  antigo pooler após 99 grava un7 -> 7: SUCESSO (65ms) -> 7
+  04-corte-conexao.sql [omni_migrator@omnigestao_prod] corte 2/3 refeito: exit=0 376ms KG_CORTE_CONEXAO_OK
+  05-encerrar-sessoes.sql [neondb_owner@neondb] corte 3/3 refeito: exit=0 6242ms KG_SESSOES_ENCERRADAS rodada=1 n=2 | KG_SESSOES_ENCERRADAS rodada=2 n=0 | KG_SESSOES_ENCERRADAS rodada=3 n=0 | KG_SESSOES_ANTIGAS_ZERO
+  antigo persistente depois do corte refeito (esperado: recusado): FALHOU (11ms) -> 3/3 refeito", OLD, ADMIN_DB, "05-encerrar-sessoes.sql", { single: false }) → 216 await tryOp("antigo persistente depois do corte refeito (esperado: recusado)", () => keep.produto.update( Server has closed the connection. [P1017]
+  antigo cold start direto após corte refeito (esperado: recusado): FALHOU (391ms) -> r, app: `old-recut-${k}` }) → 220 await tryOp(`antigo cold start ${k} após corte refeito (esperado: recusado)`, () => re.produto.count( Error querying the database: ERROR: permission denied for database "omnigestao_prod"
+  antigo cold start pooler após corte refeito (esperado: recusado): FALHOU (138ms) -> {k}` }) → 220 await tryOp(`antigo cold start ${k} após corte refeito (esperado: recusado)`, () => re.produto.count( Error in connector: Error querying the database: FATAL: permission denied for database "omnigestao_prod"
+
+## migration no clone (omni_migrator, conexão direta)
+  estoque-kg-migration-apply.sql: exit=0 1047ms NOTICE: KG_MIGRATION_OK produtos=14112 depositos=13725 livro=2546 produtos_md5=2ebb9d625991e3b340fe84b519adce42
+  _prisma_migrations antes do resolve: exit=0 -> 23 kg=0
+  prisma migrate resolve --applied: exit=0
+    Prisma schema loaded from prisma\schema.prisma
+    Datasource "db": PostgreSQL database "omnigestao_prod", schema "public" at "ep-damp-dew-ac4qr1e2.sa-east-1.aws.neon.tech"
+    Migration 20261025120000_estoque_quantidade_fracionada marked as applied.
+  _prisma_migrations depois do resolve: exit=0 -> 20261025120000_estoque_quantidade_fracionada checksum=f07242c4604660008b645004d3dfafde4da1656e728f803d9009f2f02a06a47e finished=true rolled_back=false
+  prisma migrate status: exit=0
+    Prisma schema loaded from prisma\schema.prisma
+    Datasource "db": PostgreSQL database "omnigestao_prod", schema "public" at "ep-damp-dew-ac4qr1e2.sa-east-1.aws.neon.tech"
+    24 migrations found in prisma/migrations
+    Database schema is up to date!
+  prisma migrate diff banco × schema da PR: exit=2
+    [*] Changed the `movimentacoes_estoque` table
+      [*] Renamed index `storeId_idempotencyKey` to `movimentacoes_estoque_storeId_idempotencyKey_key`
+  06-verificacao.sql [omni_migrator@omnigestao_prod] verificacao pos-migration: exit=0 241ms 
+    
+    database=omnigestao_prod dono=omni_owner acl={omni_owner=CTc/omni_owner,omni_runtime_v2=c/omni_owner,omni_migrator=c/omni_owner}
+    papel neon_service connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel neondb_owner connect=false escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel omni_migrator connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=true
+    papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    papel omnigestao_candidate_audit_ro connect=false escreve_estoque=false pg_write_all_data=false dono_por_heranca=false
+    sessoes papel=omni_migrator app=kg-rehearsal-002 n=1
+    sessoes papel=omni_runtime_v2 app=runtime-after-restart-pooler n=1
+    objetos do papel antigo=0
+    colunas estoque_produtos.stock:double precision movimentacoes_estoque.estoqueAntes:double precision movimentacoes_estoque.estoqueDepois:double precision movimentacoes_estoque.quantidade:double precision produto_depositos.quantidade:double precision
+  99-desfazer-corte.sql [omni_migrator@omnigestao_prod] desfazer DEPOIS da migration (deve recusar): exit=3 226ms KG_DESFAZER_PROIBIDO_MIGRATION_JA_APLICADA (colunas int4 encontradas: 0 de 5)
+  CONNECT do papel antigo após a recusa do 99: exit=0 -> f

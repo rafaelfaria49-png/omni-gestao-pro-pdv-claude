@@ -64,6 +64,8 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { pdvWeightSaleBlockedNotice, pdvWeightSaleFlag } from "@/lib/pdv-weight-sale-guard"
+import { usePdvWeightBlockedCartGuard } from "@/lib/use-pdv-weight-blocked-cart-guard"
 import { SelecionarAcessorioDialog } from "./acessorios/selecionar-acessorio-dialog"
 import {
   accessoryConfigRequiresSelection,
@@ -1020,6 +1022,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         precoPorKg: inv.precoPorKg,
         atributos: inv.atributos,
         ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
+        ...pdvWeightSaleFlag(inv),
       }
     })
   }, [inventory])
@@ -1167,6 +1170,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
+  // Invariante: carrinho restaurado (comanda, espera, rascunho) nunca carrega produto com venda por peso bloqueada.
+  // Com o pagamento aberto o carrinho fica intacto (pode haver envio em andamento); o servidor recusa a venda.
+  usePdvWeightBlockedCartGuard({ cart: cart, setCart: setCart, catalog: realCatalog, notify: (n) => toast({ ...n, variant: "destructive" }), paused: paymentOpen })
   /** Intent passado ao modal compartilhado (forma pré-selecionada) e flag de múltiplo. */
   const [paymentInstantIntent, setPaymentInstantIntent] = useState<PaymentMethodType | null>(null)
   const [paymentMultipay, setPaymentMultipay] = useState(false)
@@ -1755,6 +1761,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct, priceOverride?: number, qtyToAdd: number = 1) => {
+    const pesoBloqueado = pdvWeightSaleBlockedNotice(item)
+    if (pesoBloqueado) {
+      toast({ ...pesoBloqueado, variant: "destructive" })
+      return
+    }
     // OMNI-APARELHOS-ENDTOEND-001: este layout não vende unidade por IMEI — bloqueio explícito.
     if (isAparelhoSerializado(item)) {
       toast({ variant: "destructive", ...APARELHO_FORA_DO_FLUXO })

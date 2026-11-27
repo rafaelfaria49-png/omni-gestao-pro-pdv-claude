@@ -1,0 +1,9 @@
+{
+  "pass": false,
+  "verification": "UNVERIFIED_API",
+  "error": "Vercel GET /v9/projects/omni-gestao-pro HTTP 403",
+  "methods": [
+    "GET"
+  ],
+  "credentials_changed": false
+}

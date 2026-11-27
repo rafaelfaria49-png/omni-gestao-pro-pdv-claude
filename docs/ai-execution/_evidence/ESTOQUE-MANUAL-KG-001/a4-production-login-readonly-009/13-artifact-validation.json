@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "validated_at": "2026-10-29T12:15:06.666Z",
+  "files_scanned": 34,
+  "secret_value_matches": 0,
+  "credential_urls": 0,
+  "private_snapshot_records_in_json": 0,
+  "database_transactions_verified": 7,
+  "public_artifacts_sha256": {
+    "harness/a4.cjs": "2351c1cc838d9d6b256c99e1ad4736397bca68306922f90e2f232d7cc8dce826",
+    "harness/catalog.sql": "410288fee3e7ed8a89029e1d3ea8a6ceddb7e1df16db4ae4a875e806f302f3d8",
+    "harness/owner-snapshot.sql": "e70d498ad8adae9bfbfa7c6b64e90c83d68670d5f48b1072197129242ed2361a",
+    "README.md": "0d9d51d77afe7c776b69e75d59c8693e646b9594cde1d85d6c6c69228c4946bf",
+    "11-vercel-ui-verification.json": "14453a4b33e3d86efb8abfca40c4d42dc03ed4c6fa94715d7fadacdb714e0160",
+    "12-final-summary.json": "4768046362b9e4617625ce087f408b557d8289e504b37ea87756630d5bab20da"
+  }
+}

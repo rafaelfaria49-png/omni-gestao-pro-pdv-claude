@@ -1,0 +1,133 @@
+{
+  "postgres17": true,
+  "synthetic_only": true,
+  "script": "baseline/07-original.sql",
+  "p1_precision_counterexamples": [
+    {
+      "table": "estoque_produtos",
+      "column": "stock",
+      "value": "0.30000000000000004",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "estoque_produtos",
+      "column": "stock",
+      "value": "1.0000000000000002",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "estoque_produtos",
+      "column": "stock",
+      "value": "999999999999998.5",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "produto_depositos",
+      "column": "quantidade",
+      "value": "0.30000000000000004",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "produto_depositos",
+      "column": "quantidade",
+      "value": "1.0000000000000002",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "produto_depositos",
+      "column": "quantidade",
+      "value": "999999999999998.5",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "quantidade",
+      "value": "0.30000000000000004",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "quantidade",
+      "value": "1.0000000000000002",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "quantidade",
+      "value": "999999999999998.5",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "estoqueAntes",
+      "value": "0.30000000000000004",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "estoqueAntes",
+      "value": "1.0000000000000002",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "estoqueAntes",
+      "value": "999999999999998.5",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "estoqueDepois",
+      "value": "0.30000000000000004",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "estoqueDepois",
+      "value": "1.0000000000000002",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "column": "estoqueDepois",
+      "value": "999999999999998.5",
+      "accepted_by_original": true,
+      "status": 0,
+      "sqlstate": null
+    }
+  ],
+  "expression": {
+    "original_numeric": "0.3",
+    "original_predicate": true,
+    "candidate_roundtrip": false
+  },
+  "reproduced": true
+}

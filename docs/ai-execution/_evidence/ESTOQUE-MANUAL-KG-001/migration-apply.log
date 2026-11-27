@@ -1,0 +1,11 @@
+Tempo de execução está ativado.
+BEGIN
+Tempo: 3,471 ms
+ALTER TABLE
+Tempo: 36,659 ms
+ALTER TABLE
+Tempo: 12,180 ms
+ALTER TABLE
+Tempo: 17,817 ms
+COMMIT
+Tempo: 22,134 ms

@@ -1,0 +1,63 @@
+# fase A — pré-janela no clone br-wispy-mountain-accw2a7p (ep-damp-dew-ac4qr1e2) — 2026-10-26T12:18:52.450Z
+  trava/identidade: exit=0 
+br-wispy-mountain-accw2a7p ep-damp-dew-ac4qr1e2 dry-mouse-36002471 ro=off 
+## inventário do database de produção CLONADO (antes de qualquer escrita)
+    
+    guard.db_ok=1
+    session.read_only=off user=neondb_owner pg=17.11 (11592b3)
+    neon.neon.branch_id=br-wispy-mountain-accw2a7p
+    neon.neon.endpoint_id=ep-damp-dew-ac4qr1e2
+    neon.neon.project_id=dry-mouse-36002471
+    neon.neon.tenant_id=3898df296ae365ab4464a82323e3f4df
+    neon.neon.timeline_id=479ec817dedfb9242b17816a681328de
+    system_identifier=7667235400144430878
+    db.owner=neondb_owner acl=NULL
+    databases=neondb,omnigestao_prod,omnigestao_prod_candidate,postgres
+    roles.omni=omnigestao_candidate_audit_ro
+    roles.md5=51d0374d66165bf5971f37974f639a2f n=21
+    members.md5=05beb343e5ff985c64559676a5ae602b n=12
+    owners.public=neondb_owner/i:394 neondb_owner/proc:4 neondb_owner/r:110 neondb_owner/typee:36
+    schema.public.owner=pg_database_owner acl={pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}
+    rls.tables=0 forced=0 policies=0
+    table.acl.md5=d3aa81315362ccc9af21253b220e8b91
+    default_acl=2
+    extensions=plpgsql@1.0:cloud_admin
+    shdepend.owner.fora_do_escopo=0
+    shdepend.owner.por_classe=pg_class:110 pg_proc:4 pg_type:36
+    schema.cols.md5=b7b53c1eeafc04d17f554acb2185d7a1 n=1265
+    kg.cols=estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+    kg.constraints=(nenhuma)
+    migrations=23 finished=23 last=20261022120000_platform_pilot_access md5=e0944cbf768228318a5d3fac418ae367
+    migrations.kg=0
+    rows.estoque_produtos=14109 produto_depositos=13725 movimentacoes_estoque=2546
+  default ACLs (detalhe): exit=1 | ERROR: operator is not unique: text || "char"
+  funções em public (nomes): exit=0 -> dp_no_history_delete():neondb_owner ; dp_only_supersession():neondb_owner ; dp_preserve_admission():neondb_owner ; dp_require_mapped_store():neondb_owner
+  dono de neondb: exit=0 -> neondb_owner
+
+## dados sintéticos (loja e 3 produtos do ensaio, via cliente Prisma antigo)
+  cria loja sintética: SUCESSO (58ms) -> {"id":"kg-ensaio-002-loja"}
+  cria kg-ensaio-002-un13 stock=13: SUCESSO (44ms) -> {"id":"kg-ensaio-002-un13","stock":13}
+  cria kg-ensaio-002-un7 stock=7: SUCESSO (13ms) -> {"id":"kg-ensaio-002-un7","stock":7}
+  cria kg-ensaio-002-pao stock=5: SUCESSO (13ms) -> {"id":"kg-ensaio-002-pao","stock":5}
+
+## 01 / 02 / 06 (pré-janela)
+  01-papeis.sql [neondb_owner@neondb] sem senha no ambiente (deve recusar): exit=3 218ms KG_SENHA_AUSENTE"
+  01-papeis.sql [neondb_owner@neondb] papeis: exit=0 403ms KG_PAPEIS_OK
+  02-grants-runtime.sql [neondb_owner@omnigestao_prod] grants do runtime: exit=0 275ms KG_RUNTIME_GRANTS_OK
+  06-verificacao.sql [neondb_owner@omnigestao_prod] verificacao: exit=0 247ms 
+    
+    database=omnigestao_prod dono=neondb_owner acl={=Tc/neondb_owner,neondb_owner=CTc/neondb_owner,omni_runtime_v2=c/neondb_owner,omni_migrator=c/neondb_owner}
+    papel neon_service connect=true escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel neondb_owner connect=true escreve_estoque=true pg_write_all_data=true dono_por_heranca=false
+    papel omni_migrator connect=true escreve_estoque=false pg_write_all_data=false dono_por_heranca=true
+    papel omni_runtime_v2 connect=true escreve_estoque=true pg_write_all_data=false dono_por_heranca=false
+    papel omnigestao_candidate_audit_ro connect=true escreve_estoque=false pg_write_all_data=false dono_por_heranca=false
+    sessoes papel=neondb_owner app=kg-rehearsal-002 n=2
+    objetos do papel antigo=540
+    colunas estoque_produtos.stock:integer movimentacoes_estoque.estoqueAntes:integer movimentacoes_estoque.estoqueDepois:integer movimentacoes_estoque.quantidade:integer produto_depositos.quantidade:integer
+  acl-dump pre-corte gravado (20 linhas)
+  runtime_v2 (Int, regime integer) grava un13 -> 12: SUCESSO (37ms) -> 12
+  sintéticos: 
+kg-ensaio-002-pao=5 kg-ensaio-002-un13=12 kg-ensaio-002-un7=7
+default ACLs: 0 
+cloud_admin public S {neon_superuser=r*w*U*/cloud_admin};cloud_admin public r {neon_superuser=a*r*w*d*D*x*t*m*/cloud_admin} 

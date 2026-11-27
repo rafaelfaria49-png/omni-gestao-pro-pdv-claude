@@ -198,6 +198,8 @@ export interface InventoryItem {
   atributos?: ProdutoAtributoDef[]
   /** Configuração saneada e opcional projetada por `/api/ops/inventory`. */
   accessoryConfig?: ProdutoAcessoriosMetadataV1
+  /** Projetado por `/api/ops/inventory`: produto declarado por peso, venda ainda bloqueada. */
+  vendaPesoIndisponivel?: boolean
   /** Modelo de aparelho por IMEI — venda exige escolher a unidade física. */
   serializedDevice?: boolean
 }

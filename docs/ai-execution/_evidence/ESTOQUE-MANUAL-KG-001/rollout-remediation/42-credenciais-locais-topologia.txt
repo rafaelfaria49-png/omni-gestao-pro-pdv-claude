@@ -1,0 +1,21 @@
+# ESTOQUE-MANUAL-KG-001 - topologia das credenciais guardadas nesta maquina (C:\Projetos\secrets)
+# Lidas por script local que imprime SO papel, database, tipo de host e igualdade de senha (booleano).
+# Nenhum valor de senha, host ou URL foi impresso, copiado ou enviado. 2026-10-25.
+
+arquivo/chave                         papel                      database                    pooler  mesmo_cluster  mesma_senha_que_prod
+neon-production.env NEON_PROD_DATABASE_URL     neondb_owner     omnigestao_prod             sim     sim            (referencia)
+neon-production.env NEON_PROD_DIRECT_URL       neondb_owner     omnigestao_prod             nao     sim            sim
+neon-production.env NEON_PREVIEW_DATABASE_URL  neondb_owner     omnigestao_prod_candidate   sim     sim            SIM
+neon-production.env NEON_PREVIEW_DIRECT_URL    neondb_owner     omnigestao_prod_candidate   nao     sim            SIM
+neon-migration.env  NEON_DIRECT_URL            neondb_owner     neondb                      nao     sim            SIM
+vercel-production-pull.env DATABASE_URL/DIRECT_URL  postgres(.<ref>)  postgres            -       NAO (Supabase, anterior ao corte; arquivo obsoleto)
+neon-candidate-readonly.env                    omnigestao_candidate_audit_ro  omnigestao_prod_candidate  -  sim  nao
+
+Leitura:
+- Production, Preview/candidate e o admin de migracao usam o MESMO papel (neondb_owner) com a MESMA senha;
+  so o nome do database muda. Arquivos de 2026-07-27; a Vercel registra DATABASE_URL de Production e de
+  Preview atualizadas pela ultima vez em 2026-07-27 23:26/23:27 UTC (nenhuma troca desde entao).
+- Consequencia: trocar a senha do neondb_owner derruba Production, Preview e maquinas locais juntos, e
+  nao encerra sessoes abertas (provado em 10-isolamento-credenciais-topologia-neon.txt, secao 1).
+- Toda maquina com .env de Preview/candidate tem, na pratica, credencial de escrita em producao
+  (basta trocar o nome do database).
