@@ -91,6 +91,9 @@ describe("signout-race-guard — extração e proteção stateless + cerca pós-
         token: "partApartB",
       },
     ])
+    expect(extractAuthSessionTokens("__Host-authjs.session-token=host-tok")).toEqual([
+      { cookieName: "__Host-authjs.session-token", cookieNames: ["__Host-authjs.session-token"], token: "host-tok" },
+    ])
     expect(extractAuthSessionTokens(null)).toEqual([])
   })
 
@@ -142,8 +145,9 @@ describe("signout-race-guard — extração e proteção stateless + cerca pós-
     const lateOnA = await inFlightOnA
     jar.apply(lateOnA)
 
-    // Nenhum Set-Cookie de sessão foi emitido pela instância A → cookie permanece limpo!
+    // Nenhum Set-Cookie de sessão foi emitido pela instância A → cookie permanece limpo e sem cache!
     expect(getSetCookieHeaders(lateOnA.headers).some(isSessionCookieSetHeader)).toBe(false)
+    expect(lateOnA.headers.get("cache-control")).toBe("private, no-store")
     expect(jar.sessionCookieNames()).toEqual([])
   })
 

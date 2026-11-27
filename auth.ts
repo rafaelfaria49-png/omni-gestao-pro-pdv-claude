@@ -5,7 +5,7 @@ import { authConfig } from "./auth.config"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { isPlatformAuthority, resolveStoreModules } from "@/lib/auth/access-policy"
-import { isSessionRevocationEnabled, legacyAdminSessionId, prismaAdminSessionStore, resolveAdminSession } from "@/lib/auth/admin-session"
+import { isSessionRevocationEnabled, prismaAdminSessionStore, resolveAdminSession } from "@/lib/auth/admin-session"
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -21,20 +21,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async signOut(message) {
       if (!isSessionRevocationEnabled()) return
       const token = "token" in message ? message.token : undefined
-      const sid =
-        typeof token?.sid === "string"
-          ? token.sid
-          : typeof token?.jti === "string" && token.jti.trim()
-            ? legacyAdminSessionId(token.jti)
-            : undefined
-      if (typeof sid !== "string") return
+      if (!token?.sub) return
       // Uma nova tentativa; se ainda falhar, registra o prefixo do sid para acompanhamento.
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          await sessionStore.revoke(sid, "logout")
+          let sid = token.sid
+          if (sid == null) {
+            // JWT legado sem sid: garante registro determinístico pelo jti antes de revogar.
+            const legacy = await resolveAdminSession(sessionStore, {
+              sid,
+              jti: token.jti,
+              userId: token.sub,
+              isSignIn: false,
+            })
+            if (!legacy.ok) return
+            sid = legacy.sid
+          }
+          if (typeof sid === "string") {
+            await sessionStore.revoke(sid, "logout")
+          }
           return
         } catch {
-          if (attempt === 2) console.error("[auth] session_revoke_failed sid=" + sid.slice(0, 8))
+          if (attempt === 2) console.error("[auth] session_revoke_failed")
         }
       }
     },

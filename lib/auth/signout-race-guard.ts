@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 
 export const SESSION_COOKIE_BASE_NAMES = [
+  "__Host-authjs.session-token",
   "__Secure-authjs.session-token",
   "authjs.session-token",
 ] as const
@@ -14,7 +15,7 @@ export interface ExtractedSessionToken {
 const DEFAULT_TTL_MS = 15 * 60 * 1000
 const DEFAULT_MAX_ENTRIES = 10_000
 
-const SESSION_COOKIE_NAME_RE = /^(?:__Secure-)?authjs\.session-token(?:\.\d+)?$/i
+const SESSION_COOKIE_NAME_RE = /^(?:(?:__Secure|__Host)-)?authjs\.session-token(?:\.\d+)?$/i
 
 /**
  * Extrai tokens de sessão Auth.js do header `Cookie`, suportando cookies simples
@@ -194,10 +195,10 @@ export function getSetCookieHeaders(headers: Headers): string[] {
  * 3. Somente fluxos explícitos de mutação de sessão (`signIn` / `POST /api/auth/callback/*` e
  *    `POST /api/auth/signout`) gravam ou limpam o cookie de sessão.
  */
-export function stripSessionCookies(response: Response): Response {
+export function stripSessionCookies(response: Response, noStore = false): Response {
   const setCookies = getSetCookieHeaders(response.headers)
   const hasSessionCookie = setCookies.some((cookie) => isSessionCookieSetHeader(cookie))
-  if (!hasSessionCookie) return response
+  if (!hasSessionCookie && !noStore) return response
 
   const nextHeaders = new Headers(response.headers)
   nextHeaders.delete("set-cookie")
@@ -206,6 +207,9 @@ export function stripSessionCookies(response: Response): Response {
       continue
     }
     nextHeaders.append("set-cookie", cookie)
+  }
+  if (noStore) {
+    nextHeaders.set("cache-control", "private, no-store")
   }
 
   return new Response(response.body, {
@@ -275,8 +279,8 @@ async function handleSessionRequest<TRequest extends Request>(
   }
 
   // Garantia stateless entre instâncias: consultas `/api/auth/session` jamais
-  // reescrevem nem apagam o cookie de sessão no navegador.
-  return stripSessionCookies(response)
+  // reescrevem nem apagam o cookie de sessão no navegador e nunca são cacheadas.
+  return stripSessionCookies(response, true)
 }
 
 /**
