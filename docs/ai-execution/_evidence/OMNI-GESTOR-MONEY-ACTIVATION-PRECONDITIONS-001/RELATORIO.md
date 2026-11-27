@@ -135,7 +135,7 @@ atômica G004 → consulta G005, em PG real. **Não é WhatsApp nem interpretaç
 | 03 "paguei 200 daquela dívida" | mesmo título: pago 20000, **restante 60000**; consulta: aberto 60000, despesa realizada 20000 |
 | 04 "600 no cartão em 3×" | 3 parcelas de 20000 em 3 ciclos, 0 caixa; pagar a 1ª fatura não cria fato/título novo; saldo 80000 |
 | 05 "quanto gastei no mercado" | soma por **categoria estruturada** = 38050; descrição com "mercado" em outra categoria fica fora; consulta não escreve |
-| 06 "transferi R$ 300" | EMPRESA: 70000/30000, receita = despesa = 0. **Lacuna: não existe transferência PESSOAL no motor G004** |
+| 06 "transferi R$ 300" | EMPRESA (legado): 70000/30000, receita = despesa = 0. PESSOAL: `TRANSFERENCIA_INTERNA` no motor G004 (rodada 2, §10) |
 | 07 "registrei errado" | antes da confirmação: correção CAS invalida a versão antiga; depois: estorno do pagamento identificado com motivo, saldo volta a 100000, fato preservado, eventos auditados |
 
 ## 8. Production — preparação (não executada)
@@ -170,8 +170,8 @@ Isso é pré-condição de **ativação** (não de migration).
 - Superfícies 1–14 do GOAL mapeiam para: visão geral = `consultarFinanceiro`; despesa/receita/dívida/pagar/receber/
   cartão/parcelas = propostas `GASTO_PAGO`/`CONTA_PAGAR`/`PAGAR_TITULO`/`COMPRA_CREDITO`/`PAGAR_FATURA` via revisão
   + confirmação; histórico/estorno = `ESTORNAR_PAGAMENTO`; comprovantes = documentos G003.
-- Lacunas a resolver antes/na G006.5: (a) **transferência PESSOAL** no motor G004; (b) receita PESSOAL
-  estruturada; (c) GET Pagar com caminho G005 sob a flag; (d) concessão governada de `PerfilMembro`;
+- Lacunas a resolver antes/na G006.5: ~~(a) transferência PESSOAL~~ e ~~(c) GET Pagar sob a flag~~ resolvidas
+  na rodada 2 (§10); seguem (b) receita PESSOAL estruturada; (d) concessão governada de `PerfilMembro`;
   (e) `carregarConsulta` com carga limitada; (f) runtime não dono em Production para privacidade PESSOAL real.
 
 ### G007 — WhatsApp (binding/telefone) e G008–G012
@@ -191,6 +191,28 @@ Host 24/7 independente do computador do dono (Render Background Worker é o cand
 e **reaproveitar a política de datasource da #404** no worker (hoje ele recusa Production por convenção de
 ambiente/papel/nome, não pela identidade do banco — P2). Nada contratado nesta missão.
 
-## 10. Publicação
+## 10. Rodada 2 — correções autorizadas pelo dono (27/11)
 
-(preenchido após push/CI)
+| # | Item | Correção | Prova |
+|---|---|---|---|
+| 1 | E2E trocas: `42883 jsonb ~~ text` | `lib/pdv/trocas/troca-consulta.ts`: sem `Prisma.sql` aninhado dentro do `$queryRaw` (no bundle do Next o fragmento `norm(...)` não era reconhecido como SQL e seguia como parâmetro JSON); normalização inline, mesmo SQL e parâmetros simples | não reproduzia no Vitest (mesmo runtime); prova = E2E `e2e-authenticated` da CI |
+| 2 | Suítes PG G001–G006 fora da CI | workflow `Gestor Money PG` + `scripts/ci/run-gestor-money-pg-suites.mjs`: um `postgres:17` descartável por grupo (porta/papel/PGDATA da fixture), schema por migrations reais, reprova com teste pulado. 17 arquivos: perfis; writers ×2; readers, documentos; operacoes, operacoes-http, cartoes, concorrencia, rollback; consumidores, reconciliacao, contratos; channels, queue, worker-recovery; RLS restrito. GRANTs G006 de QA reconstruídos do RUNBOOK (`scripts/ci/gestor-money/g006-qa-grants.sql`) | CI |
+| 3 | 5 testes G005 com data fixa | período cobre o instante gravado pelos serviços legados (`createdAt` do motor do Prisma, fora de `vi.setSystemTime`); Agent com relógio fixo (25/10/2026) só na chamada; flag ligada declarada no arquivo; asserção `a.consulta` (campo removido na reconciliação) trocada por `resultadoLoja[0].despesa`; fila do React esvaziada antes de fechar o JSDOM | local: G005 **32/32** com a config do repositório |
+| 4 | Worker G006 × Datasource Guard | `autorizarDatasourceWorker`: `teste` → `localFixtureDatasource`; `homologacao` → só alvo **Preview atestado** na política #404 (hoje nenhum perfil atestado tem `omni_gastos_worker` → homologação cloud bloqueada até atestar um alvo) | unit 38/38 (inclui recusas por identidade) |
+| 4b | Health do worker reprovava em qualquer banco atual | funções `p03_*`/`vestuario_*` (main) e `gm_*` (HARDENING) executáveis por PUBLIC. Allowlist ganha só os 3 auxiliares de RLS `gm_*`; continua recusando SECURITY DEFINER fora da lista e GRANT explícito (a sonda `g006_qa_executavel` segue valendo) | CI (worker-recovery) |
+| 5 | Transferência PESSOAL | `TRANSFERENCIA_INTERNA` no motor G004 (PESSOAL e EMPRESA): mesma trava de contas, destino ativo e não crédito, saldo pelo ledger, saída+entrada `origem=transferencia`, sem fato/pagamento; evento/outbox/CAS comuns. Migration **aditiva nova** `20261127100000_gastos_transferencia_interna` (CHECK da revisão + ramo no `g004_consistencia_final`; resto do corpo copiado byte a byte da G004 — a G004 ensaiada não muda) | local: contratos **9/9** (saldos, idempotência, consulta 0/0, recusa de conta de outro perfil/dono, mesma conta, saldo insuficiente, e transferência forjada de uma perna recusada pelo banco) |
+| 6 | GET Pagar com a flag ligada | `app/api/financeiro/pagar/route.ts`: ligado → consulta G005 (pago/restante por alocação, 409 em anomalia legada); desligado → corpo da main intacto | local: consumidores G005 (409 e parcial 165,01) |
+
+Fora da CI, com motivo: `migration.postgres` (G002 histórico), `migration-g003`, `migration-g004` e
+`mensageria-migration` dependem de bancos-baseline com massa anterior à G001 montados à mão e têm o caminho
+`C:/Program Files/PostgreSQL/17/bin/psql.exe` fixo; o de G004 ainda espera 0 policies, defasado pelo HARDENING-P0
+(policies `gm_runtime_*`). O caminho real das migrations segue provado pelo grupo Aparelhos (cadeia real +
+DRIFT_ZERO) e pelo `rehearsal4`.
+
+**Ordem de Production atualizada:** G002 → G003 → G004 → G006 → `20261127100000_gastos_transferencia_interna`,
+uma por vez, diretório curado, janela sem venda. A migration nova também precisa entrar antes do merge (o código
+grava o tipo novo só quando usado, mas o CHECK precisa existir antes de qualquer transferência).
+
+## 11. Publicação
+
+Ver o relatório final da sessão (HEAD, CI e bloqueadores).
