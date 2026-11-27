@@ -79,7 +79,7 @@ export async function POST(req: Request) {
             : operacao === "pagar_divida"
               ? await pagarDividaReal(ctx, payload as Parameters<typeof pagarDividaReal>[1], chave)
               : operacao === "transferir"
-                ? await transferirReal(ctx, payload as Parameters<typeof transferirReal>[1])
+                ? await transferirReal(ctx, payload as Parameters<typeof transferirReal>[1], chave)
                 : operacao === "compra_cartao"
                   ? await registrarCompraCartaoReal(ctx, payload as Parameters<typeof registrarCompraCartaoReal>[1], chave)
                   : await pagarFaturaReal(ctx, payload as Parameters<typeof pagarFaturaReal>[1], chave)

@@ -83,9 +83,40 @@ describe("GestorMoneyApp — UI Integration", () => {
 
     fireEvent.click(screen.getByTestId("nav-assistente"))
     expect(screen.getByTestId("gestor-money-assistente")).toBeTruthy()
+    expect(screen.getByTestId("assistant-g007-alignment")).toBeTruthy()
     const connectBtn = screen.getByTestId("btn-conectar-whatsapp-disabled") as HTMLButtonElement
     expect(connectBtn.disabled).toBe(true)
     expect(screen.getByTestId("whatsapp-real-status-badge").textContent).toContain("Aguardando G007")
+  }, 15_000)
+
+  it("nunca exibe R$ 0,00 como limite real quando limiteCentavos é null", async () => {
+    const gw = createSyntheticGestorMoneyGateway()
+    const origSnap = gw.obterSnapshot.bind(gw)
+    vi.spyOn(gw, "obterSnapshot").mockImplementation(async (sel, per) => {
+      const snap = await origSnap(sel, per)
+      if (!snap) return null
+      return {
+        ...snap,
+        cartoes: snap.cartoes.map((c) => ({
+          ...c,
+          limiteCentavos: null,
+          disponivelCentavos: null,
+          limitePersistenciaDisponivel: false,
+        })),
+      }
+    })
+
+    render(React.createElement(GestorMoneyApp, { mode: "synthetic", customGateway: gw }))
+    await waitFor(() => {
+      expect(screen.getByTestId("gestor-money-dashboard")).toBeTruthy()
+    })
+    fireEvent.click(screen.getByTestId("nav-cartoes"))
+    await waitFor(() => {
+      expect(screen.getByTestId("gestor-money-cartoes")).toBeTruthy()
+    })
+    const cardEl = screen.getByTestId("credit-card-card-p-nubank")
+    expect(cardEl.textContent).toContain("Limite não informado")
+    expect(cardEl.textContent).not.toContain("Limite R$ 0,00")
   }, 15_000)
 
   it("no modo real exibe painel honesto de fundação pendente (PR #405) sem dados simulados", async () => {

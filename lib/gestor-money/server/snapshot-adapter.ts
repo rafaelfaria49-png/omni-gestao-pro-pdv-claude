@@ -492,9 +492,11 @@ export async function obterSnapshotReal(
       ultimos4: card.ultimos4 ?? "0000",
       corGradiente: gradientes[idx % gradientes.length],
       // Lacuna G004: `cartoes_instrumentos` não possui coluna `limiteCentavos` no schema PR #405.
-      limiteCentavos: "0",
+      // Nunca apresentar R$ 0,00 como limite real: `null` indica dado não cadastrado/não modelado.
+      limiteCentavos: null,
       usadoCentavos: usadoTotal.toString(),
-      disponivelCentavos: "0",
+      disponivelCentavos: null,
+      limitePersistenciaDisponivel: false,
       fechamentoDia,
       vencimentoDia,
       ativo: card.ativo,

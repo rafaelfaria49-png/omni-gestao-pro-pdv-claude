@@ -116,11 +116,23 @@ function buildBaseAssistenteConfig(): AssistenteWhatsAppConfig {
       },
       {
         codigo: "G003-STORAGE",
-        titulo: "Bucket privado de comprovantes em produção",
+        titulo: "Liberação do Cloudflare R2 privado em lib/gastos/documentos.ts",
         status: "PENDENTE_PR_405",
         detalhe: "Validação atual utiliza metadados locais/sintéticos seguindo regras MIME/10MB do G003.",
       },
     ],
+    alinhamentoG007: {
+      principalAutorizadoAtual: "SESSAO_WEB",
+      verificadorVinculoDisponivel: false,
+      canalGestaoRegistrado: false,
+      canalVersao: null,
+      motorConversacionalPr417: "DORMENTE_PR_417",
+      homologacoes: {
+        whatsappOficial: false,
+        audioStt: false,
+        imagemOcr: false,
+      },
+    },
   }
 }
 

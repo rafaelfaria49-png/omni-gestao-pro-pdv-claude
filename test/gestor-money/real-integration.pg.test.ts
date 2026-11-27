@@ -43,13 +43,11 @@ vi.mock("@/lib/prisma", async () => {
 
 import { prisma } from "@/lib/prisma"
 import { DocumentoStorageFixture } from "@/lib/gastos/documentos-fixture"
-import { requireFinanceiroPerfilAccess } from "@/lib/gastos/access"
 import { declararDonoPessoalRls } from "@/lib/gastos/rls-contexto"
 import { createRealBoundaryGateway } from "@/lib/gestor-money/gateway"
 import { projetarRelatorioFinanceiro } from "@/lib/gestor-money/reports"
 import {
-  obterDownloadComprovantePrivadoReal,
-  registrarComprovantePrivadoReal,
+  definirStorageComprovantesTeste,
 } from "@/lib/gestor-money/server/documents-adapter"
 import { GET as statusGet } from "@/app/api/gestor-money/status/route"
 import { GET as perfisGet } from "@/app/api/gestor-money/perfis/route"
@@ -59,6 +57,7 @@ import { PATCH as contasPatch, POST as contasPost } from "@/app/api/gestor-money
 import { PATCH as categoriasPatch, POST as categoriasPost } from "@/app/api/gestor-money/categorias/route"
 import { POST as cartoesPost } from "@/app/api/gestor-money/cartoes/route"
 import { GET as documentosGet, POST as documentosPost } from "@/app/api/gestor-money/documentos/route"
+import { GET as documentoDownloadGet } from "@/app/api/gestor-money/documentos/[documentoId]/download/route"
 import { GET as assistenteGet } from "@/app/api/gestor-money/assistente/route"
 
 function inProcessFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -118,9 +117,11 @@ describe.skipIf(!pgConfig.enabled)(
     beforeEach(() => {
       process.env.GESTOR_MONEY_ENABLED = "true"
       sessionState.current = null
+      definirStorageComprovantesTeste(null)
     })
 
     afterAll(async () => {
+      definirStorageComprovantesTeste(null)
       if (prevFlag === undefined) delete process.env.GESTOR_MONEY_ENABLED
       else process.env.GESTOR_MONEY_ENABLED = prevFlag
       await prisma.$disconnect()
@@ -241,7 +242,7 @@ describe.skipIf(!pgConfig.enabled)(
       expect(revokedEmpresa.status).toBe(403)
     })
 
-    it("3. Fluxo ponta a ponta PESSOAL no PostgreSQL: contas, categorias, despesas idempotentes, receitas, dívidas (parcial+quitação), cartões (3x+fatura), relatórios e lacuna honesta de transferência", async () => {
+    it("3. Fluxo ponta a ponta PESSOAL no PostgreSQL: contas, categorias, despesas idempotentes, receitas, dívidas (parcial+quitação), cartões (limite null honesto + 3x + fatura), relatórios e TRANSFERENCIA_INTERNA PESSOAL canônica (G004)", async () => {
       const s = await seedScenario()
       loginAs(s.U1, [s.L1])
       const gw = createRealBoundaryGateway(inProcessFetch)
@@ -371,12 +372,11 @@ describe.skipIf(!pgConfig.enabled)(
       expect(divQuitada.saldoRestanteCentavos).toBe("0")
       expect(divQuitada.status).toBe("quitada")
 
-      // Cartão de crédito + Compra parcelada 3x (60001 centavos -> 20001 + 20000 + 20000) + Pagamento da 1ª fatura
+      // Cartão de crédito (sem limite fictício R$ 0,00 -> null) + Compra parcelada 3x (60001 centavos -> 20001 + 20000 + 20000) + Pagamento da 1ª fatura
       const cardFb = await gw.criarCartao(selPessoal, {
         nome: "Nubank Real",
         bandeira: "Mastercard",
         ultimos4: "4821",
-        limiteCentavos: "500000",
         fechamentoDia: 5,
         vencimentoDia: 12,
       })
@@ -391,6 +391,9 @@ describe.skipIf(!pgConfig.enabled)(
       })
       snap = (await gw.obterSnapshot(selPessoal))!
       const card = snap.cartoes.find((c) => c.id === cardFb.operacaoId)!
+      expect(card.limiteCentavos).toBeNull()
+      expect(card.disponivelCentavos).toBeNull()
+      expect(card.limitePersistenciaDisponivel).toBe(false)
       expect(card.ciclos.length).toBe(3)
       expect(card.ciclos[0].totalCentavos).toBe("20001")
       expect(card.ciclos[1].totalCentavos).toBe("20000")
@@ -404,12 +407,51 @@ describe.skipIf(!pgConfig.enabled)(
         dataPagamento: hoje,
       })
 
+      // Transferência interna PESSOAL via contrato canônico G004 (`TRANSFERENCIA_INTERNA` — elimina 501!)
+      const transfChave = `transf-p-${randomUUID()}`
+      const transfReqBody = {
+        seletor: selPessoal,
+        chave: transfChave,
+        operacao: "transferir",
+        payload: {
+          carteiraOrigemId: contaBanco.operacaoId,
+          carteiraDestinoId: contaPix.operacaoId,
+          valorCentavos: "10000", // R$ 100,00
+          dataTransferencia: hoje,
+          descricao: "Reforço Pix Pessoal",
+        },
+      }
+      const tr1 = await operacoesPost(
+        new Request("http://localhost/api/gestor-money/operacoes", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(transfReqBody),
+        })
+      )
+      expect(tr1.status).toBe(200)
+      const tr1Body = await tr1.json()
+      expect(tr1Body.feedback.contratoG004).toBe("TRANSFERENCIA_INTERNA")
+      // Replay idempotente com mesma chave não duplica movimentação
+      const tr2 = await operacoesPost(
+        new Request("http://localhost/api/gestor-money/operacoes", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(transfReqBody),
+        })
+      )
+      expect(tr2.status).toBe(200)
+      expect((await tr2.json()).feedback.operacaoId).toBe(tr1Body.feedback.operacaoId)
+
       snap = (await gw.obterSnapshot(selPessoal))!
-      // Saldo esperado: inicial 150000 + receita 40000 - despesa 25075 - divida 80000 - fatura1 20001 = 64924 centavos
+      // Saldo consolidado inalterado pela transferência: 150000 + 40000 - 25075 - 80000 - 20001 = 64924 centavos
       expect(snap.saldoDisponivelCentavos).toBe("64924")
       expect(snap.receitasCentavos).toBe("40000")
       expect(snap.despesasCentavos).toBe("125076")
       expect(snap.contasReceberCentavos).toBe("15000")
+      // Saldos individuais refletem exatamente a transferência de R$ 100,00:
+      // Banco: 100000 + 40000 - 25075 - 80000 - 10000 = 24925 | Pix: 50000 - 20001 + 10000 = 39999
+      expect(snap.contas.find((c) => c.id === contaBanco.operacaoId)?.saldoCentavos).toBe("24925")
+      expect(snap.contas.find((c) => c.id === contaPix.operacaoId)?.saldoCentavos).toBe("39999")
 
       // Relatórios projetados sobre snapshot REAL
       const rel = projetarRelatorioFinanceiro(snap, {
@@ -419,17 +461,6 @@ describe.skipIf(!pgConfig.enabled)(
       })
       expect(rel.totalReceitasCentavos).toBe("40000")
       expect(rel.totalDespesasCentavos).toBe("125076")
-
-      // Transferência PESSOAL falha honestamente com 501 (lacuna G004 documentada)
-      await expect(
-        gw.transferir(selPessoal, {
-          carteiraOrigemId: contaBanco.operacaoId,
-          carteiraDestinoId: contaPix.operacaoId,
-          valorCentavos: "10000",
-          dataTransferencia: hoje,
-          descricao: "Tentativa Pessoal",
-        })
-      ).rejects.toMatchObject({ code: "transferencia_pessoal_pendente_g004" })
 
       // Isolamento absoluto: EMPRESA E1 continua 100% intocada (0 saldo, 0 despesas, 0 dívidas)
       const snapEmpresa = (await gw.obterSnapshot({ tipo: "EMPRESA", perfilId: s.E1, storeId: s.L1 }))!
@@ -472,13 +503,13 @@ describe.skipIf(!pgConfig.enabled)(
       expect(snap.contas.find((c) => c.id === c2.operacaoId)?.saldoCentavos).toBe("80000")
     })
 
-    it("5. Comprovantes privados (G003) e Assistente WhatsApp (G007): upload HTTP bloqueado fora de fixture, adapter G003 validado com isolamento e WhatsApp desconectado", async () => {
+    it("5. Comprovantes privados (G003 upload + URL temporária assinada + bloqueio produtivo honesto + isolamento) e Assistente G007/G008 (PR #417)", async () => {
       const s = await seedScenario()
       loginAs(s.U1, [s.L1])
       const selPessoal = { tipo: "PESSOAL" as const, perfilId: s.P1 }
 
-      // HTTP POST /documentos sem storage real -> 503 honesto (sem contratar serviço externo)
-      const uploadRes = await documentosPost(
+      // Sem storage injetado -> HTTP POST /documentos falha fechado com 503 honesto (sem bypass do G003)
+      const uploadBlocked = await documentosPost(
         new Request("http://localhost/api/gestor-money/documentos", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -489,48 +520,92 @@ describe.skipIf(!pgConfig.enabled)(
           }),
         })
       )
-      expect(uploadRes.status).toBe(503)
-      expect((await uploadRes.json()).code).toBe("documentos_storage_privado_pendente_g003")
+      expect(uploadBlocked.status).toBe(503)
+      expect((await uploadBlocked.json()).code).toBe("documentos_storage_privado_bloqueado_g003")
 
-      // Adapter G003 com DocumentoStorageFixture descartável: grava, lista e gera download assinado isolado
-      const ctxU1 = await requireFinanceiroPerfilAccess(selPessoal, "edit")
-      expect(ctxU1.ok).toBe(true)
+      // Com storage privado descartável G003 -> fluxo HTTP completo: upload + validação + vínculo + URL temporária + download + bloqueio cruzado
       const storage = new DocumentoStorageFixture()
-      const doc = await registrarComprovantePrivadoReal(
-        ctxU1.ok ? ctxU1.contexto : null!,
-        { nomeArquivo: "nota-pessoal.txt", conteudo: Buffer.from("comprovante-g003-real") },
-        storage
+      definirStorageComprovantesTeste(storage)
+
+      const gw = createRealBoundaryGateway(inProcessFetch)
+      const contaP = await gw.criarConta(selPessoal, {
+        nome: "Conta Comprovante",
+        tipo: "banco",
+        saldoInicialCentavos: "10000",
+      })
+
+      // Arquivo HTML/script deve ser rejeitado pela validação de bytes G003 (422)
+      const htmlReject = await documentosPost(
+        new Request("http://localhost/api/gestor-money/documentos", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            seletor: selPessoal,
+            nomeArquivo: "malicioso.html",
+            conteudoBase64: Buffer.from("<script>alert(1)</script>").toString("base64"),
+          }),
+        })
       )
+      expect(htmlReject.status).toBe(422)
+
+      // Upload autenticado válido + vínculo com CONTA no perfil PESSOAL
+      const uploadOk = await documentosPost(
+        new Request("http://localhost/api/gestor-money/documentos", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            seletor: selPessoal,
+            nomeArquivo: "nota-pessoal.txt",
+            conteudoBase64: Buffer.from("comprovante-g003-real").toString("base64"),
+            alvo: { tipo: "CONTA", id: contaP.operacaoId },
+          }),
+        })
+      )
+      expect(uploadOk.status).toBe(201)
+      const doc = (await uploadOk.json()).documento as { id: string; estado: string }
       expect(doc.estado).toBe("DISPONIVEL")
 
-      const dl = await obterDownloadComprovantePrivadoReal(
-        ctxU1.ok ? ctxU1.contexto : null!,
-        doc.id,
-        storage
+      // HTTP GET /documentos/[id]/download emite URL temporária (TTL 60s) + Cache-Control privado
+      const dlRes = await documentoDownloadGet(
+        new Request(`http://localhost/api/gestor-money/documentos/${doc.id}/download?tipo=PESSOAL&perfilId=${s.P1}`),
+        { params: Promise.resolve({ documentoId: doc.id }) }
       )
-      expect(dl.signedUrl).toContain("fixture-private://download/")
-      expect((await storage.consumirDownload(dl.signedUrl)).toString("utf8")).toBe("comprovante-g003-real")
+      expect(dlRes.status).toBe(200)
+      expect(dlRes.headers.get("Cache-Control")).toBe("private, no-store, max-age=0")
+      const dlBody = (await dlRes.json()) as { signedUrl: string; expiresInSec: number }
+      expect(dlBody.signedUrl).toContain("fixture-private://download/")
+      expect(dlBody.expiresInSec).toBe(60)
+      expect((await storage.consumirDownload(dlBody.signedUrl)).toString("utf8")).toBe("comprovante-g003-real")
 
-      // HTTP GET /documentos lista metadados reais do perfil
+      // HTTP GET /documentos lista metadados + diagnóstico honesto de storage
       const listRes = await documentosGet(
         new Request(`http://localhost/api/gestor-money/documentos?tipo=PESSOAL&perfilId=${s.P1}`)
       )
       expect(listRes.status).toBe(200)
-      expect((await listRes.json()).documentos.some((d: { id: string }) => d.id === doc.id)).toBe(true)
+      const listBody = await listRes.json()
+      expect(listBody.documentos.some((d: { id: string }) => d.id === doc.id)).toBe(true)
+      expect(listBody.storageDiagnostico.liberadoNoMotorG003).toBe(false)
 
-      // U2 NÃO consegue baixar nem listar documento privado de U1
+      // U2 NÃO consegue listar nem baixar URL temporária do documento privado de U1 (403)
       loginAs(s.U2, [s.L1])
       const crossDocList = await documentosGet(
         new Request(`http://localhost/api/gestor-money/documentos?tipo=PESSOAL&perfilId=${s.P1}`)
       )
       expect(crossDocList.status).toBe(403)
+      const crossDownload = await documentoDownloadGet(
+        new Request(`http://localhost/api/gestor-money/documentos/${doc.id}/download?tipo=PESSOAL&perfilId=${s.P1}`),
+        { params: Promise.resolve({ documentoId: doc.id }) }
+      )
+      expect(crossDownload.status).toBe(403)
 
-      // Assistente WhatsApp permanece desconectado até G007
+      // Assistente WhatsApp permanece desconectado até G007 e expõe alinhamento G007/G008 (PR #417)
       loginAs(s.U1, [s.L1])
-      const gw = createRealBoundaryGateway(inProcessFetch)
       const assist = await gw.obterAssistenteConfig(selPessoal)
       expect(assist.estadoConexao).toBe("DESCONECTADO_AGUARDANDO_G007")
       expect(assist.podeAlterarConexaoReal).toBe(false)
+      expect(assist.alinhamentoG007?.principalAutorizadoAtual).toBe("SESSAO_WEB")
+      expect(assist.alinhamentoG007?.verificadorVinculoDisponivel).toBe(false)
+      expect(assist.alinhamentoG007?.homologacoes.whatsappOficial).toBe(false)
     })
   }
 )

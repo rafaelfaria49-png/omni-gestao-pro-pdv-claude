@@ -111,15 +111,20 @@ export function CreditCardsView({
     setError(null)
     setSubmitting(true)
     try {
-      const limiteCentavos = parseBRLParaCentavos(limiteTexto)
-      if (!limiteCentavos || BigInt(limiteCentavos) <= BigInt(0)) {
+      const limiteCentavos =
+        gateway.mode === "synthetic"
+          ? parseBRLParaCentavos(limiteTexto)
+          : limiteTexto.trim()
+            ? parseBRLParaCentavos(limiteTexto)
+            : undefined
+      if (gateway.mode === "synthetic" && (!limiteCentavos || BigInt(limiteCentavos) <= BigInt(0))) {
         throw new Error("Informe um limite válido.")
       }
       const fb = await gateway.criarCartao(seletor, {
         nome,
         bandeira,
         ultimos4,
-        limiteCentavos,
+        ...(limiteCentavos && BigInt(limiteCentavos) > BigInt(0) ? { limiteCentavos } : {}),
         fechamentoDia: Number(fechamentoDia) || 5,
         vencimentoDia: Number(vencimentoDia) || 12,
       })
@@ -244,7 +249,8 @@ export function CreditCardsView({
           {/* Card visual selector */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {snapshot.cartoes.map((card) => {
-              const usoPct = percentualCentavos(card.usadoCentavos, card.limiteCentavos)
+              const temLimite = card.limiteCentavos !== null
+              const usoPct = temLimite ? percentualCentavos(card.usadoCentavos, card.limiteCentavos!) : null
               const selected = card.id === cartaoAtivo?.id
               return (
                 <button
@@ -273,31 +279,45 @@ export function CreditCardsView({
 
                   <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
                     <div>
-                      <p className="text-[10px] uppercase text-white/70">Usado</p>
+                      <p className="text-[10px] uppercase text-white/70">Faturas em aberto</p>
                       <p className="font-display text-sm font-bold tabular-nums">
                         {formatarCentavosBRL(card.usadoCentavos)}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] uppercase text-white/70">Disponível</p>
-                      <p className="font-display text-sm font-bold tabular-nums text-emerald-300">
-                        {formatarCentavosBRL(card.disponivelCentavos)}
-                      </p>
+                      {card.disponivelCentavos !== null ? (
+                        <p className="font-display text-sm font-bold tabular-nums text-emerald-300">
+                          {formatarCentavosBRL(card.disponivelCentavos)}
+                        </p>
+                      ) : (
+                        <p className="text-xs font-medium text-white/75" data-testid={`card-limit-unavailable-${card.id}`}>
+                          Não informado
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="mt-3 space-y-1">
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all",
-                          usoPct > 80 ? "bg-rose-400" : "bg-emerald-300"
-                        )}
-                        style={{ width: `${Math.min(100, Math.max(3, usoPct))}%` }}
-                      />
-                    </div>
+                    {usoPct !== null ? (
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all",
+                            usoPct > 80 ? "bg-rose-400" : "bg-emerald-300"
+                          )}
+                          style={{ width: `${Math.min(100, Math.max(3, usoPct))}%` }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-md bg-black/25 px-2 py-1 text-[10px] text-white/80">
+                        Limite não cadastrado · aguarda coluna limiteCentavos (G004)
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-[10px] text-white/75">
-                      <span>Limite {formatarCentavosBRL(card.limiteCentavos)}</span>
+                      <span>
+                        {temLimite ? `Limite ${formatarCentavosBRL(card.limiteCentavos!)}` : "Limite não informado"}
+                      </span>
                       <span>
                         Fecha dia {card.fechamentoDia} · Vence dia {card.vencimentoDia}
                       </span>
@@ -326,16 +346,27 @@ export function CreditCardsView({
                       Vencimento: dia <strong>{cartaoAtivo.vencimentoDia}</strong>
                     </span>
                     <span>
-                      Uso do limite: <strong>{percentualCentavos(cartaoAtivo.usadoCentavos, cartaoAtivo.limiteCentavos).toFixed(1)}%</strong>
+                      {cartaoAtivo.limiteCentavos !== null ? (
+                        <>
+                          Uso do limite:{" "}
+                          <strong>
+                            {percentualCentavos(cartaoAtivo.usadoCentavos, cartaoAtivo.limiteCentavos).toFixed(1)}%
+                          </strong>
+                        </>
+                      ) : (
+                        <>Limite: <strong>Não cadastrado (contrato G004 pendente)</strong></>
+                      )}
                     </span>
                   </div>
                 </div>
-                <div className="w-full sm:w-48">
-                  <Progress
-                    value={percentualCentavos(cartaoAtivo.usadoCentavos, cartaoAtivo.limiteCentavos)}
-                    className="h-2"
-                  />
-                </div>
+                {cartaoAtivo.limiteCentavos !== null && (
+                  <div className="w-full sm:w-48">
+                    <Progress
+                      value={percentualCentavos(cartaoAtivo.usadoCentavos, cartaoAtivo.limiteCentavos)}
+                      className="h-2"
+                    />
+                  </div>
+                )}
               </div>
 
               <Tabs defaultValue="faturas">
@@ -520,12 +551,13 @@ export function CreditCardsView({
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Limite (R$)</Label>
+                <Label>{gateway.mode === "real" ? "Limite (G004)" : "Limite (R$)"}</Label>
                 <Input
                   value={limiteTexto}
                   onChange={(e) => setLimiteTexto(e.target.value)}
-                  placeholder="10.000,00"
-                  required
+                  placeholder={gateway.mode === "real" ? "Aguarda G004" : "10.000,00"}
+                  required={gateway.mode === "synthetic"}
+                  disabled={gateway.mode === "real"}
                   className="rounded-xl"
                 />
               </div>
@@ -571,7 +603,10 @@ export function CreditCardsView({
           <DialogHeader>
             <DialogTitle className="font-display">Lançar compra no cartão</DialogTitle>
             <DialogDescription className="text-xs">
-              {cartaoAtivo?.nome} · Disponível: {formatarCentavosBRL(cartaoAtivo?.disponivelCentavos)}
+              {cartaoAtivo?.nome} ·{" "}
+              {cartaoAtivo?.disponivelCentavos !== null && cartaoAtivo?.disponivelCentavos !== undefined
+                ? `Disponível: ${formatarCentavosBRL(cartaoAtivo.disponivelCentavos)}`
+                : `Em aberto: ${formatarCentavosBRL(cartaoAtivo?.usadoCentavos)} (limite não cadastrado)`}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRegistrarCompra} className="space-y-3.5">

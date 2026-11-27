@@ -294,6 +294,58 @@ export function AssistantSettingsView({
         </div>
       </form>
 
+      {/* G007 / G008 Visual Alignment Readiness (PR #417 — read-only, zero engine duplication) */}
+      {config.alinhamentoG007 && (
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm" data-testid="assistant-g007-alignment">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <h3 className="font-display text-sm font-semibold text-foreground">
+                Contratos G007 & Motor Conversacional G008 (PR #417)
+              </h3>
+            </div>
+            <span className="rounded-full border border-border bg-muted/40 px-2.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              Principal: {config.alinhamentoG007.principalAutorizadoAtual}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 text-xs">
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-[11px] text-muted-foreground">VerificadorVinculo (G007)</p>
+              <p className="mt-1 font-semibold text-foreground">
+                {config.alinhamentoG007.verificadorVinculoDisponivel ? "Ativo" : "Aguardando G007"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-[11px] text-muted-foreground">Canal GESTAO (G006)</p>
+              <p className="mt-1 font-semibold text-foreground">
+                {config.alinhamentoG007.canalGestaoRegistrado
+                  ? `Registrado (v${config.alinhamentoG007.canalVersao ?? 1})`
+                  : "Não registrado"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-[11px] text-muted-foreground">Motor G008 (PR #417)</p>
+              <p className="mt-1 font-semibold text-foreground">
+                {config.alinhamentoG007.motorConversacionalPr417 === "ATIVO"
+                  ? "Ativo"
+                  : "Dormente · PR #417"}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-700 dark:text-amber-300">
+              WhatsApp oficial: {config.alinhamentoG007.homologacoes.whatsappOficial ? "Homologado" : "Não homologado"}
+            </span>
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-700 dark:text-amber-300">
+              Áudio (STT): {config.alinhamentoG007.homologacoes.audioStt ? "Homologado" : "Não homologado"}
+            </span>
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-700 dark:text-amber-300">
+              Imagem (OCR): {config.alinhamentoG007.homologacoes.imagemOcr ? "Homologado" : "Não homologado"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Real Integration Dependencies Transparency Matrix */}
       <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-3 flex items-center gap-2">

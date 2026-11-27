@@ -17,7 +17,6 @@ import {
 import { OperacaoGastoError, type PropostaGasto } from "@/lib/gastos/operacao-schema"
 import { comLeituraFinanceira, FinanceiroReadError } from "@/lib/gastos/read-scope"
 import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
-import { transferirEntreCarteiras } from "@/lib/financeiro/services/carteiras-service"
 import {
   CONTA_PARA_TIPO_G002,
   criarCartaoInputSchema,
@@ -256,7 +255,8 @@ export async function pagarDividaReal(
 
 export async function transferirReal(
   ctx: FinanceiroContextoAutorizado,
-  raw: TransferirInput
+  raw: TransferirInput,
+  chave?: string
 ): Promise<OperacaoFeedback> {
   const parsed = transferirInputSchema.safeParse(raw)
   if (!parsed.success) {
@@ -264,57 +264,25 @@ export async function transferirReal(
   }
   const p = parsed.data
 
-  // Lacuna explicitamente documentada na PR #405 (contratos-produto.postgres.test.ts):
-  // não existe operação atômica de transferência para perfil PESSOAL no motor G004.
-  if (ctx.tipo === "PESSOAL") {
-    throw new GestorMoneyApiError(
-      "transferencia_pessoal_pendente_g004",
-      501,
-      "Transferência interna entre carteiras pessoais ainda aguarda contrato dedicado no motor G004 (PR #405)."
-    )
+  // Contrato canônico G004 (`TRANSFERENCIA_INTERNA`, adicionado na PR #405 commit 2554d25):
+  // funciona atomicamente e com idempotência para PESSOAL e EMPRESA no mesmo perfil,
+  // sem criar receita nem despesa e sem loja fictícia.
+  const proposta: PropostaGasto = {
+    tipo: "TRANSFERENCIA_INTERNA",
+    valorCentavos: p.valorCentavos,
+    moeda: "BRL",
+    carteiraOrigemId: p.carteiraOrigemId,
+    carteiraDestinoId: p.carteiraDestinoId,
+    dataPagamento: instanteParaDataCivil(p.dataTransferencia),
+    ...(p.descricao ? { descricao: p.descricao } : {}),
   }
 
-  // Revalida que origem e destino pertencem ao perfil empresarial autorizado
-  await comLeituraFinanceira(ctx, async (db, scope) => {
-    const found = await db.carteiraFinanceira.findMany({
-      where: {
-        id: { in: [p.carteiraOrigemId, p.carteiraDestinoId] },
-        storeId: scope.storeId,
-        ativo: true,
-        OR: [{ perfilId: scope.perfilId }, { perfilId: null }],
-      },
-      select: { id: true },
-    })
-    if (found.length !== 2) {
-      throw new GestorMoneyApiError(
-        "contas_transferencia_invalidas",
-        404,
-        "As contas de origem e destino devem estar ativas e pertencer ao perfil empresarial."
-      )
-    }
-  })
-
-  const valorReais = Number(parseBigIntCentavos(p.valorCentavos)) / 100
-  const result = await transferirEntreCarteiras({
-    storeId: ctx.storeId,
-    origemId: p.carteiraOrigemId,
-    destinoId: p.carteiraDestinoId,
-    valor: valorReais,
-    descricao: p.descricao,
-  })
-  if (!result.ok) {
-    throw new GestorMoneyApiError(
-      "transferencia_recusada",
-      422,
-      result.error || "Não foi possível concluir a transferência."
-    )
-  }
-
+  const { resultado } = await executarPropostaG004(ctx, proposta, chave)
   return {
     ok: true,
-    operacaoId: result.saidaId || randomUUID(),
-    contratoG004: "TRANSFERENCIA_EMPRESA",
-    mensagem: "Transferência interna concluída sem duplicar receitas ou despesas.",
+    operacaoId: resultado.operacaoId,
+    contratoG004: "TRANSFERENCIA_INTERNA",
+    mensagem: `Transferência interna concluída no perfil ${ctx.tipo} sem duplicar receitas ou despesas (G004).`,
   }
 }
 

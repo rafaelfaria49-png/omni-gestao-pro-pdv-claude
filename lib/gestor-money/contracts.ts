@@ -259,9 +259,12 @@ export interface CartaoCreditoResumo {
   bandeira: string
   ultimos4: string
   corGradiente: string
-  limiteCentavos: CentavosString
+  /** `null` quando a fundação ainda não persiste limite de crédito (nunca exibir R$ 0,00 como limite real). */
+  limiteCentavos: CentavosString | null
   usadoCentavos: CentavosString
-  disponivelCentavos: CentavosString
+  /** `null` quando `limiteCentavos` não está cadastrado/disponível. */
+  disponivelCentavos: CentavosString | null
+  limitePersistenciaDisponivel?: boolean
   fechamentoDia: number
   vencimentoDia: number
   ativo: boolean
@@ -399,6 +402,19 @@ export interface AssistenteWhatsAppConfig {
     status: "PENDENTE_PR_405" | "PENDENTE_G007" | "DISPONIVEL_EM_SANDBOX"
     detalhe: string
   }>
+  /** Alinhamento visual somente leitura com os contratos G006/G007 e motor G008 (PR #417). */
+  alinhamentoG007?: {
+    principalAutorizadoAtual: "SESSAO_WEB" | "VINCULO_TELEFONE_G007"
+    verificadorVinculoDisponivel: boolean
+    canalGestaoRegistrado: boolean
+    canalVersao: number | null
+    motorConversacionalPr417: "DORMENTE_PR_417" | "ATIVO"
+    homologacoes: {
+      whatsappOficial: boolean
+      audioStt: boolean
+      imagemOcr: boolean
+    }
+  }
 }
 
 export type ReadinessState =
@@ -551,7 +567,7 @@ export const criarCartaoInputSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome do cartão.").max(120),
   bandeira: z.string().trim().min(2, "Informe a bandeira.").max(40),
   ultimos4: z.string().regex(/^\d{4}$/, "Informe os 4 últimos dígitos."),
-  limiteCentavos: centavosPositivosSchema,
+  limiteCentavos: centavosPositivosSchema.optional(),
   fechamentoDia: z.number().int().min(1).max(28),
   vencimentoDia: z.number().int().min(1).max(28),
 })

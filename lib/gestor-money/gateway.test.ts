@@ -186,7 +186,9 @@ describe("Gestor Money — Fronteira Isolada e Contratos G001–G006", () => {
 
     const aposCompra = await gw.obterSnapshot(sel)
     const cardAposCompra = aposCompra!.cartoes.find((c) => c.id === cardAntes.id)!
-    expect(BigInt(cardAposCompra.disponivelCentavos)).toBe(BigInt(cardAntes.disponivelCentavos) - BigInt(120000))
+    expect(cardAntes.disponivelCentavos).not.toBeNull()
+    expect(cardAposCompra.disponivelCentavos).not.toBeNull()
+    expect(BigInt(cardAposCompra.disponivelCentavos!)).toBe(BigInt(cardAntes.disponivelCentavos!) - BigInt(120000))
     expect(cardAposCompra.comprasParceladas.some((cp) => cp.descricao === "Monitor 4K")).toBe(true)
 
     const faturaAberta = cardAposCompra.ciclos.find((ci) => ci.status === "aberta")!

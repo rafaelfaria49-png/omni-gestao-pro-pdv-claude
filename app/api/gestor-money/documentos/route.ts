@@ -5,6 +5,7 @@ import {
   seletorPerfilApiSchema,
 } from "@/lib/gestor-money/server/auth-boundary"
 import {
+  diagnosticarStorageComprovantes,
   listarDocumentosPrivadosReal,
   registrarComprovantePrivadoReal,
 } from "@/lib/gestor-money/server/documents-adapter"
@@ -31,11 +32,13 @@ export async function GET(req: Request) {
 
   try {
     const documentos = await listarDocumentosPrivadosReal(authRes.contexto)
+    const storageDiagnostico = diagnosticarStorageComprovantes()
     return respostaPrivadaJson(
       {
         ok: true,
         documentos,
-        storagePrivadoProvisionado: false,
+        storagePrivadoProvisionado: storageDiagnostico.liberadoNoMotorG003,
+        storageDiagnostico,
       },
       200
     )
@@ -50,12 +53,20 @@ const uploadBodySchema = z
     seletor: seletorPerfilApiSchema,
     nomeArquivo: z.string().trim().min(1).max(180),
     conteudoBase64: z.string().min(1).max(15_000_000),
+    alvo: z
+      .object({
+        tipo: z.enum(["PAGAR", "RECEBER", "CONTA", "MOVIMENTACAO"]),
+        id: z.string().regex(/^[a-zA-Z0-9_-]{1,191}$/),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
 
 /**
- * Fronteira privada de upload de comprovantes (G003).
- * Sem provedor externo provisionado (G003-STORAGE), falha fechado com 503 sem acessar storage real.
+ * Upload autenticado de comprovantes privados (G003).
+ * Valida perfil, extensão/bytes reais (PDF/PNG/JPG/TXT <= 10MB) via `registrarDocumentoGasto`.
+ * Em runtime produtivo sem liberação G003-STORAGE em `lib/gastos/documentos.ts`, falha fechado com 503.
  */
 export async function POST(req: Request) {
   let raw: unknown
@@ -76,6 +87,7 @@ export async function POST(req: Request) {
     const documento = await registrarComprovantePrivadoReal(authRes.contexto, {
       nomeArquivo: parsed.data.nomeArquivo,
       conteudo: bytes,
+      ...(parsed.data.alvo ? { alvo: parsed.data.alvo } : {}),
     })
     return respostaPrivadaJson({ ok: true, documento }, 201)
   } catch (error) {

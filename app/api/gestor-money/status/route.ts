@@ -45,16 +45,16 @@ export async function GET() {
       disponivelNoRuntime: moduleEnabled,
       origem: "lib/gastos/documentos.ts + read-scope.ts",
       detalhe:
-        "Leitura de metadados integrada; upload/download em produção aguarda bucket privado dedicado (G003-STORAGE).",
+        "Leitura de metadados integrada; upload/download produtivo aguarda gate G003-STORAGE em lib/gastos/documentos.ts para reusar Cloudflare R2 privado já existente (storage-r2.ts).",
     },
     {
       id: "G004",
-      nome: "Operações Atômicas (Despesas, Dívidas, Pagamentos, Cartões e Faturas)",
+      nome: "Operações Atômicas (Despesas, Dívidas, Pagamentos, Transferências, Cartões e Faturas)",
       disponivelNoRuntime: moduleEnabled,
       origem: "lib/gastos/operacoes.ts + apply.ts + cartoes.ts",
       detalhe: moduleEnabled
-        ? "Ativo com revisão/confirmação e idempotência. Lacunas documentadas: transferência PESSOAL e coluna limiteCentavos em cartões."
-        : "Integrado ao código; rotas bloqueadas enquanto GESTOR_MONEY_ENABLED !== 'true'.",
+        ? "Ativo com revisão/confirmação, idempotência e TRANSFERENCIA_INTERNA para PESSOAL e EMPRESA. Lacuna documentada: coluna limiteCentavos em cartoes_instrumentos."
+        : "Integrado ao código (incluindo TRANSFERENCIA_INTERNA PESSOAL/EMPRESA); rotas bloqueadas enquanto GESTOR_MONEY_ENABLED !== 'true'.",
     },
     {
       id: "G005",

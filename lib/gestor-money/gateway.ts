@@ -911,6 +911,7 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const cardId = nextId("card")
       const mes = hojeSaoPaulo().slice(0, 7)
       const pad = (n: number) => String(n).padStart(2, "0")
+      const limite = p.limiteCentavos ?? null
       st.cartoes.push({
         id: cardId,
         perfilId: st.perfil.perfilId,
@@ -918,9 +919,10 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
         bandeira: p.bandeira,
         ultimos4: p.ultimos4,
         corGradiente: "from-slate-800 via-zinc-800 to-emerald-900",
-        limiteCentavos: p.limiteCentavos,
+        limiteCentavos: limite,
         usadoCentavos: "0",
-        disponivelCentavos: p.limiteCentavos,
+        disponivelCentavos: limite,
+        limitePersistenciaDisponivel: limite !== null,
         fechamentoDia: p.fechamentoDia,
         vencimentoDia: p.vencimentoDia,
         ativo: true,
@@ -959,8 +961,8 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const cartao = st.cartoes.find((c) => c.id === p.cartaoId && c.ativo)
       if (!cartao) throw new GestorMoneyBoundaryError("cartao_indisponivel", "Cartão não encontrado.")
       const total = parseBigIntCentavos(p.valorTotalCentavos)
-      const disponivel = parseBigIntCentavos(cartao.disponivelCentavos)
-      if (total > disponivel) {
+      const disponivel = cartao.disponivelCentavos !== null ? parseBigIntCentavos(cartao.disponivelCentavos) : null
+      if (disponivel !== null && total > disponivel) {
         throw new GestorMoneyBoundaryError("limite_insuficiente", "Valor excede o limite disponível do cartão.")
       }
       const cicloAberta = cartao.ciclos.find((ci) => ci.status === "aberta") ?? cartao.ciclos[cartao.ciclos.length - 1]
@@ -972,7 +974,7 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const primeiraParcela = valorParcela + resto
 
       cartao.usadoCentavos = (parseBigIntCentavos(cartao.usadoCentavos) + total).toString()
-      cartao.disponivelCentavos = (disponivel - total).toString()
+      cartao.disponivelCentavos = disponivel !== null ? (disponivel - total).toString() : null
       cicloAberta.totalCentavos = (parseBigIntCentavos(cicloAberta.totalCentavos) + primeiraParcela).toString()
       cicloAberta.restanteCentavos = (parseBigIntCentavos(cicloAberta.restanteCentavos) + primeiraParcela).toString()
 
@@ -1040,7 +1042,8 @@ export function createSyntheticGestorMoneyGateway(): GestorMoneyGateway {
       const usadoAtual = parseBigIntCentavos(cartao.usadoCentavos)
       const novoUsado = usadoAtual > valor ? usadoAtual - valor : BigInt(0)
       cartao.usadoCentavos = novoUsado.toString()
-      cartao.disponivelCentavos = subtrairCentavos(cartao.limiteCentavos, novoUsado)
+      cartao.disponivelCentavos =
+        cartao.limiteCentavos !== null ? subtrairCentavos(cartao.limiteCentavos, novoUsado) : null
 
       conta.saldoCentavos = subtrairCentavos(conta.saldoCentavos, valor)
       conta.saidasCentavos = somarCentavos([conta.saidasCentavos, valor])
