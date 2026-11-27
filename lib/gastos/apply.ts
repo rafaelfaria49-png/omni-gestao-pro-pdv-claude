@@ -9,7 +9,7 @@ import { storeDoContexto, type FinanceiroDb } from "./financeiro-scope"
 import type { FinanceiroContextoAutorizado } from "./types"
 import { agoraDoBanco, autorizarOperacaoNaTransacao, emTransacaoGasto, exigirRevisaoPronta, lockGasto, travarRevisaoGasto } from "./operacoes"
 import { chaveOperacao, identificadorOperacao, hashOperacaoGasto, normalizarPropostaGasto, OperacaoGastoError,
-  type PropostaGasto, type ResultadoOperacaoGasto, valorPropostaGasto, ordemBinaria, meioCompensacaoGasto } from "./operacao-schema"
+  type PropostaGasto, type ResultadoOperacaoGasto, valorPropostaGasto, ordemBinaria, meioCompensacaoGasto, MEIOS_PAGAMENTO_GASTO } from "./operacao-schema"
 import { centavosLegadosExatos, saldoTituloGasto, travarTitulosGasto, type AlocacaoPlanejada } from "./pagamentos"
 import { travarCiclosGasto } from "./cartoes"
 import { resolverFornecedorGasto } from "./fornecedores"
@@ -250,9 +250,72 @@ async function aplicarTransferenciaInterna(tx: FinanceiroDb, ctx: FinanceiroCont
   return concluirOperacaoGasto(tx, ctx, { opId: op.id, revisaoId: k.revisao.id, versaoEsperada: k.versaoEsperada, agora: k.agora, resultado })
 }
 
+const centavosTexto = z.string().regex(/^\d{1,16}$/)
 const estornoHubSchema = z.object({ localKey: z.string().trim().min(1).max(260), chave: chaveOperacao,
   pagamentoId: identificadorOperacao.optional(), movimentoId: identificadorOperacao.optional(),
-  valorCentavos: z.string().regex(/^\d{1,16}$/).optional(), motivo: z.string().trim().max(2000).optional() }).strict()
+  valorCentavos: centavosTexto.optional(), motivo: z.string().trim().max(2000).optional(),
+  // Contrato da #397: identidade do pagamento pela posição no histórico e o pago que o operador viu.
+  pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(), pagoEsperadoCentavos: centavosTexto.optional() }).strict()
+
+/**
+ * Prazo da revisão criada pelo HUB (relógio do BANCO). Padrão 30 min; `GESTOR_MONEY_HUB_REVISAO_EXPIRA_MS`
+ * só ajusta dentro de [1 s, 24 h] — ensaio de expiração real sem fingir o relógio do host.
+ */
+function expiraRevisaoHub(agora: Date): Date {
+  const configurado = Number(process.env.GESTOR_MONEY_HUB_REVISAO_EXPIRA_MS)
+  const ms = Number.isInteger(configurado) && configurado >= 1000 && configurado <= 86_400_000 ? configurado : 30 * 60_000
+  return new Date(agora.getTime() + ms)
+}
+
+/** Pré-condição da #397: o estado que o operador VIU. Divergência = recusa definitiva sem escrita. */
+function exigirEsperado(atual: bigint, esperado: string | undefined) {
+  if (esperado !== undefined && atual !== BigInt(esperado)) throw new OperacaoGastoError("titulo_alterado", 409)
+}
+
+const pagarHubSchema = z.object({ localKey: z.string().trim().min(1).max(260), chave: chaveOperacao,
+  quitar: z.boolean(), valorCentavos: centavosTexto.optional(), formaPagamento: z.enum(MEIOS_PAGAMENTO_GASTO).optional(),
+  restanteEsperadoCentavos: centavosTexto.optional() }).strict()
+
+/**
+ * Liquidar/parcial do HUB (flag LIGADA) pelo motor G004: uma revisão privada por chave do navegador e a
+ * aplicação PAGAR_TITULO na mesma chave — repetir a chave devolve a MESMA operação. Conta e forma vêm do
+ * título (ou da forma informada); nunca são inventadas. Preparação não altera dinheiro.
+ */
+export async function pagarTituloHub(contexto: unknown, input: unknown) {
+  const parsed = pagarHubSchema.safeParse(input)
+  if (!parsed.success || parsed.data.quitar === (parsed.data.valorCentavos !== undefined)) throw new OperacaoGastoError("pagamento_invalido")
+  const pedido = parsed.data, grupoChave = `hub-pagar:${pedido.chave}`
+  const revisao = await emTransacaoGasto(contexto, async (tx, ctx) => {
+    if (ctx.tipo !== "EMPRESA") throw new OperacaoGastoError("acesso_negado", 403)
+    await lockGasto(tx, ["grupo", ctx.perfilId, grupoChave])
+    await autorizarOperacaoNaTransacao(tx, ctx)
+    const titulo = await tx.contaPagarTitulo.findFirst({ where: { storeId: ctx.storeId, localKey: pedido.localKey, ativo: true,
+      OR: [{ perfilId: ctx.perfilId }, { perfilId: null }] } })
+    const existente = await tx.gastoRevisao.findFirst({ where: { perfilId: ctx.perfilId, grupoChave }, orderBy: { versao: "desc" } })
+    if (existente) {
+      // Mesma chave = mesma intenção: título e valor/quitação idênticos; a 1ª preparação é a que vale.
+      const p = normalizarPropostaGasto(existente.proposta)
+      if (p.tipo !== "PAGAR_TITULO" || !titulo || p.tituloId !== titulo.id || p.quitar !== pedido.quitar
+        || (p.valorCentavos ?? null) !== (pedido.valorCentavos ?? null)) throw new OperacaoGastoError("operacao_conteudo_divergente", 409)
+      return existente
+    }
+    if (!titulo) throw new OperacaoGastoError("titulo_indisponivel", 404)
+    exigirEsperado((await saldoTituloGasto(tx, titulo)).restante, pedido.restanteEsperadoCentavos)
+    const payload = titulo.payload && typeof titulo.payload === "object" && !Array.isArray(titulo.payload) ? titulo.payload : {}
+    const contaPayload = typeof payload.carteiraId === "string" ? payload.carteiraId.trim() : ""
+    const carteiraId = titulo.carteiraId ?? (contaPayload || null)
+    if (!carteiraId) throw new OperacaoGastoError("conta_obrigatoria")
+    const formaPayload = typeof payload.formaPagamento === "string" ? payload.formaPagamento.trim().toLowerCase() : ""
+    const formaPagamento = pedido.formaPagamento ?? MEIOS_PAGAMENTO_GASTO.find(m => m === formaPayload)
+    if (!formaPagamento) throw new OperacaoGastoError("forma_pagamento_obrigatoria")
+    const proposta = normalizarPropostaGasto({ tipo: "PAGAR_TITULO", tituloId: titulo.id, moeda: "BRL", carteiraId, formaPagamento,
+      dataPagamento: new Date().toISOString(), ...(pedido.quitar ? { quitar: true } : { valorCentavos: pedido.valorCentavos }) })
+    return tx.gastoRevisao.create({ data: { perfilId: ctx.perfilId, storeId: ctx.storeId, criadoPorAdminUserId: ctx.userId,
+      grupoChave, versao: 1, tipo: proposta.tipo, proposta: proposta as Prisma.InputJsonObject, payloadHash: hashOperacaoGasto(proposta),
+      expiraEm: expiraRevisaoHub(await agoraDoBanco(tx)) } })
+  })
+  return aplicarOperacaoGasto(contexto, { revisaoId: revisao.id, versaoEsperada: revisao.versao, chave: pedido.chave })
+}
 
 /** Resolve uma vez o "último" do HUB e conserva essa escolha em uma revisão privada.
  * Preparação não altera dinheiro. A confirmação abaixo é uma única transação financeira.
@@ -274,9 +337,21 @@ export async function estornarPagamentoHub(contexto: unknown, input: unknown) {
     const titulo = await tx.contaPagarTitulo.findFirst({ where: { storeId: ctx.storeId, perfilId: ctx.perfilId,
       localKey: pedido.localKey, ativo: true } })
     if (!titulo) throw new OperacaoGastoError("titulo_indisponivel", 404)
+    exigirEsperado((await saldoTituloGasto(tx, titulo)).pago, pedido.pagoEsperadoCentavos)
     const payload = titulo.payload && typeof titulo.payload === "object" && !Array.isArray(titulo.payload) ? titulo.payload : {}
     const historico = Array.isArray(payload.historico) ? payload.historico : []
     let pagamentoId = pedido.pagamentoId, movimentoId = pedido.movimentoId
+    if (pedido.pagamentoIndex !== undefined) {
+      // #397: o operador escolheu o pagamento pela posição no histórico; resolver a identidade dele.
+      if (pagamentoId || movimentoId) throw new OperacaoGastoError("estorno_invalido")
+      const e = historico[pedido.pagamentoIndex]
+      if (!e || typeof e !== "object" || Array.isArray(e) || !["pagamento", "liquidacao"].includes(String(e.tipo))) {
+        throw new OperacaoGastoError("pagamento_indisponivel", 404)
+      }
+      if (typeof e.pagamentoId === "string") pagamentoId = e.pagamentoId
+      else if (typeof e.movimentoId === "string") movimentoId = e.movimentoId
+      else throw new OperacaoGastoError("pagamento_exige_revisao", 409)
+    }
     if (!pagamentoId && !movimentoId) {
       for (const e of [...historico].reverse()) {
         if (!e || typeof e !== "object" || Array.isArray(e) || !["pagamento", "liquidacao"].includes(String(e.tipo))) continue
@@ -306,7 +381,7 @@ export async function estornarPagamentoHub(contexto: unknown, input: unknown) {
     }
     return tx.gastoRevisao.create({ data: { perfilId: ctx.perfilId, storeId: ctx.storeId, criadoPorAdminUserId: ctx.userId,
       grupoChave, versao: 1, tipo: proposta.tipo, proposta: proposta as Prisma.InputJsonObject, payloadHash: hashOperacaoGasto(proposta),
-      expiraEm: new Date((await agoraDoBanco(tx)).getTime() + 30 * 60_000) } })
+      expiraEm: expiraRevisaoHub(await agoraDoBanco(tx)) } })
   })
   return aplicarOperacaoGasto(contexto, { revisaoId: revisao.id, versaoEsperada: revisao.versao, chave: pedido.chave })
 }

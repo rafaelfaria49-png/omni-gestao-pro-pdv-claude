@@ -12,7 +12,7 @@ import { diaSaoPaulo } from "@/lib/gastos/operacao-schema"
 import { dataGasto, fixtureG004, pagoG004, requestG004, estadoG004 } from "./g004-fixtures"
 
 afterAll(async () => { await prisma.$disconnect() })
-afterEach(() => { vi.useRealTimers() })
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
 
 function browserG004() {
   const map = new Map<string, string>()
@@ -54,8 +54,9 @@ describe("G004 HTTP verdadeiro com dinheiro PostgreSQL", () => {
     const f = await fixtureG004(), ctx = await f.contexto(), t = await gravarTituloFinanceiro(ctx, {
       natureza: "PAGAR", chave: "HUB-expirada", descricao: "Expiração real", valorCentavos: "10000", vencimento: dataGasto, carteiraId: f.conta() })
     await aplicarPagamentoLegado({ storeId: f.L1, tipo: "pagar", canal: "financeiro", op: "parcial", localKey: t.localKey!, valor: 40, idempotencyKey: "original" })
-    const start = Date.now() + 1000
-    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(start))
+    // A expiração é decidida pelo relógio do BANCO (clock-skew G004); fingir o relógio do Node não a alcança.
+    // O prazo da revisão do HUB fica curto e a espera é real.
+    vi.stubEnv("GESTOR_MONEY_HUB_REVISAO_EXPIRA_MS", "5000")
     const browser = browserG004(), keys: string[] = [], pedido = { op: "estornar", localKey: t.localKey!, motivo: "Intenção expirada" }
     const input = { principalId: f.U1, storeId: f.L1, canal: "financeiro" as const, tipo: "pagar" as const, referencia: t.localKey!, op: "estornar" as const, pedido }
     const enviar = async (idempotencyKey: string) => { keys.push(idempotencyKey); return pagar(requestG004({ ...pedido, idempotencyKey }, f.L1, "/api/financeiro/pagar", "PATCH")) }
@@ -65,7 +66,7 @@ describe("G004 HTTP verdadeiro com dinheiro PostgreSQL", () => {
       await expect(executarPagamentoPendente(input, async key => { const response = await enviar(key); expect(response.status).toBe(503); return response }, browser.ambiente)).rejects.toThrow()
     } finally { await prisma.$executeRawUnsafe("DROP TRIGGER g004_qa_http_falha ON gastos_outbox") }
     expect(browser.map.size).toBe(1)
-    vi.setSystemTime(new Date(start + 31 * 60_000))
+    await new Promise((resolve) => setTimeout(resolve, 5500))
     const before = await estadoG004(f)
     await expect(estornarPagamentoHub(ctx, { localKey: t.localKey!, motivo: pedido.motivo, chave: keys[0] })).rejects.toMatchObject({ code: "revisao_expirada" })
     await expect(executarPagamentoPendente(input, async key => {

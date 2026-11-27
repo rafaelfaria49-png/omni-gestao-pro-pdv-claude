@@ -5,11 +5,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   useMemo,
   type ReactNode,
 } from "react"
 import { useSession } from "next-auth/react"
+import { executarPagamentoPendente, principalPagamentoBrowser } from "@/lib/financeiro/pagamento-operacao-client"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { criarCacheLeituraFinanceira } from "@/lib/gastos/read-cache"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
@@ -640,6 +642,7 @@ function FinanceiroRealScopedProvider({ children, storeId }: { children: ReactNo
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const motorPagarRef = useRef<"G004" | null>(null)
   const leitura = useMemo(() => criarCacheLeituraFinanceira(storeId, () => {
     setReceber([]); setPagar([]); setSummaryR(null); setSummaryP(null); setAnalytics(null)
     setFluxoCaixa(null); setCarteiras([]); setSaldoTotalCarteiras(0); setDRE(null)
@@ -688,6 +691,9 @@ function FinanceiroRealScopedProvider({ children, storeId }: { children: ReactNo
         if (sr) setSummaryR({ quantidade: safeNum(sr.quantidade), totalAberto: safeNum(sr.totalAberto), totalVencido: safeNum(sr.totalVencido), totalPago: safeNum(sr.totalPago) })
       }
       if (pJson.ok) {
+        // Só o servidor sabe se o Gestor Money está ligado; ele declara o motor no GET de Pagar.
+        const metaP = pJson.metadata as Record<string, unknown> | undefined
+        motorPagarRef.current = metaP?.motor === "G004" ? "G004" : null
         const pRows = Array.isArray(pJson.rows) ? pJson.rows : []
         const pAudit = Array.isArray(pJson.audit) ? pJson.audit : []
         setPagar(normalizePagarRows(pRows, pAudit))
@@ -1003,6 +1009,18 @@ function FinanceiroRealScopedProvider({ children, storeId }: { children: ReactNo
     const lojaId = readActiveStoreIdFromBrowser()
     if (!lojaId) {
       throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
+    // Gestor Money LIGADO (servidor declarou motor G004): liquidar/parcial/estornar de Pagar vão com a chave
+    // de idempotência conservada no navegador — repetir após resposta perdida devolve a MESMA operação.
+    if (motorPagarRef.current === "G004" && path === "/api/financeiro/pagar" && method === "PATCH"
+      && (body.op === "liquidar" || body.op === "parcial" || body.op === "estornar") && typeof body.localKey === "string") {
+      const pedido = { lojaId, ...body }
+      return executarPagamentoPendente({ storeId: lojaId, principalId: await principalPagamentoBrowser(),
+        canal: "financeiro", tipo: "pagar", referencia: body.localKey, op: body.op, pedido,
+      }, (idempotencyKey) => fetch(path, { method,
+        headers: withStoreHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ ...pedido, idempotencyKey }),
+      }))
     }
     const res = await fetch(path, {
       method,
