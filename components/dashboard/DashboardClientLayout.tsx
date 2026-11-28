@@ -15,7 +15,7 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
   // SEM AppShell (sidebar/topbar), SEM AccessGate, SEM AppOpsProviders.
   // O isolamento visual (CSS / theme / density) é feito no layout próprio
   // dessa rota (`app/dashboard/pdv-github-original/layout.tsx`).
-  if (pathname?.startsWith("/dashboard/pdv-github-original")) {
+  if (pathname?.startsWith("/dashboard/pdv-github-original") || pathname?.startsWith("/dashboard/gestor-money")) {
     return <>{children}</>
   }
 

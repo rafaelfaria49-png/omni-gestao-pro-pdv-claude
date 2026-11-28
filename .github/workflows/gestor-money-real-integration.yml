@@ -1,0 +1,113 @@
+name: Gestor Money - Real Integration (G001-G006 + UI)
+
+on:
+  pull_request:
+    paths:
+      - "lib/gestor-money/**"
+      - "components/gestor-money/**"
+      - "app/actions/gestor-money-vinculo.ts"
+      - "app/api/gestor-money/**"
+      - "app/dashboard/gestor-money/**"
+      - "app/gestor-money/**"
+      - "test/gestor-money/**"
+      - ".github/workflows/gestor-money-real-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gestor-money-real-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-integration-pg:
+    name: Gestor Money Real Integration (PG 17 + RLS + UI)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: gm_ci_admin
+          POSTGRES_PASSWORD: gm_ci_password
+          POSTGRES_DB: gestor_money_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://gm_ci_admin:gm_ci_password@127.0.0.1:5432/gestor_money_ci
+      DIRECT_URL: postgresql://gm_ci_admin:gm_ci_password@127.0.0.1:5432/gestor_money_ci
+      AUTH_SECRET: isolated-ci-fixture-with-no-production-authority
+      AUTH_TRUST_HOST: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure origin/main ref for official baseline preparer
+        run: git fetch origin main:refs/remotes/origin/main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply official baseline + real migrations & create restricted NOBYPASSRLS runtime role
+        env:
+          APARELHOS_TEST_DATABASE_URL: postgresql://gm_ci_admin:gm_ci_password@127.0.0.1:5432/gestor_money_ci
+        run: |
+          node scripts/aparelhos/prepare-pg.mjs
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gm_ci_runtime') THEN
+              CREATE ROLE gm_ci_runtime LOGIN PASSWORD 'gm_ci_runtime_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO gm_ci_runtime;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO gm_ci_runtime;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO gm_ci_runtime;
+          SQL
+      - name: Run Gestor Money unit, UI, API, security & real PG persistence suites
+        env:
+          GESTOR_MONEY_REAL_PG_URL: postgresql://gm_ci_runtime:gm_ci_runtime_pw@127.0.0.1:5432/gestor_money_ci
+        run: |
+          npx vitest run \
+            lib/gestor-money/money.test.ts \
+            lib/gestor-money/gateway.test.ts \
+            app/api/gestor-money/status/route.test.ts \
+            components/gestor-money/GestorMoneyApp.test.ts \
+            components/gestor-money/AssistantSettingsView.test.ts \
+            components/gestor-money/MultimodalAssistantPanel.test.ts \
+            lib/gestor-money-assistente/motor.multimodal.test.ts \
+            lib/gestor-money-assistente/multimodal/audio-g009.test.ts \
+            lib/gestor-money-assistente/multimodal/documento-g010.test.ts \
+            lib/gestor-money-assistente/multimodal/midia-seguranca.test.ts \
+            lib/auth/proxy-session-gate.test.ts \
+            test/gestor-money/real-integration.pg.test.ts
+      - name: Run focused strict TypeScript check for Gestor Money namespaces
+        run: |
+          cat <<'JSON' > ./tsconfig.gestor-money-ci.json
+          {
+            "extends": "./tsconfig.json",
+            "compilerOptions": { "incremental": false, "noEmit": true },
+            "include": [
+              "next-env.d.ts",
+              "types/**/*.d.ts",
+              "app/actions/gestor-money-vinculo.ts",
+              "lib/gestor-money/**/*.ts",
+              "components/gestor-money/**/*.ts",
+              "components/gestor-money/**/*.tsx",
+              "app/api/gestor-money/**/*.ts",
+              "app/dashboard/gestor-money/**/*.tsx",
+              "app/gestor-money/**/*.tsx",
+              "test/gestor-money/**/*.ts"
+            ],
+            "exclude": ["node_modules"]
+          }
+          JSON
+          trap 'rm -f ./tsconfig.gestor-money-ci.json' EXIT
+          node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js -p ./tsconfig.gestor-money-ci.json --noEmit
