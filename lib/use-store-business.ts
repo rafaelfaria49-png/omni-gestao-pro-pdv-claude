@@ -4,7 +4,7 @@ import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import {
-  businessPresentation, configuredBusinessBranch, legacyBusinessBranch, resolveBusinessResource,
+  businessPresentation, businessResourceModule, configuredBusinessBranch, legacyBusinessBranch, resolveBusinessResource,
   type BusinessResourceKey,
 } from "@/lib/store-business-capabilities"
 
@@ -25,10 +25,13 @@ export function useStoreBusiness() {
     legacyProfile: profile,
     presentation: businessPresentation(capabilities),
     canConfigure: permissions?.admin.configuracoes === true,
-    resource: (key: BusinessResourceKey) => resolveBusinessResource(
-      capabilities, key, profile, ready && (permissions?.hubs.cadastros ?? false) &&
-        (key === "service.technical" ? permissions?.hubs.operacoes === true :
-          key === "catalog.deviceCompatibility" || key === "pdv.accessoryModelColor" || key === "catalog.serializedDevices" ? permissions?.modules?.deviceCatalog === true : true),
-    ),
+    resource: (key: BusinessResourceKey) => {
+      const modulo = businessResourceModule(key)
+      return resolveBusinessResource(
+        capabilities, key, profile, ready && (permissions?.hubs.cadastros ?? false) &&
+          (modulo === "operacoes" ? permissions?.hubs.operacoes === true :
+            modulo === "deviceCatalog" ? permissions?.modules?.deviceCatalog === true : true),
+      )
+    },
   }
 }

@@ -36,7 +36,27 @@ export const CATALOG_CAPABILITY_KEYS_V1 = [
   "catalog.serializedDevices",
 ] as const
 
-export const KNOWN_CAPABILITY_KEYS_V1 = [...KNOWN_PDV_CAPABILITY_KEYS_V1, ...CATALOG_CAPABILITY_KEYS_V1] as const
+/** OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001 — recursos comerciais (mesmo envelope, sem outro registry). */
+export const COMMERCIAL_CAPABILITY_KEYS_V1 = [
+  "commercial.refurbishment",
+  "commercial.historicalCost",
+  "commercial.implantationMode",
+  "sales.retroactive",
+  "sales.gifts",
+  "sales.quickDeviceRegistration",
+  "sales.tradeIn",
+  "sales.detailedWarranty",
+] as const
+
+/** Limite configurável da venda retroativa (dias corridos para trás). */
+export const RETROACTIVE_SALE_LIMIT_DEFAULT_DAYS = 30
+export const RETROACTIVE_SALE_LIMIT_MAX_DAYS = 365
+
+export const KNOWN_CAPABILITY_KEYS_V1 = [
+  ...KNOWN_PDV_CAPABILITY_KEYS_V1,
+  ...CATALOG_CAPABILITY_KEYS_V1,
+  ...COMMERCIAL_CAPABILITY_KEYS_V1,
+] as const
 
 export type KnownCapabilityKeyV1 = (typeof KNOWN_CAPABILITY_KEYS_V1)[number]
 
@@ -191,6 +211,12 @@ export function validateCapabilitiesPayload(payload: unknown): CapabilitiesValid
       if (isObject(val)) {
         if (val.enabled !== undefined && typeof val.enabled !== "boolean") {
           return { ok: false, error: `enabled de "${key}" deve ser boolean.` }
+        }
+        if (key === "sales.retroactive" && val.limiteDias !== undefined) {
+          const dias = val.limiteDias
+          if (typeof dias !== "number" || !Number.isInteger(dias) || dias < 1 || dias > RETROACTIVE_SALE_LIMIT_MAX_DAYS) {
+            return { ok: false, error: `limiteDias de "sales.retroactive" deve ser inteiro entre 1 e ${RETROACTIVE_SALE_LIMIT_MAX_DAYS}.` }
+          }
         }
         const overrideAuthKey = findReservedAuthorityKey(val)
         if (overrideAuthKey) {
