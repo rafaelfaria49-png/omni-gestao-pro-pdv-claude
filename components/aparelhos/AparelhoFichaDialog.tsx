@@ -11,6 +11,7 @@ import { acessoriosTexto, resumoChecklist, sanitizeAcessorios, sanitizeChecklist
 import { dbToDateKey, formatDateKeyBr } from "@/lib/aparelhos/warranty"
 import { abrirDocumento, apiAparelhos, type AparelhoPermissions, type Detalhe, type PoliticaAparelhos } from "./api"
 import { ChecklistEditor, CondicaoPill, FieldLabel, ImeiStrip, StatusPill, brl, dataBr, dataHoraBr, inputCls, origemLabel } from "./parts"
+import { ProntuarioComercialBotao } from "./comercial/ProntuarioComercialDialog"
 
 const EVENTO_LABEL: Record<string, string> = {
   cadastro: "Cadastro", liberacao: "Liberado para venda", status: "Situação alterada", bloqueio: "Bloqueado",
@@ -142,6 +143,7 @@ export function AparelhoFichaDialog({ open, onOpenChange, aparelhoId, storeId, p
 
                 <section className="min-w-0 space-y-2">
                   {perms.editar && !["vendido", "baixado"].includes(a.status) && <Button variant="outline" className="w-full justify-start" onClick={() => onEdit(det)}><Pencil className="mr-2 h-4 w-4" />Editar dados</Button>}
+                  <ProntuarioComercialBotao aparelhoId={a.id} storeId={storeId} perms={perms} onChanged={() => { void load(); onChanged() }} />
                   {(perms.cadastrar || perms.alterarStatus) && !["vendido", "baixado"].includes(a.status) && !conf && (
                     <Button variant="outline" className="w-full justify-start" onClick={() => setConf({ resultado: "sem_restricao", fonte: "", observacao: "" })}><ShieldCheck className="mr-2 h-4 w-4" />Registrar conferência de IMEI</Button>
                   )}

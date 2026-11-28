@@ -46,6 +46,7 @@ import { usesClientExperience } from "@/lib/navigation/client-experience";
 import {
   BUSINESS_BRANCHES,
   BUSINESS_RESOURCES,
+  businessResourceModule,
   resolveBusinessResource,
 } from "@/lib/store-business-capabilities";
 import { cn } from "../../../lib/utils";
@@ -134,13 +135,9 @@ function GeralSectionContent({ storeId }: { storeId: string }) {
     if (!business.ready) return null;
     return BUSINESS_RESOURCES.filter((item) => {
       if (item.stage !== "operational") return false;
-      if (item.key === "service.technical" && !permissions?.hubs.operacoes) return false;
-      if (
-        ["catalog.deviceCompatibility", "pdv.accessoryModelColor", "catalog.serializedDevices"].includes(item.key) &&
-        !permissions?.modules?.deviceCatalog
-      ) {
-        return false;
-      }
+      const moduleKey = businessResourceModule(item.key);
+      if (moduleKey === "operacoes" && !permissions?.hubs.operacoes) return false;
+      if (moduleKey === "deviceCatalog" && !permissions?.modules?.deviceCatalog) return false;
       return resolveBusinessResource(business.capabilities, item.key, business.legacyProfile).requested;
     }).length;
   }, [business.capabilities, business.legacyProfile, business.ready, permissions]);

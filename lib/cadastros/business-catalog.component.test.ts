@@ -275,7 +275,8 @@ describe("Editor oficial de configuração", () => {
     fireEvent.click(box)
     fireEvent.click(box)
     expect(screen.getAllByText("Sugestão do ramo").length).toBe(5)
-    expect(screen.getAllByText("Ativação manual").length).toBe(1)
+    // IMEI + 8 recursos comerciais avançados: todos só por ativação manual.
+    expect(screen.getAllByText("Ativação manual").length).toBe(9)
     expect((screen.getByRole("button", { name: "Salvar ramo e recursos" }) as HTMLButtonElement).disabled).toBe(true)
   })
   it.each(["padaria", "assistencia", "acessorios"] as const)("%s: aparelhos por IMEI aparece desligado e como ativação manual, não como sugestão", (branch) => {
@@ -301,6 +302,70 @@ describe("Editor oficial de configuração", () => {
     await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
     expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: {},
       overrides: { "catalog.serializedDevices": true } } } })
+  })
+  it("agrupa recursos por tema, mostra N de M ativos e recolhe/expande o grupo", () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    render(React.createElement(BusinessResourcesCard))
+    expect(screen.getByRole("button", { name: /Vendas e atendimento/ })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /Assistência técnicas*1 de 1 ativos/ })).toBeTruthy()
+    expect(screen.getByTestId("business-resources-total").textContent).toMatch(/^3 de 14 ativos$/)
+    const trigger = screen.getByRole("button", { name: /Assistência técnicas*1 de 1 ativos/ })
+    fireEvent.click(trigger)
+    expect(screen.queryByRole("checkbox", { name: /^Assistência técnica/ })).toBeNull()
+    fireEvent.click(trigger)
+    expect(screen.getByRole("checkbox", { name: /^Assistência técnica/ })).toBeTruthy()
+  })
+  it("busca ignora acento e filtros separam ativos, desligados e em preparação", () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    render(React.createElement(BusinessResourcesCard))
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar recurso" }), { target: { value: "assistencia tecnica" } })
+    expect(screen.getByRole("checkbox", { name: /^Assistência técnica/ })).toBeTruthy()
+    expect(screen.queryByRole("checkbox", { name: /Produtos por peso/ })).toBeNull()
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar recurso" }), { target: { value: "zzzz" } })
+    expect(screen.getByText(/Nenhum recurso encontrado/)).toBeTruthy()
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar recurso" }), { target: { value: "" } })
+    fireEvent.click(screen.getByRole("button", { name: "Em preparação" }))
+    expect(screen.getByRole("checkbox", { name: /Produtos por peso/ })).toBeTruthy()
+    expect(screen.queryByRole("checkbox", { name: /^Assistência técnica/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Ativos" }))
+    expect(screen.getByRole("checkbox", { name: /^Assistência técnica/ })).toBeTruthy()
+    expect(screen.queryByRole("checkbox", { name: /Aparelhos por IMEI/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Desligados" }))
+    expect(screen.getByRole("checkbox", { name: /Aparelhos por IMEI/ })).toBeTruthy()
+    expect(screen.queryByRole("checkbox", { name: /^Assistência técnica/ })).toBeNull()
+  })
+  it("recurso com dependência ligado sem a dependência mostra o que falta", () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" }, overrides: { "commercial.refurbishment": true } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Preparação para revenda/ })
+    expect(box.getAttribute("aria-describedby")).toBeTruthy()
+    expect(box.closest("label")!.textContent).toMatch(/Requer: Aparelhos por IMEI/)
+  })
+  it("venda retroativa: limite de dias é salvo como objeto pelo mesmo caminho de patch", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    render(React.createElement(BusinessResourcesCard))
+    expect(screen.queryByLabelText("Limite de dias retroativos")).toBeNull()
+    fireEvent.click(screen.getByRole("checkbox", { name: /Venda retroativa/ }))
+    const days = screen.getByLabelText("Limite de dias retroativos") as HTMLInputElement
+    expect(days.value).toBe("30")
+    fireEvent.change(days, { target: { value: "45" } })
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }))
+    await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
+    expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: {},
+      overrides: { "sales.retroactive": { enabled: true, limiteDias: 45 } } } } })
+  })
+  it("venda retroativa: valor fora de 1..365 não entra no payload (grava só o liga)", async () => {
+    h.capabilities = { version: 1, business: { primaryBranch: "assistencia" } }
+    render(React.createElement(BusinessResourcesCard))
+    const box = screen.getByRole("checkbox", { name: /Venda retroativa/ })
+    fireEvent.click(box)
+    const days = screen.getByLabelText("Limite de dias retroativos") as HTMLInputElement
+    fireEvent.change(days, { target: { value: "400" } })
+    expect(days.getAttribute("aria-invalid")).toBe("true")
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ramo e recursos" }))
+    await waitFor(() => expect(h.save).toHaveBeenCalledOnce())
+    expect(h.save.mock.calls[0][0]).toEqual({ printerConfig: { capabilities: { version: 1, business: {},
+      overrides: { "sales.retroactive": true } } } })
   })
   it("ligar e desligar aparelhos por IMEI volta à ativação manual sem gravar nada", () => {
     render(React.createElement(BusinessResourcesCard))

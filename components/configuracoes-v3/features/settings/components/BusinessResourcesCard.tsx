@@ -27,21 +27,29 @@ import { usesClientExperience } from "@/lib/navigation/client-experience";
 import {
   BUSINESS_BRANCHES,
   BUSINESS_RESOURCES,
+  BUSINESS_RESOURCE_GROUPS,
   businessPresentation,
+  businessResourceModule,
   configuredBusinessBranch,
   legacyBusinessBranch,
   resolveBusinessResource,
   type BusinessBranch,
   type BusinessPresentation,
+  type BusinessResourceGroup,
   type BusinessResourceKey,
 } from "@/lib/store-business-capabilities";
 import { isStoreSettingsReadbackError } from "@/lib/store-settings-readback";
-import type { CapabilityOverrideValue, StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1";
+import {
+  RETROACTIVE_SALE_LIMIT_DEFAULT_DAYS,
+  RETROACTIVE_SALE_LIMIT_MAX_DAYS,
+  type CapabilityOverrideValue,
+  type StoreCapabilitiesV1,
+} from "@/lib/capabilities-persistence-v1";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsCardSkeleton } from "./SettingsCardSkeleton";
 import { SettingsStatusBadge } from "./SettingsStatusBadge";
 import { SettingsFeedbackBanner } from "./SettingsFeedbackBanner";
-import { SettingsSubSection } from "./SettingsSubSection";
 import { SettingsCollapsible } from "./SettingsCollapsible";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
@@ -105,6 +113,38 @@ function extractCapabilitiesFromSettings(
   return (caps as Record<string, unknown>).version === 1 ? (caps as StoreCapabilitiesV1) : null;
 }
 
+const RETROACTIVE_KEY = "sales.retroactive" as const satisfies BusinessResourceKey;
+
+function overrideLimitDays(value: CapabilityOverrideValue | undefined): number | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const dias = value.limiteDias;
+  return typeof dias === "number" && Number.isInteger(dias) ? dias : undefined;
+}
+
+/** Venda retroativa: o limite de dias é parte da escolha, não só o liga/desliga. */
+function limitDiffersFromSaved(
+  key: BusinessResourceKey,
+  draftValue: CapabilityOverrideValue,
+  saved: CapabilityOverrideValue | undefined,
+): boolean {
+  if (key !== RETROACTIVE_KEY) return false;
+  const wantedLimit = overrideLimitDays(draftValue);
+  if (wantedLimit === undefined) return false;
+  return wantedLimit !== (overrideLimitDays(saved) ?? RETROACTIVE_SALE_LIMIT_DEFAULT_DAYS);
+}
+
+function normalizeSearch(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+type ResourceFilter = "all" | "active" | "inactive" | "preparation";
+const RESOURCE_FILTERS: ReadonlyArray<{ value: ResourceFilter; label: string }> = [
+  { value: "all", label: "Todos" },
+  { value: "active", label: "Ativos" },
+  { value: "inactive", label: "Desligados" },
+  { value: "preparation", label: "Em preparação" },
+];
+
 /**
  * Reconcilia rascunho local com estado recém-confirmado pelo servidor,
  * mantendo apenas o patch parcial restante ainda não aplicado.
@@ -133,9 +173,13 @@ function reconcileBusinessDraft(
   >) {
     const wanted = typeof v === "boolean" ? v : v.enabled;
     const base = resolveBusinessResource(nextBaseCaps, k, legacyProfile);
+    const saved = confirmedCaps?.overrides?.[k];
     if (base.requested !== wanted) {
-      const saved = confirmedCaps?.overrides?.[k];
-      nextOverrides[k] = typeof saved === "object" && saved !== null ? { ...saved, enabled: wanted } : wanted;
+      nextOverrides[k] = typeof v === "object" && v !== null
+        ? { ...(typeof saved === "object" && saved !== null ? saved : {}), ...v, enabled: wanted }
+        : typeof saved === "object" && saved !== null ? { ...saved, enabled: wanted } : wanted;
+    } else if (limitDiffersFromSaved(k, v, saved)) {
+      nextOverrides[k] = v;
     }
   }
 
@@ -390,23 +434,43 @@ function BusinessResourcesForm({
 
   const visibleResources = useMemo(
     () =>
-      BUSINESS_RESOURCES.filter((item) =>
-        item.key === "service.technical"
+      BUSINESS_RESOURCES.filter((item) => {
+        const moduleKey = businessResourceModule(item.key);
+        return moduleKey === "operacoes"
           ? permissions?.hubs.operacoes
-          : ["catalog.deviceCompatibility", "pdv.accessoryModelColor", "catalog.serializedDevices"].includes(
-            item.key,
-          )
+          : moduleKey === "deviceCatalog"
             ? permissions?.modules?.deviceCatalog
-            : true,
-      ),
+            : true;
+      }),
     [permissions],
   );
 
-  const operationalResources = visibleResources.filter((item) => item.stage === "operational");
-  const preparationResources = visibleResources.filter((item) => item.stage === "preparation");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<ResourceFilter>("all");
+  const [closedGroups, setClosedGroups] = useState<ReadonlySet<BusinessResourceGroup>>(new Set());
+  const [retroDaysText, setRetroDaysText] = useState<string | null>(null);
+
   const activeTotalCount = visibleResources.filter(
     (item) => resolveBusinessResource(draft, item.key, legacyProfile).requested,
   ).length;
+
+  const groupedResources = useMemo(() => {
+    const needle = normalizeSearch(search);
+    return (Object.keys(BUSINESS_RESOURCE_GROUPS) as BusinessResourceGroup[])
+      .map((group) => {
+        const all = visibleResources.filter((item) => item.group === group);
+        const shown = all.filter((item) => {
+          if (needle && !normalizeSearch(`${item.label} ${item.description}`).includes(needle)) return false;
+          const requested = resolveBusinessResource(draft, item.key, legacyProfile).requested;
+          if (filter === "active") return requested;
+          if (filter === "inactive") return !requested;
+          if (filter === "preparation") return item.stage === "preparation";
+          return true;
+        });
+        return { group, all, shown };
+      })
+      .filter((entry) => entry.shown.length > 0);
+  }, [draft, filter, legacyProfile, search, visibleResources]);
 
   const isBusy = saving || revalidating;
   const disabled = !canConfigure || isBusy || externalBusy;
@@ -464,7 +528,7 @@ function BusinessResourcesForm({
       for (const [k, v] of Object.entries(current) as Array<[BusinessResourceKey, CapabilityOverrideValue]>) {
         const wanted = typeof v === "boolean" ? v : v.enabled;
         const base = resolveBusinessResource(nextCapsBase, k, legacyProfile);
-        if (base.requested !== wanted) {
+        if (base.requested !== wanted || limitDiffersFromSaved(k, v, capabilities?.overrides?.[k])) {
           next[k] = v;
         }
       }
@@ -495,6 +559,42 @@ function BusinessResourcesForm({
     });
   };
 
+  const retroOverride = draft.overrides?.[RETROACTIVE_KEY];
+  const retroLimit = overrideLimitDays(retroOverride) ?? RETROACTIVE_SALE_LIMIT_DEFAULT_DAYS;
+  const retroTextValid =
+    retroDaysText === null ||
+    (/^\d{1,3}$/.test(retroDaysText) &&
+      Number(retroDaysText) >= 1 &&
+      Number(retroDaysText) <= RETROACTIVE_SALE_LIMIT_MAX_DAYS);
+
+  // Limite de dias da venda retroativa: mesmo caminho de overrides/patch dos demais recursos.
+  const handleRetroLimitChange = (raw: string) => {
+    setRetroDaysText(raw);
+    if (!/^\d{1,3}$/.test(raw)) return;
+    const days = Number(raw);
+    if (days < 1 || days > RETROACTIVE_SALE_LIMIT_MAX_DAYS) return;
+    setSaveError(null);
+    setReconcileNotice(null);
+    setOverrides((current) => {
+      const rest = { ...current };
+      delete rest[RETROACTIVE_KEY];
+      const saved = capabilities?.overrides?.[RETROACTIVE_KEY];
+      if (!isUnconfirmed) {
+        const untouched = resolveBusinessResource(
+          { ...draft, overrides: { ...capabilities?.overrides, ...rest } },
+          RETROACTIVE_KEY,
+          legacyProfile,
+        );
+        const savedLimit = overrideLimitDays(saved) ?? RETROACTIVE_SALE_LIMIT_DEFAULT_DAYS;
+        if (untouched.requested && days === savedLimit) return rest;
+      }
+      return {
+        ...rest,
+        [RETROACTIVE_KEY]: { ...(typeof saved === "object" && saved !== null ? saved : {}), enabled: true, limiteDias: days },
+      };
+    });
+  };
+
   const handlePresentationChange = (key: keyof BusinessPresentation, value: string) => {
     setSaveError(null);
     setReconcileNotice(null);
@@ -516,6 +616,7 @@ function BusinessResourcesForm({
     setSelected(null);
     setOverrides({});
     setPresentation({});
+    setRetroDaysText(null);
     setSaveError(null);
     setReconcileNotice(null);
     setUnconfirmedSave(null);
@@ -704,7 +805,8 @@ function BusinessResourcesForm({
     };
   }, [controllerRef, discard, effectiveDirty, needsConfirmationOnly, revalidateUnconfirmed, submit]);
 
-  const renderTile = (item: (typeof BUSINESS_RESOURCES)[number], isPreparation: boolean) => {
+  const renderTile = (item: (typeof BUSINESS_RESOURCES)[number]) => {
+    const isPreparation = item.stage === "preparation";
     const state = resolveBusinessResource(draft, item.key, legacyProfile);
     const sourceLabel =
       state.source === "explicit"
@@ -719,12 +821,18 @@ function BusinessResourcesForm({
           ? "manual"
           : "preset";
     const hintId = `business-resource-${item.key}-hint`;
-    const descriptionText = isPreparation
-      ? `Preparação de cadastro. ${item.key === "catalog.weight"
-        ? "Venda fracionada e baixa em kg/g ainda indisponíveis; produtos por peso ficam bloqueados para venda."
-        : "Estoque por combinação e venda de variações ainda indisponíveis."
-      }`
-      : OPERATIONAL_DESCRIPTIONS[item.key] ?? "";
+    const baseDescription = isPreparation
+      ? item.key === "catalog.weight"
+        ? "Preparação de cadastro. Venda fracionada e baixa em kg/g ainda indisponíveis; produtos por peso ficam bloqueados para venda."
+        : item.key === "catalog.variants"
+          ? "Preparação de cadastro. Estoque por combinação e venda de variações ainda indisponíveis."
+          : item.description
+      : OPERATIONAL_DESCRIPTIONS[item.key] ?? item.description;
+    const requiresText =
+      state.requested && state.missing.length > 0
+        ? ` Requer: ${state.missing.map((dep) => BUSINESS_RESOURCES.find((r) => r.key === dep)?.label ?? dep).join(", ")}.`
+        : "";
+    const descriptionText = `${baseDescription}${requiresText}`;
 
     const ResourceIcon = RESOURCE_ICONS[item.key] ?? SlidersHorizontal;
     const isActiveOperational = state.requested && !isPreparation;
@@ -980,27 +1088,123 @@ function BusinessResourcesForm({
             </div>
           </div>
 
-          {/* Resource Tile Matrix — Recursos operacionais */}
-          {operationalResources.length > 0 ? (
-            <SettingsSubSection title="Recursos operacionais">
-              <div className="cfg-resource-grid">
-                {operationalResources.map((item) => renderTile(item, false))}
+          {/* Recursos agrupados, com busca e filtro */}
+          <div className="space-y-2" data-testid="business-resources-groups">
+            <p className="text-[11.5px] leading-snug" style={{ color: "var(--cfg-muted)" }}>
+              Plano contratado, recurso disponível, configuração da loja e permissão do usuário: nesta ordem.
+              O ramo é sugestão, não autorização. Desligar um recurso nunca apaga dados já registrados.
+            </p>
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                type="search"
+                aria-label="Buscar recurso"
+                placeholder="Buscar recurso…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="cfg-input h-9 min-w-0 sm:max-w-xs"
+              />
+              <div role="group" aria-label="Filtrar recursos" className="flex min-w-0 flex-wrap gap-1.5">
+                {RESOURCE_FILTERS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    size="sm"
+                    variant={filter === option.value ? "default" : "outline"}
+                    aria-pressed={filter === option.value}
+                    onClick={() => setFilter(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
               </div>
-            </SettingsSubSection>
-          ) : null}
+              <span
+                className="text-[11.5px] sm:ml-auto"
+                style={{ color: "var(--cfg-muted)" }}
+                data-testid="business-resources-total"
+              >
+                {activeTotalCount} de {visibleResources.length} ativos
+              </span>
+            </div>
 
-          {/* Resource Tile Matrix — Preparação de cadastro (honestidade operacional) */}
-          {preparationResources.length > 0 ? (
-            <SettingsSubSection
-              title="Preparação de cadastro"
-              description="Venda operacional ainda indisponível"
-              divided
-            >
-              <div className="cfg-prep-grid">
-                {preparationResources.map((item) => renderTile(item, true))}
-              </div>
-            </SettingsSubSection>
-          ) : null}
+            {groupedResources.length === 0 ? (
+              <p role="status" className="py-3 text-center text-xs" style={{ color: "var(--cfg-muted)" }}>
+                Nenhum recurso encontrado para esta busca ou filtro.
+              </p>
+            ) : null}
+
+            {groupedResources.map(({ group, all, shown }) => {
+              const activeInGroup = all.filter(
+                (item) => resolveBusinessResource(draft, item.key, legacyProfile).requested,
+              ).length;
+              const open = !closedGroups.has(group);
+              return (
+                <Collapsible
+                  key={group}
+                  open={open}
+                  onOpenChange={(next) =>
+                    setClosedGroups((current) => {
+                      const copy = new Set(current);
+                      if (next) copy.delete(group);
+                      else copy.add(group);
+                      return copy;
+                    })
+                  }
+                  data-group={group}
+                  className="min-w-0 rounded-xl border"
+                  style={{ borderColor: "var(--cfg-border)" }}
+                >
+                  <CollapsibleTrigger
+                    className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2 text-left"
+                    style={{ color: "var(--cfg-fg)" }}
+                  >
+                    <span className="min-w-0 text-[12.5px] font-semibold">{BUSINESS_RESOURCE_GROUPS[group]}</span>
+                    <span className="flex shrink-0 items-center gap-2 text-[11px]" style={{ color: "var(--cfg-muted)" }}>
+                      {activeInGroup} de {all.length} ativos
+                      <ChevronDown
+                        aria-hidden="true"
+                        className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+                      />
+                    </span>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="min-w-0 space-y-2 px-3 pb-3">
+                    <div className="cfg-resource-grid">{shown.map((item) => renderTile(item))}</div>
+                    {shown.some((item) => item.key === RETROACTIVE_KEY) &&
+                    resolveBusinessResource(draft, RETROACTIVE_KEY, legacyProfile).requested ? (
+                      <div
+                        className="min-w-0 space-y-1 rounded-lg border px-3 py-2"
+                        style={{ borderColor: "var(--cfg-border)" }}
+                      >
+                        <label
+                          htmlFor="business-retroactive-days"
+                          className="block text-xs font-medium"
+                          style={{ color: "var(--cfg-fg)" }}
+                        >
+                          Limite de dias retroativos
+                        </label>
+                        <Input
+                          id="business-retroactive-days"
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={RETROACTIVE_SALE_LIMIT_MAX_DAYS}
+                          step={1}
+                          disabled={disabled}
+                          value={retroDaysText ?? String(retroLimit)}
+                          onChange={(event) => handleRetroLimitChange(event.target.value)}
+                          onBlur={() => setRetroDaysText(null)}
+                          aria-invalid={!retroTextValid}
+                          className="cfg-input h-9 w-28"
+                        />
+                        <p className="text-[11px] leading-snug" style={{ color: "var(--cfg-subtle)" }}>
+                          De 1 a {RETROACTIVE_SALE_LIMIT_MAX_DAYS} dias (padrão {RETROACTIVE_SALE_LIMIT_DEFAULT_DAYS}).
+                        </p>
+                      </div>
+                    ) : null}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
 
           <p
             className="flex items-start gap-2 text-[11.5px] leading-relaxed"
