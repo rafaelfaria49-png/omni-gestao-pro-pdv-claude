@@ -19,6 +19,7 @@ import { installDirectPrint } from "./direct-print"
 import { isAuthSessionCookie, LogoutGuard } from "./privacy"
 import { handleSquirrelEvent } from "./squirrel"
 import { checkDesktopUpdate, type UpdateStatus } from "./updates"
+import { MSIX_PROFILE_DIR, packageKind } from "../shared/distribution"
 
 const startedAt = Date.now()
 
@@ -165,7 +166,7 @@ function run(config: DesktopBuildConfig) {
   function openAbout() {
     showStatus("about")
     if (!updateStatus) {
-      void checkDesktopUpdate(config, app.getVersion()).then((s) => {
+      void checkDesktopUpdate(config, app.getVersion(), packageKind(process)).then((s) => {
         updateStatus = s
         if (statusVisible && statusKind === "about") statusView?.webContents.send(STATUS_CHANNEL.state, currentState())
       })
@@ -415,9 +416,9 @@ function run(config: DesktopBuildConfig) {
 
   void app.whenReady().then(() => {
     createWindow()
-    log(`started channel=${config.channel} origin=${config.origin} version=${app.getVersion()}`)
+    log(`started channel=${config.channel} origin=${config.origin} version=${app.getVersion()} package=${packageKind(process)}`)
     // Verificação silenciosa do executável: só registra; o aviso aparece em "Sobre".
-    void checkDesktopUpdate(config, app.getVersion()).then((s) => {
+    void checkDesktopUpdate(config, app.getVersion(), packageKind(process)).then((s) => {
       updateStatus = s
       log(`update-check available=${s.available}`)
     })
@@ -438,8 +439,12 @@ try {
 if (config && config.channel !== "production") {
   const testProfile = process.env.OMNI_DESKTOP_TEST_USER_DATA // testes automatizados
   app.setPath("userData", testProfile || path.join(app.getPath("appData"), `OmniGestão Pro ${channelLabel(config.channel)}`))
+} else if (config && packageKind(process) === "msix") {
+  // Perfil próprio do pacote da Store, nunca o do Setup.exe (ver MSIX_PROFILE_DIR).
+  app.setPath("userData", path.join(app.getPath("appData"), MSIX_PROFILE_DIR))
 }
-const squirrelEvent = parseSquirrelEvent(process.argv)
+// Dentro do pacote MSIX não há Squirrel: nenhum argumento --squirrel-* é tratado.
+const squirrelEvent = packageKind(process) === "msix" ? null : parseSquirrelEvent(process.argv)
 if (!handleSquirrelEvent(squirrelEvent, () => app.quit())) {
   if (!config) fatal(configError ?? "configuração ausente")
   if (config) {
@@ -452,8 +457,9 @@ if (!handleSquirrelEvent(squirrelEvent, () => app.quit())) {
     } else if (!app.requestSingleInstanceLock()) {
       app.quit()
     } else {
-      // Mesmo AppUserModelID que o Squirrel grava nos atalhos (fixar na barra de tarefas).
-      app.setAppUserModelId(`com.squirrel.${config.channel === "qa" ? "OmniGestaoProQA" : "OmniGestaoPro"}.OmniGestaoPro`)
+      // Mesmo AppUserModelID que o Squirrel grava nos atalhos (fixar na barra de tarefas). No MSIX o
+      // pacote já define o AUMID (PackageFamilyName!App); sobrescrever quebraria o agrupamento.
+      if (packageKind(process) === "squirrel") app.setAppUserModelId(`com.squirrel.${config.channel === "qa" ? "OmniGestaoProQA" : "OmniGestaoPro"}.OmniGestaoPro`)
       app.enableSandbox()
       registerLocalScheme()
       Menu.setApplicationMenu(null) // sem aceleradores nativos: F5, Ctrl+R, Ctrl+W etc. ficam com o PDV

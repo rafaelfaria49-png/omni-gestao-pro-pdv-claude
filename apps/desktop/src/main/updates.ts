@@ -1,5 +1,6 @@
 import { net } from "electron"
 import type { DesktopBuildConfig } from "../shared/build-config"
+import type { DesktopPackageKind } from "../shared/distribution"
 import { isUpdateAvailable, parseUpdateManifest, type UpdateManifest } from "../shared/update-manifest"
 
 export interface UpdateStatus {
@@ -13,7 +14,16 @@ export interface UpdateStatus {
  * Verificação do executável. Só consulta e informa — sem download, sem instalação,
  * sem reinício. Sem manifesto configurado no build, fica desligada e diz isso.
  */
-export async function checkDesktopUpdate(config: DesktopBuildConfig, currentVersion: string): Promise<UpdateStatus> {
+export async function checkDesktopUpdate(
+  config: DesktopBuildConfig,
+  currentVersion: string,
+  kind: DesktopPackageKind = "squirrel",
+): Promise<UpdateStatus> {
+  // Pacote da Microsoft Store: a própria Store entrega as versões novas. O manifesto do Setup.exe
+  // não vale para este canal (oferecer outro instalador aqui criaria uma segunda instalação).
+  if (kind === "msix") {
+    return { available: false, message: `Programa na versão ${currentVersion}. Atualizações chegam pela Microsoft Store.` }
+  }
   if (!config.updateManifestUrl) {
     return {
       available: false,
