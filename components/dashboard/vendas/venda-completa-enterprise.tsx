@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft,
+  CalendarClock,
   Check,
   ChevronDown,
   ChevronUp,
   CreditCard,
   FileText,
+  Gift,
   HelpCircle,
   Loader2,
   MapPin,
@@ -112,6 +114,32 @@ import {
   enfileirarProdutosACadastrar,
   acharProdutoPorCodigoExato,
 } from "@/lib/pdv-produtos-a-cadastrar"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { useStoreBusiness } from "@/lib/use-store-business"
+import {
+  BRINDE_MOTIVO_MAX,
+  JUSTIFICATIVA_MAX,
+  JUSTIFICATIVA_MIN,
+  RETROATIVA_CENARIO_A_TEXTO,
+  RETROATIVA_FORM_VAZIA,
+  aplicarBrinde,
+  buildComercialPayload,
+  derivarCaracteristicas,
+  diaBr,
+  limiteDiasDoOverride,
+  limitesRetroativa,
+  linhaPodeSerBrinde,
+  removerBrinde,
+  retroativaFormDoRascunho,
+  rotuloTipoCupom,
+  rotulosCaracteristicas,
+  tipoVendaLegado,
+  validarRetroativa,
+  type BrindeLinha,
+  type ComercialCartLine,
+  type RetroativaForm,
+} from "./venda-completa-comercial"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -123,14 +151,11 @@ type ClienteResult = {
   document?: string | null
 }
 
+/**
+ * Seletor exclusivo legado (nunca chegou ao motor). Mantido só para ler rascunhos antigos: as
+ * características da venda agora são derivadas (não excludentes) — ver `venda-completa-comercial.ts`.
+ */
 type TipoVenda = "comum" | "garantia" | "a_prazo" | "orcamento"
-
-const TIPOS_VENDA: { value: TipoVenda; label: string }[] = [
-  { value: "comum",     label: "Venda Comum" },
-  { value: "garantia",  label: "Com Garantia" },
-  { value: "a_prazo",   label: "A Prazo" },
-  { value: "orcamento", label: "Orçamento Conv." },
-]
 
 type EnderecoEntrega = {
   logradouro: string
@@ -175,13 +200,18 @@ type CartLine = {
   cartLineKey?: string
   /** Aparelho individualizado (IMEI + garantia). Quantidade fixa em 1. */
   device?: LinhaAparelho
+  /** Brinde (recurso `sales.gifts`): preço 0 nesta venda; original guardado para desfazer. */
+  brinde?: BrindeLinha
 }
 
 type DraftData = {
   cliente: ClienteResult | null
   cart: CartLine[]
   discountReais: number
+  /** Legado (rascunhos antigos): só "orcamento" é aproveitado, como `origemOrcamento`. */
   tipoVenda?: TipoVenda
+  origemOrcamento?: boolean
+  retroativa?: RetroativaForm
   observacaoGeral?: string
   enderecoEntrega?: EnderecoEntrega
   /**
@@ -388,7 +418,18 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const [cupomData, setCupomData] = useState<CupomData | null>(null)
 
   // ── Dados da venda ────────────────────────────────────────────────────────
-  const [tipoVenda, setTipoVenda] = useState<TipoVenda>("comum")
+  // Características não excludentes (OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001): só "originada de
+  // orçamento" é escolha do operador; crediário/cartão/misto/garantia/brinde são derivados.
+  const [origemOrcamento, setOrigemOrcamento] = useState(false)
+  // Venda retroativa — cenário A (pagamento hoje, caixa de hoje). Regularização em caixa antigo é só via API.
+  const [retroativa, setRetroativa] = useState<RetroativaForm>(RETROATIVA_FORM_VAZIA)
+  const [showRetroativa, setShowRetroativa] = useState(false)
+  const storeBusiness = useStoreBusiness()
+  const brindesOperacional = storeBusiness.resource("sales.gifts").operational
+  const retroativaOperacional = storeBusiness.resource("sales.retroactive").operational
+  const podeRetroativa = storeBusiness.permissions?.pdv.cancelarVenda === true
+  const retroativaDisponivel = retroativaOperacional && podeRetroativa
+  const limiteDiasRetroativa = limiteDiasDoOverride(storeBusiness.capabilities?.overrides?.["sales.retroactive"])
   const [observacaoGeral, setObservacaoGeral] = useState("")
   const [helpOpen, setHelpOpen] = useState(false)
 
@@ -480,7 +521,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         setCart(validCart)
         if ((draft.discountReais ?? 0) > 0) setDiscountReais(draft.discountReais)
         if (draft.cliente) setSelectedCliente(draft.cliente)
-        if (draft.tipoVenda) setTipoVenda(draft.tipoVenda)
+        if (draft.origemOrcamento === true || draft.tipoVenda === "orcamento") setOrigemOrcamento(true)
+        const retroDraft = retroativaFormDoRascunho(draft.retroativa)
+        if (retroDraft?.ativa) { setRetroativa(retroDraft); setShowRetroativa(true) }
         if (draft.observacaoGeral) setObservacaoGeral(draft.observacaoGeral)
         if (draft.enderecoEntrega) setEnderecoEntrega(draft.enderecoEntrega)
         // N5-B1 GOAL 002 (R3): draft com identidade PENDING restaura a
@@ -504,7 +547,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           cliente: selectedCliente,
           cart,
           discountReais,
-          tipoVenda,
+          origemOrcamento,
+          ...(retroativa.ativa ? { retroativa } : {}),
           observacaoGeral,
           enderecoEntrega,
           // N5-B1 GOAL 002: identidade PENDING acompanha o draft (reload-safe).
@@ -515,7 +559,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         localStorage.removeItem(DRAFT_KEY(storeId))
       }
     } catch { /* ignore */ }
-  }, [selectedCliente, cart, discountReais, tipoVenda, observacaoGeral, enderecoEntrega, storeId])
+  }, [selectedCliente, cart, discountReais, origemOrcamento, retroativa, observacaoGeral, enderecoEntrega, storeId])
 
   // ── Mount focus ───────────────────────────────────────────────────────────
   // Autofocus operacional (GOAL 006): ao entrar/retornar, o Código/Bipe é o campo operacional
@@ -638,9 +682,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         return
       }
       setCart((prev) => {
-        const existing = prev.find((l) => l.inventoryId === product.id)
+        // Linha marcada como brinde não absorve unidade nova (a nova é cobrada).
+        const existing = prev.find((l) => l.inventoryId === product.id && !l.brinde)
         if (existing) {
-          return prev.map((l) => l.inventoryId === product.id ? { ...l, qty: l.qty + 1 } : l)
+          return prev.map((l) => l.inventoryId === product.id && !l.brinde ? { ...l, qty: l.qty + 1 } : l)
         }
         const garantiaDias = pdvParams.garantiaPadraoDias ?? 0
         return [
@@ -700,7 +745,54 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   function updateLineDiscountPct(lineId: string, pct: number) {
     if (!discountsEnabled) return
     const clamped = Math.min(100, Math.max(0, isNaN(pct) ? 0 : pct))
-    setCart((prev) => prev.map((l) => l.lineId === lineId ? { ...l, discountPct: clamped } : l))
+    // Brinde já é preço zero: desconto não se aplica.
+    setCart((prev) => prev.map((l) => l.lineId === lineId && !l.brinde ? { ...l, discountPct: clamped } : l))
+  }
+
+  // ── Brindes (recurso `sales.gifts`) ───────────────────────────────────────
+  /** Recorte comercial da linha (produto do estoque × avulso × serviço × aparelho). */
+  function comercialLine(l: CartLine): ComercialCartLine {
+    return {
+      lineId: l.lineId,
+      isAvulso: l.isAvulso,
+      isAparelho: !!l.device,
+      isServico: inventory.find((i) => i.id === l.inventoryId)?.category === "Servicos",
+      garantiaDias: l.detail?.garantiaDias,
+      brinde: l.brinde,
+    }
+  }
+
+  function toggleBrinde(lineId: string) {
+    setCart((prev) => prev.map((l) => {
+      if (l.lineId !== lineId) return l
+      if (l.brinde) return removerBrinde(l)
+      if (!brindesOperacional || !linhaPodeSerBrinde(comercialLine(l))) return l
+      return aplicarBrinde(l)
+    }))
+  }
+
+  function updateBrindeMotivo(lineId: string, motivo: string) {
+    setCart((prev) => prev.map((l) =>
+      l.lineId === lineId && l.brinde ? { ...l, brinde: { ...l.brinde, motivo: motivo.slice(0, BRINDE_MOTIVO_MAX) } } : l,
+    ))
+  }
+
+  /**
+   * `sale.comercial` da venda atual. `saleLines` é montado 1:1 a partir do carrinho (o guard de
+   * integridade bloqueia em vez de filtrar), então o índice enviado é o do carrinho — mesmo assim o
+   * mapeamento é por `lineId` sobre a lista realmente enviada.
+   */
+  function buildComercialAtual(sent: { lineIds: readonly string[]; unitPrices: readonly number[] }) {
+    return buildComercialPayload({
+      cart: cart.map(comercialLine),
+      sentLineIds: sent.lineIds,
+      sentUnitPrices: sent.unitPrices,
+      retroativa,
+      recursos: { retroativa: retroativaOperacional, brindes: brindesOperacional },
+      podeRetroativa,
+      agora: new Date(),
+      limiteDias: limiteDiasRetroativa,
+    })
   }
 
   /**
@@ -790,12 +882,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         lineId: l.lineId,
         inventoryId: l.inventoryId,
         name: l.name,
-        price: l.price,
+        // Venda em espera não carrega a marcação de brinde: volta com o preço original.
+        price: l.brinde ? l.brinde.precoOriginal : l.price,
         quantity: l.qty,
         isAvulso: l.isAvulso,
         custoUnitario: l.custoUnitario,
         codigoAvulso: l.codigoAvulso,
-        discountPct: l.discountPct,
+        discountPct: l.brinde ? l.brinde.descontoOriginal : l.discountPct,
         detail: l.detail,
         accessorySelection: l.accessorySelection,
         cartLineKey: l.cartLineKey,
@@ -825,7 +918,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setDiscountReais(0)
     setEnderecoEntrega(EMPTY_ENDERECO)
     setShowEnderecoForm(false)
-    setTipoVenda("comum")
+    setOrigemOrcamento(false)
+
+    setRetroativa(RETROATIVA_FORM_VAZIA)
+
+    setShowRetroativa(false)
     setObservacaoGeral("")
     setExpandedLineId(null)
     // N5-B1 R2 (P2-06): o rascunho saiu da superfície — guard de sessão
@@ -907,6 +1004,16 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       toast({ title: "Total inválido", description: "O valor total precisa ser maior que zero.", variant: "destructive" })
       return
     }
+    // Brinde/retroativa incompletos: corrige ANTES de digitar o pagamento (o servidor revalida).
+    const comercialPrevio = buildComercialAtual({
+      lineIds: cart.map((l) => l.lineId),
+      unitPrices: cart.map((l) => l.price * (1 - l.discountPct / 100)),
+    })
+    if (!comercialPrevio.ok) {
+      toast({ title: "Revise os dados comerciais", description: comercialPrevio.error, variant: "destructive" })
+      if (comercialPrevio.field && comercialPrevio.field !== "brindes") setShowRetroativa(true)
+      return
+    }
     // Caixa fechado na tela ou sem referência de sessão utilizável: reconsulta a
     // sessão do terminal atual antes de recusar. O carrinho é mantido e a venda
     // NÃO é enviada — recuperada a sessão, quem finaliza de novo é o operador
@@ -950,7 +1057,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setClienteQuery("")
     setShowClienteDropdown(false)
     setDiscountReais(0)
-    setTipoVenda("comum")
+    setOrigemOrcamento(false)
+
+    setRetroativa(RETROATIVA_FORM_VAZIA)
+
+    setShowRetroativa(false)
     setObservacaoGeral("")
     setEnderecoEntrega(EMPTY_ENDERECO)
     setShowEnderecoForm(false)
@@ -1039,6 +1150,15 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           ...(l.accessorySelection ? { accessorySelection: l.accessorySelection } : {}),
           ...(l.device ? { produtoId: l.device.produtoId, deviceSale: l.device.deviceSale } : {}),
         }))
+      // `comercial.brindes[].lineIndex` = índice em `saleLines` (mesma ordem do carrinho acima).
+      const comercialBuild = buildComercialAtual({
+        lineIds: cart.map((l) => l.lineId),
+        unitPrices: saleLines.map((l) => l.unitPrice),
+      })
+      if (!comercialBuild.ok) {
+        toast({ title: "Revise os dados comerciais", description: comercialBuild.error, variant: "destructive" })
+        return false
+      }
 
       let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
       let aPrazoConfig: APrazoConfig | undefined
@@ -1096,6 +1216,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         aPrazoConfig,
         pixQrKind: meta?.pixQrKind,
         cashTendered: meta?.cashTendered,
+        ...(comercialBuild.comercial ? { comercial: comercialBuild.comercial } : {}),
       })
 
       if (!result.ok) {
@@ -1124,7 +1245,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
             cliente: selectedCliente,
             cart,
             discountReais,
-            tipoVenda,
+            origemOrcamento,
+            ...(retroativa.ativa ? { retroativa } : {}),
             observacaoGeral,
             enderecoEntrega,
             pendingIdentity: pendingSaleIdentityRef.current?.getIdentity() ?? undefined,
@@ -1187,6 +1309,15 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           observacao: l.detail?.observacao,
         }))
 
+      // Características não excludentes desta venda (cupom + enriquecimento). `tipoVenda` legado
+      // segue no enriquecimento por compatibilidade de leitura.
+      const caracteristicas = derivarCaracteristicas({
+        cart: cart.map(comercialLine),
+        payments,
+        retroativa: !!comercialBuild.comercial?.retroativa,
+        origemOrcamento,
+      })
+
       // enrichVendaEnterprise awaited — persiste dados completos no DB
       // (CONFIRMED: PENDING já retornou acima).
       const enrichResult = await enrichVendaEnterprise({
@@ -1198,7 +1329,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         clienteTelefone: selectedCliente.phone ?? undefined,
         clienteEmail: selectedCliente.email ?? undefined,
         observacoesVenda: observacaoGeral || undefined,
-        tipoVenda,
+        tipoVenda: tipoVendaLegado(caracteristicas),
+        caracteristicas,
         enderecoEntrega: Object.values(enderecoEntrega).some((v) => v.trim() !== "")
           ? enderecoEntrega
           : undefined,
@@ -1216,7 +1348,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       const storeDisplayName =
         (empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "Loja").trim() || "Loja"
 
-      const tipoVendaLabel = TIPOS_VENDA.find((t) => t.value === tipoVenda)?.label
+      const tipoVendaLabel = rotuloTipoCupom(caracteristicas, comercialBuild.comercial?.retroativa?.dataEfetivaVenda)
       const dinheiroPago = payments
         .filter((payment) => payment.type === "dinheiro")
         .reduce((sum, payment) => sum + payment.value, 0)
@@ -1230,10 +1362,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         clienteNome: clienteVendaNome,
         clienteCpf: clienteVendaDoc ?? null,
         operador: operatorLabel,
-        tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
+        tipoVenda: tipoVendaLabel,
         observacaoGeral: observacaoGeral || undefined,
         itens: cart.map((l) => ({
-          nome: l.name,
+          nome: l.brinde ? `${l.name} (brinde)` : l.name,
           quantidade: l.qty,
           precoUnitario: l.price,
           lineTotal: Math.round(l.price * l.qty * (1 - l.discountPct / 100) * 100) / 100,
@@ -1265,7 +1397,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       setSelectedCliente(null)
       setClienteQuery("")
       setExpandedLineId(null)
-      setTipoVenda("comum")
+      setOrigemOrcamento(false)
+
+      setRetroativa(RETROATIVA_FORM_VAZIA)
+
+      setShowRetroativa(false)
       setObservacaoGeral("")
       setEnderecoEntrega(EMPTY_ENDERECO)
       setShowEnderecoForm(false)
@@ -1277,6 +1413,17 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   }
 
   const canFinalize = selectedCliente !== null && cart.length > 0 && total > 0 && caixa.isOpen
+
+  // Chips da tela (antes do pagamento): crediário/cartão/misto só se definem no modal de pagamento.
+  const rotulosTela = rotulosCaracteristicas(derivarCaracteristicas({
+    cart: cart.map(comercialLine),
+    payments: [],
+    retroativa: retroativa.ativa,
+    origemOrcamento,
+  }))
+  const brindesNoCarrinho = cart.filter((l) => l.brinde).length
+  const retroLimites = limitesRetroativa(new Date(), limiteDiasRetroativa)
+  const retroValidacao = retroativa.ativa ? validarRetroativa(retroativa, new Date(), limiteDiasRetroativa) : null
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1732,7 +1879,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                         <th className="w-24 px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground">UNIT</th>
                         <th className="w-[72px] px-2 py-2 text-center text-[10px] font-semibold text-muted-foreground">DESC%</th>
                         <th className="w-24 px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground">TOTAL</th>
-                        <th className="w-14 px-2 py-2" />
+                        <th className={cn("px-2 py-2", brindesOperacional || brindesNoCarrinho > 0 ? "w-20" : "w-14")} />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -1748,7 +1895,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                 <span className="font-mono text-[10px] text-muted-foreground">{line.codigo || "—"}</span>
                               </td>
                               <td className="px-2 py-2.5">
-                                <p className="font-medium leading-tight text-foreground">{line.name}</p>
+                                <p className="font-medium leading-tight text-foreground">
+                                  {line.name}
+                                  {line.brinde && (
+                                    <Badge variant="secondary" className="ml-1.5 h-4 gap-0.5 px-1 align-middle text-[9px]">
+                                      <Gift className="h-2.5 w-2.5" />Brinde
+                                    </Badge>
+                                  )}
+                                </p>
                                 {line.device && (
                                   <p className="mt-0.5 text-[10px] text-muted-foreground">
                                     <span className="font-mono">{line.device.aparelho.imei1 || line.device.aparelho.serial}</span>
@@ -1779,7 +1933,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                   className="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-center text-xs font-bold tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                 />
                               </td>
-                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">{brl(line.price)}</td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
+                                {line.brinde && (
+                                  <span className="mr-1 text-[10px] line-through">{brl(line.brinde.precoOriginal)}</span>
+                                )}
+                                {brl(line.price)}
+                              </td>
                               <td className="px-2 py-2.5 text-center">
                                 <div className="flex items-center justify-center gap-0.5">
                                   <input
@@ -1788,9 +1947,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                     max={100}
                                     step={0.5}
                                     placeholder="0"
+                                    aria-label={`Desconto de ${line.name}`}
                                     value={line.discountPct === 0 ? "" : line.discountPct}
-                                    disabled={!discountsEnabled}
-                                    readOnly={!discountsEnabled}
+                                    disabled={!discountsEnabled || !!line.brinde}
+                                    readOnly={!discountsEnabled || !!line.brinde}
                                     onChange={(e) => updateLineDiscountPct(line.lineId, parseFloat(e.target.value))}
                                     className="w-12 rounded border border-border bg-background px-1 py-0.5 text-center text-xs tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                   />
@@ -1805,6 +1965,23 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                               </td>
                               <td className="px-2 py-2.5">
                                 <div className="flex items-center justify-end gap-1">
+                                  {(line.brinde || (brindesOperacional && linhaPodeSerBrinde(comercialLine(line)))) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleBrinde(line.lineId)}
+                                      aria-pressed={!!line.brinde}
+                                      aria-label={line.brinde ? `Cobrar ${line.name} (desfazer brinde)` : `Marcar ${line.name} como brinde`}
+                                      title={line.brinde ? "Desfazer brinde (volta o preço original)" : "Brinde — entregar sem cobrança"}
+                                      className={cn(
+                                        "flex h-6 w-6 items-center justify-center rounded border transition-colors",
+                                        line.brinde
+                                          ? "border-primary bg-primary/10 text-primary"
+                                          : "border-border bg-background text-muted-foreground hover:bg-secondary",
+                                      )}
+                                    >
+                                      <Gift className="h-3 w-3" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => setExpandedLineId(isExpanded ? null : line.lineId)}
@@ -1829,6 +2006,27 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                 </div>
                               </td>
                             </tr>
+                            {line.brinde && (
+                              <tr key={`${line.lineId}-brinde`} className="bg-muted/30">
+                                <td colSpan={9} className="px-3 py-2">
+                                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                    <Label htmlFor={`brinde-motivo-${line.lineId}`} className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                                      <Gift className="h-3 w-3" />Motivo do brinde <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                      id={`brinde-motivo-${line.lineId}`}
+                                      placeholder="Ex.: cortesia na compra do aparelho"
+                                      value={line.brinde.motivo}
+                                      maxLength={BRINDE_MOTIVO_MAX}
+                                      onChange={(e) => updateBrindeMotivo(line.lineId, e.target.value)}
+                                      aria-invalid={line.brinde.motivo.trim().length < 3 || undefined}
+                                      className="h-7 min-w-0 flex-1 border-border bg-background text-xs"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">Sai do estoque pelo custo, sem receita.</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                             {isExpanded && line.device && (
                               <tr key={`${line.lineId}-device`} className="bg-muted/30">
                                 <td colSpan={9} className="px-3 py-3">
@@ -1919,24 +2117,26 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-medium text-muted-foreground">Tipo</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {TIPOS_VENDA.map((t) => (
-                      <button
-                        key={t.value}
-                        type="button"
-                        onClick={() => setTipoVenda(t.value)}
-                        className={cn(
-                          "rounded-lg border px-2 py-2 text-left text-xs transition-all",
-                          tipoVenda === t.value
-                            ? "border-primary bg-primary/10 font-semibold text-primary"
-                            : "border-border bg-card text-muted-foreground hover:bg-secondary",
-                        )}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
+                <div className="min-w-0 space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground">Características</p>
+                  {/* Derivadas e não excludentes: a venda pode ser a prazo E com garantia E com brinde. */}
+                  <div className="flex min-w-0 flex-wrap gap-1.5" aria-live="polite">
+                    {rotulosTela.length > 0 ? rotulosTela.map((label) => (
+                      <Badge key={label} variant="secondary" className="text-[10px]">{label}</Badge>
+                    )) : (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Venda comum</Badge>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    A prazo (crediário da loja), cartão de crédito e pagamento misto vêm das formas de pagamento.
+                  </p>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5">
+                    <Label htmlFor="venda-origem-orcamento" className="text-xs text-foreground">Originada de orçamento</Label>
+                    <Switch
+                      id="venda-origem-orcamento"
+                      checked={origemOrcamento}
+                      onCheckedChange={(v) => setOrigemOrcamento(v === true)}
+                    />
                   </div>
                 </div>
 
@@ -1956,6 +2156,114 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                   </div>
                 </div>
               </div>
+
+              {/* ── Data efetiva (venda retroativa) — recurso `sales.retroactive` + gerente ── */}
+              {retroativaDisponivel ? (
+                <div className="mt-4 min-w-0 rounded-lg border border-border bg-card">
+                  <button
+                    type="button"
+                    onClick={() => setShowRetroativa((o) => !o)}
+                    aria-expanded={showRetroativa}
+                    className="flex w-full items-center justify-between px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      Data efetiva (venda retroativa)
+                      {retroativa.ativa && <Badge variant="secondary" className="h-4 px-1 text-[9px]">Ativa</Badge>}
+                    </span>
+                    {showRetroativa ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+                  {showRetroativa && (
+                    <div className="space-y-3 border-t border-border px-2.5 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="venda-retroativa-ativa" className="text-xs text-foreground">
+                          Registrar com data efetiva anterior a hoje
+                        </Label>
+                        <Switch
+                          id="venda-retroativa-ativa"
+                          checked={retroativa.ativa}
+                          onCheckedChange={(v) => setRetroativa((r) => ({ ...r, ativa: v === true }))}
+                        />
+                      </div>
+                      {retroativa.ativa && (
+                        <>
+                          <p className="rounded-md border border-border bg-muted/40 px-2 py-1.5 text-[11px] text-muted-foreground">
+                            {RETROATIVA_CENARIO_A_TEXTO}
+                          </p>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="min-w-0 space-y-1">
+                              <Label htmlFor="venda-retroativa-data" className="text-[11px] text-muted-foreground">
+                                Data efetiva da venda <span className="text-destructive">*</span>
+                              </Label>
+                              <Input
+                                id="venda-retroativa-data"
+                                type="date"
+                                min={retroLimites.minVenda}
+                                max={retroLimites.ontem}
+                                value={retroativa.dataEfetivaVenda}
+                                onChange={(e) => setRetroativa((r) => ({ ...r, dataEfetivaVenda: e.target.value }))}
+                                aria-invalid={(retroValidacao && !retroValidacao.ok && retroValidacao.field === "dataEfetivaVenda") || undefined}
+                                className="h-8 border-border bg-background text-xs"
+                              />
+                              <p className="text-[10px] text-muted-foreground">Até {retroLimites.limiteDias} dias atrás.</p>
+                            </div>
+                            <div className="min-w-0 space-y-1">
+                              <Label htmlFor="venda-retroativa-entrega" className="text-[11px] text-muted-foreground">
+                                Entrega efetiva (opcional)
+                              </Label>
+                              <Input
+                                id="venda-retroativa-entrega"
+                                type="date"
+                                min={retroativa.dataEfetivaVenda || retroLimites.minVenda}
+                                max={retroLimites.hoje}
+                                value={retroativa.dataEfetivaEntrega}
+                                onChange={(e) => setRetroativa((r) => ({ ...r, dataEfetivaEntrega: e.target.value }))}
+                                aria-invalid={(retroValidacao && !retroValidacao.ok && retroValidacao.field === "dataEfetivaEntrega") || undefined}
+                                className="h-8 border-border bg-background text-xs"
+                              />
+                              <p className="text-[10px] text-muted-foreground">Sem data: igual à data da venda.</p>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="venda-retroativa-justificativa" className="text-[11px] text-muted-foreground">
+                              Justificativa <span className="text-destructive">*</span>
+                            </Label>
+                            <Textarea
+                              id="venda-retroativa-justificativa"
+                              rows={2}
+                              maxLength={JUSTIFICATIVA_MAX}
+                              placeholder="Por que a venda está sendo registrada depois?"
+                              value={retroativa.justificativa}
+                              onChange={(e) => setRetroativa((r) => ({ ...r, justificativa: e.target.value }))}
+                              aria-invalid={(retroValidacao && !retroValidacao.ok && retroValidacao.field === "justificativa") || undefined}
+                              className="min-h-0 border-border bg-background text-xs"
+                            />
+                            <p className={cn(
+                              "text-right text-[10px] tabular-nums",
+                              retroativa.justificativa.trim().length < JUSTIFICATIVA_MIN ? "text-destructive" : "text-muted-foreground",
+                            )}>
+                              {retroativa.justificativa.trim().length}/{JUSTIFICATIVA_MAX} (mínimo {JUSTIFICATIVA_MIN})
+                            </p>
+                          </div>
+                          {retroValidacao && !retroValidacao.ok && (
+                            <p className="text-[11px] font-medium text-destructive" role="alert">{retroValidacao.error}</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : retroativa.ativa ? (
+                // Rascunho com data efetiva, mas recurso/permissão indisponível agora: nunca some em silêncio.
+                <div className="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-2.5 py-2">
+                  <p className="min-w-0 text-[11px] text-destructive">
+                    Data efetiva informada, mas a venda retroativa não está disponível para este usuário ou loja.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setRetroativa(RETROATIVA_FORM_VAZIA)}>
+                    Remover data efetiva
+                  </Button>
+                </div>
+              ) : null}
             </section>
 
           </div>
@@ -2033,12 +2341,26 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
             {/* Resumo da venda */}
             <div className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span>Tipo</span>
-                  <span className="font-medium text-foreground">
-                    {TIPOS_VENDA.find((t) => t.value === tipoVenda)?.label}
+                <div className="flex items-start justify-between gap-2">
+                  <span className="shrink-0">Tipo</span>
+                  <span className="min-w-0 text-right font-medium text-foreground">
+                    {rotulosTela.length > 0 ? rotulosTela.join(" · ") : "Venda comum"}
                   </span>
                 </div>
+                {brindesNoCarrinho > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>Brindes</span>
+                    <Badge variant="secondary" className="h-4 gap-0.5 px-1 text-[9px] tabular-nums">
+                      <Gift className="h-2.5 w-2.5" />{brindesNoCarrinho}
+                    </Badge>
+                  </div>
+                )}
+                {retroativa.ativa && retroativa.dataEfetivaVenda && (
+                  <div className="flex items-center justify-between">
+                    <span>Data efetiva</span>
+                    <span className="font-medium text-foreground">{diaBr(retroativa.dataEfetivaVenda)}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span>Operador</span>
                   <span className="font-medium text-foreground">{operatorLabel}</span>

@@ -23,6 +23,7 @@ import {
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "@/lib/vendas/sale-writer-v2"
+import { prepararComercialDaVenda } from "@/lib/comercial/venda/servidor"
 import { handleEvent } from "@/lib/automation/automation-engine"
 import { dispatchSaleAutomationIfCreated } from "@/lib/vendas/sale-automation-dispatch"
 import {
@@ -126,6 +127,14 @@ export async function POST(req: Request) {
   const session = await auth()
   const operadorLabel = session?.user ? getOperatorLabelFromSession(session) : undefined
 
+  // ADR-0026: `comercial` (retroativa/brindes) é validado aqui; o cru do cliente nunca é gravado.
+  const comercial = await prepararComercialDaVenda({
+    storeId: lojaId, sale, operadorLabel, identidade: { clientSaleId: parsedClientSaleId.clientSaleId },
+  })
+  if (!comercial.ok) {
+    return jsonError(comercial.error, comercial.code, comercial.status, comercial.field ? { field: comercial.field } : undefined)
+  }
+
   try {
     await prismaEnsureConnected()
     const result = await persistSaleV2({
@@ -136,8 +145,9 @@ export async function POST(req: Request) {
       options: {
         enforceStock: true,
         requireCaixaSession: true,
-        allowClosedOriginalSession,
+        allowClosedOriginalSession: allowClosedOriginalSession || comercial.allowClosedOriginalSession,
         finalizacaoAoVivo,
+        comercial: comercial.comercial,
       },
     })
     // Automação definitiva nasce SOMENTE do create durável (CORREÇÃO-01):
