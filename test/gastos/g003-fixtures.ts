@@ -4,6 +4,7 @@ import type { Session } from "next-auth"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireFinanceiroPerfilAccess } from "@/lib/gastos/access"
+import { diaNoFusoConsulta } from "@/lib/gastos/query-calculo"
 
 export const G003_URL = "postgresql://gastos_g003@127.0.0.1:55495/gastos_g003_test"
 export const L1 = "g003-fixture-L1", L2 = "g003-fixture-L2", L3 = "g003-fixture-L3"
@@ -14,8 +15,11 @@ export const E1 = "g003-fixture-E1", E2 = "g003-fixture-E2", P1 = "g003-fixture-
 export const perfis = [E1, E2, P1, P2], stores = [L1, L2, L3]
 export const ids = (perfilId: string) => ({ conta: `${perfilId}-conta`, pagar: `${perfilId}-pagar`,
   receber: `${perfilId}-receber`, movimento: `${perfilId}-movimento`, categoria: `${perfilId}-categoria` })
-export const hoje = () => new Date().toISOString().slice(0, 10)
-export const periodo = () => ({ dataInicio: hoje(), dataFim: hoje() })
+export const hoje = (instante = new Date()) => diaNoFusoConsulta(instante)
+export const periodo = (instante = new Date()) => {
+  const dia = hoje(instante)
+  return { dataInicio: dia, dataFim: dia }
+}
 export let sessaoAtual: Session | null = null
 
 /** `platform`: sessão de plataforma da main (`requireModuleApi(req, "platform")`, ex.: /api/dashboard/elite). */
@@ -102,6 +106,8 @@ export async function prepararG003() {
     { perfilId: E1, storeId: L1, adminUserId: U1 }, { perfilId: E1, storeId: L1, adminUserId: U2 },
     { perfilId: E2, storeId: L2, adminUserId: U1 },
   ] })
+  const agora = new Date()
+  const diaAtual = hoje(agora)
   for (const perfilId of perfis) {
     const storeId = perfilId === E1 ? L1 : perfilId === E2 ? L2 : null
     const row = ids(perfilId)
@@ -114,33 +120,33 @@ export async function prepararG003() {
     await prisma.carteiraFinanceira.create({ data: { id: row.conta, perfilId, storeId, nome: `CONTA_${nomePerfil}`, tipo: "banco", saldoAtual: valores.saldo } })
     await prisma.categoriaGasto.create({ data: { id: row.categoria, perfilId, storeId, nome: `CATEGORIA_${nomePerfil}`, nomeNormalizado: "categoria", natureza: "DESPESA" } })
     const titulo = { perfilId, storeId, descricao: `SENTINELA_${nomePerfil}`, valor: valores.titulo, valorCentavos: valores.tituloCentavos,
-      precisaoStatus: "CENTAVOS", carteiraId: row.conta, vencimento: hoje(), status: "pendente",
+      precisaoStatus: "CENTAVOS", carteiraId: row.conta, vencimento: diaAtual, status: "pendente",
       localKey: storeId ? "mesma-chave" : null, identidadePessoal: storeId ? null : `gastos:pessoal:${perfilId}:mesma-chave` }
     await prisma.contaPagarTitulo.create({ data: { id: row.pagar, ...titulo, categoriaId: row.categoria } })
     await prisma.contaReceberTitulo.create({ data: { id: row.receber, ...titulo } })
     await prisma.movimentacaoFinanceira.create({ data: { id: row.movimento, perfilId, storeId, carteiraId: row.conta,
       categoriaId: row.categoria, pagarTituloId: row.pagar, tipo: "saida", origem: "pagar", descricao: `SENTINELA_${nomePerfil}`,
-      valor: valores.movimento, valorCentavos: valores.movimentoCentavos, precisaoStatus: "CENTAVOS", ocorridoEm: new Date(), referenciaId: row.pagar } })
+      valor: valores.movimento, valorCentavos: valores.movimentoCentavos, precisaoStatus: "CENTAVOS", ocorridoEm: agora, referenciaId: row.pagar } })
   }
-  await prisma.contaPagarTitulo.create({ data: { id: "g003-legado-pagar", storeId: L1, localKey: "legado", descricao: "EMPRESA_LEGADO", valor: 10, vencimento: hoje() } })
-  await prisma.contaReceberTitulo.create({ data: { id: "g003-legado-receber", storeId: L1, localKey: "legado", descricao: "EMPRESA_LEGADO", valor: 10, vencimento: hoje() } })
+  await prisma.contaPagarTitulo.create({ data: { id: "g003-legado-pagar", storeId: L1, localKey: "legado", descricao: "EMPRESA_LEGADO", valor: 10, vencimento: diaAtual } })
+  await prisma.contaReceberTitulo.create({ data: { id: "g003-legado-receber", storeId: L1, localKey: "legado", descricao: "EMPRESA_LEGADO", valor: 10, vencimento: diaAtual } })
   await prisma.carteiraFinanceira.create({ data: { id: "g003-legado-conta", storeId: L1, nome: "EMPRESA_LEGADO" } })
-  await prisma.movimentacaoFinanceira.create({ data: { id: "g003-legado-mov", storeId: L1, tipo: "saida", origem: "manual", descricao: "EMPRESA_LEGADO", valor: 10 } })
+  await prisma.movimentacaoFinanceira.create({ data: { id: "g003-legado-mov", storeId: L1, tipo: "saida", origem: "manual", descricao: "EMPRESA_LEGADO", valor: 10, ocorridoEm: agora } })
   await prisma.venda.create({ data: { id: "g003-venda", pedidoId: "g003-pedido", storeId: L1, total: 365.01, contaReceberTituloId: ids(E1).receber } })
   await prisma.sessaoCaixa.create({ data: { id: "g003-sessao", storeId: L1, operador: "Synthetic" } })
   await prisma.conciliacaoFinanceira.createMany({ data: [
-    { id: "g003-conciliacao-E1", storeId: L1, carteiraId: ids(E1).conta, dataReferencia: hoje(), saldoSistema: 100, saldoInformado: 101, diferenca: 1, status: "divergente" },
-    { id: "g003-conciliacao-legado", storeId: L1, carteiraId: "g003-legado-conta", dataReferencia: hoje(), saldoSistema: 0, saldoInformado: 0, diferenca: 0, status: "conciliado" },
+    { id: "g003-conciliacao-E1", storeId: L1, carteiraId: ids(E1).conta, dataReferencia: diaAtual, saldoSistema: 100, saldoInformado: 101, diferenca: 1, status: "divergente" },
+    { id: "g003-conciliacao-legado", storeId: L1, carteiraId: "g003-legado-conta", dataReferencia: diaAtual, saldoSistema: 0, saldoInformado: 0, diferenca: 0, status: "conciliado" },
     // Relações históricas que o FK simples aceita: storeId sozinho não protege.
-    { id: "g003-conciliacao-P1", storeId: L1, carteiraId: ids(P1).conta, dataReferencia: hoje(), saldoSistema: 700, saldoInformado: 811, diferenca: 111, status: "divergente" },
-    { id: "g003-conciliacao-P2", storeId: L1, carteiraId: ids(P2).conta, dataReferencia: hoje(), saldoSistema: 100, saldoInformado: 322, diferenca: 222, status: "divergente" },
-    { id: "g003-conciliacao-E2-cruzada", storeId: L1, carteiraId: ids(E2).conta, dataReferencia: hoje(), saldoSistema: 900, saldoInformado: 1233, diferenca: 333, status: "divergente" },
-    { id: "g003-conciliacao-E2", storeId: L2, carteiraId: ids(E2).conta, dataReferencia: hoje(), saldoSistema: 900, saldoInformado: 1344, diferenca: 444, status: "divergente" },
+    { id: "g003-conciliacao-P1", storeId: L1, carteiraId: ids(P1).conta, dataReferencia: diaAtual, saldoSistema: 700, saldoInformado: 811, diferenca: 111, status: "divergente" },
+    { id: "g003-conciliacao-P2", storeId: L1, carteiraId: ids(P2).conta, dataReferencia: diaAtual, saldoSistema: 100, saldoInformado: 322, diferenca: 222, status: "divergente" },
+    { id: "g003-conciliacao-E2-cruzada", storeId: L1, carteiraId: ids(E2).conta, dataReferencia: diaAtual, saldoSistema: 900, saldoInformado: 1233, diferenca: 333, status: "divergente" },
+    { id: "g003-conciliacao-E2", storeId: L2, carteiraId: ids(E2).conta, dataReferencia: diaAtual, saldoSistema: 900, saldoInformado: 1344, diferenca: 444, status: "divergente" },
   ] })
-  const [ano, mes] = hoje().split("-").map(Number)
+  const [ano, mes] = diaAtual.split("-").map(Number)
   await prisma.fechamentoFinanceiro.createMany({ data: [
-    { id: "g003-fechamento-E1", storeId: L1, tipo: "diario", dataReferencia: hoje(), mes, ano, saldoSistema: -133.45, snapshotDRE: { despesa: 133.45, origem: "EMPRESA_E1_LEGADO" } },
-    { id: "g003-fechamento-E2", storeId: L2, tipo: "diario", dataReferencia: hoje(), mes, ano, saldoSistema: -888.32, snapshotDRE: { despesa: 888.32, origem: E2 } },
+    { id: "g003-fechamento-E1", storeId: L1, tipo: "diario", dataReferencia: diaAtual, mes, ano, saldoSistema: -133.45, snapshotDRE: { despesa: 133.45, origem: "EMPRESA_E1_LEGADO" } },
+    { id: "g003-fechamento-E2", storeId: L2, tipo: "diario", dataReferencia: diaAtual, mes, ano, saldoSistema: -888.32, snapshotDRE: { despesa: 888.32, origem: E2 } },
   ] })
   await prisma.auditoriaFinanceira.createMany({ data: [
     { id: "g003-audit-E1", storeId: L1, entidade: "pagar", entidadeId: ids(E1).pagar, acao: "editar",

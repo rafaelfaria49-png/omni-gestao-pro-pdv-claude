@@ -1,7 +1,7 @@
 import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { GET as getLegadoMain } from "@/lib/financeiro/legado-main/rotas/exportar"
 import { requireModuleApi } from "@/lib/auth/module-access"
-import { ConsultaFinanceiraError } from "@/lib/gastos/query-calculo"
+import { ConsultaFinanceiraError, diaNoFusoConsulta, intervaloConsulta } from "@/lib/gastos/query-calculo"
 import { erroConsultaFinanceira } from "@/lib/gastos/query"
 import { consultarFinanceiroEmpresa, reaisConsulta } from "@/lib/gastos/query"
 /**
@@ -30,12 +30,12 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 function toDateRange(filtro: PeriodoFiltro) {
-  const hoje = new Date().toISOString().slice(0, 10)
-  const firstDay = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01` })()
-  return {
-    gte: new Date((filtro.dataInicio ?? firstDay) + "T00:00:00.000Z"),
-    lte: new Date((filtro.dataFim ?? hoje) + "T23:59:59.999Z"),
-  }
+  const hoje = diaNoFusoConsulta(new Date())
+  const firstDay = `${hoje.slice(0, 7)}-01`
+  const dataInicio = filtro.dataInicio ?? firstDay
+  const dataFim = filtro.dataFim ?? hoje
+  const { gte, lt } = intervaloConsulta(dataInicio, dataFim)
+  return { dataInicio, dataFim, gte, lt }
 }
 
 type Row = Record<string, string | number | null | undefined>
@@ -76,7 +76,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "conciliacoes") {
     const rows = await prisma.conciliacaoFinanceira.findMany({
-      where: { storeId, createdAt: range, carteira: { is: leituraEmpresaWhere(storeId, {}) } },
+      where: { storeId, createdAt: { gte: range.gte, lt: range.lt }, carteira: { is: leituraEmpresaWhere(storeId, {}) } },
       include: { carteira: { select: { nome: true } } },
       orderBy: { createdAt: "desc" },
       take: 5000,
@@ -88,14 +88,13 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         saldoSistema: r.saldoSistema, saldoInformado: r.saldoInformado,
         diferenca: r.diferenca, status: r.status,
         conciliadoPor: r.conciliadoPor ?? "",
-        data: r.createdAt.toISOString().slice(0, 10),
+        data: diaNoFusoConsulta(r.createdAt),
       })),
     }
   }
 
   if (tipo === "auditoria") {
-    const rows = await listarAuditoriaFinanceiraParaExportacao(storeId,
-      range.gte.toISOString().slice(0, 10), range.lte.toISOString().slice(0, 10))
+    const rows = await listarAuditoriaFinanceiraParaExportacao(storeId, range.dataInicio, range.dataFim)
     return {
       filename: "auditoria",
       rows: rows.map((r) => ({
@@ -108,7 +107,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "devolucoes") {
     const rows = await prisma.devolucaoVenda.findMany({
-      where: { storeId, at: range },
+      where: { storeId, at: { gte: range.gte, lt: range.lt } },
       select: {
         id: true, localId: true, vendaLocalId: true, tipo: true, valorTotal: true, clienteNome: true,
         operador: true, motivo: true, at: true, sessaoId: true,
@@ -128,7 +127,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         cliente: r.clienteNome,
         operador: r.operador,
         motivo: r.motivo,
-        data: r.at.toISOString().slice(0, 10),
+        data: diaNoFusoConsulta(r.at),
       })),
     }
   }
@@ -137,7 +136,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
     const rows = await prisma.sessaoCaixa.findMany({
       where: {
         storeId,
-        abertaEm: { lte: range.lte },
+        abertaEm: { lt: range.lt },
         OR: [{ fechadaEm: null }, { fechadaEm: { gte: range.gte } }],
       },
       select: {
@@ -165,7 +164,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "operacoes_caixa") {
     const rows = await prisma.caixaOperacao.findMany({
-      where: { storeId, at: range },
+      where: { storeId, at: { gte: range.gte, lt: range.lt } },
       select: { id: true, sessaoId: true, tipo: true, valor: true, motivo: true, operador: true, at: true },
       orderBy: { at: "desc" },
       take: 5000,
@@ -190,8 +189,8 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         storeId,
         status: "cancelada",
         OR: [
-          { canceladaEm: { gte: range.gte, lte: range.lte } },
-          { AND: [{ canceladaEm: null }, { at: { gte: range.gte, lte: range.lte } }] },
+          { canceladaEm: { gte: range.gte, lt: range.lt } },
+          { AND: [{ canceladaEm: null }, { at: { gte: range.gte, lt: range.lt } }] },
         ],
       },
       select: {
@@ -206,7 +205,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         id: r.id,
         pedidoId: r.pedidoId,
         total: r.total,
-        vendaEm: r.at.toISOString().slice(0, 10),
+        vendaEm: diaNoFusoConsulta(r.at),
         canceladaEm: r.canceladaEm ? r.canceladaEm.toISOString().slice(0, 16) : "",
         canceladaPor: r.canceladaPor ?? "",
         motivo: r.motivoCancelamento ?? "",
@@ -216,7 +215,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "cobrancas_os") {
     const rows = await prisma.contaReceberTitulo.findMany({
-      where: leituraEmpresaWhere(storeId, { storeId, localKey: { startsWith: "os-faturamento:" }, createdAt: range }),
+      where: leituraEmpresaWhere(storeId, { storeId, localKey: { startsWith: "os-faturamento:" }, createdAt: { gte: range.gte, lt: range.lt } }),
       select: {
         id: true, localKey: true, cliente: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true,
       },
@@ -234,7 +233,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         baseValor: "VALOR_ORIGINAL_DO_TITULO",
         status: r.status,
         vencimento: r.vencimento ?? "",
-        criadoEm: r.createdAt.toISOString().slice(0, 10),
+        criadoEm: diaNoFusoConsulta(r.createdAt),
       })),
     }
   }
@@ -279,13 +278,14 @@ export async function GET(req: Request) {
     await prismaEnsureConnected()
     const { rows, filename } = await fetchRows(storeId, tipo, filtro)
 
+    const sufixoData = diaNoFusoConsulta(new Date())
     if (formato === "xlsx") {
       const buffer = await toXLSX(rows, filename)
       return respostaFinanceiraPrivada(new NextResponse(buffer, {
         status: 200,
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "Content-Disposition": `attachment; filename="${filename}_${new Date().toISOString().slice(0, 10)}.xlsx"`,
+          "Content-Disposition": `attachment; filename="${filename}_${sufixoData}.xlsx"`,
         },
       }))
     }
@@ -296,7 +296,7 @@ export async function GET(req: Request) {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}_${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Content-Disposition": `attachment; filename="${filename}_${sufixoData}.csv"`,
       },
     }))
   } catch (e) {

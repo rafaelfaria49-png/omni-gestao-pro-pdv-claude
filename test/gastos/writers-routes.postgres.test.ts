@@ -15,6 +15,7 @@ import { garantirTituloOSTravadoV3 } from "@/lib/operacoes-v3/recebimento-misto-
 import { createPinAuthorizationToken, ADMIN_AUTHORIZATION_COOKIE } from "@/lib/auth/pin-authorization"
 import { hashSupervisorPin } from "@/lib/auth/pin-hash"
 import { ESTORNO_STEP_UP_ACTION } from "@/lib/vendas/estorno-step-up-contract"
+import { diaNoFusoConsulta } from "@/lib/gastos/query-calculo"
 
 const config = vi.hoisted(() => {
   const url = new URL(process.env.GASTOS_G002_TEST_DATABASE_URL ?? "postgresql://gastos_g002@127.0.0.1:55494/gastos_g002_test")
@@ -298,7 +299,7 @@ describe.skipIf(!process.env.GASTOS_G002_TEST_DATABASE_URL)("G002 writers adicio
       await prisma.sessaoCaixa.update({ where: { id: f.sessao.id }, data: { status: "FECHADA" } })
       novaSessao = (await prisma.sessaoCaixa.create({ data: { storeId: L, operador: "Nova fixture" } })).id
     } else {
-      const hoje = new Date(), ano = hoje.getUTCFullYear(), mes = hoje.getUTCMonth() + 1
+      const [ano, mes] = diaNoFusoConsulta(new Date()).split("-").map(Number)
       await prisma.fechamentoFinanceiro.create({ data: { storeId: L, tipo: "mensal", dataReferencia: `${ano}-${String(mes).padStart(2, "0")}-01`, mes, ano, status: "fechado" } })
       const controle = await result(await f.enviar("M1-chave-nova-periodo-fechado"), 409)
       expect(controle.code).toBe("periodo_fechado")
