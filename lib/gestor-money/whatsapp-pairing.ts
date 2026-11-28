@@ -19,7 +19,8 @@ export function normalizarTelefoneE164(raw: string): string {
   const hasPlus = trimmed.startsWith("+")
   const digits = trimmed.replace(/\D/g, "")
   if (!digits) return hasPlus ? "+" : ""
-  return `+${digits}`
+  // Não inventar código de país: exige `+` explícito para evitar transformar `11999990000` em `+11999990000`.
+  return hasPlus ? `+${digits}` : digits
 }
 
 export function validarTelefoneE164(telefone: string): boolean {

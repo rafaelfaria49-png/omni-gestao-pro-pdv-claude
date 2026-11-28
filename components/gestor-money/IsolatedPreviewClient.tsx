@@ -3,7 +3,10 @@
 import * as React from "react"
 import { GestorMoneyApp } from "./GestorMoneyApp"
 import { createSyntheticGestorMoneyGateway, type GestorMoneyGateway } from "@/lib/gestor-money/gateway"
-import { createSyntheticWhatsAppPairingActions } from "@/lib/gestor-money/whatsapp-pairing"
+import {
+  createSyntheticWhatsAppPairingActions,
+  createUnavailableWhatsAppPairingActions,
+} from "@/lib/gestor-money/whatsapp-pairing"
 import type { EstadoVinculoWhatsApp } from "@/lib/gestor-money/contracts"
 
 /**
@@ -18,7 +21,7 @@ export function IsolatedPreviewClient({
   const { gateway, pairingActions } = React.useMemo(() => {
     const base = createSyntheticGestorMoneyGateway()
     if (!whatsappMode || whatsappMode === "desligado") {
-      return { gateway: base, pairingActions: createSyntheticWhatsAppPairingActions() }
+      return { gateway: base, pairingActions: createUnavailableWhatsAppPairingActions() }
     }
 
     const estadoInicial: EstadoVinculoWhatsApp =

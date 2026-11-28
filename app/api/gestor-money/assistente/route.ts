@@ -51,7 +51,7 @@ export async function GET(req: Request) {
         .findFirst({
           where: { papel: "GESTAO", storeId: null },
           select: { ativo: true, versao: true },
-          orderBy: { createdAt: "desc" },
+          orderBy: [{ ativo: "desc" }, { createdAt: "desc" }],
         })
         .catch(() => null)
     : null

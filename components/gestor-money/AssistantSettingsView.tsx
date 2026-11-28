@@ -67,9 +67,24 @@ function formatarCodigoDisplay(codigo: string): string {
 }
 
 function formatarDataHoraBR(iso: string): string {
-  const data = formatarDataBR(iso)
-  const horaMatch = /T(\d{2}:\d{2})/.exec(iso)
-  return horaMatch ? `${data} às ${horaMatch[1]}` : data
+  const dt = new Date(iso)
+  if (!Number.isFinite(dt.getTime())) return formatarDataBR(iso)
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+      .format(dt)
+      .replace(", ", " às ")
+  } catch {
+    const data = formatarDataBR(iso)
+    const horaMatch = /T(\d{2}:\d{2})/.exec(iso)
+    return horaMatch ? `${data} às ${horaMatch[1]}` : data
+  }
 }
 
 export function AssistantSettingsView({
@@ -95,6 +110,13 @@ export function AssistantSettingsView({
   const [situacao, setSituacao] = React.useState<SituacaoVinculoWhatsAppDados | null>(
     config.situacaoVinculoInicial ?? null
   )
+  const situacaoRef = React.useRef<SituacaoVinculoWhatsAppDados | null>(
+    config.situacaoVinculoInicial ?? null
+  )
+  const atualizarSituacao = React.useCallback((proxima: SituacaoVinculoWhatsAppDados | null) => {
+    situacaoRef.current = proxima
+    setSituacao(proxima)
+  }, [])
   const [carregandoSituacao, setCarregandoSituacao] = React.useState(false)
   const [canalIndisponivelPorAcao, setCanalIndisponivelPorAcao] = React.useState(false)
   const [erroAcao, setErroAcao] = React.useState<string | null>(null)
@@ -160,32 +182,36 @@ export function AssistantSettingsView({
         if (!res.ok) {
           if (res.erro === "Indisponível.") {
             setCanalIndisponivelPorAcao(true)
+            setCodigoAtivo(null)
           } else {
             setErroAcao(res.erro)
           }
           return
         }
         setCanalIndisponivelPorAcao(false)
-        setSituacao((anterior) => {
-          const novo = res.dados
-          // Se o desafio pendente foi concluído, expirado, bloqueado ou cancelado, descartar código transitório da memória.
-          if (!novo.pendente) {
-            setCodigoAtivo(null)
-          }
-          // Se acabou de confirmar vínculo (novo pareamento ou inicial), fechar formulário e avisar o pai.
-          const confirmouAgora =
-            novo.estado === "VINCULADO" &&
-            !novo.pendente &&
-            (anterior?.pendente !== null || anterior?.estado !== "VINCULADO")
-          if (confirmouAgora && anterior !== null) {
-            setMostrarFormNovoPareamento(false)
-            setFeedbackPareamento(
-              `WhatsApp vinculado com sucesso (${novo.vinculado?.telefoneMascarado ?? ""}).`
-            )
-            void onPairingChanged?.()
-          }
-          return novo
-        })
+        const anterior = situacaoRef.current
+        const novo = res.dados
+        atualizarSituacao(novo)
+
+        // Se o desafio pendente foi concluído, expirado, bloqueado ou cancelado, descartar código transitório da memória.
+        if (!novo.pendente) {
+          setCodigoAtivo(null)
+        }
+        // Só anunciar confirmação quando de fato um NOVO vínculo foi confirmado (evita falso positivo ao cancelar/expirar re-pareamento).
+        const confirmouNovoVinculo =
+          anterior !== null &&
+          novo.estado === "VINCULADO" &&
+          !novo.pendente &&
+          (anterior.estado !== "VINCULADO" || novo.vinculado?.desde !== anterior.vinculado?.desde)
+        if (confirmouNovoVinculo) {
+          setMostrarFormNovoPareamento(false)
+          setTelefoneInput("")
+          setAceitouConsentimento(false)
+          setFeedbackPareamento(
+            `WhatsApp vinculado com sucesso (${novo.vinculado?.telefoneMascarado ?? ""}).`
+          )
+          void onPairingChanged?.()
+        }
       } catch {
         setErroComunicacao(
           "Falha de comunicação ao consultar o estado do pareamento WhatsApp. Verifique sua conexão e tente novamente."
@@ -194,7 +220,7 @@ export function AssistantSettingsView({
         if (!opcoes?.silencioso) setCarregandoSituacao(false)
       }
     },
-    [pairingActions, onPairingChanged]
+    [pairingActions, onPairingChanged, atualizarSituacao]
   )
 
   // Consulta inicial quando o canal oficial ou flag G007 está disponível
@@ -266,12 +292,14 @@ export function AssistantSettingsView({
       if (!res.ok) {
         if (res.erro === "Indisponível.") {
           setCanalIndisponivelPorAcao(true)
+          setCodigoAtivo(null)
         }
         setErroAcao(res.erro)
         return
       }
       setCanalIndisponivelPorAcao(false)
       setCodigoAtivo(res.dados)
+      setTelefoneInput("")
       setMostrarFormNovoPareamento(false)
       setAgoraMs(Date.now())
       setFeedbackPareamento(
@@ -280,10 +308,15 @@ export function AssistantSettingsView({
       // Atualiza a situação oficial do banco (estado PENDENTE + numeroAssistente + tentativasRestantes)
       const sit = await pairingActions.consultarSituacao()
       if (sit.ok) {
-        setSituacao(sit.dados)
+        atualizarSituacao(sit.dados)
+      } else if (sit.erro === "Indisponível.") {
+        setCanalIndisponivelPorAcao(true)
+        setCodigoAtivo(null)
+        setErroAcao(sit.erro)
       } else {
         // Mesmo se a leitura seguinte falhar, preserva exibição local do desafio recém-criado
-        setSituacao((prev) => ({
+        const prev = situacaoRef.current
+        atualizarSituacao({
           estado: prev?.estado === "VINCULADO" ? "VINCULADO" : "PENDENTE",
           vinculado: prev?.vinculado ?? null,
           pendente: {
@@ -293,7 +326,7 @@ export function AssistantSettingsView({
           },
           consentimentoVersao: prev?.consentimentoVersao ?? CONSENTIMENTO_WHATSAPP_VERSAO,
           numeroAssistente: prev?.numeroAssistente ?? null,
-        }))
+        })
       }
     } catch {
       setErroComunicacao(
@@ -312,6 +345,10 @@ export function AssistantSettingsView({
     try {
       const res = await pairingActions.cancelarPareamento()
       if (!res.ok) {
+        if (res.erro === "Indisponível.") {
+          setCanalIndisponivelPorAcao(true)
+          setCodigoAtivo(null)
+        }
         setErroAcao(res.erro)
         return
       }
@@ -337,11 +374,17 @@ export function AssistantSettingsView({
     try {
       const res = await pairingActions.revogarVinculo()
       if (!res.ok) {
+        if (res.erro === "Indisponível.") {
+          setCanalIndisponivelPorAcao(true)
+          setCodigoAtivo(null)
+        }
         setErroAcao(res.erro)
         setRevogarDialogOpen(false)
         return
       }
       setCodigoAtivo(null)
+      setTelefoneInput("")
+      setAceitouConsentimento(false)
       setMostrarFormNovoPareamento(false)
       setRevogarDialogOpen(false)
       setFeedbackPareamento(
@@ -499,13 +542,18 @@ export function AssistantSettingsView({
                   {badgeLabel}
                 </span>
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">{config.estadoDescricao}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {canalIndisponivelPorAcao
+                  ? "Canal oficial WhatsApp GESTAO indisponível no momento. O pareamento e o uso pelo WhatsApp permanecem bloqueados até restabelecimento."
+                  : config.estadoDescricao}
+              </p>
               <div className="mt-2 flex flex-wrap gap-3 pt-1 text-[11px] text-muted-foreground">
                 <span>
-                  Canal G006: <strong>{config.canalAtivo ? "Ativo" : "Inativo"}</strong>
+                  Canal G006: <strong>{canalOficialDisponivel ? "Ativo" : "Inativo"}</strong>
                 </span>
                 <span>
-                  Worker fila: <strong>{config.workerFilaAtivo ? "Online" : "Offline"}</strong>
+                  Worker G006:{" "}
+                  <strong>{canalOficialDisponivel && config.workerFilaAtivo ? "Habilitado (fila assíncrona)" : "Offline"}</strong>
                 </span>
                 <span>
                   Número vinculado:{" "}
@@ -683,6 +731,8 @@ export function AssistantSettingsView({
                     data-testid="btn-novo-pareamento"
                     onClick={() => {
                       setErroAcao(null)
+                      setTelefoneInput("")
+                      setAceitouConsentimento(false)
                       setMostrarFormNovoPareamento((v) => !v)
                     }}
                   >
@@ -1190,7 +1240,7 @@ export function AssistantSettingsView({
               </h3>
             </div>
             <span className="rounded-full border border-border bg-muted/40 px-2.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-              Principal: {whatsappConectadoReal ? "VINCULO_TELEFONE_G007" : config.alinhamentoG007.principalAutorizadoAtual}
+              Principal: {whatsappConectadoReal ? "VINCULO_TELEFONE_G007" : "SESSAO_WEB"}
             </span>
           </div>
           <div className="grid grid-cols-1 gap-2.5 text-xs sm:grid-cols-3">

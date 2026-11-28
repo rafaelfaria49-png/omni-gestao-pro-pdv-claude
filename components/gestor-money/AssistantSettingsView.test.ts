@@ -274,12 +274,14 @@ describe("AssistantSettingsView — Integração WhatsApp G007/G008 (PR #417 -> 
     expect(screen.getByTestId("whatsapp-linked-card").textContent).not.toContain("+5511988884444")
     expect(screen.getByTestId("whatsapp-real-status-badge").textContent).toContain("WhatsApp conectado")
 
-    // Novo pareamento para trocar número
+    // Novo pareamento para trocar número (exige re-informar telefone limpo e re-aceitar consentimento)
     fireEvent.click(screen.getByTestId("btn-novo-pareamento"))
     await waitFor(() => expect(screen.getByTestId("whatsapp-pairing-form")).toBeTruthy())
+    expect((screen.getByTestId("input-whatsapp-telefone") as HTMLInputElement).value).toBe("")
     fireEvent.change(screen.getByTestId("input-whatsapp-telefone"), {
       target: { value: "+5511988885555" },
     })
+    fireEvent.click(screen.getByTestId("checkbox-whatsapp-consentimento"))
     fireEvent.click(screen.getByTestId("btn-iniciar-pareamento"))
     await waitFor(() => expect(screen.getByTestId("whatsapp-pending-panel")).toBeTruthy())
     const codigo2 = screen.getByTestId("whatsapp-pairing-code-value").textContent!.replace(/\s+/g, "")
@@ -375,5 +377,75 @@ describe("AssistantSettingsView — Integração WhatsApp G007/G008 (PR #417 -> 
     expect(screen.getByTestId("whatsapp-real-status-badge").textContent).not.toContain("WhatsApp conectado")
     expect((screen.getByTestId("btn-conectar-whatsapp-disabled") as HTMLButtonElement).disabled).toBe(true)
     expect(screen.queryByTestId("whatsapp-pairing-form")).toBeNull()
+  })
+
+  it("8. Hardening de auditoria: rejeita número sem +, cancelar re-pareamento não exibe falso sucesso e 'Indisponível.' mid-session derruba badge conectado", async () => {
+    const { gw, perfis, snapshot, config } = await baseFixtures({
+      estadoConexao: "ATIVO",
+      numeroVinculadoMascarado: "+*********1111",
+    })
+    const synth = createSyntheticWhatsAppPairingActions({
+      estadoInicial: "VINCULADO",
+      numeroAssistente: "+5511999990001",
+      telefoneVinculadoInicial: "+5511988881111",
+    })
+    let forceUnavailable = false
+    const wrappedActions: WhatsAppPairingActions = {
+      consultarSituacao: () => synth.consultarSituacao(),
+      gerarCodigo: (input) => synth.gerarCodigo(input),
+      cancelarPareamento: () => synth.cancelarPareamento(),
+      revogarVinculo: async () =>
+        forceUnavailable ? { ok: false, erro: "Indisponível." } : synth.revogarVinculo(),
+    }
+
+    render(
+      React.createElement(AssistantSettingsView, {
+        snapshot,
+        perfisAutorizados: perfis,
+        config,
+        gateway: gw,
+        pairingActions: wrappedActions,
+        onSaved: vi.fn(),
+        pollingIntervalMs: 60_000,
+      })
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId("whatsapp-linked-phone").textContent).toContain("+*********1111")
+    })
+
+    // M-2: Abrir novo pareamento e enviar telefone sem '+' deve rejeitar sem inventar '+11...'
+    fireEvent.click(screen.getByTestId("btn-novo-pareamento"))
+    fireEvent.change(screen.getByTestId("input-whatsapp-telefone"), { target: { value: "11999990000" } })
+    fireEvent.click(screen.getByTestId("checkbox-whatsapp-consentimento"))
+    fireEvent.click(screen.getByTestId("btn-iniciar-pareamento"))
+    await waitFor(() => {
+      expect(screen.getByTestId("whatsapp-pairing-error").textContent).toContain("E.164")
+    })
+
+    // M-1: Iniciar re-pareamento válido e depois cancelar NÃO pode exibir "WhatsApp vinculado com sucesso"
+    fireEvent.change(screen.getByTestId("input-whatsapp-telefone"), { target: { value: "+5511977776666" } })
+    fireEvent.click(screen.getByTestId("btn-iniciar-pareamento"))
+    await waitFor(() => {
+      expect(screen.getByTestId("whatsapp-pairing-code-value")).toBeTruthy()
+    })
+    fireEvent.click(screen.getByTestId("btn-cancelar-pareamento"))
+    await waitFor(() => {
+      expect(screen.getByTestId("whatsapp-pairing-feedback").textContent).toContain("cancelado")
+    })
+    expect(screen.getByTestId("whatsapp-pairing-feedback").textContent).not.toContain("vinculado com sucesso")
+
+    // H-1: Desligamento mid-session ao clicar Revogar ('Indisponível.') deve derrubar imediatamente o badge conectado
+    forceUnavailable = true
+    fireEvent.click(screen.getByTestId("btn-revogar-vinculo"))
+    await waitFor(() => {
+      expect(screen.getByTestId("dialog-confirmar-revogacao")).toBeTruthy()
+    })
+    fireEvent.click(screen.getByTestId("btn-confirmar-revogacao"))
+    await waitFor(() => {
+      expect(screen.getByTestId("whatsapp-channel-unavailable-banner")).toBeTruthy()
+    })
+    expect(screen.getByTestId("whatsapp-real-status-badge").textContent).not.toContain("WhatsApp conectado")
+    expect(screen.getByTestId("assistant-g007-alignment").textContent).toContain("Principal: SESSAO_WEB")
   })
 })
