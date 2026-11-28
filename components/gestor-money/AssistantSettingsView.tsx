@@ -57,6 +57,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { MultimodalAssistantPanel } from "./MultimodalAssistantPanel"
 
 const POLLING_INTERVAL_MS = 4000
 
@@ -1229,7 +1230,15 @@ export function AssistantSettingsView({
         </div>
       </form>
 
-      {/* G007 / G008 Contract Readiness (read-only transparency — zero Audio/OCR) */}
+      {/* Multimodal Assistant Panel (Audio G009 + Image/PDF G010 + Honest 4-Axis Diagnostic) */}
+      <MultimodalAssistantPanel
+        snapshot={snapshot}
+        config={config}
+        gateway={gateway}
+        onSaved={onSaved}
+      />
+
+      {/* G007 / G008 Contract Readiness (read-only transparency) */}
       {config.alinhamentoG007 && (
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm" data-testid="assistant-g007-alignment">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -1278,11 +1287,35 @@ export function AssistantSettingsView({
             >
               WhatsApp oficial: {config.alinhamentoG007.homologacoes.whatsappOficial ? "Canal ativo" : "Não ativo"}
             </span>
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-700 dark:text-amber-300">
-              Áudio (STT): Não habilitado (fora desta etapa)
+            <span
+              className={cn(
+                "rounded-full border px-2.5 py-0.5",
+                config.multimodal?.audioG009.homologacaoConcluida
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+              )}
+            >
+              Áudio (STT):{" "}
+              {config.multimodal?.audioG009.homologacaoConcluida
+                ? "Homologado"
+                : config.multimodal?.audioG009.processamentoDisponivel
+                  ? "Disponível (não homologado)"
+                  : "Indisponível"}
             </span>
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-amber-700 dark:text-amber-300">
-              Imagem (OCR): Não habilitado (fora desta etapa)
+            <span
+              className={cn(
+                "rounded-full border px-2.5 py-0.5",
+                config.multimodal?.documentoG010.homologacaoConcluida
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+              )}
+            >
+              Imagem (OCR):{" "}
+              {config.multimodal?.documentoG010.homologacaoConcluida
+                ? "Homologado"
+                : config.multimodal?.documentoG010.processamentoDisponivel
+                  ? "Disponível (não homologado)"
+                  : "Indisponível"}
             </span>
           </div>
         </div>

@@ -529,6 +529,87 @@ export interface AssistenteWhatsAppConfig {
       imagemOcr: boolean
     }
   }
+  /** Diagnóstico honesto em 4 eixos das capacidades multimodais (G009 Áudio / G010 Documento) + G003-STORAGE. */
+  multimodal?: DiagnosticoMultimodalUI
+}
+
+export interface CapacidadeMultimodalUI {
+  providerId: "OPENAI_WHISPER" | "OPENAI_VISION" | "SIMULADO" | "INDISPONIVEL"
+  providerConfigurado: boolean
+  processamentoDisponivel: boolean
+  homologacaoConcluida: boolean
+  canalOficialDisponivel: boolean
+  motivoIndisponivel?: string
+}
+
+export interface DiagnosticoMultimodalUI {
+  audioG009: CapacidadeMultimodalUI
+  documentoG010: CapacidadeMultimodalUI
+  storagePermanenteG003: {
+    disponivel: boolean
+    privacidadeComprovada: boolean
+    motivo: string
+  }
+}
+
+export interface CandidatoDuplicidadeMultimodalUI {
+  alvoTipo: "MOVIMENTACAO" | "PAGAR" | "RECEBER"
+  alvoId: string
+  operacaoId?: string
+  descricao: string
+  valorCentavos: CentavosString
+  data: string
+  contraparte?: string
+  contaNome?: string
+  motivo:
+    | "MESMA_MENSAGEM"
+    | "MESMO_HASH_ARQUIVO"
+    | "MESMO_ID_TRANSACAO"
+    | "MESMO_DOCUMENTO"
+    | "CORRESPONDENCIA_APROXIMADA"
+  correspondenciaExata: boolean
+}
+
+export interface PropostaMultimodalExtraida {
+  naturezaSugerida: "DESPESA" | "DIVIDA"
+  descricao: string
+  valorCentavos: CentavosString | null
+  valoresCandidatosCentavos?: CentavosString[]
+  data: string | null
+  vencimento: string | null
+  formaPagamento: MeioPagamentoGasto | null
+  contraparte: string | null
+  contaSugeridaNome: string | null
+  categoriaSugeridaNome: string | null
+  numeroDocumento?: string | null
+  identificadorTransacao?: string | null
+  naturezaMercadoria?: boolean
+  quantidadeItens?: number
+}
+
+export interface AnaliseMultimodalResultado {
+  tipo: "audio" | "documento"
+  provedor: "OPENAI_WHISPER" | "OPENAI_VISION" | "SIMULADO"
+  homologado: boolean
+  sha256: string
+  mimeReal: string
+  tamanhoBytes: number
+  paginasPdf?: number
+  transcricao?: string
+  resumoTranscricao?: string
+  baixaConfianca?: boolean
+  duracaoSegundos?: number
+  tipoDocumento?: string
+  efeitoFinanceiro?: string
+  legibilidade?: "LEGIVEL" | "PARCIAL" | "ILEGIVEL" | "CORTADA"
+  textoResumo?: string
+  itens?: Array<{ descricao: string; quantidade?: number; valorCentavos?: string }>
+  avisoHonestidade: string
+  avisosAdicionais: string[]
+  proposta: PropostaMultimodalExtraida
+  candidatosDuplicidade: CandidatoDuplicidadeMultimodalUI[]
+  storagePermanenteDisponivel: boolean
+  storagePermanenteMotivo: string
 }
 
 export type ReadinessState =

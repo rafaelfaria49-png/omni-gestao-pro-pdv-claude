@@ -18,6 +18,8 @@ const WHATSAPP_MODES = new Set([
   "canal_inativo",
 ])
 
+const MULTIMODAL_MODES = new Set(["ativo", "indisponivel"])
+
 /**
  * Rota exclusivamente para validação local/isolada da interface (mobile & desktop).
  * Bloqueada em produção (fail-closed -> 404) e exige opt-in explícito
@@ -26,7 +28,7 @@ const WHATSAPP_MODES = new Set([
 export default async function GestorMoneyIsolatedPreviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ whatsapp?: string }>
+  searchParams: Promise<{ whatsapp?: string; multimodal?: string }>
 }) {
   if (
     process.env.NODE_ENV === "production" ||
@@ -41,5 +43,10 @@ export default async function GestorMoneyIsolatedPreviewPage({
     ? (raw as "desligado" | "ativo" | "vinculado" | "expirado" | "bloqueado" | "canal_inativo")
     : "desligado"
 
-  return <IsolatedPreviewClient whatsappMode={whatsappMode} />
+  const rawMultimodal = typeof sp?.multimodal === "string" ? sp.multimodal : "indisponivel"
+  const multimodalMode = MULTIMODAL_MODES.has(rawMultimodal)
+    ? (rawMultimodal as "ativo" | "indisponivel")
+    : "indisponivel"
+
+  return <IsolatedPreviewClient whatsappMode={whatsappMode} multimodalMode={multimodalMode} />
 }

@@ -5,6 +5,7 @@ import {
   respostaPrivadaJson,
 } from "@/lib/gestor-money/server/auth-boundary"
 import { diagnosticarStorageComprovantes } from "@/lib/gestor-money/server/documents-adapter"
+import { diagnosticarCapacidadesMultimodais } from "@/lib/gestor-money-assistente/multimodal/contratos"
 import { situacaoVinculo } from "@/lib/gestor-money-assistente/whatsapp/vinculo"
 import { canalGestaoLigado } from "@/lib/gestor-money-assistente/whatsapp/webhook"
 
@@ -104,6 +105,11 @@ export async function GET(req: Request) {
       : null
 
   const storageDiag = diagnosticarStorageComprovantes()
+  const multimodal = diagnosticarCapacidadesMultimodais(process.env, {
+    canalOficialDisponivel: canalFlagLigada && canalAtivo,
+    storagePermanenteDisponivel: storageDiag.runtimeLiberado,
+    storageMotivo: storageDiag.motivo,
+  })
 
   const config: AssistenteWhatsAppConfig = {
     estadoConexao,
@@ -161,10 +167,11 @@ export async function GET(req: Request) {
         canalFlagLigada && canalAtivo ? "ATIVO" : "DORMENTE_PR_417",
       homologacoes: {
         whatsappOficial: canalFlagLigada && canalAtivo,
-        audioStt: false,
-        imagemOcr: false,
+        audioStt: multimodal.audioG009.homologacaoConcluida,
+        imagemOcr: multimodal.documentoG010.homologacaoConcluida,
       },
     },
+    multimodal,
   }
 
   return respostaPrivadaJson({ ok: true, config }, 200)

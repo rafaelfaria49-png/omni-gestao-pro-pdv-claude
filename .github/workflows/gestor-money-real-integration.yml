@@ -81,6 +81,11 @@ jobs:
             app/api/gestor-money/status/route.test.ts \
             components/gestor-money/GestorMoneyApp.test.ts \
             components/gestor-money/AssistantSettingsView.test.ts \
+            components/gestor-money/MultimodalAssistantPanel.test.ts \
+            lib/gestor-money-assistente/motor.multimodal.test.ts \
+            lib/gestor-money-assistente/multimodal/audio-g009.test.ts \
+            lib/gestor-money-assistente/multimodal/documento-g010.test.ts \
+            lib/gestor-money-assistente/multimodal/midia-seguranca.test.ts \
             lib/auth/proxy-session-gate.test.ts \
             test/gestor-money/real-integration.pg.test.ts
       - name: Run focused strict TypeScript check for Gestor Money namespaces
