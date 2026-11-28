@@ -39,4 +39,37 @@ describe("G005 datas civis e IANA", () => {
     expect(()=>intervaloConsulta("2026-10-02","2026-10-01")).toThrow()
     expect(()=>inicioDiaConsulta("2026-10-01","invalido")).toThrow()
   })
+  it("virada UTC (00:00Z) vs virada brasileira (03:00Z) em America/Sao_Paulo: regressão determinística", () => {
+    // 2026-11-28T00:00:00Z = 2026-11-27 21:00 BRT; 2026-11-28T03:00:00Z = 2026-11-28 00:00 BRT
+    const viradaUtc = new Date("2026-11-28T00:00:00.000Z")
+    const incidenteCi = new Date("2026-11-28T01:11:21.000Z")
+    const ultimoMsBr = new Date("2026-11-28T02:59:59.999Z")
+    const viradaBr = new Date("2026-11-28T03:00:00.000Z")
+
+    expect(diaNoFusoConsulta(viradaUtc)).toBe("2026-11-27")
+    expect(diaNoFusoConsulta(incidenteCi)).toBe("2026-11-27")
+    expect(diaNoFusoConsulta(ultimoMsBr)).toBe("2026-11-27")
+    expect(diaNoFusoConsulta(viradaBr)).toBe("2026-11-28")
+
+    const dia27 = intervaloConsulta("2026-11-27", "2026-11-27")
+    const dia28 = intervaloConsulta("2026-11-28", "2026-11-28")
+    const contem = (iv: { gte: Date; lt: Date }, d: Date) => d.getTime() >= iv.gte.getTime() && d.getTime() < iv.lt.getTime()
+
+    expect(contem(dia27, viradaUtc)).toBe(true)
+    expect(contem(dia27, incidenteCi)).toBe(true)
+    expect(contem(dia27, ultimoMsBr)).toBe(true)
+    expect(contem(dia27, viradaBr)).toBe(false)
+
+    expect(contem(dia28, viradaUtc)).toBe(false)
+    expect(contem(dia28, incidenteCi)).toBe(false)
+    expect(contem(dia28, ultimoMsBr)).toBe(false)
+    expect(contem(dia28, viradaBr)).toBe(true)
+
+    // Virada de mês e ano entre 00:00Z e 03:00Z
+    expect(diaNoFusoConsulta(new Date("2026-12-01T00:00:00.000Z"))).toBe("2026-11-30")
+    expect(diaNoFusoConsulta(new Date("2026-12-01T02:59:59.999Z"))).toBe("2026-11-30")
+    expect(diaNoFusoConsulta(new Date("2026-12-01T03:00:00.000Z"))).toBe("2026-12-01")
+    expect(diaNoFusoConsulta(new Date("2027-01-01T00:00:00.000Z"))).toBe("2026-12-31")
+    expect(diaNoFusoConsulta(new Date("2027-01-01T03:00:00.000Z"))).toBe("2027-01-01")
+  })
 })

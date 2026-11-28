@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@/generated/prisma"
+import { deslocarDiaConsulta, inicioDiaConsulta } from "@/lib/gastos/query-calculo"
 
 // ─── tipos públicos ───────────────────────────────────────────────────────────
 
@@ -196,8 +197,20 @@ async function consultarAuditoriaEmpresa(
   if (filters.entidade) predicates.push(Prisma.sql`a.entidade=${filters.entidade}`)
   if (filters.entidadeId) predicates.push(Prisma.sql`a."entidadeId"=${filters.entidadeId} AND ${mostrarOrigem}`)
   if (filters.acao) predicates.push(Prisma.sql`a.acao=${filters.acao}`)
-  if (filters.dataInicial) predicates.push(Prisma.sql`a."createdAt">=${new Date(filters.dataInicial)}`)
-  if (filters.dataFinal) predicates.push(Prisma.sql`a."createdAt"<=${new Date(filters.dataFinal + "T23:59:59.999Z")}`)
+  if (filters.dataInicial) {
+    const inicio = /^\d{4}-\d{2}-\d{2}$/.test(filters.dataInicial)
+      ? inicioDiaConsulta(filters.dataInicial)
+      : new Date(filters.dataInicial)
+    predicates.push(Prisma.sql`a."createdAt">=${inicio}`)
+  }
+  if (filters.dataFinal) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(filters.dataFinal)) {
+      const fimExclusivo = inicioDiaConsulta(deslocarDiaConsulta(filters.dataFinal, 1))
+      predicates.push(Prisma.sql`a."createdAt"<${fimExclusivo}`)
+    } else {
+      predicates.push(Prisma.sql`a."createdAt"<=${new Date(filters.dataFinal)}`)
+    }
+  }
   const where = Prisma.sql`WHERE ${Prisma.join(predicates, " AND ")}`
   const [rows, counts] = await Promise.all([
     prisma.$queryRaw<Array<Parameters<typeof toPublica>[0]>>(Prisma.sql`
