@@ -13,7 +13,7 @@ export const runtime="nodejs"
 export const dynamic="force-dynamic"
 export const revalidate=0
 const PRIVATE={"Cache-Control":"private, no-store, max-age=0","Vary":`Cookie, ${ASSISTEC_LOJA_HEADER}`,"X-Content-Type-Options":"nosniff"}
-const modules:Record<ReportKind,AccessModule[]>={produtos:["sales"],"fluxo-caixa":["finance"],dre:["finance"],clientes:["catalog","sales"],os:["service"],tecnicos:["service"],whatsapp:["whatsapp"],geral:["sales","finance"]}
+const modules:Record<ReportKind,AccessModule[]>={produtos:["sales"],"fluxo-caixa":["finance"],dre:["finance"],clientes:["catalog","sales"],os:["service"],tecnicos:["service"],whatsapp:["whatsapp"],geral:["sales","finance"],comercial:["deviceCatalog","finance"]}
 const EXPORT_CAP_GERAL=5000
 const fail=(error:string,status:number)=>NextResponse.json({ok:false,error},{status,headers:PRIVATE})
 
