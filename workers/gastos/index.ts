@@ -1,4 +1,5 @@
-/** Node24 + tsx já fixado no lock. Nenhum request Next, browser, .env ou envio Meta. */
+/** Node24 + tsx já fixado no lock. Nenhum request Next, browser, .env ou envio Meta.
+ * G007/G008 opt-in: `GASTOS_WORKER_ASSISTENTE=ligado` + `node --conditions=react-server` + `GASTOS_WORKER_APP_DATABASE_URL`. */
 import { PrismaClient } from "../../generated/prisma"
 import { carregarConfigWorker, healthWorker, rodarWorker } from "../../lib/gastos/worker"
 import { codigoRedigido } from "../../lib/gastos/messaging-types"
@@ -22,8 +23,17 @@ async function main() {
       const health = await healthWorker(db, config)
       process.stdout.write(JSON.stringify(health) + "\n")
       if (!health.ok) process.exitCode = 1
-    } else await rodarWorker(db, config, { signal: parar.signal, once: process.argv.includes("--once"),
-      observar: evento => process.stdout.write(JSON.stringify(evento) + "\n") })
+    } else {
+      const observar = (evento: object) => process.stdout.write(JSON.stringify(evento) + "\n")
+      // G007/G008 opt-in (worker-assistente.ts): exige --conditions=react-server, modo SIMULADO e a 2ª conexão.
+      const assistente = process.env.GASTOS_WORKER_ASSISTENTE === "ligado"
+        ? await (await import("../../lib/gestor-money-assistente/whatsapp/worker-assistente")).prepararAssistenteWorker(db, config, process.env, observar)
+        : null
+      try {
+        await rodarWorker(db, config, { signal: parar.signal, once: process.argv.includes("--once"), observar,
+          ...(assistente ? { staging: assistente.staging, aposCiclo: assistente.aposCiclo, envio: assistente.envio } : {}) })
+      } finally { await assistente?.encerrar() }
+    }
   } finally {
     clearTimeout(deadline); process.removeListener("SIGTERM", shutdown); process.removeListener("SIGINT", shutdown)
     await db.$disconnect()

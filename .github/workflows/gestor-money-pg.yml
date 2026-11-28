@@ -1,6 +1,6 @@
 name: Gestor Money PG
 
-# Suítes PostgreSQL G001–G006 + RLS com runtime restrito do Gestor Money. Cada grupo sobe o próprio
+# Suítes PostgreSQL G001–G006 + G007/G008 (assistente) + RLS com runtime restrito do Gestor Money. Cada grupo sobe o próprio
 # postgres:17 descartável (porta/papel/PGDATA exigidos pela fixture) — ver scripts/ci/run-gestor-money-pg-suites.mjs.
 # Nenhuma credencial, nenhum banco externo; o Gestor Money continua DESLIGADO fora dos testes.
 
@@ -8,6 +8,9 @@ on:
   pull_request:
     paths:
       - "lib/gastos/**"
+      - "lib/gestor-money-assistente/**"
+      - "app/api/gestor-money/**"
+      - "app/actions/gestor-money-vinculo.ts"
       - "lib/financeiro/**"
       - "lib/db/**"
       - "lib/prisma.ts"
