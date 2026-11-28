@@ -79,18 +79,31 @@ export async function cenarioG007() {
 }
 export type CenarioG007 = Awaited<ReturnType<typeof cenarioG007>>
 
+export type ExtraMensagemMeta = {
+  wamid?: string
+  contexto?: string
+  tipo?: string
+  audio?: { id: string; mime_type?: string; voice?: boolean }
+  image?: { id: string; mime_type?: string; caption?: string }
+  document?: { id: string; mime_type?: string; filename?: string; caption?: string }
+}
+
 /** Corpo Meta assinado com o App Secret de gestão, como a Meta envia. */
-export function corpoMeta(c: CenarioG007, de: string, texto: string, extra: { wamid?: string; contexto?: string; tipo?: string } = {}) {
+export function corpoMeta(c: CenarioG007, de: string, texto: string, extra: ExtraMensagemMeta = {}) {
   const wamid = extra.wamid ?? `wamid.${randomUUID()}`
-  const mensagem: Record<string, unknown> = { id: wamid, from: de.slice(1), timestamp: String(Math.floor(Date.now() / 1000)), type: extra.tipo ?? "text" }
-  if ((extra.tipo ?? "text") === "text") mensagem.text = { body: texto }
+  const tipo = extra.tipo ?? (extra.audio ? "audio" : extra.image ? "image" : extra.document ? "document" : "text")
+  const mensagem: Record<string, unknown> = { id: wamid, from: de.slice(1), timestamp: String(Math.floor(Date.now() / 1000)), type: tipo }
+  if (tipo === "text") mensagem.text = { body: texto }
+  if (tipo === "audio" && extra.audio) mensagem.audio = extra.audio
+  if (tipo === "image" && extra.image) mensagem.image = extra.image
+  if (tipo === "document" && extra.document) mensagem.document = extra.document
   if (extra.contexto) mensagem.context = { id: extra.contexto }
   const raw = JSON.stringify({ object: "whatsapp_business_account", entry: [{ id: c.canal.wabaId, changes: [{ field: "messages",
     value: { messaging_product: "whatsapp", metadata: { phone_number_id: c.canal.phoneNumberId }, messages: [mensagem] } }] }] })
   return { raw, assinatura: "sha256=" + createHmac("sha256", SEGREDO).update(raw, "utf8").digest("hex"), wamid }
 }
 
-export async function receber(c: CenarioG007, de: string, texto: string, extra: { wamid?: string; contexto?: string; tipo?: string } = {}) {
+export async function receber(c: CenarioG007, de: string, texto: string, extra: ExtraMensagemMeta = {}) {
   const corpo = corpoMeta(c, de, texto, extra)
   const r = await processarWebhookGestao({ rawBody: corpo.raw, assinatura: corpo.assinatura, env: ENV, ingress })
   if (r.status !== 200) throw Error(`webhook ${r.status}`)

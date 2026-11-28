@@ -17,6 +17,7 @@ import { diaCivil } from "./datas"
 import { entradaSchema, normalizarEntrada, type EntradaNormalizada } from "./entradas"
 import { extrairCampos, interpretar } from "./interpretacao"
 import { propostaDoRascunho, rotuloIntencao, dividirParcelas } from "./mapeamento-g004"
+import { detectarCandidatosDuplicidade, rotuloMotivoDuplicidade } from "./multimodal/duplicidade"
 import { formatarCentavos, formatarDataCivil, normalizarTexto } from "./texto"
 import {
   INTENCOES_COM_CONTRATO_G004, INTENCOES_ESCRITA,
@@ -27,7 +28,7 @@ import {
 const TTL_PADRAO_MS = 15 * 60_000
 const JANELA_DUPLICIDADE_MS = 10 * 60_000
 const ORDEM_FATURA: Campo[] = ["perfil", "cartao", "fatura", "valor", "formaPagamento", "conta"]
-const ORDEM_PERGUNTAS: Campo[] = ["perfil", "valor", "titulo", "formaPagamento", "conta", "contaDestino", "cartao", "parcelas", "vencimento"]
+const ORDEM_PERGUNTAS: Campo[] = ["perfil", "jaFoiPago", "duplicidade", "valor", "titulo", "formaPagamento", "conta", "contaDestino", "cartao", "parcelas", "vencimento"]
 
 type Turno = {
   principal: Principal
@@ -41,6 +42,7 @@ type Turno = {
   respostaId: string
   confirmacao?: RespostaAssistente["confirmacao"]
   escrita?: RespostaAssistente["escritaFinanceira"]
+  vinculoDocumento?: RespostaAssistente["vinculoDocumento"]
   consulta?: RespostaAssistente["consulta"]
   entrada: { mensagemId: string; respondendoA?: string; confirmacaoToken?: string }
 }
@@ -115,6 +117,12 @@ export async function reconciliarPendencia(principal: Principal, conversaId: str
 
 async function despachar(t: Turno, norm: EntradaNormalizada) {
   t.mensagens.push(...norm.avisos)
+  // Documentos sem efeito financeiro comprovado (extrato / não financeiro) jamais geram operação automática.
+  if (norm.efeitoDocumento === "EXTRATO_INFORMATIVO" || norm.efeitoDocumento === "SEM_EFEITO_FINANCEIRO") {
+    t.codigo = "documento_sem_efeito_financeiro"
+    t.mensagens.push("Nenhum lançamento financeiro automático foi gerado a partir deste documento.")
+    return
+  }
   const interp = interpretar(norm.texto, t.hoje)
   combinarCampos(interp, norm)
   if (interp.sinaisSuspeitos.length) {
@@ -132,6 +140,18 @@ async function despachar(t: Turno, norm: EntradaNormalizada) {
     t.mensagens.push("Ainda estou verificando se a última operação foi concluída. Ela não será registrada duas vezes.",
       "Responda “sim” para eu verificar agora. Correções e cancelamento ficam bloqueados até a verificação.")
     return
+  }
+
+  // Enquanto aguarda resposta a "Ela já foi paga?" (nota fiscal / cupom), "sim"/"não" respondem à pergunta — NÃO confirmam gravação!
+  if (r && r.perguntaAtual === "jaFoiPago") {
+    if (interp.intencao === "CANCELAMENTO") {
+      t.estado.rascunho = undefined
+      t.codigo = "cancelado"
+      t.mensagens.push("Operação cancelada. Nada foi registrado.")
+      return
+    }
+    if (interp.intencao === "CONSULTA") return responderConsulta(t, interp, norm.texto)
+    return complementar(t, r, interp, norm)
   }
 
   switch (interp.intencao) {
@@ -186,7 +206,9 @@ function combinarCampos(interp: Interpretacao, norm: EntradaNormalizada) {
   }
   if (norm.campos.valorCentavos) delete interp.extracao.valoresAmbiguos
   ;(interp.extracao as DadosRascunho).proveniencia = prov
-  if (interp.intencao === "DESCONHECIDO" && interp.extracao.valorCentavos) interp.intencao = "DESPESA"
+  if (interp.intencao === "DESCONHECIDO" && (interp.extracao.valorCentavos || interp.extracao.valoresAmbiguos?.length)) {
+    interp.intencao = norm.efeitoDocumento === "OBRIGACAO_NAO_PAGA" ? "DIVIDA" : "DESPESA"
+  }
 }
 
 function intencaoEscrita(interp: Interpretacao): IntencaoEscrita | null {
@@ -214,8 +236,26 @@ async function iniciarRascunho(t: Turno, intencao: IntencaoEscrita, extracao: Ex
     t.mensagens.push("Você não tem um perfil financeiro autorizado para registrar operações.")
     return
   }
+  // Transferências entre domínios Pessoal ↔ Empresa não possuem contrato automático no G004 (TRANSFERENCIA_INTERNA vale só no mesmo perfil).
+  if (intencao === "TRANSFERENCIA" && extracao.transferenciaEntreDominios) {
+    const temPessoal = perfis.some(p => p.ref.tipo === "PESSOAL")
+    const temEmpresa = perfis.some(p => p.ref.tipo === "EMPRESA")
+    if ((temPessoal && temEmpresa) || /\b(empresa|loja|pj|cnpj)\b/i.test(norm.texto)) {
+      t.codigo = "transferencia_entre_dominios_nao_suportada"
+      t.mensagens.push(
+        "Transferências entre perfis diferentes (Empresa ↔ Pessoal) não são lançadas automaticamente: o contrato canônico TRANSFERENCIA_INTERNA vale apenas entre contas do mesmo perfil.",
+        "Para manter o isolamento contábil, registre a saída no perfil de origem e a entrada no perfil de destino separadamente. Nada foi registrado."
+      )
+      return
+    }
+  }
   const r: Rascunho = {
-    id: t.deps.novoId(), versao: 1, intencao, estado: "COLETANDO", dados: { ...extracao }, pendencias: [],
+    id: t.deps.novoId(), versao: 1, intencao, estado: "COLETANDO",
+    dados: {
+      ...extracao,
+      ...(norm.aguardandoConfirmacaoPagamento ? { aguardandoConfirmacaoPagamento: true } : {}),
+    },
+    pendencias: [],
     criadoEm: t.agora.toISOString(), atualizadoEm: t.agora.toISOString(),
     expiraEm: new Date(t.agora.getTime() + (t.deps.ttlRascunhoMs ?? TTL_PADRAO_MS)).toISOString(),
     mensagemOrigemId: t.entrada.mensagemId,
@@ -258,6 +298,7 @@ function limparResolvidos(d: DadosRascunho) {
   delete d.carteiraId; delete d.carteiraNome; delete d.carteiraDestinoId; delete d.carteiraDestinoNome; delete d.cicloId; delete d.cicloRotulo
   delete d.cicloRestanteCentavos; delete d.alocacoesFatura; delete d.cartaoDica; delete d.categoriaId; delete d.cartaoId; delete d.cartaoNome
   delete d.cicloIds; delete d.tituloId; delete d.tituloDescricao; delete d.tituloRestanteCentavos; delete d.opcoes
+  delete d.duplicidadeCandidatos; delete d.duplicidadeVerificadaChave
 }
 
 async function contextoLeitura(t: Turno, r: Rascunho): Promise<unknown | null> {
@@ -426,6 +467,31 @@ async function resolverDados(t: Turno, r: Rascunho) {
     t.mensagens.push(`O valor informado é maior que o saldo em aberto (${formatarCentavos(d.tituloRestanteCentavos)}).`)
     delete d.valorCentavos
   }
+  // Detecção de duplicidade (5 camadas) para entradas com comprovante/documento ou hash/id de transação — estritamente no perfil autorizado (`ctx`).
+  const temEvidenciaDocumento = Boolean(d.documentoHash || d.identificadorTransacao || d.numeroDocumento || d.tipoDocumento)
+  if (temEvidenciaDocumento && r.perfil && !d.duplicidadeIgnorada && (d.valorCentavos || d.documentoHash || d.identificadorTransacao || d.numeroDocumento)) {
+    const chaveVerif = [r.perfil.perfilId, d.documentoHash ?? "", d.identificadorTransacao ?? "", d.numeroDocumento ?? "", d.valorCentavos ?? ""].join("|")
+    if (d.duplicidadeVerificadaChave !== chaveVerif) {
+      d.duplicidadeVerificadaChave = chaveVerif
+      const candidatos = await detectarCandidatosDuplicidade({
+        ctx,
+        criterios: {
+          perfilId: r.perfil.perfilId,
+          sha256: d.documentoHash,
+          identificadorTransacao: d.identificadorTransacao,
+          numeroDocumento: d.numeroDocumento,
+          valorCentavos: d.valorCentavos,
+          dataReferencia: d.dataEconomica ?? t.hoje,
+          contraparte: d.contraparte,
+          descricao: d.descricao,
+          contaNome: d.carteiraNome ?? d.conta,
+        },
+        recentesConversa: t.estado.aplicadosRecentes,
+        portaDuplicidade: t.deps.duplicidade,
+      })
+      d.duplicidadeCandidatos = candidatos.length ? candidatos : undefined
+    }
+  }
 }
 
 function rotuloFatura(c: FaturaCiclo) {
@@ -449,12 +515,14 @@ function selecionarTitulo(d: DadosRascunho, x: { id: string; descricao: string; 
 function pendencias(r: Rascunho): Campo[] {
   const d = r.dados, p: Campo[] = []
   if (!r.perfil) p.push("perfil")
+  if (d.duplicidadeCandidatos?.length && !d.duplicidadeIgnorada) p.push("duplicidade")
+  if (d.aguardandoConfirmacaoPagamento) p.push("jaFoiPago")
   if (!d.valorCentavos) p.push("valor")
   if (r.intencao === "PAGAMENTO_FATURA") {
     if (!d.cartaoId) p.push("cartao")
     else if (!d.cicloId) p.push("fatura")
   }
-  if (["DESPESA", "PAGAMENTO", "PAGAMENTO_FATURA", "RECEITA", "RECEBIMENTO"].includes(r.intencao)) {
+  if (!d.aguardandoConfirmacaoPagamento && ["DESPESA", "PAGAMENTO", "PAGAMENTO_FATURA", "RECEITA", "RECEBIMENTO"].includes(r.intencao)) {
     if (!d.formaPagamento || d.formaPagamento === "credito") p.push("formaPagamento")
     if (!d.carteiraId) p.push("conta")
   }
@@ -569,6 +637,29 @@ async function perguntar(t: Turno, r: Rascunho, campo: Campo) {
     case "parcelas":
       t.mensagens.push("Em quantas parcelas?")
       return
+    case "jaFoiPago": {
+      delete d.opcoes
+      const val = d.valorCentavos ? ` de ${formatarCentavos(d.valorCentavos)}` : ""
+      const forn = d.contraparte ? ` (${d.contraparte})` : ""
+      t.mensagens.push(
+        `Identifiquei uma compra${val}${forn}. Ela já foi paga? (Responda “sim” com a forma/conta — ex.: “sim, paguei pelo Pix do PagBank” — ou “não” para registrar como conta a pagar.)`
+      )
+      return
+    }
+    case "duplicidade": {
+      const principalCand = d.duplicidadeCandidatos![0]
+      const desc = `${principalCand.descricao} — ${formatarCentavos(principalCand.valorCentavos)} em ${formatarDataCivil(principalCand.data)}`
+      const motivoTxt = rotuloMotivoDuplicidade(principalCand.motivo)
+      t.mensagens.push(
+        `Possível duplicidade neste perfil (${motivoTxt}): já existe “${desc}”. O que deseja fazer?\n` +
+          opcoes([
+            { id: "vincular", rotulo: "Vincular este comprovante/documento ao lançamento existente (sem criar nova despesa)" },
+            { id: "nova_operacao", rotulo: "Registrar mesmo assim como outra operação separada" },
+            { id: "cancelar", rotulo: "Cancelar proposta" },
+          ])
+      )
+      return
+    }
   }
 }
 
@@ -580,37 +671,54 @@ function resumo(r: Rascunho, hoje: string): string[] {
   const quem = d.contraparte ? ` — ${d.contraparte}` : ""
   const perfil = `Perfil: ${r.perfilRotulo ?? "—"}`
   const semCategoria = d.categoria && !d.categoriaId ? ` · Categoria “${d.categoria}” não cadastrada: ficará sem categoria` : ""
+  const notasExtras: string[] = []
+  if (d.naturezaMercadoria) {
+    notasExtras.push("Classificação: compra de mercadoria/peça (referência preparada para integração futura de compras/estoque; nenhuma entrada de estoque fictícia foi criada).")
+  }
+  if (d.documentoHash && !d.documentoId) {
+    notasExtras.push("Documento processado temporariamente (arquivamento permanente sujeito à disponibilidade do G003-STORAGE privado).")
+  }
+  let linhas: string[]
   switch (r.intencao) {
     case "DESPESA":
-      return [`Despesa de ${valor}${cat}${quem}.`, `Pagamento via ${FORMA_ROTULO[d.formaPagamento!]}.`,
+      linhas = [`Despesa de ${valor}${cat}${quem}.`, `Pagamento via ${FORMA_ROTULO[d.formaPagamento!]}.`,
         `Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}${semCategoria}`]
+      break
     case "DIVIDA":
-      return [`Conta a pagar de ${valor}${cat}${quem}.`, `Vencimento: ${formatarDataCivil(d.vencimento!)}.`, `${perfil}${semCategoria}`]
+      linhas = [`Conta a pagar de ${valor}${cat}${quem}.`, `Vencimento: ${formatarDataCivil(d.vencimento!)}.`, `${perfil}${semCategoria}`]
+      break
     case "COMPRA_CREDITO":
     case "PARCELAMENTO": {
       const n = d.parcelas ?? 1, partes = dividirParcelas(d.valorCentavos!, n)
       const parc = n === 1 ? "à vista" : partes[0] === partes[n - 1]
         ? `em ${n}x de ${formatarCentavos(partes[0])}` : `em ${n}x (1ª de ${formatarCentavos(partes[0])}, demais de ${formatarCentavos(partes[n - 1])})`
-      return [`Compra no crédito de ${valor}${cat}${quem}, ${parc}.`, `Cartão: ${d.cartaoNome} · Data: ${data} · ${perfil}${semCategoria}`]
+      linhas = [`Compra no crédito de ${valor}${cat}${quem}, ${parc}.`, `Cartão: ${d.cartaoNome} · Data: ${data} · ${perfil}${semCategoria}`]
+      break
     }
     case "RECEITA":
-      return [`Receita de ${valor}${cat}${quem}.`, `Recebida via ${FORMA_ROTULO[d.formaPagamento!]}.`,
+      linhas = [`Receita de ${valor}${cat}${quem}.`, `Recebida via ${FORMA_ROTULO[d.formaPagamento!]}.`,
         `Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
+      break
     case "RECEBIMENTO":
-      return [`Recebimento de ${valor} da conta a receber “${d.tituloDescricao}”${d.quitar ? " (quitação)" : ""}.`,
+      linhas = [`Recebimento de ${valor} da conta a receber “${d.tituloDescricao}”${d.quitar ? " (quitação)" : ""}.`,
         `Via ${FORMA_ROTULO[d.formaPagamento!]} · Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
+      break
     case "PAGAMENTO_FATURA":
-      return [`Pagamento de ${valor} da fatura ${d.cicloRotulo} do cartão ${d.cartaoNome}${d.cicloRestanteCentavos === d.valorCentavos ? " (quitação)" : ""}.`,
+      linhas = [`Pagamento de ${valor} da fatura ${d.cicloRotulo} do cartão ${d.cartaoNome}${d.cicloRestanteCentavos === d.valorCentavos ? " (quitação)" : ""}.`,
         `Via ${FORMA_ROTULO[d.formaPagamento!]} · Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
+      break
     case "TRANSFERENCIA":
-      return [`Transferência de ${valor} entre contas do mesmo perfil.`,
+      linhas = [`Transferência de ${valor} entre contas do mesmo perfil.`,
         `De: ${d.carteiraNome} → Para: ${d.carteiraDestinoNome} · Data: ${data} · ${perfil}`, "Não conta como receita nem despesa."]
+      break
     case "PAGAMENTO":
-      return [`Pagamento de ${valor} da conta “${d.tituloDescricao}”${d.quitar ? " (quitação)" : ""}.`,
+      linhas = [`Pagamento de ${valor} da conta “${d.tituloDescricao}”${d.quitar ? " (quitação)" : ""}.`,
         `Via ${FORMA_ROTULO[d.formaPagamento!]} · Conta: ${d.carteiraNome} · Data: ${data} · ${perfil}`]
+      break
     default:
-      return [`${rotuloIntencao(r)} de ${valor}.`]
+      linhas = [`${rotuloIntencao(r)} de ${valor}.`]
   }
+  return [...linhas, ...notasExtras]
 }
 
 function assinaturaRascunho(r: Rascunho, hoje: string) {
@@ -638,6 +746,55 @@ async function complementar(t: Turno, r: Rascunho, interp: Interpretacao, norm: 
     t.mensagens.push(`Você tem uma operação aberta: ${rotuloIntencao(r)} de ${formatarCentavos(r.dados.valorCentavos)}. Confirme ou cancele antes de iniciar outra.`)
     if (r.estado === "AGUARDANDO_CONFIRMACAO") t.confirmacao = { rascunhoId: r.id, versao: r.versao, token: r.confirmacaoToken! }
     return
+  }
+
+  // Resposta direta à pergunta multimodal "Ela já foi paga?" (texto ou áudio)
+  if (r.perguntaAtual === "jaFoiPago") {
+    const respondeuNao = interp.intencao === "NEGACAO" || /\b(ainda nao|nao foi|a pagar|em aberto|nao paguei|depois|boleto)\b/.test(texto)
+    const respondeuSim = interp.intencao === "CONFIRMACAO" || /\b(sim|ja foi|paguei|pago|paga|pix|debito|dinheiro|transferencia|cartao)\b/.test(texto)
+    if (respondeuNao && !respondeuSim) {
+      r.dados.aguardandoConfirmacaoPagamento = false
+      r.intencao = "DIVIDA"
+      delete r.dados.formaPagamento
+      mesclar(r, campos)
+      r.versao += 1
+      r.atualizadoEm = t.agora.toISOString()
+      r.expiraEm = new Date(t.agora.getTime() + (t.deps.ttlRascunhoMs ?? TTL_PADRAO_MS)).toISOString()
+      await resolverDados(t, r)
+      if (t.estado.rascunho === r) await perguntarOuResumir(t, r)
+      return
+    }
+    if (respondeuSim) {
+      r.dados.aguardandoConfirmacaoPagamento = false
+      if (campos.formaPagamento === "credito" || (campos.parcelas ?? 1) > 1) {
+        r.intencao = (campos.parcelas ?? 1) > 1 ? "PARCELAMENTO" : "COMPRA_CREDITO"
+      } else {
+        r.intencao = "DESPESA"
+      }
+      mesclar(r, campos)
+      r.versao += 1
+      r.atualizadoEm = t.agora.toISOString()
+      r.expiraEm = new Date(t.agora.getTime() + (t.deps.ttlRascunhoMs ?? TTL_PADRAO_MS)).toISOString()
+      await resolverDados(t, r)
+      if (t.estado.rascunho === r) await perguntarOuResumir(t, r)
+      return
+    }
+  }
+
+  // Resposta textual natural para escolha de duplicidade ("vincular", "outra operação", "cancelar")
+  if (r.perguntaAtual === "duplicidade") {
+    if (/\b(vincular|mesma compra|mesmo lancamento|anexar|ligar)\b/.test(texto)) {
+      await aplicarOpcao(t, r, "duplicidade", { id: "vincular", rotulo: "Vincular" })
+      return
+    }
+    if (/\b(outra operacao|outra compra|registrar outra|registrar mesmo assim|nao e duplicada|diferente)\b/.test(texto)) {
+      await aplicarOpcao(t, r, "duplicidade", { id: "nova_operacao", rotulo: "Outra operação" })
+      r.versao += 1
+      r.atualizadoEm = t.agora.toISOString()
+      await resolverDados(t, r)
+      if (t.estado.rascunho === r) await perguntarOuResumir(t, r)
+      return
+    }
   }
 
   const opcao = /^\d{1,2}$/.test(texto) && r.dados.opcoes?.length ? r.dados.opcoes[Number(texto) - 1] : undefined
@@ -699,6 +856,71 @@ async function aplicarOpcao(t: Turno, r: Rascunho, campo: Campo, opcao: { id: st
       if (!x) { t.mensagens.push("Essa conta não está mais em aberto."); return false }
       selecionarTitulo(d, x)
       return true
+    }
+    case "duplicidade": {
+      if (opcao.id === "cancelar") {
+        t.estado.rascunho = undefined
+        t.codigo = "cancelado"
+        t.mensagens.push("Proposta cancelada. Nenhuma operação adicional foi registrada.")
+        return false
+      }
+      if (opcao.id === "nova_operacao") {
+        d.duplicidadeIgnorada = true
+        delete d.duplicidadeCandidatos
+        delete d.opcoes
+        return true
+      }
+      if (opcao.id === "vincular") {
+        const cand = d.duplicidadeCandidatos?.[0]
+        if (!cand || !r.perfil) {
+          t.estado.rascunho = undefined
+          t.codigo = "cancelado"
+          t.mensagens.push("Não encontrei o lançamento de destino para vincular. Nada foi registrado.")
+          return false
+        }
+        const acessoEdit = await t.deps.autorizacao.contexto(t.principal, r.perfil, "edit")
+        if (!acessoEdit.ok) {
+          t.estado.rascunho = undefined
+          t.codigo = "acesso_revogado"
+          t.mensagens.push("Seu acesso de edição a este perfil não está autorizado. Nada foi vinculado nem registrado.")
+          return false
+        }
+        const arquivo = t.deps.midiaEfemera?.() ?? null
+        let arquivadoPermanente = false
+        let documentoId: string | undefined
+        let motivoStorage: string | undefined
+        if (arquivo && t.deps.arquivamento) {
+          const resArq = await t.deps.arquivamento.arquivarEVincular(acessoEdit.contexto, {
+            nomeArquivo: arquivo.nomeArquivo,
+            conteudo: arquivo.bytes,
+            alvo: { tipo: cand.alvoTipo, id: cand.alvoId },
+          })
+          if (resArq.arquivado) {
+            arquivadoPermanente = true
+            documentoId = resArq.documentoId
+          } else {
+            motivoStorage = resArq.motivo
+            t.mensagens.push(resArq.mensagemUsuario)
+          }
+        } else {
+          motivoStorage = "STORAGE_BLOQUEADO"
+          t.mensagens.push("O comprovante foi processado apenas temporariamente (storage permanente G003-STORAGE indisponível neste ambiente).")
+        }
+        t.estado.rascunho = undefined
+        t.codigo = "documento_vinculado"
+        t.vinculoDocumento = {
+          alvoTipo: cand.alvoTipo,
+          alvoId: cand.alvoId,
+          ...(documentoId ? { documentoId } : {}),
+          arquivadoPermanente,
+          ...(motivoStorage ? { motivoStorage } : {}),
+        }
+        t.mensagens.push(
+          `Documento vinculado ao lançamento existente “${cand.descricao}” (${formatarCentavos(cand.valorCentavos)}) sem criar nova despesa.`
+        )
+        return false
+      }
+      return false
     }
     default: return false
   }
@@ -790,7 +1012,22 @@ async function executar(t: Turno, r: Rascunho) {
     t.estado.ultimoPerfil = r.perfil
     t.estado.aplicadosRecentes = [...t.estado.aplicadosRecentes
       .filter(a => t.agora.getTime() - new Date(a.em).getTime() < JANELA_DUPLICIDADE_MS),
-      { assinatura: assinaturaRascunho(r, diaCivil(new Date(r.criadoEm))), em: t.agora.toISOString(), operacaoId: res.operacaoId }].slice(-20)
+      {
+        assinatura: assinaturaRascunho(r, diaCivil(new Date(r.criadoEm))),
+        em: t.agora.toISOString(),
+        operacaoId: res.operacaoId,
+        perfilId: r.perfil.perfilId,
+        valorCentavos: res.valorCentavos,
+        data: r.dados.dataEconomica ?? diaCivil(new Date(r.criadoEm)),
+        ...(r.dados.contraparte ? { contraparte: r.dados.contraparte } : {}),
+        ...(r.dados.descricao ?? r.dados.categoria ? { descricao: r.dados.descricao ?? r.dados.categoria } : {}),
+        ...(r.dados.carteiraNome ? { contaNome: r.dados.carteiraNome } : {}),
+        ...(r.dados.documentoHash ? { sha256: r.dados.documentoHash } : {}),
+        ...(r.dados.identificadorTransacao ? { identificadorTransacao: r.dados.identificadorTransacao } : {}),
+        ...(r.dados.numeroDocumento ? { numeroDocumento: r.dados.numeroDocumento } : {}),
+        alvoTipo: r.intencao === "DIVIDA" ? ("PAGAR" as const) : ("MOVIMENTACAO" as const),
+        alvoId: res.operacaoId,
+      }].slice(-20)
     t.codigo = "registrado"
     t.escrita = { operacaoId: res.operacaoId, valorCentavos: res.valorCentavos }
     t.mensagens.push(`Registrado ✅ ${resumo(r, diaCivil(new Date(r.atualizadoEm)))[0]}`)
@@ -893,6 +1130,7 @@ function montarResposta(t: Turno): RespostaAssistente {
     ...(r ? { rascunho: { id: r.id, versao: r.versao, estado: r.estado, intencao: r.intencao, pendencias: r.pendencias } } : {}),
     ...(t.confirmacao && r?.estado === "AGUARDANDO_CONFIRMACAO" ? { confirmacao: t.confirmacao } : {}),
     ...(t.escrita ? { escritaFinanceira: t.escrita } : {}),
+    ...(t.vinculoDocumento ? { vinculoDocumento: t.vinculoDocumento } : {}),
     ...(t.consulta ? { consulta: t.consulta } : {}),
   }
 }
