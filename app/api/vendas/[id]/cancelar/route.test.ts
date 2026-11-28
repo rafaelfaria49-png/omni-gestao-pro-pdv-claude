@@ -281,10 +281,14 @@ const h = vi.hoisted(() => {
     $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
   }
 
-  return { STORE, db, estornosReceber, reset, addVenda, addCredito, addUso, prisma }
+  return { STORE, db, estornosReceber, reset, addVenda, addCredito, addUso, prisma, tx }
 })
 
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: async () => {} }))
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.tx)
+  return { prisma: h.prisma, prismaEnsureConnected: async () => {} }
+})
 vi.mock("@/lib/ops-api-gate", () => ({
   opsLojaIdFromRequest: vi.fn(() => h.STORE),
   requireOpsSubscription: vi.fn(async () => ({ ok: true })),

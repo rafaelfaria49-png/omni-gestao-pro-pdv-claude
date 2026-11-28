@@ -207,7 +207,12 @@ const h = vi.hoisted(() => {
 });
 
 // Único I/O mockado: Prisma em memória. Demais mocks só evitam acoplar auth/caixa.
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
+// G002: infraestrutura do fake (perfil EMPRESA); asserções de negócio preservadas.
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma }
+})
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 // Usuário da loja-2 com módulo service (requireModuleAction(storeId, "service") nas actions V3).
 vi.mock("@/auth", async () => {

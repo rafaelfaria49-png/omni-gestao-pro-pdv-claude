@@ -8,6 +8,7 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  * - Devoluções vinculadas
  * - Payload JSON (pagamentos, descontos, cpf)
  */
+import { leituraEmpresaWhere, apiGuardLeituraOperacional, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -77,7 +78,9 @@ export async function GET(
   if (moduleDenied) return moduleDenied
 
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
+  if (!storeId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  const denied = await apiGuardLeituraOperacional(storeId, p => p.hubs.vendas, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   const { id: rawId } = await params
   const pedidoId = rawId?.trim()
   // Workspace Enterprise (F1): enriquecimento read-only opt-in. Os consumidores
@@ -85,7 +88,7 @@ export async function GET(
   const full = new URL(req.url).searchParams.get("full") === "1"
 
   if (!pedidoId) {
-    return NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 }))
   }
 
   try {
@@ -99,7 +102,7 @@ export async function GET(
     })
 
     if (!venda) {
-      return NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 })
+      return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 }))
     }
 
     // Buscar devoluções vinculadas via vendaLocalId
@@ -121,7 +124,7 @@ export async function GET(
         select: { id: true },
       }),
       prisma.movimentacaoFinanceira.findFirst({
-        where: { storeId, referenciaId: pedidoId, tipo: "saida", origem: "cancelamento_pdv" },
+        where: leituraEmpresaWhere(storeId, { storeId, referenciaId: pedidoId, tipo: "saida", origem: "cancelamento_pdv" }),
         select: { id: true },
       }),
     ])
@@ -202,18 +205,18 @@ export async function GET(
             })
           : Promise.resolve(null),
         prisma.movimentacaoFinanceira.findMany({
-          where: { storeId, referenciaId: pedidoId },
+          where: leituraEmpresaWhere(storeId, { storeId, referenciaId: pedidoId }),
           orderBy: { createdAt: "asc" },
           select: { id: true, tipo: true, origem: true, valor: true, descricao: true, createdAt: true },
         }),
         prisma.contaReceberTitulo.findMany({
-          where: {
+          where: leituraEmpresaWhere(storeId, {
             storeId,
             OR: [
               { localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
               ...(venda.contaReceberTituloId ? [{ id: venda.contaReceberTituloId }] : []),
             ],
-          },
+          }),
           orderBy: { createdAt: "asc" },
         }),
       ])
@@ -263,7 +266,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
+    return respostaFinanceiraPrivada(NextResponse.json({
       ok: true,
       venda: {
         id: venda.pedidoId,
@@ -344,10 +347,8 @@ export async function GET(
           }
         }),
       },
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[vendas/detalhe]", msg)
-    return NextResponse.json({ ok: false, error: "Falha ao carregar venda" }, { status: 503 })
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados." }, { status: 503 }))
   }
 }

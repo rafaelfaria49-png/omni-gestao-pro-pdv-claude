@@ -167,7 +167,12 @@ const h = vi.hoisted(() => {
 
 const STORE = "loja-2"
 
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
+// G002: infraestrutura do fake (perfil EMPRESA); asserções de negócio preservadas.
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }
+})
 // `requireModuleApi` (guard real, desde 2026-10-22) lê a loja por estas funções e exige sessão
 // com a loja liberada e o módulo `finance` (RELATORIOS-FASE-A-001 · A9).
 vi.mock("@/lib/store-id-from-request", () => ({

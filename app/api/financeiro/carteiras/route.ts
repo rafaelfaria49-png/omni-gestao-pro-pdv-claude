@@ -1,4 +1,9 @@
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import { GET as getLegadoMain } from "@/lib/financeiro/legado-main/rotas/carteiras"
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
+import { consultarFinanceiroEmpresa, reaisConsulta, diaNoFusoConsulta } from "@/lib/gastos/query"
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
@@ -7,7 +12,7 @@ import {
   criarCarteira,
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
-import { apiGuardEnterpriseOrOps, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { opsLojaIdFromRequest, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { auth } from "@/auth"
 import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
@@ -19,25 +24,24 @@ function err(msg: string, code: string, status = 400) {
 // ─── GET /api/financeiro/carteiras ───────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  // Ativação controlada: desligado, a rota é a da main (consulta limitada ao período, tolerante ao legado).
+  if (!gestorMoneyAtivo()) return respostaFinanceiraPrivada(await getLegadoMain(req as never))
   const moduleDenied = await requireModuleApi(req, "finance")
   if (moduleDenied) return moduleDenied
 
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
-  const denied = await apiGuardFinanceiroViewOrOps(storeId)
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(err("Loja não identificada.", "STORE_REQUIRED", 400))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   const apenasAtivas = req.nextUrl.searchParams.get("ativas") === "1"
 
   try {
-    const carteiras = await listarCarteiras(storeId, apenasAtivas)
-    const saldoTotal = carteiras
-      .filter((c) => c.ativo)
-      .reduce((acc, c) => acc + c.saldoAtual, 0)
-
-    return NextResponse.json({ ok: true, carteiras, saldoTotal })
+    const q=await consultarFinanceiroEmpresa(storeId,{dataInicio:"1900-01-01",dataFim:diaNoFusoConsulta(new Date())})
+    const carteiras=q.contas.filter(c=>!apenasAtivas||c.ativo).map(c=>({...c,storeId,saldoAtual:reaisConsulta(c.saldoCentavos),saldoInicial:reaisConsulta(c.saldoInicialCentavos)}))
+    return respostaFinanceiraPrivada(NextResponse.json({ok:true,carteiras,saldoTotal:reaisConsulta(q.saldoCentavos),apuracao:{asOf:q.asOf,base:q.base,versaoCalculo:q.versaoCalculo,criterios:q.criterios,semCarteira:q.semCarteira}}))
   } catch (e) {
-    console.error("[GET /api/financeiro/carteiras]", e)
-    return err("Erro ao listar carteiras.", "INTERNAL_ERROR", 500)
+    const erro=erroConsultaFinanceira(e)
+    return respostaFinanceiraPrivada(NextResponse.json(erro.body,{status:erro.status}))
   }
 }
 

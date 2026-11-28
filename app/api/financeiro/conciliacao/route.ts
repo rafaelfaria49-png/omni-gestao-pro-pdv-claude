@@ -5,6 +5,7 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  * GET  → lista conciliações (filtro opcional: status=conciliado|divergente|pendente)
  * POST → cria conciliação para uma carteira
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
@@ -34,34 +35,28 @@ const postSchema = z.object({
 })
 
 export async function GET(req: Request) {
+  // Reconciliação main × G003: módulo finance por loja (main) + guard de leitura privada (G003).
   const moduleDenied = await requireModuleApi(req, "finance")
-  if (moduleDenied) return moduleDenied
-
-  await prismaEnsureConnected()
+  if (moduleDenied) return respostaFinanceiraPrivada(moduleDenied)
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  const denied = await apiGuardEnterpriseOrOps(
-    storeId,
-    (p) => p.financeiro.conciliacao,
-    "Sem permissão para conciliação financeira.",
-    { errorBody: "okFalse" },
-  )
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  const denied = await apiGuardLeituraFinanceira(storeId, (p) => p.financeiro.conciliacao, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   const url = new URL(req.url)
   const status = (url.searchParams.get("status") ?? undefined) as StatusConciliacao | undefined
   const resumo = url.searchParams.get("resumo") === "1"
 
   try {
+    await prismaEnsureConnected()
     if (resumo) {
       const res = await getResumoConciliacao(storeId)
-      return NextResponse.json({ ok: true, resumo: res })
+      return respostaFinanceiraPrivada(NextResponse.json({ ok: true, resumo: res }))
     }
 
     const items = await listarConciliacoes(storeId, status)
-    return NextResponse.json({ ok: true, items, total: items.length })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg }, { status: 503 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, items, total: items.length }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }
 

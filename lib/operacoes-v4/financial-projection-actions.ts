@@ -1,10 +1,13 @@
 "use server";
 
+import { leituraEmpresaWhere, requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { localKeyContaReceberOSV3 } from "@/lib/operacoes-v3/payment-model";
 import { prisma } from "@/lib/prisma";
+import { registroFinanceiroDaEmpresa } from "@/lib/gastos/financeiro-scope";
 import type { OrdemServico } from "@/types/os";
 import {
   projectFinancialOSV4,
@@ -27,6 +30,8 @@ async function authorizeFinancialProjection(storeId: string): Promise<string> {
     "Sem permissão para consultar o financeiro desta OS.",
   );
   if (!guard.ok) throw new Error(guard.error);
+  // G003 (reforço) só com o Gestor Money ligado; desligado vale o guard da main acima.
+  if (gestorMoneyAtivo()) await requireLeituraOperacionalEmpresa(sid, p => p.operacoes.editarOs);
   return sid;
 }
 
@@ -57,10 +62,10 @@ async function loadFinancialProjections(
     payload: unknown;
   }> = [];
   try {
-    titles = await prisma.contaReceberTitulo.findMany({
-      where: { storeId: sid, localKey: { in: localKeys } },
+    titles = (await prisma.contaReceberTitulo.findMany({
+      where: leituraEmpresaWhere(sid, { storeId: sid, localKey: { in: localKeys } }),
       select: { id: true, storeId: true, localKey: true, valor: true, status: true, payload: true },
-    });
+    })).map((title) => registroFinanceiroDaEmpresa(title, sid));
   } catch {
     titleReadFailed = true;
   }

@@ -37,6 +37,7 @@ import { avaliarRecebiveisParaEstorno } from "@/lib/vendas/estorno-recebivel-gua
 import { avaliarSessaoParaEstorno } from "@/lib/vendas/estorno-sessao-guard"
 import { sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 import { auth } from "@/auth"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -480,6 +481,7 @@ export async function POST(
         if (valorEstorno > 0) {
           await tx.movimentacaoFinanceira.create({
             data: {
+              ...await dadosFinanceirosEmpresa(tx, storeId, valorEstorno),
               storeId,
               tipo: "saida",
               valor: valorEstorno,

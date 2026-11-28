@@ -43,6 +43,9 @@ const h = vi.hoisted(() => {
   }
 
   const prisma = {
+    adminUser: { findUnique: async () => ({ active: true, role: "ADMIN" }) },
+    adminUserStore: { findUnique: async ({ where }: { where: { adminUserId_storeId: { storeId: string } } }) =>
+      ["loja-a", "loja-b"].includes(where.adminUserId_storeId.storeId) ? { storeId: where.adminUserId_storeId.storeId } : null },
     cliente: {
       findFirst: async ({ where }: { where: Row }) =>
         store.clientes.find((c) => c.id === where.id && c.storeId === where.storeId) ?? null,
@@ -102,7 +105,10 @@ vi.mock("@/auth", async () => {
   return { auth: vi.fn(async () => storeSession({ stores: ["loja-a", "loja-b"], modules: ["agent"] })) }
 })
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
-vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: h.requireEnterpriseWith }))
+vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: h.requireEnterpriseWith,
+  // Igual à função real: requireEnterpriseSession = auth() (+ troca de senha) — a sessão é a do mock de auth.
+  requireEnterpriseSession: async () => ({ ok: true, session: await (await import("@/auth")).auth() }),
+}))
 
 import {
   createOmniAgentMemory,

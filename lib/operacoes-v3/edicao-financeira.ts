@@ -3,6 +3,7 @@ import { normalizeReceberStatus, RECEBER_STATUS } from "@/lib/financeiro/contrac
 import { reconciliarRecebimentosFinanceirosV3 } from "./delivery-financial-guard";
 import type { EdicaoCompletaV3 } from "./edicao-completa-model";
 import type { OrcamentoV3 } from "./orcamento-model";
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope";
 
 export const AJUSTE_SEGURO_OBRIGATORIO = "Há recebimento, estorno, fechamento ou divergência financeira. Use o fluxo financeiro de ajuste/compensação antes de alterar a cobrança; nenhum histórico será reescrito.";
 const centavos = (n: number) => Math.round(n * 100);
@@ -55,7 +56,11 @@ export async function reconciliarEdicaoFinanceiraV3(tx: Prisma.TransactionClient
     vencimento: d.pagamento.vencimento,
     historico: [...(Array.isArray(anterior.historico) ? anterior.historico : []), { tipo: "correcao_os", at: contexto.agora, ...contexto, valorAnterior: titulo.valor, valorNovo: total, vencimentoAnterior: titulo.vencimento, vencimentoNovo: d.pagamento.vencimento }],
   };
-  await tx.contaReceberTitulo.update({ where: { id: titulo.id }, data: { valor: total, cliente: d.cliente.nome, vencimento: d.pagamento.vencimento, payload: payload as unknown as Prisma.InputJsonValue } });
+  // Reconciliação G002: writer posterior à base — o valor novo carrega escopo EMPRESA e precisão
+  // em centavos (CHECK valor×valorCentavos) na mesma transação; o título é sempre empresarial.
+  if (!titulo.storeId) throw new Error(AJUSTE_SEGURO_OBRIGATORIO);
+  const escopo = await dadosFinanceirosEmpresa(tx, titulo.storeId, total, { receberTituloId: titulo.id });
+  await tx.contaReceberTitulo.update({ where: { id: titulo.id }, data: { ...escopo, valor: total, cliente: d.cliente.nome, vencimento: d.pagamento.vencimento, payload: payload as unknown as Prisma.InputJsonValue } });
   await tx.auditoriaFinanceira.create({ data: { storeId: titulo.storeId, entidade: "receber", entidadeId: titulo.id, acao: "editar", usuarioId: contexto.operadorId, antes: { valor: titulo.valor, vencimento: titulo.vencimento, payload: titulo.payload } as Prisma.InputJsonValue, depois: { valor: total, payload, ...contexto } as unknown as Prisma.InputJsonValue } });
   return payload;
 }

@@ -1,8 +1,8 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { leituraEmpresaWhere, apiGuardLeituraOperacional, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { prisma, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { classifyLineOrigem, type OrigemVendaKey } from "@/lib/caixa-fechamento-resumo"
 import {
@@ -105,23 +105,23 @@ export async function GET(req: Request) {
 
   const lojaId = opsLojaIdFromRequest(req)
   if (!lojaId) {
-    return NextResponse.json(
+    return respostaFinanceiraPrivada(NextResponse.json(
       { error: "Unidade obrigatória: envie o header x-assistec-loja-id." },
       { status: 400 }
-    )
+    ))
   }
 
-  const denied = await apiGuardEnterpriseOrOps(
+  const denied = await apiGuardLeituraOperacional(
     lojaId,
     (p) => p.hubs.caixaHistorico,
-    "Sem permissão para consultar o histórico de caixa.",
+    req,
   )
-  if (denied) return denied
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   const url = new URL(req.url)
   const sessaoId = url.searchParams.get("sessaoId")
   if (!sessaoId) {
-    return NextResponse.json({ error: "sessaoId obrigatório." }, { status: 400 })
+    return respostaFinanceiraPrivada(NextResponse.json({ error: "sessaoId obrigatório." }, { status: 400 }))
   }
 
   try {
@@ -151,7 +151,7 @@ export async function GET(req: Request) {
     })
 
     if (!sessao) {
-      return NextResponse.json({ error: "Sessão não encontrada." }, { status: 404 })
+      return respostaFinanceiraPrivada(NextResponse.json({ error: "Sessão não encontrada." }, { status: 404 }))
     }
 
     // Totais de sangria/suprimento/devoluções existentes
@@ -222,7 +222,7 @@ export async function GET(req: Request) {
     const financeiroWhere = financeiroDasVendasWhere(lojaId, vendasAtivas.pedidoIds)
     const movFinAgg = financeiroWhere
       ? await prisma.movimentacaoFinanceira.aggregate({
-          where: financeiroWhere,
+          where: leituraEmpresaWhere(lojaId, financeiroWhere),
           _sum: { valor: true },
           _count: true,
         })
@@ -257,10 +257,10 @@ export async function GET(req: Request) {
     const quitadoPorPedido = new Map<string, boolean>()
     if (pedidosComTitulo.length > 0) {
       const titulos = await prisma.contaReceberTitulo.findMany({
-        where: {
+        where: leituraEmpresaWhere(lojaId, {
           storeId: lojaId,
           OR: pedidosComTitulo.map((pid) => ({ localKey: { startsWith: `pdv-aprazo-${pid}` } })),
-        },
+        }),
         select: { localKey: true, status: true, valor: true, payload: true },
       })
       for (const pid of pedidosComTitulo) {
@@ -293,7 +293,7 @@ export async function GET(req: Request) {
       recebivelQuitado: quitadoPorPedido.get(v.pedidoId) === true,
     }))
 
-    return NextResponse.json({
+    return respostaFinanceiraPrivada(NextResponse.json({
       ok: true,
       sessao: { ...sessao, devolucoes: sessao.devolucoes.map(({ payload: _payload, ...d }) => d) },
       regularizacoes,
@@ -313,10 +313,8 @@ export async function GET(req: Request) {
         /** Como o conjunto foi resolvido: `vinculo` (payload.sessaoId) ou `janela` (legado). */
         escopoVendasModo,
       },
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[ops/caixa/sessao-detalhe]", msg)
-    return NextResponse.json({ error: "Falha ao carregar detalhes da sessão" }, { status: 500 })
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados." }, { status: 503 }))
   }
 }

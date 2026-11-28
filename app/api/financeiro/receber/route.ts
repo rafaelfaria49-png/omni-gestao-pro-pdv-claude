@@ -8,6 +8,8 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  * PATCH  → op: liquidar | parcial | estornar | cancelar
  * DELETE → cancelamento seguro (não destrói dados)
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
@@ -16,7 +18,7 @@ import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
-import { apiGuardFinanceiroEditEnterpriseOrLegacy, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { apiGuardFinanceiroEditEnterpriseOrLegacy } from "@/lib/auth/api-enterprise-guard"
 import {
   buildContaReceberAuditTrail,
   buildContaReceberSummary,
@@ -146,9 +148,9 @@ export async function GET(req: Request) {
   if (moduleDenied) return moduleDenied
 
   const storeId = readSid(req)
-  if (!storeId) return err("Unidade obrigatória", "store_missing", 400)
-  const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(err("Unidade obrigatória", "store_missing", 400))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   const url = new URL(req.url)
   const localKeyParam = url.searchParams.get("localKey")?.trim()
@@ -159,10 +161,10 @@ export async function GET(req: Request) {
     // Detalhe de um título específico
     if (localKeyParam) {
       const titulo = await prisma.contaReceberTitulo.findUnique({
-        where: { storeId_localKey: { storeId, localKey: localKeyParam } },
+        where: { ...leituraEmpresaWhere(storeId, {}), storeId_localKey: { storeId, localKey: localKeyParam } },
       })
-      if (!titulo) return err("Título não encontrado", "not_found", 404)
-      return NextResponse.json({
+      if (!titulo) return respostaFinanceiraPrivada(err("Título não encontrado", "not_found", 404))
+      return respostaFinanceiraPrivada(NextResponse.json({
         ok: true,
         titulo: {
           id: titulo.id,
@@ -174,12 +176,12 @@ export async function GET(req: Request) {
           status: titulo.status,
           historico: parseHistorico(titulo.payload),
         },
-      })
+      }))
     }
 
     // Lista paginada
     const titulos = await prisma.contaReceberTitulo.findMany({
-      where: { storeId },
+      where: leituraEmpresaWhere(storeId, { storeId }),
       orderBy: { updatedAt: "desc" },
     })
 
@@ -206,18 +208,16 @@ export async function GET(req: Request) {
     // Nomes com 2+ cadastros na loja: o HUB não junta títulos só pelo nome nesses casos.
     const clientesLoja = await prisma.cliente.findMany({ where: { storeId }, select: { id: true, name: true } })
     const nomesAmbiguos = Array.from(mapearNomesAmbiguos(clientesLoja))
-    return NextResponse.json({
+    return respostaFinanceiraPrivada(NextResponse.json({
       ok: true,
       rows,
       nomesAmbiguos,
       summary: buildContaReceberSummary(titulos),
       audit: buildContaReceberAuditTrail(titulos),
       metadata: { source: "server", storeId, generatedAt: new Date().toISOString() },
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha interna"
-    console.error("[financeiro/receber GET]", msg)
-    return err(msg, "db_error", 503)
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }
 

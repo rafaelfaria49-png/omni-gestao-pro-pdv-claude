@@ -1,4 +1,9 @@
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import { GET as getLegadoMain } from "@/lib/financeiro/legado-main/rotas/exportar"
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { ConsultaFinanceiraError, diaNoFusoConsulta, intervaloConsulta } from "@/lib/gastos/query-calculo"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
+import { consultarFinanceiroEmpresa, reaisConsulta } from "@/lib/gastos/query"
 /**
  * GET /api/financeiro/relatorios/exportar
  *
@@ -12,23 +17,25 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  *   dataFim    — yyyy-mm-dd
  *   preset     — hoje | 7dias | 30dias | estemes | mespassado
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
 import { buildFiltroPreset, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { listarAuditoriaFinanceiraParaExportacao } from "@/lib/financeiro/services/auditoria-financeira-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 function toDateRange(filtro: PeriodoFiltro) {
-  const hoje = new Date().toISOString().slice(0, 10)
-  const firstDay = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01` })()
-  return {
-    gte: new Date((filtro.dataInicio ?? firstDay) + "T00:00:00.000Z"),
-    lte: new Date((filtro.dataFim ?? hoje) + "T23:59:59.999Z"),
-  }
+  const hoje = diaNoFusoConsulta(new Date())
+  const firstDay = `${hoje.slice(0, 7)}-01`
+  const dataInicio = filtro.dataInicio ?? firstDay
+  const dataFim = filtro.dataFim ?? hoje
+  const { gte, lt } = intervaloConsulta(dataInicio, dataFim)
+  return { dataInicio, dataFim, gte, lt }
 }
 
 type Row = Record<string, string | number | null | undefined>
@@ -60,61 +67,16 @@ async function toXLSX(rows: Row[], sheetName: string): Promise<Buffer> {
 async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): Promise<{ rows: Row[]; filename: string }> {
   const range = toDateRange(filtro)
 
-  if (tipo === "movimentacoes") {
-    const rows = await prisma.movimentacaoFinanceira.findMany({
-      where: { storeId, createdAt: range },
-      select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
-    return {
-      filename: "movimentacoes",
-      rows: rows.map((r) => ({
-        id: r.id, tipo: r.tipo, descricao: r.descricao,
-        valor: r.valor, origem: r.origem ?? "",
-        data: r.createdAt.toISOString().slice(0, 10),
-      })),
-    }
-  }
-
-  if (tipo === "receber") {
-    const rows = await prisma.contaReceberTitulo.findMany({
-      where: { storeId, createdAt: range },
-      select: { id: true, localKey: true, cliente: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
-    return {
-      filename: "contas_receber",
-      rows: rows.map((r) => ({
-        id: r.id, localKey: r.localKey, cliente: r.cliente ?? "",
-        descricao: r.descricao, valor: r.valor, status: r.status,
-        vencimento: r.vencimento ?? "", createdAt: r.createdAt.toISOString().slice(0, 10),
-      })),
-    }
-  }
-
-  if (tipo === "pagar") {
-    const rows = await prisma.contaPagarTitulo.findMany({
-      where: { storeId, createdAt: range },
-      select: { id: true, localKey: true, fornecedor: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
-    return {
-      filename: "contas_pagar",
-      rows: rows.map((r) => ({
-        id: r.id, localKey: r.localKey ?? "",
-        fornecedor: typeof r.fornecedor === "string" ? r.fornecedor : (r.fornecedor ? String((r.fornecedor as { name?: string }).name ?? "") : ""),
-        descricao: r.descricao, valor: r.valor, status: r.status,
-        vencimento: r.vencimento ?? "", createdAt: r.createdAt.toISOString().slice(0, 10),
-      })),
-    }
+  if (["movimentacoes","pagar","receber","fluxo","dre"].includes(tipo)) {
+    const q=await consultarFinanceiroEmpresa(storeId,filtro)
+    const criterios={base_apuracao:q.base,finalidade:tipo==="dre"?"FONTE_CAIXA_PARA_DRE_CLASSIFICADA_NO_RELATORIO":"MOVIMENTOS_E_POSICOES",timezone:q.timezone,data_inicio:q.periodo.dataInicio,data_fim:q.periodo.dataFim,as_of:q.asOf,versao_calculo:q.versaoCalculo,posicao_titulos:q.criterios.posicaoTitulos}
+    if(tipo==="pagar"||tipo==="receber")return {filename:"contas_"+tipo,rows:q[tipo].map(t=>({id:t.id,localKey:t.localKey??"",descricao:t.descricao,valor:reaisConsulta(t.valorCentavos),valorOriginal:reaisConsulta(t.valorCentavos),valorPago:reaisConsulta(t.pagoCentavos),valorRestante:reaisConsulta(t.restanteCentavos),valorAberto:reaisConsulta(t.restanteCentavos),status:t.status,vencimento:t.vencimento,categoriaId:t.categoriaId??"",...criterios}))}
+    return {filename:tipo==="dre"?"dre_fonte_caixa":tipo==="fluxo"?"fluxo_caixa":"movimentacoes",rows:q.eventos.map(e=>({id:e.movimentoId,alocacao:e.id,tipo:e.tipo,descricao:e.descricao,valor:reaisConsulta(e.valorCentavos),receitaRealizada:reaisConsulta(e.receitaCentavos),despesaRealizada:reaisConsulta(e.despesaCentavos),transferencia:e.transferencia?"sim":"nao",categoriaId:e.categoriaId??"",categoria:e.categoria,origem:e.origem,data:e.dia,ocorridoEm:e.ocorridoEm,...criterios}))}
   }
 
   if (tipo === "conciliacoes") {
     const rows = await prisma.conciliacaoFinanceira.findMany({
-      where: { storeId, createdAt: range },
+      where: { storeId, createdAt: { gte: range.gte, lt: range.lt }, carteira: { is: leituraEmpresaWhere(storeId, {}) } },
       include: { carteira: { select: { nome: true } } },
       orderBy: { createdAt: "desc" },
       take: 5000,
@@ -126,31 +88,26 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         saldoSistema: r.saldoSistema, saldoInformado: r.saldoInformado,
         diferenca: r.diferenca, status: r.status,
         conciliadoPor: r.conciliadoPor ?? "",
-        data: r.createdAt.toISOString().slice(0, 10),
+        data: diaNoFusoConsulta(r.createdAt),
       })),
     }
   }
 
   if (tipo === "auditoria") {
-    const rows = await prisma.auditoriaFinanceira.findMany({
-      where: { storeId, createdAt: range },
-      select: { id: true, entidade: true, entidadeId: true, acao: true, usuarioNome: true, ip: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 5000,
-    })
+    const rows = await listarAuditoriaFinanceiraParaExportacao(storeId, range.dataInicio, range.dataFim)
     return {
       filename: "auditoria",
       rows: rows.map((r) => ({
         id: r.id, entidade: r.entidade, entidadeId: r.entidadeId ?? "",
         acao: r.acao, usuarioNome: r.usuarioNome ?? "sistema",
-        ip: r.ip ?? "", data: r.createdAt.toISOString().slice(0, 16),
+        ip: r.ip ?? "", data: r.createdAt.slice(0, 16),
       })),
     }
   }
 
   if (tipo === "devolucoes") {
     const rows = await prisma.devolucaoVenda.findMany({
-      where: { storeId, at: range },
+      where: { storeId, at: { gte: range.gte, lt: range.lt } },
       select: {
         id: true, localId: true, vendaLocalId: true, tipo: true, valorTotal: true, clienteNome: true,
         operador: true, motivo: true, at: true, sessaoId: true,
@@ -170,7 +127,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         cliente: r.clienteNome,
         operador: r.operador,
         motivo: r.motivo,
-        data: r.at.toISOString().slice(0, 10),
+        data: diaNoFusoConsulta(r.at),
       })),
     }
   }
@@ -179,7 +136,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
     const rows = await prisma.sessaoCaixa.findMany({
       where: {
         storeId,
-        abertaEm: { lte: range.lte },
+        abertaEm: { lt: range.lt },
         OR: [{ fechadaEm: null }, { fechadaEm: { gte: range.gte } }],
       },
       select: {
@@ -207,7 +164,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "operacoes_caixa") {
     const rows = await prisma.caixaOperacao.findMany({
-      where: { storeId, at: range },
+      where: { storeId, at: { gte: range.gte, lt: range.lt } },
       select: { id: true, sessaoId: true, tipo: true, valor: true, motivo: true, operador: true, at: true },
       orderBy: { at: "desc" },
       take: 5000,
@@ -232,8 +189,8 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         storeId,
         status: "cancelada",
         OR: [
-          { canceladaEm: { gte: range.gte, lte: range.lte } },
-          { AND: [{ canceladaEm: null }, { at: { gte: range.gte, lte: range.lte } }] },
+          { canceladaEm: { gte: range.gte, lt: range.lt } },
+          { AND: [{ canceladaEm: null }, { at: { gte: range.gte, lt: range.lt } }] },
         ],
       },
       select: {
@@ -248,7 +205,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         id: r.id,
         pedidoId: r.pedidoId,
         total: r.total,
-        vendaEm: r.at.toISOString().slice(0, 10),
+        vendaEm: diaNoFusoConsulta(r.at),
         canceladaEm: r.canceladaEm ? r.canceladaEm.toISOString().slice(0, 16) : "",
         canceladaPor: r.canceladaPor ?? "",
         motivo: r.motivoCancelamento ?? "",
@@ -258,7 +215,7 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
   if (tipo === "cobrancas_os") {
     const rows = await prisma.contaReceberTitulo.findMany({
-      where: { storeId, localKey: { startsWith: "os-faturamento:" }, createdAt: range },
+      where: leituraEmpresaWhere(storeId, { storeId, localKey: { startsWith: "os-faturamento:" }, createdAt: { gte: range.gte, lt: range.lt } }),
       select: {
         id: true, localKey: true, cliente: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true,
       },
@@ -273,43 +230,29 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
         cliente: r.cliente ?? "",
         descricao: r.descricao,
         valor: r.valor,
+        baseValor: "VALOR_ORIGINAL_DO_TITULO",
         status: r.status,
         vencimento: r.vencimento ?? "",
-        criadoEm: r.createdAt.toISOString().slice(0, 10),
+        criadoEm: diaNoFusoConsulta(r.createdAt),
       })),
     }
   }
 
-  // fluxo = movimentações simplificadas (padrão fallback)
-  const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range },
-    select: { tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-    take: 5000,
-  })
-  return {
-    filename: "fluxo_caixa",
-    rows: rows.map((r) => ({
-      tipo: r.tipo,
-      descricao: r.descricao,
-      valor: r.valor,
-      origem: r.origem ?? "",
-      data: r.createdAt.toISOString().slice(0, 10),
-    })),
-  }
+  throw new ConsultaFinanceiraError("tipo_exportacao_invalido",400)
 }
 
 export async function GET(req: Request) {
+  // Ativação controlada: desligado, a rota é a da main (consulta limitada ao período, tolerante ao legado).
+  if (!gestorMoneyAtivo()) return respostaFinanceiraPrivada(await getLegadoMain(req as never))
+  // Reconciliação main × G003: módulo finance por loja (main) + guard de leitura privada (G003).
   const moduleDenied = await requireModuleApi(req, "finance")
-  if (moduleDenied) return moduleDenied
-
-  await prismaEnsureConnected()
+  if (moduleDenied) return respostaFinanceiraPrivada(moduleDenied)
   // F-02-anchor (SPRINT_MULTI_LOJA-S-002): a chamada via anchor-tag (`<a href>`) não envia
   // `x-assistec-loja-id`, mas o cliente passa `storeId` na query — resolvido por
   // `storeIdFromAssistecRequestForRead`. Sem fallback `loja-1`: ausência → 400 explícito.
   const storeId = opsLojaIdFromRequest(req)
   if (!storeId) {
-    return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 }))
   }
   const url = new URL(req.url)
 
@@ -319,46 +262,45 @@ export async function GET(req: Request) {
     if (tipo === "conciliacoes") return p.financeiro.conciliacao
     return p.financeiro.edit
   }
-  const denied = await apiGuardEnterpriseOrOps(
-    storeId,
-    exportCheck,
-    "Sem permissão para exportar estes dados.",
-    { errorBody: "okFalse" },
-  )
-  if (denied) return denied
+  const denied = await apiGuardLeituraFinanceira(storeId, exportCheck, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   const formato = (url.searchParams.get("formato") ?? "csv").toLowerCase()
   const preset = url.searchParams.get("preset")
 
+  try {
   let filtro: PeriodoFiltro = preset ? buildFiltroPreset(preset) : {}
   if (url.searchParams.get("dataInicio")) filtro.dataInicio = url.searchParams.get("dataInicio")!
   if (url.searchParams.get("dataFim")) filtro.dataFim = url.searchParams.get("dataFim")!
+  if (url.searchParams.get("carteiraId")) filtro.carteiraId=url.searchParams.get("carteiraId")!
+  if (url.searchParams.get("categoriaId")) filtro.categoriaId=url.searchParams.get("categoriaId")!
 
-  try {
+    await prismaEnsureConnected()
     const { rows, filename } = await fetchRows(storeId, tipo, filtro)
 
+    const sufixoData = diaNoFusoConsulta(new Date())
     if (formato === "xlsx") {
       const buffer = await toXLSX(rows, filename)
-      return new NextResponse(buffer, {
+      return respostaFinanceiraPrivada(new NextResponse(buffer, {
         status: 200,
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "Content-Disposition": `attachment; filename="${filename}_${new Date().toISOString().slice(0, 10)}.xlsx"`,
+          "Content-Disposition": `attachment; filename="${filename}_${sufixoData}.xlsx"`,
         },
-      })
+      }))
     }
 
     // Default: CSV
     const csv = toCSV(rows)
-    return new NextResponse(csv, {
+    return respostaFinanceiraPrivada(new NextResponse(csv, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}_${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Content-Disposition": `attachment; filename="${filename}_${sufixoData}.csv"`,
       },
-    })
+    }))
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg }, { status: 503 })
+    const erro=erroConsultaFinanceira(e)
+    return respostaFinanceiraPrivada(NextResponse.json(erro.body,{status:erro.status}))
   }
 }

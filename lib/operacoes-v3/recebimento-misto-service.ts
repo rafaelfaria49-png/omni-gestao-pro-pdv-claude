@@ -28,6 +28,7 @@ import {
   upsertContaReceber,
 } from "@/lib/financeiro/services/contas-receber-service";
 import { createMovimentacaoEntradaFromReceber } from "@/lib/financeiro/services/movimentacoes-service";
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope";
 import { recebimentoLoteAdvisoryLock } from "@/lib/financeiro/services/recebimento-lote-service";
 import { statusV3FromOS } from "./status-machine";
 import {
@@ -245,6 +246,7 @@ export async function garantirTituloOSTravadoV3(
   await tx.contaReceberTitulo.createMany({
     data: [
       {
+        ...await dadosFinanceirosEmpresa(tx, p.storeId, p.total),
         storeId: p.storeId,
         localKey,
         descricao: `OS ${p.codigo}`,

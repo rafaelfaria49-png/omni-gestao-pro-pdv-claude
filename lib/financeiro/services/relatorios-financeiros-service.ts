@@ -1,21 +1,10 @@
-/**
- * Relatórios Financeiros Avançados — FASE 12
- *
- * Todas as funções aceitam `storeId` + filtros de período.
- * Prioriza aggregates/groupBy do Prisma para evitar N+1.
- */
-
-import { prisma } from "@/lib/prisma"
+/** Projeções de compatibilidade do HUB; autoridade monetária única em gastos/query. */
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import * as legado from "@/lib/financeiro/legado-main/relatorios-financeiros"
+import { consultarFinanceiroEmpresa, reaisConsulta, filtroConsultaFinanceira, type ConsultaFinanceiraDTO } from "@/lib/gastos/query"
+import { diaNoFusoConsulta, deslocarDiaConsulta, dataCivilConsulta, ConsultaFinanceiraError } from "@/lib/gastos/query-calculo"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
-import type { Prisma } from "@/generated/prisma"
-import {
-  isOrigemDevolucaoPdv,
-  isOrigemEstornoPagar,
-  isOrigemEstornoReceber,
-  isOrigemSangriaPdv,
-  isOrigemTransferenciaInterna,
-} from "./movimentacao-financeira-classify"
-
+import { isOrigemTransferenciaInterna, isOrigemEstornoPagar, isOrigemEstornoReceber, isOrigemDevolucaoPdv } from "./movimentacao-financeira-classify"
 type MovLin = { tipo: string; origem: string | null; valor: number; descricao?: string | null; createdAt?: Date }
 
 /** Receita/despesa líquidas alinhadas ao DRE (FASE 13): devoluções e estornos de recebimento abatem receita; estorno de pagamento abate despesa; transferências ignoradas. */
@@ -48,12 +37,13 @@ export function reduceNetResultadoMovs(rows: MovLin[]): { receita: number; despe
   return { receita, despesa, qtdEntradasBrutas }
 }
 
-// ─── tipos ────────────────────────────────────────────────────────────────────
 
 export type PeriodoFiltro = {
   dataInicio?: string // yyyy-mm-dd
   dataFim?: string    // yyyy-mm-dd
   carteiraId?: string
+  categoriaId?: string
+  categoriaNome?: string
 }
 
 export type CategoriaLinha = {
@@ -73,6 +63,7 @@ export type RankingItem = {
 }
 
 export type IndicadoresExecutivos = {
+  apuracao: ReturnType<typeof apuracaoConsulta>
   receitaTotal: number
   despesaTotal: number
   lucroLiquido: number
@@ -90,6 +81,7 @@ export type IndicadoresExecutivos = {
 }
 
 export type ResumoExecutivo = {
+  apuracao: Pick<ConsultaFinanceiraDTO, "base" | "timezone" | "moeda" | "asOf" | "versaoCalculo" | "criterios" | "semCarteira">
   periodo: { dataInicio: string; dataFim: string; dias: number }
   indicadores: IndicadoresExecutivos
   receitasPorCategoria: CategoriaLinha[]
@@ -108,6 +100,7 @@ export type FluxoPeriodo = {
 }
 
 export type ComparativoMensal = {
+  asOf: string
   mes: string
   mesLabel: string
   ano: number
@@ -118,6 +111,7 @@ export type ComparativoMensal = {
 }
 
 export type ComparativoAnual = {
+  asOf: string
   ano: number
   entrada: number
   saida: number
@@ -138,553 +132,92 @@ export type AnaliseCarteira = {
   participacao: number
 }
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
+function pct(v: number, base: number) { return base ? safeMoney(v / base * 100) : 0 }
+function crescimento(a: string, b: string) { return BigInt(b) > BigInt(0) ? pct(reaisConsulta(a) - reaisConsulta(b), reaisConsulta(b)) : 0 }
+export function projetarIndicadoresConsulta(q: ConsultaFinanceiraDTO): IndicadoresExecutivos {
+  const receitaTotal = reaisConsulta(q.receitaRealizadaCentavos), despesaTotal = reaisConsulta(q.despesaRealizadaCentavos)
+  const lucroLiquido = reaisConsulta(q.resultadoCentavos)
+  const entradas = new Set(q.eventos.filter(e => BigInt(e.receitaCentavos) > BigInt(0)).map(e => e.movimentoId)).size
+  const maior = q.eventos.filter(e => BigInt(e.despesaCentavos) > BigInt(0)).sort((a,b) => Number(BigInt(b.despesaCentavos) - BigInt(a.despesaCentavos)))[0]
+  const topConta = q.contas.filter(c => c.ativo && c.tipo !== "credito").sort((a,b) => Number(BigInt(b.saldoCentavos) - BigInt(a.saldoCentavos)))[0]
+  const hoje = diaNoFusoConsulta(new Date(q.asOf))
+  const vencido = q.receber.filter(t => { try { return dataCivilConsulta(t.vencimento) < hoje } catch { return false } }).reduce((s,t) => s + BigInt(t.restanteCentavos), BigInt(0))
+  const denom = q.receber.reduce((s,t) => s + (t.cancelado ? BigInt(0) : BigInt(t.valorCentavos)), BigInt(0))
+  return { apuracao: apuracaoConsulta(q), receitaTotal, despesaTotal, lucroLiquido, margemLiquida: pct(lucroLiquido, receitaTotal), ticketMedio: entradas ? safeMoney(receitaTotal / entradas) : 0,
+    saldoConsolidado: reaisConsulta(q.saldoCentavos), receberPendente: reaisConsulta(q.receberAbertoCentavos), pagarPendente: reaisConsulta(q.pagarAbertoCentavos),
+    crescimentoMensal: crescimento(q.comparativos.receitaMesAtualCentavos, q.comparativos.receitaMesAnteriorCentavos),
+    crescimentoAnual: crescimento(q.comparativos.receitaAnoAtualCentavos, q.comparativos.receitaAnoAnteriorCentavos), inadimplencia: pct(reaisConsulta(vencido), reaisConsulta(denom)),
+    maiorDespesa: maior ? { descricao: maior.descricao, valor: reaisConsulta(maior.despesaCentavos) } : null,
+    maiorCategoriaReceita: [...q.porCategoria].sort((a,b) => Number(BigInt(b.receitaCentavos) - BigInt(a.receitaCentavos)))[0]?.categoria ?? null,
+    carteiraTop: topConta ? { nome: topConta.nome, saldo: reaisConsulta(topConta.saldoCentavos) } : null }
 }
-
-function firstDayOfMonth(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
+function categorias(q: ConsultaFinanceiraDTO, tipo: "receitaCentavos" | "despesaCentavos"): CategoriaLinha[] {
+  const total = reaisConsulta(tipo === "receitaCentavos" ? q.receitaRealizadaCentavos : q.despesaRealizadaCentavos)
+  return q.porCategoria.filter(c => BigInt(c[tipo]) !== BigInt(0)).map(c => ({ categoria: c.categoria, total: reaisConsulta(c[tipo]), percentual: pct(reaisConsulta(c[tipo]), Math.abs(total)), qtd: c.quantidade, media: c.quantidade ? safeMoney(reaisConsulta(c[tipo]) / c.quantidade) : 0 })).sort((a,b) => b.total-a.total)
 }
-
-function subDays(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  return d.toISOString().slice(0, 10)
+export function projetarRankingConsulta(q: ConsultaFinanceiraDTO, tipo: "receitaCentavos" | "despesaCentavos", take: number): RankingItem[] {
+  const total = reaisConsulta(tipo === "receitaCentavos" ? q.receitaRealizadaCentavos : q.despesaRealizadaCentavos)
+  return q.eventos.filter(e => BigInt(e[tipo]) !== BigInt(0)).map(e => ({ label: e.descricao, valor: reaisConsulta(e[tipo]), percentual: pct(reaisConsulta(e[tipo]), Math.abs(total)), tipo: tipo === "receitaCentavos" ? "entrada" as const : "saida" as const })).sort((a,b) => b.valor-a.valor).slice(0,take)
 }
-
-function toDateRange(filtro: PeriodoFiltro): { gte: Date; lte: Date } {
-  const inicio = filtro.dataInicio ?? firstDayOfMonth()
-  const fim = filtro.dataFim ?? todayStr()
-  return {
-    gte: new Date(inicio + "T00:00:00.000Z"),
-    lte: new Date(fim + "T23:59:59.999Z"),
+export async function getIndicadoresExecutivos(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getIndicadoresExecutivos(storeId, filtro); return projetarIndicadoresConsulta(await consultarFinanceiroEmpresa(storeId, filtro)) }
+export async function getResultadoPorCategoria(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getResultadoPorCategoria(storeId, filtro);
+  const q = await consultarFinanceiroEmpresa(storeId, filtro)
+  return { receitas: categorias(q, "receitaCentavos"), despesas: categorias(q, "despesaCentavos") }
+}
+export async function getTopReceitas(storeId: string, filtro: PeriodoFiltro = {}, take = 10) { if (!gestorMoneyAtivo()) return legado.getTopReceitas(storeId, filtro, take); return projetarRankingConsulta(await consultarFinanceiroEmpresa(storeId, filtro), "receitaCentavos", take) }
+export async function getTopDespesas(storeId: string, filtro: PeriodoFiltro = {}, take = 10) { if (!gestorMoneyAtivo()) return legado.getTopDespesas(storeId, filtro, take); return projetarRankingConsulta(await consultarFinanceiroEmpresa(storeId, filtro), "despesaCentavos", take) }
+export function projetarFluxoConsulta(q: ConsultaFinanceiraDTO, agrupamento: "dia" | "semana" | "mes" = "dia"): FluxoPeriodo[] {
+  const buckets = new Map<string, { entrada: bigint; saida: bigint }>()
+  for (const e of q.eventos) {
+    if (e.transferencia) continue
+    const date = new Date(e.dia + "T12:00:00Z")
+    const key = agrupamento === "mes" ? e.dia.slice(0,7) : agrupamento === "semana" ? deslocarDiaConsulta(e.dia, -date.getUTCDay()) : e.dia
+    const b = buckets.get(key) ?? { entrada: BigInt(0), saida: BigInt(0) }
+    // Fluxo físico é distinto do resultado líquido: devolução entra/saí na direção real.
+    b[e.tipo === "entrada" ? "entrada" : "saida"] += BigInt(e.valorCentavos)
+    buckets.set(key,b)
   }
-}
-
-function buildMovWhere(storeId: string, filtro: PeriodoFiltro, extra: Prisma.MovimentacaoFinanceiraWhereInput = {}): Prisma.MovimentacaoFinanceiraWhereInput {
-  const range = toDateRange(filtro)
-  const w: Prisma.MovimentacaoFinanceiraWhereInput = {
-    storeId,
-    createdAt: range,
-    ...extra,
-  }
-  if (filtro.carteiraId) w.carteiraId = filtro.carteiraId
-  return w
-}
-
-function pct(part: number, total: number): number {
-  if (!total) return 0
-  return safeMoney((part / total) * 100)
-}
-
-function monthLabel(m: number, a: number): string {
-  const labels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
-  return `${labels[(m - 1) % 12]}/${String(a).slice(-2)}`
-}
-
-// ─── getIndicadoresExecutivos ─────────────────────────────────────────────────
-
-export async function getIndicadoresExecutivos(
-  storeId: string,
-  filtro: PeriodoFiltro = {},
-): Promise<IndicadoresExecutivos> {
-  const where = buildMovWhere(storeId, filtro)
-
-  const [movRows, receberAgg, pagarAgg, carteiras, maiorDespesaRow] = await Promise.all([
-    prisma.movimentacaoFinanceira.findMany({
-      where,
-      select: { tipo: true, origem: true, valor: true, descricao: true },
-    }),
-    prisma.contaReceberTitulo.aggregate({ where: { storeId, status: { in: ["pendente", "parcial", "atrasado"] } }, _sum: { valor: true } }),
-    prisma.contaPagarTitulo.aggregate({ where: { storeId, status: { in: ["pendente", "atrasado"] } }, _sum: { valor: true } }),
-    prisma.carteiraFinanceira.findMany({ where: { storeId, ativo: true }, select: { id: true, nome: true, saldoAtual: true }, orderBy: { saldoAtual: "desc" }, take: 1 }),
-    prisma.movimentacaoFinanceira.findFirst({
-      where: {
-        ...where,
-        tipo: "saida",
-        NOT: {
-          OR: [
-            { origem: { startsWith: "estorno_receber" } },
-            { origem: "devolucao_pdv" },
-            { origem: "transferencia" },
-            { origem: "transferência" },
-          ],
-        },
-      },
-      orderBy: { valor: "desc" },
-      select: { descricao: true, valor: true },
-    }),
-  ])
-
-  const { receita: receitaTotal, despesa: despesaTotal, qtdEntradasBrutas } = reduceNetResultadoMovs(movRows)
-  const lucroLiquido = safeMoney(receitaTotal - despesaTotal)
-  const margemLiquida = pct(lucroLiquido, receitaTotal)
-  const ticketMedio = qtdEntradasBrutas > 0 ? safeMoney(receitaTotal / qtdEntradasBrutas) : 0
-
-  // Saldo consolidado = soma de todas as carteiras ativas
-  const saldoAgg = await prisma.carteiraFinanceira.aggregate({ where: { storeId, ativo: true }, _sum: { saldoAtual: true } })
-  const saldoConsolidado = safeMoney(saldoAgg._sum.saldoAtual ?? 0)
-
-  // Crescimento mensal — comparar mês atual vs anterior (líquido)
-  const now = new Date()
-  const mesAtual = { dataInicio: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, dataFim: todayStr() }
-  const prevMonth = new Date(now)
-  prevMonth.setMonth(prevMonth.getMonth() - 1)
-  const prevFirst = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}-01`
-  const prevLast = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}-${new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate()}`
-
-  const [curRows, prevRows] = await Promise.all([
-    prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, mesAtual),
-      select: { tipo: true, origem: true, valor: true },
-    }),
-    prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, { dataInicio: prevFirst, dataFim: prevLast }),
-      select: { tipo: true, origem: true, valor: true },
-    }),
-  ])
-  const curRec = reduceNetResultadoMovs(curRows).receita
-  const prevRec = reduceNetResultadoMovs(prevRows).receita
-  const crescimentoMensal = prevRec > 0 ? safeMoney(((curRec - prevRec) / prevRec) * 100) : 0
-
-  // Crescimento anual
-  const anoAtual = now.getFullYear()
-  const [curYearRows, prevYearRows] = await Promise.all([
-    prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, { dataInicio: `${anoAtual}-01-01`, dataFim: `${anoAtual}-12-31` }),
-      select: { tipo: true, origem: true, valor: true },
-    }),
-    prisma.movimentacaoFinanceira.findMany({
-      where: buildMovWhere(storeId, { dataInicio: `${anoAtual - 1}-01-01`, dataFim: `${anoAtual - 1}-12-31` }),
-      select: { tipo: true, origem: true, valor: true },
-    }),
-  ])
-  const curYear = reduceNetResultadoMovs(curYearRows).receita
-  const prevYear = reduceNetResultadoMovs(prevYearRows).receita
-  const crescimentoAnual = prevYear > 0 ? safeMoney(((curYear - prevYear) / prevYear) * 100) : 0
-
-  // Inadimplência = vencidos / (pago + aberto + vencido)
-  const receberStats = await prisma.contaReceberTitulo.groupBy({
-    by: ["status"],
-    where: { storeId },
-    _sum: { valor: true },
+  let acumulado = BigInt(0)
+  return [...buckets].sort(([a],[b]) => a.localeCompare(b)).map(([periodo,b]) => {
+    const saldo = b.entrada-b.saida; acumulado += saldo
+    return { periodo, label: periodo, entrada: reaisConsulta(b.entrada), saida: reaisConsulta(b.saida), saldo: reaisConsulta(saldo), acumulado: reaisConsulta(acumulado) }
   })
-  let totalPagoR = 0, totalAbertoR = 0, totalVencidoR = 0
-  for (const s of receberStats) {
-    const v = safeMoney(s._sum.valor ?? 0)
-    if (s.status === "pago") totalPagoR += v
-    else if (s.status === "pendente" || s.status === "parcial") totalAbertoR += v
-    else if (s.status === "atrasado") totalVencidoR += v
-  }
-  const denomInad = totalPagoR + totalAbertoR + totalVencidoR
-  const inadimplencia = pct(totalVencidoR, denomInad)
-
-  // Maior categoria de receita (origem) no período — exclui transfer/estorno_pagar na entrada bruta
-  const origemMap = new Map<string, number>()
-  for (const m of movRows) {
-    if (m.tipo !== "entrada") continue
-    const o = m.origem ?? "manual"
-    if (isOrigemTransferenciaInterna(o) || isOrigemEstornoPagar(o)) continue
-    origemMap.set(o, safeMoney((origemMap.get(o) ?? 0) + safeMoney(m.valor)))
-  }
-  let maiorCat: string | null = null
-  let maiorCatV = 0
-  for (const [k, v] of origemMap) {
-    if (v > maiorCatV) { maiorCatV = v; maiorCat = k }
-  }
-
-  return {
-    receitaTotal,
-    despesaTotal,
-    lucroLiquido,
-    margemLiquida,
-    ticketMedio,
-    saldoConsolidado,
-    crescimentoMensal,
-    crescimentoAnual,
-    inadimplencia,
-    receberPendente: safeMoney(receberAgg._sum.valor ?? 0),
-    pagarPendente: safeMoney(pagarAgg._sum.valor ?? 0),
-    maiorDespesa: maiorDespesaRow ? { descricao: maiorDespesaRow.descricao, valor: safeMoney(maiorDespesaRow.valor) } : null,
-    maiorCategoriaReceita: maiorCat,
-    carteiraTop: carteiras[0] ? { nome: carteiras[0].nome, saldo: safeMoney(carteiras[0].saldoAtual) } : null,
-  }
 }
-
-// ─── getFluxoPorPeriodo ───────────────────────────────────────────────────────
-
-export async function getFluxoPorPeriodo(
-  storeId: string,
-  filtro: PeriodoFiltro = {},
-  agrupamento: "dia" | "semana" | "mes" = "dia",
-): Promise<FluxoPeriodo[]> {
-  const range = toDateRange(filtro)
-
-  const movs = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) },
-    select: { tipo: true, valor: true, origem: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-  })
-
-  const buckets = new Map<string, { entrada: number; saida: number }>()
-  for (const m of movs) {
-    const o = m.origem ?? ""
-    if (isOrigemTransferenciaInterna(o)) continue
-
-    let key: string
-    const d = new Date(m.createdAt)
-    if (agrupamento === "dia") {
-      key = d.toISOString().slice(0, 10)
-    } else if (agrupamento === "semana") {
-      const startOfWeek = new Date(d)
-      startOfWeek.setDate(d.getDate() - d.getDay())
-      key = startOfWeek.toISOString().slice(0, 10)
-    } else {
-      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-    }
-
-    const cur = buckets.get(key) ?? { entrada: 0, saida: 0 }
-    const v = safeMoney(m.valor)
-    if (m.tipo === "entrada") cur.entrada = safeMoney(cur.entrada + v)
-    else cur.saida = safeMoney(cur.saida + v)
-    buckets.set(key, cur)
-  }
-
-  let acumulado = 0
-  return Array.from(buckets.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([periodo, v]) => {
-      const saldo = safeMoney(v.entrada - v.saida)
-      acumulado = safeMoney(acumulado + saldo)
-      return {
-        periodo,
-        label: agrupamento === "mes"
-          ? monthLabel(parseInt(periodo.split("-")[1]), parseInt(periodo.split("-")[0]))
-          : periodo,
-        entrada: safeMoney(v.entrada),
-        saida: safeMoney(v.saida),
-        saldo,
-        acumulado,
-      }
-    })
+export async function getFluxoPorPeriodo(storeId: string, filtro: PeriodoFiltro = {}, agrupamento: "dia" | "semana" | "mes" = "dia") { if (!gestorMoneyAtivo()) return legado.getFluxoPorPeriodo(storeId, filtro, agrupamento); return projetarFluxoConsulta(await consultarFinanceiroEmpresa(storeId, filtro), agrupamento) }
+export function apuracaoConsulta(q: ConsultaFinanceiraDTO) {
+  return { base:q.base, timezone:q.timezone, moeda:q.moeda, asOf:q.asOf, versaoCalculo:q.versaoCalculo, criterios:q.criterios, semCarteira:q.semCarteira }
 }
-
-// ─── getResultadoPorCategoria ─────────────────────────────────────────────────
-
-function catReceitaOrigem(origemRaw: string): string {
-  const o = origemRaw.toLowerCase().trim()
-  if (o.startsWith("os") || o.startsWith("receber")) return "Serviços / OS"
-  if (o === "pdv" || o === "venda") return "Vendas (PDV)"
-  if (o.startsWith("marketplace")) return "Marketplace"
-  if (o === "suprimento_pdv") return "Suprimento de caixa (PDV)"
-  return origemRaw || "Outras receitas"
+export function projetarAnaliseCarteirasConsulta(q: ConsultaFinanceiraDTO): AnaliseCarteira[] {
+  return q.contas.filter(c => c.ativo).map(c => ({ id: c.id, nome: c.nome, tipo: c.tipo, saldoAtual: reaisConsulta(c.saldoCentavos), saldoInicial: reaisConsulta(c.saldoInicialCentavos), totalEntradas: reaisConsulta(c.entradasCentavos), totalSaidas: reaisConsulta(c.saidasCentavos), qtdMovimentacoes: c.quantidadeMovimentos, participacao: c.tipo === "credito" ? 0 : pct(reaisConsulta(c.saldoCentavos), reaisConsulta(q.saldoCentavos)) })).sort((a,b) => b.saldoAtual-a.saldoAtual)
 }
-
-export async function getResultadoPorCategoria(
-  storeId: string,
-  filtro: PeriodoFiltro = {},
-): Promise<{ receitas: CategoriaLinha[]; despesas: CategoriaLinha[] }> {
-  const range = toDateRange(filtro)
-  const baseWhere = { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) }
-
-  const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: baseWhere,
-    select: { tipo: true, origem: true, valor: true },
-  })
-
-  type Acc = { total: number; qtd: number }
-  const receitasMap = new Map<string, Acc>()
-  const despesasMap = new Map<string, Acc>()
-  const bump = (map: Map<string, Acc>, key: string, delta: number) => {
-    const cur = map.get(key) ?? { total: 0, qtd: 0 }
-    cur.total = safeMoney(cur.total + delta)
-    cur.qtd += 1
-    map.set(key, cur)
-  }
-
-  for (const m of rows) {
-    const o = m.origem ?? ""
-    const v = safeMoney(m.valor)
-    if (isOrigemTransferenciaInterna(o)) continue
-
-    if (m.tipo === "entrada") {
-      if (isOrigemEstornoPagar(o)) {
-        bump(despesasMap, "Estorno de pagamento (redução de despesa)", -v)
-        continue
-      }
-      bump(receitasMap, catReceitaOrigem(o), v)
-      continue
-    }
-    if (m.tipo === "saida") {
-      if (isOrigemEstornoReceber(o)) {
-        bump(receitasMap, "Estorno / cancelamento de recebimento", -v)
-        continue
-      }
-      if (isOrigemDevolucaoPdv(o)) {
-        bump(receitasMap, "Devolução PDV (abatimento)", -v)
-        continue
-      }
-      if (isOrigemSangriaPdv(o)) {
-        bump(despesasMap, "Sangria de caixa (PDV)", v)
-        continue
-      }
-      bump(despesasMap, o || "Saídas diversas", v)
-    }
-  }
-
-  const { receita: netRec, despesa: netDesp } = reduceNetResultadoMovs(rows)
-  const denomRec = Math.max(Math.abs(netRec), 1e-6)
-  const denomDesp = Math.max(Math.abs(netDesp), 1e-6)
-
-  const toLinhas = (map: Map<string, Acc>, denom: number): CategoriaLinha[] =>
-    Array.from(map.entries())
-      .map(([categoria, { total, qtd }]) => ({
-        categoria,
-        total: safeMoney(total),
-        percentual: pct(Math.abs(total), denom),
-        qtd,
-        media: qtd > 0 ? safeMoney(total / qtd) : 0,
-      }))
-      .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
-
-  return {
-    receitas: toLinhas(receitasMap, denomRec),
-    despesas: toLinhas(despesasMap, denomDesp),
-  }
+export async function getAnaliseCarteiras(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getAnaliseCarteiras(storeId, filtro); return projetarAnaliseCarteirasConsulta(await consultarFinanceiroEmpresa(storeId,filtro)) }
+export function projetarComparativoMensalConsulta(q: ConsultaFinanceiraDTO, meses=12): ComparativoMensal[] {
+  if(!Number.isInteger(meses)||meses<1||meses>24) throw new ConsultaFinanceiraError("periodo_invalido",422)
+  const hoje=diaNoFusoConsulta(new Date(q.asOf)),date=new Date(hoje+"T12:00:00Z");date.setUTCDate(1);date.setUTCMonth(date.getUTCMonth()-meses+1)
+  return Array.from({length:meses},(_,i)=>{const d=new Date(date);d.setUTCMonth(d.getUTCMonth()+i);const mes=d.toISOString().slice(0,7),v=q.calendario.find(c=>c.mes===mes)
+    const entrada=reaisConsulta(v?.receitaCentavos??"0"),saida=reaisConsulta(v?.despesaCentavos??"0")
+    return {asOf:q.asOf,mes,mesLabel:mes,ano:d.getUTCFullYear(),entrada,saida,lucro:safeMoney(entrada-saida),margem:pct(entrada-saida,entrada)} })
 }
-
-// ─── getTopReceitas / getTopDespesas ──────────────────────────────────────────
-
-const whereSemTransferencia: Prisma.MovimentacaoFinanceiraWhereInput = {
-  NOT: {
-    OR: [
-      { origem: "transferencia" },
-      { origem: "transferência" },
-      { origem: { startsWith: "transfer" } },
-    ],
-  },
-}
-
-export async function getTopReceitas(storeId: string, filtro: PeriodoFiltro = {}, take = 10): Promise<RankingItem[]> {
-  const range = toDateRange(filtro)
-  const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: {
-      storeId,
-      tipo: "entrada",
-      createdAt: range,
-      ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}),
-      AND: [whereSemTransferencia, { NOT: { origem: { startsWith: "estorno_pagar" } } }],
-    },
-    select: { descricao: true, valor: true },
-    orderBy: { valor: "desc" },
-    take,
-  })
-  const movRows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) },
-    select: { tipo: true, origem: true, valor: true },
-  })
-  const total = Math.max(reduceNetResultadoMovs(movRows).receita, 1e-6)
-  return rows.map((r) => ({
-    label: r.descricao,
-    valor: safeMoney(r.valor),
-    percentual: pct(r.valor, total),
-    tipo: "entrada" as const,
-  }))
-}
-
-export async function getTopDespesas(storeId: string, filtro: PeriodoFiltro = {}, take = 10): Promise<RankingItem[]> {
-  const range = toDateRange(filtro)
-  const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: {
-      storeId,
-      tipo: "saida",
-      createdAt: range,
-      ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}),
-      AND: [
-        whereSemTransferencia,
-        {
-          NOT: {
-            OR: [
-              { origem: { startsWith: "estorno_receber" } },
-              { origem: "devolucao_pdv" },
-              { origem: { startsWith: "devolucao_" } },
-            ],
-          },
-        },
-      ],
-    },
-    select: { descricao: true, valor: true },
-    orderBy: { valor: "desc" },
-    take,
-  })
-  const movRows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: range, ...(filtro.carteiraId ? { carteiraId: filtro.carteiraId } : {}) },
-    select: { tipo: true, origem: true, valor: true },
-  })
-  const total = Math.max(reduceNetResultadoMovs(movRows).despesa, 1e-6)
-  return rows.map((r) => ({
-    label: r.descricao,
-    valor: safeMoney(r.valor),
-    percentual: pct(r.valor, total),
-    tipo: "saida" as const,
-  }))
-}
-
-// ─── getAnaliseCarteiras ──────────────────────────────────────────────────────
-
-export async function getAnaliseCarteiras(storeId: string, filtro: PeriodoFiltro = {}): Promise<AnaliseCarteira[]> {
-  const range = toDateRange(filtro)
-  const carteiras = await prisma.carteiraFinanceira.findMany({
-    where: { storeId, ativo: true },
-    select: { id: true, nome: true, tipo: true, saldoAtual: true, saldoInicial: true },
-  })
-
-  const saldoTotal = carteiras.reduce((s, c) => s + c.saldoAtual, 0)
-
-  const results = await Promise.all(carteiras.map(async (c) => {
-    const [entAgg, saiAgg, cnt] = await Promise.all([
-      prisma.movimentacaoFinanceira.aggregate({ where: { storeId, carteiraId: c.id, tipo: "entrada", createdAt: range }, _sum: { valor: true } }),
-      prisma.movimentacaoFinanceira.aggregate({ where: { storeId, carteiraId: c.id, tipo: "saida", createdAt: range }, _sum: { valor: true } }),
-      prisma.movimentacaoFinanceira.count({ where: { storeId, carteiraId: c.id, createdAt: range } }),
-    ])
-    return {
-      id: c.id,
-      nome: c.nome,
-      tipo: c.tipo,
-      saldoAtual: safeMoney(c.saldoAtual),
-      saldoInicial: safeMoney(c.saldoInicial),
-      totalEntradas: safeMoney(entAgg._sum.valor ?? 0),
-      totalSaidas: safeMoney(saiAgg._sum.valor ?? 0),
-      qtdMovimentacoes: cnt,
-      participacao: pct(c.saldoAtual, saldoTotal),
-    }
-  }))
-
-  return results.sort((a, b) => b.saldoAtual - a.saldoAtual)
-}
-
-// ─── getComparativoMensal ─────────────────────────────────────────────────────
-
-export async function getComparativoMensal(storeId: string, meses = 12): Promise<ComparativoMensal[]> {
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth() - (meses - 1), 1, 0, 0, 0, 0)
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
-  const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: { storeId, createdAt: { gte: first, lte: last } },
-    select: { tipo: true, origem: true, valor: true, createdAt: true },
-  })
-  const byMes = new Map<string, MovLin[]>()
-  for (const m of rows) {
-    const d = m.createdAt
-    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-    const arr = byMes.get(k) ?? []
-    arr.push({ tipo: m.tipo, origem: m.origem, valor: m.valor })
-    byMes.set(k, arr)
-  }
-
-  const result: ComparativoMensal[] = []
-  for (let i = meses - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const ano = d.getFullYear()
-    const mes = d.getMonth() + 1
-    const mesStr = String(mes).padStart(2, "0")
-    const k = `${ano}-${mesStr}`
-    const { receita: entrada, despesa: saida } = reduceNetResultadoMovs(byMes.get(k) ?? [])
-    const lucro = safeMoney(entrada - saida)
-    result.push({
-      mes: `${ano}-${mesStr}`,
-      mesLabel: monthLabel(mes, ano),
-      ano,
-      entrada: safeMoney(entrada),
-      saida: safeMoney(saida),
-      lucro,
-      margem: pct(lucro, entrada),
-    })
-  }
+export function projetarComparativoAnualConsulta(q: ConsultaFinanceiraDTO, anos=3): ComparativoAnual[] {
+  if(!Number.isInteger(anos)||anos<1||anos>10)throw new ConsultaFinanceiraError("periodo_invalido",422)
+  const atual=Number(diaNoFusoConsulta(new Date(q.asOf)).slice(0,4)),result:ComparativoAnual[]=[]
+  for(let ano=atual-anos+1;ano<=atual;ano++){const rows=q.calendario.filter(c=>c.mes.startsWith(String(ano))),entrada=reaisConsulta(rows.reduce((s,c)=>s+BigInt(c.receitaCentavos),BigInt(0))),saida=reaisConsulta(rows.reduce((s,c)=>s+BigInt(c.despesaCentavos),BigInt(0))),prev=result.at(-1)
+    result.push({asOf:q.asOf,ano,entrada,saida,lucro:safeMoney(entrada-saida),margem:pct(entrada-saida,entrada),crescimento:prev?.entrada?pct(entrada-prev.entrada,prev.entrada):0}) }
   return result
 }
-
-// ─── getComparativoAnual ──────────────────────────────────────────────────────
-
-export async function getComparativoAnual(storeId: string, anos = 3): Promise<ComparativoAnual[]> {
-  const anoAtual = new Date().getFullYear()
-  const firstYear = anoAtual - (anos - 1)
-  const rows = await prisma.movimentacaoFinanceira.findMany({
-    where: {
-      storeId,
-      createdAt: {
-        gte: new Date(`${firstYear}-01-01T00:00:00.000Z`),
-        lte: new Date(`${anoAtual}-12-31T23:59:59.999Z`),
-      },
-    },
-    select: { tipo: true, origem: true, valor: true, createdAt: true },
-  })
-  const byAno = new Map<number, MovLin[]>()
-  for (const m of rows) {
-    const y = m.createdAt.getFullYear()
-    const arr = byAno.get(y) ?? []
-    arr.push({ tipo: m.tipo, origem: m.origem, valor: m.valor })
-    byAno.set(y, arr)
-  }
-
-  const result: ComparativoAnual[] = []
-  for (let i = anos - 1; i >= 0; i--) {
-    const ano = anoAtual - i
-    const { receita: entrada, despesa: saida } = reduceNetResultadoMovs(byAno.get(ano) ?? [])
-    const entradaN = safeMoney(entrada)
-    const saidaN = safeMoney(saida)
-    const lucro = safeMoney(entradaN - saidaN)
-    const prev = result[result.length - 1]
-    const crescimento = prev && prev.entrada > 0 ? safeMoney(((entradaN - prev.entrada) / prev.entrada) * 100) : 0
-    result.push({ ano, entrada: entradaN, saida: saidaN, lucro, margem: pct(lucro, entradaN), crescimento })
-  }
-  return result
+export async function getComparativoMensal(storeId:string,meses=12){ if (!gestorMoneyAtivo()) return legado.getComparativoMensal(storeId, meses);return projetarComparativoMensalConsulta(await consultarFinanceiroEmpresa(storeId),meses)}
+export async function getComparativoAnual(storeId:string,anos=3){ if (!gestorMoneyAtivo()) return legado.getComparativoAnual(storeId, anos);return projetarComparativoAnualConsulta(await consultarFinanceiroEmpresa(storeId),anos)}
+export function projetarResumoConsulta(q: ConsultaFinanceiraDTO): ResumoExecutivo {
+  return { periodo:{dataInicio:q.periodo.dataInicio,dataFim:q.periodo.dataFim,dias:Math.round((Date.parse(q.periodo.dataFim)-Date.parse(q.periodo.dataInicio))/86400000)+1}, indicadores:projetarIndicadoresConsulta(q), receitasPorCategoria:categorias(q,"receitaCentavos"),despesasPorCategoria:categorias(q,"despesaCentavos"),topReceitas:projetarRankingConsulta(q,"receitaCentavos",5),topDespesas:projetarRankingConsulta(q,"despesaCentavos",5), apuracao:apuracaoConsulta(q) }
 }
-
-// ─── getResumoExecutivo ───────────────────────────────────────────────────────
-
-export async function getResumoExecutivo(storeId: string, filtro: PeriodoFiltro = {}): Promise<ResumoExecutivo> {
-  const inicio = filtro.dataInicio ?? firstDayOfMonth()
-  const fim = filtro.dataFim ?? todayStr()
-  const dias = Math.max(1, Math.round((new Date(fim).getTime() - new Date(inicio).getTime()) / 86400000) + 1)
-
-  const [indicadores, cats, topR, topD] = await Promise.all([
-    getIndicadoresExecutivos(storeId, filtro),
-    getResultadoPorCategoria(storeId, filtro),
-    getTopReceitas(storeId, filtro, 5),
-    getTopDespesas(storeId, filtro, 5),
-  ])
-
-  return {
-    periodo: { dataInicio: inicio, dataFim: fim, dias },
-    indicadores,
-    receitasPorCategoria: cats.receitas,
-    despesasPorCategoria: cats.despesas,
-    topReceitas: topR,
-    topDespesas: topD,
-  }
-}
-
-// ─── Pré-define filtros padrão ────────────────────────────────────────────────
-
+export async function getResumoExecutivo(storeId: string, filtro: PeriodoFiltro = {}) { if (!gestorMoneyAtivo()) return legado.getResumoExecutivo(storeId, filtro); return projetarResumoConsulta(await consultarFinanceiroEmpresa(storeId,filtro)) }
 export function buildFiltroPreset(preset: string): PeriodoFiltro {
-  const today = todayStr()
-  switch (preset) {
-    case "hoje": return { dataInicio: today, dataFim: today }
-    case "ontem": { const d = subDays(1); return { dataInicio: d, dataFim: d } }
-    case "7dias": return { dataInicio: subDays(7), dataFim: today }
-    case "30dias": return { dataInicio: subDays(30), dataFim: today }
-    case "estemes": return { dataInicio: firstDayOfMonth(), dataFim: today }
-    case "mespassado": {
-      const d = new Date(); d.setMonth(d.getMonth() - 1)
-      const ano = d.getFullYear(); const mes = d.getMonth() + 1
-      const mesStr = String(mes).padStart(2, "0")
-      const lastDay = new Date(ano, mes, 0).getDate()
-      return { dataInicio: `${ano}-${mesStr}-01`, dataFim: `${ano}-${mesStr}-${String(lastDay).padStart(2, "0")}` }
-    }
-    default: return { dataInicio: firstDayOfMonth(), dataFim: today }
-  }
+  const hoje=diaNoFusoConsulta(new Date())
+  if(preset==="hoje") return {dataInicio:hoje,dataFim:hoje}
+  if(preset==="ontem") {const d=deslocarDiaConsulta(hoje,-1);return {dataInicio:d,dataFim:d}}
+  if(preset==="7dias"||preset==="30dias") return {dataInicio:deslocarDiaConsulta(hoje,preset==="7dias"?-7:-30),dataFim:hoje}
+  if(preset==="mespassado") {const d=new Date(hoje+"T12:00:00Z");d.setUTCDate(1);d.setUTCDate(0);const fim=d.toISOString().slice(0,10);return {dataInicio:fim.slice(0,7)+"-01",dataFim:fim}}
+  if(preset==="estemes") {const f=filtroConsultaFinanceira();return {dataInicio:f.dataInicio,dataFim:f.dataFim}}
+  throw new ConsultaFinanceiraError("periodo_exige_esclarecimento",422)
 }

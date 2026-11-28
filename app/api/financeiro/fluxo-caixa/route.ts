@@ -11,10 +11,10 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  *  - fluxo diário dos últimos 30 dias
  *  - alertas financeiros
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import { getFluxoCaixaResumo } from "@/lib/financeiro/services/fluxo-caixa-service"
 
 export const runtime = "nodejs"
@@ -30,9 +30,9 @@ export async function GET(req: Request) {
   if (moduleDenied) return moduleDenied
 
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  const denied = await apiGuardFinanceiroViewOrOps(storeId)
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   try {
     await prismaEnsureConnected()
@@ -43,13 +43,11 @@ export async function GET(req: Request) {
     )
 
     if (!resumo) {
-      return err("Não foi possível calcular fluxo de caixa", "db_error", 503)
+      return respostaFinanceiraPrivada(err("Não foi possível calcular fluxo de caixa", "db_error", 503))
     }
 
-    return NextResponse.json({ ok: true, ...resumo })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha interna"
-    console.error("[financeiro/fluxo-caixa GET]", msg)
-    return err(msg, "db_error", 503)
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, ...resumo }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }

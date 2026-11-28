@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma";
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope";
 import type { OrdemServico, OSStatus } from "@/types/os";
 import { isFaturamentoOS } from "@/lib/os/faturamento";
 import { buildContaReceberLocalKey } from "@/lib/financeiro/contracts/local-key";
@@ -254,7 +255,7 @@ export async function cancelContaReceberFromOS(params: {
     if (!(await travarTituloContaReceber(tx, storeId, { localKey }))) return { ok: true, action: "noop_not_found", localKey };
     const existing = await tx.contaReceberTitulo.findUnique({
       where: { storeId_localKey: { storeId, localKey } },
-      select: { id: true, payload: true },
+      select: { id: true, payload: true, carteiraId: true },
     });
     if (!existing) return { ok: true, action: "noop_not_found", localKey };
 
@@ -270,6 +271,7 @@ export async function cancelContaReceberFromOS(params: {
     await tx.contaReceberTitulo.update({
       where: { id: existing.id },
       data: {
+        ...await dadosFinanceirosEmpresa(tx, storeId, undefined, { carteiraHistoricaId: existing.carteiraId }),
         status: RECEBER_STATUS.CANCELADO,
         payload: nextPayload as unknown as Prisma.InputJsonValue,
       },

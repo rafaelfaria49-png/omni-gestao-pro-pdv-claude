@@ -30,6 +30,8 @@ const h = vi.hoisted(() => {
     return {
       id: `cr-${++seq}`,
       storeId: data.storeId,
+      perfilId: data.perfilId ?? null,
+      ativo: data.ativo ?? true,
       localKey: data.localKey,
       descricao: data.descricao ?? "",
       cliente: data.cliente ?? "",
@@ -53,6 +55,12 @@ const h = vi.hoisted(() => {
   }
 
   const prisma = {
+    adminUser: { findUnique: async () => ({ active: true, role: "ADMIN" }) },
+    adminUserStore: { findUnique: async ({ where }: { where: { adminUserId_storeId: { storeId: string } } }) =>
+      where.adminUserId_storeId.storeId === STORE ? { storeId: STORE } : null },
+    financeiroPerfil: { findUnique: async ({ where }: { where: { storeId: string } }) => ({
+      id: `perfil-${where.storeId}`, storeId: where.storeId, tipo: "EMPRESA", ativo: true, membros: [{ id: "unit-grant" }],
+    }) },
     // `SELECT … FOR UPDATE` do título (em memória não há concorrência): devolve a linha, se existir.
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join("?")
@@ -149,13 +157,22 @@ vi.mock("@/auth", async () => {
   const { storeSession } = await import("@/test/fixtures/store-session")
   return { auth: vi.fn(async () => storeSession({ stores: ["loja-1"], modules: ["finance"] })) }
 })
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
+// G002: infraestrutura do fake (perfil EMPRESA); asserções de negócio preservadas.
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }
+})
 vi.mock("@/lib/ops-api-gate", () => ({
   opsLojaIdFromRequest: vi.fn(() => STORE),
   opsLojaIdFromRequestForWrite: vi.fn(() => STORE),
 }))
 vi.mock("@/lib/auth/api-enterprise-guard", () => ({
   apiGuardFinanceiroViewOrOps: vi.fn(async () => null),
+}))
+vi.mock("@/lib/auth/guard-enterprise", () => ({
+  // Igual à função real: requireEnterpriseSession = auth() (+ troca de senha) — a sessão é a do mock de auth.
+  requireEnterpriseSession: async () => ({ ok: true, session: await (await import("@/auth")).auth() }),
 }))
 
 import { GET } from "./route"

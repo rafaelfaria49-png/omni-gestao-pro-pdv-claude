@@ -1,3 +1,7 @@
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import * as legado from "@/lib/financeiro/legado-main/dre"
+import { consultarEventosFinanceirosEmpresaNaTransacao, reaisConsulta } from "@/lib/gastos/query"
+import { diaNoFusoConsulta, intervaloConsulta } from "@/lib/gastos/query-calculo"
 /**
  * DRE Service — Demonstração do Resultado do Exercício (mensal).
  *
@@ -17,6 +21,8 @@
  *  - Lookup O(1) via Map para categorias
  */
 
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
+import type { FinanceiroDb } from "@/lib/gastos/financeiro-scope"
 import { prisma } from "@/lib/prisma"
 import {
   isOrigemDevolucaoPdv,
@@ -78,6 +84,8 @@ export type AlertaDRE = {
 }
 
 export type DREMensal = {
+  /** Só no cálculo G005 (Gestor Money ligado); o DRE legado da main não o informa. */
+  baseApuracao?: "CAIXA_COM_CLASSIFICACAO_DRE"
   periodo: { mes: number; ano: number; label: string }
 
   // Receitas
@@ -186,44 +194,34 @@ async function getDREPeriodo(
   storeId: string,
   mes: number,
   ano: number,
+  db: FinanceiroDb,
 ): Promise<Omit<DREMensal, "comparativo" | "historico6Meses" | "alertas" | "tendencia">> {
-  const inicio = new Date(ano, mes - 1, 1)
-  const fim = new Date(ano, mes, 0, 23, 59, 59, 999)
+  const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`
+  const dataFim = new Date(Date.UTC(ano, mes, 0)).toISOString().slice(0, 10)
+  const range = intervaloConsulta(dataInicio, dataFim)
 
-  // Busca movimentações + títulos pagos no período — em paralelo, sem N+1
+  // Fatos de caixa separados das posições: título legado anômalo não bloqueia a DRE.
+  // Na composição de fechamento, o isolamento é herdado (READ COMMITTED), sem promessa de snapshot G005.
   const [movs, crPagos, cpPagos] = await Promise.all([
-    prisma.movimentacaoFinanceira.findMany({
-      where: {
-        storeId,
-        createdAt: { gte: inicio, lte: fim },
-      },
-      select: {
-        id: true,
-        tipo: true,
-        origem: true,
-        valor: true,
-        referenciaId: true,
-        descricao: true,
-      },
-    }),
+    consultarEventosFinanceirosEmpresaNaTransacao(storeId,db,{dataInicio:String(ano)+"-"+String(mes).padStart(2,"0")+"-01",dataFim:new Date(Date.UTC(ano,mes,0)).toISOString().slice(0,10)}).then(q=>q.eventos.map(e=>({id:e.id,tipo:e.tipo,origem:e.origem,valor:reaisConsulta(e.valorCentavos),referenciaId:e.referenciaTituloId,categoriaEstruturada:e.categoriaId?e.categoria:null}))),
 
     // Títulos a receber pagos/parciais no período para ticket médio
-    prisma.contaReceberTitulo.findMany({
-      where: {
+    db.contaReceberTitulo.findMany({
+      where: leituraEmpresaWhere(storeId, {
         storeId,
         status: { in: ["pago", "parcial"] },
-        updatedAt: { gte: inicio, lte: fim },
-      },
+        updatedAt: range,
+      }),
       select: { id: true, valor: true },
     }),
 
     // Títulos a pagar pagos no período para classificação de categoria
-    prisma.contaPagarTitulo.findMany({
-      where: {
+    db.contaPagarTitulo.findMany({
+      where: leituraEmpresaWhere(storeId, {
         storeId,
         status: "pago",
-        updatedAt: { gte: inicio, lte: fim },
-      },
+        updatedAt: range,
+      }),
       select: { id: true, payload: true },
     }),
   ])
@@ -287,7 +285,7 @@ async function getDREPeriodo(
     }
 
     // Demais saídas: despesa/custo via CP vinculado
-    const cat = m.referenciaId ? (cpCatMap.get(m.referenciaId) ?? "Outros") : "Outros"
+    const cat = m.categoriaEstruturada ?? (m.referenciaId ? (cpCatMap.get(m.referenciaId) ?? "Outros") : "Outros")
     const tipo = classifyCategoria(cat)
     const catFormatada = cat.charAt(0).toUpperCase() + cat.slice(1)
 
@@ -313,6 +311,7 @@ async function getDREPeriodo(
     : 0
 
   return {
+    baseApuracao: "CAIXA_COM_CLASSIFICACAO_DRE",
     periodo: { mes, ano, label: mesLabel(mes, ano) },
     receitaBruta,
     receitasDetalhadas: agrupaPorCategoria(receitaItems, receitaBruta),
@@ -340,13 +339,20 @@ export async function getDREMensal(
   storeId: string,
   mes?: number,
   ano?: number,
-): Promise<DREMensal> {
+  db: FinanceiroDb = prisma,
+): Promise<DREMensal> { if (!gestorMoneyAtivo()) return legado.getDREMensal(storeId, mes, ano);
+  if(db===prisma){
+    return prisma.$transaction(async tx=>{
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`
+      return getDREMensal(storeId,mes,ano,tx)
+    },{isolationLevel:"RepeatableRead",timeout:20000})
+  }
   const sid = (storeId ?? "").trim()
   if (!sid) throw new Error("dre-service: storeId obrigatório")
 
   const now = new Date()
-  const mesFinal = mes ?? now.getMonth() + 1
-  const anoFinal = ano ?? now.getFullYear()
+  const mesFinal = mes ?? Number(diaNoFusoConsulta(now).slice(5,7))
+  const anoFinal = ano ?? Number(diaNoFusoConsulta(now).slice(0,4))
 
   // Mês anterior para comparativo
   let mesAnt = mesFinal - 1
@@ -364,9 +370,9 @@ export async function getDREMensal(
 
   // Buscar DRE atual + anterior + histórico em paralelo
   const [atual, anterior, ...historicoParcial] = await Promise.all([
-    getDREPeriodo(sid, mesFinal, anoFinal),
-    getDREPeriodo(sid, mesAnt, anoAnt),
-    ...periodos.slice(0, 5).map((p) => getDREPeriodo(sid, p.mes, p.ano)),
+    getDREPeriodo(sid, mesFinal, anoFinal, db),
+    getDREPeriodo(sid, mesAnt, anoAnt, db),
+    ...periodos.slice(0, 5).map((p) => getDREPeriodo(sid, p.mes, p.ano, db)),
   ])
 
   // Histórico 6 meses (inclui o atual)

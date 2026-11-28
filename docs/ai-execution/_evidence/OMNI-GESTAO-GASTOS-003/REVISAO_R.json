@@ -1,0 +1,351 @@
+{
+  "goal": "OMNI-GESTAO-GASTOS-003",
+  "status": "APPROVED_R2_LOCAL_COMMIT_AUTHORIZED",
+  "reviewerRequested": "Claude Code / Anthropic Sonnet 5.5",
+  "verdict": "APPROVED",
+  "approvedForCommit": true,
+  "productionApproval": false,
+  "lintExceptionAccepted": true,
+  "inheritedG002R5Approval": false,
+  "reviewHistory": [
+    {
+      "tag": "R1",
+      "goal": "OMNI-GESTAO-GASTOS-003",
+      "status": "CHANGES_REQUESTED_R1",
+      "reviewerRequested": "Claude Code / Anthropic Sonnet 5.5",
+      "actualModel": "claude-sonnet-5-5",
+      "sessionId": "2d1685db-226b-49c5-8d67-e188a0676c74",
+      "verdict": "CHANGES_REQUESTED",
+      "approvedForCommit": false,
+      "productionApproval": false,
+      "lintExceptionAccepted": true,
+      "lintAcceptanceLimitedToCurrentR1Hashes": true,
+      "inheritedG002R5Approval": false,
+      "cli": "2.1.288 (Claude Code)",
+      "family": "anthropic",
+      "readTools": 89,
+      "inputManifestSHA256": "a69cd90cd27d273bd6f87ab33a0a959ecafd1af1c9b16b6adfd30b55199178d7",
+      "eventsSHA256": "6a7dc53c96798ec7c1080518a19d97647e95fbfbe7c967989bda00af427af326",
+      "evidence": "G003-execution/review-r1-submission/result.json, run-result.json e read-trace.json",
+      "findings": [
+        {
+          "id": "F1",
+          "priority": "P1",
+          "title": "Perfil EMPRESA auto-provisionado por writer legado, sem grant, bloqueia todas as leituras financeiras da loja",
+          "files": [
+            "lib/gastos/read-scope.ts:79-88",
+            "lib/gastos/financeiro-scope.ts:51-62",
+            "docs/decisions/OMNI-GESTAO-GASTOS-002-WRITERS.md:39",
+            "test/gastos/readers.postgres.test.ts:167-174",
+            "docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-003/RELATORIO.md (PENDÊNCIAS_REAIS)"
+          ],
+          "proof": "requireLeituraFinanceiraEmpresa lança erro quando existe perfil e membros.length é 0. resolverPerfilEmpresa cria o perfil EMPRESA sem PerfilMembro; a decisão G002 diz 'Não cria PerfilMembro'. 14 arquivos de produção chamam dadosFinanceirosEmpresa (PDV ops-upsert-venda, os-faturamento, movimentacoes, carteiras, contas, vendas/corrigir*, cancelar etc.). O grep só encontra perfilMembro.create em testes, então nenhum caminho de produção concede grant. Assim, o primeiro writer legado numa loja sem perfil passa essa loja de 'legado legível' para 403 em todos os GETs financeiros, mesmo para ADMIN: analytics, pagar, receber, DRE, fluxo, relatórios, export, ops/contas-receber-list (PDV) e resumo do Agent. A negação é coerente com 'grant ATUAL', mas a transição não é testada nem listada como pendência de implantação. O único teste de loja sem perfil (readers.postgres.test.ts:167-174) cobre o caso 'ainda sem perfil'.",
+          "requiredFix": "(a) Adicionar teste PG: loja legada sem perfil, rodar um writer real G002/legado que provisiona o perfil, e provar que a leitura passa a 403 sem grant (e a 200 com grant), documentando o comportamento como deliberado. (b) Registrar na decisão G003 e em PENDÊNCIAS_REAIS/limitações que provisionar PerfilMembro (por administrador autorizado, sem autoatribuição) é pré-condição bloqueante de qualquer implantação. Se o dono do produto preferir outro contrato, isso exige decisão humana expressa; não proponho afrouxar o gate."
+        },
+        {
+          "id": "F2",
+          "priority": "P2",
+          "title": "Assertions PG vazias ou fracas para parte dos contratos A02/A14/A18",
+          "files": [
+            "test/gastos/g003-fixtures.ts:85-122",
+            "test/gastos/readers.postgres.test.ts:70-76,86-104"
+          ],
+          "proof": "A fixture não semeia nenhuma ConciliacaoFinanceira, FechamentoFinanceiro nem AuditoriaFinanceira. Os 'GET conciliacao/fechamentos/auditoria omitem pessoal' passam com listas vazias, então não provam o filtro carteira.is(leituraEmpresaWhere) de conciliacao-service.ts:105-120 nem snapshotTecnico/toPublica de auditoria-financeira-service.ts:76-112. Nos agregados (resumo, indicadores, dre, fluxo-caixa, relatorios/fluxo, categorias), semEstrangeiros só procura IDs como substring, que não aparecem em somas; apenas analytics tem assert numérico (133.45 = 123.45 + 10). O export PG roda só tipo=pagar; receber, movimentacoes, conciliacoes e cobrancas_os não são exercidos. O critério 'Relatório não soma valor pessoal' e 'Auditoria não divulga conteúdo pessoal' fica sem prova direta nesses caminhos.",
+          "requiredFix": "Semear conciliação, fechamento e auditoria (com antes/depois contendo descrição/ownership) para P1/P2/E2 e para E1, com valores distintos. Assertar totais numéricos esperados (só E1 + legado L1) em resumo, indicadores, DRE, fluxo-caixa, relatorios/fluxo, categorias, rankings e carteiras.saldoTotal. Cobrir export CSV/XLSX de todos os tipos. Provar que antes/depois da auditoria devolvem só campos técnicos."
+        },
+        {
+          "id": "F3",
+          "priority": "P2",
+          "title": "Concorrência e rollback de documentos alegados, mas sem prova PostgreSQL",
+          "files": [
+            "lib/gastos/documentos.ts:52-86,145-165",
+            "prisma/migrations/20261021120000_gastos_readers_documentos/migration.sql:176-178",
+            "test/gastos/documentos.postgres.test.ts"
+          ],
+          "proof": "Nos 21 testes de documentos (lista no INVENTARIO) não há Promise.all, nem falha após o upload para exercitar a limpeza de documentos.ts:81-84 (removerObjeto), nem corrida entre vincular e revisarOrfaos. A leitura do código é favorável: transação ReadCommitted (financeiro-scope.ts:65), advisory lock por perfil+sha, FOR UPDATE do documento no trigger de vínculo e em revisarOrfaos. Mas a decisão G003 e o RELATORIO afirmam serialização e rollback sem teste que os comprove, e o escopo pedido inclui dedup por perfil com concorrência e rollback.",
+          "requiredFix": "Adicionar testes PG: (1) N registros simultâneos dos mesmos bytes no mesmo perfil geram 1 linha e 1 objeto de storage, com o mesmo DTO; mesmos bytes em perfis distintos são independentes. (2) Falha forçada após enviarConteudoPrivado (por exemplo, create que viola constraint) não deixa objeto órfão no fixture e não persiste linha. (3) vincular concorrente com revisarOrfaos nunca resulta em documento QUARENTENA com vínculo."
+        },
+        {
+          "id": "F4",
+          "priority": "P3",
+          "title": "/api/vendas/[id] passou a exigir hubs.vendas, que não existia antes, apesar de a decisão dizer 'conservam suas permissões operacionais'",
+          "files": [
+            "app/api/vendas/[id]/route.ts:75-77",
+            "docs/decisions/OMNI-GESTAO-GASTOS-003-LEITURAS-DOCUMENTOS.md:11"
+          ],
+          "proof": "O baseline só validava o storeId; o G003 adiciona apiGuardLeituraOperacional(storeId, p => p.hubs.vendas). A matriz de papéis dá hubs.vendas=false ao TECNICO. O INVENTARIO não mostra que nenhum consumidor legítimo (OS, recibo, caixa) chame esse GET com papel sem hubs.vendas.",
+          "requiredFix": "Confirmar por consumidores (OS V4, PDV, reimpressão) que nenhum papel autorizado regride, registrando no INVENTARIO. Se houver regressão, alinhar a permissão à usada pelo consumidor. Corrigir a redação da decisão para declarar a nova exigência."
+        },
+        {
+          "id": "F5",
+          "priority": "P3",
+          "title": "Quarentena é terminal e a deduplicação devolve documento QUARENTENA que nunca poderá ser vinculado ou baixado",
+          "files": [
+            "lib/gastos/documentos.ts:63-64,124,106-107",
+            "migration.sql:180"
+          ],
+          "proof": "Reenviar os mesmos bytes de um órfão em quarentena retorna o DTO existente (estado QUARENTENA). vincular e download o recusam e não há transição de volta. Os dados não se perdem, mas o usuário fica sem caminho funcional.",
+          "requiredFix": "Documentar como limitação reservada à política de retenção futura, ou prever a transição auditada. Não bloqueia por si."
+        },
+        {
+          "id": "F6",
+          "priority": "P3",
+          "title": "Sem guarda de DELETE/TRUNCATE em documentos_gastos e documentos_vinculos",
+          "files": [
+            "migration.sql:166-167,201-202"
+          ],
+          "proof": "Os triggers cobrem só INSERT/UPDATE. Um órfão (sem vínculo, logo sem proteção de FK) ou um vínculo pode ser apagado por SQL do papel owner. A imutabilidade do histórico é provada só para UPDATE. Não existe caminho de código que apague; a defesa em profundidade está ausente. O teste usa deleteMany na limpeza da fixture.",
+          "requiredFix": "Registrar como limitação, ou adicionar trigger BEFORE DELETE/TRUNCATE em migration G003 (ainda não aplicada). Não bloqueia por si."
+        },
+        {
+          "id": "F7",
+          "priority": "P3",
+          "title": "Trilha de auditoria financeira empresarial reduzida na escrita, sem teste",
+          "files": [
+            "lib/financeiro/services/auditoria-financeira-service.ts:76-91,135-136"
+          ],
+          "proof": "snapshotTecnico mantém só status, tipo, origem, valores numéricos, saldos, diferença e acao. Descrições, IDs e demais campos deixam de ser gravados em registrarAuditoriaFinanceira, para todos os writers G002. É coerente com A18 ('apenas metadados técnicos'), mas é uma perda deliberada de detalhe de auditoria em dados empresariais, e nenhum teste PG cobre o conteúdo gravado.",
+          "requiredFix": "Cobrir no teste de F2 o que é gravado e devolvido. Declarar a perda como aceita na decisão G003."
+        },
+        {
+          "id": "F8",
+          "priority": "P3",
+          "title": "Rigidez de seletores e do Provider em uso multi-aba",
+          "files": [
+            "lib/gastos/read-scope.ts:128-138",
+            "lib/gastos/read-cache.ts:12,19-22"
+          ],
+          "proof": "Cookie assistec-active-store diferente do storeId do request gera 403. Um único 401/403 desativa permanentemente o cache do Provider (ativo=false) até mudar a chave sessão/usuário/loja. Duas abas com lojas distintas podem derrubar a aba que não é a última ativa. É fail-closed e seguro, mas é comportamento novo.",
+          "requiredFix": "Registrar como limitação conhecida. Sem exigência de código."
+        }
+      ],
+      "pending": "Resolver F1-F3, confirmar F4, registrar limites F5-F8 e correção factual do inventário offline; retestar e obter R do delta antes do commit."
+    },
+    {
+      "tag": "R2",
+      "actualModel": "claude-sonnet-5-5",
+      "sessionId": "ccf81443-42bb-4a6d-b9bb-a5e589d14eb1",
+      "cli": "2.1.288 (Claude Code)",
+      "family": "anthropic",
+      "startedAt": "2026-10-22T05:12:33.090Z",
+      "finishedAt": "2026-10-22T05:17:43.606Z",
+      "readTools": 70,
+      "inputManifestSHA256": "41d8c4c4e4c32b0c95d6a2fbd5fd7ae063cec84ccf6a124acf58cf1009898611",
+      "diffSHA256": "b070ef2064f18fc5a0ed276903ad79059223bb44a80bced8d537cb6bc9bb4217",
+      "eventsSHA256": "9354f7c3e434d1f45ed27d32ac39db459de9a3a10e3b640c065a4c5634ef1430",
+      "runResultSHA256": "d7d9ebfa03f72129dc0ae49193d97973aa52704568e6b777f011353032e019e3",
+      "resultSHA256": "b2f01f258d12b3cb354e3be3944b56d69fa4efaa2715b6dd326ffc520e174fe1",
+      "verdict": "APPROVED",
+      "lintExceptionAccepted": true,
+      "approvedForLocalCommit": true,
+      "productionApproval": false,
+      "independentReport": {
+        "reviewer": {
+          "family": "Anthropic",
+          "requestedModel": "claude-sonnet-5-5",
+          "sessionNote": "O pedido informa a sessão 2d1685db-226b-49c5-8d67-e188a0676c74. Não consigo verificá-la daqui e não afirmo o ID por conta própria.",
+          "tools": "Read/Glob/Grep apenas. Não executei nada, não editei, não rodei SQL e não abri credenciais nem .env."
+        },
+        "verdict": "APPROVED",
+        "scope": "Revisão do delta R2 do G003 (base bcde32ca83a216c512e5234d599a4bd8471869b0) depois do R1 CHANGES_REQUESTED. Cobre os achados F1-F8, a auditoria SQL lateral (lista, detalhe e export), fixtures e asserts novos, concorrência e rollback de documentos, consumidores de GET /api/vendas/[id], os gates atuais (build-r3, typecheck-r7, lint-focused-r5, focused-pg-r6 e demais) e o aceite expresso do lint para os hashes atuais. A aprovação G002/R5 não foi herdada.",
+        "approvedForLocalCommit": true,
+        "productionApproval": false,
+        "lintExceptionAccepted": true,
+        "lintExceptionTerms": "Aceito EXPRESSAMENTE a exceção LIMITADA do G003 para os hashes atuais abaixo. LINT_GLOBAL permanece BASELINE_FAIL (nunca PASS) e LINT_DELTA=PASS. Basis: G002 com 105 erros/114 avisos em 4465 arquivos, contra G003 com 105 erros/113 avisos em 4476 arquivos. Ambos têm exit 1, mesmo comando, eslint.config.mjs, package.json e lock (hashes idênticos), mesmo node_modules físico e Node v26.12.1. O diferencial mostra before 219, after 218, matched 218, added [] e removed 1 (react-hooks/exhaustive-deps `emptyRelatorios` em FinanceiroRealContext.tsx). Os 142 offsets de fix convertidos são normalizados só em raízes absolutas e UTF-16→LF, e as fontes com diagnóstico atual são idênticas salvo CRLF. A exceção vale só para o conjunto de fontes em final-source-audit.json (66 arquivos; hashes de código idênticos em build-r3, focused-pg-r6, lint-focused-r5 e typecheck-r7). Se qualquer arquivo lintável mudar, é preciso repetir o lint focado e refrescar o G003 integral e o diferencial. Este aceite não substitui o do R1, que valia só para os hashes antigos.",
+        "lintEvidenceHashes": {
+          "g002Global": "bf2016bf41b3c15acd12c7684d50dc899fc212be5fb859fbcc1094b7448a17f6",
+          "g003Global": "6ed21705100b489f656506e08c6e61b885f4cbffebde3556bf40f0be1ac618cc",
+          "differential": "d48280e8e5cccea8ec29655c293f8e22316c504a6a940e83ded7a4ba94ab434c",
+          "r1Superseded": "g003Global aa749f7061acbfcefe6eab2657179ccfe39b641ffcaff6462fa42c42f0c13fbe (aceite R1, não mais válido)",
+          "verification": "Os hashes g002 e g003 conferem com `files.*.sha256` em lint-differential.json, com RELATORIO.md e com REVISAO_R.json. O hash do diferencial (d48280e8…) só consta como declarado em RELATORIO.md e REVISAO_R.json, e eu não o recomputei."
+        },
+        "findings": [
+          {
+            "id": "N1",
+            "priority": "P3",
+            "blocking": false,
+            "title": "As fixtures de auditoria não isolam a checagem de origem do SQL lateral e só exercitam a entidade 'pagar'",
+            "file": "test/gastos/g003-fixtures.ts:143-156; lib/financeiro/services/auditoria-financeira-service.ts:170-197",
+            "proof": "As linhas históricas de vazamento (g003-audit-P1, P2 e E2-cruzada) também seriam excluídas pelos predicados de marcador, sem depender do lateral. P1 e P2 carregam tipoPerfil=PESSOAL e ownerAdminUserId. E2-cruzada carrega perfilId=E2, que o NOT EXISTS sobre financeiro_perfis exclui (EMPRESA de outra loja). Se alguém removesse `COALESCE(ref.empresa, TRUE)`, os testes ainda passariam. Além disso, todas as linhas poluídas são entidade='pagar'. Os ramos receber, movimentacao, carteira, conciliacao (join com a carteira), fechamento e os não têm linha poluída. A origem inexistente (g003-audit-sem-origem) é coberta.",
+            "assessment": "Li os 7 ramos do lateral e a lógica está correta. Os nomes de tabela precisam existir para o SQL rodar no PG, e o teste roda. A fixture prova o comportamento combinado (lista, detalhe indistinguível de ausente, export com os 2 ids esperados), mas não prova cada defesa isolada. Isso é uma limitação de força do teste, não uma falha comprovada do G003.",
+            "requiredFix": "Não bloqueia o commit local. Em passo futuro que já toque nessas fixtures, semear linhas sem marcador para título P1/P2/E2 e uma por tipo de entidade, e exigir que fiquem fora da lista."
+          },
+          {
+            "id": "N2",
+            "priority": "P3",
+            "blocking": false,
+            "title": "Suítes PG G001/G002/PDV/V3/migration não foram repetidas depois do delta R1",
+            "file": "evidence/pg-g002-r1.receipt.json:107,183; pg-pdv-native-r1; v3-g003; pg-g001-r2; pg-migration-r4",
+            "proof": "Esses recibos têm hash pré-delta em auditoria-financeira-service.ts (8d101525…, atual e6a5de6c…) e em relatorios/exportar/route.ts (631aa854…, atual 58902503…). O delta mexeu no caminho de leitura: a consulta lateral, listarAuditoriaFinanceiraParaExportacao e o ramo de auditoria do export. `registrarAuditoriaFinanceira` ficou no mesmo lugar (create em 135-136, as mesmas linhas que o R1 citou) e snapshotTecnico só deslocou 3 linhas por comentário. Os consumidores de list/getAuditoria/export são só as 3 rotas GET. As 820 regressões unitárias (regression-unit-r4, 04:56) e o focused-pg-r6 foram repetidos com os hashes atuais.",
+            "assessment": "Risco baixo. O RELATORIO já diz que essas suítes 'continuam provas dos mesmos SQLs e corpos de writers preservados'. Sem pedido de código.",
+            "requiredFix": "Nenhuma. Se quiser fechar o rastro, repita pg-g002-r1 antes do commit; é opcional."
+          },
+          {
+            "id": "N3",
+            "priority": "P3",
+            "blocking": false,
+            "title": "prisma/schema.prisma não está no pacote",
+            "file": "prisma/schema.prisma (hash 3e51cf53…)",
+            "proof": "O hash é constante em focused-pg-r6, typecheck-r7, build-r3, lint-focused-r5 e v3-g003 (21/10 23:14), então não mudou ao longo da execução. Não consegui lê-lo. A migration tem 10 `ON DELETE RESTRICT` e nenhum CASCADE, SET NULL ou NO ACTION. A conformidade schema↔migration repousa em geração Prisma, typecheck e build verdes e nos 6 testes de migration.",
+            "requiredFix": "Nenhuma."
+          }
+        ],
+        "r1FindingsStatus": {
+          "F1": "RESOLVIDO. readers.postgres.test.ts:331-363 usa o writer G002 real (createMovimentacao) e percorre legado 200 → perfil EMPRESA criado com perfilMembro.count=0 → 403 com no-store → grant explícito de fixture → 200. O título legado continua com perfilId NULL. ACL e writers ficaram intactos (read-scope.ts:87 inalterado desde o R1). A decisão G003 (§Pré-condição de implantação), o RELATORIO (GATES_EXTERNOS) e REVISAO_R (deploymentPrerequisite) tornam a concessão/revisão de grants por operador autorizado um gate externo bloqueante de qualquer implantação, inclusive para perfis novos criados por writers. Não exige implantar, backfillar nem autoatribuir.",
+          "F2": "RESOLVIDO, com N1 como limitação de força do teste. O diagnóstico r2 revelou vazamento real de entidadeId/valor na auditoria histórica. A correção está em auditoria-financeira-service.ts: consulta lateral que valida origem, perfil e loja (EMPRESA da loja ou perfilId NULL) mais marcadores privados, compartilhada por lista, detalhe e export (:223-235). Sem origem comprovada saem apenas metadados, com entidadeId, antes e depois NULL. O detalhe desconhecido devolve `{ok:true,items:[],total:0}`, igual ao ausente. As fixtures agora têm conciliação, fechamento e auditoria não vazios, e P2 repete nomes e valores de E1. Há asserts numéricos exatos em analytics, resumo, indicadores, DRE, fluxo, categorias, rankings, carteiras e conciliação. O export cobre 12 tipos × csv/xlsx = 24 casos, com ids e totais esperados. Um teste inspeciona a linha de auditoria realmente gravada e o DTO devolvido.",
+          "F3": "RESOLVIDO. documentos.postgres.test.ts:71-90 faz 6 registros concorrentes do mesmo perfil e hash, com 1 linha, 1 upload e DTOs idênticos, e o perfil distinto fica independente. Em :92-119 um trigger de falha só de fixture, criado e removido em finally, força erro PG depois do upload, e a linha sofre rollback, o objeto é removido exatamente uma vez e os logs não vazam P1, U1, path nem bytes. Em :121-157 a fila de locks reais é observada via pg_stat_activity nas duas ordens (vínculo→retenção e retenção→vínculo). Nunca resulta QUARENTENA com vínculo, e os bytes são preservados. O DDL foi revisado antes (r1-delta-test-sql-reviewed.json) e não toca trigger, constraint nem RLS canônicos.",
+          "F4": "RESOLVIDO. A decisão declara a nova exigência `hubs.vendas` no GET venda. r1-f4-consumer-proof.json mapeia os consumidores (conferencia-caixa/venda-detalhe, workspace-correcao-venda, vendas-arquivo-geral, operations-store). Em enterprise-permissions.ts, ADMIN/GERENTE/CAIXA/VENDEDOR têm hubs.vendas e caixaHistorico, e TECNICO tem ambos false. Os testes PG são positivos para os 4 papéis comerciais, e o token ADMIN antigo de um TECNICO atual recebe 403 com no-store. A Action OS V4 é positiva para ADMIN e TECNICO pelo gate operacoes.editarOs (readers.postgres.test.ts:461-480). operacoes/lovable/api/vendas.ts usa Server Actions, não o GET. O INVENTARIO registra a resposta (respostaR1.getVenda).",
+          "F5": "Limite documentado na decisão: quarentena terminal e dedup devolve o documento ainda em QUARENTENA, sem download nem novo vínculo. Sem escopo novo.",
+          "F6": "Limite documentado: nenhuma API G003 apaga documentos ou vínculos, o SQL do owner ainda pode DELETE/TRUNCATE, e os triggers protegem só UPDATE, identidade e histórico. Não se certifica retenção contra o owner.",
+          "F7": "Limite documentado e testado. A minimização na gravação e na leitura é deliberada (A18). readers.postgres.test.ts:177-192 inspeciona a linha gravada (só status e valor) e o DTO devolvido.",
+          "F8": "Limite documentado: cookie de loja compartilhado entre abas pode dar 403, e o Provider invalida a geração até remontar ou recarregar. Fail-closed, sem alegar recuperação automática."
+        },
+        "gatesVerified": {
+          "totals": "Os 7 vitest.json conferem com o declarado: 122 (focused-pg-r6: 20 unit + 77 readers PG + 25 documentos PG), 6 (migration), 820 (regressão unitária), 24 (G001), 97 (G002), 6 (PDV) e 109 (OS/V3). Todos têm numFailedTests=0, numPendingTests=0, numTodoTests=0 e success=true. PG = 77+25+6+24+97+6+109 = 344, sem skips.",
+          "typecheck": "typecheck-r7: `npm run typecheck` (tsc --noEmit, 4096 MB) com exit 0, log sem diagnósticos e sourceUnchanged=true.",
+          "lintFocused": "lint-focused-r5: 59 arquivos, exit 0, sem errorCount nem warningCount > 0, sourceUnchanged=true.",
+          "build": "build-r3: exit 0, MIGRATION_SKIPPED, Prisma Client v6.19.3 gerado, 'Compiled successfully', 102/102 páginas, sourceUnchanged=true.",
+          "worker": "built-worker-validation.json (pass=true, buildLabel build-r3, sw.js de 05:09:43 gerado pelo build). A primeira regra (índice 1) é NetworkOnly com 0 URLs privadas no precache. Estão cobertas /api/contador-externo/lojas, /contador-externo, /contador-externo/lojas/** e `?_rsc`. O aquecimento é bloqueado para 21 URLs nos dois tipos de mensagem e a ativação limpa 21 URLs em 3 caches. Recursos comuns e origem estrangeira (índice 18 NetworkFirst) são preservados. É VM com CacheStorage sintético, não E2E de navegador.",
+          "sourceHashes": "Os hashes de código são idênticos em focused-pg-r6, typecheck-r7, lint-focused-r5, build-r3 e final-source-audit.json. Só os 5 docs (GOAL, RELATORIO, INVENTARIO, REVISAO_R e decisão) diferem, o que é esperado porque foram editados depois dos gates.",
+          "allowlist": "final-source-audit.json: 66 alterados, outsideAllowlist=[], protectedWriterBodyChanges=[]. Os corpos dos writers G002 (POST/PATCH/DELETE das rotas, criarCarteira, transferirEntreCarteiras, liquidar* etc.) têm hashes de corpo listados como 'unchanged'.",
+          "delta": "delta-since-r1.json lista só 11 arquivos alterados desde o R1. read-scope.ts, read-cache.ts, documentos.ts, migration, next.config.mjs e client-privacy-cache.js estão fora da lista, ou seja, inalterados desde o R1. Isso preserva as conclusões do R1 sobre eles.",
+          "node": "Node local v26.12.1 contra 24.x declarado. Nenhuma falha concreta introduzida. É limitação registrada, sem mudança de configuração."
+        },
+        "verifiedWithoutFinding": [
+          "leituraEmpresaWhere (read-scope.ts:23-29): loja vazia lança erro; a interseção mantém o filtro do consumidor dentro de AND; perfilId NULL ou perfil EMPRESA da mesma loja.",
+          "requireLeituraFinanceiraEmpresa (:75-89): usuário ativo, permissão atual, membership real e, existindo perfil, grant vigente. ADMIN não ignora o grant. Sem perfil não provisiona nada.",
+          "Seletores estritos (:128-138) e respostaFinanceiraPrivada (private, no-store, Vary: Cookie) em sucesso, negação, erro e export, inclusive o 400 e o 503 do export (exportar/route.ts:306,316-351).",
+          "Contador externo: reader revalida cookie, sessão e vínculo próprios com tocarUltimoUso/estenderSessao como no-op, sem renovação escondida. Os testes PG recusam scope clonado, loja ou userId trocados e acesso revogado.",
+          "SQL da auditoria: Prisma.sql parametrizado, único Prisma.raw com alias fixo 'e' ou 'c', paginação validada, nenhuma entrada do request em nomes SQL.",
+          "A migration continua aditiva: 10 FKs `ON DELETE RESTRICT`, nenhum CASCADE, SET NULL ou NO ACTION."
+        ],
+        "inspectedFiles": [
+          "delta-since-r1.json, evidence/review-r1-structured.json, evidence/r1-triage.json, evidence/current-gates.json",
+          "current/docs/ai-execution/_evidence/OMNI-GESTAO-GASTOS-003/{GOAL.md,RELATORIO.md,REVISAO_R.json,INVENTARIO_READERS.json (por busca e contagens)}",
+          "current/docs/decisions/OMNI-GESTAO-GASTOS-003-LEITURAS-DOCUMENTOS.md",
+          "current/lib/gastos/read-scope.ts:15-205",
+          "current/lib/financeiro/services/auditoria-financeira-service.ts (integral)",
+          "current/app/api/financeiro/relatorios/exportar/route.ts (por busca: guard, auditoria e headers)",
+          "current/app/api/vendas/[id]/route.ts:60-120",
+          "current/lib/auth/enterprise-permissions.ts (matriz de papéis por busca)",
+          "current/lib/operations-store.tsx:2146-2153 e current/components/dashboard/vendas/vendas-arquivo-geral.tsx:910-917",
+          "current/test/gastos/readers.postgres.test.ts:1-260 e 320-485 (lista completa de testes por busca)",
+          "current/test/gastos/documentos.postgres.test.ts:1-160 (lista completa de testes por busca)",
+          "current/test/gastos/g003-fixtures.ts:84-172",
+          "current/prisma/migrations/20261021120000_gastos_readers_documentos/migration.sql (contagem de ON DELETE)",
+          "evidence/{focused-pg-r6,typecheck-r7,build-r3,lint-focused-r5}.receipt.json",
+          "evidence/{pg-migration-r4,regression-unit-r4,pg-g001-r2,pg-g002-r1,pg-pdv-native-r1,v3-g003}.{receipt,vitest}.json",
+          "evidence/{build-r3.log,typecheck-r7.log,lint-focused-r5.eslint.json,built-worker-validation.json,final-source-audit.json}",
+          "evidence/{lint-differential,lint-differential-matched,lint-global-g002,lint-global-g003,lint-eol-source-proof}.json",
+          "evidence/{r1-f4-consumer-proof,r1-delta-audit-sql-reviewed,r1-delta-diagnostic-r3-diagnosis}.json"
+        ],
+        "limitations": [
+          "Não executei nada. Não recomputei SHA-256, contagens AST (179 consultas Prisma, 18 SQL raw, 13 grupos, 19 offline), ESLint, build, testes nem o hash do diferencial. Confiei na consistência cruzada de recibos, hashes e logs.",
+          "Não li os 66 arquivos linha a linha. Neste R2 foco o delta (11 arquivos) e uso delta-since-r1.json para sustentar a estabilidade do restante. As conclusões do R1 sobre arquivos inalterados valem.",
+          "O pacote não traz prisma/schema.prisma e não inclui uma versão R1 do auditoria-financeira-service.ts, então não pude fazer diff delta-a-delta. A inferência de que o caminho de escrita não mudou vem das linhas citadas no R1.",
+          "Testes de leitura e documentos rodam com o owner das tabelas. Só o ensaio de migration usa papel efetivo não-owner/NOBYPASSRLS. Não certifico RLS produtiva.",
+          "Sessão e cookies são sintéticos, com serviços, Actions e constraints reais. A capability de download é um bearer temporário de fixture (até 60 s), sem reautenticação no consumo, e o storage é só fixture.",
+          "A validação do service worker é uma execução em VM com CacheStorage sintético, não um E2E de navegador.",
+          "Node 26.12.1 contra 24.x declarado: typecheck, lint e build passaram nesse runtime e não certifico outro.",
+          "N1 e N2 acima são limitações de força do teste e de rastro de reexecução, não bloqueiam.",
+          "productionApproval=false. Implantação continua condicionada à concessão/revisão explícita de PerfilMembro por operador autorizado, fora do G003. Não há aprovação de push, merge, deploy nem G004-G010.",
+          "O commit local único só vale para os caminhos exatos da allowlist (66 arquivos), com a atualização dos docs que registre este R2. Qualquer alteração de código lintável ou de produto invalida o aceite de lint e exige novo R."
+        ]
+      }
+    }
+  ],
+  "currentGates": {
+    "build": "build-r3",
+    "typecheck": "typecheck-r7",
+    "lintFocused": "lint-focused-r5",
+    "focused": "focused-pg-r6",
+    "migration": "pg-migration-r4",
+    "unitRegressions": "regression-unit-r4",
+    "g001": "pg-g001-r2",
+    "g002": "pg-g002-r1",
+    "pdv": "pg-pdv-native-r1",
+    "osV3": "v3-g003"
+  },
+  "testTotals": {
+    "focused": 122,
+    "readersPG": 77,
+    "documentosPG": 25,
+    "unitFocused": 20,
+    "unitRegressions": 820,
+    "postgres": 344
+  },
+  "lintEvidence": {
+    "global": "BASELINE_FAIL",
+    "delta": "PASS",
+    "g002": "bf2016bf41b3c15acd12c7684d50dc899fc212be5fb859fbcc1094b7448a17f6",
+    "g003": "6ed21705100b489f656506e08c6e61b885f4cbffebde3556bf40f0be1ac618cc",
+    "differential": "d48280e8e5cccea8ec29655c293f8e22316c504a6a940e83ded7a4ba94ab434c",
+    "newDiagnostics": 0,
+    "exceptionRequiresNewR": true
+  },
+  "executorResponse": "E/r1-triage.json",
+  "pending": [
+    "Criar e conferir um unico commit somente local com os 66 caminhos exatos",
+    "SHA final no recibo externo pos-commit, sem auto-inclusao circular no commit"
+  ],
+  "deploymentPrerequisite": "Concessao/revisao explicita de PerfilMembro por operador autorizado antes de qualquer implantacao, incluindo perfis criados por writers G002; sem autoatribuicao/producao neste GOAL.",
+  "actualModel": "claude-sonnet-5-5",
+  "sessionId": "ccf81443-42bb-4a6d-b9bb-a5e589d14eb1",
+  "cli": "2.1.288 (Claude Code)",
+  "family": "anthropic",
+  "approvedForLocalCommit": true,
+  "lintEvidenceHashes": {
+    "g002Global": "bf2016bf41b3c15acd12c7684d50dc899fc212be5fb859fbcc1094b7448a17f6",
+    "g003Global": "6ed21705100b489f656506e08c6e61b885f4cbffebde3556bf40f0be1ac618cc",
+    "differential": "d48280e8e5cccea8ec29655c293f8e22316c504a6a940e83ded7a4ba94ab434c",
+    "r1Superseded": "g003Global aa749f7061acbfcefe6eab2657179ccfe39b641ffcaff6462fa42c42f0c13fbe (aceite R1, não mais válido)",
+    "verification": "Os hashes g002 e g003 conferem com `files.*.sha256` em lint-differential.json, com RELATORIO.md e com REVISAO_R.json. O hash do diferencial (d48280e8…) só consta como declarado em RELATORIO.md e REVISAO_R.json, e eu não o recomputei."
+  },
+  "inputManifestSHA256": "41d8c4c4e4c32b0c95d6a2fbd5fd7ae063cec84ccf6a124acf58cf1009898611",
+  "eventsSHA256": "9354f7c3e434d1f45ed27d32ac39db459de9a3a10e3b640c065a4c5634ef1430",
+  "findings": [
+    {
+      "id": "N1",
+      "priority": "P3",
+      "blocking": false,
+      "title": "As fixtures de auditoria não isolam a checagem de origem do SQL lateral e só exercitam a entidade 'pagar'",
+      "file": "test/gastos/g003-fixtures.ts:143-156; lib/financeiro/services/auditoria-financeira-service.ts:170-197",
+      "proof": "As linhas históricas de vazamento (g003-audit-P1, P2 e E2-cruzada) também seriam excluídas pelos predicados de marcador, sem depender do lateral. P1 e P2 carregam tipoPerfil=PESSOAL e ownerAdminUserId. E2-cruzada carrega perfilId=E2, que o NOT EXISTS sobre financeiro_perfis exclui (EMPRESA de outra loja). Se alguém removesse `COALESCE(ref.empresa, TRUE)`, os testes ainda passariam. Além disso, todas as linhas poluídas são entidade='pagar'. Os ramos receber, movimentacao, carteira, conciliacao (join com a carteira), fechamento e os não têm linha poluída. A origem inexistente (g003-audit-sem-origem) é coberta.",
+      "assessment": "Li os 7 ramos do lateral e a lógica está correta. Os nomes de tabela precisam existir para o SQL rodar no PG, e o teste roda. A fixture prova o comportamento combinado (lista, detalhe indistinguível de ausente, export com os 2 ids esperados), mas não prova cada defesa isolada. Isso é uma limitação de força do teste, não uma falha comprovada do G003.",
+      "requiredFix": "Não bloqueia o commit local. Em passo futuro que já toque nessas fixtures, semear linhas sem marcador para título P1/P2/E2 e uma por tipo de entidade, e exigir que fiquem fora da lista."
+    },
+    {
+      "id": "N2",
+      "priority": "P3",
+      "blocking": false,
+      "title": "Suítes PG G001/G002/PDV/V3/migration não foram repetidas depois do delta R1",
+      "file": "evidence/pg-g002-r1.receipt.json:107,183; pg-pdv-native-r1; v3-g003; pg-g001-r2; pg-migration-r4",
+      "proof": "Esses recibos têm hash pré-delta em auditoria-financeira-service.ts (8d101525…, atual e6a5de6c…) e em relatorios/exportar/route.ts (631aa854…, atual 58902503…). O delta mexeu no caminho de leitura: a consulta lateral, listarAuditoriaFinanceiraParaExportacao e o ramo de auditoria do export. `registrarAuditoriaFinanceira` ficou no mesmo lugar (create em 135-136, as mesmas linhas que o R1 citou) e snapshotTecnico só deslocou 3 linhas por comentário. Os consumidores de list/getAuditoria/export são só as 3 rotas GET. As 820 regressões unitárias (regression-unit-r4, 04:56) e o focused-pg-r6 foram repetidos com os hashes atuais.",
+      "assessment": "Risco baixo. O RELATORIO já diz que essas suítes 'continuam provas dos mesmos SQLs e corpos de writers preservados'. Sem pedido de código.",
+      "requiredFix": "Nenhuma. Se quiser fechar o rastro, repita pg-g002-r1 antes do commit; é opcional."
+    },
+    {
+      "id": "N3",
+      "priority": "P3",
+      "blocking": false,
+      "title": "prisma/schema.prisma não está no pacote",
+      "file": "prisma/schema.prisma (hash 3e51cf53…)",
+      "proof": "O hash é constante em focused-pg-r6, typecheck-r7, build-r3, lint-focused-r5 e v3-g003 (21/10 23:14), então não mudou ao longo da execução. Não consegui lê-lo. A migration tem 10 `ON DELETE RESTRICT` e nenhum CASCADE, SET NULL ou NO ACTION. A conformidade schema↔migration repousa em geração Prisma, typecheck e build verdes e nos 6 testes de migration.",
+      "requiredFix": "Nenhuma."
+    }
+  ],
+  "blockingFindings": [],
+  "limitations": [
+    "Não executei nada. Não recomputei SHA-256, contagens AST (179 consultas Prisma, 18 SQL raw, 13 grupos, 19 offline), ESLint, build, testes nem o hash do diferencial. Confiei na consistência cruzada de recibos, hashes e logs.",
+    "Não li os 66 arquivos linha a linha. Neste R2 foco o delta (11 arquivos) e uso delta-since-r1.json para sustentar a estabilidade do restante. As conclusões do R1 sobre arquivos inalterados valem.",
+    "O pacote não traz prisma/schema.prisma e não inclui uma versão R1 do auditoria-financeira-service.ts, então não pude fazer diff delta-a-delta. A inferência de que o caminho de escrita não mudou vem das linhas citadas no R1.",
+    "Testes de leitura e documentos rodam com o owner das tabelas. Só o ensaio de migration usa papel efetivo não-owner/NOBYPASSRLS. Não certifico RLS produtiva.",
+    "Sessão e cookies são sintéticos, com serviços, Actions e constraints reais. A capability de download é um bearer temporário de fixture (até 60 s), sem reautenticação no consumo, e o storage é só fixture.",
+    "A validação do service worker é uma execução em VM com CacheStorage sintético, não um E2E de navegador.",
+    "Node 26.12.1 contra 24.x declarado: typecheck, lint e build passaram nesse runtime e não certifico outro.",
+    "N1 e N2 acima são limitações de força do teste e de rastro de reexecução, não bloqueiam.",
+    "productionApproval=false. Implantação continua condicionada à concessão/revisão explícita de PerfilMembro por operador autorizado, fora do G003. Não há aprovação de push, merge, deploy nem G004-G010.",
+    "O commit local único só vale para os caminhos exatos da allowlist (66 arquivos), com a atualização dos docs que registre este R2. Qualquer alteração de código lintável ou de produto invalida o aceite de lint e exige novo R."
+  ],
+  "postReviewUpdatesAllowed": "Somente transcricao do R2 em GOAL/RELATORIO/INVENTARIO/REVISAO_R; produto, schema, migration e testes permanecem identicos ao pacote aprovado."
+}

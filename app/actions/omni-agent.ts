@@ -1,7 +1,11 @@
 "use server"
+import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
+import { FinanceiroReadError, leituraComandosOmniEmpresaWhere, requireLeituraFinanceiraEmpresa, requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
+import { erroConsultaFinanceira } from "@/lib/gastos/query"
 import type { OmniAgentInterpretacao } from "@/lib/omni-agent/types"
 import { INTENT_MODULE } from "@/lib/omni-agent/types"
 import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret"
@@ -9,7 +13,6 @@ import { executeOmniAgentIntent } from "@/lib/omni-agent/executor"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { resolveStoreWhatsAppCredentials } from "@/lib/whatsapp/store-credentials"
-import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import { normalizeOmniAgentCanal } from "@/lib/omni-agent/canal"
 import { isOmniAgentAutomationTriggerKey, type OmniAgentAutomationTriggerKey } from "@/lib/omni-agent/omni-automation-triggers"
@@ -49,7 +52,8 @@ async function logExec(storeId: string, commandId: string, ok: boolean, detail: 
       data: {
         action: ok ? "OMNI_AGENT_EXEC_OK" : "OMNI_AGENT_EXEC_ERRO",
         userLabel: "Omni Agent HUB",
-        detail: detail.slice(0, 4000),
+        // Desligado: trilha detalhada da main. Ligado: minimização do G003 (sem conteúdo privado).
+        detail: gestorMoneyAtivo() ? (ok ? "Comando concluído." : "Comando recusado ou indisponível.") : detail.slice(0, 4000),
         metadata: omniAgentAuditMetadata(sid, { commandId }),
         source: "omni_agent",
       },
@@ -234,7 +238,7 @@ export async function listOmniAgentCommands(storeId: string, take = 80): Promise
   if (!g.ok) throw new Error(g.error)
 
   const rows = await prisma.omniAgentCommand.findMany({
-    where: { storeId: sid },
+    where: await leituraComandosOmniEmpresaWhere(sid),
     orderBy: { createdAt: "desc" },
     take: Math.min(take, 200),
   })
@@ -263,7 +267,7 @@ export async function getOmniAgentHubStats(storeId: string): Promise<OmniAgentHu
   const start = new Date()
   start.setHours(0, 0, 0, 0)
 
-  const base = { storeId: sid }
+  const base = await leituraComandosOmniEmpresaWhere(sid)
   const [todayCount, pending, awaitingConfirmation, executed, error, total] = await Promise.all([
     prisma.omniAgentCommand.count({ where: { ...base, createdAt: { gte: start } } }),
     prisma.omniAgentCommand.count({ where: { ...base, status: "PENDENTE" } }),
@@ -494,6 +498,7 @@ export type OmniAgentReportsSnapshotDTO = {
   intentCounts: OmniAgentIntentCountDTO[]
   financeiroHoje: Awaited<ReturnType<typeof getResumoExecutivo>> | null
   financeiroSemPermissao: boolean
+  financeiroErro?: ReturnType<typeof erroConsultaFinanceira>["body"] | null
 }
 
 export async function getOmniAgentReportsSnapshot(storeId: string): Promise<OmniAgentReportsSnapshotDTO> {
@@ -506,7 +511,7 @@ export async function getOmniAgentReportsSnapshot(storeId: string): Promise<Omni
   const [stats, rows] = await Promise.all([
     getOmniAgentHubStats(sid),
     prisma.omniAgentCommand.findMany({
-      where: { storeId: sid },
+      where: await leituraComandosOmniEmpresaWhere(sid),
       orderBy: { createdAt: "desc" },
       take: 400,
       select: { interpretacao: true },
@@ -525,17 +530,21 @@ export async function getOmniAgentReportsSnapshot(storeId: string): Promise<Omni
 
   let financeiroHoje: Awaited<ReturnType<typeof getResumoExecutivo>> | null = null
   const financeGate = INTENT_MODULE.FINANCE_SUMMARY
-  const financeiroSemPermissao = !financeGate?.(g.permissions)
+  let financeiroSemPermissao = !financeGate?.(g.permissions)
+  let financeiroErro: ReturnType<typeof erroConsultaFinanceira>["body"] | null = null
 
   if (financeGate?.(g.permissions)) {
     try {
+      await requireLeituraFinanceiraEmpresa(sid)
       financeiroHoje = await getResumoExecutivo(sid, buildFiltroPreset("hoje"))
-    } catch {
+    } catch (e) {
       financeiroHoje = null
+      financeiroSemPermissao = e instanceof FinanceiroReadError && e.status === 403
+      financeiroErro = erroConsultaFinanceira(e).body
     }
   }
 
-  return { stats, intentCounts, financeiroHoje, financeiroSemPermissao }
+  return { stats, intentCounts, financeiroHoje, financeiroSemPermissao, financeiroErro }
 }
 
 export type OmniAgentAutomationDTO = {
@@ -594,7 +603,9 @@ export async function listOmniAgentAutomations(storeId: string): Promise<OmniAge
   const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
-  await ensureDefaultOmniAgentAutomations(sid)
+  await requireLeituraOperacionalEmpresa(sid, p => p.workspace.omniAgent)
+  // Desligado: como na main, a lista garante as automações padrão da loja.
+  if (!gestorMoneyAtivo()) await ensureDefaultOmniAgentAutomations(sid)
 
   const rows = await prisma.omniAgentAutomation.findMany({
     where: { storeId: sid },

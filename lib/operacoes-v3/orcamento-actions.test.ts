@@ -136,7 +136,8 @@ describe("gerarOrcamentoDaOS — GOAL OPS-V4-FINANCEIRO-RETIRADA-GARANTIA-002 (i
   it("o título conferido é o da chave canônica DESTA loja e OS", async () => {
     findFirstMock.mockResolvedValue(semOrcamento());
     await gerarOrcamentoDaOS(" loja-1 ", " os-1 ");
-    expect(tituloMock).toHaveBeenCalledWith(expect.objectContaining({ where: { storeId_localKey: { storeId: "loja-1", localKey: localKeyContaReceberOSV3("loja-1", "os-1") } } }));
+    // G003: a leitura acrescenta o filtro de escopo EMPRESA; a chave canônica continua a mesma.
+    expect(tituloMock).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ storeId: "loja-1", storeId_localKey: { storeId: "loja-1", localKey: localKeyContaReceberOSV3("loja-1", "os-1") } }) }));
   });
 
   it("loja ou OS vazias seguem o caminho (e a mensagem) de sempre", async () => {

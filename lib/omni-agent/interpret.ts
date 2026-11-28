@@ -5,6 +5,16 @@ import {
   parseReceivableFromCommand,
 } from "@/lib/omni-agent/interpret-receivable"
 
+function periodoDaConsulta(text: string): string {
+  if (/m[eê]s passado/i.test(text)) return "mespassado"
+  if (/neste m[eê]s|este m[eê]s|m[eê]s atual/i.test(text)) return "estemes"
+  if (/ontem/i.test(text)) return "ontem"
+  if (/hoje/i.test(text)) return "hoje"
+  if (/30 dias/i.test(text)) return "30dias"
+  if (/7 dias/i.test(text)) return "7dias"
+  return ""
+}
+
 function extractClienteNome(text: string): string {
   const t = text.trim()
   const m1 = t.match(/(?:para|cliente)\s+([^,\n.]+?)(?:\s+(?:com|—|-|,|\.|$))/i)
@@ -64,6 +74,17 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
     }
   }
 
+  // Consultas antecedem a interpretação de escrita: pergunta não registra gasto.
+  const perguntaFinanceira=/^(quanto|qual|quais)\b/i.test(raw)&&/paguei|pagamos|gastei|gasto|despesa|pagamentos|a pagar/i.test(raw)
+  if(perguntaFinanceira){
+    const aberto=/ainda.*pagar|a pagar|falta.*pagar/i.test(raw)
+    const preset=periodoDaConsulta(raw)
+    const categoria=raw.match(/(?:paguei|gastei)\s+(?:de|em|com)\s+(.+?)(?=\s+(?:neste|nesse|este|no|na|hoje|ontem|durante)\b|[?.!]|$)/i)?.[1]
+      ??raw.match(/gasto(?:\s+realizado)?\s+(?:em|com|de)\s+(.+?)(?=\s+(?:neste|nesse|este|no|na|hoje|ontem|durante)\b|[?.!]|$)/i)?.[1]
+    return {intent:"FINANCE_SUMMARY",action:"Consultar financeiro",confidence:0.95,requiresConfirmation:false,
+      fields:{consulta:aberto?"PAGAR_ABERTO":"DESPESA_REALIZADA",preset,...(categoria?{categoriaNome:categoria.trim()}:{}),...(/pessoal/i.test(raw)?{perfil:"PESSOAL"}:{}),...(/compet[êe]ncia|reconhecid/i.test(raw)?{base:"COMPETENCIA"}:{})}}
+  }
+
   if (/(consultar\s+caixa|^caixa$|status\s+do\s+caixa|sess[aã]o\s+de\s+caixa)/i.test(t) || (t.includes("caixa") && /consult|status|abert/.test(t))) {
     return {
       intent: "CASHBOX_QUERY",
@@ -82,9 +103,9 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
   ) {
     return {
       intent: "FINANCE_SUMMARY",
-      action: "Resumo financeiro (hoje)",
+      action: "Resumo financeiro",
       confidence: 0.9,
-      fields: { preset: "hoje" },
+      fields: { preset: periodoDaConsulta(raw) },
       requiresConfirmation: false,
     }
   }

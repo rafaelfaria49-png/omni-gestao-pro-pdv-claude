@@ -83,9 +83,10 @@ const h = vi.hoisted(() => {
           const s = db.sessoes.find((x) => x.id === values[0] && x.storeId === values[1])
           return s ? [{ status: s.status }] : []
         }
-        if (sql.includes("contas_receber_titulos") && sql.includes("FOR UPDATE")) {
+        // G002: a ponte de escopo trava o título com FOR NO KEY UPDATE (WHERE id = ? AND "storeId" = ?).
+        if (sql.includes("contas_receber_titulos") && /FOR (?:NO KEY )?UPDATE/.test(sql)) {
           // Trava do título (upsert/cancelamento travados): em memória, só confirma a existência.
-          const porId = sql.includes('"id" = ?')
+          const porId = /id"? = ?/.test(sql)
           const r = db.titulos.find((t) =>
             porId ? t.id === values[0] && t.storeId === values[1] : t.storeId === values[0] && t.localKey === values[1],
           )
@@ -297,6 +298,10 @@ const h = vi.hoisted(() => {
           return c
         },
       },
+      // G002: perfil EMPRESA já provisionado neste harness; criação/RLS são provas PG.
+      financeiroPerfil: { findUnique: async ({ where }: { where: { storeId: string } }) => {
+        guard(); return { id: `unit-empresa:${where.storeId}`, storeId: where.storeId, tipo: "EMPRESA", ativo: true }
+      } },
       sessaoCaixa: {
         findFirst: async ({ where }: { where: Record<string, unknown> }) => {
           guard()
@@ -367,7 +372,12 @@ const SESSAO = "sess-1"
 const SESSAO_OUTRA = "sess-2"
 const LK = "cr-crediario-77"
 
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }))
+// G002: infraestrutura do fake (perfil EMPRESA); asserções de negócio preservadas.
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  return { prisma: h.prisma, prismaEnsureConnected: vi.fn(async () => undefined) }
+})
 vi.mock("@/lib/store-id-from-request", () => ({
   storeIdFromAssistecRequestForWrite: vi.fn((req: Request) => req.headers.get("x-assistec-loja-id") ?? ""),
   // `requireModuleApi` (module-access) resolve a loja pela leitura canônica do mesmo header.

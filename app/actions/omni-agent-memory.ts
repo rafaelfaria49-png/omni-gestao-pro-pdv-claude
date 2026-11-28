@@ -1,7 +1,9 @@
 "use server"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { requireModuleAction, requirePlatformAction } from "@/lib/auth/module-access"
 
 import { prisma } from "@/lib/prisma"
+import { requireLeituraOperacionalEmpresa } from "@/lib/gastos/read-scope"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import { writeOmniAgentMemory } from "@/lib/omni-agent/memory-writer"
@@ -68,7 +70,8 @@ async function logMemoryAudit(
       data: {
         action,
         userLabel: "Omni Agent HUB",
-        detail: detail.slice(0, 4000),
+        // Desligado: trilha detalhada da main. Ligado: minimização do G003.
+        detail: gestorMoneyAtivo() ? "Metadados da memória operacional atualizados." : detail.slice(0, 4000),
         metadata: omniAgentAuditMetadata(storeId, extra),
         source: "omni_agent",
       },
@@ -193,6 +196,7 @@ export async function listOmniAgentMemoriesByCliente(
   await requireModuleAction(storeId, "agent")
 
   const { sid } = await guard(storeId)
+  await requireLeituraOperacionalEmpresa(sid, p => p.workspace.omniAgent)
   const cid = clienteId.trim()
   if (!cid) return []
 
@@ -215,6 +219,7 @@ export async function listRecentOmniAgentMemories(
   await requireModuleAction(storeId, "agent")
 
   const { sid } = await guard(storeId)
+  await requireLeituraOperacionalEmpresa(sid, p => p.workspace.omniAgent)
 
   const rows = await prisma.omniAgentMemory.findMany({
     where: { storeId: sid, status: "ativo" },
@@ -232,6 +237,7 @@ export async function searchOmniAgentMemories(
   await requireModuleAction(storeId, "agent")
 
   const { sid } = await guard(storeId)
+  await requireLeituraOperacionalEmpresa(sid, p => p.workspace.omniAgent)
   const q = term.trim()
   if (!q) return listRecentOmniAgentMemories(sid, opts)
 

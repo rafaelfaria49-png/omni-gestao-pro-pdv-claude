@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 /**
  * PDV-MOTOR-INTEGRITY-N1 — invariante linhas × total no choke point compartilhado.
  *
@@ -13,7 +14,7 @@
  */
 import { describe, expect, it } from "vitest"
 import {
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   SalePaymentsMismatchError,
   InvalidSaleLinesError,
   type SalePayload,
@@ -233,3 +234,9 @@ describe("invariante linhas × total — V2 equivalente a V1", () => {
     expect(counts().vendaUpserts).toBe(1)
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

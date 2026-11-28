@@ -27,6 +27,7 @@ import { authenticateSupervisorPin } from "@/lib/auth/verify-supervisor-pin"
 import { mergeFinanceiroPayload, appendFinanceiroHistorico } from "@/lib/financeiro/contracts/payload"
 import { tituloEditavel, parseVencimentoBr } from "@/lib/vendas/correcao-cliente-titulo-plan"
 import type { Prisma } from "@/generated/prisma"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -153,6 +154,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await tx.contaReceberTitulo.update({
         where: { id: titulo.id },
         data: {
+          ...await dadosFinanceirosEmpresa(tx, storeId, undefined, {
+            receberTituloId: titulo.id, carteiraHistoricaId: titulo.carteiraId,
+          }),
           ...(mudaVencimento && novoVenc ? { vencimento: novoVenc } : {}),
           payload: tituloPayload as unknown as Prisma.InputJsonValue,
         },

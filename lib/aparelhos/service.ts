@@ -10,6 +10,7 @@
  */
 import type { Prisma, AparelhoFisico } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
 import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-ledger-service"
 import { buildIdempotencyKey } from "@/lib/estoque/stock-ledger-contract"
 import type { AparelhoPermissions } from "./permissions"
@@ -745,6 +746,9 @@ export async function decidirAquisicao(ctx: AparelhoCtx, id: string, raw: unknow
         storeId: ctx.storeId, operador: ctx.actorLabel,
         aquisicao: { id: aq.id, protocolo: aq.protocolo, tipo: aq.tipo, valorTotal: aq.valorTotal, formaPagamento: aq.formaPagamento, vendedorNome: aq.vendedorNome, fornecedorId: aq.fornecedorId },
       })
+      // Reconciliação G002: título NOVO entra no perfil EMPRESA na mesma transação (inerte com
+      // o Gestor Money desligado). Título preexistente (skipDuplicates) não é tocado.
+      if (obrigacao?.criado) await dadosFinanceirosEmpresa(tx, ctx.storeId, undefined, { pagarTituloId: obrigacao.tituloId })
       for (const u of aq.aparelhos) {
         if (u.status === "baixado") continue
         await tx.aparelhoFisico.update({ where: { id: u.id }, data: { propriedade: "loja", version: { increment: 1 } } })

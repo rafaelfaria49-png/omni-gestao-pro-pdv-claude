@@ -1,4 +1,6 @@
 import type { Prisma } from "@/generated/prisma"
+import { dadosFinanceirosEmpresa } from "@/lib/gastos/financeiro-scope"
+import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-service"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { assertNoUnsupportedVariantLines, assertProductCommercialSaleSupported } from "@/lib/cadastros/product-commercial-contract"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
@@ -1269,6 +1271,7 @@ export async function upsertVendaInTransaction(
       await tx.movimentacaoFinanceira.create({
         data: {
           storeId: lojaId,
+          ...await dadosFinanceirosEmpresa(tx, lojaId, valorImediato),
           tipo: "entrada",
           valor: valorImediato,
           descricao: `Venda PDV ${pedidoId}${sufixoCliente}`,
@@ -1470,27 +1473,12 @@ export async function upsertVendaInTransaction(
         vendas: [{ saleId: pedidoId, total: aPrazoVal }],
       } as unknown as Prisma.InputJsonValue
 
-      const upserted = await tx.contaReceberTitulo.upsert({
-        where: { storeId_localKey: { storeId: lojaId, localKey: aprazoLocalKey } },
-        create: {
-          storeId: lojaId,
-          localKey: aprazoLocalKey,
-          descricao: aprazoDesc,
-          cliente: aprazoCliente,
-          valor: valorParcela,
-          vencimento: vencStr,
-          status: "pendente",
-          payload: aprazoPayload,
-        },
-        // `status` fora do update para preservar baixas/pagamentos já feitos em re-sync.
-        update: {
-          descricao: aprazoDesc,
-          cliente: aprazoCliente,
-          valor: valorParcela,
-          vencimento: vencStr,
-          payload: aprazoPayload,
-        },
-        select: { id: true },
+      // Mesmo writer canônico com trava/ledger: re-sync não perde baixa já feita.
+      const upserted = await upsertContaReceber({
+        storeId: lojaId, localKey: aprazoLocalKey, descricao: aprazoDesc,
+        cliente: aprazoCliente, valor: valorParcela, vencimento: vencStr,
+        status: "pendente", payloadPatch: aprazoPayload as Record<string, unknown>,
+        replacePayload: true, db: tx,
       })
       if (n === 1) firstTituloId = upserted.id
     }

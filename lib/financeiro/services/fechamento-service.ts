@@ -8,10 +8,14 @@
  *  - verificarPeriodoFechado: retorna true se a data está dentro de um período fechado
  */
 
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { prisma } from "@/lib/prisma"
 import { safeMoney } from "@/lib/financeiro/contracts/valores"
 import type { FechamentoFinanceiro, Prisma } from "@/generated/prisma"
-import { registrarAuditoriaFinanceira } from "./auditoria-financeira-service"
+import type { FinanceiroDb } from "@/lib/gastos/financeiro-scope"
+import { travarCompetenciaFinanceira } from "@/lib/gastos/periodo"
+import { diaSaoPaulo } from "@/lib/gastos/operacao-schema"
 import { getDREMensal } from "./dre-service"
 
 // ─── tipos públicos ───────────────────────────────────────────────────────────
@@ -66,25 +70,27 @@ function toPublico(f: FechamentoFinanceiro): FechamentoPublico {
 }
 
 function dateToDataRef(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  // Ativação controlada: desligado, a chave do dia é a da main (UTC), para não mudar a chave de
+  // fechamentos já gravados perto da meia-noite; ligado, o dia civil de São Paulo (G004/G005).
+  return gestorMoneyAtivo() ? diaSaoPaulo(d.toISOString()) : d.toISOString().slice(0, 10)
 }
 
 function primeiroDiaMes(mes: number, ano: number): string {
   return `${ano}-${String(mes).padStart(2, "0")}-01`
 }
 
-async function getSaldoAtualStore(storeId: string): Promise<number> {
-  const agg = await prisma.movimentacaoFinanceira.aggregate({
-    where: { storeId },
+async function getSaldoAtualStore(storeId: string, db: FinanceiroDb): Promise<number> {
+  const agg = await db.movimentacaoFinanceira.aggregate({
+    where: leituraEmpresaWhere(storeId, { storeId }),
     _sum: { valor: true },
   })
   // Não temos tipo aqui — recalcular manualmente
-  const entradas = await prisma.movimentacaoFinanceira.aggregate({
-    where: { storeId, tipo: "entrada" },
+  const entradas = await db.movimentacaoFinanceira.aggregate({
+    where: leituraEmpresaWhere(storeId, { storeId, tipo: "entrada" }),
     _sum: { valor: true },
   })
-  const saidas = await prisma.movimentacaoFinanceira.aggregate({
-    where: { storeId, tipo: "saida" },
+  const saidas = await db.movimentacaoFinanceira.aggregate({
+    where: leituraEmpresaWhere(storeId, { storeId, tipo: "saida" }),
     _sum: { valor: true },
   })
   void agg
@@ -150,18 +156,21 @@ export async function fecharDia(
 
   const [ano, mes] = d.split("-").map(Number)
 
-  const existente = await prisma.fechamentoFinanceiro.findFirst({
+  return prisma.$transaction(async tx => {
+    await travarCompetenciaFinanceira(tx, storeId, d.slice(0, 7))
+
+  const existente = await tx.fechamentoFinanceiro.findFirst({
     where: { storeId, tipo: "diario", dataReferencia: d, status: "fechado" },
   })
   if (existente) {
     throw new Error(`Dia ${d} já está fechado. Reabra o fechamento antes de fechar novamente.`)
   }
 
-  const saldoSistema = await getSaldoAtualStore(storeId)
+  const saldoSistema = await getSaldoAtualStore(storeId, tx)
   const saldoInformado = opts.saldoInformado !== undefined ? safeMoney(opts.saldoInformado) : null
   const diferenca = saldoInformado !== null ? safeMoney(saldoInformado - saldoSistema) : 0
 
-  const row = await prisma.fechamentoFinanceiro.upsert({
+  const row = await tx.fechamentoFinanceiro.upsert({
     where: { fechamento_store_tipo_data: { storeId, tipo: "diario", dataReferencia: d } },
     create: {
       storeId, tipo: "diario", dataReferencia: d, mes, ano,
@@ -179,16 +188,18 @@ export async function fecharDia(
     },
   })
 
-  await registrarAuditoriaFinanceira({
+  await tx.auditoriaFinanceira.create({ data: {
     storeId,
     entidade: "fechamento",
     entidadeId: row.id,
     acao: "fechar",
+    // Detalhes do fechamento não são dados pessoais: a trilha da main é preservada.
     depois: { tipo: "diario", dataReferencia: d, saldoSistema, diferenca },
     usuarioNome: opts.fechadoPor,
-  })
+  } })
 
   return toPublico(row)
+  }, { maxWait: 5000, timeout: 20000 })
 }
 
 // ─── fecharMes ────────────────────────────────────────────────────────────────
@@ -200,8 +211,14 @@ export async function fecharMes(
   opts: { observacao?: string; fechadoPor?: string; saldoInformado?: number } = {},
 ): Promise<FechamentoPublico> {
   const dataReferencia = primeiroDiaMes(mes, ano)
+  // Desligado: o DRE legado (cliente global, como na main) é calculado ANTES da transação — dentro
+  // dela disputaria a conexão com a transação interativa e seguraria a trava da competência.
+  const snapshotForaDaTransacao = gestorMoneyAtivo() ? undefined : await getDREMensal(storeId, mes, ano).catch(() => null)
 
-  const existente = await prisma.fechamentoFinanceiro.findFirst({
+  return prisma.$transaction(async tx => {
+    await travarCompetenciaFinanceira(tx, storeId, dataReferencia.slice(0, 7))
+
+  const existente = await tx.fechamentoFinanceiro.findFirst({
     where: { storeId, tipo: "mensal", dataReferencia, status: "fechado" },
   })
   if (existente) {
@@ -209,19 +226,22 @@ export async function fecharMes(
     throw new Error(`Mês ${label} já está fechado. Reabra o fechamento antes de fechar novamente.`)
   }
 
-  const saldoSistema = await getSaldoAtualStore(storeId)
+  const saldoSistema = await getSaldoAtualStore(storeId, tx)
   const saldoInformado = opts.saldoInformado !== undefined ? safeMoney(opts.saldoInformado) : null
   const diferenca = saldoInformado !== null ? safeMoney(saldoInformado - saldoSistema) : 0
 
   // Snapshot do DRE do mês
-  let snapshotDRE: unknown = null
-  try {
-    snapshotDRE = await getDREMensal(storeId, mes, ano)
-  } catch {
-    // DRE snapshot é opcional
+  // Como na main, o snapshot do DRE é opcional: uma falha nele não impede o fechamento.
+  let snapshotDRE: unknown = snapshotForaDaTransacao ?? null
+  if (snapshotForaDaTransacao === undefined) {
+    try {
+      snapshotDRE = await getDREMensal(storeId, mes, ano, tx)
+    } catch {
+      // DRE snapshot é opcional
+    }
   }
 
-  const row = await prisma.fechamentoFinanceiro.upsert({
+  const row = await tx.fechamentoFinanceiro.upsert({
     where: { fechamento_store_tipo_data: { storeId, tipo: "mensal", dataReferencia } },
     create: {
       storeId, tipo: "mensal", dataReferencia, mes, ano,
@@ -241,16 +261,17 @@ export async function fecharMes(
     },
   })
 
-  await registrarAuditoriaFinanceira({
+  await tx.auditoriaFinanceira.create({ data: {
     storeId,
     entidade: "fechamento",
     entidadeId: row.id,
     acao: "fechar",
     depois: { tipo: "mensal", mes, ano, saldoSistema, diferenca },
     usuarioNome: opts.fechadoPor,
-  })
+  } })
 
   return toPublico(row)
+  }, { maxWait: 5000, timeout: 20000 })
 }
 
 // ─── reabrirFechamento ────────────────────────────────────────────────────────
@@ -265,15 +286,19 @@ export async function reabrirFechamento(
     throw new Error("Motivo de reabertura é obrigatório.")
   }
 
-  const existente = await prisma.fechamentoFinanceiro.findFirst({
+  const base = await prisma.fechamentoFinanceiro.findFirst({
     where: { id, storeId },
   })
+  if (!base) throw new Error("Fechamento não encontrado.")
+  return prisma.$transaction(async tx => {
+  await travarCompetenciaFinanceira(tx, storeId, base.dataReferencia.slice(0, 7))
+  const existente = await tx.fechamentoFinanceiro.findFirst({ where: { id, storeId } })
   if (!existente) throw new Error("Fechamento não encontrado.")
   if (existente.status === "reaberto") {
     throw new Error("Fechamento já está reaberto.")
   }
 
-  const row = await prisma.fechamentoFinanceiro.update({
+  const row = await tx.fechamentoFinanceiro.update({
     where: { id },
     data: {
       status: "reaberto",
@@ -283,7 +308,7 @@ export async function reabrirFechamento(
     },
   })
 
-  await registrarAuditoriaFinanceira({
+  await tx.auditoriaFinanceira.create({ data: {
     storeId,
     entidade: "fechamento",
     entidadeId: id,
@@ -291,7 +316,8 @@ export async function reabrirFechamento(
     antes: { status: "fechado" },
     depois: { status: "reaberto", motivo },
     usuarioNome: reabertoPor,
-  })
+  } })
 
   return toPublico(row)
+  }, { maxWait: 5000, timeout: 20000 })
 }

@@ -26,7 +26,12 @@ const h = vi.hoisted(() => {
   return { state, db, prisma, update }
 })
 
-vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }))
+vi.mock("@/lib/prisma", async () => {
+  const { attachG002EmpresaFake } = await import("@/test/gastos/g002-fixtures")
+  attachG002EmpresaFake(h.prisma)
+  attachG002EmpresaFake(h.db)
+  return { prisma: h.prisma }
+})
 
 import { cancelContaReceber } from "./contas-receber-service"
 

@@ -1,4 +1,9 @@
 import { requireModuleApi } from "@/lib/auth/module-access"
+import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
+import { consultarFinanceiroEmpresa, diaNoFusoConsulta, erroConsultaFinanceira, reaisConsulta, resumoTitulosConsulta } from "@/lib/gastos/query"
+import { estornarPagamentoHub, pagarTituloHub } from "@/lib/gastos/apply"
+import { contextoEmpresaOperacao } from "@/lib/gastos/operacoes"
+import { OperacaoGastoError } from "@/lib/gastos/operacao-schema"
 /**
  * /api/financeiro/pagar
  *
@@ -8,6 +13,8 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  * PATCH  → op: liquidar | parcial | estornar | cancelar
  * DELETE → cancelamento seguro (não destrói dados)
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
+import { leituraEmpresaWhere } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
@@ -16,7 +23,7 @@ import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
-import { apiGuardFinanceiroEditEnterpriseOrLegacy, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { apiGuardFinanceiroEditEnterpriseOrLegacy } from "@/lib/auth/api-enterprise-guard"
 import {
   buildContaPagarAuditTrail,
   buildContaPagarSummary,
@@ -185,17 +192,113 @@ const deleteQuerySchema = z.object({
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
+// ─── PATCH com o Gestor Money LIGADO (motor G004) ─────────────────────────────
+
+const centavosDeReais = (v: number | undefined) => v === undefined ? undefined : String(Math.round(v * 100))
+const chaveIdempotencia = z.string().trim().min(1).max(160).regex(/^[^\u0000-\u001f\u007f]+$/)
+/** Mesmo corpo da #397 + a chave do navegador (obrigatória com o motor) e a forma opcional. */
+const patchGestorMoneySchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("liquidar"), lojaId: z.string().max(120).optional(), localKey: z.string().min(1).max(260),
+    observacao: z.string().max(2000).optional(), restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
+    formaPagamento: z.string().max(80).optional(), idempotencyKey: chaveIdempotencia }),
+  z.object({ op: z.literal("parcial"), lojaId: z.string().max(120).optional(), localKey: z.string().min(1).max(260),
+    valor: z.number().finite().positive("Valor deve ser positivo"), observacao: z.string().max(2000).optional(),
+    restanteEsperado: z.number().finite().nonnegative().max(1e12).optional(),
+    formaPagamento: z.string().max(80).optional(), idempotencyKey: chaveIdempotencia }),
+  z.object({ op: z.literal("estornar"), lojaId: z.string().max(120).optional(), localKey: z.string().min(1).max(260),
+    motivo: z.string().max(2000).optional(), pagamentoIndex: z.number().int().nonnegative().max(100_000).optional(),
+    pagoEsperado: z.number().finite().nonnegative().max(1e12).optional(), idempotencyKey: chaveIdempotencia }),
+])
+
+/** Recusa definitiva = 4xx sem efeito que nunca vai passar com a MESMA chave; o navegador descarta a intenção.
+ * Acesso negado (pode voltar) e conteúdo divergente (a chave pertence a outro pedido) conservam a intenção. */
+function recusaDefinitiva(status: number, code: string) {
+  return status >= 400 && status < 500 && code !== "acesso_negado" && code !== "operacao_conteudo_divergente"
+}
+
+async function patchPagarGestorMoney(storeId: string, json: unknown, actor: ReturnType<typeof extractAuditoriaActor>): Promise<NextResponse> {
+  const parsed = patchGestorMoneySchema.safeParse(json)
+  if (!parsed.success) {
+    const semChave = typeof json === "object" && json !== null && !("idempotencyKey" in json)
+    return NextResponse.json({ ok: false, code: semChave ? "idempotency_obrigatoria" : "validation_error",
+      error: semChave ? "Atualize a página: esta operação exige a confirmação segura do navegador." : "Dados inválidos" }, { status: 400 })
+  }
+  const d = parsed.data, operacaoId = d.idempotencyKey
+  try {
+    const ctx = await contextoEmpresaOperacao(storeId)
+    if (d.op === "estornar") {
+      const resultado = await estornarPagamentoHub(ctx, { localKey: d.localKey, chave: operacaoId, motivo: d.motivo,
+        pagamentoIndex: d.pagamentoIndex, pagoEsperadoCentavos: centavosDeReais(d.pagoEsperado) })
+      void logAuditoriaFinanceira({ storeId, entidade: "pagar", entidadeId: d.localKey, acao: "estornar", actor,
+        depois: { localKey: d.localKey, motivo: d.motivo, operacaoId, operacaoFinanceiraId: resultado.operacaoId, valorCentavos: resultado.valorCentavos } })
+      return NextResponse.json({ ok: true, op: "estornar", operacaoId, valorEstornado: Number(resultado.valorCentavos) / 100, resultado })
+    }
+    const forma = d.formaPagamento?.trim().toLowerCase()
+    const resultado = await pagarTituloHub(ctx, { localKey: d.localKey, chave: operacaoId, quitar: d.op === "liquidar",
+      ...(d.op === "parcial" ? { valorCentavos: centavosDeReais(d.valor) } : {}),
+      ...(forma ? { formaPagamento: forma } : {}), restanteEsperadoCentavos: centavosDeReais(d.restanteEsperado) })
+    void logAuditoriaFinanceira({ storeId, entidade: "pagar", entidadeId: d.localKey, acao: "liquidar", actor,
+      depois: { localKey: d.localKey, operacaoId, operacaoFinanceiraId: resultado.operacaoId, valorCentavos: resultado.valorCentavos, parcial: d.op === "parcial" } })
+    return NextResponse.json({ ok: true, op: d.op, operacaoId, valorPago: Number(resultado.valorCentavos) / 100, resultado })
+  } catch (e) {
+    if (e instanceof OperacaoGastoError) {
+      // Contrato da #397 para recusas de estado: `<op>_titulo_alterado`; período fechado com a mensagem da main.
+      const code = e.code === "titulo_alterado" ? `${d.op}_titulo_alterado` : e.code
+      const error = e.code === "periodo_fechado" ? "Período financeiro fechado. Reabra o fechamento para alterar lançamentos." : e.message
+      return NextResponse.json({ ok: false, error, code, operacaoId, operacaoRejeitada: recusaDefinitiva(e.status, e.code) }, { status: e.status })
+    }
+    // Falha recuperável (banco, rede, gatilho): a intenção fica no navegador e a MESMA chave é reenviada.
+    console.error("[financeiro/pagar PATCH G004]", e instanceof Error ? e.name : "erro")
+    return NextResponse.json({ ok: false, error: "Não foi possível confirmar a operação financeira. Reenvie a mesma operação.",
+      code: "db_error", operacaoId, operacaoRejeitada: false }, { status: 503 })
+  }
+}
+
+/** GET com o Gestor Money LIGADO — mesma forma de resposta da main, valores da consulta G005. */
+async function getPagarGestorMoney(storeId: string, localKey: string | undefined): Promise<NextResponse> {
+  try {
+    const q = await consultarFinanceiroEmpresa(storeId, { dataInicio: "1900-01-01", dataFim: diaNoFusoConsulta(new Date()) })
+    const linha = (t: (typeof q.pagar)[number]) => ({
+      id: t.localKey?.trim() || t.id, localKey: t.localKey, descricao: t.descricao, valor: reaisConsulta(t.valorCentavos),
+      vencimento: t.vencimento, status: t.status, ...t.apresentacao,
+      pago: reaisConsulta(t.pagoCentavos), restante: reaisConsulta(t.restanteCentavos), categoriaId: t.categoriaId,
+    })
+    if (localKey) {
+      const t = q.pagar.find((x) => x.localKey === localKey)
+      if (!t) return err("Título não encontrado", "not_found", 404)
+      return NextResponse.json({ ok: true, titulo: { ...linha(t), id: t.id } })
+    }
+    const audit = q.pagar.map((t) => ({
+      id: t.id, storeId, localKey: t.localKey ?? t.id, status: t.status, valor: reaisConsulta(t.valorCentavos),
+      pago: reaisConsulta(t.pagoCentavos), restante: reaisConsulta(t.restanteCentavos), saldoAberto: reaisConsulta(t.restanteCentavos),
+      vencimento: t.vencimento, cliente: t.apresentacao.cliente, fornecedorNome: t.apresentacao.fornecedor,
+    }))
+    return NextResponse.json({
+      ok: true, rows: q.pagar.map(linha), summary: resumoTitulosConsulta(q, "PAGAR"), audit,
+      // `motor: "G004"`: o navegador passa a enviar liquidar/parcial/estornar com a chave de idempotência.
+      metadata: { source: "server", storeId, generatedAt: q.asOf, base: q.base, versaoCalculo: q.versaoCalculo, criterios: q.criterios, motor: "G004" },
+    })
+  } catch (e) {
+    const erro = erroConsultaFinanceira(e)
+    return NextResponse.json(erro.body, { status: erro.status })
+  }
+}
+
 export async function GET(req: Request) {
   const moduleDenied = await requireModuleApi(req, "finance")
   if (moduleDenied) return moduleDenied
 
   const storeId = readSid(req)
-  if (!storeId) return err("Unidade obrigatória", "store_missing", 400)
-  const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(err("Unidade obrigatória", "store_missing", 400))
+  const denied = await apiGuardLeituraFinanceira(storeId, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   const url = new URL(req.url)
   const localKeyParam = url.searchParams.get("localKey")?.trim()
+
+  // Ligado: a lista vem da consulta canônica G005 (pago/restante por alocação estruturada, anomalia
+  // legada recusada com 409). Desligado: corpo da main abaixo, sem nenhuma alteração.
+  if (gestorMoneyAtivo()) return respostaFinanceiraPrivada(await getPagarGestorMoney(storeId, localKeyParam))
 
   try {
     await prismaEnsureConnected()
@@ -203,10 +306,10 @@ export async function GET(req: Request) {
     // Detalhe de um título específico
     if (localKeyParam) {
       const titulo = await prisma.contaPagarTitulo.findUnique({
-        where: { storeId_localKey: { storeId, localKey: localKeyParam } },
+        where: { ...leituraEmpresaWhere(storeId, {}), storeId_localKey: { storeId, localKey: localKeyParam } },
       })
-      if (!titulo) return err("Título não encontrado", "not_found", 404)
-      return NextResponse.json({
+      if (!titulo) return respostaFinanceiraPrivada(err("Título não encontrado", "not_found", 404))
+      return respostaFinanceiraPrivada(NextResponse.json({
         ok: true,
         titulo: {
           id: titulo.id,
@@ -224,12 +327,12 @@ export async function GET(req: Request) {
           parcela: parcelaLabelFromPayload(titulo.payload),
           historico: parseHistorico(titulo.payload),
         },
-      })
+      }))
     }
 
     // Lista paginada
     const titulos = await prisma.contaPagarTitulo.findMany({
-      where: { storeId },
+      where: leituraEmpresaWhere(storeId, { storeId }),
       orderBy: { updatedAt: "desc" },
     })
 
@@ -247,17 +350,15 @@ export async function GET(req: Request) {
       parcela: parcelaLabelFromPayload(t.payload),
     }))
 
-    return NextResponse.json({
+    return respostaFinanceiraPrivada(NextResponse.json({
       ok: true,
       rows,
       summary: buildContaPagarSummary(titulos),
       audit: buildContaPagarAuditTrail(titulos),
       metadata: { source: "server", storeId, generatedAt: new Date().toISOString() },
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha interna"
-    console.error("[financeiro/pagar GET]", msg)
-    return err(msg, "db_error", 503)
+    }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }
 
@@ -361,6 +462,12 @@ export async function PATCH(req: Request) {
   const userLabel = getOperatorLabelFromSession(session)
   const actor = extractAuditoriaActor(session, req)
 
+  // Gestor Money LIGADO: liquidar/parcial/estornar pelo motor G004, com a chave de idempotência do navegador.
+  // Desligado (padrão), nada abaixo muda: o caminho da main/#397 segue intacto. `cancelar` é sempre da main.
+  if (gestorMoneyAtivo() && parsed.data.op !== "cancelar") {
+    return respostaFinanceiraPrivada(await patchPagarGestorMoney(storeId, json, actor))
+  }
+
   try {
     await prismaEnsureConnected()
 
@@ -403,7 +510,7 @@ export async function PATCH(req: Request) {
             const valorEstornado = Math.round(Math.max(0, pagoAntes - pagoDepois) * 100) / 100
             const mov =
               valorEstornado > 0.009
-                ? await estornarMovimentacaoDePagamentoPagar(tx, { storeId, tituloId, valor: valorEstornado, pagoRestante: pagoDepois })
+                ? await estornarMovimentacaoDePagamentoPagar(tx, { storeId, tituloId, valor: valorEstornado, pagoRestante: pagoDepois, historico: (res.data.payload as { historico?: unknown } | null)?.historico })
                 : { valor: 0, divergente: false, movimentacaoId: null }
             return { titulo: res.data, valor: valorEstornado, movimentacao: mov, carteiraId: null as string | null }
           }

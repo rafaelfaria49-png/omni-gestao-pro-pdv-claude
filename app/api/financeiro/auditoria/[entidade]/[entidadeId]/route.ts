@@ -4,9 +4,9 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  *
  * Retorna o histórico de auditoria de uma entidade específica.
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import {
   getAuditoriaPorEntidade,
@@ -25,30 +25,24 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ entidade: string; entidadeId: string }> },
 ) {
+  // Reconciliação main × G003: módulo finance por loja (main) + guard de leitura privada (G003).
   const moduleDenied = await requireModuleApi(req, "finance")
-  if (moduleDenied) return moduleDenied
-
-  await prismaEnsureConnected()
+  if (moduleDenied) return respostaFinanceiraPrivada(moduleDenied)
   const { entidade, entidadeId } = await params
   const storeId = opsLojaIdFromRequest(req)
-  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  const denied = await apiGuardEnterpriseOrOps(
-    storeId,
-    (p) => p.auditoria,
-    "Sem permissão para auditoria financeira.",
-    { errorBody: "okFalse" },
-  )
-  if (denied) return denied
+  if (!storeId) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  const denied = await apiGuardLeituraFinanceira(storeId, (p) => p.auditoria, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
 
   if (!ENTIDADES_VALIDAS.includes(entidade as EntidadeAuditoria)) {
-    return NextResponse.json({ ok: false, error: "Entidade inválida", code: "invalid_entidade" }, { status: 400 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Entidade inválida", code: "invalid_entidade" }, { status: 400 }))
   }
 
   try {
+    await prismaEnsureConnected()
     const items = await getAuditoriaPorEntidade(storeId, entidade as EntidadeAuditoria, entidadeId)
-    return NextResponse.json({ ok: true, items, total: items.length })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg }, { status: 503 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, items, total: items.length }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }

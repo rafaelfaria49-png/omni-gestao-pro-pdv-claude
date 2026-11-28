@@ -69,7 +69,7 @@ export async function registrarObrigacaoAquisicaoTx(
     aquisicao: { id: string; protocolo: string; tipo: string; valorTotal: number; formaPagamento: string; vendedorNome: string; fornecedorId: string | null }
     operador: string
   },
-): Promise<{ localKey: string; tituloId: string } | null> {
+): Promise<{ localKey: string; tituloId: string; criado: boolean } | null> {
   const { storeId, aquisicao: aq } = args
   if (!(aq.valorTotal > 0)) return null
   const localKey = contaPagarLocalKeyDaAquisicao(storeId, aq.id)
@@ -90,7 +90,7 @@ export async function registrarObrigacaoAquisicaoTx(
     { tipo: "criacao", userLabel: args.operador, observacao: `Compra de aparelho aprovada (${aq.protocolo})` },
   )
   // createMany + skipDuplicates: nunca sobrescreve um título que o Financeiro já movimentou.
-  await tx.contaPagarTitulo.createMany({
+  const criado = await tx.contaPagarTitulo.createMany({
     data: [{
       storeId,
       localKey,
@@ -105,5 +105,7 @@ export async function registrarObrigacaoAquisicaoTx(
     skipDuplicates: true,
   })
   const titulo = await tx.contaPagarTitulo.findUniqueOrThrow({ where: { storeId_localKey: { storeId, localKey } }, select: { id: true } })
-  return { localKey, tituloId: titulo.id }
+  // `criado`: o chamador (servidor) adota o título NOVO no escopo financeiro. Este módulo fica
+  // puro — é importado também por componentes de cliente (rótulos/tipos).
+  return { localKey, tituloId: titulo.id, criado: criado.count === 1 }
 }

@@ -1,3 +1,4 @@
+import { attachG002EmpresaFake } from "@/test/gastos/g002-fixtures"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const h = vi.hoisted(() => ({
@@ -17,7 +18,7 @@ import {
   InvalidClientSaleIdError,
   StockLedgerBusinessError,
   VendaClientKeyUniqueConflictError,
-  upsertVendaInTransaction,
+  upsertVendaInTransaction as upsertVendaBase,
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 import { persistSaleV2 } from "./sale-writer-v2"
@@ -423,3 +424,9 @@ describe("persistSaleV2 — retry e replay concorrente", () => {
     expect(h.findFirst).toHaveBeenCalledTimes(1)
   })
 })
+
+// G002: atualizar apenas a infraestrutura do fake; asserções de negócio preservadas.
+function upsertVendaInTransaction(...args: Parameters<typeof upsertVendaBase>) {
+  attachG002EmpresaFake(args[0])
+  return upsertVendaBase(...args)
+}

@@ -6,11 +6,12 @@ import { requireModuleApi } from "@/lib/auth/module-access"
  * POST  → cria movimentação manual
  * DELETE → remove movimentação (hard-delete, somente manual)
  */
+import { apiGuardLeituraFinanceira, respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardFinanceiroEditEnterpriseOrLegacy, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { apiGuardFinanceiroEditEnterpriseOrLegacy } from "@/lib/auth/api-enterprise-guard"
 import {
   listMovimentacoes,
   createMovimentacao,
@@ -61,9 +62,9 @@ export async function GET(req: Request) {
   if (moduleDenied) return moduleDenied
 
   const sid = storeIdFromReq(req)
-  if (!sid) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
-  const denied = await apiGuardFinanceiroViewOrOps(sid)
-  if (denied) return denied
+  if (!sid) return respostaFinanceiraPrivada(NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }))
+  const denied = await apiGuardLeituraFinanceira(sid, undefined, req)
+  if (denied) return respostaFinanceiraPrivada(denied)
   const url = new URL(req.url)
 
   const tipo = url.searchParams.get("tipo")
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
 
     if (resumo) {
       const res = await getResumoMovimentacoes(sid, { dataInicial, dataFinal })
-      return NextResponse.json({ ok: true, resumo: res })
+      return respostaFinanceiraPrivada(NextResponse.json({ ok: true, resumo: res }))
     }
 
     const rows = await listMovimentacoes(sid, {
@@ -95,11 +96,9 @@ export async function GET(req: Request) {
       skip: Number.isFinite(skip) ? skip : 0,
     })
 
-    return NextResponse.json({ ok: true, rows, total: rows.length })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[financeiro/movimentacoes GET]", msg)
-    return NextResponse.json({ ok: false, error: msg }, { status: 503 })
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: true, rows, total: rows.length }))
+  } catch {
+    return respostaFinanceiraPrivada(NextResponse.json({ ok: false, error: "Não foi possível consultar os dados financeiros." }, { status: 503 }))
   }
 }
 

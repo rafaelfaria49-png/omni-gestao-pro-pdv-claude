@@ -5,9 +5,15 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
+  useMemo,
   type ReactNode,
 } from "react"
+import { useSession } from "next-auth/react"
+import { executarPagamentoPendente, principalPagamentoBrowser } from "@/lib/financeiro/pagamento-operacao-client"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { criarCacheLeituraFinanceira } from "@/lib/gastos/read-cache"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import {
   enviarRecebimentoHub,
@@ -536,12 +542,12 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
     const auditItem = auditMap.get(id)
     const valor = safeNum(row.valor)
     const status = normalizeReceberStatus(safeStr(row.status))
-    const saldoAberto = auditItem
+    const saldoAberto = typeof row.restante === "number" ? safeNum(row.restante) : auditItem
       ? safeNum(auditItem.saldoAberto)
       : status === "pago" || status === "cancelado"
         ? 0
         : valor
-    const recebido = Math.max(0, valor - saldoAberto)
+    const recebido = typeof row.pago === "number" ? safeNum(row.pago) : Math.max(0, valor - saldoAberto)
     const descricao = safeStr(row.descricao)
     const parcelaRaw = typeof row.parcela === "string" ? row.parcela.trim() : ""
     result.push({
@@ -575,7 +581,7 @@ function normalizePagarRows(rows: unknown[], audit: unknown[]): ContaPagar[] {
     const auditItem = auditMap.get(id)
     const valor = safeNum(row.valor)
     const status = normalizePagarStatus(safeStr(row.status))
-    const pago = auditItem ? safeNum(auditItem.pago) : status === "pago" ? valor : 0
+    const pago = typeof row.pago === "number" ? safeNum(row.pago) : auditItem ? safeNum(auditItem.pago) : status === "pago" ? valor : 0
     const descricao = safeStr(row.descricao)
     const parcelaRaw = typeof row.parcela === "string" ? row.parcela.trim() : ""
     result.push({
@@ -599,6 +605,15 @@ function normalizePagarRows(rows: unknown[], audit: unknown[]): ContaPagar[] {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
+  const { data: session, status } = useSession()
+  const { lojaAtivaId } = useLojaAtiva()
+  const userId = status === "authenticated" ? session?.user?.id ?? null : null
+  const scope = JSON.stringify([status, userId, lojaAtivaId])
+  // Trocar ator/loja desmonta todo o estado e as respostas pendentes da instância anterior.
+  return <FinanceiroRealScopedProvider key={scope} storeId={userId ? lojaAtivaId : null}>{children}</FinanceiroRealScopedProvider>
+}
+
+function FinanceiroRealScopedProvider({ children, storeId }: { children: ReactNode; storeId: string | null }) {
   const [receber, setReceber] = useState<ContaReceber[]>([])
   const [nomesAmbiguos, setNomesAmbiguos] = useState<ReadonlySet<string>>(new Set())
   const [pagar, setPagar] = useState<ContaPagar[]>([])
@@ -612,7 +627,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [saldoTotalCarteiras, setSaldoTotalCarteiras] = useState(0)
   const [dre, setDRE] = useState<DREMensal | null>(null)
   const [loadingDRE, setLoadingDRE] = useState(true)
-  const emptyRelatorios: RelatoriosAvancados = { resumo: null, fluxo: [], comparativoMensal: [], comparativoAnual: [], analiseCarteiras: [], topReceitas: [], topDespesas: [] }
+  const emptyRelatorios = useMemo<RelatoriosAvancados>(() => ({ resumo: null, fluxo: [], comparativoMensal: [], comparativoAnual: [], analiseCarteiras: [], topReceitas: [], topDespesas: [] }), [])
   const [relatorios, setRelatorios] = useState<RelatoriosAvancados>(emptyRelatorios)
   const [loadingRelatorios, setLoadingRelatorios] = useState(false)
   const [filtrosFinanceiros, setFiltrosFinanceiros] = useState<FiltrosFinanceiros>({ preset: "estemes" })
@@ -626,6 +641,16 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [loadingFechamentos, setLoadingFechamentos] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const motorPagarRef = useRef<"G004" | null>(null)
+  const leitura = useMemo(() => criarCacheLeituraFinanceira(storeId, () => {
+    setReceber([]); setPagar([]); setSummaryR(null); setSummaryP(null); setAnalytics(null)
+    setFluxoCaixa(null); setCarteiras([]); setSaldoTotalCarteiras(0); setDRE(null)
+    setRelatorios({ resumo: null, fluxo: [], comparativoMensal: [], comparativoAnual: [], analiseCarteiras: [], topReceitas: [], topDespesas: [] })
+    setAuditoriaFinanceira([]); setConciliacoes([]); setFechamentos([]); setResumoConciliacao(null)
+    setError("Acesso financeiro indisponível. Atualize a sessão.")
+  }), [storeId])
+  useEffect(() => { leitura.iniciar(); return () => leitura.descartar() }, [leitura])
 
   /**
    * `silent`: recarga de fundo (após um recebimento) — não liga `loading`, senão a aba
@@ -648,9 +673,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
     try {
       const [rRes, pRes, aRes] = await Promise.all([
-        fetch("/api/financeiro/receber", { headers: withStoreHeaders() }),
-        fetch("/api/financeiro/pagar", { headers: withStoreHeaders() }),
-        fetch("/api/financeiro/analytics", { headers: withStoreHeaders() }),
+        leitura.buscar("/api/financeiro/receber", { headers: withStoreHeaders() }),
+        leitura.buscar("/api/financeiro/pagar", { headers: withStoreHeaders() }),
+        leitura.buscar("/api/financeiro/analytics", { headers: withStoreHeaders() }),
       ])
       const [rJson, pJson, aJson] = await Promise.all([
         rRes.json() as Promise<Record<string, unknown>>,
@@ -666,6 +691,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         if (sr) setSummaryR({ quantidade: safeNum(sr.quantidade), totalAberto: safeNum(sr.totalAberto), totalVencido: safeNum(sr.totalVencido), totalPago: safeNum(sr.totalPago) })
       }
       if (pJson.ok) {
+        // Só o servidor sabe se o Gestor Money está ligado; ele declara o motor no GET de Pagar.
+        const metaP = pJson.metadata as Record<string, unknown> | undefined
+        motorPagarRef.current = metaP?.motor === "G004" ? "G004" : null
         const pRows = Array.isArray(pJson.rows) ? pJson.rows : []
         const pAudit = Array.isArray(pJson.audit) ? pJson.audit : []
         setPagar(normalizePagarRows(pRows, pAudit))
@@ -680,7 +708,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [leitura])
 
   const refreshFluxoCaixa = useCallback(async () => {
     if (!readActiveStoreIdFromBrowser()) {
@@ -690,7 +718,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
     setLoadingFluxoCaixa(true)
     try {
-      const res = await fetch("/api/financeiro/fluxo-caixa", { headers: withStoreHeaders() })
+      const res = await leitura.buscar("/api/financeiro/fluxo-caixa", { headers: withStoreHeaders() })
       const json = (await res.json()) as Record<string, unknown>
       if (json.ok) setFluxoCaixa(json as unknown as FluxoCaixa)
     } catch {
@@ -698,7 +726,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoadingFluxoCaixa(false)
     }
-  }, [])
+  }, [leitura])
 
   const refreshCarteiras = useCallback(async () => {
     if (!readActiveStoreIdFromBrowser()) {
@@ -709,7 +737,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
     setLoadingCarteiras(true)
     try {
-      const res = await fetch("/api/financeiro/carteiras", {
+      const res = await leitura.buscar("/api/financeiro/carteiras", {
         headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
@@ -722,7 +750,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoadingCarteiras(false)
     }
-  }, [])
+  }, [leitura])
 
   const criarCarteira = useCallback(async (data: NovaCarteiraInput): Promise<CarteiraPublica> => {
     if (!readActiveStoreIdFromBrowser()) {
@@ -769,7 +797,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
       if (mes) params.set("mes", String(mes))
       if (ano) params.set("ano", String(ano))
       const url = `/api/financeiro/dre${params.toString() ? `?${params.toString()}` : ""}`
-      const res = await fetch(url, {
+      const res = await leitura.buscar(url, {
         headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
@@ -779,7 +807,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoadingDRE(false)
     }
-  }, [])
+  }, [leitura])
 
   const buildRelatoriosParams = (f: FiltrosFinanceiros): string => {
     const params = new URLSearchParams()
@@ -814,10 +842,10 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
       }
 
       const [resumoRes, rankRes, indicRes, fluxoRes] = await Promise.all([
-        fetch(`/api/financeiro/relatorios/resumo?${qs}`, { headers }),
-        fetch(`/api/financeiro/relatorios/rankings?${qs}`, { headers }),
-        fetch(`/api/financeiro/relatorios/indicadores?${qs}`, { headers }),
-        fetch(`/api/financeiro/relatorios/fluxo?${qs}&agrupamento=mes`, { headers }),
+        leitura.buscar(`/api/financeiro/relatorios/resumo?${qs}`, { headers }),
+        leitura.buscar(`/api/financeiro/relatorios/rankings?${qs}`, { headers }),
+        leitura.buscar(`/api/financeiro/relatorios/indicadores?${qs}`, { headers }),
+        leitura.buscar(`/api/financeiro/relatorios/fluxo?${qs}&agrupamento=mes`, { headers }),
       ])
       const [resumoJson, rankJson, indicJson, fluxoJson] = await Promise.all([
         resumoRes.json(), rankRes.json(), indicRes.json(), fluxoRes.json()
@@ -835,7 +863,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } catch { /* silencioso */ } finally {
       setLoadingRelatorios(false)
     }
-  }, [filtrosFinanceiros])
+  }, [emptyRelatorios, filtrosFinanceiros, leitura])
 
   const exportarRelatorio = useCallback((tipo: string, formato: "csv" | "xlsx", filtros?: FiltrosFinanceiros) => {
     const f = filtros ?? filtrosFinanceiros
@@ -868,7 +896,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
     setLoadingAuditoria(true)
     try {
-      const res = await fetch("/api/financeiro/auditoria?take=30", {
+      const res = await leitura.buscar("/api/financeiro/auditoria?take=30", {
         headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
@@ -876,7 +904,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } catch { /* silencioso */ } finally {
       setLoadingAuditoria(false)
     }
-  }, [])
+  }, [leitura])
 
   const refreshConciliacao = useCallback(async () => {
     if (!readActiveStoreIdFromBrowser()) {
@@ -888,8 +916,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     setLoadingConciliacao(true)
     try {
       const [listRes, resumoRes] = await Promise.all([
-        fetch("/api/financeiro/conciliacao", { headers: withStoreHeaders() }),
-        fetch("/api/financeiro/conciliacao?resumo=1", { headers: withStoreHeaders() }),
+        leitura.buscar("/api/financeiro/conciliacao", { headers: withStoreHeaders() }),
+        leitura.buscar("/api/financeiro/conciliacao?resumo=1", { headers: withStoreHeaders() }),
       ])
       const [listJson, resumoJson] = await Promise.all([listRes.json(), resumoRes.json()]) as [Record<string, unknown>, Record<string, unknown>]
       if (listJson.ok) setConciliacoes(Array.isArray(listJson.items) ? (listJson.items as ConciliacaoPublica[]) : [])
@@ -897,7 +925,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } catch { /* silencioso */ } finally {
       setLoadingConciliacao(false)
     }
-  }, [])
+  }, [leitura])
 
   const refreshFechamentos = useCallback(async () => {
     if (!readActiveStoreIdFromBrowser()) {
@@ -907,7 +935,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
     setLoadingFechamentos(true)
     try {
-      const res = await fetch("/api/financeiro/fechamentos", {
+      const res = await leitura.buscar("/api/financeiro/fechamentos", {
         headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
@@ -915,7 +943,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     } catch { /* silencioso */ } finally {
       setLoadingFechamentos(false)
     }
-  }, [])
+  }, [leitura])
 
   const fecharDia = useCallback(async (opts?: { observacao?: string; saldoInformado?: number }): Promise<FechamentoPublico> => {
     if (!readActiveStoreIdFromBrowser()) {
@@ -981,6 +1009,18 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     const lojaId = readActiveStoreIdFromBrowser()
     if (!lojaId) {
       throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
+    // Gestor Money LIGADO (servidor declarou motor G004): liquidar/parcial/estornar de Pagar vão com a chave
+    // de idempotência conservada no navegador — repetir após resposta perdida devolve a MESMA operação.
+    if (motorPagarRef.current === "G004" && path === "/api/financeiro/pagar" && method === "PATCH"
+      && (body.op === "liquidar" || body.op === "parcial" || body.op === "estornar") && typeof body.localKey === "string") {
+      const pedido = { lojaId, ...body }
+      return executarPagamentoPendente({ storeId: lojaId, principalId: await principalPagamentoBrowser(),
+        canal: "financeiro", tipo: "pagar", referencia: body.localKey, op: body.op, pedido,
+      }, (idempotencyKey) => fetch(path, { method,
+        headers: withStoreHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ ...pedido, idempotencyKey }),
+      }))
     }
     const res = await fetch(path, {
       method,

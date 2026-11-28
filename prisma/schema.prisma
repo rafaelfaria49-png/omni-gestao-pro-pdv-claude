@@ -31,6 +31,8 @@ enum MarketingMediaJobKind {
 }
 
 model Store {
+  gastosCanais WhatsAppCanal[]
+  gastosOrigensCanal GastoOrigemCanal[]
   /**
    * Use ids estáveis: loja-1, loja-2, ...
    */
@@ -103,6 +105,8 @@ model Store {
   devolucoes             DevolucaoVenda[]
   garantiasOrdemServico  GarantiaOrdemServico[]
   adminUserStores        AdminUserStore[]
+  financeiroPerfil       FinanceiroPerfil?
+  categoriasGastos       CategoriaGasto[]
   omniAgentCommands      OmniAgentCommand[]
   omniAgentAutomations   OmniAgentAutomation[]
   omniAgentConfig        OmniAgentConfig?
@@ -166,6 +170,17 @@ model Store {
 
   @@index([profile])
   @@map("stores")
+  documentosGastos DocumentoGasto[]
+  gastosOperacoes FinanceiroOperacao[]
+  gastosRevisoes GastoRevisao[]
+  gastosFatos Gasto[]
+  gastosPagamentos PagamentoFinanceiro[]
+  gastosAlocacoes AlocacaoPagamento[]
+  gastosCartoes CartaoInstrumento[]
+  gastosCiclos CartaoCiclo[]
+  gastosCartoesLimitesEventos CartaoLimiteEvento[]
+  gastosEventos FinanceiroOperacaoEvento[]
+  gastosOutbox GastoOutbox[]
 }
 
 enum MarketplaceProvider {
@@ -1258,6 +1273,7 @@ model Fornecedor {
 
   contasPagar ContaPagarTitulo[]
   aparelhosAquisicoes AparelhoAquisicao[]
+  gastos Gasto[]
 
   @@index([storeId])
   @@index([name])
@@ -1313,8 +1329,21 @@ model MarcaCadastro {
  */
 model ContaPagarTitulo {
   id              String      @id @default(cuid())
-  storeId         String      @default("loja-1") @map("storeId")
-  store           Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId         String?     @map("storeId")
+  store           Store?      @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId        String?
+  perfil          FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  identidadePessoal String?
+  ativo           Boolean     @default(true)
+  carteiraId      String?
+  carteira        CarteiraFinanceira? @relation("PagarCarteiraEscopo", fields: [carteiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  categoriaId     String?
+  categoria       CategoriaGasto? @relation(fields: [categoriaId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  valorCentavos   Decimal? @db.Decimal(20, 0)
+  valorOriginalLegado Float?
+  precisaoStatus  String?
+  vencimentoEm    DateTime? @db.Date
+  movimentacoes   MovimentacaoFinanceira[] @relation("MovPagarEscopo")
   /**
    * Opcional: vínculo com cadastro de fornecedor da mesma loja.
    */
@@ -1340,10 +1369,19 @@ model ContaPagarTitulo {
   updatedAt       DateTime    @updatedAt @map("updatedAt")
 
   @@unique([storeId, localKey])
+  @@unique([id, perfilId])
+  @@unique([perfilId, identidadePessoal])
   @@index([storeId])
   @@index([fornecedorId])
   @@index([status])
   @@map("contas_pagar_titulos")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoPagar")
+  gastoId String?
+  gasto Gasto? @relation(fields: [gastoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  cartaoCicloId String?
+  cartaoCiclo CartaoCiclo? @relation(fields: [cartaoCicloId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  versaoFinanceira Int @default(0)
+  alocacoesPagamento AlocacaoPagamento[]
 }
 
 // --- Contas a receber + vendas (servidor; opcional — o painel ainda usa localStorage por padrão)
@@ -1353,8 +1391,21 @@ model ContaPagarTitulo {
  */
 model ContaReceberTitulo {
   id         String   @id @default(cuid())
-  storeId    String   @default("loja-1") @map("storeId")
-  store      Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId    String?  @map("storeId")
+  store      Store?   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId   String?
+  perfil     FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  identidadePessoal String?
+  ativo      Boolean @default(true)
+  carteiraId String?
+  carteira   CarteiraFinanceira? @relation("ReceberCarteiraEscopo", fields: [carteiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  categoriaId String?
+  categoria  CategoriaGasto? @relation(fields: [categoriaId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  valorCentavos Decimal? @db.Decimal(20, 0)
+  valorOriginalLegado Float?
+  precisaoStatus String?
+  vencimentoEm DateTime? @db.Date
+  movimentacoes MovimentacaoFinanceira[] @relation("MovReceberEscopo")
   /**
    * Id estável do título no navegador (localStorage) — upsert idempotente por unidade.
    */
@@ -1374,9 +1425,12 @@ model ContaReceberTitulo {
   vendas Venda[]
 
   @@unique([storeId, localKey])
+  @@unique([id, perfilId])
+  @@unique([perfilId, identidadePessoal])
   @@index([storeId])
   @@index([cliente])
   @@map("contas_receber_titulos")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoReceber")
 }
 
 /**
@@ -1385,8 +1439,15 @@ model ContaReceberTitulo {
  */
 model CarteiraFinanceira {
   id           String   @id @default(cuid())
-  storeId      String   @default("loja-1") @map("storeId")
-  store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId      String?  @map("storeId")
+  store        Store?   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId     String?
+  perfil       FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  identificadorInstrumento String?
+  instituicao  String?
+  saldoInicialCentavos Decimal? @db.Decimal(20, 0)
+  saldoAtualCentavos Decimal? @db.Decimal(20, 0)
+  precisaoStatus String?
   nome         String   @map("nome")
   /**
    * "caixa" | "banco" | "pix" | "dinheiro" | "credito" | "debito" | "investimento"
@@ -1406,18 +1467,37 @@ model CarteiraFinanceira {
   createdAt    DateTime @default(now()) @map("createdAt")
   updatedAt    DateTime @updatedAt @map("updatedAt")
 
-  movimentacoes MovimentacaoFinanceira[]
+  movimentacoes MovimentacaoFinanceira[] @relation("MovCarteiraHistorica")
+  movimentacoesEscopo MovimentacaoFinanceira[] @relation("MovCarteiraEscopo")
+  titulosPagar ContaPagarTitulo[] @relation("PagarCarteiraEscopo")
+  titulosReceber ContaReceberTitulo[] @relation("ReceberCarteiraEscopo")
   conciliacoes  ConciliacaoFinanceira[]
 
   @@index([storeId])
   @@index([storeId, ativo])
+  @@unique([id, perfilId])
   @@map("carteiras_financeiras")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoConta")
+  pagamentosFinanceiros PagamentoFinanceiro[]
 }
 
 model MovimentacaoFinanceira {
   id           String              @id @default(cuid())
-  storeId      String              @default("loja-1") @map("storeId")
-  store        Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId      String?             @map("storeId")
+  store        Store?              @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  perfilId     String?
+  perfil       FinanceiroPerfil? @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  categoriaId  String?
+  categoria    CategoriaGasto? @relation(fields: [categoriaId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  pagarTituloId String?
+  pagarTitulo ContaPagarTitulo? @relation("MovPagarEscopo", fields: [pagarTituloId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  receberTituloId String?
+  receberTitulo ContaReceberTitulo? @relation("MovReceberEscopo", fields: [receberTituloId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  formaPagamento String?
+  ocorridoEm   DateTime?
+  valorCentavos Decimal? @db.Decimal(20, 0)
+  valorOriginalLegado Float?
+  precisaoStatus String?
   /**
    * "entrada" | "saida"
    */
@@ -1436,7 +1516,8 @@ model MovimentacaoFinanceira {
    * Carteira que recebe ou debita esta movimentação (opcional).
    */
   carteiraId   String?             @map("carteiraId")
-  carteira     CarteiraFinanceira? @relation(fields: [carteiraId], references: [id], onDelete: SetNull)
+  carteira     CarteiraFinanceira? @relation("MovCarteiraHistorica", fields: [carteiraId], references: [id], onDelete: SetNull)
+  carteiraEscopo CarteiraFinanceira? @relation("MovCarteiraEscopo", fields: [carteiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
   createdAt    DateTime            @default(now()) @map("createdAt")
 
   @@index([storeId])
@@ -1445,7 +1526,17 @@ model MovimentacaoFinanceira {
   @@index([referenciaId])
   @@index([carteiraId])
   @@index([createdAt])
+  @@unique([id, perfilId])
   @@map("movimentacoes_financeiras")
+  documentosVinculos DocumentoVinculo[] @relation("DocumentoMovimento")
+  operacaoFinanceiraId String?
+  operacaoFinanceira FinanceiroOperacao? @relation(fields: [operacaoFinanceiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  compensaMovimentacaoId String?
+  compensaMovimentacao MovimentacaoFinanceira? @relation("CompensacaoMovimentoGasto", fields: [compensaMovimentacaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  compensacoesGastos MovimentacaoFinanceira[] @relation("CompensacaoMovimentoGasto")
+  compensadoGastosCentavos Decimal @default(0) @db.Decimal(20, 0)
+  pagamentoFinanceiro PagamentoFinanceiro? @relation("PagamentoMovimento")
+  estornosLegados PagamentoFinanceiro[] @relation("PagamentoCompensaLegado")
 }
 
 /**
@@ -2232,6 +2323,7 @@ model AdminUserStore {
   storeId     String    @map("storeId")
   store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now()) @map("createdAt")
+  perfisFinanceiros PerfilMembro[]
 
   @@unique([adminUserId, storeId])
   @@index([storeId])
@@ -2242,6 +2334,7 @@ model AdminUserStore {
  * Usuários de acesso ao painel OmniGestão (email + senha). Separado do User PIN-based.
  */
 model AdminUser {
+  gastosOrigensCanal GastoOrigemCanal[]
   id        String   @id @default(cuid())
   name      String   @default("")
   email     String   @unique
@@ -2260,6 +2353,7 @@ model AdminUser {
   adminUserStores AdminUserStore[]
   /** Sessões de login (revogação por sessão no servidor). */
   adminSessions AdminSession[]
+  perfilFinanceiroPessoal FinanceiroPerfil? @relation("FinanceiroPerfilOwner")
   dpAcessos DpAcesso[]
   dpPessoas DpPessoaUsuario[]
   dpAuditorias DpAuditoria[]
@@ -2285,6 +2379,11 @@ model AdminUser {
   currentPeriodEnd     DateTime?
 
   @@map("admin_users")
+  documentosGastosPessoais DocumentoGasto[] @relation("DocumentoGastoOwner")
+  documentosGastosCriados DocumentoGasto[] @relation("DocumentoGastoCriador")
+  gastosRevisoes GastoRevisao[]
+  gastosOperacoes FinanceiroOperacao[]
+  gastosCartoesLimitesEventos CartaoLimiteEvento[]
 }
 
 /**
@@ -2304,6 +2403,86 @@ model AdminSession {
   @@index([userId])
   @@index([expiresAt])
   @@map("admin_sessions")
+}
+
+// Gastos G001: fundação dormente. CHECKs e imutabilidade de escopo na migration.
+enum FinanceiroPerfilTipo {
+  EMPRESA
+  PESSOAL
+}
+
+model FinanceiroPerfil {
+  origensCanal GastoOrigemCanal[]
+  id               String               @id @default(cuid())
+  tipo             FinanceiroPerfilTipo
+  storeId          String?              @unique
+  store            Store?               @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerAdminUserId String?              @unique
+  owner            AdminUser?           @relation("FinanceiroPerfilOwner", fields: [ownerAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ativo            Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  membros          PerfilMembro[]
+  contas           CarteiraFinanceira[]
+  categorias       CategoriaGasto[]
+  titulosPagar     ContaPagarTitulo[]
+  titulosReceber   ContaReceberTitulo[]
+  movimentacoes    MovimentacaoFinanceira[]
+
+  @@unique([id, storeId])
+  @@map("financeiro_perfis")
+  documentos DocumentoGasto[]
+  documentosVinculos DocumentoVinculo[]
+  operacoes FinanceiroOperacao[]
+  revisoes GastoRevisao[]
+  gastos Gasto[]
+  pagamentos PagamentoFinanceiro[]
+  alocacoes AlocacaoPagamento[]
+  cartoes CartaoInstrumento[]
+  ciclos CartaoCiclo[]
+  cartoesLimitesEventos CartaoLimiteEvento[]
+  membrosEventos PerfilMembroEvento[]
+  eventosOperacao FinanceiroOperacaoEvento[]
+  outbox GastoOutbox[]
+}
+
+model CategoriaGasto {
+  id              String @id @default(cuid())
+  perfilId        String
+  perfil          FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  gastos Gasto[]
+  storeId         String?
+  store           Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome            String
+  nomeNormalizado String
+  natureza        String
+  ativo           Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  titulosPagar    ContaPagarTitulo[]
+  titulosReceber  ContaReceberTitulo[]
+  movimentacoes  MovimentacaoFinanceira[]
+
+  @@unique([id, perfilId])
+  @@unique([perfilId, nomeNormalizado, natureza])
+  @@map("categorias_gastos")
+}
+
+// Apenas EMPRESA: storeId não nulo não pode referenciar um perfil PESSOAL.
+model PerfilMembro {
+  id             String           @id @default(cuid())
+  perfilId       String
+  storeId        String
+  adminUserId    String
+  perfil         FinanceiroPerfil @relation(fields: [perfilId, storeId], references: [id, storeId], onDelete: Restrict, onUpdate: Restrict)
+  vinculoLoja    AdminUserStore   @relation(fields: [adminUserId, storeId], references: [adminUserId, storeId], onDelete: Cascade, onUpdate: Restrict)
+  revogadoEm     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([perfilId, adminUserId])
+  @@index([adminUserId, storeId])
+  @@map("financeiro_perfil_membros")
 }
 
 // =================================================================================
@@ -4370,4 +4549,492 @@ model IdentificacaoSolicitacao {
   createdAt   DateTime @default(now())
   @@unique([storeId, operacao, chave], name: "storeId_operacao_chave")
   @@map("identificacao_solicitacoes")
+}
+
+// G003 — documentos privados, sem ativar storage/canal ou o motor de G004.
+enum DocumentoGastoEstado {
+  DISPONIVEL
+  QUARENTENA
+  RETIDO
+}
+
+model DocumentoGasto {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerAdminUserId String?
+  owner AdminUser? @relation("DocumentoGastoOwner", fields: [ownerAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  criadoPorAdminUserId String
+  criadoPor AdminUser @relation("DocumentoGastoCriador", fields: [criadoPorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nomeArquivo String
+  mime String
+  bytes Int
+  sha256 String
+  storageRef String @unique
+  proveniencia String
+  estado DocumentoGastoEstado @default(DISPONIVEL)
+  versao Int @default(1)
+  historico Json @db.JsonB
+  retencaoRevisarEm DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  vinculos DocumentoVinculo[]
+  gastos Gasto[]
+
+  @@unique([id, perfilId])
+  @@unique([perfilId, sha256])
+  @@index([perfilId, estado, createdAt])
+  @@index([perfilId, retencaoRevisarEm])
+  @@map("documentos_gastos")
+}
+
+model DocumentoVinculo {
+  id String @id @default(cuid())
+  documentoId String
+  perfilId String
+  documento DocumentoGasto @relation(fields: [documentoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  pagarTituloId String?
+  pagarTitulo ContaPagarTitulo? @relation("DocumentoPagar", fields: [pagarTituloId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  receberTituloId String?
+  receberTitulo ContaReceberTitulo? @relation("DocumentoReceber", fields: [receberTituloId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  carteiraId String?
+  carteira CarteiraFinanceira? @relation("DocumentoConta", fields: [carteiraId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  movimentacaoId String?
+  movimentacao MovimentacaoFinanceira? @relation("DocumentoMovimento", fields: [movimentacaoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([documentoId, pagarTituloId])
+  @@unique([documentoId, receberTituloId])
+  @@unique([documentoId, carteiraId])
+  @@unique([documentoId, movimentacaoId])
+  @@index([perfilId, createdAt])
+  @@index([pagarTituloId])
+  @@index([receberTituloId])
+  @@index([carteiraId])
+  @@index([movimentacaoId])
+  @@map("documentos_vinculos")
+}
+
+/** Proposta privada: corrigir substitui a revisão por CAS; confirmar só aplica uma vez. */
+model GastoRevisao {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  criadoPorAdminUserId String
+  criadoPor AdminUser @relation(fields: [criadoPorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  grupoChave String
+  versao Int
+  tipo String
+  estado String @default("PRONTA")
+  proposta Json @db.JsonB
+  payloadHash String @db.Char(64)
+  correcaoDeId String? @unique
+  correcaoDe GastoRevisao? @relation("GastoRevisaoAnterior", fields: [correcaoDeId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  sucessora GastoRevisao? @relation("GastoRevisaoAnterior")
+  expiraEm DateTime
+  decididaEm DateTime?
+  /// G006 · clock skew: instante gerado pelo PostgreSQL (UTC), nunca pelo host do Prisma.
+  createdAt DateTime @default(dbgenerated("timezone('UTC'::text, clock_timestamp())"))
+  operacao FinanceiroOperacao?
+  gasto Gasto?
+
+  @@unique([id, perfilId])
+  @@unique([perfilId, grupoChave, versao])
+  @@unique([correcaoDeId, perfilId])
+  @@index([perfilId, estado, expiraEm])
+  @@map("gastos_revisoes")
+}
+
+/** A reserva só existe na transação; resultado e outbox são duráveis após COMMIT. */
+model FinanceiroOperacao {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autorAdminUserId String
+  autor AdminUser @relation(fields: [autorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  chave String
+  grupoChave String
+  tipo String
+  payloadHash String @db.Char(64)
+  revisaoId String @unique
+  revisao GastoRevisao @relation(fields: [revisaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  estado String @default("RESERVADA")
+  resultado Json? @db.JsonB
+  /// G006 · clock skew: instante gerado pelo PostgreSQL (UTC), nunca pelo host do Prisma.
+  createdAt DateTime @default(dbgenerated("timezone('UTC'::text, clock_timestamp())"))
+  concluidaEm DateTime?
+  gasto Gasto?
+  pagamento PagamentoFinanceiro?
+  movimentos MovimentacaoFinanceira[]
+  evento FinanceiroOperacaoEvento?
+  outbox GastoOutbox[]
+
+  @@unique([id, perfilId])
+  @@unique([perfilId, chave])
+  @@unique([perfilId, grupoChave])
+  @@unique([revisaoId, perfilId])
+  @@index([perfilId, createdAt])
+  @@map("financeiro_operacoes")
+}
+
+/** Fato reconhecido; não é outro caixa nem outra movimentação financeira. */
+model Gasto {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  operacaoId String @unique
+  operacao FinanceiroOperacao @relation(fields: [operacaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  revisaoId String @unique
+  revisao GastoRevisao @relation(fields: [revisaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  grupoChave String
+  tipo String
+  descricao String
+  valorCentavos Decimal @db.Decimal(20, 0)
+  moeda String @default("BRL")
+  dataGasto DateTime @db.Date
+  competencia String?
+  categoriaId String?
+  categoria CategoriaGasto? @relation(fields: [categoriaId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  fornecedorId String?
+  fornecedor Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  contraparteTexto String?
+  documentoId String?
+  documento DocumentoGasto? @relation(fields: [documentoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now())
+  titulos ContaPagarTitulo[]
+  alocacoes AlocacaoPagamento[]
+
+  @@unique([id, perfilId])
+  @@unique([operacaoId, perfilId])
+  @@unique([revisaoId, perfilId])
+  @@unique([perfilId, grupoChave])
+  @@index([perfilId, dataGasto])
+  @@map("gastos")
+}
+
+/** Uma saída/compensação real; o movimento canônico não é contado duas vezes. */
+model PagamentoFinanceiro {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  operacaoId String @unique
+  operacao FinanceiroOperacao @relation(fields: [operacaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  tipo String
+  valorCentavos Decimal @db.Decimal(20, 0)
+  moeda String @default("BRL")
+  carteiraId String
+  carteira CarteiraFinanceira @relation(fields: [carteiraId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  formaPagamento String
+  pagoEm DateTime
+  movimentoId String @unique
+  movimento MovimentacaoFinanceira @relation("PagamentoMovimento", fields: [movimentoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  compensaPagamentoId String?
+  compensaPagamento PagamentoFinanceiro? @relation("CompensacaoPagamento", fields: [compensaPagamentoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  compensacoes PagamentoFinanceiro[] @relation("CompensacaoPagamento")
+  compensaMovimentoLegadoId String?
+  compensaMovimentoLegado MovimentacaoFinanceira? @relation("PagamentoCompensaLegado", fields: [compensaMovimentoLegadoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now())
+  alocacoes AlocacaoPagamento[]
+
+  @@unique([id, perfilId])
+  @@unique([operacaoId, perfilId])
+  @@unique([movimentoId, perfilId])
+  @@index([compensaPagamentoId])
+  @@index([compensaMovimentoLegadoId])
+  @@index([perfilId, pagoEm])
+  @@map("pagamentos_financeiros")
+}
+
+model AlocacaoPagamento {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  pagamentoId String
+  pagamento PagamentoFinanceiro @relation(fields: [pagamentoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  pagarTituloId String?
+  pagarTitulo ContaPagarTitulo? @relation(fields: [pagarTituloId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  gastoId String?
+  gasto Gasto? @relation(fields: [gastoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  valorCentavos Decimal @db.Decimal(20, 0)
+  compensaAlocacaoId String?
+  compensaAlocacao AlocacaoPagamento? @relation("CompensacaoAlocacao", fields: [compensaAlocacaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  compensacoes AlocacaoPagamento[] @relation("CompensacaoAlocacao")
+  estornadoCentavos Decimal @default(0) @db.Decimal(20, 0)
+  createdAt DateTime @default(now())
+
+  @@unique([id, perfilId])
+  @@unique([pagamentoId, pagarTituloId])
+  @@unique([pagamentoId, gastoId])
+  @@index([pagarTituloId])
+  @@index([gastoId])
+  @@index([compensaAlocacaoId])
+  @@map("alocacoes_pagamento")
+}
+
+/** Instrumento informativo, nunca uma conta de dinheiro ou limite como saldo. */
+model CartaoInstrumento {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nome String
+  ultimos4 String? @db.VarChar(4)
+  bandeira String?
+  limiteCentavos Decimal? @db.Decimal(20, 0)
+  ativo Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  ciclos CartaoCiclo[]
+  limitesEventos CartaoLimiteEvento[]
+
+  @@unique([id, perfilId])
+  @@index([perfilId, ativo])
+  @@map("cartoes_instrumentos")
+}
+
+/** Histórico imutável de alterações de limite de cartão (auditoria privada, com RLS). */
+/// Auditoria imutável de provisionamento/concessão/revogação de acesso ao perfil EMPRESA.
+/// Alvo e autor sem FK: o histórico sobrevive à remoção do vínculo de loja (que revoga o membro).
+model PerfilMembroEvento {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String
+  adminUserId String
+  autorAdminUserId String
+  acao String
+  motivo String?
+  createdAt DateTime @default(now())
+
+  @@index([perfilId, createdAt])
+  @@index([adminUserId, createdAt])
+  @@map("financeiro_perfil_membros_eventos")
+}
+
+model CartaoLimiteEvento {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cartaoId String
+  cartao CartaoInstrumento @relation(fields: [cartaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  autorAdminUserId String
+  autor AdminUser @relation(fields: [autorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  acao String
+  limiteAnteriorCentavos Decimal? @db.Decimal(20, 0)
+  limiteNovoCentavos Decimal? @db.Decimal(20, 0)
+  motivo String?
+  createdAt DateTime @default(now())
+
+  @@unique([id, perfilId])
+  @@index([cartaoId, createdAt])
+  @@index([perfilId, createdAt])
+  @@map("cartoes_limites_eventos")
+}
+
+/** Ciclo explícito agrega títulos de compras; não é um segundo título/despesa. */
+model CartaoCiclo {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cartaoId String
+  cartao CartaoInstrumento @relation(fields: [cartaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  identificador String
+  competencia String
+  vencimento DateTime @db.Date
+  fechamentoEm DateTime? @db.Date
+  ativo Boolean @default(true)
+  createdAt DateTime @default(now())
+  titulos ContaPagarTitulo[]
+
+  @@unique([id, perfilId])
+  @@unique([cartaoId, identificador])
+  @@index([perfilId, competencia])
+  @@map("cartoes_ciclos")
+}
+
+/** Auditoria transacional privada. PESSOAL nunca é espelhado na auditoria comum. */
+model FinanceiroOperacaoEvento {
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  operacaoId String @unique
+  operacao FinanceiroOperacao @relation(fields: [operacaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  tipo String
+  dados Json @db.JsonB
+  createdAt DateTime @default(now())
+
+  @@unique([id, perfilId])
+  @@unique([operacaoId, perfilId])
+  @@index([perfilId, createdAt])
+  @@map("financeiro_operacao_eventos")
+}
+
+/** Apenas persistência do resultado; claim/envio/retry pertencem ao G006. */
+model GastoOutbox {
+  jobEntrega GastoJob?
+  id String @id @default(cuid())
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  operacaoId String
+  operacao FinanceiroOperacao @relation(fields: [operacaoId, perfilId], references: [id, perfilId], onDelete: Restrict, onUpdate: Restrict)
+  tipo String
+  estado String @default("PENDENTE")
+  payload Json @db.JsonB
+  /// G006 · clock skew: instante gerado pelo PostgreSQL (UTC), nunca pelo host do Prisma.
+  createdAt DateTime @default(dbgenerated("timezone('UTC'::text, clock_timestamp())"))
+
+  @@unique([id, perfilId])
+  @@unique([operacaoId, tipo])
+  @@index([perfilId, estado, createdAt])
+  @@map("gastos_outbox")
+}
+
+/** GESTAO é da plataforma; ATENDIMENTO conserva a loja. Sem segredo em banco. */
+model WhatsAppCanal {
+  canalId String @id @default(uuid())
+  phoneNumberId String @unique
+  wabaId String
+  appId String
+  telefoneE164 String @unique
+  papel String
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  credencialRef String
+  ativo Boolean @default(false)
+  versao Int @default(1)
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  mensagens WhatsAppGestaoInbox[]
+
+  @@map("whatsapp_canais")
+}
+
+/** Staging técnico privado: nenhum storeId, perfil ou usuário presumido. */
+model WhatsAppGestaoInbox {
+  id String @id @default(uuid())
+  provedor String
+  canalId String
+  canal WhatsAppCanal @relation(fields: [canalId], references: [canalId], onDelete: Restrict, onUpdate: Restrict)
+  canalVersao Int
+  phoneNumberId String
+  externalMessageId String
+  remetenteE164 String
+  correlacaoId String
+  respondidoA String?
+  mediaId String?
+  ocorridoEm DateTime @db.Timestamptz(3)
+  recebidoEm DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  proveniencia String
+  conteudo Json @db.JsonB
+  conteudoHash String @db.Char(64)
+  estado String @default("RECEBIDO")
+  job GastoJob?
+  origens GastoOrigemCanal[]
+
+  @@unique([provedor, phoneNumberId, externalMessageId])
+  @@index([canalId, recebidoEm])
+  @@map("whatsapp_gestao_inbox")
+}
+
+/** Identidade de origem imutável; não é operação nem outbox financeira. */
+model GastoOrigemCanal {
+  id String @id @default(uuid())
+  inboxId String
+  inbox WhatsAppGestaoInbox @relation(fields: [inboxId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  perfilId String
+  perfil FinanceiroPerfil @relation(fields: [perfilId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storeId String?
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autorAdminUserId String
+  autor AdminUser @relation(fields: [autorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  grupoChave String
+  bindingRef String
+  bindingVersao Int
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  jobs GastoJob[]
+
+  @@unique([perfilId, grupoChave])
+  @@map("gastos_origens_canal")
+}
+
+/** Jobs técnicos; nenhum tipo aplica dinheiro. Entrega referencia a outbox G004. */
+model GastoJob {
+  id String @id @default(uuid())
+  chave String @unique
+  tipo String
+  inboxId String? @unique
+  inbox WhatsAppGestaoInbox? @relation(fields: [inboxId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  outboxId String? @unique
+  outbox GastoOutbox? @relation(fields: [outboxId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  origemId String?
+  origem GastoOrigemCanal? @relation(fields: [origemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  estado String @default("PRONTO")
+  tentativas Int @default(0)
+  tentativasCiclo Int @default(0)
+  limiteTentativas Int @default(5)
+  runAfter DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  prazoEm DateTime @default(dbgenerated("(clock_timestamp() + '24:00:00'::interval)")) @db.Timestamptz(3)
+  leaseOwner String?
+  leaseToken String?
+  leaseUntil DateTime? @db.Timestamptz(3)
+  envioEstado String @default("NAO_INICIADO")
+  externalMessageId String?
+  reconciliacaoRef String?
+  resultado Json? @db.JsonB
+  falhaCodigo String?
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  updatedAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  eventos GastoJobEvento[]
+
+  @@index([estado, runAfter, createdAt, id])
+  @@index([estado, leaseUntil])
+  @@map("gastos_jobs")
+}
+
+/** Auditoria técnica append-only, sem payload, telefone, token ou valores. */
+model GastoJobEvento {
+  id String @id @default(uuid())
+  jobId String
+  job GastoJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tipo String
+  codigo String
+  atorSql String @default(dbgenerated("CURRENT_USER"))
+  tentativa Int
+  evidenciaRef String?
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+
+  @@index([jobId, createdAt])
+  @@map("gastos_job_eventos")
+}
+
+model GastoWorkerPulso {
+  id String @id
+  versao String
+  estado String
+  ultimoPulso DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+  iniciadoEm DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(3)
+
+  @@map("gastos_worker_pulsos")
 }
