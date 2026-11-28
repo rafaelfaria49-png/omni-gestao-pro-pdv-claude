@@ -22,6 +22,11 @@ type EnterpriseEnrichInput = {
   clienteEmail?: string
   observacoesVenda?: string
   tipoVenda?: string
+  /**
+   * Características não excludentes da venda (crediário, cartão de crédito, garantia, misto,
+   * retroativa, brinde, originada de orçamento). Informativo; `tipoVenda` segue por compat.
+   */
+  caracteristicas?: Record<string, boolean>
   enderecoEntrega?: {
     logradouro?: string
     numero?: string

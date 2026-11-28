@@ -7,6 +7,9 @@
  */
 
 import { STOCK_DRIFT_REASON, type StockDriftDetails } from "@/lib/estoque/stock-drift-reconcile"
+import { COMERCIAL_CONTEXTUAL_REJECTION_CODES, COMERCIAL_REJECTION_CODES } from "@/lib/comercial/venda/contrato"
+
+const COMERCIAL_CONTEXTUAL: ReadonlySet<string> = new Set(COMERCIAL_CONTEXTUAL_REJECTION_CODES)
 
 export const PENDING_SYNC_CLASS = {
   AUTO_RETRY: "AUTO_RETRY",
@@ -373,6 +376,8 @@ export const DEFINITIVE_REJECTION_CODES: ReadonlySet<string> = new Set([
   "CREDITO_VALE_INSUFICIENTE",
   "CAIXA_FECHADO",
   "SESSAO_INVALIDA",
+  // ADR-0026: recusas do contrato comercial (retroativa/brindes) — validadas antes da transação.
+  ...COMERCIAL_REJECTION_CODES,
 ])
 
 export type SaleAttemptOutcome = "CONFIRMED" | "REJECTED" | "UNKNOWN" | "ACTION_REQUIRED" | "QUARANTINED"
@@ -418,7 +423,15 @@ export function finalizeFailureDisposition(input: {
     httpStatus: input.httpStatus,
     networkError: input.networkError,
   })
-  return outcome === "REJECTED" && !input.reusedIdentity ? "FAILED" : "PENDING"
+  if (outcome === "REJECTED" && !input.reusedIdentity) return "FAILED"
+  // ADR-0026: recusa comercial contextual (dia/permissão/flag) na finalização AO VIVO de identidade
+  // nova — nada pode ter sido gravado antes — encerra com a mensagem; no reenvio segue pendente.
+  const code = typeof input.code === "string" ? input.code.trim() : ""
+  if (
+    !input.reusedIdentity && input.networkError !== true && typeof input.httpStatus === "number" &&
+    input.httpStatus >= 400 && input.httpStatus < 500 && COMERCIAL_CONTEXTUAL.has(code)
+  ) return "FAILED"
+  return "PENDING"
 }
 
 const REJECTION_GUIDANCE: Record<string, string> = {

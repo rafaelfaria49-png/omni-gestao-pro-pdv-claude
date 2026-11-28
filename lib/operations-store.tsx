@@ -167,6 +167,21 @@ export const LOJA_NAO_RESOLVIDA_MOTIVO =
 
 export type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
+/**
+ * Pedido comercial da venda (OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001 · ADR-0026), enviado em
+ * `body.sale.comercial` aos writers V1/V2. O servidor valida e grava só o objeto canônico
+ * (`lib/comercial/venda/contrato.ts`); ausente = venda comum, corpo idêntico ao de antes.
+ */
+export type SaleComercialRequest = {
+  retroativa?: {
+    modo: "pagamento_hoje" | "regularizacao"
+    dataEfetivaVenda: string
+    dataEfetivaEntrega?: string
+    justificativa: string
+  }
+  brindes?: Array<{ lineIndex: number; motivo: string }>
+}
+
 /** Variação de produto (tamanho, cor, sabor, etc.) */
 export type ProdutoAtributoDef = {
   id: string
@@ -671,6 +686,8 @@ interface OperationsContextType {
       discountPercent?: number
     }
     aPrazoConfig?: APrazoConfig
+    /** Retroativa/brindes — opcional; viaja no SaleRecord (inclusive na fila de reenvio). */
+    comercial?: SaleComercialRequest
   }) => Promise<
     | { ok: true; saleId: string; pending?: boolean; clientSaleId?: string; serverId?: string }
     /** \`code: UNKNOWN_TWIN_CODE\` = aguardando a decisão explícita do operador (\`resolveUnknownTwin\`). */
@@ -3330,6 +3347,7 @@ export function OperationsProvider({
       aPrazoConfig,
       pixQrKind,
       cashTendered,
+      comercial,
     }) => {
       // Sem loja resolvida: recusa antes de qualquer mutação local (carrinho preservado na tela).
       if (!lojaResolvida) return { ok: false, reason: LOJA_NAO_RESOLVIDA_MOTIVO, code: LOJA_NAO_RESOLVIDA_CODE }
@@ -3559,7 +3577,9 @@ export function OperationsProvider({
       )
       if (already) return reusePending(already)
 
-      const saleRow: SaleRecord = {
+      // `comercial` não faz parte de SaleRecord compartilhado: o objeto viaja inteiro (estado, snapshot
+      // local e reenvio da fila serializam o mesmo registro).
+      const saleRow: SaleRecord & { comercial?: SaleComercialRequest } = {
         id: saleId,
         ...(clientSaleId ? { clientSaleId } : {}),
         at: new Date().toISOString(),
@@ -3585,6 +3605,7 @@ export function OperationsProvider({
         discountReais: auditMeta?.discountReais,
         discountPercent: auditMeta?.discountPercent,
         ...(aPrazoConfig ? { aPrazoConfig } : {}),
+        ...(comercial ? { comercial } : {}),
         ...(offlineNow ? { registeredOffline: true } : {}),
         syncPending: true,
         localEffectsApplied: false,
@@ -3643,6 +3664,7 @@ export function OperationsProvider({
       // identidade. Só para identidade criada NESTA chamada: uma `clientSaleId` reaproveitada
       // do mapa compartilhado pode estar viva como PENDING em outra aba — o 409 só prova que
       // ela não estava gravada AGORA; fechá-la abriria caminho para 2 identidades.
+      // Recusas da validação comercial (ADR-0026) estão em DEFINITIVE_REJECTION_CODES: mesma regra.
       const disposition = finalizeFailureDisposition({
         code,
         httpStatus: persistResult.httpStatus,

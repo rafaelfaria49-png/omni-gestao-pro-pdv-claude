@@ -1,6 +1,6 @@
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 
-export const REPORT_KINDS = ["produtos", "fluxo-caixa", "dre", "clientes", "os", "tecnicos", "whatsapp", "geral"] as const
+export const REPORT_KINDS = ["produtos", "fluxo-caixa", "dre", "clientes", "os", "tecnicos", "whatsapp", "geral", "comercial"] as const
 export type ReportKind = typeof REPORT_KINDS[number]
 export type Cell = string | number | null
 export type Column = { key: string; label: string; format?: "money" | "number" | "percent" | "date" | "hours" }
@@ -30,7 +30,7 @@ export type ReportResponse = Report & {
 export const REPORT_TITLES: Record<ReportKind, string> = {
   produtos: "Produtos mais vendidos", "fluxo-caixa": "Fluxo de caixa", dre: "DRE gerencial parcial",
   clientes: "Clientes", os: "Ordens de serviço", tecnicos: "Desempenho de técnicos", whatsapp: "WhatsApp HUB",
-  geral: "Relatório Geral da Loja",
+  geral: "Relatório Geral da Loja", comercial: "Aparelhos e custos comerciais",
 }
 export function isReportKind(value: string): value is ReportKind {
   return REPORT_KINDS.includes(value as ReportKind)
@@ -45,6 +45,8 @@ export function canReadReport(p: EnterprisePermissions, kind: ReportKind): boole
     case "whatsapp": return p.hubs.whatsapp
     // Consolida vendas e caixa: exige os dois módulos de origem e visão financeira.
     case "geral": return p.hubs.vendas && p.hubs.financeiro && p.financeiro.view
+    // Custos e margem de aparelhos: catálogo (deviceCatalog→cadastros) + visão financeira.
+    case "comercial": return p.hubs.cadastros && p.hubs.financeiro && p.financeiro.view
   }
 }
 const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" })

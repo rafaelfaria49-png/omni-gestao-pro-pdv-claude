@@ -74,6 +74,8 @@ export async function persistSaleV2(input: PersistSaleV2Input): Promise<UpsertVe
     ...(options?.historicalRecovery === true ? { historicalRecovery: true } : {}),
     // COMPAT-PROFISSIONAL-001: sinal de finalização ao vivo (guard de cor desativada).
     ...(options?.finalizacaoAoVivo === true ? { finalizacaoAoVivo: true } : {}),
+    // ADR-0026: `payload.comercial` validado pela rota (nunca o cru do cliente).
+    ...(options?.comercial ? { comercial: options.comercial } : {}),
     v2: {
       clientSaleId,
       allocate: (tx) => allocateSaleNumberForWriter(tx, storeId),

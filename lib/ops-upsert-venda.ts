@@ -378,6 +378,12 @@ export type UpsertVendaOptions = {
    */
   historicalAbsorcaoSomenteInventario?: boolean
   /**
+   * OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001 (ADR-0026) — `payload.comercial` VALIDADO pelo servidor
+   * (`lib/comercial/venda/servidor.ts`). O `comercial` cru enviado pelo cliente é sempre descartado;
+   * só este objeto é gravado. Ausente = venda sem dados comerciais (comportamento anterior).
+   */
+  comercial?: Record<string, unknown> | null
+  /**
    * Fluxo V2: o caller traz `clientSaleId` e um callback que aloca o número
    * comercial DENTRO desta transação. Este módulo NÃO importa o allocator.
    */
@@ -427,6 +433,11 @@ export type SalePayload = {
    * Cliente que enviar este campo é ignorado — o motor reconstrói a partir do breakdown.
    */
   fiscalPaymentHandoff?: FiscalPaymentHandoff
+  /**
+   * ADR-0026: pedido comercial do cliente (retroativa, brindes). É ENTRADA para o validador do
+   * servidor; o motor grava somente `UpsertVendaOptions.comercial`, nunca este valor cru.
+   */
+  comercial?: unknown
   /**
    * Metadados de auditoria gravados pelo SERVIDOR (nunca enviados pelo cliente) quando
    * `allowClosedOriginalSession` é usado para sincronizar uma venda pendente cuja sessão
@@ -964,9 +975,14 @@ export async function upsertVendaInTransaction(
           retroactiveSync: true,
           originalSessionClosed: true,
           syncedAt: new Date().toISOString(),
-          reason: "pending_sale_closed_original_session",
+          // ADR-0026: regularização retroativa validada tem motivo PRÓPRIO (não é reenvio de venda pendente).
+          reason: (options?.comercial as { retroativa?: { modo?: string } } | null | undefined)?.retroativa?.modo === "regularizacao"
+            ? "regularizacao_retroativa"
+            : "pending_sale_closed_original_session",
         }
       : {}),
+    // ADR-0026: o cliente nunca é autoridade de `comercial` — só o objeto validado no servidor.
+    comercial: options?.comercial ?? undefined,
     // Sempre por último: o cliente nunca é autoridade deste contrato.
     fiscalPaymentHandoff: buildFiscalPaymentHandoff(
       saleSemTPagCliente.paymentBreakdown,

@@ -3885,6 +3885,9 @@ model AparelhoFisico {
   eventos         AparelhoEvento[]
   fotos           AparelhoFoto[]
   vendas          AparelhoVenda[]
+  /// OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001 (aditivo, só back-relations — nenhuma coluna nova aqui).
+  perfilComercial ComercialPerfilUnidade?
+  custosAplicados ComercialCustoLancamento[]
 
   @@unique([storeId, codigoInterno])
   @@unique([id, storeId])
@@ -4028,6 +4031,8 @@ model AparelhoVenda {
   updatedAt     DateTime  @updatedAt @map("updatedAt")
 
   documentos    AparelhoDocumento[]
+  /// OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001: custo congelado no momento da venda (imutável).
+  custoHistorico ComercialVendaCusto?
 
   @@unique([storeId, numeroGarantia])
   @@unique([vendaId, aparelhoId])
@@ -4091,6 +4096,135 @@ model AparelhoSequencia {
 
   @@id([storeId, chave, ano])
   @@map("aparelhos_sequencias")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001 — contrato de custos comerciais (ADR-0025, ADITIVO)
+// Tabelas novas; nenhuma coluna de tabela existente muda. Dinheiro em CENTAVOS inteiros.
+// Não é ledger financeiro nem estoque: apropriação de custo à unidade. Dinheiro só se move
+// pelo Financeiro canônico (Contas a Pagar → pagar); estoque só pelo boundary do StockLedger.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Prontuário comercial da unidade individualizada (1:1 com AparelhoFisico).
+/// O estado de estoque continua em AparelhoFisico.status; aqui ficam as dimensões ortogonais.
+model ComercialPerfilUnidade {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  aparelhoId    String   @map("aparelhoId")
+  aparelho      AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
+  /// smartphone | tablet | notebook | computador | televisor | audio | eletrodomestico | outro
+  categoria     String   @default("smartphone") @map("categoria")
+  /// normal | com_avarias | danificado | nao_liga | nao_avaliado
+  funcionamento String   @default("nao_avaliado") @map("funcionamento")
+  /// revenda | preparacao | pecas | devolucao_fornecedor | baixa
+  finalidade    String   @default("revenda") @map("finalidade")
+  /// nenhuma | em_preparacao | em_testes | concluida
+  etapaPreparacao String @default("nenhuma") @map("etapaPreparacao")
+  /// conhecido | estimado | desconhecido — custo de aquisição informado (nunca "desconhecido = zero").
+  custoAquisicaoStatus String @default("conhecido") @map("custoAquisicaoStatus")
+  custoAquisicaoJustificativa String @default("") @map("custoAquisicaoJustificativa")
+  /// Unidade registrada no modo de implantação (mercadoria anterior ao sistema).
+  preexistente  Boolean  @default(false) @map("preexistente")
+  defeitos      String   @default("") @map("defeitos") @db.Text
+  /// Classificação estética configurável (A, B, C…).
+  classeEstetica String  @default("") @map("classeEstetica")
+  /// Conferências de segurança registradas (iCloud/Google/MDM/dados) — PASS/FAIL/NAO_TESTADO.
+  conferencias  Json     @default("{}") @map("conferencias") @db.JsonB
+  version       Int      @default(1) @map("version")
+  updatedBy     String   @default("") @map("updatedBy")
+  createdAt     DateTime @default(now()) @map("createdAt")
+  updatedAt     DateTime @updatedAt @map("updatedAt")
+
+  @@unique([aparelhoId, storeId])
+  @@index([storeId, etapaPreparacao])
+  @@map("comercial_perfis_unidade")
+}
+
+/// Origem financeira JÁ REGISTRADA que pode ser rateada entre unidades (ex.: compra de 5 telas
+/// por R$ 500). A capacidade (valor e quantidade) é travada por linha (FOR UPDATE) a cada rateio.
+model ComercialCustoOrigem {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  /// conta_pagar (ContaPagarTitulo) | gestor_money_gasto (reservado; fail-closed até o contrato publicado)
+  tipo          String   @map("tipo")
+  referenciaId  String   @map("referenciaId")
+  descricao     String   @default("") @map("descricao")
+  valorTotalCentavos Int @map("valorTotalCentavos")
+  quantidadeTotal Int    @map("quantidadeTotal")
+  createdBy     String   @default("") @map("createdBy")
+  createdAt     DateTime @default(now()) @map("createdAt")
+
+  lancamentos   ComercialCustoLancamento[]
+
+  @@unique([storeId, tipo, referenciaId])
+  @@unique([id, storeId])
+  @@map("comercial_custos_origens")
+}
+
+/// Custo apropriado a uma unidade. Append-only: só transita ativo → estornado (CAS), nunca é apagado.
+model ComercialCustoLancamento {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  aparelhoId    String   @map("aparelhoId")
+  aparelho      AparelhoFisico @relation(fields: [aparelhoId, storeId], references: [id, storeId], onDelete: Restrict)
+  /// peca | mao_obra_interna | servico_terceirizado | frete | outro
+  categoria     String   @map("categoria")
+  /// estoque | preexistente | vinculo_financeiro | nova_compra | gerencial
+  origem        String   @map("origem")
+  descricao     String   @map("descricao")
+  quantidade    Int      @default(1) @map("quantidade")
+  /// NULL somente quando custoStatus = desconhecido (custo desconhecido NÃO é zero).
+  valorCentavos Int?     @map("valorCentavos")
+  /// conhecido | estimado | desconhecido
+  custoStatus   String   @default("conhecido") @map("custoStatus")
+  /// Produto consumido do estoque (origem = estoque) ou citado (preexistente).
+  produtoId     String?  @map("produtoId")
+  /// Chave da movimentação de estoque gerada (origem = estoque) — reversão compensatória usa outra chave.
+  estoqueIdempotencyKey String? @map("estoqueIdempotencyKey")
+  origemFinanceiraId String? @map("origemFinanceiraId")
+  origemFinanceira ComercialCustoOrigem? @relation(fields: [origemFinanceiraId, storeId], references: [id, storeId], onDelete: Restrict)
+  /// Título criado pela nova compra/serviço terceirizado (Contas a Pagar pendente).
+  contaPagarTituloId String? @map("contaPagarTituloId")
+  justificativa String   @default("") @map("justificativa")
+  /// ativo | estornado
+  status        String   @default("ativo") @map("status")
+  estornadoEm   DateTime? @map("estornadoEm")
+  estornadoPor  String?  @map("estornadoPor")
+  motivoEstorno String?  @map("motivoEstorno")
+  operador      String   @default("") @map("operador")
+  idempotencyKey String  @map("idempotencyKey")
+  payloadHash   String   @map("payloadHash") @db.Char(64)
+  createdAt     DateTime @default(now()) @map("createdAt")
+
+  @@unique([storeId, idempotencyKey])
+  @@index([storeId, aparelhoId, status])
+  @@index([storeId, origemFinanceiraId])
+  @@map("comercial_custos_lancamentos")
+}
+
+/// Custo histórico CONGELADO na venda da unidade. Imutável (trigger): alterar custo depois
+/// não altera o lucro histórico. `completo = false` quando algum componente é desconhecido.
+model ComercialVendaCusto {
+  id              String   @id @default(cuid())
+  storeId         String   @map("storeId")
+  aparelhoVendaId String   @unique @map("aparelhoVendaId")
+  aparelhoVenda   AparelhoVenda @relation(fields: [aparelhoVendaId], references: [id], onDelete: Restrict)
+  vendaId         String   @map("vendaId")
+  aparelhoId      String   @map("aparelhoId")
+  precoVendaCentavos Int   @map("precoVendaCentavos")
+  /// NULL quando o custo de aquisição é desconhecido.
+  custoAquisicaoCentavos Int? @map("custoAquisicaoCentavos")
+  custoAplicadoCentavos Int @map("custoAplicadoCentavos")
+  /// NULL quando incompleto (há componente desconhecido): margem não é inventada.
+  custoTotalCentavos Int?  @map("custoTotalCentavos")
+  completo        Boolean  @map("completo")
+  estimado        Boolean  @map("estimado")
+  componentes     Json     @map("componentes") @db.JsonB
+  createdAt       DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId, createdAt])
+  @@index([storeId, vendaId])
+  @@map("comercial_vendas_custos")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -19,6 +19,7 @@ import { buildGarantiaSnapshot } from "./snapshot"
 import { resolveStoreModules } from "@/lib/auth/access-policy"
 import { resolveBusinessResource } from "@/lib/store-business-capabilities"
 import type { StoreCapabilitiesV1 } from "@/lib/capabilities-persistence-v1"
+import { congelarCustoVendaTx } from "@/lib/comercial/custos/congelamento"
 
 import type { DeviceSaleLineV1 } from "./device-sale-line"
 export type { DeviceSaleLineV1 }
@@ -258,6 +259,12 @@ export async function applyDeviceSaleLinesTx(
           dataEntrega: garantia.dataEntrega,
         },
       },
+    })
+    // OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001: custo histórico congelado (recurso explícito +
+    // migration comercial instalada); caso contrário não faz nada.
+    await congelarCustoVendaTx(tx, {
+      storeId: ctx.storeId, capabilities: config?.capabilities ?? null, aparelhoVendaId: av.id, vendaId: ctx.vendaId,
+      aparelho: unit, precoVenda: preco,
     })
     results.push({ aparelhoId: unit.id, aparelhoVendaId: av.id, numeroGarantia })
   }

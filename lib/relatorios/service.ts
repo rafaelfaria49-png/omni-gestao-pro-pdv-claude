@@ -9,10 +9,11 @@ import { whatsappReport } from "./whatsapp"
 import type { ReportDb } from "./sql"
 import { originReport } from "./origins"
 import { generalOriginReport, generalReport } from "./geral"
+import { comercialReport } from "./comercial"
 
 const builders={produtos:productReport,"fluxo-caixa":cashFlowReport,dre:dreReport,clientes:customerReport,os:operationsReport,
   tecnicos:(db:ReportDb,storeId:string,q:ReportQuery)=>operationsReport(db,storeId,q,true),whatsapp:whatsappReport,
-  geral:(db:ReportDb,storeId:string,q:ReportQuery)=>generalReport(db,storeId,q,{service:false})}
+  geral:(db:ReportDb,storeId:string,q:ReportQuery)=>generalReport(db,storeId,q,{service:false}),comercial:comercialReport}
 
 export async function buildReport(db:PrismaClient,kind:ReportKind,storeId:string,q:ReportQuery,options:{compare?:boolean;financial?:boolean;service?:boolean}={}):Promise<ReportResponse> {
   const started=performance.now(),previous=previousQuery(q)
@@ -24,7 +25,7 @@ export async function buildReport(db:PrismaClient,kind:ReportKind,storeId:string
     // Relatório Geral: blocos consolidados sem comparativo (custo dobrado, sem leitura útil por bloco).
     const current=kind==="geral"?(q.source?await generalOriginReport(tx,storeId,q):await generalReport(tx,storeId,q,{service:!!options.service}))
       :q.source&&(kind!=="produtos"||q.source.startsWith("venda:"))?await originReport(tx,kind,storeId,q):await builders[kind](tx,storeId,q)
-    const before=options.compare===false||q.source||kind==="geral"?null:await builders[kind](tx,storeId,previous)
+    const before=options.compare===false||q.source||kind==="geral"||kind==="comercial"?null:await builders[kind](tx,storeId,previous)
     return {...current,previousMetrics:before?.metrics.filter(m=>!m.key.startsWith("forecast")&&!m.key.startsWith("overdue")&&m.key!=="projection")??[]}
   },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:30000,maxWait:5000})
   if ((kind==="os"||kind==="tecnicos")&&!options.financial) {

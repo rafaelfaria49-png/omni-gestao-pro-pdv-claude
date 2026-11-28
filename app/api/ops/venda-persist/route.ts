@@ -26,6 +26,7 @@ import {
 } from "@/lib/ops-upsert-venda"
 import { handleEvent } from "@/lib/automation/automation-engine"
 import { dispatchSaleAutomationIfCreated } from "@/lib/vendas/sale-automation-dispatch"
+import { prepararComercialDaVenda } from "@/lib/comercial/venda/servidor"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -82,6 +83,12 @@ export async function POST(req: Request) {
   const session = await auth()
   const operadorLabel = session?.user ? getOperatorLabelFromSession(session) : undefined
 
+  // ADR-0026: `comercial` (retroativa/brindes) é validado aqui; o cru do cliente nunca é gravado.
+  const comercial = await prepararComercialDaVenda({ storeId: lojaId, sale, operadorLabel, identidade: { pedidoId } })
+  if (!comercial.ok) {
+    return NextResponse.json({ error: comercial.error, code: comercial.code, ...(comercial.field ? { field: comercial.field } : {}) }, { status: comercial.status })
+  }
+
   try {
     await prismaEnsureConnected()
     const result = await prisma.$transaction(
@@ -89,8 +96,9 @@ export async function POST(req: Request) {
         return upsertVendaInTransaction(tx, lojaId, sale, operadorLabel, {
           enforceStock: true,
           requireCaixaSession: true,
-          allowClosedOriginalSession,
+          allowClosedOriginalSession: allowClosedOriginalSession || comercial.allowClosedOriginalSession,
           finalizacaoAoVivo,
+          comercial: comercial.comercial,
         })
       },
       // `DATABASE_URL` usa `connection_limit=1` (pooler Supabase) — vendas com muitas

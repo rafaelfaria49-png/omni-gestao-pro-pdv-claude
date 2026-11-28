@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight,ArrowUpDown,ClipboardList,LayoutDashboard,MessageCircle,Package,ReceiptText,TrendingUp,Users,Wallet,Wrench,type LucideIcon } from "lucide-react"
+import { ArrowRight,ArrowUpDown,ClipboardList,LayoutDashboard,MessageCircle,Package,ReceiptText,Smartphone,TrendingUp,Users,Wallet,Wrench,type LucideIcon } from "lucide-react"
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import { canAccessPage } from "@/lib/auth/page-access"
 import { EnterpriseAccessDenied } from "@/components/enterprise/EnterpriseAccessDenied"
@@ -21,6 +21,7 @@ const reports:Card[]=[
   {title:"Clientes",description:"Compras identificadas, recorrência, ticket, última compra e histórico por cadastro. Sem correspondências inventadas.",href:"/dashboard/relatorios/clientes",icon:Users,kind:"clientes"},
   {title:"Ordens de Serviço",description:"OS únicas das Operações V3/V4, status, prazos comprovados e garantias registradas.",href:"/dashboard/relatorios/os",icon:ClipboardList,kind:"os"},
   {title:"Técnicos",description:"Atribuições e conclusões reais. Tempos e prazos com cobertura explícita; sem metas ou satisfação simuladas.",href:"/dashboard/relatorios/tecnicos",icon:Wrench,kind:"tecnicos"},
+  {title:"Aparelhos e Custos Comerciais",description:"Aparelhos adquiridos, em preparação e vendidos, capital imobilizado, estoque parado e margem histórica só com custo congelado completo. Custo desconhecido nunca vira zero.",href:"/dashboard/relatorios/comercial",icon:Smartphone,kind:"comercial"},
   {title:"WhatsApp",description:"Registros com ID wamid e intervalo de resposta. Aceite externo e automações sem telemetria ficam indisponíveis.",href:"/dashboard/relatorios/whatsapp",icon:MessageCircle,kind:"whatsapp"},
 ]
 
