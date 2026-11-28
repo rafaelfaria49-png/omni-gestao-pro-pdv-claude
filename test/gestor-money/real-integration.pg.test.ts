@@ -8,7 +8,7 @@
  * - Exige `GESTOR_MONEY_REAL_PG_URL` apontando exclusivamente para banco loopback descartável.
  * - Nunca toca Production.
  */
-import { randomUUID } from "node:crypto"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 import type { Session } from "next-auth"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { modulosSinteticos } from "@/test/gastos/sessao-modulos"
@@ -42,6 +42,16 @@ vi.mock("@/lib/prisma", async () => {
 })
 
 import { prisma } from "@/lib/prisma"
+import {
+  cancelarPareamentoWhatsApp,
+  gerarCodigoVinculoWhatsApp,
+  revogarVinculoWhatsApp,
+  situacaoVinculoWhatsApp,
+} from "@/app/actions/gestor-money-vinculo"
+import {
+  CONSENTIMENTO_VERSAO_ATUAL,
+  confirmarPareamentoPorMensagem,
+} from "@/lib/gestor-money-assistente/whatsapp/vinculo"
 import { DocumentoStorageFixture } from "@/lib/gastos/documentos-fixture"
 import {
   criarStoragePrivadoR2G003,
@@ -877,6 +887,219 @@ describe.skipIf(!pgConfig.enabled)(
         { params: Promise.resolve({ cartaoId: card.id }) }
       )
       expect(crossHist.status).toBe(403)
+    })
+
+    it("7. Pareamento WhatsApp G007/G008 ponta a ponta via Server Actions canônicas + PG 17: sem vínculo, pendente, cancelamento, código inválido/bloqueado, expirado, telefone já vinculado, confirmado, novo pareamento, revogação, isolamento e canal indisponível", async () => {
+      const s = await seedScenario()
+      const selPessoal = { tipo: "PESSOAL" as const, perfilId: s.P1 }
+      const prevWaFlag = process.env.GESTOR_MONEY_WHATSAPP_GESTAO
+      const prevWaNum = process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO
+      const telU1A = `+55119${String(Math.floor(10000000 + Math.random() * 89999999))}`
+      const telU1B = `+55119${String(Math.floor(10000000 + Math.random() * 89999999))}`
+
+      try {
+        // 1. Canal oficial desligado (GESTOR_MONEY_WHATSAPP_GESTAO ausente) -> todas as actions retornam Indisponível
+        delete process.env.GESTOR_MONEY_WHATSAPP_GESTAO
+        loginAs(s.U1, [s.L1])
+        expect(await situacaoVinculoWhatsApp()).toEqual({ ok: false, erro: "Indisponível." })
+        expect(
+          await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: true })
+        ).toEqual({ ok: false, erro: "Indisponível." })
+        expect(await cancelarPareamentoWhatsApp()).toEqual({ ok: false, erro: "Indisponível." })
+        expect(await revogarVinculoWhatsApp()).toEqual({ ok: false, erro: "Indisponível." })
+
+        const gw = createRealBoundaryGateway(inProcessFetch)
+        const assistOff = await gw.obterAssistenteConfig(selPessoal)
+        expect(assistOff.estadoConexao).toBe("DESCONECTADO_AGUARDANDO_G007")
+        expect(assistOff.podeAlterarConexaoReal).toBe(false)
+
+        // 2. Flag ligada, mas SEM canal GESTAO ativo em whatsapp_canais -> estadoConexao = CANAL_INATIVO (NUNCA ATIVO!)
+        process.env.GESTOR_MONEY_WHATSAPP_GESTAO = "ligado"
+        process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO = "+5511999990001"
+        const assistSemCanal = await gw.obterAssistenteConfig(selPessoal)
+        expect(assistSemCanal.estadoConexao).toBe("CANAL_INATIVO")
+        expect(assistSemCanal.podeAlterarConexaoReal).toBe(false)
+
+        // 3. Registra canal GESTAO em whatsapp_canais (inicia inativo por trigger G006; depois ativa na versao 2)
+        const numSuffix = String(Math.floor(1000000000 + Math.random() * 8999999999))
+        const canal = await prisma.whatsAppCanal.create({
+          data: {
+            papel: "GESTAO",
+            storeId: null,
+            phoneNumberId: `700${numSuffix}`,
+            wabaId: "700007",
+            appId: "710007",
+            telefoneE164: `+55119${numSuffix.slice(0, 8)}`,
+            credencialRef: "WHATSAPP_CANAL_TOKEN_GM_CI_SYNTHETIC",
+            ativo: false,
+            versao: 1,
+          },
+        })
+        const assistCanalInativo = await gw.obterAssistenteConfig(selPessoal)
+        expect(assistCanalInativo.estadoConexao).toBe("CANAL_INATIVO")
+        expect(assistCanalInativo.podeAlterarConexaoReal).toBe(false)
+
+        await prisma.whatsAppCanal.update({
+          where: { canalId: canal.canalId },
+          data: { ativo: true, versao: 2 },
+        })
+
+        // Sem sessão -> actions retornam Indisponível (fail-closed)
+        sessionState.current = null
+        expect(await situacaoVinculoWhatsApp()).toEqual({ ok: false, erro: "Indisponível." })
+
+        // Login como U1 -> SEM_VINCULO + canal oficial ativo
+        loginAs(s.U1, [s.L1])
+        const assistPronto = await gw.obterAssistenteConfig(selPessoal)
+        expect(assistPronto.estadoConexao).toBe("AGUARDANDO_VINCULO")
+        expect(assistPronto.podeAlterarConexaoReal).toBe(true)
+        expect(assistPronto.canalAtivo).toBe(true)
+
+        const sit0 = await situacaoVinculoWhatsApp()
+        expect(sit0.ok).toBe(true)
+        if (!sit0.ok) throw new Error("sit0")
+        expect(sit0.dados.estado).toBe("SEM_VINCULO")
+        expect(sit0.dados.numeroAssistente).toBe("+5511999990001")
+
+        // Validações de telefone inválido e consentimento ausente
+        expect(
+          await gerarCodigoVinculoWhatsApp({ telefoneE164: "11999", aceitouConsentimento: true })
+        ).toEqual({
+          ok: false,
+          erro: "Informe o telefone no formato internacional, por exemplo +5511999990000.",
+        })
+        expect(
+          await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: false })
+        ).toEqual({
+          ok: false,
+          erro: "É preciso aceitar os termos de uso do assistente pelo WhatsApp.",
+        })
+
+        // Início de pareamento -> PENDENTE (código nunca volta em situacaoVinculoWhatsApp) -> Cancelamento -> SEM_VINCULO
+        const d1 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: true })
+        expect(d1.ok).toBe(true)
+        if (!d1.ok) throw new Error("d1")
+        expect(d1.dados.codigo).toMatch(/^\d{6}$/)
+        const sitPend = await situacaoVinculoWhatsApp()
+        expect(sitPend.ok).toBe(true)
+        if (!sitPend.ok) throw new Error("sitPend")
+        expect(sitPend.dados.estado).toBe("PENDENTE")
+        expect(sitPend.dados.pendente?.tentativasRestantes).toBe(5)
+        expect(JSON.stringify(sitPend)).not.toContain(d1.dados.codigo)
+
+        const canc = await cancelarPareamentoWhatsApp()
+        expect(canc).toEqual({ ok: true, dados: { cancelado: true } })
+        const sitAposCanc = await situacaoVinculoWhatsApp()
+        expect(sitAposCanc.ok && sitAposCanc.dados.estado).toBe("SEM_VINCULO")
+        expect(await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: d1.dados.codigo })).toEqual({
+          tipo: "SEM_DESAFIO",
+        })
+
+        // Código expirado -> situacaoVinculoWhatsApp reporta EXPIRADO e confirmação recusa com EXPIRADO
+        const expSalt = randomBytes(16).toString("hex")
+        const expCriadoEm = new Date(Date.now() - 20 * 60_000)
+        const expHash = createHash("sha256").update(`${expSalt}:123123`).digest("hex")
+        await prisma.gmAssistDesafio.create({
+          data: {
+            id: randomUUID(),
+            adminUserId: s.U1,
+            telefoneE164: telU1A,
+            codigoSalt: expSalt,
+            codigoHash: expHash,
+            pendenteUsuario: s.U1,
+            consentimentoVersao: CONSENTIMENTO_VERSAO_ATUAL,
+            criadoEm: expCriadoEm,
+            expiraEm: new Date(expCriadoEm.getTime() + 10 * 60_000),
+          },
+        })
+        const sitExp = await situacaoVinculoWhatsApp()
+        expect(sitExp.ok && sitExp.dados.estado).toBe("EXPIRADO")
+        expect(await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: "123123" })).toEqual({
+          tipo: "EXPIRADO",
+        })
+
+        // Código inválido (5x) -> BLOQUEADO
+        const d2 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: true })
+        if (!d2.ok) throw new Error("d2")
+        const errado = d2.dados.codigo === "000000" ? "111111" : "000000"
+        for (let i = 0; i < 4; i++) {
+          const r = await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: errado })
+          expect(r.tipo).toBe("CODIGO_INVALIDO")
+        }
+        expect(await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: errado })).toEqual({
+          tipo: "BLOQUEADO",
+        })
+        const sitBloq = await situacaoVinculoWhatsApp()
+        expect(sitBloq.ok && sitBloq.dados.estado).toBe("BLOQUEADO")
+
+        // Novo pareamento válido -> VINCULADO com telefone mascarado
+        const d3 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: true })
+        if (!d3.ok) throw new Error("d3")
+        const conf = await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: d3.dados.codigo })
+        expect(conf.tipo).toBe("VINCULADO")
+
+        const sitVinc = await situacaoVinculoWhatsApp()
+        expect(sitVinc.ok).toBe(true)
+        if (!sitVinc.ok) throw new Error("sitVinc")
+        expect(sitVinc.dados.estado).toBe("VINCULADO")
+        expect(sitVinc.dados.vinculado?.telefoneMascarado).toBe(d3.dados.telefoneMascarado)
+        expect(JSON.stringify(sitVinc)).not.toContain(telU1A)
+
+        const assistAtivo = await gw.obterAssistenteConfig(selPessoal)
+        expect(assistAtivo.estadoConexao).toBe("ATIVO")
+        expect(assistAtivo.numeroVinculadoMascarado).toBe(d3.dados.telefoneMascarado)
+
+        // Isolamento entre usuários + Telefone já vinculado a outra conta
+        loginAs(s.U2, [s.L1])
+        const sitU2 = await situacaoVinculoWhatsApp()
+        expect(sitU2.ok && sitU2.dados.estado).toBe("SEM_VINCULO")
+        expect(await revogarVinculoWhatsApp()).toEqual({
+          ok: false,
+          erro: "Não há WhatsApp vinculado à sua conta.",
+        })
+        const dU2 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: true })
+        if (!dU2.ok) throw new Error("dU2")
+        expect(
+          await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: dU2.dados.codigo })
+        ).toEqual({ tipo: "TELEFONE_JA_VINCULADO" })
+
+        // Novo pareamento de U1 para outro telefone substitui o anterior
+        loginAs(s.U1, [s.L1])
+        const d4 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1B, aceitouConsentimento: true })
+        if (!d4.ok) throw new Error("d4")
+        const sitTroca = await situacaoVinculoWhatsApp()
+        expect(sitTroca.ok).toBe(true)
+        if (sitTroca.ok) {
+          expect(sitTroca.dados.estado).toBe("VINCULADO")
+          expect(sitTroca.dados.pendente?.telefoneMascarado).toBe(d4.dados.telefoneMascarado)
+        }
+        expect(
+          (await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1B, texto: d4.dados.codigo })).tipo
+        ).toBe("VINCULADO")
+        const sitNovo = await situacaoVinculoWhatsApp()
+        expect(sitNovo.ok && sitNovo.dados.vinculado?.telefoneMascarado).toBe(d4.dados.telefoneMascarado)
+
+        // Desativar canal GESTAO com usuário ainda vinculado -> estadoConexao cai imediatamente para CANAL_INATIVO (NUNCA ATIVO!)
+        await prisma.whatsAppCanal.update({ where: { canalId: canal.canalId }, data: { ativo: false, versao: 3 } })
+        const assistCanalOff = await gw.obterAssistenteConfig(selPessoal)
+        expect(assistCanalOff.estadoConexao).toBe("CANAL_INATIVO")
+        expect(assistCanalOff.podeAlterarConexaoReal).toBe(false)
+
+        // Revogação definitiva por U1 -> SEM_VINCULO (2ª revogação falha com SEM_VINCULO)
+        await prisma.whatsAppCanal.update({ where: { canalId: canal.canalId }, data: { ativo: true, versao: 4 } })
+        expect(await revogarVinculoWhatsApp()).toEqual({ ok: true, dados: { revogado: true } })
+        const sitRev = await situacaoVinculoWhatsApp()
+        expect(sitRev.ok && sitRev.dados.estado).toBe("SEM_VINCULO")
+        expect(await revogarVinculoWhatsApp()).toEqual({
+          ok: false,
+          erro: "Não há WhatsApp vinculado à sua conta.",
+        })
+      } finally {
+        if (prevWaFlag === undefined) delete process.env.GESTOR_MONEY_WHATSAPP_GESTAO
+        else process.env.GESTOR_MONEY_WHATSAPP_GESTAO = prevWaFlag
+        if (prevWaNum === undefined) delete process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO
+        else process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO = prevWaNum
+      }
     })
   }
 )

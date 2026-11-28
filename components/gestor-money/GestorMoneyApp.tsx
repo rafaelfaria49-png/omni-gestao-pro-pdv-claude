@@ -31,12 +31,17 @@ import type {
   OperacaoFeedback,
   PerfilResumo,
   TipoPerfilFinanceiro,
+  WhatsAppPairingActions,
 } from "@/lib/gestor-money/contracts"
 import {
   createRealBoundaryGateway,
   createSyntheticGestorMoneyGateway,
   type GestorMoneyGateway,
 } from "@/lib/gestor-money/gateway"
+import {
+  createSyntheticWhatsAppPairingActions,
+  createUnavailableWhatsAppPairingActions,
+} from "@/lib/gestor-money/whatsapp-pairing"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -81,14 +86,50 @@ const NAV_ITEMS: Array<{
 export function GestorMoneyApp({
   mode = "real",
   customGateway,
+  pairingActions,
+  gerarCodigoVinculoAction,
+  situacaoVinculoAction,
+  cancelarPareamentoAction,
+  revogarVinculoAction,
 }: {
   mode?: "real" | "synthetic"
   customGateway?: GestorMoneyGateway
+  pairingActions?: WhatsAppPairingActions
+  gerarCodigoVinculoAction?: WhatsAppPairingActions["gerarCodigo"]
+  situacaoVinculoAction?: WhatsAppPairingActions["consultarSituacao"]
+  cancelarPareamentoAction?: WhatsAppPairingActions["cancelarPareamento"]
+  revogarVinculoAction?: WhatsAppPairingActions["revogarVinculo"]
 }) {
   const gateway = React.useMemo(
     () => customGateway ?? (mode === "synthetic" ? createSyntheticGestorMoneyGateway() : createRealBoundaryGateway()),
     [mode, customGateway]
   )
+  const resolvedPairingActions = React.useMemo<WhatsAppPairingActions>(() => {
+    if (pairingActions) return pairingActions
+    if (
+      gerarCodigoVinculoAction &&
+      situacaoVinculoAction &&
+      cancelarPareamentoAction &&
+      revogarVinculoAction
+    ) {
+      return {
+        gerarCodigo: gerarCodigoVinculoAction,
+        consultarSituacao: situacaoVinculoAction,
+        cancelarPareamento: cancelarPareamentoAction,
+        revogarVinculo: revogarVinculoAction,
+      }
+    }
+    return mode === "synthetic"
+      ? createSyntheticWhatsAppPairingActions()
+      : createUnavailableWhatsAppPairingActions()
+  }, [
+    pairingActions,
+    gerarCodigoVinculoAction,
+    situacaoVinculoAction,
+    cancelarPareamentoAction,
+    revogarVinculoAction,
+    mode,
+  ])
   const studioTheme = React.useContext(StudioThemeContext)
   const { toast } = useToast()
 
@@ -506,9 +547,12 @@ export function GestorMoneyApp({
                 {section === "assistente" && assistenteConfig && (
                   <AssistantSettingsView
                     snapshot={snapshot}
+                    perfisAutorizados={perfis}
                     config={assistenteConfig}
                     gateway={gateway}
+                    pairingActions={resolvedPairingActions}
                     onSaved={handleOperationSuccess}
+                    onPairingChanged={() => loadData(perfilTipo, true)}
                   />
                 )}
               </>

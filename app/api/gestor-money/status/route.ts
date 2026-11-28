@@ -3,6 +3,7 @@ import { gestorMoneyAtivo } from "@/lib/gastos/ativacao"
 import { respostaFinanceiraPrivada } from "@/lib/gastos/read-scope"
 import type { IntegrationContractStatus } from "@/lib/gestor-money/contracts"
 import { diagnosticarStorageComprovantes } from "@/lib/gestor-money/server/documents-adapter"
+import { canalGestaoLigado } from "@/lib/gestor-money-assistente/whatsapp/webhook"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -80,9 +81,12 @@ export async function GET() {
     {
       id: "G007",
       nome: "Vínculo de Telefone WhatsApp & Webhook Oficial",
-      disponivelNoRuntime: false,
-      origem: "Próximo milestone após fundação",
-      detalhe: "WhatsApp permanece honestamente desconectado até conclusão do G007.",
+      disponivelNoRuntime: moduleEnabled && canalGestaoLigado(process.env),
+      origem: "app/actions/gestor-money-vinculo.ts + lib/gestor-money-assistente/whatsapp/",
+      detalhe:
+        moduleEnabled && canalGestaoLigado(process.env)
+          ? "Ativo no runtime: pareamento G007 via Server Actions canônicas e motor conversacional G008 (somente texto; sem áudio/OCR)."
+          : "Integrado ao código (PR #417); dormente enquanto GESTOR_MONEY_WHATSAPP_GESTAO !== 'ligado'.",
     },
   ]
 

@@ -436,9 +436,47 @@ export interface ConsultaFinanceiraSnapshot {
   storageDiagnostico?: StorageComprovantesDiagnostico
 }
 
+export const CONSENTIMENTO_WHATSAPP_VERSAO = "gm-whatsapp-consentimento-v1" as const
+
+export type EstadoVinculoWhatsApp =
+  | "SEM_VINCULO"
+  | "PENDENTE"
+  | "EXPIRADO"
+  | "BLOQUEADO"
+  | "VINCULADO"
+
+export type ResultadoAcaoVinculo<T> =
+  | { ok: true; dados: T }
+  | { ok: false; erro: string }
+
+export interface CodigoPareamentoGerado {
+  codigo: string
+  expiraEm: string
+  telefoneMascarado: string
+}
+
+export interface SituacaoVinculoWhatsAppDados {
+  estado: EstadoVinculoWhatsApp
+  vinculado: { telefoneMascarado: string; desde: string } | null
+  pendente: { telefoneMascarado: string; expiraEm: string; tentativasRestantes: number } | null
+  consentimentoVersao: string
+  numeroAssistente: string | null
+}
+
+export interface WhatsAppPairingActions {
+  gerarCodigo(input: {
+    telefoneE164: string
+    aceitouConsentimento: boolean
+  }): Promise<ResultadoAcaoVinculo<CodigoPareamentoGerado>>
+  consultarSituacao(): Promise<ResultadoAcaoVinculo<SituacaoVinculoWhatsAppDados>>
+  cancelarPareamento(): Promise<ResultadoAcaoVinculo<{ cancelado: boolean }>>
+  revogarVinculo(): Promise<ResultadoAcaoVinculo<{ revogado: true }>>
+}
+
 export type EstadoConexaoWhatsApp =
   | "DESCONECTADO_AGUARDANDO_G007"
   | "CANAL_INATIVO"
+  | "AGUARDANDO_VINCULO"
   | "ATIVO"
   | "ERRO_CREDENCIAIS"
 
@@ -447,10 +485,12 @@ export interface AssistenteWhatsAppConfig {
   estadoDescricao: string
   canalPapel: "GESTAO"
   canalAtivo: boolean
+  canalFlagLigada?: boolean
   workerFilaAtivo: boolean
   numeroVinculadoMascarado: string | null
   podeAlterarConexaoReal: boolean
   motivoConexaoIndisponivel: string | null
+  situacaoVinculoInicial?: SituacaoVinculoWhatsAppDados | null
   preferenciasConfirmacao: {
     exigirConfirmacaoSempre: boolean
     limiteConfirmacaoDuplaCentavos: CentavosString

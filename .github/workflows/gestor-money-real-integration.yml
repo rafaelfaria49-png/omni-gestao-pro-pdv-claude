@@ -5,6 +5,7 @@ on:
     paths:
       - "lib/gestor-money/**"
       - "components/gestor-money/**"
+      - "app/actions/gestor-money-vinculo.ts"
       - "app/api/gestor-money/**"
       - "app/dashboard/gestor-money/**"
       - "app/gestor-money/**"
@@ -79,6 +80,7 @@ jobs:
             lib/gestor-money/gateway.test.ts \
             app/api/gestor-money/status/route.test.ts \
             components/gestor-money/GestorMoneyApp.test.ts \
+            components/gestor-money/AssistantSettingsView.test.ts \
             lib/auth/proxy-session-gate.test.ts \
             test/gestor-money/real-integration.pg.test.ts
       - name: Run focused strict TypeScript check for Gestor Money namespaces
@@ -90,6 +92,7 @@ jobs:
             "include": [
               "next-env.d.ts",
               "types/**/*.d.ts",
+              "app/actions/gestor-money-vinculo.ts",
               "lib/gestor-money/**/*.ts",
               "components/gestor-money/**/*.ts",
               "components/gestor-money/**/*.tsx",
