@@ -992,44 +992,7 @@ describe.skipIf(!pgConfig.enabled)(
           tipo: "SEM_DESAFIO",
         })
 
-        // Código expirado -> situacaoVinculoWhatsApp reporta EXPIRADO e confirmação recusa com EXPIRADO
-        const expSalt = randomBytes(16).toString("hex")
-        const expCriadoEm = new Date(Date.now() - 20 * 60_000)
-        const expHash = createHash("sha256").update(`${expSalt}:123123`).digest("hex")
-        await prisma.gmAssistDesafio.create({
-          data: {
-            id: randomUUID(),
-            adminUserId: s.U1,
-            telefoneE164: telU1A,
-            codigoSalt: expSalt,
-            codigoHash: expHash,
-            pendenteUsuario: s.U1,
-            consentimentoVersao: CONSENTIMENTO_VERSAO_ATUAL,
-            criadoEm: expCriadoEm,
-            expiraEm: new Date(expCriadoEm.getTime() + 10 * 60_000),
-          },
-        })
-        const sitExp = await situacaoVinculoWhatsApp()
-        expect(sitExp.ok && sitExp.dados.estado).toBe("EXPIRADO")
-        expect(await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: "123123" })).toEqual({
-          tipo: "EXPIRADO",
-        })
-
-        // Código inválido (5x) -> BLOQUEADO
-        const d2 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: true })
-        if (!d2.ok) throw new Error("d2")
-        const errado = d2.dados.codigo === "000000" ? "111111" : "000000"
-        for (let i = 0; i < 4; i++) {
-          const r = await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: errado })
-          expect(r.tipo).toBe("CODIGO_INVALIDO")
-        }
-        expect(await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: errado })).toEqual({
-          tipo: "BLOQUEADO",
-        })
-        const sitBloq = await situacaoVinculoWhatsApp()
-        expect(sitBloq.ok && sitBloq.dados.estado).toBe("BLOQUEADO")
-
-        // Novo pareamento válido -> VINCULADO com telefone mascarado
+        // Novo pareamento válido de U1 -> VINCULADO com telefone mascarado
         const d3 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU1A, aceitouConsentimento: true })
         if (!d3.ok) throw new Error("d3")
         const conf = await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: d3.dados.codigo })
@@ -1046,7 +1009,7 @@ describe.skipIf(!pgConfig.enabled)(
         expect(assistAtivo.estadoConexao).toBe("ATIVO")
         expect(assistAtivo.numeroVinculadoMascarado).toBe(d3.dados.telefoneMascarado)
 
-        // Isolamento entre usuários + Telefone já vinculado a outra conta
+        // Isolamento entre usuários + Telefone já vinculado a outra conta + EXPIRADO + BLOQUEADO (em U2)
         loginAs(s.U2, [s.L1])
         const sitU2 = await situacaoVinculoWhatsApp()
         expect(sitU2.ok && sitU2.dados.estado).toBe("SEM_VINCULO")
@@ -1059,6 +1022,44 @@ describe.skipIf(!pgConfig.enabled)(
         expect(
           await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU1A, texto: dU2.dados.codigo })
         ).toEqual({ tipo: "TELEFONE_JA_VINCULADO" })
+
+        // Código expirado em U2 -> situacaoVinculoWhatsApp reporta EXPIRADO e confirmação recusa com EXPIRADO
+        const telU2 = `+55119${String(Math.floor(10000000 + Math.random() * 89999999))}`
+        const expSalt = randomBytes(16).toString("hex")
+        const expCriadoEm = new Date(Date.now() - 20 * 60_000)
+        const expHash = createHash("sha256").update(`${expSalt}:123123`).digest("hex")
+        await prisma.gmAssistDesafio.create({
+          data: {
+            id: randomUUID(),
+            adminUserId: s.U2,
+            telefoneE164: telU2,
+            codigoSalt: expSalt,
+            codigoHash: expHash,
+            pendenteUsuario: s.U2,
+            consentimentoVersao: CONSENTIMENTO_VERSAO_ATUAL,
+            criadoEm: expCriadoEm,
+            expiraEm: new Date(expCriadoEm.getTime() + 10 * 60_000),
+          },
+        })
+        const sitExp = await situacaoVinculoWhatsApp()
+        expect(sitExp.ok && sitExp.dados.estado).toBe("EXPIRADO")
+        expect(await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU2, texto: "123123" })).toEqual({
+          tipo: "EXPIRADO",
+        })
+
+        // Código inválido (5x) em U2 -> BLOQUEADO
+        const d2 = await gerarCodigoVinculoWhatsApp({ telefoneE164: telU2, aceitouConsentimento: true })
+        if (!d2.ok) throw new Error("d2")
+        const errado = d2.dados.codigo === "000000" ? "111111" : "000000"
+        for (let i = 0; i < 4; i++) {
+          const r = await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU2, texto: errado })
+          expect(r.tipo).toBe("CODIGO_INVALIDO")
+        }
+        expect(await confirmarPareamentoPorMensagem(prisma, { remetenteE164: telU2, texto: errado })).toEqual({
+          tipo: "BLOQUEADO",
+        })
+        const sitBloq = await situacaoVinculoWhatsApp()
+        expect(sitBloq.ok && sitBloq.dados.estado).toBe("BLOQUEADO")
 
         // Novo pareamento de U1 para outro telefone substitui o anterior
         loginAs(s.U1, [s.L1])
