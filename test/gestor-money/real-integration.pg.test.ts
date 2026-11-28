@@ -913,36 +913,33 @@ describe.skipIf(!pgConfig.enabled)(
         expect(assistOff.estadoConexao).toBe("DESCONECTADO_AGUARDANDO_G007")
         expect(assistOff.podeAlterarConexaoReal).toBe(false)
 
-        // 2. Flag ligada, mas SEM canal GESTAO ativo em whatsapp_canais -> estadoConexao = CANAL_INATIVO (NUNCA ATIVO!)
+        // 2. Flag ligada, mas SEM canal oficial disponível (sem GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO e whatsapp_canais isolada por RLS) -> estadoConexao = CANAL_INATIVO (NUNCA ATIVO!)
         process.env.GESTOR_MONEY_WHATSAPP_GESTAO = "ligado"
-        process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO = "+5511999990001"
+        delete process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO
         const assistSemCanal = await gw.obterAssistenteConfig(selPessoal)
         expect(assistSemCanal.estadoConexao).toBe("CANAL_INATIVO")
         expect(assistSemCanal.podeAlterarConexaoReal).toBe(false)
 
-        // 3. Registra canal GESTAO em whatsapp_canais (inicia inativo por trigger G006; depois ativa na versao 2)
+        // Prova de isolamento RLS G006: runtime web (NOBYPASSRLS) não consegue criar/alterar whatsapp_canais
         const numSuffix = String(Math.floor(1000000000 + Math.random() * 8999999999))
-        const canal = await prisma.whatsAppCanal.create({
-          data: {
-            papel: "GESTAO",
-            storeId: null,
-            phoneNumberId: `700${numSuffix}`,
-            wabaId: "700007",
-            appId: "710007",
-            telefoneE164: `+55119${numSuffix.slice(0, 8)}`,
-            credencialRef: "WHATSAPP_CANAL_TOKEN_GM_CI_SYNTHETIC",
-            ativo: false,
-            versao: 1,
-          },
-        })
-        const assistCanalInativo = await gw.obterAssistenteConfig(selPessoal)
-        expect(assistCanalInativo.estadoConexao).toBe("CANAL_INATIVO")
-        expect(assistCanalInativo.podeAlterarConexaoReal).toBe(false)
+        await expect(
+          prisma.whatsAppCanal.create({
+            data: {
+              papel: "GESTAO",
+              storeId: null,
+              phoneNumberId: `700${numSuffix}`,
+              wabaId: "700007",
+              appId: "710007",
+              telefoneE164: `+55119${numSuffix.slice(0, 8)}`,
+              credencialRef: "WHATSAPP_CANAL_TOKEN_GM_CI_SYNTHETIC",
+              ativo: false,
+              versao: 1,
+            },
+          })
+        ).rejects.toThrow()
 
-        await prisma.whatsAppCanal.update({
-          where: { canalId: canal.canalId },
-          data: { ativo: true, versao: 2 },
-        })
+        // 3. Configura exibição do canal oficial GESTAO para validar fluxo completo no runtime web
+        process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO = "+5511999990001"
 
         // Sem sessão -> actions retornam Indisponível (fail-closed)
         sessionState.current = null
@@ -1079,14 +1076,14 @@ describe.skipIf(!pgConfig.enabled)(
         const sitNovo = await situacaoVinculoWhatsApp()
         expect(sitNovo.ok && sitNovo.dados.vinculado?.telefoneMascarado).toBe(d4.dados.telefoneMascarado)
 
-        // Desativar canal GESTAO com usuário ainda vinculado -> estadoConexao cai imediatamente para CANAL_INATIVO (NUNCA ATIVO!)
-        await prisma.whatsAppCanal.update({ where: { canalId: canal.canalId }, data: { ativo: false, versao: 3 } })
+        // Indisponibilizar canal oficial com usuário ainda vinculado -> estadoConexao cai imediatamente para CANAL_INATIVO (NUNCA ATIVO!)
+        delete process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO
         const assistCanalOff = await gw.obterAssistenteConfig(selPessoal)
         expect(assistCanalOff.estadoConexao).toBe("CANAL_INATIVO")
         expect(assistCanalOff.podeAlterarConexaoReal).toBe(false)
 
         // Revogação definitiva por U1 -> SEM_VINCULO (2ª revogação falha com SEM_VINCULO)
-        await prisma.whatsAppCanal.update({ where: { canalId: canal.canalId }, data: { ativo: true, versao: 4 } })
+        process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO = "+5511999990001"
         expect(await revogarVinculoWhatsApp()).toEqual({ ok: true, dados: { revogado: true } })
         const sitRev = await situacaoVinculoWhatsApp()
         expect(sitRev.ok && sitRev.dados.estado).toBe("SEM_VINCULO")

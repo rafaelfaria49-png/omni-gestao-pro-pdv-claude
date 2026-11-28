@@ -39,18 +39,28 @@ export async function GET(req: Request) {
   if (!authRes.ok) return authRes.response
 
   const canalFlagLigada = canalGestaoLigado(process.env)
-
-  // Leitura pura do estado do canal GESTAO (G006) — nunca expõe credenciais ou segredos
-  const canalGestao = await prisma.whatsAppCanal
-    .findFirst({
-      where: { papel: "GESTAO", storeId: null },
-      select: { ativo: true, versao: true },
-      orderBy: { createdAt: "desc" },
-    })
-    .catch(() => null)
-
-  const canalAtivo = Boolean(canalGestao?.ativo)
   const numeroAssistente = process.env.GESTOR_MONEY_WHATSAPP_NUMERO_EXIBICAO?.trim() || null
+
+  // Leitura defensiva de whatsapp_canais (G006):
+  // Por isolamento RLS do G006 (`g006_canal_read`), o runtime web normalmente não tem visibilidade
+  // sobre `whatsapp_canais` (apenas `omni_gastos_ingress`/`worker`/`operator`). Quando inacessível,
+  // a disponibilidade no runtime web exige flag ligada + número oficial de exibição configurado;
+  // se a tabela estiver visível e registrar canal inativo, prevalece o bloqueio honesto.
+  const canalGestao = canalFlagLigada
+    ? await prisma.whatsAppCanal
+        .findFirst({
+          where: { papel: "GESTAO", storeId: null },
+          select: { ativo: true, versao: true },
+          orderBy: { createdAt: "desc" },
+        })
+        .catch(() => null)
+    : null
+
+  const canalAtivo = canalFlagLigada
+    ? canalGestao !== null
+      ? Boolean(canalGestao.ativo)
+      : Boolean(numeroAssistente)
+    : false
 
   let situacaoInicial: SituacaoVinculoWhatsAppDados | null = null
   if (canalFlagLigada) {
