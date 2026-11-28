@@ -7,6 +7,14 @@
  * Valores de consulta vêm exclusivamente da PortaConsulta (G005 `consultarFinanceiro`).
  */
 import type { PropostaGasto } from "@/lib/gastos/operacao-schema"
+import type {
+  CandidatoDuplicidade,
+  EfeitoFinanceiroDocumento,
+  ItemDocumentoExtraido,
+  PortaArquivamentoDocumento,
+  PortaDuplicidadeFinanceira,
+  TipoDocumentoFinanceiro,
+} from "./multimodal/contratos"
 
 export const INTENCOES = [
   "DESPESA", "RECEITA", "DIVIDA", "PAGAMENTO", "RECEBIMENTO", "TRANSFERENCIA",
@@ -52,6 +60,24 @@ export type Extracao = {
   referenciaTitulo?: boolean
   quitar?: boolean
   documentoId?: string
+  /** G009/G010: metadados multimodais e de prevenção de duplicidade (nunca alteram autorização). */
+  quantidadeItens?: number
+  naturezaMercadoria?: boolean
+  transferenciaEntreDominios?: boolean
+  documentoHash?: string
+  identificadorTransacao?: string
+  numeroDocumento?: string
+  tipoDocumento?: TipoDocumentoFinanceiro
+  efeitoFinanceiro?: EfeitoFinanceiroDocumento
+  itensDocumento?: ItemDocumentoExtraido[]
+  referenciaIntegracaoFutura?: {
+    categoriaFluxo: "COMPRA_MERCADORIA" | "DOCUMENTO_COMERCIAL" | "COMPROVANTE_FINANCEIRO"
+    documentoHash: string
+    numeroDocumento?: string
+    identificadorTransacao?: string
+    fornecedor?: string
+    itens?: ItemDocumentoExtraido[]
+  }
 }
 
 export type PlanoConsulta = {
@@ -71,7 +97,7 @@ export type Interpretacao = {
   sinaisSuspeitos: string[]
 }
 
-export type Campo = "valor" | "perfil" | "formaPagamento" | "conta" | "contaDestino" | "fatura" | "vencimento" | "cartao" | "parcelas" | "titulo"
+export type Campo = "valor" | "perfil" | "formaPagamento" | "conta" | "contaDestino" | "fatura" | "vencimento" | "cartao" | "parcelas" | "titulo" | "jaFoiPago" | "duplicidade"
 
 export type EstadoRascunho = "COLETANDO" | "AGUARDANDO_CONFIRMACAO" | "EM_EXECUCAO" | "INCERTO"
   | "APLICADO" | "CANCELADO" | "EXPIRADO"
@@ -100,6 +126,12 @@ export type DadosRascunho = Extracao & {
   /** Opções numeradas oferecidas na última pergunta (ex.: títulos candidatos). */
   opcoes?: Array<{ id: string; rotulo: string }>
   proveniencia?: Partial<Record<keyof Extracao, Proveniencia>>
+  /** G010: nota fiscal/cupom/comercial aguarda confirmar se já foi pago antes de propor GASTO_PAGO vs CONTA_PAGAR. */
+  aguardandoConfirmacaoPagamento?: boolean
+  /** G009/G010: candidatos de duplicidade encontrados exclusivamente no perfil autorizado. */
+  duplicidadeCandidatos?: CandidatoDuplicidade[]
+  duplicidadeIgnorada?: boolean
+  duplicidadeVerificadaChave?: string
 }
 
 export type Rascunho = {
@@ -132,7 +164,22 @@ export type EstadoConversa = {
   rascunho?: Rascunho
   /** Perfil escolhido por último — sugestão, nunca autorização. */
   ultimoPerfil?: PerfilRef
-  aplicadosRecentes: Array<{ assinatura: string; em: string; operacaoId: string }>
+  aplicadosRecentes: Array<{
+    assinatura: string
+    em: string
+    operacaoId: string
+    perfilId?: string
+    valorCentavos?: string
+    data?: string
+    contraparte?: string
+    descricao?: string
+    contaNome?: string
+    sha256?: string
+    identificadorTransacao?: string
+    numeroDocumento?: string
+    alvoTipo?: "MOVIMENTACAO" | "PAGAR" | "RECEBER"
+    alvoId?: string
+  }>
 }
 
 export type RespostaAssistente = {
@@ -141,6 +188,13 @@ export type RespostaAssistente = {
   rascunho?: { id: string; versao: number; estado: EstadoRascunho; intencao: IntencaoEscrita; pendencias: Campo[] }
   confirmacao?: { rascunhoId: string; versao: number; token: string }
   escritaFinanceira?: { operacaoId: string; valorCentavos: string }
+  vinculoDocumento?: {
+    alvoTipo: "MOVIMENTACAO" | "PAGAR" | "RECEBER"
+    alvoId: string
+    documentoId?: string
+    arquivadoPermanente: boolean
+    motivoStorage?: string
+  }
   consulta?: { tipo: PlanoConsulta["tipo"]; fonte: "G005_CONSULTA_CANONICA"; asOf: string; versaoCalculo?: string }
   duplicada?: boolean
   /** Id da mensagem de saída (para vínculo de reply/botão no canal). */
@@ -243,4 +297,10 @@ export type DependenciasMotor = {
   novoId: () => string
   /** Vida útil do rascunho (padrão 15 min; G004 limita a revisão a 24 h). */
   ttlRascunhoMs?: number
+  /** G009/G010: detecção de duplicidade isolada ao perfil/loja autorizado (`ctx`). */
+  duplicidade?: PortaDuplicidadeFinanceira
+  /** G003-STORAGE: arquivamento permanente opcional (falha fechado se privacidade R2 não comprovada). */
+  arquivamento?: PortaArquivamentoDocumento
+  /** Fornecedor efêmero do arquivo em memória para arquivamento sob confirmação explícita. */
+  midiaEfemera?: () => { nomeArquivo: string; bytes: Uint8Array } | null
 }

@@ -1,24 +1,25 @@
 import "server-only"
 /**
- * G007/G008 — gateway do canal de GESTÃO sobre o pipeline oficial G006.
+ * G007/G008/G009/G010 — gateway do canal de GESTÃO sobre o pipeline oficial G006.
  *
  * Webhook (HMAC) → `persistirIngresso` (inbox+job STAGING, ACK durável) → worker G006 `claimJob` →
- * ESTE processador (gancho `staging` do `rodarWorker`) → motor conversacional → respostas.
+ * ESTE processador (gancho `staging` do `rodarWorker`) → [download/STT/OCR seguro quando mídia] →
+ * motor conversacional G008 → respostas.
  *
- * Por mensagem:
- * 1. Canal GESTAO vigente (`g006_canal_vigente`) e conteúdo de texto (áudio/foto = G009/G010, fora do escopo).
- * 2. Remetente sem vínculo: só o fluxo de pareamento (código da sessão web) ou o onboarding. Nunca motor,
- *    nunca loja presumida, nunca a Inbox de clientes.
- * 3. Remetente vinculado: principal opaco BINDING_G007 → motor. Cada perfil/ato passa pelo emissor G001 por
- *    principal (`requireFinanceiroPerfilAccessPorPrincipal`), que revalida o vínculo e relê o banco.
- * 4. Escrita: antes do G004, `registrarOrigemCanal` (G006) amarra grupo↔mensagem↔vínculo; o resultado sai
- *    pela outbox G006 (ENVIAR_RESULTADO) só depois do COMMIT. Demais respostas: `respostas.ts`.
- * 5. Reentrega/reclaim: o motor devolve a resposta registrada (idempotência) e a fila deduplica por chave.
- * Falha de infraestrutura → `falharJob` RETRY (backoff G006); nada financeiro sem confirmação válida.
+ * Invariantes de segurança:
+ * 1. Canal GESTAO vigente (`g006_canal_vigente`).
+ * 2. Remetente sem vínculo: só pareamento ou onboarding — NUNCA baixa mídia nem aciona provider pago.
+ * 3. Remetente vinculado: limite horário de mídia, download autenticado anti-SSRF, validação por magic bytes,
+ *    STT/OCR fail-closed, limpeza do buffer em `finally`, e REVALIDAÇÃO do vínculo antes de chamar o motor.
+ * 4. Nenhuma mídia ou OCR grava operação financeira diretamente: tudo passa pelo motor G008 (revisão + confirmação)
+ *    e pelo G004 via `registrarOrigemCanal` (G006).
+ * 5. Falhas transitórias de download/provider → `falharJob` RETRY (backoff G006) com idempotência.
  */
 import { randomUUID } from "node:crypto"
 import { prisma } from "@/lib/prisma"
 import { requireFinanceiroPerfilAccessPorPrincipal } from "@/lib/gastos/access"
+import { credenciaisDoCanal } from "@/lib/gastos/channels"
+import type { DocumentoStoragePort } from "@/lib/gastos/documentos-fixture"
 import { registrarOrigemCanal } from "@/lib/gastos/outbox"
 import { concluirStaging, exigirLease, falharJob, type Claim } from "@/lib/gastos/queue"
 import { decidirFalha } from "@/lib/gastos/retry"
@@ -26,8 +27,29 @@ import type { VerificadorVinculo } from "@/lib/gastos/messaging-types"
 import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
 import type { ProcessadorStaging } from "@/lib/gastos/worker"
 import type { PrismaClient } from "@/generated/prisma"
-import { cadastrosGestorMoney, consultaG005, execucaoG004, listarPerfisDoUsuario } from "../adaptador-servidor"
+import {
+  cadastrosGestorMoney,
+  consultaG005,
+  criarArquivamentoG003,
+  duplicidadeG005,
+  execucaoG004,
+  listarPerfisDoUsuario,
+} from "../adaptador-servidor"
+import type { EntradaConversa } from "../entradas"
 import { processarMensagem, reconciliarPendencia } from "../motor"
+import { criarProviderTranscricaoOpenAI, processarAudioG009 } from "../multimodal/audio-g009"
+import {
+  LIMITES_MIDIA,
+  type MimeAudioAceito,
+  type MimeDocumentoAceito,
+  type PortaArquivamentoDocumento,
+  type PortaDownloadMidiaWhatsApp,
+  type PortaDuplicidadeFinanceira,
+  type PortaExtracaoDocumento,
+  type PortaTranscricaoAudio,
+} from "../multimodal/contratos"
+import { criarProviderDocumentoOpenAI, processarDocumentoG010 } from "../multimodal/documento-g010"
+import { criarDownloaderMidiaMeta } from "../multimodal/midia-seguranca"
 import type { DependenciasMotor, PortaAutorizacao, PortaExecucao, RespostaAssistente } from "../tipos"
 import { conversasPendentes, emitirPrincipalVinculo, repositorioConversaPg, verificadorDoPrincipal, vinculoDoPrincipal, VinculoRevogadoError } from "./persistencia"
 import { enfileirarRespostas, enviarRespostasPendentes, respostaIdPorMensagemExterna, type TransporteConversa } from "./respostas"
@@ -40,6 +62,14 @@ export type DependenciasGateway = {
   novoId?: () => string
   /** Somente testes: substitui o executor G004 (ex.: injetar falha incerta). Produção usa o G004 real. */
   execucao?: PortaExecucao
+  /** G009/G010: portas substituíveis (produção usa Meta + OpenAI fail-closed; testes injetam fixtures). */
+  downloaderMidia?: PortaDownloadMidiaWhatsApp
+  provedorAudio?: PortaTranscricaoAudio
+  provedorDocumento?: PortaExtracaoDocumento
+  duplicidade?: PortaDuplicidadeFinanceira
+  arquivamento?: PortaArquivamentoDocumento
+  storageDocumentos?: DocumentoStoragePort | null
+  env?: Record<string, string | undefined>
 }
 
 export const TEXTOS = {
@@ -52,7 +82,9 @@ export const TEXTOS = {
   bloqueado: "Muitas tentativas com código errado. Por segurança, gere um novo código no OmniGestão.",
   jaVinculado: "Este número já está vinculado a outra conta. O titular precisa revogar o vínculo antes de um novo pareamento.",
   revogado: "O vínculo deste WhatsApp foi revogado. Nada foi registrado. Para voltar a usar, faça um novo pareamento no OmniGestão.",
-  soTexto: "Por enquanto eu entendo apenas mensagens de texto. Nada foi registrado.",
+  soTexto: "Por enquanto não consegui identificar o formato desta mensagem. Envie texto, áudio, imagem ou PDF de comprovante. Nada foi registrado.",
+  midiaSemId: "Não encontrei o arquivo de mídia nesta mensagem. Tente reenviar o áudio ou documento. Nada foi registrado.",
+  limiteMidia: "Você atingiu o limite temporário de processamento de áudios e documentos por hora. Tente novamente em instantes ou envie por texto.",
 } as const
 
 function textoPareamento(r: ResultadoPareamento): string | null {
@@ -114,41 +146,274 @@ function execucaoComOrigem(fila: PrismaClient, app: GmDb, inboxId: string | unde
   }
 }
 
-function dependenciasMotor(app: GmDb, fila: PrismaClient, inboxId: string | undefined, d: DependenciasGateway): DependenciasMotor {
-  return { autorizacao: autorizacaoVinculo(app), cadastros: cadastrosGestorMoney, consulta: consultaG005,
-    execucao: execucaoComOrigem(fila, app, inboxId, d.execucao ?? execucaoG004), repositorio: repositorioConversaPg(app),
-    agora: d.agora ?? (() => new Date()), novoId: d.novoId ?? (() => randomUUID()) }
+function dependenciasMotor(
+  app: GmDb,
+  fila: PrismaClient,
+  inboxId: string | undefined,
+  d: DependenciasGateway,
+  midiaEfemera?: () => { nomeArquivo: string; bytes: Uint8Array } | null
+): DependenciasMotor {
+  return {
+    autorizacao: autorizacaoVinculo(app),
+    cadastros: cadastrosGestorMoney,
+    consulta: consultaG005,
+    execucao: execucaoComOrigem(fila, app, inboxId, d.execucao ?? execucaoG004),
+    repositorio: repositorioConversaPg(app),
+    agora: d.agora ?? (() => new Date()),
+    novoId: d.novoId ?? (() => randomUUID()),
+    duplicidade: d.duplicidade ?? duplicidadeG005,
+    arquivamento: d.arquivamento ?? criarArquivamentoG003(d.storageDocumentos ?? null),
+    ...(midiaEfemera ? { midiaEfemera } : {}),
+  }
 }
 
 /** O resultado de escrita sai pela outbox G006 (pós-COMMIT): aqui não se duplica a mensagem de sucesso. */
 const mensagensParaFila = (r: RespostaAssistente) => (r.codigo === "registrado" ? [] : r.mensagens)
 
+class ErroMidiaTransitorio extends Error {
+  readonly codigo: string
+  constructor(codigo: string) {
+    super(codigo)
+    this.codigo = codigo
+  }
+}
+
 export function processadorStagingGestao(d: DependenciasGateway = {}): ProcessadorStaging {
   const app = d.app ?? prisma
-  return async (fila, claim) => {
+  return async (fila, claim, signal) => {
     try {
-      await processar(fila, app, claim, d)
-      // PROCESSADO_G008 (#405): a mensagem foi efetivamente tratada pelo assistente (motor, pareamento ou onboarding).
+      await processar(fila, app, claim, d, signal)
+      // PROCESSADO_G008 (#405): a mensagem foi efetivamente tratada pelo assistente (motor, mídia, pareamento ou onboarding).
       await concluirStaging(fila, claim, { estadoInbox: "PROCESSADO_G008" })
     } catch (e) {
       const codigo = (e as { codigo?: string })?.codigo
       if (codigo === "LEASE_PERDIDA") throw e
-      // Infraestrutura (DB/serviço): nova tentativa com backoff G006. Idempotência garante reprocessamento seguro.
+      // Infraestrutura ou falha transitória de download/provider (timeout/429/5xx): nova tentativa com backoff G006.
       await falharJob(fila, claim, codigo === "CANAL_ALTERADO" || codigo === "POISON_JOB"
-        ? { acao: "DLQ", codigo, esperaMs: 0 } : decidirFalha({ tipo: "TEMPORARIA_LOCAL" }, claim.tentativasCiclo, false))
+        ? { acao: "DLQ", codigo, esperaMs: 0 }
+        : decidirFalha({ tipo: "TEMPORARIA_LOCAL" }, claim.tentativasCiclo, false))
     }
   }
 }
 
-async function processar(fila: PrismaClient, app: GmDb, claim: Claim, d: DependenciasGateway) {
+async function auditarMidia(app: GmDb, tipo: string, userId: string, vinculoId: string) {
+  await app.gmAssistEvento.create({
+    data: { id: randomUUID(), tipo, adminUserId: userId, vinculoId },
+  }).catch(() => undefined)
+}
+
+async function processar(
+  fila: PrismaClient,
+  app: GmDb,
+  claim: Claim,
+  d: DependenciasGateway,
+  signal?: AbortSignal
+) {
   await fila.$transaction(tx => exigirLease(tx, claim))
   if (claim.tipo !== "STAGING" || !claim.inboxId) throw Object.assign(new Error("POISON_JOB"), { codigo: "POISON_JOB" })
   const [vigente] = await fila.$queryRaw<Array<{ valido: boolean }>>`SELECT g006_canal_vigente(${claim.inboxId}) AS valido`
   if (!vigente?.valido) throw Object.assign(new Error("CANAL_ALTERADO"), { codigo: "CANAL_ALTERADO" })
   const inbox = await fila.whatsAppGestaoInbox.findUniqueOrThrow({ where: { id: claim.inboxId } })
-  const conteudo = inbox.conteudo as { tipo?: unknown; texto?: unknown }
+  const conteudo = inbox.conteudo as {
+    tipo?: unknown
+    texto?: unknown
+    mediaId?: unknown
+    mimeType?: unknown
+    caption?: unknown
+    filename?: unknown
+    duracaoSegundos?: unknown
+  }
   const base = { origemRef: `inbox:${inbox.id}`, inboxId: inbox.id, canalId: inbox.canalId, destinatarioE164: inbox.remetenteE164 }
   const vinculo = await vinculoAtivoPorTelefone(app, inbox.remetenteE164)
+
+  // ── 1. Fluxo de mídia (G009 áudio / G010 imagem e documento PDF) ──────────
+  if (conteudo?.tipo === "audio" || conteudo?.tipo === "foto" || conteudo?.tipo === "documento") {
+    // Remetente sem vínculo NUNCA dispara download nem provider pago.
+    if (!vinculo) {
+      await app.gmAssistEvento.create({ data: { id: randomUUID(), tipo: "MENSAGEM_SEM_VINCULO" } })
+      await enfileirarRespostas(app, { ...base, vinculoId: null, respostaId: null, mensagens: [TEXTOS.onboarding] })
+      return
+    }
+
+    const mediaId =
+      (typeof conteudo.mediaId === "string" && conteudo.mediaId.trim()) ||
+      (typeof inbox.mediaId === "string" && inbox.mediaId.trim()) ||
+      ""
+    if (!mediaId) {
+      await enfileirarRespostas(app, { ...base, vinculoId: vinculo.id, respostaId: null, mensagens: [TEXTOS.midiaSemId] })
+      return
+    }
+
+    // Limite horário de processamento de mídia por usuário (controle de custo/abuso)
+    const agora = (d.agora ?? (() => new Date()))()
+    const ultimaHora = new Date(agora.getTime() - 60 * 60_000)
+    const qtdMidiasHora = await app.gmAssistEvento.count({
+      where: { adminUserId: vinculo.adminUserId, tipo: "MIDIA_PROCESSADA", criadoEm: { gt: ultimaHora } },
+    })
+    if (qtdMidiasHora >= LIMITES_MIDIA.MAX_MIDIAS_POR_HORA_USUARIO) {
+      await enfileirarRespostas(app, { ...base, vinculoId: vinculo.id, respostaId: null, mensagens: [TEXTOS.limiteMidia] })
+      return
+    }
+
+    const env = d.env ?? process.env
+    const ehAudio = conteudo.tipo === "audio"
+    const downloader = d.downloaderMidia ?? criarDownloaderMidiaMeta()
+    let credenciais: { phoneNumberId: string; accessToken: string } | undefined
+    if (!d.downloaderMidia) {
+      const canal = await fila.whatsAppCanal.findUnique({
+        where: { canalId: inbox.canalId },
+        select: { phoneNumberId: true, credencialRef: true },
+      })
+      if (canal) {
+        try {
+          credenciais = credenciaisDoCanal(canal, env)
+        } catch {
+          credenciais = undefined
+        }
+      }
+    }
+
+    const dl = await downloader.baixar({
+      mediaId,
+      tipoEsperado: ehAudio ? "AUDIO" : "DOCUMENTO",
+      credenciais,
+      mimeDeclarado: typeof conteudo.mimeType === "string" ? conteudo.mimeType : undefined,
+      duracaoSegundos: typeof conteudo.duracaoSegundos === "number" ? conteudo.duracaoSegundos : undefined,
+      signal,
+    })
+
+    if (!dl.ok) {
+      if (dl.transitorio) throw new ErroMidiaTransitorio(dl.codigo)
+      await auditarMidia(app, "MIDIA_REJEITADA", vinculo.adminUserId, vinculo.id)
+      await enfileirarRespostas(app, { ...base, vinculoId: vinculo.id, respostaId: null, mensagens: [dl.mensagemUsuario] })
+      return
+    }
+
+    const midia = dl.midia
+    const nomeArquivoSeguro =
+      typeof conteudo.filename === "string" && conteudo.filename.trim()
+        ? conteudo.filename.trim().replace(/[/\\]/g, "_").slice(0, 140)
+        : `midia-${inbox.id.slice(0, 12)}.${midia.extensao}`
+
+    try {
+      let conteudoMotor: EntradaConversa["conteudo"]
+      if (ehAudio) {
+        const providerAudio = d.provedorAudio ?? criarProviderTranscricaoOpenAI(env)
+        const resAudio = await processarAudioG009(
+          {
+            bytes: midia.bytes,
+            mime: midia.mimeReal as MimeAudioAceito,
+            nomeArquivo: nomeArquivoSeguro,
+            sha256: midia.sha256,
+            duracaoSegundos: typeof conteudo.duracaoSegundos === "number" ? conteudo.duracaoSegundos : undefined,
+            signal,
+          },
+          providerAudio
+        )
+        if (!resAudio.ok) {
+          if (resAudio.transitorio) throw new ErroMidiaTransitorio(resAudio.codigo)
+          await auditarMidia(
+            app,
+            resAudio.codigo === "INJECAO_DETECTADA" ? "MIDIA_INJECAO_BLOQUEADA" : "MIDIA_REJEITADA",
+            vinculo.adminUserId,
+            vinculo.id
+          )
+          await enfileirarRespostas(app, { ...base, vinculoId: vinculo.id, respostaId: null, mensagens: [resAudio.mensagemUsuario] })
+          return
+        }
+        conteudoMotor = {
+          tipo: "AUDIO_TRANSCRITO",
+          transcricao: resAudio.transcricaoSanitizada,
+          idioma: "pt-BR",
+          ...(resAudio.confianca !== undefined ? { confianca: resAudio.confianca } : {}),
+          ...(resAudio.duracaoSegundos !== undefined ? { duracaoSegundos: resAudio.duracaoSegundos } : {}),
+          sha256: resAudio.sha256,
+          provedor: resAudio.provedor,
+          homologado: resAudio.homologado,
+        }
+      } else {
+        const providerDoc = d.provedorDocumento ?? criarProviderDocumentoOpenAI(env)
+        const legenda = typeof conteudo.caption === "string" ? conteudo.caption.trim() : undefined
+        const resDoc = await processarDocumentoG010(
+          {
+            bytes: midia.bytes,
+            mime: midia.mimeReal as MimeDocumentoAceito,
+            nomeArquivo: nomeArquivoSeguro,
+            sha256: midia.sha256,
+            paginasPdf: midia.paginasPdf,
+            legendaUsuario: legenda,
+            signal,
+          },
+          providerDoc
+        )
+        if (!resDoc.ok) {
+          if (resDoc.transitorio) throw new ErroMidiaTransitorio(resDoc.codigo)
+          await auditarMidia(
+            app,
+            resDoc.codigo === "INJECAO_DETECTADA" ? "MIDIA_INJECAO_BLOQUEADA" : "MIDIA_REJEITADA",
+            vinculo.adminUserId,
+            vinculo.id
+          )
+          await enfileirarRespostas(app, { ...base, vinculoId: vinculo.id, respostaId: null, mensagens: [resDoc.mensagemUsuario] })
+          return
+        }
+        conteudoMotor = {
+          tipo: "DOCUMENTO_EXTRAIDO",
+          documento: resDoc.documento,
+          sha256: resDoc.sha256,
+          ...(legenda ? { legenda } : {}),
+          avisoHonestidade: resDoc.avisoHonestidade,
+          ...(resDoc.referenciaIntegracaoFutura ? { referenciaIntegracaoFutura: resDoc.referenciaIntegracaoFutura } : {}),
+          provedor: resDoc.provedor,
+          homologado: resDoc.homologado,
+        }
+      }
+
+      // REVALIDAÇÃO OBRIGATÓRIA pós-processamento (revogação durante STT/OCR aborta tudo e nada é gravado!)
+      const aindaVigente = await vinculoVigente(app, vinculo.id, vinculo.versao)
+      if (!aindaVigente) {
+        await auditarMidia(app, "MIDIA_ABORTADA_REVOGACAO", vinculo.adminUserId, vinculo.id)
+        await enfileirarRespostas(app, { ...base, vinculoId: vinculo.id, respostaId: null, mensagens: [TEXTOS.revogado] })
+        return
+      }
+
+      await auditarMidia(app, "MIDIA_PROCESSADA", vinculo.adminUserId, vinculo.id)
+      const principal = emitirPrincipalVinculo(aindaVigente)
+      const respondendoA = await respostaIdPorMensagemExterna(app, inbox.respondidoA)
+      const midiaSnapshot = () => ({ nomeArquivo: nomeArquivoSeguro, bytes: new Uint8Array(midia.bytes) })
+      let resposta: RespostaAssistente
+      try {
+        resposta = await processarMensagem(
+          principal,
+          {
+            mensagemId: inbox.id,
+            conversaId: aindaVigente.id,
+            canal: "WHATSAPP_GESTAO",
+            recebidaEm: inbox.ocorridoEm.toISOString(),
+            ...(respondendoA ? { respondendoA } : {}),
+            conteudo: conteudoMotor,
+          },
+          dependenciasMotor(app, fila, inbox.id, d, midiaSnapshot)
+        )
+      } catch (e) {
+        if (!(e instanceof VinculoRevogadoError)) throw e
+        await enfileirarRespostas(app, { ...base, vinculoId: vinculo.id, respostaId: null, mensagens: [TEXTOS.revogado] })
+        return
+      }
+      await enfileirarRespostas(app, {
+        ...base,
+        vinculoId: aindaVigente.id,
+        respostaId: resposta.respostaId,
+        mensagens: mensagensParaFila(resposta),
+      })
+      return
+    } finally {
+      // Limpeza segura garantida do buffer temporário em memória
+      midia.descartar()
+    }
+  }
+
+  // ── 2. Fluxo textual canônico (pareamento G007 + motor G008) ─────────────
   if (conteudo?.tipo !== "texto" || typeof conteudo.texto !== "string") {
     await enfileirarRespostas(app, { ...base, vinculoId: vinculo?.id ?? null, respostaId: null, mensagens: [vinculo ? TEXTOS.soTexto : TEXTOS.onboarding] })
     return
@@ -201,10 +466,11 @@ export async function reconciliarConversasGestao(fila: PrismaClient, d: Dependen
   return n
 }
 
-/** Tarefa por ciclo do worker (`aposCiclo`): reconciliação + envio das respostas conversacionais. */
+/** Gancho periódico do worker G006: entrega respostas pendentes do assistente e reconcilia pendências G004. */
 export function cicloGestao(fila: PrismaClient, transporte: TransporteConversa, env: Record<string, string | undefined>, d: DependenciasGateway = {}) {
+  const app = d.app ?? prisma
   return async () => {
     await reconciliarConversasGestao(fila, d)
-    await enviarRespostasPendentes(d.app ?? prisma, fila, transporte, { env })
+    await enviarRespostasPendentes(app, fila, transporte, { env })
   }
 }

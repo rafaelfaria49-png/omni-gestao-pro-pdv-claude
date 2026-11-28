@@ -21,11 +21,18 @@ import { prepararRevisaoGasto } from "@/lib/gastos/operacoes"
 import { OperacaoGastoError } from "@/lib/gastos/operacao-schema"
 import { consultarFinanceiro, type ConsultaFinanceiraDTO } from "@/lib/gastos/query"
 import { consultarCartoesGasto, planejarPagamentoFaturaGasto } from "@/lib/gastos/cartoes"
-import { comLeituraFinanceira } from "@/lib/gastos/read-scope"
+import { registrarDocumentoGasto, vincularDocumentoGasto } from "@/lib/gastos/documentos"
+import type { DocumentoStoragePort } from "@/lib/gastos/documentos-fixture"
+import { comLeituraFinanceira, leituraPerfilWhere } from "@/lib/gastos/read-scope"
 import { declararDonoPessoalRls } from "@/lib/gastos/rls-contexto"
 import type { FinanceiroContextoAutorizado } from "@/lib/gastos/types"
 import { filtroDoPlano } from "./consultas"
-import { diaCivil } from "./datas"
+import { diaCivil, somarDias } from "./datas"
+import type {
+  CandidatoDuplicidade,
+  PortaArquivamentoDocumento,
+  PortaDuplicidadeFinanceira,
+} from "./multimodal/contratos"
 import type {
   DependenciasMotor, PerfilAutorizado, PortaAutorizacao, PortaCadastros, PortaConsulta, PortaExecucao,
   Principal, RepositorioConversa, ResumoConsulta,
@@ -120,6 +127,162 @@ async function planejarFatura(ctx: unknown, input: { cicloId: string; valorCenta
 
 export const consultaG005: PortaConsulta = {
   consultar: (ctx, filtro) => consultarFinanceiro(ctx, filtro),
+}
+
+/**
+ * Busca candidatos de duplicidade EXCLUSIVAMENTE dentro do perfil/loja autorizado (`ctx`),
+ * usando transação READ ONLY + RLS G001/G003. Jamais consulta outro usuário, perfil ou loja.
+ */
+export const duplicidadeG005: PortaDuplicidadeFinanceira = {
+  async buscarCandidatos(ctx, criterios): Promise<CandidatoDuplicidade[]> {
+    return comLeituraFinanceira(ctx, async (db, c) => {
+      const encontrados: CandidatoDuplicidade[] = []
+      const wherePerfil = leituraPerfilWhere(c)
+
+      // 1. Mesmo hash SHA-256 em documentos_gastos do MESMO perfil/loja
+      if (criterios.sha256) {
+        const doc = await db.documentoGasto.findFirst({
+          where: {
+            perfilId: c.perfilId,
+            storeId: storeDe(c),
+            ownerAdminUserId: c.tipo === "PESSOAL" ? c.userId : null,
+            sha256: criterios.sha256,
+          },
+          select: {
+            id: true,
+            nomeArquivo: true,
+            createdAt: true,
+            vinculos: {
+              select: { movimentacaoId: true, pagarTituloId: true, receberTituloId: true },
+              take: 1,
+            },
+          },
+        })
+        if (doc) {
+          const vinc = doc.vinculos[0]
+          const alvoTipo: "MOVIMENTACAO" | "PAGAR" | "RECEBER" = vinc?.pagarTituloId
+            ? "PAGAR"
+            : vinc?.receberTituloId
+              ? "RECEBER"
+              : "MOVIMENTACAO"
+          const alvoId = vinc?.pagarTituloId ?? vinc?.receberTituloId ?? vinc?.movimentacaoId ?? doc.id
+          encontrados.push({
+            alvoTipo,
+            alvoId,
+            descricao: `Documento já arquivado (${doc.nomeArquivo})`,
+            valorCentavos: criterios.valorCentavos ?? "0",
+            data: diaCivil(doc.createdAt),
+            motivo: "MESMO_HASH_ARQUIVO",
+            correspondenciaExata: true,
+          })
+        }
+      }
+
+      // 2. Correspondência por valor + data (±3 dias) em movimentações e títulos do MESMO perfil/loja
+      if (criterios.valorCentavos && /^[1-9]\d{0,12}$/.test(criterios.valorCentavos)) {
+        const refDia = criterios.dataReferencia ?? diaCivil(new Date())
+        const inicio = new Date(`${somarDias(refDia, -3)}T00:00:00.000Z`)
+        const fim = new Date(`${somarDias(refDia, 4)}T00:00:00.000Z`)
+
+        const movs = await db.movimentacaoFinanceira.findMany({
+          where: {
+            ...wherePerfil,
+            valorCentavos: criterios.valorCentavos,
+            ocorridoEm: { gte: inicio, lt: fim },
+          },
+          select: {
+            id: true,
+            descricao: true,
+            valorCentavos: true,
+            ocorridoEm: true,
+            createdAt: true,
+            operacaoFinanceiraId: true,
+          },
+          orderBy: { ocorridoEm: "desc" },
+          take: 5,
+        })
+        for (const m of movs) {
+          encontrados.push({
+            alvoTipo: "MOVIMENTACAO",
+            alvoId: m.id,
+            operacaoId: m.operacaoFinanceiraId ?? undefined,
+            descricao: m.descricao,
+            valorCentavos: String(m.valorCentavos ?? criterios.valorCentavos),
+            data: diaCivil(m.ocorridoEm ?? m.createdAt),
+            motivo: "CORRESPONDENCIA_APROXIMADA",
+            correspondenciaExata: false,
+          })
+        }
+
+        const titulos = await db.contaPagarTitulo.findMany({
+          where: {
+            ...wherePerfil,
+            valorCentavos: criterios.valorCentavos,
+            ativo: true,
+          },
+          select: {
+            id: true,
+            descricao: true,
+            valorCentavos: true,
+            vencimento: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        })
+        for (const t of titulos) {
+          encontrados.push({
+            alvoTipo: "PAGAR",
+            alvoId: t.id,
+            descricao: t.descricao,
+            valorCentavos: String(t.valorCentavos ?? criterios.valorCentavos),
+            data: t.vencimento ?? refDia,
+            motivo: "CORRESPONDENCIA_APROXIMADA",
+            correspondenciaExata: false,
+          })
+        }
+      }
+
+      return encontrados.slice(0, 5)
+    })
+  },
+}
+
+/**
+ * Adaptador G003-STORAGE para arquivamento permanente de comprovantes sob confirmação explícita.
+ * Falha fechado com mensagem honesta quando storage privado R2 não está comprovado —
+ * jamais afirma arquivamento permanente quando só houve processamento temporário.
+ */
+export function criarArquivamentoG003(storage?: DocumentoStoragePort | null): PortaArquivamentoDocumento {
+  return {
+    async arquivarEVincular(ctx, input) {
+      if (!storage) {
+        return {
+          arquivado: false,
+          motivo: "STORAGE_BLOQUEADO",
+          mensagemUsuario:
+            "O arquivo foi processado apenas temporariamente: o armazenamento permanente privado (G003-STORAGE) está bloqueado neste ambiente.",
+        }
+      }
+      try {
+        const doc = await registrarDocumentoGasto(
+          ctx,
+          { nomeArquivo: input.nomeArquivo, conteudo: input.conteudo, proveniencia: "UPLOAD_INTERNO" },
+          storage
+        )
+        if (input.alvo) {
+          await vincularDocumentoGasto(ctx, doc.id, input.alvo)
+        }
+        return { arquivado: true, documentoId: doc.id }
+      } catch {
+        return {
+          arquivado: false,
+          motivo: "STORAGE_BLOQUEADO",
+          mensagemUsuario:
+            "Não foi possível arquivar permanentemente no storage privado (G003-STORAGE indisponível ou bloqueado). O arquivo temporário foi descartado com segurança.",
+        }
+      }
+    },
+  }
 }
 
 /** Escrita EXCLUSIVAMENTE pelo G004. Erro conhecido < 500 = recusado antes do COMMIT. */

@@ -8,7 +8,7 @@
  *   Número de ATENDIMENTO (loja) ou desconhecido é ignorado aqui — o webhook comercial segue intacto.
  * - ACK 200 SÓ depois do COMMIT inbox+job (`persistirIngresso`, papel `omni_gastos_ingress`); falha → 500 para a
  *   Meta reentregar. Reentrega do mesmo wamid é idempotente (unique provedor+phoneNumberId+externalMessageId).
- * - Nenhum processamento financeiro no request: o worker G006 processa a fila.
+ * - Nenhum processamento financeiro nem download de mídia no request: o worker G006 processa a fila.
  */
 import type { PrismaClient } from "@/generated/prisma"
 import { persistirIngresso } from "@/lib/gastos/channels"
@@ -19,13 +19,64 @@ export function canalGestaoLigado(env: Record<string, string | undefined>) {
   return env.GESTOR_MONEY_ENABLED === "true" && env.GESTOR_MONEY_WHATSAPP_GESTAO === "ligado"
 }
 
-type MensagemMeta = { id?: unknown; from?: unknown; timestamp?: unknown; type?: unknown; text?: { body?: unknown }; context?: { id?: unknown } }
+type MensagemMeta = {
+  id?: unknown
+  from?: unknown
+  timestamp?: unknown
+  type?: unknown
+  text?: { body?: unknown }
+  audio?: { id?: unknown; mime_type?: unknown; voice?: unknown }
+  image?: { id?: unknown; mime_type?: unknown; caption?: unknown }
+  document?: { id?: unknown; mime_type?: unknown; filename?: unknown; caption?: unknown }
+  context?: { id?: unknown }
+}
+
+const strLimit = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : undefined)
+
+function extrairMidiaId(m: MensagemMeta): string | undefined {
+  if (m.type === "audio") return strLimit(m.audio?.id, 200)
+  if (m.type === "image") return strLimit(m.image?.id, 200)
+  if (m.type === "document") return strLimit(m.document?.id, 200)
+  return undefined
+}
 
 function conteudoDe(m: MensagemMeta): Record<string, unknown> {
   if (m.type === "text" && typeof m.text?.body === "string") return { tipo: "texto", texto: m.text.body.slice(0, 4000) }
-  // Áudio/foto: só o tipo técnico (G009/G010 fora do escopo). Mídia não é baixada.
-  if (m.type === "audio") return { tipo: "audio" }
-  if (m.type === "image") return { tipo: "foto" }
+  // G009/G010: apenas metadados técnicos e mediaId são enfileirados; download e IA ocorrem somente no worker oficial G006.
+  if (m.type === "audio") {
+    const mediaId = strLimit(m.audio?.id, 200)
+    const mimeType = strLimit(m.audio?.mime_type, 80)
+    return {
+      tipo: "audio",
+      ...(mediaId ? { mediaId } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      voice: Boolean(m.audio?.voice),
+    }
+  }
+  if (m.type === "image") {
+    const mediaId = strLimit(m.image?.id, 200)
+    const mimeType = strLimit(m.image?.mime_type, 80)
+    const caption = strLimit(m.image?.caption, 1000)
+    return {
+      tipo: "foto",
+      ...(mediaId ? { mediaId } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      ...(caption ? { caption } : {}),
+    }
+  }
+  if (m.type === "document") {
+    const mediaId = strLimit(m.document?.id, 200)
+    const mimeType = strLimit(m.document?.mime_type, 80)
+    const filename = strLimit(m.document?.filename, 180)
+    const caption = strLimit(m.document?.caption, 1000)
+    return {
+      tipo: "documento",
+      ...(mediaId ? { mediaId } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      ...(filename ? { filename } : {}),
+      ...(caption ? { caption } : {}),
+    }
+  }
   return { tipo: "tecnico", meta: String(m.type ?? "desconhecido").slice(0, 40) }
 }
 
@@ -49,10 +100,12 @@ export async function processarWebhookGestao(input: { rawBody: string; assinatur
       if (!canal || canal.papel !== "GESTAO" || !canal.ativo || String(entry.id ?? "") !== canal.wabaId) { ignoradas += mensagens.length; continue }
       for (const m of mensagens) {
         const ts = Number(m.timestamp)
+        const mediaId = extrairMidiaId(m)
         try {
           await persistirIngresso(input.ingress, { provedor: "META", canalId: canal.canalId, phoneNumberId, wabaId: canal.wabaId, appId: canal.appId,
             externalMessageId: String(m.id ?? ""), remetenteE164: "+" + String(m.from ?? "").replace(/\D/g, ""), correlacaoId: String(m.id ?? ""),
             ...(typeof m.context?.id === "string" ? { respondidoA: m.context.id } : {}),
+            ...(mediaId ? { mediaId } : {}),
             ocorridoEm: new Date(Number.isFinite(ts) && ts > 0 ? ts * 1000 : Date.now()).toISOString(), conteudo: conteudoDe(m) })
           persistidas++
         } catch (e) {

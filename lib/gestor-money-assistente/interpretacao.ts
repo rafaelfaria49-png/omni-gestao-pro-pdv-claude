@@ -20,6 +20,7 @@ const SUSPEITOS: Array<[RegExp, string]> = [
   [/\b(perfilid|storeid|userid|owneradminuserid|adminuserid|tituloid|carteiraid)\b/, "identificador_interno"],
   [/\b(de|do|da) outro usuario\b|\btodos os usuarios\b|\boutra loja que nao\b|\bconta de outra pessoa\b/, "escopo_alheio"],
   [/\b(api key|token de acesso|senha do|access token)\b/, "credencial"],
+  [/\b(aprove|confirme|registre|execute|aplique) (automaticamente|imediatamente|sem confirmacao|sem perguntar)\b|\bsem pedir confirmacao\b|\bpule a confirmacao\b/, "bypass_confirmacao"],
 ]
 
 const BANCOS: Array<[RegExp, string]> = [
@@ -40,9 +41,14 @@ const CORRECAO = /^(na verdade|corrig\w*|altera\w*|muda\w*|troca\w*|era |foi |na
 
 /** Extrai literais monetários restantes; devolve todos os candidatos distintos. */
 function valores(texto: string): { valor?: string; ambiguos?: string[] } {
+  // Propaga unidade monetária em alternativas explícitas ("50 ou 80 reais" -> "50 reais ou 80 reais") para nunca silenciar ambiguidade.
+  const normalizado = texto.replace(
+    /\b(\d[\d.,]*\d|\d)(\s+ou\s+)(\d[\d.,]*\d|\d)(\s*(?:mil|k)?\s*(?:reais|real|conto|contos|pila|pilas))\b/g,
+    "$1$4$2$3$4"
+  )
   const re = /(r\$\s*)?(\d[\d.,]*\d|\d)(\s*(?:mil|k)\b)?(\s*(?:reais|real|conto|contos|pila|pilas)\b)?(?:\s*e\s*(\d{1,2})\s*centavos)?/g
   const achados: Array<{ c: string; forte: boolean }> = []
-  for (const m of texto.matchAll(re)) {
+  for (const m of normalizado.matchAll(re)) {
     let c = literalParaCentavos(m[2], m[3])
     if (!c) continue
     if (m[5]) c = (BigInt(c) + BigInt(m[5])).toString()
@@ -189,9 +195,21 @@ export function extrairCampos(original: string, hoje: string, opcoes: { sentidoD
   const p = perfil(texto)
   if (p.perfil) e.perfil = p.perfil
   if (p.perfilTexto) { e.perfilTexto = p.perfilTexto; texto = texto.replace(/\b(loja|filial|unidade)\s+(?!de\b|do\b|da\b)[a-z0-9]+\b/, " ") }
-  const v = valores(texto.replace(/\bc6\b/g, " ").replace(/\b\d{1,2}h\b/g, " "))
+  // Remove quantidades explícitas antes de substantivos de itens (ex.: "2 telas", "1 peça") para não colidirem como segundo valor monetário.
+  const textoValores = texto
+    .replace(/\bc6\b/g, " ")
+    .replace(/\b\d{1,2}h\b/g, " ")
+    .replace(/\b(\d{1,3})\s+(?:telas?|pecas?|unidades?|itens?|caixas?|pacotes?|aparelhos?|baterias?|displays?|peliculas?|capas?)\b/g, " ")
+  const v = valores(textoValores)
   if (v.valor) e.valorCentavos = v.valor
   if (v.ambiguos) e.valoresAmbiguos = v.ambiguos
+  // Se comprou item/mercadoria (ex.: "duas telas", "uma peça"), preserva descrição legível e marca naturezaMercadoria.
+  const itemMerc = texto.match(/\b(\d{1,3}\s+)?(telas?|pecas?|mercadorias?|baterias?|displays?|aparelhos?|peliculas?|capas?)\b/)
+  if (itemMerc) {
+    e.naturezaMercadoria = true
+    if (itemMerc[1]) e.quantidadeItens = Number(itemMerc[1].trim())
+    e.descricao = itemMerc[0].trim()
+  }
   const f = forma(texto)
   if (f) e.formaPagamento = f
   const b = bancos(texto)
@@ -204,8 +222,17 @@ export function extrairCampos(original: string, hoje: string, opcoes: { sentidoD
     if (b[1]) e.contaDestino = b[1]
   }
   const cat = categoriaPorTexto(texto)
-  if (cat) { e.categoria = cat.categoria; e.descricao = cat.categoria }
-  if (/\b(daquela|dessa|desta|aquela|da) (divida|conta|boleto|parcela)\b|\bque (eu )?devia\b|\bdo que devo\b/.test(texto)) e.referenciaTitulo = true
+  if (cat) { e.categoria = cat.categoria; if (!e.descricao) e.descricao = cat.categoria }
+  // "conta de internet", "conta de luz" → despesa da categoria, não pagamento de dívida antiga.
+  if (/\b(daquela|dessa|desta|aquela) (divida|conta|boleto|parcela)\b|\bque (eu )?devia\b|\bdo que devo\b/.test(texto)
+    || (/\bda conta\b/.test(texto) && !cat)) e.referenciaTitulo = true
+  // Transferência mencionando explicitamente origem de conta/empresa + destino "minha conta pessoal" (ou vice-versa)
+  if (/\b(transferi|passei|movi)\b/.test(texto) && (
+    (/\b(empresa|loja|cnpj|pj|pagbank|itau pj|bradesco pj)\b/.test(texto) && /\bpara (a |o )?(minha )?conta pessoal\b/.test(texto)) ||
+    (/\b(pessoal|particular)\b/.test(texto) && /\bpara (a |o )?(empresa|loja|conta da empresa|conta da loja)\b/.test(texto))
+  )) {
+    e.transferenciaEntreDominios = true
+  }
   if (/\b(quitei|quitar|paguei tudo|paguei o total|tudo que devia|o restante|fatura toda|fatura inteira|total da fatura)\b/.test(texto)) e.quitar = true
   const c = contraparte(original, texto)
   if (c) e.contraparte = c

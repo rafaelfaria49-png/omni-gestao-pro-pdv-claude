@@ -55,8 +55,8 @@ export async function prepararAssistenteWorker(db: PrismaClient, config: ConfigW
   }
   observar({ evento: "ASSISTENTE_PRONTO", versao: "g008-1" })
   return {
-    staging: processadorStagingGestao(),
-    aposCiclo: cicloGestao(db, transporte, env),
+    staging: processadorStagingGestao({ env }),
+    aposCiclo: cicloGestao(db, transporte, env, { env }),
     envio: { verificarVinculo: verificadorVinculoG006(), transporte: transporteResultadoG006(transporte), env },
     encerrar: () => prisma.$disconnect(),
   }

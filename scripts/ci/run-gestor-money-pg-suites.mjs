@@ -69,7 +69,8 @@ export const GRUPOS = [
   // (workers/gastos/index.ts, Node 24 + react-server) roda como processo filho com o runtime restrito gm_g007_runtime.
   { nome: "g007", extraEnv: LIGADO, porta: 55530, pgdata: "G007-execution/pgdata", banco: "gastos_g006_test", dono: "gm_g007_owner",
     envs: ["GASTOS_G007_TEST_DATABASE_URL", "DATABASE_URL"], arquivos: ["test/gastos/assistente-whatsapp.postgres.test.ts",
-      "test/gastos/assistente-contratos.postgres.test.ts", "test/gastos/assistente-worker-entrypoint.postgres.test.ts"],
+      "test/gastos/assistente-contratos.postgres.test.ts", "test/gastos/assistente-worker-entrypoint.postgres.test.ts",
+      "test/gastos/assistente-multimodal.postgres.test.ts"],
     preparo: (g) => {
       for (const papel of ["omni_gastos_ingress", "omni_gastos_worker", "omni_gastos_operator"]) {
         psqlAdmin(g, "postgres", `CREATE ROLE ${papel} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`)
