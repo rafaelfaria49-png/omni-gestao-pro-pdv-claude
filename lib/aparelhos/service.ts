@@ -14,6 +14,8 @@ import { applyStockMutationTx, type StockLedgerTx } from "@/lib/estoque/stock-le
 import { buildIdempotencyKey } from "@/lib/estoque/stock-ledger-contract"
 import type { AparelhoPermissions } from "./permissions"
 import { podeAprovarAquisicao } from "./permissions"
+import { comercialInstalado } from "@/lib/comercial/instalacao"
+import { bloqueiaLiberacao } from "@/lib/comercial/custos/contracts"
 import { validateImei, normalizeSerial, maskImei, maskSerial, looksLikeImeiQuery, normalizeImei } from "./imei"
 import {
   APARELHO_CONDICOES, APARELHO_ORIGENS, canTransition, contaNoEstoque, isAparelhoStatus, isNovo,
@@ -271,20 +273,20 @@ async function moverEstoqueTx(tx: Prisma.TransactionClient, ctx: AparelhoCtx, un
   if (!res.ok) stop(409, `ESTOQUE_${res.code}`, `Estoque: ${res.message}`)
 }
 
-async function eventoTx(tx: Prisma.TransactionClient, ctx: AparelhoCtx, aparelhoId: string, tipo: string, de: string | null, para: string | null, dados: Record<string, unknown> = {}) {
+export async function eventoTx(tx: Prisma.TransactionClient, ctx: AparelhoCtx, aparelhoId: string, tipo: string, de: string | null, para: string | null, dados: Record<string, unknown> = {}) {
   await tx.aparelhoEvento.create({
     data: { storeId: ctx.storeId, aparelhoId, tipo, deStatus: de, paraStatus: para, operador: ctx.actorLabel, dados: dados as Prisma.InputJsonValue },
   })
 }
 
-async function lockUnitTx(tx: Prisma.TransactionClient, storeId: string, id: string): Promise<AparelhoFisico> {
+export async function lockUnitTx(tx: Prisma.TransactionClient, storeId: string, id: string): Promise<AparelhoFisico> {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "aparelhos_fisicos" WHERE "id" = ${id} AND "storeId" = ${storeId} FOR UPDATE`
   if (!rows[0]) stop(404, "NAO_ENCONTRADO", "Aparelho não encontrado nesta loja.")
   return tx.aparelhoFisico.findUniqueOrThrow({ where: { id } })
 }
 
 /** Transição genérica com coerência de estoque (entra/sai do saldo ao cruzar a fronteira). */
-async function transicionarTx(tx: Prisma.TransactionClient, ctx: AparelhoCtx, unit: AparelhoFisico, para: AparelhoStatus, tipoEvento: string, dados: Record<string, unknown> = {}, extra: Prisma.AparelhoFisicoUpdateInput = {}) {
+export async function transicionarTx(tx: Prisma.TransactionClient, ctx: AparelhoCtx, unit: AparelhoFisico, para: AparelhoStatus, tipoEvento: string, dados: Record<string, unknown> = {}, extra: Prisma.AparelhoFisicoUpdateInput = {}) {
   if (!canTransition(unit.status, para)) {
     stop(409, "TRANSICAO_INVALIDA", `Não é possível passar de "${unit.status}" para "${para}".`)
   }
@@ -405,6 +407,16 @@ async function liberarTx(tx: Prisma.TransactionClient, ctx: AparelhoCtx, unit: A
   const checklist = resumoChecklist(sanitizeChecklist(unit.checklist))
   if (checklist.falhas > 0 && unit.observacoes.trim().length === 0) {
     stop(409, "CHECKLIST_COM_FALHA", "Há itens com falha no checklist: descreva-os nas observações antes de liberar.", "observacoes")
+  }
+  // OMNI-COMMERCIAL-ENTERPRISE-EVOLUTION-001: unidade em preparação (ou com finalidade que não é
+  // revenda) fica fora do estoque vendável. Sem a migration comercial, nada muda.
+  if (await comercialInstalado(tx)) {
+    const perfil = await tx.comercialPerfilUnidade.findUnique({
+      where: { aparelhoId_storeId: { aparelhoId: unit.id, storeId: ctx.storeId } },
+      select: { etapaPreparacao: true, finalidade: true },
+    })
+    const bloqueio = bloqueiaLiberacao(perfil)
+    if (bloqueio) stop(409, "PREPARACAO_PENDENTE", bloqueio)
   }
   return transicionarTx(tx, ctx, unit, "disponivel", "liberacao", { checklist })
 }
