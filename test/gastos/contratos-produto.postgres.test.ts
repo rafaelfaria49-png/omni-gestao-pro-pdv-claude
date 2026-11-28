@@ -14,6 +14,7 @@ import { saldoTituloGasto } from "@/lib/gastos/pagamentos"
 import { criarCategoriaGasto } from "@/lib/gastos/categorias"
 import { cadastrarCartaoGasto, cadastrarCicloGasto } from "@/lib/gastos/cartoes"
 import { consultarFinanceiro, filtroConsultaFinanceira } from "@/lib/gastos/query"
+import { diaNoFusoConsulta } from "@/lib/gastos/query-calculo"
 import { transferirEntreCarteiras } from "@/lib/financeiro/services/carteiras-service"
 import { aplicarG005, dataGasto, dataPagamento, estadoG005, fixtureG005 } from "./g005-fixtures"
 
@@ -98,7 +99,7 @@ describe("Gestor Money — contratos de produto 01–07 (motor canônico, sem ca
       saldoInicial: 0, saldoAtual: 0, saldoInicialCentavos: "0", saldoAtualCentavos: "0", precisaoStatus: "CENTAVOS" } })
     expect((await transferirEntreCarteiras({ storeId: f.L1, origemId: f.conta(), destinoId: caixa, valor: 300 })).ok).toBe(true)
     // O serviço legado de transferência grava no relógio real: o período vai até hoje (dia civil de São Paulo).
-    const hoje = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })
+    const hoje = diaNoFusoConsulta(new Date())
     const q = await consultarFinanceiro(ctx, filtroConsultaFinanceira({ dataInicio: "2026-10-01", dataFim: hoje }))
     expect(q.contas.find((c) => c.id === f.conta())?.saldoCentavos).toBe("70000")
     expect(q.contas.find((c) => c.id === caixa)?.saldoCentavos).toBe("30000")

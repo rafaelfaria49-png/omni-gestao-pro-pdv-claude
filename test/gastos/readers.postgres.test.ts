@@ -45,7 +45,7 @@ import { getOmniAgentReportsSnapshot, listOmniAgentCommands, listOmniAgentAutoma
 import { getOmniAgentTimeline } from "@/app/actions/omni-agent-timeline"
 import { searchOmniAgentMemories } from "@/app/actions/omni-agent-memory"
 import { contexto, E1, E2, P1, P2, L1, L2, L3, U1, U2, EXT, requestCookiesG003, ids, request, login, logout,
-  prepararG003, limparG003, estadoFinanceiroG003, periodo } from "./g003-fixtures"
+  prepararG003, limparG003, estadoFinanceiroG003, hoje, periodo } from "./g003-fixtures"
 
 vi.mock("@/auth", async () => ({ auth: async () => (await import("./g003-fixtures")).sessaoAtual }))
 // Cookie é adaptador do request Next.js; nenhuma ACL ou fonte financeira é mockada.
@@ -534,4 +534,66 @@ describe.skipIf(!process.env.GASTOS_G003_TEST_DATABASE_URL)("G003 readers reais 
     await expect(comLeituraFinanceira(await contexto(P1), db => db.store.update({ where: { id: L1 }, data: { name: "INVALID" } }))).rejects.toThrow()
     expect((await prisma.store.findUnique({ where: { id: L1 } }))?.name).toBe(L1)
   })
+
+  it("virada UTC (00:00Z) vs virada brasileira (03:00Z): fixture hoje/periodo e readers/export G003 são determinísticos", async () => {
+    const tViradaUtc = new Date("2026-08-15T00:00:00.000Z")
+    const tUltimoMsBr = new Date("2026-08-15T02:59:59.999Z")
+    const tViradaBr = new Date("2026-08-15T03:00:00.000Z")
+
+    // Contrato canônico da fixture: 00:00Z e 02:59:59.999Z ainda pertencem a 14/08 em America/Sao_Paulo; 03:00Z inicia 15/08.
+    expect(hoje(tViradaUtc)).toBe("2026-08-14")
+    expect(periodo(tViradaUtc)).toEqual({ dataInicio: "2026-08-14", dataFim: "2026-08-14" })
+    expect(hoje(tUltimoMsBr)).toBe("2026-08-14")
+    expect(hoje(tViradaBr)).toBe("2026-08-15")
+    expect(periodo(tViradaBr)).toEqual({ dataInicio: "2026-08-15", dataFim: "2026-08-15" })
+
+    // Massa explícita em janela fixa (independente do relógio real do host/CI)
+    await prisma.movimentacaoFinanceira.createMany({ data: [
+      { id: "g003-tz-00z", perfilId: E1, storeId: L1, carteiraId: ids(E1).conta, categoriaId: ids(E1).categoria,
+        tipo: "saida", origem: "manual", descricao: "TZ_00Z", valor: 11.11, valorCentavos: "1111", precisaoStatus: "CENTAVOS", ocorridoEm: tViradaUtc },
+      { id: "g003-tz-0259z", perfilId: E1, storeId: L1, carteiraId: ids(E1).conta, categoriaId: ids(E1).categoria,
+        tipo: "saida", origem: "manual", descricao: "TZ_0259Z", valor: 22.22, valorCentavos: "2222", precisaoStatus: "CENTAVOS", ocorridoEm: tUltimoMsBr },
+      { id: "g003-tz-03z", perfilId: E1, storeId: L1, carteiraId: ids(E1).conta, categoriaId: ids(E1).categoria,
+        tipo: "saida", origem: "manual", descricao: "TZ_03Z", valor: 44.44, valorCentavos: "4444", precisaoStatus: "CENTAVOS", ocorridoEm: tViradaBr },
+    ] })
+    await prisma.conciliacaoFinanceira.createMany({ data: [
+      { id: "g003-tz-conc-00z", storeId: L1, carteiraId: ids(E1).conta, dataReferencia: "2026-08-14", saldoSistema: 0, saldoInformado: 0, diferenca: 0, status: "conciliado", createdAt: tViradaUtc },
+      { id: "g003-tz-conc-03z", storeId: L1, carteiraId: ids(E1).conta, dataReferencia: "2026-08-15", saldoSistema: 0, saldoInformado: 0, diferenca: 0, status: "conciliado", createdAt: tViradaBr },
+    ] })
+    await prisma.auditoriaFinanceira.createMany({ data: [
+      { id: "g003-tz-audit-00z", storeId: L1, entidade: "pagar", entidadeId: ids(E1).pagar, acao: "criar", createdAt: tViradaUtc },
+      { id: "g003-tz-audit-03z", storeId: L1, entidade: "pagar", entidadeId: ids(E1).pagar, acao: "criar", createdAt: tViradaBr },
+    ] })
+
+    const qsDia14 = new URLSearchParams(periodo(tViradaUtc))
+    const qsDia15 = new URLSearchParams(periodo(tViradaBr))
+
+    const res14 = await (await resumo(request(`/api/financeiro/relatorios/resumo?${qsDia14}`))).json()
+    const res15 = await (await resumo(request(`/api/financeiro/relatorios/resumo?${qsDia15}`))).json()
+    expect(res14.indicadores.despesaTotal).toBeCloseTo(33.33)
+    expect(res15.indicadores.despesaTotal).toBeCloseTo(44.44)
+
+    const fluxo14 = await (await fluxoRelatorio(request(`/api/financeiro/relatorios/fluxo?${qsDia14}`))).json()
+    const fluxo15 = await (await fluxoRelatorio(request(`/api/financeiro/relatorios/fluxo?${qsDia15}`))).json()
+    expect(fluxo14.fluxo).toHaveLength(1)
+    expect(fluxo14.fluxo[0]).toMatchObject({ periodo: "2026-08-14", saida: 33.33 })
+    expect(fluxo15.fluxo).toHaveLength(1)
+    expect(fluxo15.fluxo[0]).toMatchObject({ periodo: "2026-08-15", saida: 44.44 })
+
+    const csvIds = async (tipo: string, p: Record<string, string>) => {
+      const text = await (await exportar(request(`/api/financeiro/relatorios/exportar?${new URLSearchParams({ tipo, formato: "csv", ...p })}`))).text()
+      const [header, ...lines] = text.trim().split("\n")
+      const idIdx = header.split(";").indexOf("id")
+      return lines.filter(Boolean).map(l => l.split(";")[idIdx]).sort()
+    }
+
+    expect(await csvIds("movimentacoes", periodo(tViradaUtc))).toEqual(["g003-tz-00z", "g003-tz-0259z"])
+    expect(await csvIds("movimentacoes", periodo(tViradaBr))).toEqual(["g003-tz-03z"])
+    expect(await csvIds("dre", periodo(tViradaUtc))).toEqual(["g003-tz-00z", "g003-tz-0259z"])
+    expect(await csvIds("fluxo", periodo(tViradaBr))).toEqual(["g003-tz-03z"])
+    expect(await csvIds("conciliacoes", periodo(tViradaUtc))).toEqual(["g003-tz-conc-00z"])
+    expect(await csvIds("conciliacoes", periodo(tViradaBr))).toEqual(["g003-tz-conc-03z"])
+    expect(await csvIds("auditoria", periodo(tViradaUtc))).toEqual(["g003-tz-audit-00z"])
+    expect(await csvIds("auditoria", periodo(tViradaBr))).toEqual(["g003-tz-audit-03z"])
+  }, 60_000)
 })

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 import { consultarFinanceiro, consultarFinanceiroEmpresa, filtroConsultaFinanceira } from "@/lib/gastos/query"
+import { diaNoFusoConsulta } from "@/lib/gastos/query-calculo"
 import { cadastrarCartaoGasto, cadastrarCicloGasto } from "@/lib/gastos/cartoes"
 import { transferirEntreCarteiras } from "@/lib/financeiro/services/carteiras-service"
 import { fecharMes } from "@/lib/financeiro/services/fechamento-service"
@@ -15,7 +16,7 @@ const periodo = { dataInicio: "2026-10-01", dataFim: "2026-10-31" }
 // Serviços legados (transferirEntreCarteiras, aplicarPagamentoLegado) não recebem data: o movimento leva o
 // createdAt do relógio real, preenchido pelo motor do Prisma (fora do alcance de vi.setSystemTime). O período
 // desses casos termina no maior entre 31/10/2026 e o dia civil de São Paulo — cobre o instante gravado em qualquer data.
-const hojeSP = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })
+const hojeSP = () => diaNoFusoConsulta(new Date())
 const periodoComLegado = () => ({ dataInicio: "2026-10-01", dataFim: hojeSP() > "2026-10-31" ? hojeSP() : "2026-10-31" })
 // Suíte do comportamento LIGADO (G005); a ativação é explícita aqui, nunca herdada do ambiente.
 beforeAll(() => { vi.stubEnv("GESTOR_MONEY_ENABLED", "true") })
